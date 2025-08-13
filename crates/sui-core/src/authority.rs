@@ -1925,14 +1925,8 @@ impl AuthorityState {
         // Allow testing what happens if we crash here.
         fail_point!("crash");
 
-        let balance_settlement = transaction_outputs.get_balance_settlement_info();
-
         self.get_cache_writer()
             .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
-
-        if let Some(balance_settlement) = balance_settlement {
-            self.execution_scheduler.settle_balances(balance_settlement);
-        }
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force

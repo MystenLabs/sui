@@ -2,21 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use parking_lot::Mutex;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::balance::Balance;
 use sui_types::base_types::{FullObjectID, ObjectRef};
-use sui_types::effects::{
-    AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI,
-    TransactionEvents,
-};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
 use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
-use sui_types::{TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID};
-
-use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 
 /// TransactionOutputs
 #[derive(Debug)]
@@ -109,7 +102,7 @@ impl TransactionOutputs {
                         // when it could have been transferred to consensus from `ObjectOwner`, as
                         // its root owner may not have been a fastpath object. However, whether or
                         // not it was technically in the fastpath at the version the marker is
-                        // written, it cetainly is not in the fastpath *anymore*. This is needed
+                        // written, it certainly is not in the fastpath *anymore*. This is needed
                         // to produce the required behavior in `ObjectCacheRead::multi_input_objects_available`
                         // when checking whether receiving objects are available.
                         (
@@ -207,46 +200,6 @@ impl TransactionOutputs {
 
     pub fn take_accumulator_events(&self) -> Vec<AccumulatorEvent> {
         std::mem::take(&mut *self.accumulator_events.lock())
-    }
-
-    /// If this transaction is an accumulator settlement transaction, return the balance settlement info.
-    /// Otherwise, return None.
-    /// Note that we need to return Some even when the balance changes are empty.
-    /// This is important since the balance withdraw scheduler expects to see every accumulator
-    /// version get settled.
-    pub fn get_balance_settlement_info(&self) -> Option<BalanceSettlement> {
-        if !self.written.contains_key(&SUI_ACCUMULATOR_ROOT_OBJECT_ID) {
-            return None;
-        }
-        let accumulator_version = self.effects.lamport_version();
-
-        let accumulator_events = self.accumulator_events.lock();
-        let mut balance_changes = BTreeMap::new();
-        for event in accumulator_events.iter() {
-            let TypeTag::Struct(struct_ty) = &event.write.address.ty else {
-                continue;
-            };
-            if !Balance::is_balance(struct_ty) {
-                continue;
-            }
-
-            let value = match event.write.value {
-                AccumulatorValue::Integer(value) => value,
-                AccumulatorValue::IntegerTuple(..) => {
-                    panic!("Unexpected accumulator value: {:?}", event.write.value)
-                }
-            };
-            let change = match event.write.operation {
-                AccumulatorOperation::Merge => value as i128,
-                AccumulatorOperation::Split => -(value as i128),
-            };
-            balance_changes.insert(event.accumulator_obj, change);
-        }
-
-        Some(BalanceSettlement {
-            accumulator_version,
-            balance_changes,
-        })
     }
 
     #[cfg(test)]

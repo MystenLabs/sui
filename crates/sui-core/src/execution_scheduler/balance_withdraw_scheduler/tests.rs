@@ -37,7 +37,6 @@ impl TestScheduler {
         self.mock_read
             .settle_balance_changes(version, changes.clone());
         self.scheduler.settle_balances(BalanceSettlement {
-            accumulator_version: version,
             balance_changes: changes,
         });
     }

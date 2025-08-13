@@ -10,6 +10,7 @@ use sui_types::accumulator_root::{
     ACCUMULATOR_SETTLEMENT_MODULE,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
+use sui_types::base_types::ObjectID;
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
     TransactionEffects, TransactionEffectsAPI,
@@ -23,9 +24,10 @@ use sui_types::{
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::execution_cache::TransactionCacheRead;
+use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 
 /// Merged value is the value stored inside accumulator objects.
-/// Each mergable Move type will map to a single variant as its representation.
+/// Each mergeable Move type will map to a single variant as its representation.
 ///
 /// For instance, Balance<T> stores a single u64 value, so it will map to SumU128.
 /// A clawback Balance<T> will map to SumU128U128 since it also needs to represent
@@ -147,116 +149,144 @@ impl MergedValueIntermediate {
     }
 }
 
-// TODO(address-balances): This currently only creates a single accumulator update transaction.
-// To support multiple accumulator update transactions, we need to:
-// - have each transaction take the accumulator root as a "non-exclusive mutable" input
-// - each transaction writes out a set of fields that are disjoint from the others.
-// - a barrier transaction must be added to advance the version of the accumulator root object.
-//   The barrier transaction doesn't do any field writes. This is necessary in order to provide
-//   a consistent view of the system accumulator state. When the version of the accumulator
-//   root object is advanced, we know that all accumulator state updates prior to that version
-//   have been applied.
-pub fn create_accumulator_update_transactions(
-    epoch_store: &AuthorityPerEpochStore,
-    checkpoint_height: u64,
-    cache: Option<&dyn TransactionCacheRead>,
-    ckpt_effects: &[TransactionEffects],
-) -> (Vec<TransactionKind>, usize) {
-    let epoch = epoch_store.epoch();
-    let accumulator_root_obj_initial_shared_version = epoch_store
-        .epoch_start_config()
-        .accumulator_root_obj_initial_shared_version()
-        .expect("accumulator root object must exist");
+struct Update {
+    merge: MergedValueIntermediate,
+    split: MergedValueIntermediate,
+}
 
-    struct Update {
-        merge: MergedValueIntermediate,
-        split: MergedValueIntermediate,
-    }
+pub(crate) struct AccumulatorSettlementTxBuilder {
+    updates: HashMap<ObjectID, Update>,
+    addresses: HashMap<ObjectID, AccumulatorAddress>,
+}
 
-    let mut updates = HashMap::<_, Update>::new();
+impl AccumulatorSettlementTxBuilder {
+    pub fn new(
+        cache: Option<&dyn TransactionCacheRead>,
+        ckpt_effects: &[TransactionEffects],
+    ) -> Self {
+        let mut updates = HashMap::<_, _>::new();
 
-    let mut addresses = HashMap::<_, AccumulatorAddress>::new();
+        let mut addresses = HashMap::<_, _>::new();
 
-    for effect in ckpt_effects {
-        let tx = effect.transaction_digest();
-        // TransactionEffectsAPI::accumulator_events() uses a linear scan of all
-        // object changes and allocates a new vector. In the common case (on validators),
-        // we still have still have the original vector in the writeback cache, so
-        // we can avoid the unnecessary work by just taking it from the cache.
-        let events = match cache.and_then(|c| c.take_accumulator_events(tx)) {
-            Some(events) => events,
-            None => effect.accumulator_events(),
-        };
+        for effect in ckpt_effects {
+            let tx = effect.transaction_digest();
+            // TransactionEffectsAPI::accumulator_events() uses a linear scan of all
+            // object changes and allocates a new vector. In the common case (on validators),
+            // we still have still have the original vector in the writeback cache, so
+            // we can avoid the unnecessary work by just taking it from the cache.
+            let events = match cache.and_then(|c| c.take_accumulator_events(tx)) {
+                Some(events) => events,
+                None => effect.accumulator_events(),
+            };
 
-        for AccumulatorEvent {
-            accumulator_obj,
-            write:
-                AccumulatorWriteV1 {
-                    operation,
-                    value,
-                    address,
-                },
-        } in events
-        {
-            if let Some(prev) = addresses.insert(accumulator_obj, address.clone()) {
-                debug_assert_eq!(prev, address);
-            }
-
-            let entry = updates.entry(accumulator_obj).or_insert_with(|| {
-                let zero = MergedValueIntermediate::zero(&value);
-                Update {
-                    merge: zero,
-                    split: zero,
+            for AccumulatorEvent {
+                accumulator_obj,
+                write:
+                    AccumulatorWriteV1 {
+                        operation,
+                        value,
+                        address,
+                    },
+            } in events
+            {
+                if let Some(prev) = addresses.insert(accumulator_obj, address.clone()) {
+                    debug_assert_eq!(prev, address);
                 }
-            });
 
-            match operation {
-                AccumulatorOperation::Merge => {
-                    entry.merge.accumulate_into(value);
-                }
-                AccumulatorOperation::Split => {
-                    entry.split.accumulate_into(value);
+                let entry = updates.entry(accumulator_obj).or_insert_with(|| {
+                    let zero = MergedValueIntermediate::zero(&value);
+                    Update {
+                        merge: zero,
+                        split: zero,
+                    }
+                });
+
+                match operation {
+                    AccumulatorOperation::Merge => {
+                        entry.merge.accumulate_into(value);
+                    }
+                    AccumulatorOperation::Split => {
+                        entry.split.accumulate_into(value);
+                    }
                 }
             }
         }
+
+        Self { updates, addresses }
     }
 
-    let mut builder = ProgrammableTransactionBuilder::new();
-
-    let root = builder
-        .input(CallArg::Object(ObjectArg::SharedObject {
-            id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            initial_shared_version: accumulator_root_obj_initial_shared_version,
-            mutable: true,
-        }))
-        .unwrap();
-
-    let epoch_arg = builder.pure(epoch).unwrap();
-    let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
-    let idx_arg = builder.pure(0u64).unwrap();
-
-    builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        ACCUMULATOR_SETTLEMENT_MODULE.into(),
-        ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
-        vec![],
-        vec![epoch_arg, checkpoint_height_arg, idx_arg],
-    );
-
-    let num_updates = updates.len();
-
-    for (accumulator_obj, update) in updates {
-        let Update { merge, split } = update;
-        let address = addresses.get(&accumulator_obj).unwrap();
-        let merged_value = MergedValue::from(merge);
-        let split_value = MergedValue::from(split);
-        MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
+    pub fn num_updates(&self) -> usize {
+        self.updates.len()
     }
 
-    (
+    pub fn get_balance_settlements(&self) -> BalanceSettlement {
+        let balance_changes = self
+            .updates
+            .iter()
+            .map(|(object_id, update)| match (update.merge, update.split) {
+                (
+                    MergedValueIntermediate::SumU128(merge),
+                    MergedValueIntermediate::SumU128(split),
+                ) => (*object_id, merge as i128 - split as i128),
+                _ => todo!(),
+            })
+            .collect();
+
+        BalanceSettlement { balance_changes }
+    }
+
+    // TODO(address-balances): This currently only creates a single accumulator update transaction.
+    // To support multiple accumulator update transactions, we need to:
+    // - have each transaction take the accumulator root as a "non-exclusive mutable" input
+    // - each transaction writes out a set of fields that are disjoint from the others.
+    // - a barrier transaction must be added to advance the version of the accumulator root object.
+    //   The barrier transaction doesn't do any field writes. This is necessary in order to provide
+    //   a consistent view of the system accumulator state. When the version of the accumulator
+    //   root object is advanced, we know that all accumulator state updates prior to that version
+    //   have been applied.
+    pub fn build_tx(
+        self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint_height: u64,
+    ) -> Vec<TransactionKind> {
+        let epoch = epoch_store.epoch();
+        let accumulator_root_obj_initial_shared_version = epoch_store
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()
+            .expect("accumulator root object must exist");
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+
+        let root = builder
+            .input(CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version: accumulator_root_obj_initial_shared_version,
+                mutable: true,
+            }))
+            .unwrap();
+
+        let epoch_arg = builder.pure(epoch).unwrap();
+        let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
+        let idx_arg = builder.pure(0u64).unwrap();
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ACCUMULATOR_SETTLEMENT_MODULE.into(),
+            ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
+            vec![],
+            vec![epoch_arg, checkpoint_height_arg, idx_arg],
+        );
+
+        for (accumulator_obj, update) in self.updates {
+            let Update { merge, split } = update;
+            let address = self.addresses.get(&accumulator_obj).unwrap();
+            let merged_value = MergedValue::from(merge);
+            let split_value = MergedValue::from(split);
+            MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
+        }
+
         vec![TransactionKind::ProgrammableSystemTransaction(
             builder.finish(),
-        )],
-        num_updates,
-    )
+        )]
+    }
 }
