@@ -58,10 +58,6 @@ impl AssignedVersions {
         Self::new(shared_object_versions, WithdrawType::NonWithdraw)
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.shared_object_versions.is_empty()
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
         self.shared_object_versions.iter()
     }
