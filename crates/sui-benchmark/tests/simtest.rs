@@ -3,12 +3,14 @@
 
 #[cfg(msim)]
 mod test {
+    use mysten_common::register_debug_fatal_handler;
     use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
+    use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::str::FromStr;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use sui_benchmark::bank::BenchmarkBank;
@@ -25,7 +27,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::node::AuthorityOverloadConfig;
+    use sui_config::node::{AuthorityOverloadConfig, ForkRecoveryConfig};
     use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -46,7 +48,7 @@ mod test {
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
-    use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
+    use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -638,8 +640,16 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 60, simulated_load_config, None, None)
-            .await;
+        test_simulated_load_with_test_config(
+            test_cluster,
+            60,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
+        )
+        .await;
     }
 
     // Tests cluster defense against failing transaction floods Traffic Control
@@ -694,6 +704,8 @@ mod test {
             simulated_load_config,
             Some(target_qps),
             Some(num_workers),
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
         )
         .await;
     }
@@ -1127,17 +1139,24 @@ mod test {
             SimulatedLoadConfig::default(),
             None,
             None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
         )
         .await;
     }
 
-    async fn test_simulated_load_with_test_config(
+    async fn test_simulated_load_with_test_config<F, Fut>(
         test_cluster: Arc<TestCluster>,
         test_duration_secs: u64,
         config: SimulatedLoadConfig,
         target_qps: Option<u64>,
         num_workers: Option<u64>,
-    ) {
+        pre_load_setup: Option<F>,
+        enable_surfer: bool,
+    ) where
+        F: FnOnce(Arc<TestCluster>) -> Fut + Send,
+        Fut: std::future::Future<Output = ()> + Send,
+    {
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let genesis = test_cluster.swarm.config().genesis.clone();
@@ -1255,6 +1274,11 @@ mod test {
             Duration::from_secs(test_duration_secs)
         };
 
+        // Run any pre-load setup after gas creation but before load generation
+        if let Some(setup_fn) = pre_load_setup {
+            setup_fn(test_cluster.clone()).await;
+        }
+
         let bench_task = tokio::spawn(async move {
             let driver = BenchDriver::new(5, false);
 
@@ -1279,33 +1303,224 @@ mod test {
             assert!(benchmark_stats.num_error_txes < 100);
         });
 
-        let surfer_task = tokio::spawn(async move {
-            // now do a sui-surfer test
-            let mut test_packages_dir = benchmark_move_base_dir();
-            test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
-            let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
-                .unwrap()
-                .flat_map(|entry| {
-                    let entry = entry.unwrap();
-                    entry.metadata().unwrap().is_dir().then_some(entry.path())
+        if enable_surfer {
+            let surfer_task = tokio::spawn(async move {
+                // now do a sui-surfer test
+                let mut test_packages_dir = benchmark_move_base_dir();
+                test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
+                let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
+                    .unwrap()
+                    .flat_map(|entry| {
+                        let entry = entry.unwrap();
+                        entry.metadata().unwrap().is_dir().then_some(entry.path())
+                    })
+                    .collect();
+                info!("using sui_surfer test packages: {test_package_paths:?}");
+
+                let surf_strategy = SurfStrategy::new(Duration::from_millis(400));
+                let results = sui_surfer::run_with_test_cluster_and_strategy(
+                    surf_strategy,
+                    test_duration,
+                    test_package_paths,
+                    test_cluster,
+                    1, // skip first account for use by bench_task
+                )
+                .await;
+                info!("sui_surfer test complete with results: {results:?}");
+                assert!(results.num_successful_transactions > 0);
+                assert!(!results.unique_move_functions_called.is_empty());
+            });
+
+            let _ = futures::join!(bench_task, surfer_task);
+        } else {
+            info!("Surfer disabled, running only benchmark task");
+            bench_task.await.unwrap();
+        }
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_fork_recovery_transaction_effects_simulation() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = build_test_cluster(4, 5000, 4).await;
+
+        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
+        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
+
+        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
+            Arc::new(Mutex::new(HashSet::new()));
+
+        let transaction_counter: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
+
+        let node_to_authority_map: std::collections::HashMap<
+            sui_simulator::task::NodeId,
+            AuthorityName,
+        > = test_cluster
+            .swarm
+            .validator_nodes()
+            .filter_map(|validator| {
+                validator.get_node_handle().map(|handle| {
+                    let node_id = handle.with(|node| node.get_sim_node_id());
+                    (node_id, validator.name())
                 })
-                .collect();
-            info!("using sui_surfer test packages: {test_package_paths:?}");
+            })
+            .collect();
 
-            let surf_strategy = SurfStrategy::new(Duration::from_millis(400));
-            let results = sui_surfer::run_with_test_cluster_and_strategy(
-                surf_strategy,
-                test_duration,
-                test_package_paths,
-                test_cluster,
-                1, // skip first account for use by bench_task
-            )
+        info!("Fork recovery test: Running transactions to trigger fork scenario");
+
+        let test_cluster_for_handler = test_cluster.clone();
+
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            30,
+            SimulatedLoadConfig::default(),
+            None, // target_qps
+            None, // num_workers
+            Some({
+                let forked_validators = forked_validators.clone();
+                let checkpoint_overrides = checkpoint_overrides.clone();
+                let effects_overrides = effects_overrides.clone();
+                let node_to_authority_map = node_to_authority_map.clone();
+                let _test_cluster_for_handler = test_cluster_for_handler.clone();
+                move |_cluster: Arc<TestCluster>| async move {
+                    // Simulate fork during execution to generate divergent effects
+                    register_fail_point_arg("simulate_fork_during_execution", {
+                        let forked_validators = forked_validators.clone();
+                        let effects_overrides = effects_overrides.clone();
+                        let _transaction_counter = transaction_counter.clone();
+                        move || {
+                            Some((
+                                forked_validators.clone(),
+                                /* full_halt: */ true,
+                                effects_overrides.clone(),
+                                0.1f32, // default fork probability for this test
+                            ))
+                        }
+                    });
+
+                    // Intercept validator panic when overwriting a previously-computed digest & shutdown instead
+                    register_fail_point_arg("kill_checkpoint_fork_node", {
+                        let forked_validators: Arc<
+                            Mutex<HashSet<sui_types::crypto::AuthorityPublicKeyBytes>>,
+                        > = forked_validators.clone();
+                        let checkpoint_overrides = checkpoint_overrides.clone();
+                        let node_to_authority_map = node_to_authority_map.clone();
+                        move || {
+                            let current_node_id = sui_simulator::current_simnode_id();
+                            let authority_name =
+                                node_to_authority_map.get(&current_node_id).unwrap();
+
+                            if forked_validators.lock().unwrap().contains(authority_name) {
+                                Some(checkpoint_overrides.clone())
+                            } else {
+                                None
+                            }
+                        }
+                    });
+                    // Intercept validator panic when txn effects fork detected & shutdown instead
+                    register_fail_point_if("kill_transaction_fork_node", {
+                        let forked_validators = forked_validators.clone();
+                        let node_to_authority_map = node_to_authority_map.clone();
+                        move || {
+                            forked_validators.lock().unwrap().contains(
+                                node_to_authority_map
+                                    .get(&sui_simulator::current_simnode_id())
+                                    .unwrap(),
+                            )
+                        }
+                    });
+
+                    // Intercept validator panic when split brain detected & shutdown instead
+                    register_fail_point_arg("kill_split_brain_node", {
+                        let checkpoint_overrides = checkpoint_overrides.clone();
+                        let forked_validators = forked_validators.clone();
+                        move || Some((checkpoint_overrides.clone(), forked_validators.clone()))
+                    });
+
+                    register_debug_fatal_handler!(
+                        "Split brain detected in checkpoint signature aggregation",
+                        move || {
+                            //noop
+                        }
+                    );
+                }
+            }),
+            false, // disable surfer for fork recovery test
+        )
+        .await;
+        info!("Fork recovery test: First load gen done");
+
+        clear_fail_point("simulate_fork_during_execution");
+
+        // The fail points have already computed the correct checkpoint overrides
+        let checkpoint_overrides_computed = checkpoint_overrides.lock().unwrap().clone();
+
+        if checkpoint_overrides_computed.is_empty() {
+            panic!("Fork should have been triggered during the test and checkpoint overrides should be computed");
+        }
+
+        let captured_effects = effects_overrides.lock().unwrap().clone();
+
+        let fork_recovery_config = ForkRecoveryConfig {
+            transaction_overrides: captured_effects,
+            checkpoint_overrides: checkpoint_overrides_computed,
+        };
+
+        info!(
+            "Fork recovery config created: transaction_overrides count: {}, checkpoint_overrides count: {}",
+            fork_recovery_config.transaction_overrides.len(),
+            fork_recovery_config.checkpoint_overrides.len()
+        );
+
+        // Log some details about the overrides for debugging
+        for (digest, override_val) in &fork_recovery_config.transaction_overrides {
+            info!("Transaction override: {} -> {}", digest, override_val);
+        }
+
+        for (checkpoint_seq, override_val) in &fork_recovery_config.checkpoint_overrides {
+            info!(
+                "Checkpoint override: {} -> {}",
+                checkpoint_seq, override_val
+            );
+        }
+
+        for validator in test_cluster.swarm.validator_nodes() {
+            let validator_name = validator.name();
+            if forked_validators.lock().unwrap().contains(&validator_name) {
+                // Force restart each validator individually to ensure config is applied
+                validator.stop();
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                info!("node stopped {}", validator_name.concise());
+
+                {
+                    let mut config = validator.config();
+                    config.fork_recovery = Some(fork_recovery_config.clone());
+                    info!(
+                        "Override applied for validator {}: fork_recovery={:?}",
+                        validator_name.concise(),
+                        config.fork_recovery
+                    );
+                }
+
+                validator.start().await.unwrap();
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+
+        clear_fail_point("kill_checkpoint_fork_node");
+        clear_fail_point("kill_transaction_fork_node");
+        clear_fail_point("kill_split_brain_node");
+
+        // Send one txn to ensure liveness
+        let sender = test_cluster.get_address_0();
+        let rgp = test_cluster.get_reference_gas_price().await;
+        test_cluster
+            .fund_address_and_return_gas(rgp, None, sender)
             .await;
-            info!("sui_surfer test complete with results: {results:?}");
-            assert!(results.num_successful_transactions > 0);
-            assert!(!results.unique_move_functions_called.is_empty());
-        });
 
-        let _ = futures::join!(bench_task, surfer_task);
+        test_cluster.wait_for_epoch(None).await;
     }
 }

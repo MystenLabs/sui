@@ -54,6 +54,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     pin::Pin,
+    str::FromStr,
     sync::Arc,
     vec,
 };
@@ -106,7 +107,7 @@ use sui_json_rpc_types::{
     SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, TransactionFilter,
 };
-use sui_macros::{fail_point, fail_point_async, fail_point_if};
+use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::authenticator_state::get_authenticator_state;
@@ -899,6 +900,75 @@ impl ExecutionEnv {
     }
 }
 
+#[derive(Debug)]
+pub struct ForkRecoveryState {
+    /// Transaction digest to effects digest overrides
+    transaction_overrides:
+        parking_lot::RwLock<HashMap<TransactionDigest, TransactionEffectsDigest>>,
+    /// Checkpoint sequence to checkpoint digest overrides  
+    checkpoint_overrides: parking_lot::RwLock<HashMap<CheckpointSequenceNumber, CheckpointDigest>>,
+}
+
+impl Default for ForkRecoveryState {
+    fn default() -> Self {
+        Self {
+            transaction_overrides: parking_lot::RwLock::new(HashMap::new()),
+            checkpoint_overrides: parking_lot::RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+impl ForkRecoveryState {
+    pub fn new(config: Option<&sui_config::node::ForkRecoveryConfig>) -> Result<Self, SuiError> {
+        let Some(config) = config else {
+            return Ok(Self::default());
+        };
+
+        let mut transaction_overrides = HashMap::new();
+        for (tx_digest_str, effects_digest_str) in &config.transaction_overrides {
+            let tx_digest = TransactionDigest::from_str(tx_digest_str).map_err(|_| {
+                SuiError::Unknown(format!("Invalid transaction digest: {}", tx_digest_str))
+            })?;
+            let effects_digest =
+                TransactionEffectsDigest::from_str(effects_digest_str).map_err(|_| {
+                    SuiError::Unknown(format!("Invalid effects digest: {}", effects_digest_str))
+                })?;
+            transaction_overrides.insert(tx_digest, effects_digest);
+        }
+
+        let mut checkpoint_overrides = HashMap::new();
+        for (seq_num, checkpoint_digest_str) in &config.checkpoint_overrides {
+            let checkpoint_digest =
+                CheckpointDigest::from_str(checkpoint_digest_str).map_err(|_| {
+                    SuiError::Unknown(format!(
+                        "Invalid checkpoint digest: {}",
+                        checkpoint_digest_str
+                    ))
+                })?;
+            checkpoint_overrides.insert(*seq_num, checkpoint_digest);
+        }
+
+        Ok(Self {
+            transaction_overrides: parking_lot::RwLock::new(transaction_overrides),
+            checkpoint_overrides: parking_lot::RwLock::new(checkpoint_overrides),
+        })
+    }
+
+    pub fn get_transaction_override(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<TransactionEffectsDigest> {
+        self.transaction_overrides.read().get(tx_digest).copied()
+    }
+
+    pub fn get_checkpoint_override(
+        &self,
+        seq_num: &CheckpointSequenceNumber,
+    ) -> Option<CheckpointDigest> {
+        self.checkpoint_overrides.read().get(seq_num).copied()
+    }
+}
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -954,6 +1024,9 @@ pub struct AuthorityState {
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
+
+    /// Fork recovery state for handling equivocation after forks
+    fork_recovery_state: Option<ForkRecoveryState>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1492,13 +1565,25 @@ impl AuthorityState {
     pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        execution_env: ExecutionEnv,
+        mut execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
         let tx_digest = certificate.digest();
+
+        if let Some(fork_recovery) = &self.fork_recovery_state {
+            if let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest) {
+                warn!(
+                    ?tx_digest,
+                    original_digest = ?execution_env.expected_effects_digest,
+                    override_digest = ?override_digest,
+                    "Applying fork recovery override for transaction effects digest"
+                );
+                execution_env.expected_effects_digest = Some(override_digest);
+            }
+        }
 
         // prevent concurrent executions of the same tx.
         let tx_guard = epoch_store.acquire_tx_guard(certificate)?;
@@ -2021,6 +2106,19 @@ impl AuthorityState {
                     actual_effects = ?effects,
                     "fork detected!"
                 );
+
+                fail_point_if!("kill_transaction_fork_node", || {
+                    #[cfg(msim)]
+                    {
+                        tracing::error!(
+                            fatal = true,
+                            "Fork recovery test: killing node due to transaction effects fork for digest: {}",
+                            tx_digest
+                        );
+                        sui_simulator::task::shutdown_current_node();
+                    }
+                });
+
                 panic!(
                     "Transaction {} is expected to have effects digest {}, but got {}!",
                     tx_digest,
@@ -2030,9 +2128,29 @@ impl AuthorityState {
             }
         }
 
-        fail_point_if!("cp_execution_nondeterminism", || {
+        fail_point_arg!("simulate_fork_during_execution", |(
+            forked_validators,
+            full_halt,
+            effects_overrides,
+            fork_probability,
+        ): (
+            std::sync::Arc<
+                std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+            >,
+            bool,
+            std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>,
+            f32,
+        )| {
             #[cfg(msim)]
-            self.create_fail_state(certificate, epoch_store, &mut effects);
+            self.simulate_fork_during_execution(
+                certificate,
+                epoch_store,
+                &mut effects,
+                forked_validators,
+                full_halt,
+                effects_overrides,
+                fork_probability,
+            );
         });
 
         // index certificate
@@ -2737,30 +2855,76 @@ impl AuthorityState {
     }
 
     #[cfg(msim)]
-    fn create_fail_state(
+    fn simulate_fork_during_execution(
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         effects: &mut TransactionEffects,
+        forked_validators: std::sync::Arc<
+            std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+        >,
+        full_halt: bool,
+        effects_overrides: std::sync::Arc<
+            std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+        >,
+        fork_probability: f32,
     ) {
         use std::cell::RefCell;
         thread_local! {
-            static FAIL_STATE: RefCell<(u64, HashSet<AuthorityName>)> = RefCell::new((0, HashSet::new()));
+            static TOTAL_FAILING_STAKE: RefCell<u64> = RefCell::new(0);
         }
         if !certificate.data().intent_message().value.is_system_tx() {
             let committee = epoch_store.committee();
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
-                FAIL_STATE.with_borrow_mut(|fail_state| {
-                    //let (&mut failing_stake, &mut failing_validators) = fail_state;
-                    if fail_state.0 < committee.validity_threshold() {
-                        fail_state.0 += cur_stake;
-                        fail_state.1.insert(self.name);
+                TOTAL_FAILING_STAKE.with_borrow_mut(|total_stake| {
+                    let should_fork = if full_halt {
+                        // For partial fork, fork enough nodes to cause true split brain
+                        *total_stake <= committee.validity_threshold()
+                    } else {
+                        // For partial fork, only fork up to but not including validity threshold
+                        *total_stake + cur_stake < committee.validity_threshold()
+                    };
+
+                    if should_fork {
+                        *total_stake += cur_stake;
+
+                        if let Ok(mut external_set) = forked_validators.lock() {
+                            external_set.insert(self.name);
+                            info!("forked_validators: {:?}", external_set);
+                        }
                     }
 
-                    if fail_state.1.contains(&self.name) {
-                        info!("cp_exec failing tx");
-                        effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                    if let Ok(external_set) = forked_validators.lock() {
+                        if external_set.contains(&self.name) {
+                            // If effects_overrides is empty, deterministically select a tx_digest to fork with 1/100 probability.
+                            // Fork this transaction and record the digest and the original effects to original_effects.
+                            // If original_effects is nonempty and contains a key matching this transaction digest (i.e.
+                            // the transaction was forked on a different validator), fork this txn as well.
+
+                            let tx_digest = certificate.digest().to_string();
+                            if let Ok(mut overrides) = effects_overrides.lock() {
+                                if overrides.contains_key(&tx_digest)
+                                    || overrides.is_empty()
+                                        && sui_simulator::random::deterministic_probability(
+                                            &tx_digest,
+                                            fork_probability,
+                                        )
+                                {
+                                    let original_effects_digest = effects.digest().to_string();
+                                    overrides
+                                        .insert(tx_digest.clone(), original_effects_digest.clone());
+                                    info!(
+                                        ?tx_digest,
+                                        ?original_effects_digest,
+                                        "Captured forked effects digest for transaction"
+                                    );
+                                    info!("cp_exec failing tx");
+                                    effects.gas_cost_summary_mut_for_testing().computation_cost +=
+                                        1;
+                                }
+                            }
+                        }
                     }
                 });
             }
@@ -3331,6 +3495,12 @@ impl AuthorityState {
         } else {
             None
         };
+
+        let fork_recovery_state = config.fork_recovery.as_ref().map(|fork_config| {
+            ForkRecoveryState::new(Some(fork_config))
+                .expect("Failed to initialize fork recovery state")
+        });
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3355,6 +3525,7 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             traffic_controller,
+            fork_recovery_state,
         });
 
         let state_clone = Arc::downgrade(&state);
@@ -3903,6 +4074,10 @@ impl AuthorityState {
     /// Chain Identifier is the digest of the genesis checkpoint.
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
+    }
+
+    pub fn get_fork_recovery_state(&self) -> Option<&ForkRecoveryState> {
+        self.fork_recovery_state.as_ref()
     }
 
     #[instrument(level = "trace", skip_all)]
