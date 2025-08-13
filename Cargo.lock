@@ -14375,6 +14375,7 @@ dependencies = [
  "sui-keys",
  "sui-move-build",
  "sui-node",
+ "sui-rpc-api",
  "sui-sdk",
  "sui-swarm-config",
  "sui-types",
