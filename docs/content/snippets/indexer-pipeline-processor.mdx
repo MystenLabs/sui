@@ -1,17 +1,11 @@
-- Concurrent processing: Multiple tasks running concurrently for maximum throughput.
+The `Processor` handles multiple tasks running concurrently for maximum throughput. It's primary responsibility is to convert raw checkpoint data into database-ready rows using parallel workers.
 
-Primary responsibility: Converts raw checkpoint data into database-ready rows using parallel workers.
+The component handles this task by spawning `FANOUT` worker tasks (default: 10) for parallel processing. The `FANOUT` is the key configuration as it controls parallel processing capacity.
 
-How it works
-
-- Spawns `FANOUT` worker tasks (default: 10) for parallel processing
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=FANOUT}
     
-- Each worker calls your `Handler::process()` method independently
+Each worker calls your `Handler::process()` method independently. 
+
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=values}
 
-    
-- Workers can process different checkpoints simultaneously (out-of-order)
-- Sends processed data to `Collector` with checkpoint metadata
-
-Key Configuration: `FANOUT` - controls parallel processing capacity.
+Each of these workers can process different checkpoints simultaneously and in any order. The workers send their processed data to the `Collector` with checkpoint metadata.

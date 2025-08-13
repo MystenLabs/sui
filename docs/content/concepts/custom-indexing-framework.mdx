@@ -58,7 +58,6 @@ The framework then exposes specific interfaces that you implement to define your
 
 - `process()`: Transform raw checkpoint data (transactions, events, object changes) into your desired database rows. This is where you extract meaningful information, filter relevant data, and format it for storage.
 {@inject: crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
-    [https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/full_checkpoint_content.rs#L19-L23](https://github.com/MystenLabs/sui/blob/main/#L19-L23)
     
 - `commit()`: Store your processed data to the database with proper transaction handling. The framework calls this with batches of processed data for efficient bulk operations.
 - `prune()`: Clean up old data based on your retention policies (optional). Useful for managing database size by removing outdated records while preserving recent data.
