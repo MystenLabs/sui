@@ -213,8 +213,8 @@ impl DagState {
                 state.update_block_metadata(block);
             }
 
-            debug!(
-                "Recovered blocks {}: {:?}",
+            info!(
+                "Recovered blocks {}(eviction_round {eviction_round}): {:?}",
                 authority_index,
                 blocks
                     .iter()
