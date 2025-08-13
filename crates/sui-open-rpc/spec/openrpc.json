@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.54.0"
+    "version": "1.55.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "91",
+              "maxSupportedProtocolVersion": "92",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1313,6 +1313,7 @@
                 "check_for_init_during_upgrade": false,
                 "commit_root_state_digest": false,
                 "consensus_batched_block_sync": false,
+                "consensus_checkpoint_signature_key_includes_digest": false,
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_linearize_subdag_v2": false,
                 "consensus_median_based_commit_timestamp": false,
@@ -1367,6 +1368,7 @@
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,
+                "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "random_beacon": false,
                 "receive_objects": false,

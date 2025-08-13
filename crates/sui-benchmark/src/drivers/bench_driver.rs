@@ -828,7 +828,11 @@ async fn run_bench_worker(
                 );
                 match payload.get_failure_type() {
                     Some(ExpectedFailureType::NoFailure) => {
-                        panic!("Transaction failed unexpectedly");
+                        panic!(
+                            "Transaction {} failed unexpectedly {}",
+                            transaction.digest(),
+                            err
+                        );
                     }
                     Some(_) => {
                         metrics

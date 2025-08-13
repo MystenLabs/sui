@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
+
 
 const references = [
 	{
@@ -53,6 +55,7 @@ const references = [
 			'references/cli/ptb',
 			'references/cli/keytool',
 			'references/cli/move',
+      'references/cli/replay',
 			'references/cli/validator',
 		],
 	},

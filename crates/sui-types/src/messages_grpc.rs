@@ -222,14 +222,20 @@ pub struct HandleCertificateRequestV3 {
 
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxRequest {
-    #[prost(bytes = "bytes", tag = "1")]
-    pub transaction: Bytes,
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub transactions: Vec<Bytes>,
 }
 
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxResponse {
-    // Serialized Consensus Position
-    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2, 3")]
+    // Results for each transaction in the request
+    #[prost(message, repeated, tag = "1")]
+    pub results: Vec<RawSubmitTxResult>,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawSubmitTxResult {
+    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2")]
     pub inner: Option<RawValidatorSubmitStatus>,
 }
 
@@ -303,8 +309,8 @@ pub struct RawExecutedData {
 
 #[derive(Clone, prost::Message)]
 pub struct RawRejectedStatus {
-    #[prost(bytes = "bytes", tag = "1")]
-    pub error: Bytes,
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub error: Option<Bytes>,
 }
 
 #[derive(Clone, prost::Message)]

@@ -24,7 +24,7 @@ Response: {
   "data": {
     "nonGenesisTransaction": {
       "digest": "BHbfKkkQWomffJrjJ5PdxGUm5mREWMyNGDeky4dt9rnw",
-      "kind": null
+      "kind": {}
     }
   }
 }

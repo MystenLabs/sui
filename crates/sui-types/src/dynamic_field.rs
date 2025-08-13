@@ -1,17 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{ObjectDigest, SuiAddress};
+use crate::base_types::{MoveObjectType, ObjectDigest, SuiAddress};
 use crate::crypto::DefaultHash;
 use crate::error::{SuiError, SuiResult};
 use crate::id::UID;
-use crate::object::Object;
-use crate::storage::ObjectStore;
+use crate::object::{MoveObject, Object};
+use crate::storage::{ChildObjectResolver, ObjectStore};
 use crate::sui_serde::Readable;
 use crate::sui_serde::SuiTypeTag;
-use crate::{
-    MoveTypeTagTrait, MoveTypeTagTraitGeneric, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS,
-};
+use crate::{MoveTypeTagTrait, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use fastcrypto::encoding::Base64;
 use fastcrypto::hash::HashFunction;
 use move_core_types::annotated_value::{MoveStruct, MoveValue};
@@ -298,47 +296,20 @@ where
     Ok(id)
 }
 
-fn get_dynamic_field_object_from_store_impl<K>(
-    object_store: &dyn ObjectStore,
-    parent_id: ObjectID,
-    key: &K,
-    key_type_tag: &TypeTag,
-) -> Result<Object, SuiError>
+pub fn serialize_dynamic_field<K, V>(id: &UID, name: &K, value: V) -> Result<Vec<u8>, SuiError>
 where
-    K: Serialize + DeserializeOwned + fmt::Debug,
+    K: Serialize + Clone,
+    V: Serialize,
 {
-    let id = derive_dynamic_field_id(parent_id, key_type_tag, &bcs::to_bytes(key).unwrap())
-        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
-    let object = object_store.get_object(&id).ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!(
-            "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
-            key, id, parent_id
-        ))
-    })?;
-    Ok(object)
-}
+    let field = Field::<K, V> {
+        id: id.clone(),
+        name: name.clone(),
+        value,
+    };
 
-pub fn get_dynamic_field_from_store_impl<K, V>(
-    object_store: &dyn ObjectStore,
-    parent_id: ObjectID,
-    key: &K,
-    key_type_tag: &TypeTag,
-) -> Result<V, SuiError>
-where
-    K: Serialize + DeserializeOwned + fmt::Debug,
-    V: Serialize + DeserializeOwned,
-{
-    let object =
-        get_dynamic_field_object_from_store_impl(object_store, parent_id, key, key_type_tag)?;
-    let move_object = object.data.try_as_move().ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!(
-            "Dynamic field {:?} is not a Move object",
-            object.id()
-        ))
-    })?;
-    Ok(bcs::from_bytes::<Field<K, V>>(move_object.contents())
-        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?
-        .value)
+    bcs::to_bytes(&field).map_err(|err| SuiError::ObjectSerializationError {
+        error: err.to_string(),
+    })
 }
 
 /// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field object
@@ -351,10 +322,12 @@ pub fn get_dynamic_field_object_from_store<K>(
     key: &K,
 ) -> Result<Object, SuiError>
 where
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug + Clone,
 {
-    let key_type_tag = K::get_type_tag();
-    get_dynamic_field_object_from_store_impl(object_store, parent_id, key, &key_type_tag)
+    Ok(DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
+        .into_unbounded_id()?
+        .expect_object(key, object_store)?
+        .as_object())
 }
 
 /// Similar to `get_dynamic_field_object_from_store`, but returns the value in the field instead of
@@ -365,42 +338,283 @@ pub fn get_dynamic_field_from_store<K, V>(
     key: &K,
 ) -> Result<V, SuiError>
 where
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug + Clone,
     V: Serialize + DeserializeOwned,
 {
-    let key_type_tag = K::get_type_tag();
-    get_dynamic_field_from_store_impl(object_store, parent_id, key, &key_type_tag)
+    DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
+        .into_unbounded_id()?
+        .expect_object(key, object_store)?
+        .load_value::<V>()
 }
 
-/// Get a dynamic field object from the store with a generic key type. The key type may
-/// only have phantom type parameters, because it must have a fixed serialization
-/// format.
-pub fn get_dynamic_field_object_from_store_generic<K>(
-    object_store: &dyn ObjectStore,
-    parent_id: ObjectID,
-    key: &K,
-    key_type_params: &[TypeTag],
-) -> Result<Object, SuiError>
+/// A chainable API for getting dynamic fields.
+///
+/// This allows you to start with either:
+/// - a parent ID + key
+/// - or pre-hashed child ID,
+///
+/// and then allows you to read the field
+/// - consistently (with a version bound)
+/// - or inconsistently (no version bound)
+///
+/// And take the object that was read from the store and:
+/// - return the raw object
+/// - or deserialize the field value from the object
+/// - or just check if it exists
+///
+/// By chaining these together, we can have all the options above without
+/// a cross-product of functions for each case.
+///
+/// DynamicFieldKey represents the inputs into a dynamic field id computation (hash).
+/// Use it to start a lookup if you know the parent and key.
+pub struct DynamicFieldKey<ParentID, K>(pub ParentID, pub K, pub TypeTag);
+
+impl<ParentID, K> DynamicFieldKey<ParentID, K>
 where
-    K: MoveTypeTagTraitGeneric + Serialize + DeserializeOwned + fmt::Debug,
+    ParentID: Into<SuiAddress> + Into<ObjectID> + Copy,
+    K: Serialize + fmt::Debug,
 {
-    let key_type_tag = K::get_type_tag(key_type_params);
-    get_dynamic_field_object_from_store_impl(object_store, parent_id, key, &key_type_tag)
+    /// Get the computed ID of the dynamic field.
+    pub fn object_id(&self) -> Result<ObjectID, SuiError> {
+        derive_dynamic_field_id(self.0, &self.2, &bcs::to_bytes(&self.1).unwrap())
+            .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))
+    }
+
+    /// Convert the key into a UnboundedDynamicFieldID, which can be used to load the latest
+    /// version of the field object.
+    pub fn into_unbounded_id(self) -> Result<UnboundedDynamicFieldID<K>, SuiError> {
+        let id = self.object_id()?;
+        Ok(UnboundedDynamicFieldID::<K>::new(self.0.into(), id))
+    }
+
+    /// Convert the key into a BoundedDynamicFieldID, which can be used to load the field object
+    /// with a version bound for consistent reads.
+    pub fn into_id_with_bound(
+        self,
+        parent_version: SequenceNumber,
+    ) -> Result<BoundedDynamicFieldID<K>, SuiError> {
+        let id = self.object_id()?;
+        Ok(BoundedDynamicFieldID::<K>::new(
+            self.0.into(),
+            id,
+            parent_version,
+        ))
+    }
+
+    /// Convert the key into a DynamicField, which contains the `Field<K, V>` object,
+    /// that is, the value that would be stored in the field object.
+    ///
+    /// Used to compute the contents of a field object without writing and then reading it back.
+    pub fn into_field<V>(self, value: V) -> Result<DynamicField<K, V>, SuiError>
+    where
+        V: Serialize + DeserializeOwned + MoveTypeTagTrait,
+    {
+        let id = self.object_id()?;
+        let field = Field::<K, V> {
+            id: UID::new(id),
+            name: self.1,
+            value,
+        };
+        let type_tag = TypeTag::Struct(Box::new(DynamicFieldInfo::dynamic_field_type(
+            self.2,
+            V::get_type_tag(),
+        )));
+        Ok(DynamicField(field, type_tag))
+    }
 }
 
-/// Get a dynamic field from the store with a generic key type. The key type may
-/// only have phantom type parameters, because it must have a fixed serialization
-/// format.
-pub fn get_dynamic_field_from_store_generic<K, V>(
-    object_store: &dyn ObjectStore,
-    parent_id: ObjectID,
-    key: &K,
-    key_type_params: &[TypeTag],
-) -> Result<V, SuiError>
+/// A DynamicField is a `Field<K, V>` object, that is, the value that would be stored in the field object.
+pub struct DynamicField<K, V>(Field<K, V>, TypeTag);
+
+impl<K, V> DynamicField<K, V>
 where
-    K: MoveTypeTagTraitGeneric + Serialize + DeserializeOwned + fmt::Debug,
-    V: Serialize + DeserializeOwned,
+    K: Serialize,
+    V: Serialize,
 {
-    let key_type_tag = K::get_type_tag(key_type_params);
-    get_dynamic_field_from_store_impl(object_store, parent_id, key, &key_type_tag)
+    /// Convert the internal `Field<K, V>` object into a Move object.
+    /// Use this to create a Move object in memory without reading one from the store.
+    ///
+    /// IMPORTANT: Do not call except in tests to avoid possible conservation bugs.
+    /// (For instance, you can simply create a Move object that contains minted SUI. If
+    /// you then write this object to the db, it will break conservation.)
+    pub fn into_move_object_unsafe_for_testing(
+        self,
+        version: SequenceNumber,
+    ) -> Result<MoveObject, SuiError> {
+        let field = self.0;
+        let type_tag = self.1;
+        let TypeTag::Struct(struct_tag) = type_tag else {
+            unreachable!()
+        };
+        // TODO(address-balances): more efficient type repr
+        let move_object_type = MoveObjectType::from(*struct_tag);
+
+        let field_bytes =
+            bcs::to_bytes(&field).map_err(|e| SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            })?;
+        Ok(unsafe {
+            MoveObject::new_from_execution_with_limit(
+                move_object_type,
+                false, // A dynamic field is never transferable, public or otherwise.
+                version,
+                field_bytes,
+                512,
+            )
+        }?)
+    }
+
+    /// Get the internal `Field<K, V>` object.
+    pub fn into_inner(self) -> Field<K, V> {
+        self.0
+    }
+}
+
+/// A UnboundedDynamicFieldID contains the material needed to load an a dynamic field from
+/// the store.
+///
+/// Can be obtained from a DynamicFieldKey, or created directly if you know the
+/// parent and child IDs but do not know the key.
+pub struct UnboundedDynamicFieldID<K: Serialize>(
+    pub ObjectID, // parent
+    pub ObjectID, // child
+    std::marker::PhantomData<K>,
+);
+
+impl<K> UnboundedDynamicFieldID<K>
+where
+    K: Serialize + std::fmt::Debug,
+{
+    /// Create a UnboundedDynamicFieldID from a parent and child ID.
+    pub fn new(parent: ObjectID, id: ObjectID) -> Self {
+        Self(parent, id, std::marker::PhantomData)
+    }
+
+    /// Load the field object from the store.
+    pub fn load_object(self, object_store: &dyn ObjectStore) -> Option<DynamicFieldObject<K>> {
+        object_store
+            .get_object(&self.1)
+            .map(DynamicFieldObject::<K>::new)
+    }
+
+    /// Load the field object from the store.
+    /// If the field does not exist, return an error.
+    pub fn expect_object(
+        self,
+        key: &K,
+        object_store: &dyn ObjectStore,
+    ) -> Result<DynamicFieldObject<K>, SuiError> {
+        let parent = self.0;
+        let id = self.1;
+        self.load_object(object_store).ok_or_else(|| {
+            SuiError::DynamicFieldReadError(format!(
+                "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
+                key, id, parent
+            ))
+        })
+    }
+
+    /// Check if the field object exists in the store.
+    pub fn exists(self, object_store: &dyn ObjectStore) -> bool {
+        self.load_object(object_store).is_some()
+    }
+
+    /// Convert an UnboundedDynamicFieldID into a BoundedDynamicFieldID, which can then
+    /// be used to do a consistent lookup of the field.
+    pub fn with_bound(self, parent_version: SequenceNumber) -> BoundedDynamicFieldID<K> {
+        BoundedDynamicFieldID::new(self.0, self.1, parent_version)
+    }
+
+    /// Get the child ID.
+    pub fn as_object_id(self) -> ObjectID {
+        self.1
+    }
+}
+
+/// A BoundedDynamicFieldID contains the material needed to load an a dynamic field from
+/// the store, along with a parent version bound. The returned field will be the highest
+/// version of the field object that has a version less than or equal to the bound.
+///
+/// Can be obtained from a DynamicFieldID by calling `with_bound`, or created directly
+/// if you know the parent and child IDs and the parent version bound.
+pub struct BoundedDynamicFieldID<K: Serialize>(
+    pub ObjectID,       // parent
+    pub ObjectID,       // child
+    pub SequenceNumber, // parent version
+    std::marker::PhantomData<K>,
+);
+
+impl<K> BoundedDynamicFieldID<K>
+where
+    K: Serialize,
+{
+    /// Create a BoundedDynamicFieldID from a parent and child ID and a parent version.
+    pub fn new(parent_id: ObjectID, child_id: ObjectID, parent_version: SequenceNumber) -> Self {
+        Self(
+            parent_id,
+            child_id,
+            parent_version,
+            std::marker::PhantomData,
+        )
+    }
+
+    /// Load the field object from the store.
+    /// If the field does not exist, return None.
+    pub fn load_object(
+        self,
+        child_object_resolver: &dyn ChildObjectResolver,
+    ) -> Result<Option<DynamicFieldObject<K>>, SuiError> {
+        child_object_resolver
+            .read_child_object(&self.0, &self.1, self.2)
+            .map(|r| r.map(DynamicFieldObject::<K>::new))
+    }
+
+    /// Check if the field object exists in the store.
+    pub fn exists(self, child_object_resolver: &dyn ChildObjectResolver) -> Result<bool, SuiError> {
+        self.load_object(child_object_resolver).map(|r| r.is_some())
+    }
+}
+
+/// A DynamicFieldObject is a wrapper around an Object that contains a `Field<K, V>` object.
+pub struct DynamicFieldObject<K>(pub Object, std::marker::PhantomData<K>);
+
+impl<K> DynamicFieldObject<K> {
+    /// Create a DynamicFieldObject directly from an Object.
+    pub fn new(object: Object) -> Self {
+        Self(object, std::marker::PhantomData)
+    }
+
+    /// Get the underlying Object.
+    pub fn as_object(self) -> Object {
+        self.0
+    }
+}
+
+impl<K> DynamicFieldObject<K>
+where
+    K: Serialize + DeserializeOwned,
+{
+    /// Deserialize the field value from the object. Requires that the value type is known.
+    pub fn load_value<V>(self) -> Result<V, SuiError>
+    where
+        V: Serialize + DeserializeOwned,
+    {
+        self.load_field::<V>().map(|f| f.value)
+    }
+
+    /// Deserialize the field value from the object. Requires that the value type is known.
+    pub fn load_field<V>(self) -> Result<Field<K, V>, SuiError>
+    where
+        V: Serialize + DeserializeOwned,
+    {
+        let object = self.0;
+        let move_object = object.data.try_as_move().ok_or_else(|| {
+            SuiError::DynamicFieldReadError(format!(
+                "Dynamic field {:?} is not a Move object",
+                object.id()
+            ))
+        })?;
+        bcs::from_bytes::<Field<K, V>>(move_object.contents())
+            .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))
+    }
 }

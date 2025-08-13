@@ -1,3 +1,11 @@
+### Capturing log output in tests
+1. Add this call at the top of the test
+   ```
+   telemetry_subscribers::init_for_testing();
+   ```
+2. Run the test with the `--nocapture` (goes after `--`) command line flag (see https://doc.rust-lang.org/cargo/commands/cargo-test.html#display-options).
+3. Optionally set the `RUST_LOG` (example `RUST_LOG=debug`) environment variable (defaults to `info`).
+
 ### Debugging transactional tests in RustRover
 
 1. Add new `Cargo` run configuration

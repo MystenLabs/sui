@@ -19,6 +19,7 @@ use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
+use sui_framework::BuiltInFramework;
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_swarm_config::genesis_config::AccountConfig;
@@ -75,6 +76,10 @@ pub struct AdvanceEpochConfig {
     pub create_bridge_state: bool,
     /// Controls whether to create bridge committee.
     pub create_bridge_committee: bool,
+    /// Controls whether to include system packages in the epoch change transaction.
+    /// When enabled, includes current framework packages (Move stdlib, Sui framework,
+    /// Sui system, DeepBook, and Bridge packages) in the change epoch transaction.
+    pub include_system_packages: bool,
 }
 
 mod epoch_state;
@@ -273,14 +278,25 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// The `config` parameter controls which special end-of-epoch transactions are created
     /// as part of this epoch change.
     ///
-    /// NOTE: This function does not currently support updating the protocol version or the system
-    /// packages
+    /// NOTE: This function does not currently support updating the protocol version
     pub fn advance_epoch(&mut self, config: AdvanceEpochConfig) {
         let next_epoch = self.epoch_state.epoch() + 1;
         let next_epoch_protocol_version = self.epoch_state.protocol_version();
         let gas_cost_summary = self.checkpoint_builder.epoch_rolling_gas_cost_summary();
         let epoch_start_timestamp_ms = self.store.get_clock().timestamp_ms();
-        let next_epoch_system_package_bytes = vec![];
+
+        let next_epoch_system_package_bytes = if config.include_system_packages {
+            BuiltInFramework::iter_system_packages()
+                .map(|pkg| {
+                    let version = SequenceNumber::from(1u64);
+                    let modules = pkg.bytes.clone();
+                    let deps = pkg.dependencies.clone();
+                    (version, modules, deps)
+                })
+                .collect()
+        } else {
+            vec![]
+        };
 
         let mut kinds = vec![];
 

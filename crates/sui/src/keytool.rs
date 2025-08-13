@@ -486,7 +486,9 @@ impl KeyToolCommand {
                 old_alias,
                 new_alias,
             } => {
-                let new_alias = keystore.update_alias(&old_alias, new_alias.as_deref())?;
+                let new_alias = keystore
+                    .update_alias(&old_alias, new_alias.as_deref())
+                    .await?;
                 CommandOutput::Alias(AliasUpdate {
                     old_alias,
                     new_alias,
@@ -636,7 +638,7 @@ impl KeyToolCommand {
                     Ok(skp) => {
                         info!("Importing Bech32 encoded private key to keystore");
                         let mut key = Key::from(&skp);
-                        keystore.import(alias.clone(), skp)?;
+                        keystore.import(alias.clone(), skp).await?;
 
                         let alias = match alias {
                             Some(x) => x,
@@ -648,12 +650,14 @@ impl KeyToolCommand {
                     }
                     Err(_) => {
                         info!("Importing mneomonics to keystore");
-                        let sui_address = keystore.import_from_mnemonic(
-                            &input_string,
-                            key_scheme,
-                            derivation_path,
-                            alias.clone(),
-                        )?;
+                        let sui_address = keystore
+                            .import_from_mnemonic(
+                                &input_string,
+                                key_scheme,
+                                derivation_path,
+                                alias.clone(),
+                            )
+                            .await?;
                         let skp = keystore.export(&sui_address)?;
                         let mut key = Key::from(skp);
 
@@ -668,7 +672,7 @@ impl KeyToolCommand {
                 }
             }
             KeyToolCommand::Export { key_identity } => {
-                let address = keystore.get_by_identity(key_identity)?;
+                let address = keystore.get_by_identity(&key_identity)?;
                 let skp = keystore.export(&address)?;
                 let mut key = Key::from(skp);
                 key.alias = keystore.get_alias(&key.sui_address).ok();
@@ -830,7 +834,7 @@ impl KeyToolCommand {
                 data,
                 intent,
             } => {
-                let address = keystore.get_by_identity(address)?;
+                let address = keystore.get_by_identity(&address)?;
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 let intent_clone = intent.clone();
                 let msg: TransactionData =
@@ -842,8 +846,9 @@ impl KeyToolCommand {
                 let mut hasher = DefaultHash::default();
                 hasher.update(bcs::to_bytes(&intent_msg)?);
                 let digest = hasher.finalize().digest;
-                let sui_signature =
-                    keystore.sign_secure(&address, &intent_msg.value, intent_msg.intent)?;
+                let sui_signature = keystore
+                    .sign_secure(&address, &intent_msg.value, intent_msg.intent)
+                    .await?;
                 CommandOutput::Sign(SignData {
                     sui_address: address,
                     raw_tx_data: data,
@@ -1013,7 +1018,7 @@ impl KeyToolCommand {
                 let pk = skp.public();
                 let ephemeral_key_identifier: SuiAddress = (&skp.public()).into();
                 println!("Ephemeral key identifier: {ephemeral_key_identifier}");
-                keystore.import(None, skp)?;
+                keystore.import(None, skp).await?;
 
                 let mut eph_pk_bytes = vec![pk.flag()];
                 eph_pk_bytes.extend(pk.as_ref());

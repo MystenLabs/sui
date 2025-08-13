@@ -27,8 +27,8 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::gas::GasCostSummary;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::EffectsFinalityInfo;
 use sui_types::quorum_driver_types::FinalizedEffects;
@@ -48,6 +48,7 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
+use sui_types::{digests::ChainIdentifier, gas::GasCostSummary};
 use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
@@ -528,7 +529,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
 pub struct FullNodeProxy {
     sui_client: SuiClient,
+
+    // Committee and protocol config are initialized on startup and not updated on epoch changes.
     committee: Arc<Committee>,
+    protocol_config: Arc<ProtocolConfig>,
 }
 
 impl FullNodeProxy {
@@ -539,16 +543,24 @@ impl FullNodeProxy {
             .build(http_url)
             .await?;
 
-        let resp = sui_client.read_api().get_committee_info(None).await?;
-        let epoch = resp.epoch;
-        let committee_vec = resp.validators;
-        let committee_map = BTreeMap::from_iter(committee_vec.into_iter());
-        let committee =
-            Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
+        let committee = {
+            let resp = sui_client.read_api().get_committee_info(None).await?;
+            let epoch = resp.epoch;
+            let committee_map = resp.validators.into_iter().collect();
+            Committee::new(epoch, committee_map)
+        };
+
+        let protocol_config = {
+            let resp = sui_client.read_api().get_protocol_config(None).await?;
+            // Basically set by the SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE env var.
+            let chain = ChainIdentifier::default().chain();
+            ProtocolConfig::get_for_version(resp.protocol_version, chain)
+        };
 
         Ok(Self {
             sui_client,
             committee: Arc::new(committee),
+            protocol_config: Arc::new(protocol_config),
         })
     }
 }
@@ -563,7 +575,7 @@ impl ValidatorProxy for FullNodeProxy {
             .await?;
 
         if let Some(sui_object) = response.data {
-            sui_object.try_into()
+            sui_object.try_into_object(&self.protocol_config)
         } else if let Some(error) = response.error {
             bail!("Error getting object {:?}: {}", object_id, error)
         } else {
@@ -605,9 +617,12 @@ impl ValidatorProxy for FullNodeProxy {
         for object in objects {
             let o = object.data;
             if let Some(o) = o {
-                let temp: Object = o.clone().try_into()?;
+                let temp: Object = o.clone().try_into_object(&self.protocol_config)?;
                 let gas_coin = GasCoin::try_from(&temp)?;
-                values_objects.push((gas_coin.value(), o.clone().try_into()?));
+                values_objects.push((
+                    gas_coin.value(),
+                    o.clone().try_into_object(&self.protocol_config)?,
+                ));
             }
         }
 
@@ -680,6 +695,7 @@ impl ValidatorProxy for FullNodeProxy {
         Box::new(Self {
             sui_client: self.sui_client.clone(),
             committee: self.clone_committee(),
+            protocol_config: self.protocol_config.clone(),
         })
     }
 

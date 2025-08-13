@@ -33,7 +33,7 @@ impl Default for DbConfig {
             // Increase write buffer and WAL sizes to prepare for high write throughput.
             write_buffer_size_mb: 4 * 1024,
             max_wal_size_mb: 4 * 1024,
-            // Increase block size and and cache size to handle a mix of point lookup and scan
+            // Increase block size and cache size to handle a mix of point lookup and scan
             // workloads.
             block_size_kb: 32,
             block_cache_slots: 8192,

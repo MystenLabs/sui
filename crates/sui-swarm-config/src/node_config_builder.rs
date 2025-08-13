@@ -254,6 +254,7 @@ impl ValidatorConfigBuilder {
             execution_time_observer_config: self.execution_time_observer_config,
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
+            fork_recovery: None,
         }
     }
 
@@ -562,6 +563,7 @@ impl FullnodeConfigBuilder {
             execution_time_observer_config: None,
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
+            fork_recovery: None,
         }
     }
 }

@@ -209,7 +209,7 @@ impl<'a> LimitsVerifier<'a> {
     fn verify_identifiers(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         for (idx, identifier) in self.module.identifiers().iter().enumerate() {
             if config
-                .max_idenfitier_len
+                .max_identifier_len
                 .is_some_and(|max_identifier_len| identifier.len() > (max_identifier_len as usize))
             {
                 return Err(verification_error(

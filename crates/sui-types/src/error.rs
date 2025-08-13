@@ -649,7 +649,6 @@ pub enum SuiError {
     #[error("Method not allowed")]
     InvalidRpcMethodError,
 
-    // TODO: We should fold this into UserInputError::Unsupported.
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
 

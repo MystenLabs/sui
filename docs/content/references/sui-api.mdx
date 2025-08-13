@@ -1,5 +1,7 @@
 ---
 title: Sui RPC
+description: SuiJSON is a JSON-based format that enables alignment of JSON inputs with Move call arguments. 
+keywords: [suijson, json, json-based, json format, move call arguments, json inputs, move types, expected move types, move type mapping ]
 ---
 
 :::info
@@ -12,7 +14,7 @@ _SuiJSON_ is a JSON-based format with restrictions that allow Sui to align JSON 
 
 This table shows the restrictions placed on JSON types to make them SuiJSON compatible:
 
-| JSON    | SuiJSON Restrictions                         | Move Type Mapping                                                                        |
+| JSON    | SuiJSON restrictions                         | Move type mapping                                                                        |
 | ------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Number  | Must be unsigned integer                     | u8, u6, u32, u64 (encoded as String), u128 (encoded as String), u256 (encoded as String) |
 | String  | No restrictions                              | Vector`<u8>`, Address, ObjectID, TypeTag, Identifier, Unsigned integer (256 bit max)     |
@@ -33,7 +35,7 @@ Additionally, Move supports u128 and u256 but JSON doesn't. As a result Sui allo
 
 ## Type coercion rules {#type-coercion-rules}
 
-|      Move Type      |                                                                                                                                         SuiJSON Representations                                                                                                                                          |                                                                          Valid Examples                                                                           |                                                                                                             Invalid Examples                                                                                                              |
+|      Move Type      |                                                                                                                                         SuiJSON Representations                                                                                                                                          |                                                                          Valid Examples                                                                           |                                                                                                             Invalid examples                                                                                                              |
 | :-----------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 |        Bool         |                                                                                                                                                   Bool                                                                                                                                                   |                                                                            true, false                                                                            |                                                                                                                                                                                                                                           |
 |         u8          |                                                                                            Supports 3 formats: Unsigned number < 256. Decimal string with value < 256. One byte hex string prefixed with 0x.                                                                                             |                                                                           7 "70" "0x43"                                                                           |                    -5: negative not allowed 3.9: float not allowed NaN: not allowed 300: U8 must be less than 256 " 9": Spaces not allowed in string "9A": Hex num must be prefixed with 0x "0x09CD": Too large for U8                    |

@@ -265,7 +265,7 @@ pub async fn run_queries(
                     }
 
                     let now = Instant::now();
-                    debug!("Sending request for method: {}", request_line.method);
+                    debug!("Sending request for method: {} body: {:?}", request_line.method, request_line.body_json);
                     let res = client
                         .post(&endpoint)
                         .json(&request_line.body_json)
@@ -276,30 +276,44 @@ pub async fn run_queries(
                     // update pagination cursor if the request is successful.
                     let mut is_error = true;
                     if let Ok(resp) = res {
-                        if resp.status().is_success() {
+                        let status = resp.status();
+                        let resp_text = match resp.text().await {
+                                    Ok(text) => text,
+                                    Err(e) => {
+                                        return Err(BenchmarkError::Other(anyhow::anyhow!(
+                                            "Failed to get response text for method {}: {}",
+                                            request_line.method, e
+                                        )));
+                                    }
+                                };
+
+                        // Debug log all the responses, but truncate long ones
+                        let response = if resp_text.len() > 1000 {
+                            format!("{}...", &resp_text[..997])
+                        } else {
+                            resp_text.to_string()
+                        };
+                        debug!(
+                            "Response for method: {}, request body: {}, status: {}, response body: {}",
+                            request_line.method, request_line.body_json, status, response
+                        );
+                        if status.is_success() {
                             let supports_pagination = PaginationCursorState::get_method_cursor_index(&request_line.method).is_some();
                             if supports_pagination {
-                                #[derive(Deserialize)]
+                                #[derive(Debug, Deserialize)]
                                 struct Body {
                                     result: Result,
                                 }
-                                #[derive(Deserialize)]
+                                #[derive(Debug, Deserialize)]
                                 #[serde(rename_all = "camelCase")]
                                 struct Result {
                                     has_next_page: bool,
                                     next_cursor: Option<Value>,
                                 }
 
-                                let resp_text = match resp.text().await {
-                                    Ok(text) => text,
-                                    Err(e) => {
-                                        return Err(BenchmarkError::Other(anyhow::anyhow!(
-                                            "Failed to get response text for method {}: {}", 
-                                            request_line.method, e
-                                        )));
-                                    }
-                                };
+
                                 let parse_result = serde_json::from_str::<Body>(&resp_text);
+                                debug!("Parsed response for method: {}, result: {:?}", request_line.method, parse_result);
                                 if let Ok(Body { result }) = parse_result {
                                     let method_key = match PaginationCursorState::get_method_key(
                                         &request_line.method,
@@ -329,16 +343,6 @@ pub async fn run_queries(
                                 is_error = false;
                             }
                         } else {
-                            let status = resp.status();
-                            let resp_text = match resp.text().await {
-                                Ok(text) => text,
-                                Err(e) => {
-                                    return Err(BenchmarkError::Other(anyhow::anyhow!(
-                                        "Failed to get error response text for method {}: {}", 
-                                        request_line.method, e
-                                    )));
-                                }
-                            };
                             warn!(
                                 method = request_line.method,
                                 status = ?status,

@@ -139,7 +139,7 @@ fn get_keypair() -> Result<SignerInfo> {
     // TODO(chris) allow pass in custom path for keystore
     // Load keystore from ~/.sui/sui_config/sui.keystore
     let keystore_path = get_sui_config_directory().join("sui.keystore");
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
     let active_address = keystore.addresses().pop().unwrap();
     let keypair: &SuiKeyPair = keystore.export(&active_address)?;
     println!("using address {active_address} for signing");

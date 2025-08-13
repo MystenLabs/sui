@@ -278,6 +278,14 @@ impl MovePackage {
 }
 
 impl MovePackage {
+    /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
+    /// is not a package. This is more efficient when you already have the native object.
+    pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
+        let contents = native.data.try_as_package()?.clone();
+        let super_ = Object::from_contents(scope, Arc::new(native));
+        Some(Self { super_, contents })
+    }
+
     /// Try to downcast an `Object` to a `MovePackage`. This function returns `None` if `object`'s
     /// contents cannot be fetched, or it is not a package.
     pub(crate) async fn from_object(

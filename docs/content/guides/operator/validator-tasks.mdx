@@ -1,6 +1,7 @@
 ---
 title: Validator Tasks
 description: As a validator on Sui, there are some processes you need to perform to ensure your nodes are always optimized.
+keywords: [ run sui validator, sui validator tasks, running a validator node, running validator, deploy validator node, configure validator node, node storage, node metrics, node logs, node dashboards, state sync, node updates, joining the validator set, leaving the validator set, private security fixes ]
 ---
 
 This guide focuses on running the Sui node software as a validator.
@@ -69,7 +70,8 @@ Sui node uses the following ports by default:
 
 To run a validator successfully, it is critical that ports 8080-8084 are open as outlined, including the specific protocol (TCP/UDP).
 
-## Network Buffer
+## Network buffer
+
 From load testing Sui validator networks, it has been determined that the default Linux network buffer sizes are too small.
 We recommend increasing them using one of the following two methods:
 
@@ -241,18 +243,18 @@ When an update is required to the Sui node software the following process can be
 
 Checkpoints in Sui contain the permanent history of the network. They are comparable to blocks in other blockchains with one big difference being that they are lagging instead of leading. All transactions are final and executed prior to being included in a checkpoint.
 
-These checkpoints are synchronized between validators and fullnodes via a dedicated peer to peer state sync interface.
+These checkpoints are synchronized between validators and Full nodes via a dedicated peer to peer state sync interface.
 
-Inter-validator state sync is always permitted however there are controls available to limit what fullnodes are allowed to sync from a specific validator.
+Inter-validator state sync is always permitted however there are controls available to limit what Full nodes are allowed to sync from a specific validator.
 
-The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but will restrict all fullnodes from syncing. The Sui node [configuration](#configuration) can be modified to allow a known fullnode to sync from a validator:
+The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but will restrict all Full nodes from syncing. The Sui node [configuration](#configuration) can be modified to allow a known Full node to sync from a validator:
 
 ```sh
 p2p-config:
   anemo-config:
     max-concurrent-connections: 0
   seed-peers:
-    - address: <multiaddr>  # The p2p address of the fullnode
+    - address: <multiaddr>  # The p2p address of the Full node
       peer-id: <peer-id>    # hex encoded network public key of the node
     - address: ...          # another permitted peer
       peer-id: ...
