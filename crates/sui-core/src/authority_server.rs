@@ -1210,7 +1210,7 @@ impl ValidatorService {
             // mysticeti fastpath outputs to a separate dirty cache
             // UncommittedData::fastpath_transaction_outputs that will only get flushed
             // once finalized. So the output of notify_read_executed_effects is
-            // guaranteed to be finalized effects.
+            // guaranteed to be finalized effects or effects from QD execution.
             mut effects = self.state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects(
