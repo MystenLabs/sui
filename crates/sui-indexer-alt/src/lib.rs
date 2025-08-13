@@ -37,6 +37,23 @@ pub(crate) mod bootstrap;
 pub mod config;
 pub(crate) mod handlers;
 
+/// Checks that the pipeline and task names don't include the reserved delimiter. The generalized
+/// indexer writes watermarks to the database with the format `pipeline@task` if task is set on the
+/// indexer, otherwise `pipeline`.
+fn validate_pipeline_and_task_names(value: &str) -> anyhow::Result<()> {
+    const WATERMARK_DELIMITER: char = '@';
+
+    if value.contains(WATERMARK_DELIMITER) {
+        anyhow::bail!(
+            "The delimiter '{}' cannot be used in the pipeline and task names but was found in '{}'",
+            WATERMARK_DELIMITER,
+            value,
+        );
+    }
+
+    Ok(())
+}
+
 pub async fn setup_indexer(
     database_url: Url,
     db_args: DbArgs,
@@ -107,6 +124,7 @@ pub async fn setup_indexer(
     )))?;
 
     let metrics_prefix = None;
+    let task = indexer_args.task.clone();
     let mut indexer = Indexer::new(
         store,
         indexer_args,
@@ -194,6 +212,14 @@ pub async fn setup_indexer(
     add_concurrent!(TxCalls, tx_calls);
     add_concurrent!(TxDigests, tx_digests);
     add_concurrent!(TxKinds, tx_kinds);
+
+    for pipeline_name in indexer.pipelines() {
+        validate_pipeline_and_task_names(pipeline_name)?;
+    }
+
+    if let Some(task) = &task {
+        validate_pipeline_and_task_names(task)?;
+    }
 
     Ok(indexer)
 }
