@@ -92,9 +92,9 @@ impl RocksDBStore {
         tracing::warn!("Consensus store using tidehunter");
         use typed_store::tidehunter_util::{KeyIndexing, KeySpaceConfig, KeyType, ThConfig};
         const MUTEXES: usize = 1024;
-        let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
-        let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
-        let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
+        let index_digest_key = KeyIndexing::fixed(36);
+        let index_index_digest_key = KeyIndexing::fixed(40);
+        let commit_vote_key = KeyIndexing::fixed(76);
         let u32_prefix = KeyType::prefix_uniform(3, 0);
         let u64_prefix = KeyType::prefix_uniform(6, 0);
         let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
