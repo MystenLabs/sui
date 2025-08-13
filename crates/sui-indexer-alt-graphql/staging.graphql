@@ -230,6 +230,10 @@ type ChangeEpochTransaction {
 	Unix timestamp when epoch started.
 	"""
 	epochStartTimestamp: DateTime
+	"""
+	System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
+	"""
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
 """
