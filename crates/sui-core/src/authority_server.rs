@@ -26,6 +26,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -1195,46 +1196,12 @@ impl ValidatorService {
         request: WaitForEffectsRequest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<WaitForEffectsResponse> {
-        let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "Mysticeti fastpath".to_string(),
-            });
-        };
-
         let tx_digest = request.transaction_digest;
         let tx_digests = [tx_digest];
 
-        if let Some(ref consensus_position) = request.consensus_position {
-            let local_epoch = epoch_store.epoch();
-            match consensus_position.epoch.cmp(&local_epoch) {
-                Ordering::Less => {
-                    // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
-                    // if response from this validator is desired.
-                    let response = WaitForEffectsResponse::Expired {
-                        epoch: local_epoch,
-                        round: None,
-                    };
-                    return Ok(response);
-                }
-                Ordering::Greater => {
-                    // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
-                    return Err(SuiError::WrongEpoch {
-                        expected_epoch: local_epoch,
-                        actual_epoch: consensus_position.epoch,
-                    });
-                }
-                Ordering::Equal => {
-                    // The validator's epoch is the same as the epoch of the transaction.
-                    // We can proceed with the normal flow.
-                }
-            };
-
-            consensus_tx_status_cache.check_position_too_ahead(consensus_position)?;
-        }
-
         // We always wait for finalized effects which is safe regardless of consensus
-        // position as we have separated fastpath outputs to a separate cache.
-        let mut executed_effects_finalized_future = Box::pin(
+        // position.
+        let executed_effects_finalized_future = Box::pin(
             self.state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects(
@@ -1243,57 +1210,100 @@ impl ValidatorService {
                 ),
         );
 
+        let fastpath_effects_future: Pin<Box<dyn Future<Output = _> + Send>> =
+            if request.consensus_position.is_some() {
+                Box::pin(self.wait_for_fastpath_effects(
+                    request.consensus_position.unwrap(),
+                    &tx_digests,
+                    request.include_details,
+                    epoch_store,
+                ))
+            } else {
+                Box::pin(futures::future::pending())
+            };
+
+        tokio::select! {
+            mut effects = executed_effects_finalized_future => {
+                let effects = effects.pop().unwrap();
+                let details = if request.include_details {
+                    Some(self.complete_executed_data(effects.clone(), None).await?)
+                } else {
+                    None
+                };
+
+                Ok(WaitForEffectsResponse::Executed {
+                    effects_digest: effects.digest(),
+                    details,
+                })
+            }
+
+            fastpath_response = fastpath_effects_future => {
+                fastpath_response
+            }
+        }
+    }
+
+    async fn wait_for_fastpath_effects(
+        &self,
+        consensus_position: ConsensusPosition,
+        tx_digests: &[TransactionDigest],
+        include_details: bool,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<WaitForEffectsResponse> {
+        let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "Mysticeti fastpath".to_string(),
+            });
+        };
+
+        let local_epoch = epoch_store.epoch();
+        match consensus_position.epoch.cmp(&local_epoch) {
+            Ordering::Less => {
+                // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
+                // if response from this validator is desired.
+                let response = WaitForEffectsResponse::Expired {
+                    epoch: local_epoch,
+                    round: None,
+                };
+                return Ok(response);
+            }
+            Ordering::Greater => {
+                // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
+                return Err(SuiError::WrongEpoch {
+                    expected_epoch: local_epoch,
+                    actual_epoch: consensus_position.epoch,
+                });
+            }
+            Ordering::Equal => {
+                // The validator's epoch is the same as the epoch of the transaction.
+                // We can proceed with the normal flow.
+            }
+        };
+
+        consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
+
         let mut current_status = None;
-        // We default to pending future until we see FastpathCertified status.
-        let mut fastpath_outputs_future: Pin<Box<dyn Future<Output = _> + Send>> =
-            Box::pin(futures::future::pending());
+        let mut fastpath_outputs_future = Box::pin(
+            self.state
+                .get_transaction_cache_reader()
+                .notify_read_fastpath_transaction_outputs(tx_digests),
+        );
 
         loop {
             tokio::select! {
-                mut effects = &mut executed_effects_finalized_future => {
-                    let effects = effects.pop().unwrap();
-                    let details = if request.include_details {
-                        Some(self.complete_executed_data(effects.clone(), None).await?)
-                    } else {
-                        None
-                    };
-
-                    return Ok(WaitForEffectsResponse::Executed {
-                        effects_digest: effects.digest(),
-                        details,
-                    });
-                }
-
-
-                status_result = async {
-                    if let Some(consensus_position) = request.consensus_position {
-                        consensus_tx_status_cache
-                            .notify_read_transaction_status_change(consensus_position, current_status)
-                            .await
-                    } else {
-                        // If no consensus position is provided, we don't need to wait for status changes.
-                        futures::future::pending().await
-                    }
-                } => {
+                status_result = consensus_tx_status_cache
+                    .notify_read_transaction_status_change(consensus_position, current_status) => {
                     match status_result {
                         NotifyReadConsensusTxStatusResult::Status(new_status) => {
                             match new_status {
                                 ConsensusTxStatus::Rejected => {
                                     return Ok(WaitForEffectsResponse::Rejected {
                                         error: epoch_store.get_rejection_vote_reason(
-                                            request.consensus_position.unwrap()
+                                            consensus_position
                                         )
                                     });
                                 }
                                 ConsensusTxStatus::FastpathCertified => {
-                                    if current_status != Some(ConsensusTxStatus::FastpathCertified) {
-                                        // First time we see FastpathCertified, start waiting for fast path outputs.
-                                        fastpath_outputs_future = Box::pin(
-                                            self.state
-                                                .get_transaction_cache_reader()
-                                                .notify_read_fastpath_transaction_outputs(&tx_digests)
-                                        );
-                                    }
                                     current_status = Some(new_status);
                                     continue;
                                 }
@@ -1318,7 +1328,7 @@ impl ValidatorService {
                     let outputs = outputs.pop().unwrap();
                     let effects = outputs.effects.clone();
 
-                    let details = if request.include_details {
+                    let details = if include_details {
                         Some(self.complete_executed_data(effects.clone(), Some(outputs)).await?)
                     } else {
                         None
