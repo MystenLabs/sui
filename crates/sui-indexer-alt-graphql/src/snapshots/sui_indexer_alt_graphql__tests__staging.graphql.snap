@@ -518,6 +518,10 @@ type Epoch {
 	"""
 	startTimestamp: DateTime
 	"""
+	The transactions in this epoch, optionally filtered by transaction filters.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	The system packages used by all transactions in this epoch.
 	"""
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
