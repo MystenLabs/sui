@@ -1,0 +1,20 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 818
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-116:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 15200000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 118:
+//# run a::m::myinit --sender A
+created: object(2,0), object(2,1), object(2,2), object(2,3)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 14949200,  storage_rebate: 0, non_refundable_storage_fee: 0
