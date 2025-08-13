@@ -353,6 +353,7 @@ impl OffchainCluster {
 
         let with_genesis = true;
         let indexer = setup_indexer(
+            None, // TODO: Configure indexer task if needed for testing using OffchainCluster
             database_url.clone(),
             DbArgs::default(),
             indexer_args,
@@ -369,6 +370,7 @@ impl OffchainCluster {
         let indexer = indexer.run().await.context("Failed to start indexer")?;
 
         let consistent_store = start_consistent_store(
+            None, // TODO: Configure indexer task if needed for testing using OffchainCluster
             rocksdb_path,
             consistent_indexer_args,
             client_args,

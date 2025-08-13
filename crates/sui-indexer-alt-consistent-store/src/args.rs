@@ -19,6 +19,10 @@ pub struct Args {
 pub enum Command {
     /// Run the Indexer and RPC.
     Run {
+        /// An optional name for the indexer that ... TODO (wlmyng)
+        #[clap(long)]
+        indexer_task: Option<String>,
+
         /// The path where the RocksDB database will be stored. The database will be created if it
         /// does not exist.
         #[arg(long)]

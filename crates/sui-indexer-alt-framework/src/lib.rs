@@ -63,7 +63,7 @@ pub struct Indexer<S: Store> {
     /// An optional task name configured on the indexer to support running one-off or temporary
     /// tasks, like backfills. By default, there is no task name. If one is provided, the indexer
     /// will write watermark rows for pipeline = `pipeline` and task = `task`.
-    task: Option<&'static str>,
+    task: Option<String>,
 
     /// The storage backend that the indexer uses to write and query indexed data. This
     /// generic implementation allows for plugging in different storage solutions that implement the
@@ -131,7 +131,7 @@ impl<S: Store> Indexer<S> {
         ingestion_config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
-        task: Option<&'static str>,
+        task: Option<String>,
         cancel: CancellationToken,
     ) -> Result<Self> {
         let IndexerArgs {
@@ -225,7 +225,7 @@ impl<S: Store> Indexer<S> {
             config,
             self.skip_watermark,
             self.store.clone(),
-            self.task,
+            self.task.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
@@ -325,10 +325,10 @@ impl<S: Store> Indexer<S> {
             .context("Failed to establish connection to store")?;
 
         let watermark = conn
-            .committer_watermark(P::NAME, self.task)
+            .committer_watermark(P::NAME, self.task.as_deref())
             .await
             .with_context(|| {
-                if let Some(task) = self.task {
+                if let Some(task) = self.task.as_deref() {
                     format!(
                         "Failed to get watermark for pipeline {} of task {}",
                         P::NAME,
@@ -392,7 +392,7 @@ impl<T: TransactionalStore> Indexer<T> {
             watermark,
             config,
             self.store.clone(),
-            self.task,
+            self.task.clone(),
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),

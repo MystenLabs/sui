@@ -22,6 +22,9 @@ pub struct Args {
 pub enum Command {
     /// Run the indexer.
     Indexer {
+        /// An optional name for the indexer that ... TODO (wlmyng)
+        #[clap(long)]
+        indexer_task: Option<String>,
         /// The URL of the database to connect to.
         #[clap(
             long,

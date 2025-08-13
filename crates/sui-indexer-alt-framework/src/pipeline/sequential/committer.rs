@@ -44,7 +44,7 @@ pub(super) fn committer<H>(
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
-    task: Option<&'static str>,
+    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()>
@@ -53,6 +53,8 @@ where
     H::Store: TransactionalStore + 'static,
 {
     tokio::spawn(async move {
+        let task = task.as_deref();
+
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
         let mut poll = interval(config.committer.collect_interval());

@@ -46,6 +46,7 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Indexer {
+            indexer_task,
             database_url,
             db_args,
             client_args,
@@ -82,6 +83,7 @@ async fn main() -> Result<()> {
                 .context("Failed to register uptime metric.")?;
 
             let h_indexer = setup_indexer(
+                indexer_task,
                 database_url,
                 db_args,
                 indexer_args,

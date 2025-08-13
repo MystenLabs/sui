@@ -54,6 +54,7 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
     ///
     /// See [`framework::Indexer::new`] for details on the other arguments.
     pub(crate) async fn new(
+        indexer_task: Option<String>,
         path: impl AsRef<Path>,
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
@@ -82,7 +83,7 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
             ingestion_config,
             metrics_prefix,
             registry,
-            None, // TODO: configure indexer_task
+            indexer_task,
             cancel.child_token(),
         )
         .await
