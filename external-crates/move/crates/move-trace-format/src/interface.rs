@@ -12,12 +12,15 @@ use serde::Serialize;
 pub trait Tracer {
     /// Notify the tracer of a new event in the VM. This is called for every event that is emitted,
     /// and immediatlye _after_ the `event` has been added to the trace held inside of the `writer`.
-    fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>);
+    fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>) -> bool;
 }
 
 pub struct NopTracer;
 impl Tracer for NopTracer {
-    fn notify(&mut self, _event: &TraceEvent, _writer: Writer<'_>) {}
+    fn notify(&mut self, _event: &TraceEvent, _writer: Writer<'_>) -> bool {
+        // keep all events
+        true
+    }
 }
 
 /// A writer that allows you to push custom events to the trace but encapsulates the trace so that
