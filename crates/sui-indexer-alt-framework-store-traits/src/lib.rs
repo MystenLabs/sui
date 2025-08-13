@@ -16,7 +16,7 @@ pub trait Connection: Send {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
     /// Given a pipeline and optional indexer task, return the reader watermark from the database.
@@ -25,7 +25,7 @@ pub trait Connection: Send {
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
 
     /// For some pipeline and optional indexer task, get the bounds for the region that the pruner
@@ -37,7 +37,7 @@ pub trait Connection: Send {
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
 
@@ -46,7 +46,7 @@ pub trait Connection: Send {
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 
@@ -66,7 +66,7 @@ pub trait Connection: Send {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
@@ -74,7 +74,7 @@ pub trait Connection: Send {
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         pruner_hi: u64,
     ) -> anyhow::Result<bool>;
 }

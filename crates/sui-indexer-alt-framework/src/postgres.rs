@@ -36,7 +36,6 @@ impl Indexer<Db> {
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
     pub async fn new_from_pg(
-        indexer_task: Option<&'static str>,
         database_url: Url,
         db_args: DbArgs,
         indexer_args: IndexerArgs,
@@ -69,7 +68,6 @@ impl Indexer<Db> {
             ingestion_config,
             metrics_prefix,
             registry,
-            indexer_task,
             cancel,
         )
         .await
@@ -98,7 +96,6 @@ impl Indexer<Db> {
             IngestionConfig::default(),
             None,
             &Registry::new(),
-            None, // indexer_task
             CancellationToken::new(),
         )
         .await

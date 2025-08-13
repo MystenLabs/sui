@@ -28,11 +28,12 @@ use super::{Handler, PrunerConfig};
 pub(super) fn reader_watermark<H: Handler + 'static>(
     config: Option<PrunerConfig>,
     store: H::Store,
-    task: Option<&'static str>,
+    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        let task = task.as_deref();
         let Some(config) = config else {
             info!(
                 pipeline = H::NAME,
@@ -86,7 +87,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                         continue;
                     }
 
-                    // TODO: how do we report task to this metric?
+                    // TODO: (wlmyng) how do we report task to this metric?
                     metrics
                         .watermark_reader_lo
                         .with_label_values(&[H::NAME])
@@ -100,7 +101,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                     if updated {
                         info!(pipeline = H::NAME, task = task, new_reader_lo, "Watermark");
 
-                        // TODO: how do we report task to this metric?
+                        // TODO: (wlmyng) how do we report task to this metric?
                         metrics
                             .watermark_reader_lo_in_db
                             .with_label_values(&[H::NAME])

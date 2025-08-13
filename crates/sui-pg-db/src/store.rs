@@ -25,7 +25,7 @@ impl store::Connection for Connection<'_> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
     ) -> anyhow::Result<Option<store::CommitterWatermark>> {
         // TODO: Add task filter
         let watermark: Option<(i64, i64, i64, i64)> = watermarks::table
@@ -55,7 +55,7 @@ impl store::Connection for Connection<'_> {
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
     ) -> anyhow::Result<Option<store::ReaderWatermark>> {
         let watermark: Option<(i64, i64)> = watermarks::table
             .select((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
@@ -77,7 +77,7 @@ impl store::Connection for Connection<'_> {
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         delay: Duration,
     ) -> anyhow::Result<Option<store::PrunerWatermark>> {
         //     |---------- + delay ---------------------|
@@ -111,7 +111,7 @@ impl store::Connection for Connection<'_> {
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         watermark: store::CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Create a StoredWatermark directly from CommitterWatermark
@@ -150,7 +150,7 @@ impl store::Connection for Connection<'_> {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         reader_lo: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)
@@ -168,7 +168,7 @@ impl store::Connection for Connection<'_> {
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&'static str>,
+        task: Option<&str>,
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)

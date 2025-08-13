@@ -157,7 +157,6 @@ impl IndexerClusterBuilder {
         let client_args = self.args.client_args.context("client_args is required")?;
 
         let indexer = Indexer::new_from_pg(
-            None, // TODO: return and configure indexer task
             database_url,
             self.db_args,
             self.args.indexer_args,
