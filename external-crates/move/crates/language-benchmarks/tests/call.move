@@ -6,7 +6,7 @@ module 0x1::bench {
         if (check) () else abort code
     }
 
-    public fun bench() {
+    public fun bench_call() {
         let mut i = 0;
         // 3000 is the number of loops to make the benchmark run for a couple of minutes,
         // which is an eternity.

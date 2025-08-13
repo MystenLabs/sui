@@ -90,6 +90,27 @@ fn create_vm() -> InMemoryTestAdapter {
     ))
 }
 
+fn find_bench_functions(modules: &Vec<CompiledModule>) -> Vec<Identifier> {
+    let name = "bench";
+    modules
+        .iter()
+        .flat_map(|module| {
+            module
+                .function_defs()
+                .iter()
+                .enumerate()
+                .filter_map(|(_idx, def)| {
+                    let handle = module.function_handle_at(def.function);
+                    if module.identifier_at(handle.name).as_str().starts_with(name) {
+                        Some(Identifier::new(module.identifier_at(handle.name).as_str()).unwrap())
+                    } else {
+                        None
+                    }
+                })
+        })
+        .collect()
+}
+
 // execute a given function in the Bench module
 fn execute<M: Measurement + 'static>(
     c: &mut Criterion<M>,
@@ -99,6 +120,7 @@ fn execute<M: Measurement + 'static>(
 ) {
     // establish running context
     let sender = CORE_CODE_ADDRESS;
+    let fun_names = find_bench_functions(&modules);
 
     let linkage = adapter
         .generate_linkage_context(sender, sender, &modules)
@@ -111,26 +133,29 @@ fn execute<M: Measurement + 'static>(
 
     // module and function to call
     let module_id = ModuleId::new(sender, Identifier::new("bench").unwrap());
-    let fun_name = Identifier::new("bench").unwrap();
+    // let fun_name = Identifier::new("bench").unwrap();
 
-    // benchmark
-    // TODO: we may want to use a real gas meter to make benchmarks more realistic.
-    c.bench_function(file, |b| {
-        b.iter_with_large_drop(|| {
-            adapter
-                .make_vm(linkage.clone())
-                .unwrap()
-                .execute_function_bypass_visibility(
-                    &module_id,
-                    &fun_name,
-                    vec![],
-                    Vec::<Vec<u8>>::new(),
-                    &mut UnmeteredGasMeter,
-                    None,
-                )
-                .unwrap_or_else(|err| {
-                    panic!("{:?}::bench in {file} failed with {:?}", &module_id, err)
-                })
-        })
+    fun_names.iter().for_each(|fun_name| {
+        // benchmark
+        // TODO: we may want to use a real gas meter to make benchmarks more realistic.
+        let bench_name = format!("{}::{}", file, fun_name);
+        c.bench_function(&bench_name, |b| {
+            b.iter_with_large_drop(|| {
+                adapter
+                    .make_vm(linkage.clone())
+                    .unwrap()
+                    .execute_function_bypass_visibility(
+                        &module_id,
+                        &fun_name,
+                        vec![],
+                        Vec::<Vec<u8>>::new(),
+                        &mut UnmeteredGasMeter,
+                        None,
+                    )
+                    .unwrap_or_else(|err| {
+                        panic!("{:?}::bench in {file} failed with {:?}", &module_id, err)
+                    })
+            })
+        });
     });
 }
