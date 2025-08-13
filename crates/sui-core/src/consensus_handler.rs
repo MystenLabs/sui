@@ -1355,18 +1355,17 @@ impl ConsensusBlockHandler {
                     "rejected"
                 } else {
                     "certified"
-                }
-                .to_string();
+                };
                 if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind {
                     debug!(
-                        "User Transaction in position: {:?} with digest {:?} is {:?}",
+                        "User Transaction in position: {:} with digest {:} is {:}",
                         position,
                         tx.digest(),
                         status_str
                     );
                 } else {
                     debug!(
-                        "System Transaction in position: {:?} is {:?}",
+                        "System Transaction in position: {:} is {:}",
                         position, status_str
                     );
                 }

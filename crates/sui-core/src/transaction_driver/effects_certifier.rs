@@ -56,7 +56,7 @@ impl EffectsCertifier {
         Self { metrics }
     }
 
-    #[instrument(level = "debug", skip_all, err)]
+    #[instrument(level = "error", skip_all, err)]
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -241,7 +241,7 @@ impl EffectsCertifier {
         }
     }
 
-    #[instrument(level = "debug", skip_all, err, ret, fields(tx_digest = ?tx_digest, consensus_position = ?consensus_position))]
+    #[instrument(level = "error", skip_all, err, ret, fields(consensus_position = ?consensus_position))]
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
