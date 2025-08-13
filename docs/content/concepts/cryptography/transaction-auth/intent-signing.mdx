@@ -66,7 +66,7 @@ const intentMessage = messageWithIntent('TransactionData', transactionBytes);
 const signature = await this.sign(intentMessage);
 ```
 
-Under the hood, the `new_secure` method in Rust and the `signData` method in TypesScript does the following:
+Under the hood, the `new_secure` method in Rust and the `signData` method in TypeScript does the following:
 
 1.  Serializes the intent message as the 3-byte intent concatenated with the BCS serialized bytes of the transaction data.
 1.  Applies Blake2b hash to get the 32-byte digest
