@@ -1199,17 +1199,6 @@ impl ValidatorService {
         let tx_digest = request.transaction_digest;
         let tx_digests = [tx_digest];
 
-        // We always wait for finalized effects which is safe regardless of consensus
-        // position.
-        let executed_effects_finalized_future = Box::pin(
-            self.state
-                .get_transaction_cache_reader()
-                .notify_read_executed_effects(
-                    "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
-                    &tx_digests,
-                ),
-        );
-
         let fastpath_effects_future: Pin<Box<dyn Future<Output = _> + Send>> =
             if request.consensus_position.is_some() {
                 Box::pin(self.wait_for_fastpath_effects(
@@ -1223,7 +1212,15 @@ impl ValidatorService {
             };
 
         tokio::select! {
-            mut effects = executed_effects_finalized_future => {
+            // We always wait for finalized effects regardless of consensus position.
+            // This is safe because we have separated mysticeti fastpath outputs to a
+            // separate cache.
+            mut effects = self.state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects(
+                    "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
+                    &tx_digests,
+                ) => {
                 let effects = effects.pop().unwrap();
                 let details = if request.include_details {
                     Some(self.complete_executed_data(effects.clone(), None).await?)
@@ -1283,12 +1280,6 @@ impl ValidatorService {
         consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
 
         let mut current_status = None;
-        let mut fastpath_outputs_future = Box::pin(
-            self.state
-                .get_transaction_cache_reader()
-                .notify_read_fastpath_transaction_outputs(tx_digests),
-        );
-
         loop {
             tokio::select! {
                 status_result = consensus_tx_status_cache
@@ -1322,7 +1313,7 @@ impl ValidatorService {
                     }
                 }
 
-                mut outputs = &mut fastpath_outputs_future,
+                mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(tx_digests),
                     if current_status == Some(ConsensusTxStatus::FastpathCertified) => {
 
                     let outputs = outputs.pop().unwrap();
