@@ -4,7 +4,7 @@
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
-    Context, Object as GraphQLObject,
+    Context, Object,
 };
 use move_binary_format::{errors::PartialVMResult, CompiledModule};
 use sui_types::{
@@ -33,7 +33,7 @@ pub(crate) type CSystemPackage = JsonCursor<usize>;
 /// A system transaction that updates epoch information on-chain (increments the current epoch). Executed by the system once per epoch, without using gas. Epoch change transactions cannot be submitted by users, because validators will refuse to sign them.
 ///
 /// This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
-#[GraphQLObject]
+#[Object]
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
     async fn epoch(&self) -> Option<Epoch> {
@@ -74,7 +74,7 @@ impl ChangeEpochTransaction {
         )?))
     }
 
-    /// System packages (specifically framework and move stdlib) that are written before the new epoch starts, to upgrade them on-chain. Validators write these packages out when running the transaction.
+    /// System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
     async fn system_packages(
         &self,
         ctx: &Context<'_>,
