@@ -907,7 +907,19 @@ impl ConsensusAdapter {
         }
         debug!("{transaction_keys:?} processed by consensus");
 
-        let consensus_keys: Vec<_> = transactions.iter().map(|t| t.key()).collect();
+        let consensus_keys: Vec<_> = transactions
+            .iter()
+            .filter_map(|t| {
+                if t.is_user_transaction() {
+                    // UserTransaction is not inserted into the pending consensus transactions table.
+                    // Also UserTransaction shares the same key as CertifiedTransaction, so removing
+                    // the key here can have unexpected effects.
+                    None
+                } else {
+                    Some(t.key())
+                }
+            })
+            .collect();
         epoch_store
             .remove_pending_consensus_transactions(&consensus_keys)
             .expect("Storage error when removing consensus transaction");
