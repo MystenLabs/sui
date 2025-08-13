@@ -7,6 +7,7 @@ use crate::client_commands::{
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
+use crate::trace_analysis_commands::AnalyzeTraceCommand;
 use crate::validator_commands::SuiValidatorCommand;
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
@@ -364,6 +365,21 @@ pub enum SuiCommand {
     /// Invoke Sui's move-analyzer via CLI
     #[clap(name = "analyzer", hide = true)]
     Analyzer,
+
+    /// Analyze and/or transform a trace file
+    #[clap(name = "analyze-trace")]
+    AnalyzeTrace {
+        /// The path to the trace file to analyze
+        #[arg(long, short)]
+        path: PathBuf,
+
+        /// The output directory for any generated artifacts. Defaults `<cur_dir>`
+        #[arg(long, short)]
+        output_dir: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: AnalyzeTraceCommand,
+    },
 }
 
 impl SuiCommand {
@@ -753,6 +769,11 @@ impl SuiCommand {
                 analyzer::run(implicit_deps(latest_system_packages()));
                 Ok(())
             }
+            SuiCommand::AnalyzeTrace {
+                path,
+                output_dir,
+                command,
+            } => command.execute(path, output_dir).await,
         }
     }
 }

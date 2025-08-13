@@ -13104,6 +13104,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
  "msim",
