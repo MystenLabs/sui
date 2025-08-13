@@ -102,9 +102,7 @@ fun add_to_mmr(new_val: vector<u8>, mmr: &mut MerkleMountainRange) {
             *r = cur;
             return
         } else {
-            // TODO: Add a prefix before hashing?
-            r.append(cur);
-            cur = hash::blake2b256(r);
+            cur = hash_two_to_one(r, cur);
             *r = vector::empty();
         };
         i = i + 1;
@@ -112,6 +110,12 @@ fun add_to_mmr(new_val: vector<u8>, mmr: &mut MerkleMountainRange) {
 
     // Vector length insufficient. Increase by 1.
     mmr.digest_vec.push_back(cur);
+}
+
+// TODO: Add a prefix to distinguish inner hashes?
+fun hash_two_to_one(e1: &mut vector<u8>, e2: vector<u8>): vector<u8> {
+    e1.append(e2);
+    hash::blake2b256(e1)
 }
 
 }
