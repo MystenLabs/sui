@@ -38,7 +38,6 @@ pub mod config;
 pub(crate) mod handlers;
 
 pub async fn setup_indexer(
-    indexer_task: Option<String>,
     database_url: Url,
     db_args: DbArgs,
     indexer_args: IndexerArgs,
@@ -115,7 +114,6 @@ pub async fn setup_indexer(
         ingestion,
         metrics_prefix,
         registry,
-        indexer_task,
         cancel.clone(),
     )
     .await?;

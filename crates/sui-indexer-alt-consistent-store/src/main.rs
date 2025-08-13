@@ -38,7 +38,6 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Run {
-            indexer_task,
             database_path,
             indexer_args,
             client_args,
@@ -76,7 +75,6 @@ async fn main() -> anyhow::Result<()> {
             });
 
             let h_service = start_service(
-                indexer_task,
                 database_path,
                 indexer_args,
                 client_args,

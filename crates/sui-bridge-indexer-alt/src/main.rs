@@ -59,7 +59,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let metrics_prefix = None;
     let mut indexer = Indexer::new_from_pg(
-        None, // TODO: return and configure indexer task
         database_url,
         db_args,
         indexer_args,

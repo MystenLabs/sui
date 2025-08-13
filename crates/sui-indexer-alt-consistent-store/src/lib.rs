@@ -68,7 +68,6 @@ mod store;
 /// The service spins up auxiliary services (to expose metrics, run the indexer, and the RPC), and
 /// will clean these up on shutdown as well.
 pub async fn start_service(
-    indexer_task: Option<String>,
     path: impl AsRef<Path>,
     indexer_args: IndexerArgs,
     client_args: ClientArgs,
@@ -95,7 +94,6 @@ pub async fn start_service(
     let committer = committer.finish(CommitterConfig::default());
 
     let mut indexer: Indexer<Schema> = Indexer::new(
-        indexer_task,
         path,
         indexer_args,
         client_args,
