@@ -57,7 +57,7 @@ impl fmt::Debug for SubmitTxResponse {
                 .finish(),
             Self::Executed { effects_digest, .. } => f
                 .debug_struct("Executed")
-                .field("effects_digest", effects_digest)
+                .field("effects_digest", &format_args!("{}", effects_digest))
                 .finish(),
         }
     }

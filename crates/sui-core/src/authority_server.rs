@@ -530,7 +530,7 @@ impl ValidatorService {
         Ok((tonic::Response::new(info), Weight::zero()))
     }
 
-    #[instrument(name= "ValidatorService::handle_submit_transaction", level = "debug", skip_all, err, fields(tx_digest = ?tracing::field::Empty))]
+    #[instrument(name= "ValidatorService::handle_submit_transaction", level = "error", skip_all, err, fields(tx_digest = ?tracing::field::Empty))]
     async fn handle_submit_transaction(
         &self,
         request: tonic::Request<RawSubmitTxRequest>,
@@ -1178,6 +1178,7 @@ impl ValidatorService {
     }
 
     // TODO(fastpath): Add metrics.
+    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, err, fields(tx_digest = ?request.transaction_digest, consensus_position = ?request.consensus_position))]
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
