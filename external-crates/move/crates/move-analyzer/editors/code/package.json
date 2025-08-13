@@ -40,12 +40,20 @@
       {
         "command": "move.build",
         "title": "Build a Move package",
-        "category": "Move"
+        "category": "Move",
+        "icon": {
+          "light": "images/hammer-light.svg",
+          "dark": "images/hammer-dark.svg"
+        }
       },
       {
         "command": "move.test",
         "title": "Run Move package test",
-        "category": "Move"
+        "category": "Move",
+        "icon": {
+          "light": "images/test-light.svg",
+          "dark": "images/test-dark.svg"
+        }
       },
       {
         "command": "move.trace",
@@ -150,8 +158,21 @@
         {
           "command": "move.trace"
         }
-        ]
+        ],
+        "editor/title" :[
+        {
+          "command": "move.build",
+          "when": "resourceExtname == .move",
+          "group": "navigation"
+        },
+        {
+          "command": "move.test",
+          "when": "resourceExtname == .move",
+          "group": "navigation"
+        }
+    ]
     }
+    
   },
   "scripts": {
     "compile": "tsc -p ./ && cd ../../ && cargo build",
