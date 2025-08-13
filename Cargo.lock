@@ -14342,6 +14342,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-grpc-rosetta"
+version = "1.55.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.3",
+ "axum-extra 0.10.1",
+ "bcs",
+ "clap",
+ "eyre",
+ "fastcrypto",
+ "futures",
+ "hyper 1.5.2",
+ "lru 0.10.0",
+ "move-cli",
+ "move-core-types",
+ "mysten-metrics",
+ "once_cell",
+ "quick-js",
+ "rand 0.8.5",
+ "reqwest 0.12.9",
+ "serde",
+ "serde_json",
+ "shared-crypto",
+ "signature 1.6.4",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-move-build",
+ "sui-node",
+ "sui-sdk",
+ "sui-swarm-config",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-cluster",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "typed-store",
+]
+
+[[package]]
 name = "sui-http"
 version = "0.0.0"
 dependencies = [

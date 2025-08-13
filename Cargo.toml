@@ -124,6 +124,7 @@ members = [
   "crates/sui-graphql-rpc",
   "crates/sui-graphql-rpc-client",
   "crates/sui-graphql-rpc-headers",
+  "crates/sui-grpc-rosetta",
   "crates/sui-http",
   "crates/sui-indexer",
   "crates/sui-indexer-alt",
@@ -410,7 +411,10 @@ ipnetwork = "0.20.0"
 iso8601 = "0.6.3"
 itertools = "0.13.0"
 tikv-jemalloc-ctl = "^0.5"
-tikv-jemallocator = { version = "^0.5", features = ["profiling", "disable_initial_exec_tls"] }
+tikv-jemallocator = { version = "^0.5", features = [
+  "profiling",
+  "disable_initial_exec_tls",
+] }
 jsonrpsee = { version = "0.24.9", features = [
   "server",
   "macros",
@@ -745,6 +749,7 @@ sui-proxy = { path = "crates/sui-proxy" }
 sui-replay = { path = "crates/sui-replay" }
 sui-replay-2 = { path = "crates/sui-replay-2" }
 sui-rosetta = { path = "crates/sui-rosetta" }
+sui-grpc-rosetta = { path = "crates/sui-grpc-rosetta" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
 sui-simulator = { path = "crates/sui-simulator" }
