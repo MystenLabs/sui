@@ -1360,17 +1360,17 @@ impl ConsensusBlockHandler {
                         .inc();
                     continue;
                 }
-                self.epoch_store
-                    .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
-
                 self.metrics
                     .consensus_block_handler_txn_processed
                     .with_label_values(&["certified"])
                     .inc();
+
                 if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
                     if tx.is_consensus_tx() {
                         continue;
                     }
+                    self.epoch_store
+                        .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
                     let tx = VerifiedTransaction::new_unchecked(*tx);
                     executable_transactions.push(Schedulable::Transaction(
                         VerifiedExecutableTransaction::new_from_consensus(
@@ -1385,10 +1385,20 @@ impl ConsensusBlockHandler {
         if executable_transactions.is_empty() {
             return;
         }
-
         self.metrics
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
+
+        // Avoid triggering fastpath execution during reconfiguration.
+        let reconfiguration_lock = self.epoch_store.get_reconfig_state_read_lock_guard();
+        if !reconfiguration_lock.should_accept_user_certs() {
+            debug!(
+                "Skipping {} fastpath execution because of epoch change",
+                executable_transactions.len(),
+            );
+            return;
+        }
+
         self.transaction_manager_sender.send(
             executable_transactions,
             Default::default(),
