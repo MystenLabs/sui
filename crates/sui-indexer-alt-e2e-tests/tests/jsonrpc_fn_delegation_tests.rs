@@ -35,7 +35,7 @@ impl FnDelegationTestCluster {
     async fn new() -> anyhow::Result<Self> {
         let onchain_cluster = TestClusterBuilder::new()
             .with_num_validators(1)
-            .with_epoch_duration_ms(2000)
+            .with_epoch_duration_ms(300_000) // 5 minutes
             .with_accounts(vec![
                 AccountConfig {
                     address: None,
