@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+// Test comment
 
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
