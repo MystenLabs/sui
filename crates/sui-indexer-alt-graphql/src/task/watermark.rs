@@ -223,6 +223,13 @@ impl Watermarks {
         &self.global_hi
     }
 
+    /// The reader_lo for a pipeline. Returned as an inclusive checkpoint number.
+    pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> anyhow::Result<&Watermark> {
+        self.pipeline_lo
+            .get(pipeline)
+            .ok_or_else(|| anyhow::anyhow!("'{}' not found in pipeline_lo watermarks", pipeline))
+    }
+
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
     /// (should not happen under normal operation).
     pub(crate) fn timestamp_hi(&self) -> Option<DateTime<Utc>> {
@@ -251,6 +258,10 @@ impl Watermarks {
 impl Watermark {
     pub(crate) fn checkpoint(&self) -> u64 {
         self.checkpoint as u64
+    }
+
+    pub(crate) fn transaction(&self) -> u64 {
+        self.transaction as u64
     }
 }
 

@@ -942,6 +942,14 @@ impl WritebackCache {
         }
 
         let tx_digest = *transaction.digest();
+        debug!(
+            ?tx_digest,
+            "Writing transaction output objects to cache: {:?}",
+            written
+                .values()
+                .map(|o| (o.id(), o.version()))
+                .collect::<Vec<_>>(),
+        );
         let effects_digest = effects.digest();
 
         self.metrics.record_cache_write("transaction_block");
@@ -1853,12 +1861,16 @@ impl ObjectCacheRead for WritebackCache {
         epoch: EpochId,
     ) -> BoxFuture<'a, ()> {
         self.object_notify_read
-            .read(input_and_receiving_keys, move |keys| {
-                self.multi_input_objects_available(keys, receiving_keys, epoch)
-                    .into_iter()
-                    .map(|available| if available { Some(()) } else { None })
-                    .collect::<Vec<_>>()
-            })
+            .read(
+                "notify_read_input_objects",
+                input_and_receiving_keys,
+                move |keys| {
+                    self.multi_input_objects_available(keys, receiving_keys, epoch)
+                        .into_iter()
+                        .map(|available| if available { Some(()) } else { None })
+                        .collect::<Vec<_>>()
+                },
+            )
             .map(|_| ())
             .boxed()
     }
@@ -2057,10 +2069,11 @@ impl TransactionCacheRead for WritebackCache {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>> {
         self.executed_effects_digests_notify_read
-            .read(digests, |digests| {
+            .read(task_name, digests, |digests| {
                 self.multi_get_executed_effects_digests(digests)
             })
             .boxed()
@@ -2149,12 +2162,16 @@ impl TransactionCacheRead for WritebackCache {
         tx_digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<Arc<TransactionOutputs>>> {
         self.fastpath_transaction_outputs_notify_read
-            .read(tx_digests, |tx_digests| {
-                tx_digests
-                    .iter()
-                    .map(|tx_digest| self.get_mysticeti_fastpath_outputs(tx_digest))
-                    .collect()
-            })
+            .read(
+                "notify_read_fastpath_transaction_outputs",
+                tx_digests,
+                |tx_digests| {
+                    tx_digests
+                        .iter()
+                        .map(|tx_digest| self.get_mysticeti_fastpath_outputs(tx_digest))
+                        .collect()
+                },
+            )
             .boxed()
     }
 

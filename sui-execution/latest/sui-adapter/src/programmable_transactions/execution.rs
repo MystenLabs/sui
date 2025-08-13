@@ -201,6 +201,16 @@ mod checked {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let mut argument_updates = Mode::empty_arguments();
+
+        let kind = match &command {
+            Command::MakeMoveVec(_, _) => CommandKind::MakeMoveVec,
+            Command::TransferObjects(_, _) => CommandKind::TransferObjects,
+            Command::SplitCoins(_, _) => CommandKind::SplitCoins,
+            Command::MergeCoins(_, _) => CommandKind::MergeCoins,
+            Command::MoveCall(_) => CommandKind::MoveCall,
+            Command::Publish(_, _) => CommandKind::Publish,
+            Command::Upgrade(_, _, _, _) => CommandKind::Upgrade,
+        };
         let results = match command {
             Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
                 let Some(tag) = tag_opt else {
@@ -494,7 +504,7 @@ mod checked {
         };
 
         Mode::finish_command(context, mode_results, argument_updates, &results)?;
-        context.push_command_results(results)?;
+        context.push_command_results(kind, results)?;
         Ok(())
     }
 
@@ -794,6 +804,46 @@ mod checked {
             &modules,
             upgrade_ticket.policy,
         )?;
+        if context.protocol_config.check_for_init_during_upgrade() {
+            // find newly added modules to the package,
+            // and error if they have init functions
+            let current_module_names: BTreeSet<&str> = current_package
+                .move_package()
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let upgrade_module_names: BTreeSet<&str> = package
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let new_module_names = upgrade_module_names
+                .difference(&current_module_names)
+                .copied()
+                .collect::<BTreeSet<&str>>();
+            let new_modules = modules
+                .iter()
+                .filter(|m| {
+                    let name = m.identifier_at(m.self_handle().name).as_str();
+                    new_module_names.contains(name)
+                })
+                .collect::<Vec<&CompiledModule>>();
+            let new_module_has_init = new_modules.iter().any(|module| {
+                module.function_defs.iter().any(|fdef| {
+                    let fhandle = module.function_handle_at(fdef.function);
+                    let fname = module.identifier_at(fhandle.name);
+                    fname == INIT_FN_NAME
+                })
+            });
+            if new_module_has_init {
+                // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::FeatureNotYetSupported,
+                    "`init` in new modules on upgrade is not yet supported",
+                ));
+            }
+        }
 
         context.write_package(package);
         Ok(vec![Value::Raw(
@@ -1030,13 +1080,13 @@ mod checked {
         Ok(())
     }
 
-    fn init_modules<Mode: ExecutionMode>(
+    fn init_modules<'a, Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
-        modules: &[CompiledModule],
+        modules: impl IntoIterator<Item = &'a CompiledModule>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
-        let modules_to_init = modules.iter().filter_map(|module| {
+        let modules_to_init = modules.into_iter().filter_map(|module| {
             for fdef in &module.function_defs {
                 let fhandle = module.function_handle_at(fdef.function);
                 let fname = module.identifier_at(fhandle.name);
@@ -1370,7 +1420,7 @@ mod checked {
     /// each value
     fn build_move_args<Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
-        module_id: &ModuleId,
+        _module_id: &ModuleId,
         function: &IdentStr,
         function_kind: FunctionKind,
         signature: &LoadedFunctionInstantiation,
@@ -1404,11 +1454,6 @@ mod checked {
         // check the types and remember which are by mutable ref
         let mut by_mut_ref = vec![];
         let mut serialized_args = Vec::with_capacity(num_args);
-        let command_kind = CommandKind::MoveCall {
-            package: (*module_id.address()).into(),
-            module: module_id.name(),
-            function,
-        };
         // an init function can have one or two arguments, with the last one always being of type
         // &mut TxContext and the additional (first) one representing a one time witness type (see
         // one_time_witness verifier pass for additional explanation)
@@ -1450,7 +1495,7 @@ mod checked {
                 }
                 Type::Reference(inner) => (context.borrow_arg(idx, arg, param_ty)?, inner),
                 t => {
-                    let value = context.by_value_arg(command_kind, idx, arg)?;
+                    let value = context.by_value_arg(CommandKind::MoveCall, idx, arg)?;
                     (value, t)
                 }
             };

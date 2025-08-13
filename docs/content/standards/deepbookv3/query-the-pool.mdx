@@ -1,14 +1,16 @@
 ---
 title: Query the Pool
+description: A Pool is a shared object that represents a unique market pair, such as SUI/USDC. 
+keywords: [ deepbook, deepbookv3, pool, balancemanager, tradeproof, query a pool, query pool, whitelist status, base quantity against quote, quote quantity against base, DEEP fees, input token fees, quote quantity against quote or base, check fee required, reserve mid price, reserve pool mid price ]
 ---
 
-The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBook Design](./design.mdx#pool) to learn more about the structure of pools.
+The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBookV3 Design](./design.mdx#pool) to learn more about the structure of pools.
 
 To perform trades, you pass a `BalanceManager` and `TradeProof` into the relevant `Pool`. Unlike `Pool`s, `BalanceManager` shared objects can contain any type of token, such that the same `BalanceManager` can access multiple `Pool`s to interact with many different trade pairings. See [BalanceManager](./balance-manager.mdx) to learn more.
 
 ## API
 
-DeepBook exposes a set of endpoints that can be used to query any pool.
+DeepBookV3 exposes a set of endpoints that can be used to query any pool.
 
 ### Check whitelist status
 
@@ -127,3 +129,7 @@ Returns the book parameters for the pool (`tick_size`, `lot_size`, `min_size`).
 Returns the `OrderDeepPrice` struct for the pool, which determines the conversion for DEEP fees.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_order_deep_price noComments}
+
+## Related links
+
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

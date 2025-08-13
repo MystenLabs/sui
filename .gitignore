@@ -2,6 +2,8 @@
 **/.history/
 **/.vscode/
 **/.idea/
+**/CLAUDE-local.md
+**/.claude/
 
 # OSX
 .DS_Store

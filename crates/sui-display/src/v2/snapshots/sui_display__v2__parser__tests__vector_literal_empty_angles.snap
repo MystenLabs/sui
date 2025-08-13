@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{vector<>[1]}\"#)"
+---
+Error: Unexpected '>' at offset 8, expected one of 'address', 'bool', 'u128', 'u16', 'u256', 'u32', 'u64', 'u8', 'vector', a decimal number, or a hexadecimal number

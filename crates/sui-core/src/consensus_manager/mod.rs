@@ -249,7 +249,9 @@ impl ReplayWaiter {
                 continue;
             };
             info!("Waiting for consensus handler to finish replaying ...");
-            monitor.replay_complete().await;
+            monitor
+                .replay_to_consumer_last_processed_commit_complete()
+                .await;
             break;
         }
     }
@@ -361,7 +363,7 @@ impl Drop for RunningLockGuard<'_> {
             // consensus was not running and now will be marked as started
             Running::False => {
                 tracing::info!(
-                "Starting up consensus for epoch {} & protocol version {:?} is complete - took {} seconds",
+                "Starting up consensus for epoch {} & protocol version {:?} completed - took {} seconds",
                 self.epoch.unwrap(),
                 self.protocol_version.unwrap(),
                 self.start.elapsed().as_secs_f64());

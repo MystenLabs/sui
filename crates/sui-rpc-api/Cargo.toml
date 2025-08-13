@@ -50,12 +50,3 @@ bytes.workspace = true
 tonic-health.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
-
-[dev-dependencies]
-protox = "0.7"
-tonic-build = "0.13"
-sui-sdk-types = { workspace = true, features = ["proptest"] }
-test-strategy = "0.4.0"
-proptest.workspace = true
-paste = "1.0.15"
-walkdir.workspace = true

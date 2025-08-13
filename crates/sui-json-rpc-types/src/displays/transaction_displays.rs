@@ -52,6 +52,9 @@ impl Display for Pretty<'_, SuiProgrammableTransactionBlock> {
                             object_id
                         )]);
                     }
+                    SuiCallArg::BalanceWithdraw(arg) => {
+                        builder.push_record(vec![format!("{i:<3} Balance Withdraw: {:?}", arg)]);
+                    }
                 }
             }
 

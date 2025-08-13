@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use bytes::Bytes;
 use consensus_types::block::{BlockRef, TransactionIndex};
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -9,17 +10,30 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     transaction::TransactionVerifier,
+    VerifiedBlock,
 };
 
 pub(crate) trait BlockVerifier: Send + Sync + 'static {
     /// Verifies a block and its transactions, checking signatures, size limits,
     /// and transaction validity. All honest validators should produce the same verification
     /// outcome for the same block, so any verification error should be due to equivocation.
+    /// Returns the verified block.
     ///
     /// When Mysticeti fastpath is enabled, it also votes on the transactions in verified blocks,
     /// and can return a non-empty list of rejected transaction indices. Different honest
     /// validators may vote differently on transactions.
-    fn verify_and_vote(&self, block: &SignedBlock) -> ConsensusResult<Vec<TransactionIndex>>;
+    ///
+    /// The method takes both the SignedBlock and its serialized bytes, to avoid re-serializing the block.
+    fn verify_and_vote(
+        &self,
+        block: SignedBlock,
+        serialized_block: Bytes,
+    ) -> ConsensusResult<(VerifiedBlock, Vec<TransactionIndex>)>;
+
+    /// Votes on the transactions in a verified block.
+    /// This is used to vote on transactions in a verified block, without having to verify the block again. The method
+    /// will verify the transactions and vote on them.
+    fn vote(&self, block: &VerifiedBlock) -> ConsensusResult<Vec<TransactionIndex>>;
 }
 
 /// `SignedBlockVerifier` checks the validity of a block.
@@ -175,18 +189,31 @@ impl SignedBlockVerifier {
 
 // All block verification logic are implemented below.
 impl BlockVerifier for SignedBlockVerifier {
-    fn verify_and_vote(&self, block: &SignedBlock) -> ConsensusResult<Vec<TransactionIndex>> {
-        self.verify_block(block)?;
-        if self.context.protocol_config.mysticeti_fastpath() {
-            self.transaction_verifier
-                .verify_and_vote_batch(&block.transactions_data())
-                .map_err(|e| ConsensusError::InvalidTransaction(e.to_string()))
+    fn verify_and_vote(
+        &self,
+        block: SignedBlock,
+        serialized_block: Bytes,
+    ) -> ConsensusResult<(VerifiedBlock, Vec<TransactionIndex>)> {
+        self.verify_block(&block)?;
+
+        // If the block verification passed then we can produce the verified block, but we should only return it if the transaction verification passed as well.
+        let verified_block = VerifiedBlock::new_verified(block, serialized_block);
+
+        let rejected_transactions = if self.context.protocol_config.mysticeti_fastpath() {
+            self.vote(&verified_block)?
         } else {
             self.transaction_verifier
-                .verify_batch(&block.transactions_data())
+                .verify_batch(&verified_block.transactions_data())
                 .map_err(|e| ConsensusError::InvalidTransaction(e.to_string()))?;
-            Ok(vec![])
-        }
+            vec![]
+        };
+        Ok((verified_block, rejected_transactions))
+    }
+
+    fn vote(&self, block: &VerifiedBlock) -> ConsensusResult<Vec<TransactionIndex>> {
+        self.transaction_verifier
+            .verify_and_vote_batch(&block.reference(), &block.transactions_data())
+            .map_err(|e| ConsensusError::InvalidTransaction(e.to_string()))
     }
 }
 
@@ -195,7 +222,18 @@ pub(crate) struct NoopBlockVerifier;
 
 #[cfg(test)]
 impl BlockVerifier for NoopBlockVerifier {
-    fn verify_and_vote(&self, _block: &SignedBlock) -> ConsensusResult<Vec<TransactionIndex>> {
+    fn verify_and_vote(
+        &self,
+        _block: SignedBlock,
+        _serialized_block: Bytes,
+    ) -> ConsensusResult<(VerifiedBlock, Vec<TransactionIndex>)> {
+        Ok((
+            VerifiedBlock::new_verified(_block, _serialized_block),
+            vec![],
+        ))
+    }
+
+    fn vote(&self, _block: &VerifiedBlock) -> ConsensusResult<Vec<TransactionIndex>> {
         Ok(vec![])
     }
 }
@@ -233,6 +271,7 @@ mod test {
         // Rejects transactions with length [4, 16) bytes.
         fn verify_and_vote_batch(
             &self,
+            _block_ref: &BlockRef,
             batch: &[&[u8]],
         ) -> Result<Vec<TransactionIndex>, ValidationError> {
             let mut rejected_indices = vec![];
@@ -519,8 +558,11 @@ mod test {
                 ])
                 .build();
             let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            let serialized_block = signed_block
+                .serialize()
+                .expect("Block serialization failed.");
             assert!(matches!(
-                verifier.verify_and_vote(&signed_block),
+                verifier.verify_and_vote(signed_block, serialized_block),
                 Err(ConsensusError::InvalidTransaction(_))
             ));
         }
@@ -557,10 +599,14 @@ mod test {
                 ])
                 .build();
             let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
-            assert_eq!(
-                verifier.verify_and_vote(&signed_block).unwrap(),
-                Vec::<TransactionIndex>::new()
-            );
+            let serialized_block = signed_block
+                .serialize()
+                .expect("Block serialization failed.");
+            let (verified_block, rejected_transactions) = verifier
+                .verify_and_vote(signed_block, serialized_block.clone())
+                .unwrap();
+            assert_eq!(rejected_transactions, Vec::<TransactionIndex>::new());
+            assert_eq!(verified_block.serialized().clone(), serialized_block);
         }
 
         // Block with 2 transactions rejected.
@@ -575,8 +621,14 @@ mod test {
                 ])
                 .build();
             let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            let serialized_block = signed_block
+                .serialize()
+                .expect("Block serialization failed.");
+            let (_verified_block, rejected_transactions) = verifier
+                .verify_and_vote(signed_block, serialized_block)
+                .unwrap();
             assert_eq!(
-                verifier.verify_and_vote(&signed_block).unwrap(),
+                rejected_transactions,
                 vec![1 as TransactionIndex, 3 as TransactionIndex],
             );
         }
@@ -593,8 +645,11 @@ mod test {
                 ])
                 .build();
             let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            let serialized_block = signed_block
+                .serialize()
+                .expect("Block serialization failed.");
             assert!(matches!(
-                verifier.verify_and_vote(&signed_block),
+                verifier.verify_and_vote(signed_block, serialized_block),
                 Err(ConsensusError::InvalidTransaction(_))
             ));
         }

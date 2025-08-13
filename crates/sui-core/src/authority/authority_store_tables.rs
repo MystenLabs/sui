@@ -332,20 +332,20 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "object_per_epoch_marker_table".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
                     MUTEXES,
                     uniform_key,
-                    KeySpaceConfig::new_with_key_offset(8),
+                    KeySpaceConfig::default(),
                 ),
             ),
             (
                 "object_per_epoch_marker_table_v2".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
                     MUTEXES,
                     uniform_key,
-                    KeySpaceConfig::new_with_key_offset(8),
+                    KeySpaceConfig::default(),
                 ),
             ),
         ];

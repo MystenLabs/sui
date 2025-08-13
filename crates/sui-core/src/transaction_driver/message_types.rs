@@ -9,8 +9,8 @@ use sui_types::{
     error::SuiError,
     messages_consensus::ConsensusPosition,
     messages_grpc::{
-        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectReason, RawRejectedStatus,
-        RawSubmitTxRequest, RawSubmitTxResponse, RawValidatorSubmitStatus,
+        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectedStatus,
+        RawSubmitTxRequest, RawSubmitTxResponse, RawSubmitTxResult, RawValidatorSubmitStatus,
         RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
     },
     object::Object,
@@ -26,11 +26,11 @@ pub struct SubmitTxRequest {
 impl SubmitTxRequest {
     pub fn into_raw(&self) -> Result<RawSubmitTxRequest, SuiError> {
         Ok(RawSubmitTxRequest {
-            transaction: bcs::to_bytes(&self.transaction)
+            transactions: vec![bcs::to_bytes(&self.transaction)
                 .map_err(|e| SuiError::TransactionSerializationError {
                     error: e.to_string(),
                 })?
-                .into(),
+                .into()],
         })
     }
 }
@@ -51,7 +51,16 @@ impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
     type Error = SuiError;
 
     fn try_from(value: RawSubmitTxResponse) -> Result<Self, Self::Error> {
-        match value.inner {
+        // TODO(fastpath): handle multiple transactions.
+        if value.results.len() != 1 {
+            return Err(SuiError::GrpcMessageDeserializeError {
+                type_info: "RawSubmitTxResponse.results".to_string(),
+                error: format!("Expected exactly 1 result, got {}", value.results.len()),
+            });
+        }
+
+        let result = value.results.into_iter().next().unwrap();
+        match result.inner {
             Some(RawValidatorSubmitStatus::Submitted(consensus_position)) => Ok(Self::Submitted {
                 consensus_position: consensus_position.as_ref().try_into()?,
             }),
@@ -63,8 +72,8 @@ impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
                 })
             }
             None => Err(SuiError::GrpcMessageDeserializeError {
-                type_info: "RawSubmitTxResponse.inner".to_string(),
-                error: "RawSubmitTxResponse.inner is None".to_string(),
+                type_info: "RawSubmitTxResult.inner".to_string(),
+                error: "RawSubmitTxResult.inner is None".to_string(),
             }),
         }
     }
@@ -87,7 +96,9 @@ impl TryFrom<SubmitTxResponse> for RawSubmitTxResponse {
                 RawValidatorSubmitStatus::Executed(raw_executed)
             }
         };
-        Ok(RawSubmitTxResponse { inner: Some(inner) })
+        Ok(RawSubmitTxResponse {
+            results: vec![RawSubmitTxResult { inner: Some(inner) }],
+        })
     }
 }
 
@@ -124,42 +135,17 @@ pub struct ExecutedData {
     pub output_objects: Vec<Object>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RejectReason {
-    // Transaction is not voted to be rejected locally.
-    None,
-    // Rejected due to lock conflict.
-    LockConflict(String),
-    // Rejected due to package verification.
-    PackageVerification(String),
-    // Rejected due to overload.
-    Overload(String),
-    // Rejected due to coin deny list.
-    CoinDenyList,
-}
-
-impl std::fmt::Display for RejectReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RejectReason::None => write!(f, "Rejected with no reason"),
-            RejectReason::LockConflict(msg) => write!(f, "Lock conflict: {}", msg),
-            RejectReason::PackageVerification(msg) => {
-                write!(f, "Package verification failed: {}", msg)
-            }
-            RejectReason::Overload(msg) => write!(f, "Overload: {}", msg),
-            RejectReason::CoinDenyList => write!(f, "Coin deny list"),
-        }
-    }
-}
-
+#[derive(Clone)]
 pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
     },
+    // The transaction was rejected by consensus.
     Rejected {
-        // The rejection reason known locally.
-        reason: RejectReason,
+        // The reason of the reject vote casted by the validator.
+        // If None, the validator did not cast a reject vote.
+        error: Option<SuiError>,
     },
     // The transaction position is expired, with the local epoch and committed round.
     // When round is None, the expiration is due to lagging epoch in the request.
@@ -204,8 +190,8 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                 })
             }
             Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
-                let reason = try_from_raw_rejected_status(rejected)?;
-                Ok(Self::Rejected { reason })
+                let error = try_from_raw_rejected_status(rejected)?;
+                Ok(Self::Rejected { error })
             }
             Some(RawValidatorTransactionStatus::Expired(expired)) => Ok(Self::Expired {
                 epoch: expired.epoch,
@@ -275,25 +261,34 @@ fn try_from_raw_executed_status(
     Ok((effects_digest, details))
 }
 
-fn try_from_raw_rejected_status(rejected: RawRejectedStatus) -> Result<RejectReason, SuiError> {
-    let raw_reason = RawRejectReason::try_from(rejected.reason).map_err(|err| {
-        SuiError::GrpcMessageDeserializeError {
-            type_info: "RawWaitForEffectsResponse.rejected.reason".to_string(),
-            error: err.to_string(),
+fn try_from_raw_rejected_status(rejected: RawRejectedStatus) -> Result<Option<SuiError>, SuiError> {
+    match rejected.error {
+        Some(error_bytes) => {
+            let error = bcs::from_bytes(&error_bytes).map_err(|err| {
+                SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawWaitForEffectsResponse.rejected.reason".to_string(),
+                    error: err.to_string(),
+                }
+            })?;
+            Ok(Some(error))
         }
-    })?;
-    let reason = match raw_reason {
-        RawRejectReason::None => RejectReason::None,
-        RawRejectReason::LockConflict => {
-            RejectReason::LockConflict(rejected.message.unwrap_or_default())
-        }
-        RawRejectReason::PackageVerification => {
-            RejectReason::PackageVerification(rejected.message.unwrap_or_default())
-        }
-        RawRejectReason::Overload => RejectReason::Overload(rejected.message.unwrap_or_default()),
-        RawRejectReason::CoinDenyList => RejectReason::CoinDenyList,
+        None => Ok(None),
+    }
+}
+
+fn try_from_response_rejected(error: Option<SuiError>) -> Result<RawRejectedStatus, SuiError> {
+    let error = match error {
+        Some(e) => Some(
+            bcs::to_bytes(&e)
+                .map_err(|err| SuiError::GrpcMessageSerializeError {
+                    type_info: "RawRejectedStatus.error".to_string(),
+                    error: err.to_string(),
+                })?
+                .into(),
+        ),
+        None => None,
     };
-    Ok(reason)
+    Ok(RawRejectedStatus { error })
 }
 
 impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
@@ -330,8 +325,8 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                 let raw_executed = try_from_response_executed(effects_digest, details)?;
                 RawValidatorTransactionStatus::Executed(raw_executed)
             }
-            WaitForEffectsResponse::Rejected { reason } => {
-                let raw_rejected = try_from_response_rejected(reason)?;
+            WaitForEffectsResponse::Rejected { error } => {
+                let raw_rejected = try_from_response_rejected(error)?;
                 RawValidatorTransactionStatus::Rejected(raw_rejected)
             }
             WaitForEffectsResponse::Expired { epoch, round } => {
@@ -405,21 +400,5 @@ fn try_from_response_executed(
     Ok(RawExecutedStatus {
         effects_digest,
         details,
-    })
-}
-
-fn try_from_response_rejected(reason: RejectReason) -> Result<RawRejectedStatus, SuiError> {
-    let (reason, message) = match reason {
-        RejectReason::None => (RawRejectReason::None, None),
-        RejectReason::LockConflict(message) => (RawRejectReason::LockConflict, Some(message)),
-        RejectReason::PackageVerification(message) => {
-            (RawRejectReason::PackageVerification, Some(message))
-        }
-        RejectReason::Overload(message) => (RawRejectReason::Overload, Some(message)),
-        RejectReason::CoinDenyList => (RawRejectReason::CoinDenyList, None),
-    };
-    Ok(RawRejectedStatus {
-        reason: reason.into(),
-        message,
     })
 }

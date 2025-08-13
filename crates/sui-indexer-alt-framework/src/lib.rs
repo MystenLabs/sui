@@ -118,6 +118,7 @@ impl<S: Store> Indexer<S> {
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
+        metrics_prefix: Option<&str>,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self> {
@@ -128,7 +129,7 @@ impl<S: Store> Indexer<S> {
             skip_watermark,
         } = indexer_args;
 
-        let metrics = IndexerMetrics::new(registry);
+        let metrics = IndexerMetrics::new(metrics_prefix, registry);
 
         let ingestion_service = IngestionService::new(
             client_args,

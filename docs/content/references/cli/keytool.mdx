@@ -1,6 +1,7 @@
 ---
 title: Sui Keytool CLI
 description: The Sui Keytool CLI has commands for managing and generating addresses, working with private keys, signatures, or zkLogin. 
+keywords: [ keytool cli, keytool reference, keytool, sui keytool, keytool help, how to use keytool, key tool ]
 ---
 
 The Sui CLI `keytool` command provides several command-level access for the management and generation of addresses, as well as working with private keys, signatures, or zkLogin. For example, a user could export a private key from the Sui Wallet and import it into the local Sui CLI wallet using the `sui keytool import [...]` command.
@@ -17,16 +18,16 @@ Commands:
   decode-or-verify-tx                   Given a Base64 encoded transaction bytes, decode its components. If a signature is provided, verify the signature against the transaction 
   											and output the result.
   decode-multi-sig                  	Given a Base64 encoded MultiSig signature, decode its components. If tx_bytes is passed in, verify the multisig
-  generate                          	Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1} with optional derivation path, default to
+  generate                          	Generate a new key pair with key scheme flag {ed25519 | secp256k1 | secp256r1} with optional derivation path, default to
                                         	m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be { word12 |
                                         	word15 | word18 | word21 | word24} default to word12 if not specified
   import                            	Add a new key to sui.keystore using either the input mnemonic phrase or a private key (from the Wallet), the key scheme flag {ed25519 |
                                         	secp256k1 | secp256r1} and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
                                         	or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24
   list                              	List all keys by its Sui address, Base64 encoded public key, key scheme name in sui.keystore
-  load-keypair                      	This reads the content at the provided file path. The accepted format can be [enum SuiKeyPair] (Base64 encoded of 33-byte `flag ||
-                                        	privkey`) or `type AuthorityKeyPair` (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag ||
-                                        	privkey`, the network keypair, worker keypair, protocol keypair as Base64 encoded `privkey`
+  load-key pair                      	This reads the content at the provided file path. The accepted format can be [enum SuiKeyPair] (Base64 encoded of 33-byte `flag ||
+                                        	privkey`) or `type AuthorityKeyPair` (Base64 encoded `privkey`). This prints out the account key pair as Base64 encoded `flag ||
+                                        	privkey`, the network key pair, worker key pair, protocol key pair as Base64 encoded `privkey`
   multi-sig-address                 	To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64. See `keytool list` for example public keys
   multi-sig-combine-partial-sig     	Provides a list of participating signatures (`flag || sig || pk` encoded in Base64), threshold, a list of all public keys and a list of
                                         	their weights that define the MultiSig address. Returns a valid MultiSig signature and its sender address. The result can be used as
@@ -40,7 +41,7 @@ Commands:
   sign-kms                          	Creates a signature by leveraging AWS KMS. Pass in a key-id to leverage Amazon KMS to sign a message and the base64 pubkey. Generate
                                         	PubKey from pem using MystenLabs/base64pemkey Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded of the
                                         	BCS serialized transaction bytes itself and its intent. If intent is absent, default will be used
-  unpack                            	This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It outputs the keypair into a file at the current
+  unpack                            	This takes [enum SuiKeyPair] of Base64 encoded of 33-byte (`flag || privkey`). It outputs the key pair into a file at the current
                                         	directory where the address is the filename, and prints out its Sui address, Base64 encoded public key, the key scheme, and the key
                                         	scheme flag
   zk-login-sign-and-execute-tx      	Given the max_epoch, generate an OAuth url, ask user to paste the redirect with id_token, call salt server, then call the prover

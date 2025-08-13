@@ -9,6 +9,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
+use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
 use sui_indexer_alt_e2e_tests::{find_address_owned, find_immutable, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
@@ -149,6 +150,7 @@ impl TypeLimitCluster {
         let mut cluster = FullCluster::new_with_configs(
             Simulacrum::new(),
             IndexerArgs::default(),
+            IndexerArgs::default(),
             IndexerConfig {
                 pipeline: PipelineLayer {
                     cp_sequence_numbers: Some(Default::default()),
@@ -160,6 +162,7 @@ impl TypeLimitCluster {
                 },
                 ..IndexerConfig::for_test()
             },
+            ConsistentConfig::for_test(),
             JsonRpcConfig {
                 package_resolver: package_resolver.finish(),
                 ..JsonRpcConfig::default()

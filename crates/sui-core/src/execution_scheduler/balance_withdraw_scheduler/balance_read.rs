@@ -8,11 +8,10 @@ use std::sync::Arc;
 #[cfg(test)]
 use parking_lot::RwLock;
 use sui_types::{
-    accumulator_root::get_balance_from_account_for_testing,
+    accumulator_root::{AccumulatorValue, U128},
     base_types::{ObjectID, SequenceNumber},
+    storage::ChildObjectResolver,
 };
-
-use crate::execution_cache::ObjectCacheRead;
 
 pub(crate) trait AccountBalanceRead: Send + Sync {
     fn get_account_balance(
@@ -24,15 +23,20 @@ pub(crate) trait AccountBalanceRead: Send + Sync {
     ) -> u64;
 }
 
-impl AccountBalanceRead for Arc<dyn ObjectCacheRead> {
+impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
     fn get_account_balance(
         &self,
         account_id: &ObjectID,
         accumulator_version: SequenceNumber,
     ) -> u64 {
-        self.find_object_lt_or_eq_version(*account_id, accumulator_version)
-            .map(|obj| get_balance_from_account_for_testing(&obj))
-            .unwrap_or_default()
+        let value: U128 =
+            AccumulatorValue::load_by_id(self.as_ref(), Some(accumulator_version), *account_id)
+                // Expect is safe because at this point we should know that we are dealing with a Balance<T>
+                // object
+                .expect("read cannot fail")
+                .unwrap_or(U128 { value: 0 });
+
+        std::cmp::min(value.value, u64::MAX as u128) as u64
     }
 }
 

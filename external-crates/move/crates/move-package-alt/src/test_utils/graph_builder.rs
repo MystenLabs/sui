@@ -39,6 +39,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use heck::CamelCase;
 use indoc::formatdoc;
 use petgraph::{
     graph::{DiGraph, NodeIndex},
@@ -76,6 +77,9 @@ pub struct PackageSpec {
 
     /// The publications for each environment
     pubs: BTreeMap<EnvironmentName, PubSpec>,
+
+    /// Is the package a legacy package?
+    is_legacy: bool,
 }
 
 /// Information used to build an edge in the package graph
@@ -145,6 +149,13 @@ impl TestPackageGraph {
         self
     }
 
+    pub fn add_legacy_packages(mut self, nodes: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        for node in nodes {
+            self = self.add_package(node, |pkg| pkg.set_legacy())
+        }
+        self
+    }
+
     /// `builder.add_published("a", original, published_at)` is shorthand for
     /// ```ignore
     /// builder.add_package("a", |a| a.publish(original, published_at))
@@ -204,6 +215,10 @@ impl TestPackageGraph {
 
     /// Return the contents of a `Move.toml` file for the package represented by `node`
     fn format_manifest(&self, node: NodeIndex) -> String {
+        if self.inner[node].is_legacy {
+            return self.format_legacy_manifest(node);
+        }
+
         let mut move_toml = formatdoc!(
             r#"
                 [package]
@@ -233,6 +248,61 @@ impl TestPackageGraph {
 
         move_toml.push_str(&deps);
         move_toml.push_str(&dep_replacements);
+        move_toml
+    }
+
+    /// Return the contents of a legacy `Move.toml` file for the legacy package represented by
+    /// `node`
+    fn format_legacy_manifest(&self, node: NodeIndex) -> String {
+        let package = &self.inner[node];
+        assert!(package.is_legacy);
+
+        assert!(
+            package.pubs.len() <= 1,
+            "legacy packages may have at most one publication"
+        );
+        let publication = package
+            .pubs
+            .first_key_value()
+            .map(|(env, publication)| publication);
+
+        let published_at = publication
+            .map(|it| format!("published-at = {}", it.addresses.published_at))
+            .unwrap_or_default();
+
+        let mut move_toml = formatdoc!(
+            r#"
+            [package]
+            name = "{}"
+            edition = "2024"
+            {published_at}
+            "#,
+            package.id.to_camel_case()
+        );
+
+        let mut deps = String::from("\n[dependencies]\n");
+        for edge in self.inner.edges(node) {
+            let dep_spec = edge.weight();
+            let dep_str = self.format_legacy_dep(edge.weight(), &self.inner[edge.target()]);
+            deps.push_str(&dep_str);
+            deps.push('\n');
+        }
+        move_toml.push_str(&deps);
+        move_toml.push('\n');
+
+        // TODO: it would be good to split up `PackageSpec` and `LegacyPackageSpec`, so that we can
+        // add things like additional `[addresses]`
+        move_toml.push_str(&formatdoc!(
+            r#"
+            [addresses]
+            {} = "{}"
+            "#,
+            package.name,
+            publication
+                .map(|it| it.addresses.original_id.to_string())
+                .unwrap_or("0x0".to_string())
+        ));
+
         move_toml
     }
 
@@ -304,6 +374,32 @@ impl TestPackageGraph {
 
         format!(r#"{env}{name} = {{ local = "../{path}"{is_override}{rename_from}{use_env} }}"#)
     }
+
+    /// Output the dependency in the form
+    /// `<capitalized-name> = { ... }`, failing if the dependency uses non-legacy features
+    fn format_legacy_dep(&self, dep: &DepSpec, target: &PackageSpec) -> String {
+        // TODO: we could share more code with the non-legacy stuff I think
+        let name = dep.name.as_ref().as_str().to_camel_case();
+        let path = &target.id;
+
+        let is_override = if dep.is_override {
+            ", override = true"
+        } else {
+            ""
+        };
+
+        assert!(
+            dep.rename_from.is_none(),
+            "legacy manifests don't support rename-from"
+        );
+
+        assert!(
+            dep.use_env.is_none(),
+            "legacy manifests don't support use-env"
+        );
+
+        format!(r#"{name} = {{ local = "../{path}"{is_override} }}"#)
+    }
 }
 
 impl PackageSpec {
@@ -313,6 +409,7 @@ impl PackageSpec {
             name: PackageName::new(name.as_ref()).expect("valid package name"),
             pubs: BTreeMap::new(),
             id: name.as_ref().to_string(),
+            is_legacy: false,
         }
     }
 
@@ -339,6 +436,18 @@ impl PackageSpec {
     /// Change this to a git dependency (in its own temporary directory)
     pub fn make_git(mut self) -> Self {
         todo!();
+        self
+    }
+
+    /// Change this package to a legacy package. Legacy packages will produce manfests with
+    /// upper-cased names for the package and the dependency, and will contain an `[addresses]`
+    /// section with a single variable given by the package name.
+    ///
+    /// If the package is published, the `published-at` field will be added and the named-address
+    /// will be set to the original ID; otherwise there will be no published-at field and the
+    /// named address will be set to 0.
+    pub fn set_legacy(mut self) -> Self {
+        self.is_legacy = true;
         self
     }
 }
@@ -517,6 +626,44 @@ mod tests {
         chain-id = "_test_env_id"
         toolchain-version = "test-0.0.0"
         build-config = {}
+        "###);
+    }
+
+    /// Check generation of legacy manifests
+    #[test]
+    fn legacy() {
+        let graph = TestPackageGraph::new(["a", "c"])
+            .add_legacy_packages(["b"])
+            .add_package("d", |d| {
+                d.set_legacy()
+                    .publish(OriginalID::from(0x4444), PublishedID::from(0x5555))
+            })
+            .add_deps([("a", "b"), ("b", "c"), ("c", "d")])
+            .build();
+
+        assert_snapshot!(graph.read_file("b/Move.toml"), @r###"
+        [package]
+        name = "B"
+        edition = "2024"
+
+
+        [dependencies]
+        C = { local = "../c" }
+
+        [addresses]
+        b = "0x0"
+        "###);
+
+        assert_snapshot!(graph.read_file("d/Move.toml"), @r###"
+        [package]
+        name = "D"
+        edition = "2024"
+        published-at = 0x0000000000000000000000000000000000000000000000000000000000005555
+
+        [dependencies]
+
+        [addresses]
+        d = "0x0000000000000000000000000000000000000000000000000000000000004444"
         "###);
     }
 }

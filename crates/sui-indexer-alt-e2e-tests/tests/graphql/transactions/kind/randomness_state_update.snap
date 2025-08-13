@@ -1,0 +1,29 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 1, line 6:
+//# advance-epoch --create-random-state
+Epoch advanced: 1
+
+task 3, line 10:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 4, lines 12-27:
+//# run-graphql
+Response: {
+  "data": {
+    "randomnessStateUpdateTransaction": {
+      "digest": "FL1Q5ppJXWGN7C7kenCgtTRxABCaKjzahYeq66hJasP2",
+      "kind": {
+        "__typename": "RandomnessStateUpdateTransaction",
+        "epoch": 1,
+        "randomnessRound": 0,
+        "randomBytes": "SGVsbG8gU3VpIFJhbmRvbW5lc3M=",
+        "randomnessObjInitialSharedVersion": 2
+      }
+    }
+  }
+}

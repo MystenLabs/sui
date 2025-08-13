@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module counter::vector_test {
+module vector_test::vector_test {
 
     public fun create_empty(): vector<bool> {
         // An empty vector of bool elements.

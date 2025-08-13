@@ -3,9 +3,8 @@
 
 use std::{convert::Infallible, sync::Arc, time::Duration};
 
-use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
-
 use crate::pagination;
+use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -113,6 +112,12 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::ServerError {
             path: vec![],
             extensions,
         }
+    }
+}
+
+impl<E: std::error::Error> From<bcs::Error> for RpcError<E> {
+    fn from(err: bcs::Error) -> Self {
+        RpcError::InternalError(Arc::new(err.into()))
     }
 }
 

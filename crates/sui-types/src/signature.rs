@@ -39,6 +39,7 @@ pub struct VerifyParams {
     pub accept_zklogin_in_multisig: bool,
     pub accept_passkey_in_multisig: bool,
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
+    pub additional_multisig_checks: bool,
 }
 
 impl VerifyParams {
@@ -50,6 +51,7 @@ impl VerifyParams {
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
+        additional_multisig_checks: bool,
     ) -> Self {
         Self {
             oidc_provider_jwks,
@@ -59,6 +61,7 @@ impl VerifyParams {
             accept_zklogin_in_multisig,
             accept_passkey_in_multisig,
             zklogin_max_epoch_upper_bound_delta,
+            additional_multisig_checks,
         }
     }
 }

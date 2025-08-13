@@ -11,6 +11,7 @@ use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::effects::TransactionEffectsAPI as _;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -27,7 +28,7 @@ use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::execution_scheduler::SchedulingSource;
-use crate::transaction_driver::{RejectReason, WaitForEffectsRequest, WaitForEffectsResponse};
+use crate::transaction_driver::{WaitForEffectsRequest, WaitForEffectsResponse};
 
 use super::AuthorityServerHandle;
 
@@ -136,7 +137,7 @@ async fn test_wait_for_effects_position_mismatch() {
 }
 
 #[tokio::test]
-async fn test_wait_for_effects_post_commit_rejected() {
+async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
     let test_context = TestContext::new().await;
 
     let transaction = test_context.build_test_transaction();
@@ -154,6 +155,7 @@ async fn test_wait_for_effects_post_commit_rejected() {
     })
     .unwrap();
 
+    // Validator does not reject the transaction, but it is rejected by the commit.
     let state_clone = test_context.state.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -172,9 +174,9 @@ async fn test_wait_for_effects_post_commit_rejected() {
         .unwrap();
 
     match response {
-        WaitForEffectsResponse::Rejected { reason } => {
+        WaitForEffectsResponse::Rejected { error } => {
             // TODO(fastpath): Test reject reason.
-            assert_eq!(reason, RejectReason::None);
+            assert!(error.is_none(), "{:?}", error);
         }
         _ => panic!("Expected Rejected response"),
     }
@@ -231,8 +233,8 @@ async fn test_wait_for_effects_timeout() {
 }
 
 #[tokio::test]
-async fn test_wait_for_effects_quorum_rejected() {
-    // This test exercises the path where the transaction is rejected by a quorum in consensus.
+async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
+    // This test exercises the path where the transaction is rejected by both consensus and the validator.
     let test_context = TestContext::new().await;
 
     let transaction = test_context.build_test_transaction();
@@ -255,6 +257,14 @@ async fn test_wait_for_effects_quorum_rejected() {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
+        epoch_store.set_rejection_vote_reason(
+            tx_position,
+            &SuiError::UserInputError {
+                error: UserInputError::TransactionDenied {
+                    error: "object denied".to_string(),
+                },
+            },
+        );
     });
 
     let response = test_context
@@ -266,8 +276,15 @@ async fn test_wait_for_effects_quorum_rejected() {
         .unwrap();
 
     match response {
-        WaitForEffectsResponse::Rejected { reason } => {
-            assert_eq!(reason, RejectReason::None);
+        WaitForEffectsResponse::Rejected { error } => {
+            assert_eq!(
+                error,
+                Some(SuiError::UserInputError {
+                    error: UserInputError::TransactionDenied {
+                        error: "object denied".to_string(),
+                    },
+                })
+            );
         }
         _ => panic!("Expected Rejected response"),
     }

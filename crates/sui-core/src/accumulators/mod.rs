@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
-    ACCUMULATOR_ROOT_MODULE, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC,
-    ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
+    ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC, ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
+    ACCUMULATOR_SETTLEMENT_MODULE,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::effects::{
@@ -87,7 +87,7 @@ impl MergedValue {
                     let split_amount = builder.pure(split_amount).unwrap();
                     builder.programmable_move_call(
                         SUI_FRAMEWORK_PACKAGE_ID,
-                        ACCUMULATOR_ROOT_MODULE.into(),
+                        ACCUMULATOR_SETTLEMENT_MODULE.into(),
                         ACCUMULATOR_ROOT_SETTLE_U128_FUNC.into(),
                         vec![address.ty.clone()],
                         vec![root, address_arg, merge_amount, split_amount],
@@ -161,7 +161,7 @@ pub fn create_accumulator_update_transactions(
     checkpoint_height: u64,
     cache: Option<&dyn TransactionCacheRead>,
     ckpt_effects: &[TransactionEffects],
-) -> Vec<TransactionKind> {
+) -> (Vec<TransactionKind>, usize) {
     let epoch = epoch_store.epoch();
     let accumulator_root_obj_initial_shared_version = epoch_store
         .epoch_start_config()
@@ -237,11 +237,13 @@ pub fn create_accumulator_update_transactions(
 
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
-        ACCUMULATOR_ROOT_MODULE.into(),
+        ACCUMULATOR_SETTLEMENT_MODULE.into(),
         ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
         vec![],
         vec![epoch_arg, checkpoint_height_arg, idx_arg],
     );
+
+    let num_updates = updates.len();
 
     for (accumulator_obj, update) in updates {
         let Update { merge, split } = update;
@@ -251,7 +253,10 @@ pub fn create_accumulator_update_transactions(
         MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
     }
 
-    vec![TransactionKind::ProgrammableSystemTransaction(
-        builder.finish(),
-    )]
+    (
+        vec![TransactionKind::ProgrammableSystemTransaction(
+            builder.finish(),
+        )],
+        num_updates,
+    )
 }

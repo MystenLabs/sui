@@ -1,8 +1,168 @@
+"""
+System transaction for creating the accumulator root.
+"""
+type AccumulatorRootCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+type ActiveJwk {
+	"""
+	The string (Issuing Authority) that identifies the OIDC provider.
+	"""
+	iss: String
+	"""
+	The string (Key ID) that identifies the JWK among a set of JWKs, (RFC 7517, Section 4.5).
+	"""
+	kid: String
+	"""
+	The JWK key type parameter, (RFC 7517, Section 4.1).
+	"""
+	kty: String
+	"""
+	The JWK RSA public exponent, (RFC 7517, Section 9.3).
+	"""
+	e: String
+	"""
+	The JWK RSA modulus, (RFC 7517, Section 9.3).
+	"""
+	n: String
+	"""
+	The JWK algorithm parameter, (RFC 7517, Section 4.4).
+	"""
+	alg: String
+	"""
+	The most recent epoch in which the JWK was validated.
+	"""
+	epoch: Epoch
+}
+
+type ActiveJwkConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ActiveJwkEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ActiveJwk!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ActiveJwkEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ActiveJwk!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Address implements IAddressable {
 	"""
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
 	address: SuiAddress!
+}
+
+"""
+System transaction for creating the on-chain state used by zkLogin.
+"""
+type AuthenticatorStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction that is executed at the end of an epoch to expire JSON Web Keys (JWKs) that are no longer valid, based on their associated epoch. This is part of the on-chain state management for zkLogin and authentication.
+"""
+type AuthenticatorStateExpireTransaction {
+	"""
+	Expire JWKs that have a lower epoch than this.
+	"""
+	minEpoch: Epoch
+	"""
+	The initial version that the AuthenticatorStateUpdate was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
+}
+
+type AuthenticatorStateUpdateTransaction {
+	"""
+	Epoch of the authenticator state update transaction.
+	"""
+	epoch: Epoch
+	"""
+	Consensus round of the authenticator state update.
+	"""
+	round: UInt53
+	"""
+	Newly active JWKs (JSON Web Keys).
+	"""
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	"""
+	The initial version of the authenticator object that it was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
+}
+
+"""
+Effects to the balance (sum of coin values per coin type) of addresses and objects.
+"""
+type BalanceChange {
+	"""
+	The address or object whose balance has changed.
+	"""
+	owner: Address
+	"""
+	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
+	"""
+	coinType: String
+	"""
+	The signed balance change.
+	"""
+	amount: BigInt
+}
+
+type BalanceChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [BalanceChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: BalanceChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
@@ -15,6 +175,66 @@ String representation of an arbitrary width, possibly signed integer
 """
 scalar BigInt
 
+
+"""
+System transaction for initializing bridge committee.
+"""
+type BridgeCommitteeInitTransaction {
+	"""
+	The initial shared version of the bridge object.
+	"""
+	bridgeObjectVersion: UInt53
+}
+
+"""
+System transaction for creating bridge state for cross-chain operations.
+"""
+type BridgeStateCreateTransaction {
+	"""
+	The chain identifier for which this bridge state is being created.
+	"""
+	chainIdentifier: String
+}
+
+"""
+A system transaction that updates epoch information on-chain (increments the current epoch). Executed by the system once per epoch, without using gas. Epoch change transactions cannot be submitted by users, because validators will refuse to sign them.
+
+This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+"""
+type ChangeEpochTransaction {
+	"""
+	The next (to become) epoch.
+	"""
+	epoch: Epoch
+	"""
+	The epoch's corresponding protocol configuration.
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
+	The total amount of gas charged for storage during the epoch.
+	"""
+	storageCharge: UInt53
+	"""
+	The total amount of gas charged for computation during the epoch.
+	"""
+	computationCharge: UInt53
+	"""
+	The amount of storage rebate refunded to the transaction senders.
+	"""
+	storageRebate: UInt53
+	"""
+	The non-refundable storage fee.
+	"""
+	nonRefundableStorageFee: UInt53
+	"""
+	Unix timestamp when epoch started.
+	"""
+	epochStartTimestamp: DateTime
+	"""
+	System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
+	"""
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
+}
 
 """
 Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
@@ -41,13 +261,34 @@ type Checkpoint {
 	"""
 	epoch: Epoch
 	"""
+	The total number of transactions in the network by the end of this checkpoint.
+	"""
+	networkTotalTransactions: UInt53
+	"""
 	The digest of the previous checkpoint's summary.
 	"""
 	previousCheckpointDigest: String
 	"""
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+	"""
+	rollingGasSummary: GasCostSummary
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's summary.
+	"""
+	summaryBcs: Base64
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's contents.
+	"""
+	contentBcs: Base64
+	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
+	"""
+	The aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
+	validatorSignatures: ValidatorAggregatedSignature
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 }
 
 """
@@ -65,9 +306,181 @@ input CheckpointFilter {
 }
 
 """
+System transaction for creating the coin deny list state.
+"""
+type CoinDenyListStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+A single command in the programmable transaction.
+"""
+union Command = MoveCallCommand | TransferObjectsCommand | OtherCommand
+
+type CommandConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CommandEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Command!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CommandEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Command!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
+"""
+type ConsensusCommitPrologueTransaction {
+	"""
+	Epoch of the commit prologue transaction.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	epoch: Epoch
+	"""
+	Consensus round of the commit.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	round: UInt53
+	"""
+	Unix timestamp from consensus.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	commitTimestamp: DateTime
+	"""
+	Digest of consensus output, encoded as a Base58 string.
+	
+	Present in V2, V3, V4.
+	"""
+	consensusCommitDigest: String
+	"""
+	The sub DAG index of the consensus commit. This field is populated if there
+	are multiple consensus commits per round.
+	
+	Present in V3, V4.
+	"""
+	subDagIndex: UInt53
+	"""
+	Digest of any additional state computed by the consensus handler.
+	Used to detect forking bugs as early as possible.
+	
+	Present in V4.
+	"""
+	additionalStateDigest: String
+}
+
+"""
+Reason why a transaction that attempted to access a consensus-managed object was cancelled.
+"""
+enum ConsensusObjectCancellationReason {
+	"""
+	Read operation was cancelled.
+	"""
+	CANCELLED_READ
+	"""
+	Object congestion prevented execution.
+	"""
+	CONGESTED
+	"""
+	Randomness service was unavailable.
+	"""
+	RANDOMNESS_UNAVAILABLE
+	"""
+	Internal use only.
+	"""
+	UNKNOWN
+}
+
+"""
+A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
+"""
+type ConsensusObjectCancelled {
+	"""
+	The ID of the consensus-managed object that the transaction intended to access.
+	"""
+	address: SuiAddress
+	"""
+	Reason why the transaction was cancelled.
+	"""
+	cancellationReason: ConsensusObjectCancellationReason
+}
+
+type ConsensusObjectRead {
+	"""
+	The version of the consensus-managed object that was read by this transaction.
+	"""
+	object: Object
+}
+
+"""
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
+
+"""
+System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
+"""
+type EndOfEpochTransaction {
+	"""
+	The list of system transactions that are allowed to run at the end of the epoch.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
+}
+
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction
+
+type EndOfEpochTransactionKindConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EndOfEpochTransactionKindEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [EndOfEpochTransactionKind!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EndOfEpochTransactionKindEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: EndOfEpochTransactionKind!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 """
 Activity on Sui is partitioned in time, into epochs.
@@ -105,6 +518,10 @@ type Epoch {
 	"""
 	startTimestamp: DateTime
 	"""
+	The transactions in this epoch, optionally filtered by transaction filters.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	The system packages used by all transactions in this epoch.
 	"""
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
@@ -113,9 +530,17 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
+	Validator-related properties, including the active validators.
+	"""
+	validatorSet: ValidatorSet
+	"""
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: UInt53
+	"""
+	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	totalTransactions: UInt53
 	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
 	"""
@@ -124,6 +549,138 @@ type Epoch {
 	The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
 	"""
 	totalStakeRewards: BigInt
+	"""
+	The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
+	"""
+	totalStakeSubsidies: BigInt
+	"""
+	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+	This fund is used to redistribute storage fees from past transactions to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	netInflow: BigInt
+	"""
+	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+	"""
+	fundOutflow: BigInt
+	"""
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	This is also used for storage rebates.
+	"""
+	storageFund: StorageFund
+	"""
+	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+	"""
+	safeMode: SafeMode
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+	"""
+	systemStateVersion: UInt53
+	"""
+	Details of the system that are decided during genesis.
+	"""
+	systemParameters: SystemParameters
+	"""
+	Parameters related to the subsidy that supplements staking rewards
+	"""
+	systemStakeSubsidy: StakeSubsidy
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
+}
+
+type Event {
+	"""
+	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
+	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
+	"""
+	eventBcs: Base64
+	"""
+	Address of the sender of the transaction that emitted this event.
+	"""
+	sender: Address
+	"""
+	The position of the event among the events from the same transaction.
+	"""
+	sequenceNumber: UInt53!
+	"""
+	Timestamp corresponding to the checkpoint this event's transaction was finalized in.
+	All events from the same transaction share the same timestamp.
+	"""
+	timestamp: DateTime
+	"""
+	The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
+	"""
+	transaction: Transaction
+}
+
+type EventConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EventEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Event!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EventEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Represents execution error information for failed transactions.
+"""
+type ExecutionError {
+	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	
+	Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
+	"""
+	abortCode: BigInt
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
+	"""
+	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+	"""
+	instructionOffset: Int
+	"""
+	The error's name. Only populated for clever errors.
+	"""
+	identifier: String
+	"""
+	An associated constant for the error. Only populated for clever errors.
+	
+	Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
+	"""
+	constant: String
 }
 
 """
@@ -155,6 +712,56 @@ type FeatureFlag {
 }
 
 
+"""
+Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
+"""
+type GasCoin {
+	"""
+	Placeholder field (gas coin has no additional data)
+	"""
+	_: Boolean
+}
+
+"""
+Summary of charges from transactions.
+
+Storage is charged in three parts -- `storage_cost`, `-storage_rebate`, and `non_refundable_storage_fee` -- independently of `computation_cost`.
+
+The overall cost of a transaction, deducted from its gas coins, is its `computation_cost + storage_cost - storage_rebate`. `non_refundable_storage_fee` is collected from objects being mutated or deleted and accumulated by the system in storage funds, the remaining storage costs of previous object versions are what become the `storage_rebate`. The ratio between `non_refundable_storage_fee` and `storage_rebate` is set by the protocol.
+"""
+type GasCostSummary {
+	"""
+	The sum cost of computation/execution
+	"""
+	computationCost: UInt53
+	"""
+	Cost for storage at the time the transaction is executed, calculated as the size of the objects being mutated in bytes multiplied by a storage cost per byte (part of the protocol).
+	"""
+	storageCost: UInt53
+	"""
+	Amount the user gets back from the storage cost of the previous versions of objects being mutated or deleted.
+	"""
+	storageRebate: UInt53
+	"""
+	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
+	"""
+	nonRefundableStorageFee: UInt53
+}
+
+"""
+Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+"""
+type GasEffects {
+	"""
+	The gas object used to pay for this transaction. If multiple gas coins were provided, this represents the combined coin after smashing.
+	"""
+	gasObject: Object
+	"""
+	Breakdown of the gas costs for this transaction.
+	"""
+	gasSummary: GasCostSummary
+}
+
 type GasInput {
 	"""
 	Address of the owner of the gas object(s) used.
@@ -172,6 +779,16 @@ type GasInput {
 	Objects used to pay for a transaction's execution and storage
 	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+}
+
+"""
+System transaction that initializes the network and writes the initial set of objects on-chain.
+"""
+type GenesisTransaction {
+	"""
+	Objects to be created during genesis.
+	"""
+	objects(first: Int, after: String, last: Int, before: String): ObjectConnection
 }
 
 """
@@ -218,6 +835,32 @@ interface IObject {
 	previousTransaction: Transaction
 }
 
+type Input {
+	"""
+	The index of the input.
+	"""
+	ix: Int
+}
+
+
+type MoveCallCommand {
+	"""
+	The storage ID of the package the function being called is defined in.
+	"""
+	package: SuiAddress
+	"""
+	The name of the module the function being called is defined in.
+	"""
+	module: String
+	"""
+	The name of the function being called.
+	"""
+	functionName: String
+	"""
+	The actual function parameters passed in for this move call.
+	"""
+	arguments: [TransactionArgument!]!
+}
 
 """
 A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
@@ -304,6 +947,20 @@ type MovePackageEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type MutateConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
 }
 
 """
@@ -466,6 +1123,23 @@ input ObjectKey {
 }
 
 """
+Placeholder for unimplemented command types
+"""
+type OtherCommand {
+	"""
+	Placeholder field for unimplemented commands
+	"""
+	_: Boolean
+}
+
+"""
+A Move object, either immutable, or owned mutable.
+"""
+type OwnedOrImmutable {
+	object: Object
+}
+
+"""
 Identifies a specific version of a package.
 
 The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
@@ -509,6 +1183,24 @@ type PageInfo {
 	endCursor: String
 }
 
+type PerEpochConfig {
+	"""
+	The per-epoch configuration object as of the checkpoint when the transaction was executed.
+	"""
+	object: Object
+}
+
+type ProgrammableTransaction {
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+}
+
 """
 A protocol configuration that can hold an arbitrary value (or no value at all).
 """
@@ -546,6 +1238,16 @@ type ProtocolConfigs {
 	List all available feature flags and their values.
 	"""
 	featureFlags: [FeatureFlag!]!
+}
+
+"""
+BCS encoded primitive value (not an object or Move struct).
+"""
+type Pure {
+	"""
+	BCS serialized and Base64 encoded primitive value.
+	"""
+	bytes: Base64
 }
 
 type Query {
@@ -673,6 +1375,75 @@ type Query {
 	Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
 	"""
 	transactionEffects(digest: String!): TransactionEffects
+	"""
+	The transactions that exist in the network, optionally filtered by transaction filters.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+}
+
+"""
+System transaction for creating the on-chain randomness state.
+"""
+type RandomnessStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction to update the source of on-chain randomness.
+"""
+type RandomnessStateUpdateTransaction {
+	"""
+	Epoch of the randomness state update transaction.
+	"""
+	epoch: Int
+	"""
+	Randomness round of the update.
+	"""
+	randomnessRound: Int
+	"""
+	Updated random bytes, Base64 encoded.
+	"""
+	randomBytes: Base64
+	"""
+	The initial version of the randomness object that it was shared at.
+	"""
+	randomnessObjInitialSharedVersion: Int
+}
+
+"""
+A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type ReadConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
+"""
+A Move object that can be received in this transaction.
+"""
+type Receiving {
+	object: Object
+}
+
+type SafeMode {
+	"""
+	Whether safe mode was used for the last epoch change.
+	The system will retry a full epoch change on every epoch boundary and automatically reset this flag if so.
+	"""
+	enabled: Boolean
+	"""
+	Accumulated fees for computation and cost that have not been added to the various reward pools, because the full epoch change did not happen.
+	"""
+	gasSummary: GasCostSummary
 }
 
 type ServiceConfig {
@@ -776,11 +1547,121 @@ type ServiceConfig {
 	maxMoveValueDepth: Int
 }
 
+"""
+A Move object that's shared.
+"""
+type SharedInput {
+	"""
+	The address of the shared object.
+	"""
+	address: SuiAddress
+	"""
+	The version that this object was shared at.
+	"""
+	initialSharedVersion: UInt53
+	"""
+	Controls whether the transaction block can reference the shared object as a mutable reference or by value.
+	
+	This has implications for scheduling: Transactions that just read shared objects at a certain version (mutable = false) can be executed concurrently, while transactions that write shared objects (mutable = true) must be executed serially with respect to each other.
+	"""
+	mutable: Boolean
+}
+
+"""
+Parameters that control the distribution of the stake subsidy.
+"""
+type StakeSubsidy {
+	"""
+	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over time.
+	"""
+	balance: BigInt
+	"""
+	Number of times stake subsidies have been distributed.
+	Subsidies are distributed with other staking rewards, at the end of the epoch.
+	"""
+	distributionCounter: Int
+	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
+	currentDistributionAmount: BigInt
+	"""
+	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
+	"""
+	periodLength: Int
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
+	"""
+	decreaseRate: Int
+}
+
+"""
+SUI set aside to account for objects stored on-chain.
+"""
+type StorageFund {
+	"""
+	Sum of storage rebates of live objects on chain.
+	"""
+	totalObjectStorageRebates: BigInt
+	"""
+	The portion of the storage fund that will never be refunded through storage rebates.
+	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
+	"""
+	nonRefundableBalance: BigInt
+}
+
+"""
+System transaction for storing execution time observations.
+"""
+type StoreExecutionTimeObservationsTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 
 """
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Details of the system that are decided during genesis.
+"""
+type SystemParameters {
+	"""
+	Target duration of an epoch, in milliseconds.
+	"""
+	durationMs: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
+	stakeSubsidyStartEpoch: UInt53
+	"""
+	The minimum number of active validators that the system supports.
+	"""
+	minValidatorCount: Int
+	"""
+	The maximum number of active validators that the system supports.
+	"""
+	maxValidatorCount: Int
+	"""
+	Minimum stake needed to become a new validator.
+	"""
+	minValidatorJoiningStake: BigInt
+	"""
+	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
+	"""
+	validatorLowStakeThreshold: BigInt
+	"""
+	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
+	"""
+	validatorVeryLowStakeThreshold: BigInt
+	"""
+	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
+	"""
+	validatorLowStakeGracePeriod: BigInt
+}
 
 """
 Description of a transaction, the unit of activity on Sui.
@@ -794,6 +1675,10 @@ type Transaction {
 	The results to the chain of executing this transaction.
 	"""
 	effects: TransactionEffects
+	"""
+	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
+	"""
+	kind: TransactionKind
 	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
 	"""
@@ -810,6 +1695,44 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	User signatures for this transaction.
+	"""
+	signatures: [UserSignature!]!
+}
+
+"""
+An argument to a programmable transaction command.
+"""
+union TransactionArgument = GasCoin | Input | TxResult
+
+type TransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Transaction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Transaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
@@ -839,6 +1762,26 @@ type TransactionEffects {
 	"""
 	lamportVersion: UInt53
 	"""
+	Rich execution error information for failed transactions.
+	"""
+	executionError: ExecutionError
+	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	"""
+	timestamp: DateTime
+	"""
+	The epoch this transaction was finalized in.
+	"""
+	epoch: Epoch
+	"""
+	Events emitted by this transaction.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection
+	"""
+	The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
+	"""
+	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
+	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
@@ -850,12 +1793,209 @@ type TransactionEffects {
 	The before and after state of objects that were modified by this transaction.
 	"""
 	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+	"""
+	Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+	"""
+	gasEffects: GasEffects
+	"""
+	The unchanged consensus-managed objects that were referenced by this transaction.
+	"""
+	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
+}
+
+input TransactionFilter {
+	"""
+	Limit to transactions that occured strictly after the given checkpoint.
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Limit to transactions in the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit to transaction that occured strictly before the given checkpoint.
+	"""
+	beforeCheckpoint: UInt53
+}
+
+"""
+Input argument to a Programmable Transaction Block (PTB) command.
+"""
+union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving
+
+type TransactionInputConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionInputEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionInput!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionInputEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionInput!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Different types of transactions that can be executed on the Sui network.
+"""
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction
+
+"""
+Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.
+"""
+type TransferObjectsCommand {
+	"""
+	The objects to transfer.
+	"""
+	inputs: [TransactionArgument!]!
+	"""
+	The address to transfer to.
+	"""
+	address: TransactionArgument
+}
+
+"""
+The result of another command.
+"""
+type TxResult {
+	"""
+	The index of the command that produced this result.
+	"""
+	cmd: Int
+	"""
+	For nested results, the index within the result.
+	"""
+	ix: Int
 }
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Details pertaining to consensus-managed objects that are referenced by but not changed by a transaction.
+"""
+union UnchangedConsensusObject = ConsensusObjectRead | MutateConsensusStreamEnded | ReadConsensusStreamEnded | ConsensusObjectCancelled | PerEpochConfig
+
+type UnchangedConsensusObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [UnchangedConsensusObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [UnchangedConsensusObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type UnchangedConsensusObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: UnchangedConsensusObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type UserSignature {
+	"""
+	The signature bytes, Base64-encoded.
+	For simple signatures: flag || signature || pubkey
+	For complex signatures: flag || bcs_serialized_struct
+	"""
+	signatureBytes: Base64
+}
+
+type ValidatorAggregatedSignature {
+	"""
+	The epoch when this aggregate signature was produced.
+	"""
+	epoch: Epoch
+	"""
+	The Base64 encoded BLS12381 aggregated signature.
+	"""
+	signature: Base64
+	"""
+	The indexes of validators that contributed to this signature.
+	"""
+	signersMap: [Int!]!
+}
+
+"""
+Representation of `0x3::validator_set::ValidatorSet`.
+"""
+type ValidatorSet {
+	"""
+	Total amount of stake for all active validators at the beginning of the epoch.
+	"""
+	totalStake: BigInt
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
+	pendingRemovals: [Int!]
+	"""
+	Object ID of the wrapped object `TableVec` storing the pending active validators.
+	"""
+	pendingActiveValidatorsId: SuiAddress
+	"""
+	Size of the pending active validators table.
+	"""
+	pendingActiveValidatorsSize: Int
+	"""
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+	of the corresponding validators. This is needed because a validator's address
+	can potentially change but the object ID of its pool will not.
+	"""
+	stakingPoolMappingsId: SuiAddress
+	"""
+	Size of the stake pool mappings `Table`.
+	"""
+	stakingPoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the inactive staking pools.
+	"""
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools `Table`.
+	"""
+	inactivePoolsSize: Int
+	"""
+	Object ID of the `Table` storing the validator candidates.
+	"""
+	validatorCandidatesId: SuiAddress
+	"""
+	Size of the validator candidates `Table`.
+	"""
+	validatorCandidatesSize: Int
+}
 
 """
 Filter for paginating the history of an Object or MovePackage.

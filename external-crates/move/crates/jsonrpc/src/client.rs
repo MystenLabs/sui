@@ -34,7 +34,7 @@ pub enum JsonRpcError {
 }
 
 impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> Endpoint<I, O> {
-    /// Create an enpdoint that reads from [input] and writes to [output]
+    /// Create an enpdoint that reads from `input` and writes to `output`
     pub fn new(input: I, output: O) -> Self {
         Self {
             input: BufReader::new(input),
@@ -43,7 +43,7 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> Endpoint<I, O> {
         }
     }
 
-    /// Call the RPC method [method] with argument [arg]; decode and return the output
+    /// Call the RPC method `method` with argument `arg`; decode and return the output
     pub async fn call<A, R>(&mut self, method: impl AsRef<str>, arg: A) -> Result<R, JsonRpcError>
     where
         A: Serialize,
@@ -61,9 +61,9 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> Endpoint<I, O> {
         }
     }
 
-    /// Call the method [method] once for each argument in [args] using a JSON RPC batch request
+    /// Call the method `method` once for each argument in `args` using a JSON RPC batch request
     /// and await all of the responses. Return the results of the calls in the same order as
-    /// [args].
+    /// `args`.
     pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
         &mut self,
         method: impl AsRef<str>,
@@ -121,7 +121,7 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> Endpoint<I, O> {
         Ok(serde_json::de::from_str(response_json.as_str())?)
     }
 
-    /// Generate a [Request] to call [method]([arg]) using [self.sqn]; [self.sqn]
+    /// Generate a `Request` to call `method`(`arg`) using `self.sqn`; `self.sqn`
     fn make_request<A: Serialize>(&mut self, method: impl AsRef<str>, arg: A) -> Request<A> {
         let request = Request::<A> {
             jsonrpc: TwoPointZero,

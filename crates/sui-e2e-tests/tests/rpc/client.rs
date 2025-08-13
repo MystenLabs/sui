@@ -4,8 +4,8 @@
 use crate::transfer_coin;
 use sui_macros::sim_test;
 use sui_rpc_api::Client;
+use sui_sdk_types::Address;
 use sui_sdk_types::BalanceChange;
-use sui_sdk_types::ObjectId;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
@@ -16,7 +16,7 @@ use test_cluster::TestClusterBuilder;
 async fn get_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let id: ObjectId = "0x5".parse().unwrap();
+    let id: Address = "0x5".parse().unwrap();
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
 

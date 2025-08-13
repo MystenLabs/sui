@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::DiagnosticReporter,
-    expansion::ast::{ModuleDefinition, ModuleIdent},
+    expansion::ast::{Attributes, ModuleDefinition, ModuleIdent},
     ice,
     naming::ast::BuiltinTypeName_,
     shared::{
@@ -19,7 +19,7 @@ use std::{collections::BTreeMap, sync::Arc};
 /// type or for unknown base types.
 pub fn modules(
     env: &CompilationEnv,
-    pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib_opt: Option<Arc<PreCompiledProgramInfo>>,
     modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) {
     let reporter = env.diagnostic_reporter_at_top_level();
@@ -30,20 +30,22 @@ pub fn modules(
             /* allow shadowing */ false,
             &mut definers,
             mident,
-            m,
+            &m.attributes,
         )
     }
+
     if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
-        for (mident, m) in pre_compiled_lib.expansion.modules.key_cloned_iter() {
+        for (mident, module_info) in pre_compiled_lib.iter() {
             check_prim_definer(
                 &reporter,
                 /* allow shadowing */ true,
                 &mut definers,
-                mident,
-                m,
+                *mident,
+                &module_info.info.attributes,
             )
         }
     }
+
     env.set_primitive_type_definers(definers)
 }
 
@@ -52,9 +54,9 @@ fn check_prim_definer(
     allow_shadowing: bool,
     definers: &mut BTreeMap<BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     mident: ModuleIdent,
-    m: &ModuleDefinition,
+    attributes: &Attributes,
 ) {
-    let defines_prim_attr = m.attributes.get_(&AttributeKind_::DefinesPrimitive);
+    let defines_prim_attr = attributes.get_(&AttributeKind_::DefinesPrimitive);
     let Some(sp!(attr_loc, attr_)) = defines_prim_attr else {
         return;
     };

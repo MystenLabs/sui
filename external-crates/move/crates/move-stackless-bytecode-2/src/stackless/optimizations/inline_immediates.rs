@@ -33,12 +33,12 @@ fn process_instruction(mut inst: Instruction, env: &mut Env) -> Option<Instructi
     match &mut inst {
         Instruction::AssignReg { lhs, rhs } if matches!(lhs[..], [_]) => match rhs {
             RValue::Trivial(imm @ Trivial::Immediate(_)) => {
-                let register = lhs[0];
-                env.immediates.insert(register, imm.clone());
+                let register = &lhs[0];
+                env.immediates.insert(register.name, imm.clone());
                 None
             }
-            RValue::Trivial(Trivial::Register(var)) => {
-                if let Some(imm) = env.immediates.remove(var) {
+            RValue::Trivial(Trivial::Register(reg)) => {
+                if let Some(imm) = env.immediates.remove(&reg.name) {
                     let _ = std::mem::replace(rhs, RValue::Trivial(imm));
                 }
                 Some(inst)
@@ -47,8 +47,8 @@ fn process_instruction(mut inst: Instruction, env: &mut Env) -> Option<Instructi
             | RValue::Data { op: _, args }
             | RValue::Call { function: _, args } => {
                 for arg in args {
-                    if let Trivial::Register(var) = arg {
-                        if let Some(imm) = env.immediates.remove(var) {
+                    if let Trivial::Register(reg) = arg {
+                        if let Some(imm) = env.immediates.remove(&reg.name) {
                             let _ = std::mem::replace(arg, imm);
                         }
                     }
@@ -60,8 +60,8 @@ fn process_instruction(mut inst: Instruction, env: &mut Env) -> Option<Instructi
         // Substituting immediates in return instruction
         Instruction::Return(operands) => {
             for operand in operands {
-                if let Trivial::Register(var) = operand {
-                    if let Some(imm) = env.immediates.remove(var) {
+                if let Trivial::Register(reg) = operand {
+                    if let Some(imm) = env.immediates.remove(&reg.name) {
                         let _ = std::mem::replace(operand, imm);
                     }
                 }
@@ -69,8 +69,8 @@ fn process_instruction(mut inst: Instruction, env: &mut Env) -> Option<Instructi
             Some(inst)
         }
         Instruction::StoreLoc { loc: _, value } => {
-            if let Trivial::Register(var) = value {
-                if let Some(imm) = env.immediates.remove(var) {
+            if let Trivial::Register(reg) = value {
+                if let Some(imm) = env.immediates.remove(&reg.name) {
                     let _ = std::mem::replace(value, imm);
                 }
             }

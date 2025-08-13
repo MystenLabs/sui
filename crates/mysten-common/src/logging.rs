@@ -6,13 +6,21 @@ use once_cell::sync::Lazy;
 
 #[macro_export]
 macro_rules! fatal {
-    ($($arg:tt)*) => {{
-        tracing::error!(fatal = true, $($arg)*);
-        panic!($($arg)*);
+    ($msg:literal $(, $arg:expr)*) => {{
+        if $crate::in_antithesis() {
+            let full_msg = format!($msg $(, $arg)*);
+            let json = $crate::logging::json!({ "message": full_msg });
+            $crate::logging::assert_unreachable_antithesis!($msg, &json);
+        }
+        tracing::error!(fatal = true, $msg $(, $arg)*);
+        panic!($msg $(, $arg)*);
     }};
 }
 
 pub use antithesis_sdk::assert_reachable as assert_reachable_antithesis;
+pub use antithesis_sdk::assert_unreachable as assert_unreachable_antithesis;
+
+pub use serde_json::json;
 
 #[inline(always)]
 pub fn crash_on_debug() -> bool {
@@ -67,13 +75,14 @@ macro_rules! register_debug_fatal_handler {
 
 #[macro_export]
 macro_rules! debug_fatal {
-    ($($arg:tt)*) => {{
+    //($msg:literal $(, $arg:expr)* $(,)?)
+    ($msg:literal $(, $arg:expr)*) => {{
         loop {
             #[cfg(msim)]
             {
                 if let Some(cb) = $crate::logging::intercept_debug_fatal::get_callback() {
-                    tracing::error!($($arg)*);
-                    let msg = format!($($arg)*);
+                    tracing::error!($msg $(, $arg)*);
+                    let msg = format!($msg $(, $arg)*);
                     if msg.contains(&cb.pattern) {
                         (cb.callback)();
                     }
@@ -81,14 +90,23 @@ macro_rules! debug_fatal {
                 }
             }
 
-            if $crate::logging::crash_on_debug() {
-                $crate::fatal!($($arg)*);
+            // In antithesis, rather than crashing, we will use the assert_unreachable_antithesis
+            // macro to catch the signal that something has gone wrong.
+            if !$crate::in_antithesis() && $crate::logging::crash_on_debug() {
+                $crate::fatal!($msg $(, $arg)*);
             } else {
                 let stacktrace = std::backtrace::Backtrace::capture();
-                tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $($arg)*);
+                tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $msg $(, $arg)*);
                 let location = concat!(file!(), ':', line!());
                 if let Some(metrics) = mysten_metrics::get_metrics() {
                     metrics.system_invariant_violations.with_label_values(&[location]).inc();
+                }
+                if $crate::in_antithesis() {
+                    // antithesis requires a literal for first argument. pass the formatted argument
+                    // as a string.
+                    let full_msg = format!($msg $(, $arg)*);
+                    let json = $crate::logging::json!({ "message": full_msg });
+                    $crate::logging::assert_unreachable_antithesis!($msg, &json);
                 }
             }
             break;
