@@ -1,5 +1,5 @@
 ---
-title: Build a Custom Indexer
+title: Build Your First Custom Indexer
 description: Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data.
 ---
 
@@ -9,11 +9,11 @@ description: Establishing a custom indexer helps improve latency, allows pruning
 
 :::
 
-This guide walks you through building a complete custom indexer using the `sui-indexer-alt-framework`. The guide instructs how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+To build a complete custom indexer, you use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
 
 :::tip
 
-While this guide uses PostgreSQL with [Diesel](https://diesel.rs/guides/getting-started) (a popular Rust ORM and query builder) for minimalism and out-of-the-box support, the `sui-indexer-alt-framework` is designed for flexible storage. You can {/*[**Bring Your Own Store (BYOS)**](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)*/} use different databases (such as [MongoDB](https://www.mongodb.com/), [CouchDB](https://couchdb.apache.org/), or similar) or utilize other database clients if you prefer not to use Diesel. To achieve this, implement the framework's `Store` and `Connection` traits and define your database write logic directly within your `Handler::commit()` method.
+While this example uses PostgreSQL with [Diesel](https://diesel.rs/guides/getting-started) (a popular Rust ORM and query builder) for minimalism and out-of-the-box support, the `sui-indexer-alt-framework` is designed for flexible storage. You can {/*[**Bring Your Own Store (BYOS)**](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)*/} use different databases (such as [MongoDB](https://www.mongodb.com/), [CouchDB](https://couchdb.apache.org/), or similar) or utilize other database clients if you prefer not to use Diesel. To achieve this, implement the framework's `Store` and `Connection` traits and define your database write logic directly within your `Handler::commit()` method.
 
 :::
 
@@ -29,19 +29,17 @@ You need the following stack installed on your machine.
 - [PostgreSQL](https://www.postgresql.org/download/)
 - [Diesel CLI](https://diesel.rs/guides/getting-started#installing-diesel-cli)
 
-If you're unsure whether your system has the necessary softare properly installed, you can verify installation with the following commands.
+If you're unsure whether your system has the necessary software properly installed, you can verify installation with the following commands.
 
 ```sh
-psql --version
-```
-```sh
-diesel --version
+$ psql --version
+$ diesel --version
 ```
 
 To test PostgreSQL functionality, you can create and delete a test table.
 
 ```sh
-createdb test_db && dropdb test_db
+$ createdb test_db && dropdb test_db
 ```
 
 If you receive a new prompt with no console output, the test was successful. If you receive a `createdb` error similar to
@@ -53,7 +51,7 @@ createdb: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: FAT
 then you need to create the user (replace `username` with the name provided in your error message).
 
 ```sh
-sudo -u postgres createuser --superuser username
+$ sudo -u postgres createuser --superuser username
 ```
 
 Enter the password for your pgAdmin account when prompted, then try the `createdb && dropdb` command again.
@@ -62,9 +60,9 @@ Enter the password for your pgAdmin account when prompted, then try the `created
 
 Read the [Custom Indexing Framework](../../../concepts/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](../../../concepts/custom-indexer/pipeline-architecture.mdx) topics first to understand the overall architecture and concurrent pipeline concepts.
 
-## What this guide builds
+## What you build
 
-This guide demonstrates how to create an indexer that:
+The following steps show how to create an indexer that:
 
 - Connects to Sui Testnet: Uses the remote checkpoint store at https://checkpoints.testnet.sui.io.
 - Processes checkpoints: Streams checkpoint data continuously.
@@ -85,51 +83,43 @@ Sui provides checkpoint stores for both Mainnet and Testnet.
 
 ##step Project setup
 
-First, open your terminal or console to the directory you want to store your indexer project. Use the `cargo new` command to create your Rust project and then navigate your terminal or console to its directory.
+First, open your console to the directory you want to store your indexer project. Use the `cargo new` command to create a new Rust project and then navigate to its directory.
 
 ```sh
-cargo new simple-sui-indexer
-```
-```sh
-cd simple-sui-indexer
+$ cargo new simple-sui-indexer
+$ cd simple-sui-indexer
 ```
 
 ##step Configure dependencies
 
-Replace your `Cargo.toml` with the following configuration and save. You can use an editor of your choice, but the instructions use Visual Studio Code (VS Code) for demonstration. Replace those instructions as needed for your environment.
-
-```sh
-code Cargo.toml
-```
-Replace the code in the manifest with the following:
+Replace your `Cargo.toml` code with the following configuration and save.
  
 {@inject: examples/rust/basic-sui-indexer/Cargo.toml}
 
 The manifest now includes the following dependencies:
 
 - `sui-indexer-alt-framework`: Core framework providing pipeline infrastructure.
-- `diesel/diesel-async`: Type-safe database ORM with async support.
+- `diesel/diesel-async`: Type-safe database ORM with asynchronous support.
 - `tokio`: Async runtime required by the framework.
 - `clap`: Command-line argument parsing for configuration.
 - `anyhow`: Error handling and async-trait for trait implementations.
-- `dotenvy`: Ingest .env file that stores your PostgreSQL URL. 
+- `dotenvy`: Ingest `.env` file that stores your PostgreSQL URL. 
 
 ##step Create database
 
 Before configuring migrations, create and verify your local PostgreSQL database:
 
-
 ```sh
-createdb sui_indexer
+$ createdb sui_indexer
 ```
 
 Get your connection details:
 
 ```sh
-psql sui_indexer -c "\conninfo"
+$ psql sui_indexer -c "\conninfo"
 ```
 
-If successful your terminal or console should display a message similar to the following:
+If successful, your console should display a message similar to the following:
 
 ```sh
 You are connected to database "sui_indexer" as user "username" via socket in "/tmp" at port "5432".
@@ -138,13 +128,13 @@ You are connected to database "sui_indexer" as user "username" via socket in "/t
 You can now set a variable to your database URL as it's used in following commands. Make sure to change `username` to your actual username.
 
 ```sh
-PSQL_URL=postgres://username@localhost:5432/sui_indexer
+$ PSQL_URL=postgres://username@localhost:5432/sui_indexer
 ``` 
 
 You can now test your connection with the following command:
 
 ```sh
-psql $PSQL_URL -c "SELECT 'Connected';"
+$ psql $PSQL_URL -c "SELECT 'Connected';"
 ```
 
 If successful, your console or terminal should respond with a message similar to the following:
@@ -160,7 +150,7 @@ If successful, your console or terminal should respond with a message similar to
 
 Before you start coding, make sure you set up a local PostgreSQL database from the previous step. This is required for the indexer to store the extracted transaction data.
 
-The following steps have you:
+The following database setup steps have you:
 
 1. Create a database table to store the data.
 1. Use `Diesel` to manage the process.
@@ -171,10 +161,7 @@ The following steps have you:
 First, create a `diesel.toml` file (within the same folder as `cargo.toml`) to configure database migrations.
 
 ```sh
-touch diesel.toml
-```
-```sh
-code diesel.toml
+$ touch diesel.toml
 ```
 
 Update and save the file with the following code:
@@ -185,36 +172,30 @@ Update and save the file with the following code:
 
 Diesel migrations are a way of creating and managing database tables using SQL files. Each migration has two files:
 
-- `up.sql` - creates and changes the table.
-- `down.sql` - removes and undoes the changes.
+- `up.sql`: Creates and changes the table.
+- `down.sql`: Removes and undoes the changes.
 
-Use the `diesel setup` command to create the necessary directory structure for the next command, passing your database URL with the `--database-url` argument.
+Use the `diesel setup` command to create the necessary directory structure, passing your database URL with the `--database-url` argument.
 
 ```sh
-diesel setup --database-url $PSQL_URL
+$ diesel setup --database-url $PSQL_URL
 ```
 
 Use the `diesel migration` command at the root of your project to then generate the migration files.
 
 ```sh
-diesel migration generate transaction_digests
+$ diesel migration generate transaction_digests
 ```
 
 You should now have a `migrations` folder in your project. There should be a subdirectory in this folder with the name format `YYYY-MM-DD-HHMMSS_transaction_digests`. This folder should contain the `up.sql` and `down.sql` files. 
 
-Open `up.sql` 
-
-```sh
-code ./migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql
-```
-
-and replace its contents with the following code (using the actual folder name):
+Open `up.sql` and replace its contents with the following code (using the actual folder name):
 
 {@inject: examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql}
 
-:::info
+:::tip
 
-This example uses the `TEXT` data type for `tx_digest`, but the best practice for a production indexer is to use `BYTEA` data type.
+This example uses the `TEXT` data type for `tx_digest`, but best practice for a production indexer is to use the `BYTEA` data type.
 
 The `TEXT` type is used to make the transaction digest easily readable and directly usable with external tools. Digests are `Base58` encoded, and because PostgreSQL cannot natively display `BYTEA` data in this format, storing it as `TEXT` allows you to copy the digest from a query and paste it into an explorer like [SuiScan](https://suiscan.xyz/testnet/home).
 
@@ -222,13 +203,7 @@ For a production environment, however, `BYTEA` is strongly recommended. It offer
 
 :::
 
-Save `up.sql`, then open `down.sql` to edit (using the actual folder name).
-
-```sh
-code ./migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql
-```
-
-Replace the contents of the file with the following code and save it:
+Save `up.sql`, then open `down.sql` to edit. Replace the contents of the file with the following code and save it:
 
 {@inject: examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql}
 
@@ -237,13 +212,13 @@ Replace the contents of the file with the following code and save it:
 From the root of your project, use the `diesel migration` command to create tables.
 
 ```sh
-diesel migration run --database-url $PSQL_URL
+$ diesel migration run --database-url $PSQL_URL
 ```
 
-Then use the `diesel print-schema` command to generate the schema.rs file from the actual database.
+Then use the `diesel print-schema` command to generate the `schema.rs` file from the actual database.
 
 ```sh
-diesel print-schema --database-url $PSQL_URL > src/schema.rs
+$ diesel print-schema --database-url $PSQL_URL > src/schema.rs
 ```
 
 Your `src/schema.rs` file should now look like the following:
@@ -275,16 +250,10 @@ Key annotations:
 Create a `handlers.rs` file in your `src` directory. 
 
 ```sh
-touch ./src/handlers.rs
+$ touch ./src/handlers.rs
 ```
 
-Open the file
-
-```sh
-code ./src/handler.rs
-```
-
-and define a concrete struct to implement the `Processor` and `Handler` traits:
+Open the file and define a concrete struct to implement the `Processor` and `Handler` traits:
 
 {@inject: examples/rust/basic-sui-indexer/src/handlers.rs#struct=TransactionDigestHandler}
 
@@ -379,13 +348,7 @@ After running the command for your environment, make sure the `.env` file exists
 
 ##step Create main function
 
-Now, to tie everything together in the main function, open your `main.rs` file.
-
-```sh
-code ./src/main.rs
-```
-
-Replace the default code with the following and save the file:
+Now, to tie everything together in the main function, open your `main.rs` file. Replace the default code with the following and save the file:
 
 {@inject: examples/rust/basic-sui-indexer/src/main.rs}
 
@@ -405,7 +368,7 @@ Your indexer is now complete. The next steps walk you through running the indexe
 Use the `cargo run` command to run your indexer against Testnet with remote checkpoint storage.
 
 ```sh
-cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
+$ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
 ```
 
 :::info
@@ -421,26 +384,28 @@ If successful, your console informs you that the indexer is running.
 Open a new terminal or console and connect to your database to check the results:
 
 ```bash
-psql sui_indexer
+$ psql sui_indexer
 ```
 
 Ater connecting, run a few queries to verify your indexer is working:
 
-Check how many transaction digests were indexed:
+Check how many transaction digests are indexed:
 
 ```sql
-SELECT COUNT(*) FROM transaction_digests;
+$ SELECT COUNT(*) FROM transaction_digests;
 ```
 
 View sample records:
 
 ```sql
-SELECT * FROM transaction_digests LIMIT 5;
+$ SELECT * FROM transaction_digests LIMIT 5;
 ```
 
 To confirm your data is accurate, copy any transaction digest from your database and verify it on SuiScan: [https://suiscan.xyz/testnet/home](https://suiscan.xyz/testnet/home)
 
-🎉 You've built a working custom indexer! The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
+You've built a working custom indexer 🎉 
+
+The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
 
 {/*## Next stepsFrom here you can:
 

@@ -130,7 +130,7 @@ where
                     // writes by combining rows, but we will limit the number of checkpoints we try
                     // and batch together as a way to impose some limit on the size of the batch
                     // (and therefore the length of the write transaction).
-                    // docs::#batch
+                    // docs::#batch  (see docs/content/references/contribute/mdx-components.mdx#code-inject)
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
                         if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                             break;
@@ -306,7 +306,7 @@ where
                         .with_label_values(&[H::NAME])
                         .set(watermark.timestamp_ms_hi_inclusive as i64);
 
-                    // docs::#send
+                    // docs::#send (see docs/content/references/contribute/mdx-components.mdx#code-inject)
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.

@@ -205,7 +205,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     } = config;
 
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
-    //docs::#buff
+    //docs::#buff (see docs/content/references/contribute/mdx-components.mdx#code-inject)
     let (collector_tx, committer_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
     //docs::/#buff
