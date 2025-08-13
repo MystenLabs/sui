@@ -4,7 +4,7 @@ description: Use the DeepBook TypeScript SDK to interact directly with the DeepB
 keywords: [ deepbook, deep book, deepbook v3, typescript, typescript sdk, mysten/deepbook, deepbookV3 SDK, Coin, Pool, Manager ]
 ---
 
-The DeepBook TypeScript SDK abstracts away the transaction calls, allowing for direct interactions with the DeepBook package.
+The DeepBookV3 TypeScript SDK abstracts away the transaction calls, allowing for direct interactions with the `DeepBook` package.
 
 - [SDK repository](https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3)
 - [NPM version](https://www.npmjs.com/package/@mysten/deepbook-v3)
@@ -19,7 +19,7 @@ npm install @mysten/deepbook-v3
 
 ## Constants
 
-The DeepBookV3 SDK includes a constants file (`/utils/constants.ts`) that maintains the latest deployed addresses for DeepBook, as well as a few staple coins and pools.
+The DeepBookV3 SDK includes a constants file (`/utils/constants.ts`) that maintains the latest deployed addresses for DeepBookV3, as well as a few staple coins and pools.
 
 <details>
 <summary>
@@ -30,7 +30,7 @@ The DeepBookV3 SDK includes a constants file (`/utils/constants.ts`) that mainta
 
 ## DeepBookClient
 
-To work with DeepBook, you must create a `DeepBookClient`. To construct the `DeepBookClient`, pass in a `SuiClient`, the sender address, and environment. The [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the `SuiClient` and key functionality necessary to process transactions. The following example imports those libraries, as well.
+To work with DeepBookV3, you must create a `DeepBookClient`. To construct the `DeepBookClient`, pass in a `SuiClient`, the sender address, and environment. The [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the `SuiClient` and key functionality necessary to process transactions. The following example imports those libraries, as well.
 
 ```tsx
 import { DeepBookClient } from '@mysten/deepbook-v3';
@@ -70,7 +70,7 @@ class DeepBookMarketMaker {
 
 ## Keys: Coin, Pool, and Manager {#keys}
 
-Functions that require the input of a coin, pool, or a manager require the key of any such object as the parameter. The SDK manages a key:value relationship of this data in memory. Some default data comes with the SDK (as seen in `utils/constants.ts`). Coins are stored in a `CoinMap` and pools in a `PoolMap` in the config.
+Functions that require the input of a coin, pool, or a manager require the key of any such object as the parameter. The SDK manages a `key:value` relationship of this data in memory. Some default data comes with the SDK (as seen in `utils/constants.ts`). Coins are stored in a `CoinMap` and pools in a `PoolMap` in the config.
 
 ### Balance manager
 
@@ -359,3 +359,9 @@ import { DeepBookMarketMaker } from './deepbookMarketMaker.js';
 	console.dir(res, { depth: null });
 })();
 ```
+
+## Related links
+
+- [DeepBookV3 Indexer repository](https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3): The DeepBookV3 SDK repository on GitHub.
+- [DeepBookV3 SDK node package](https://www.npmjs.com/package/@mysten/deepbook-v3): The DeepBookV3 SDK node package on NPM.
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

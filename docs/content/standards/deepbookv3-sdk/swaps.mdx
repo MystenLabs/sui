@@ -1,5 +1,7 @@
 ---
 title: Swaps
+description: Learn how to use the DeepBookV3 SDK to interact a swap-like interface.
+keywords: [ automatic market makers, amms, swap_exact_amount, balancemanager, base_in, quote_in, deep_in, swaps, swap base quantity, deep quantity, DEEP, swap exact quantity, deepbook, deepbookv3  ]
 ---
 
 DeepBookV3 provides a swap-like interface commonly seen in automatic market makers (AMMs). The DeepBookV3 SDK provides functions to leverage the features of this interface. See [Swaps](../deepbookv3/swaps.mdx) in the API section for more details.
@@ -61,3 +63,9 @@ swapExactQuoteForBase = (tx: Transaction) => {
   tx.transferObjects([baseOut, quoteOut, deepOut], this.getActiveAddress());
 };
 ```
+
+## Related links
+
+- [DeepBookV3 Indexer repository](https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3): The DeepBookV3 SDK repository on GitHub.
+- [DeepBookV3 SDK node package](https://www.npmjs.com/package/@mysten/deepbook-v3): The DeepBookV3 SDK node package on NPM.
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

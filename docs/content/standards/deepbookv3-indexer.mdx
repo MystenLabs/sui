@@ -1,14 +1,13 @@
 ---
 title: DeepBookV3 Indexer
-description: Use the DeepBook Indexer to access order book and trading data in real-time.
-keywords: [ deepbook, deepbook indexer, indexer, data retrieval, order book, asset conversions, view pool information, historical volume analysis, user-specific volume tracking, trading pools, tick size, lot size ]
+sidebar_label: Indexer
+description: DeepBookV3 Indexer provides streamlined, real-time access to order book and trading data from the DeepBookV3 protocol. It acts as a centralized service to aggregate and expose critical data points.
+keywords: [ DeepBook Indexer, DeepBook, public indexer, viewing pool information, historical volume analysis, volume tracking, balance manager, BalanceManager, trading pairs ]
 ---
 
-import Admonition from '@theme/Admonition';
+DeepBookV3 Indexer provides streamlined, real-time access to order book and trading data from the DeepBookV3 protocol. It acts as a centralized service to aggregate and expose critical data points for developers, traders, and analysts who interact with DeepBookV3.
 
-DeepBook Indexer provides streamlined, real-time access to order book and trading data from the DeepBook protocol. It acts as a centralized service to aggregate and expose critical data points for developers, traders, and analysts who interact with DeepBook.
-
-DeepBook Indexer simplifies data retrieval by offering endpoints that enable:
+DeepBookV3 Indexer simplifies data retrieval by offering endpoints that enable:
 
 -	**Viewing pool information:** Retrieve detailed metadata about all available trading pools, including base and quote assets, tick sizes, and lot sizes.
 -	**Historical volume analysis:** Fetch volume metrics for specific pools or balance managers over custom time ranges, with support for interval-based breakdowns.
@@ -28,9 +27,9 @@ Run your own indexer if:
 -	You have specific customization needs.
 -	Your application depends on proprietary features or extended data sets.
 
-## Public DeepBook Indexer
+## Public DeepBookV3 Indexer
 
-[Mysten Labs](https://www.mystenlabs.com/) provides a public indexer for DeepBook. You can access this indexer at the following URL:
+[Mysten Labs](https://www.mystenlabs.com/) provides a public indexer for DeepBookV3. You can access this indexer at the following URL:
 
 ```http
 https://deepbook-indexer.mainnet.mystenlabs.com/
@@ -67,7 +66,7 @@ Use these conversions to interpret the volumes correctly across all pools and as
 
 ## API endpoints
 
-You can perform the following tasks using the endpoints that the indexer API for DeepBook provides.
+You can perform the following tasks using the endpoints that the indexer API for DeepBookV3 provides.
 
 ### Get all pool information
 
@@ -245,7 +244,7 @@ produces a response similar to
 
 ### Get historical volume by balance manager
 
-```
+```http
 /historical_volume_by_balance_manager_id/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
 ```
 
@@ -287,7 +286,7 @@ produces a response similar to
 
 ### Get historical volume by balance manager within a specific time range and intervals
 
-```
+```http
 /historical_volume_by_balance_manager_id_with_interval/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&interval=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
 ```
 
@@ -342,7 +341,7 @@ produces a response similar to
 /summary
 ```
 
-Returns a summary in JSON for all trading pairs in DeepBook.
+Returns a summary in JSON for all trading pairs in DeepBookV3.
 
 #### Response
 
@@ -664,7 +663,7 @@ produces a response similar to
 /assets
 ```
 
-Returns asset information for all coins being traded on DeepBook.
+Returns asset information for all coins being traded on DeepBookV3.
 
 #### Response
 
@@ -712,3 +711,7 @@ produces a response similar to
 	...
 }
 ```
+
+## Related links
+
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.
