@@ -881,11 +881,7 @@ impl ExecutionEnv {
     }
 
     pub fn with_assigned_versions(mut self, assigned_versions: AssignedVersions) -> Self {
-        if !assigned_versions.is_empty() {
-            self.assigned_versions = assigned_versions;
-            // scheduling source cannot be fast path if assigned versions are set
-            self.scheduling_source = SchedulingSource::NonFastPath;
-        }
+        self.assigned_versions = assigned_versions;
         self
     }
 
