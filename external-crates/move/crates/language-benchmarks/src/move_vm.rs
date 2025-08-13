@@ -90,23 +90,19 @@ fn create_vm() -> InMemoryTestAdapter {
     ))
 }
 
-fn find_bench_functions(modules: &Vec<CompiledModule>) -> Vec<Identifier> {
+fn find_bench_functions(modules: &[CompiledModule]) -> Vec<Identifier> {
     let name = "bench";
     modules
         .iter()
         .flat_map(|module| {
-            module
-                .function_defs()
-                .iter()
-                .enumerate()
-                .filter_map(|(_idx, def)| {
-                    let handle = module.function_handle_at(def.function);
-                    if module.identifier_at(handle.name).as_str().starts_with(name) {
-                        Some(Identifier::new(module.identifier_at(handle.name).as_str()).unwrap())
-                    } else {
-                        None
-                    }
-                })
+            module.function_defs().iter().filter_map(|def| {
+                let handle = module.function_handle_at(def.function);
+                if module.identifier_at(handle.name).as_str().starts_with(name) {
+                    Some(Identifier::new(module.identifier_at(handle.name).as_str()).unwrap())
+                } else {
+                    None
+                }
+            })
         })
         .collect()
 }
@@ -133,7 +129,6 @@ fn execute<M: Measurement + 'static>(
 
     // module and function to call
     let module_id = ModuleId::new(sender, Identifier::new("bench").unwrap());
-    // let fun_name = Identifier::new("bench").unwrap();
 
     fun_names.iter().for_each(|fun_name| {
         // benchmark
@@ -146,7 +141,7 @@ fn execute<M: Measurement + 'static>(
                     .unwrap()
                     .execute_function_bypass_visibility(
                         &module_id,
-                        &fun_name,
+                        fun_name,
                         vec![],
                         Vec::<Vec<u8>>::new(),
                         &mut UnmeteredGasMeter,
