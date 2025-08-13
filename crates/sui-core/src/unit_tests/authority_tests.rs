@@ -6760,3 +6760,80 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
         panic!("Expected execution status to be Failure");
     }
 }
+
+#[tokio::test]
+async fn test_should_wait_for_dependency_object() {
+    let (sender, _keypair): (_, AccountKeyPair) = get_key_pair();
+    let authority_state = TestAuthorityBuilder::new().build().await;
+
+    // Test case: Object doesn't exist yet - should wait
+    let non_existent_obj_id = ObjectID::random();
+    let non_existent_obj_ref = (
+        non_existent_obj_id,
+        OBJECT_START_VERSION,
+        ObjectDigest::random(),
+    );
+    let result = authority_state
+        .should_wait_for_dependency_object(non_existent_obj_ref)
+        .unwrap();
+    if let InputKey::VersionedObject {
+        id: full_obj_id,
+        version,
+    } = result
+    {
+        assert_eq!(full_obj_id.id(), non_existent_obj_id);
+        assert_eq!(version, OBJECT_START_VERSION);
+    } else {
+        panic!("Expected Some(InputKey::VersionedObject)");
+    }
+
+    // Set up a test object a test object.
+    let test_obj_id = ObjectID::random();
+    let test_object = Object::with_id_owner_for_testing(test_obj_id, sender);
+    let current_version = test_object.version();
+    let current_ref = test_object.compute_object_reference();
+    authority_state
+        .insert_genesis_object(test_object.clone())
+        .await;
+
+    // Test case: Current version - should not wait
+    let result = authority_state.should_wait_for_dependency_object(current_ref);
+    assert!(result.is_none(), "Should not wait for current version");
+
+    // Test case: Older version - should not wait
+    let older_version = SequenceNumber::from_u64(current_version.value() - 1);
+    let older_ref = (test_obj_id, older_version, ObjectDigest::random());
+    let result = authority_state.should_wait_for_dependency_object(older_ref);
+    assert!(result.is_none(), "Should not wait for older version");
+
+    // Test case: Request future version - should wait
+    let future_version = SequenceNumber::from_u64(current_version.value() + 1);
+    let future_ref = (test_obj_id, future_version, ObjectDigest::random());
+    let result = authority_state
+        .should_wait_for_dependency_object(future_ref)
+        .unwrap();
+    if let InputKey::VersionedObject {
+        id: full_obj_id,
+        version,
+    } = result
+    {
+        assert_eq!(full_obj_id.id(), test_obj_id);
+        assert_eq!(version, future_version);
+    } else {
+        panic!("Expected InputKey::VersionedObject");
+    }
+
+    // Test case: Deleted object - should not wait
+    let deleted_obj_id = ObjectID::random();
+    let deleted_obj_ref = (
+        deleted_obj_id,
+        OBJECT_START_VERSION,
+        ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    let deleted_obj = Object::with_id_owner_for_testing(deleted_obj_id, sender);
+    authority_state
+        .insert_genesis_object(deleted_obj.clone())
+        .await;
+    let result = authority_state.should_wait_for_dependency_object(deleted_obj_ref);
+    assert!(result.is_none(), "Should not wait for deleted object");
+}
