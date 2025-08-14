@@ -43,9 +43,11 @@ async fn test_install_dir_creates_directory() {
     create_test_package(&package_path).expect("Failed to create test package");
 
     let install_dir = PathBuf::from("custom_install");
-    let mut build_config = BuildConfig::default();
-    build_config.install_dir = Some(install_dir.clone());
-    build_config.default_flavor = Some(move_compiler::editions::Flavor::Core);
+    let build_config = BuildConfig {
+        install_dir: Some(install_dir.clone()),
+        default_flavor: Some(move_compiler::editions::Flavor::Core),
+        ..Default::default()
+    };
 
     let env = default_environment();
 
@@ -83,9 +85,11 @@ async fn test_install_dir_relative_path() {
 
     let relative_install_dir = PathBuf::from("../install_output");
 
-    let mut build_config = BuildConfig::default();
-    build_config.install_dir = Some(relative_install_dir.clone());
-    build_config.default_flavor = Some(move_compiler::editions::Flavor::Core);
+    let build_config = BuildConfig {
+        install_dir: Some(relative_install_dir.clone()),
+        default_flavor: Some(move_compiler::editions::Flavor::Core),
+        ..Default::default()
+    };
 
     let env = default_environment();
     let mut output = Cursor::new(Vec::new());
@@ -117,9 +121,11 @@ async fn test_install_dir_absolute_path() {
     let absolute_install_dir = temp_dir.path().join("absolute_install");
     assert!(absolute_install_dir.is_absolute());
 
-    let mut build_config = BuildConfig::default();
-    build_config.install_dir = Some(absolute_install_dir.clone());
-    build_config.default_flavor = Some(move_compiler::editions::Flavor::Core);
+    let build_config = BuildConfig {
+        install_dir: Some(absolute_install_dir.clone()),
+        default_flavor: Some(move_compiler::editions::Flavor::Core),
+        ..Default::default()
+    };
 
     let env = default_environment();
     let mut output = Cursor::new(Vec::new());
@@ -154,8 +160,10 @@ async fn test_no_install_dir_uses_default() {
 
     create_test_package(&package_path).expect("Failed to create test package");
 
-    let mut build_config = BuildConfig::default();
-    build_config.default_flavor = Some(move_compiler::editions::Flavor::Core);
+    let build_config = BuildConfig {
+        default_flavor: Some(move_compiler::editions::Flavor::Core),
+        ..Default::default()
+    };
 
     let env = default_environment();
     let mut output = Cursor::new(Vec::new());
@@ -189,9 +197,11 @@ async fn test_install_dir_existing_directory() {
     let test_file = install_dir.join("existing_file.txt");
     fs::write(&test_file, "existing content").expect("Failed to write test file");
 
-    let mut build_config = BuildConfig::default();
-    build_config.install_dir = Some(install_dir.clone());
-    build_config.default_flavor = Some(move_compiler::editions::Flavor::Core);
+    let build_config = BuildConfig {
+        install_dir: Some(install_dir.clone()),
+        default_flavor: Some(move_compiler::editions::Flavor::Core),
+        ..Default::default()
+    };
 
     let env = default_environment();
     let mut output = Cursor::new(Vec::new());
