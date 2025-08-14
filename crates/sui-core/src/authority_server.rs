@@ -733,15 +733,11 @@ impl ValidatorService {
                 .state
                 .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
             {
-                let events = if include_events {
-                    if signed_effects.events_digest().is_some() {
-                        Some(
-                            self.state
-                                .get_transaction_events(signed_effects.transaction_digest())?,
-                        )
-                    } else {
-                        None
-                    }
+                let events = if include_events && signed_effects.events_digest().is_some() {
+                    Some(
+                        self.state
+                            .get_transaction_events(signed_effects.transaction_digest())?,
+                    )
                 } else {
                     None
                 };
@@ -959,29 +955,23 @@ impl ValidatorService {
                     }
                     _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
                 };
-                let events = if include_events {
-                    if effects.events_digest().is_some() {
-                        Some(self.state.get_transaction_events(effects.transaction_digest())?)
-                    } else {
-                        None
-                    }
+                let events = if include_events && effects.events_digest().is_some() {
+                    Some(self.state.get_transaction_events(effects.transaction_digest())?)
                 } else {
                     None
                 };
 
-                let input_objects = include_input_objects
-                    .then(|| self.state.get_transaction_input_objects(&effects))
-                    .map_or_else(
-                        Vec::new,
-                        |result| result.unwrap_or_default()
-                    );
+                let input_objects = if include_input_objects {
+                    self.state.get_transaction_input_objects(&effects)?
+                } else {
+                    vec![]
+                };
 
-                let output_objects = include_output_objects
-                    .then(|| self.state.get_transaction_output_objects(&effects))
-                    .map_or_else(
-                        Vec::new,
-                        |result| result.unwrap_or_default()
-                    );
+                let output_objects = if include_output_objects {
+                    self.state.get_transaction_output_objects(&effects)?
+                } else {
+                    vec![]
+                };
 
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
                     epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
