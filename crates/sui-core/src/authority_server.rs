@@ -1178,7 +1178,7 @@ impl ValidatorService {
     }
 
     // TODO(fastpath): Add metrics.
-    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, err, fields(tx_digest = ?request.transaction_digest, consensus_position = ?request.consensus_position))]
+    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, err, fields(consensus_position = ?request.consensus_position))]
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
@@ -1233,6 +1233,7 @@ impl ValidatorService {
         }
     }
 
+    #[instrument(level = "error", skip_all, err)]
     async fn wait_for_fastpath_effects(
         &self,
         consensus_position: ConsensusPosition,

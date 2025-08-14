@@ -241,7 +241,7 @@ impl EffectsCertifier {
         }
     }
 
-    #[instrument(level = "error", skip_all, err, ret, fields(consensus_position = ?consensus_position))]
+    #[instrument(level = "debug", skip_all, err, ret, fields(consensus_position = ?consensus_position))]
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
