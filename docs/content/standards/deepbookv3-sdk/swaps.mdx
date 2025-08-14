@@ -44,7 +44,7 @@ swapExactBaseForQuote = (tx: Transaction) => {
     poolKey: 'SUI_DBUSDC',
     amount: 1, // amount of SUI to swap
     deepAmount: 1, // amount of DEEP to pay as fees, excess is returned
-    minOut: 0.1, // minimum amount of DBUSDC to receive or transactionf fails
+    minOut: 0.1, // minimum amount of DBUSDC to receive or transaction fails
   })(tx);
 
   // Transfer received coins to own address
@@ -56,7 +56,7 @@ swapExactQuoteForBase = (tx: Transaction) => {
     poolKey: 'SUI_DBUSDC',
     amount: 1, // amount of DBUSDC to swap
     deepAmount: 1, // amount of DEEP to pay as fees, excess is returned
-    minOut: 0.1, // minimum amount of SUI to receive or transactionf fails
+    minOut: 0.1, // minimum amount of SUI to receive or transaction fails
   })(tx);
 
   // Transfer received coins to own address
