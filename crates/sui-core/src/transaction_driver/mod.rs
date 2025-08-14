@@ -35,7 +35,9 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
-    validator_client_monitor::{ValidatorClientMetrics, ValidatorClientMonitor},
+    validator_client_monitor::{
+        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
+    },
 };
 use sui_config::NodeConfig;
 
@@ -194,6 +196,7 @@ where
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        let start_time = Instant::now();
         let auth_agg = self.authority_aggregator.load();
 
         let (name, submit_txn_resp) = self
@@ -208,7 +211,8 @@ where
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
-        self.certifier
+        let result = self
+            .certifier
             .get_certified_finalized_effects(
                 &auth_agg,
                 &self.client_monitor,
@@ -218,7 +222,19 @@ where
                 submit_txn_resp,
                 options,
             )
-            .await
+            .await?;
+
+        // Record end-to-end latency for successful transaction
+        let end_to_end_latency = start_time.elapsed();
+        self.client_monitor
+            .record_interaction_result(OperationFeedback {
+                authority_name: name,
+                display_name: auth_agg.get_display_name(&name),
+                operation: OperationType::Submit,
+                result: Ok(end_to_end_latency),
+            });
+
+        Ok(result)
     }
 
     fn enable_reconfig(
