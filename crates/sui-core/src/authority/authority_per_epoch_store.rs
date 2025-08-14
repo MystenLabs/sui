@@ -3173,7 +3173,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
-        indirect_state_observer: IndirectStateObserver,
+        mut indirect_state_observer: IndirectStateObserver,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
         // Split transactions into different types for processing.
@@ -3418,20 +3418,18 @@ impl AuthorityPerEpochStore {
             .collect();
 
         let (
-            verified_non_randomness_transactions,
+            mut verified_non_randomness_transactions,
             verified_randomness_transactions,
             notifications,
-            consensus_commit_prologue_root,
-            assigned_versions,
+            cancelled_txns,
         ) = self
             .process_consensus_transactions(
                 &mut output,
                 &sequenced_non_randomness_transactions,
                 &sequenced_randomness_transactions,
                 checkpoint_service,
-                cache_reader,
                 consensus_commit_info,
-                indirect_state_observer,
+                &mut indirect_state_observer,
                 &mut roots,
                 &mut randomness_roots,
                 shared_object_congestion_tracker,
@@ -3444,6 +3442,23 @@ impl AuthorityPerEpochStore {
                 authority_metrics,
             )
             .await?;
+
+        // Add the consensus commit prologue transaction to the beginning of `verified_non_randomness_certificates`.
+        let consensus_commit_prologue_root = self.add_consensus_commit_prologue_transaction(
+            &mut output,
+            &mut verified_non_randomness_transactions,
+            consensus_commit_info,
+            indirect_state_observer,
+            &cancelled_txns,
+        )?;
+
+        let assigned_versions = self.process_consensus_transaction_shared_object_versions(
+            cache_reader,
+            verified_non_randomness_transactions.iter(),
+            verified_randomness_transactions.iter(),
+            &cancelled_txns,
+            &mut output,
+        )?;
 
         let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
             &mut output,
@@ -3584,11 +3599,10 @@ impl AuthorityPerEpochStore {
             self.record_end_of_message_quorum_time_metric();
         }
 
-        let all_txns = [
-            verified_non_randomness_transactions,
-            verified_randomness_transactions,
-        ]
-        .concat();
+        let all_txns = verified_non_randomness_transactions
+            .into_iter()
+            .chain(verified_randomness_transactions.into_iter())
+            .collect();
 
         Ok((all_txns, assigned_versions))
     }
@@ -3676,17 +3690,15 @@ impl AuthorityPerEpochStore {
     // Assigns shared object versions to transactions and updates the next shared object version state.
     // Shared object versions in cancelled transactions are assigned to special versions that will
     // cause the transactions to be cancelled in execution engine.
-    fn process_consensus_transaction_shared_object_versions(
-        &self,
+    fn process_consensus_transaction_shared_object_versions<'a>(
+        &'a self,
         cache_reader: &dyn ObjectCacheRead,
-        non_randomness_transactions: &[Schedulable],
-        randomness_transactions: &[Schedulable],
+        non_randomness_transactions: impl Iterator<Item = &'a Schedulable> + Clone,
+        randomness_transactions: impl Iterator<Item = &'a Schedulable> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<AssignedTxAndVersions> {
-        let all_certs = non_randomness_transactions
-            .iter()
-            .chain(randomness_transactions.iter());
+        let all_certs = non_randomness_transactions.chain(randomness_transactions);
 
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -3759,8 +3771,8 @@ impl AuthorityPerEpochStore {
             .collect();
         let assigned_versions = self.process_consensus_transaction_shared_object_versions(
             cache_reader,
-            &transactions,
-            &[],
+            transactions.iter(),
+            std::iter::empty(),
             &BTreeMap::new(),
             &mut output,
         )?;
@@ -3797,9 +3809,8 @@ impl AuthorityPerEpochStore {
         non_randomness_transactions: &[VerifiedSequencedConsensusTransaction],
         randomness_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
-        cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
-        mut indirect_state_observer: IndirectStateObserver,
+        indirect_state_observer: &mut IndirectStateObserver,
         non_randomness_roots: &mut BTreeSet<TransactionKey>,
         randomness_roots: &mut BTreeSet<TransactionKey>,
         mut shared_object_congestion_tracker: SharedObjectCongestionTracker,
@@ -3811,11 +3822,10 @@ impl AuthorityPerEpochStore {
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(
-        Vec<Schedulable>,                      // non-randomness transactions to schedule
-        Vec<Schedulable>,                      // randomness transactions to schedule
+        VecDeque<Schedulable>, // non-randomness transactions to schedule
+        VecDeque<Schedulable>, // randomness transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
-        Option<TransactionKey>,                // consensus commit prologue root
-        AssignedTxAndVersions,
+        BTreeMap<TransactionDigest, CancelConsensusCertificateReason>, // cancelled transactions
     )> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transactions");
 
@@ -3879,7 +3889,7 @@ impl AuthorityPerEpochStore {
                     tx,
                     checkpoint_service,
                     consensus_commit_info,
-                    &mut indirect_state_observer,
+                    indirect_state_observer,
                     &previously_deferred_tx_digests,
                     randomness_manager.as_deref_mut(),
                     dkg_failed,
@@ -4016,33 +4026,11 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // Add the consensus commit prologue transaction to the beginning of `verified_non_randomness_certificates`.
-        let consensus_commit_prologue_root = self.add_consensus_commit_prologue_transaction(
-            output,
-            &mut verified_non_randomness_certificates,
-            consensus_commit_info,
-            indirect_state_observer,
-            &cancelled_txns,
-        )?;
-
-        let verified_non_randomness_certificates: Vec<_> =
-            verified_non_randomness_certificates.into();
-        let verified_randomness_certificates: Vec<_> = verified_randomness_certificates.into();
-
-        let assigned_tx_and_versions = self.process_consensus_transaction_shared_object_versions(
-            cache_reader,
-            &verified_non_randomness_certificates,
-            &verified_randomness_certificates,
-            &cancelled_txns,
-            output,
-        )?;
-
         Ok((
             verified_non_randomness_certificates,
             verified_randomness_certificates,
             notifications,
-            consensus_commit_prologue_root,
-            assigned_tx_and_versions,
+            cancelled_txns,
         ))
     }
 
