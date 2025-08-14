@@ -91,7 +91,7 @@ pub struct EpochStats {
     pub total_gas_reward: u64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
     pub last_of_epoch: bool,
@@ -100,7 +100,7 @@ pub struct PendingCheckpointInfo {
     pub checkpoint_height: CheckpointHeight,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpoint {
     pub roots: Vec<TransactionKey>,
     pub details: PendingCheckpointInfo,
