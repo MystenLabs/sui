@@ -3421,8 +3421,6 @@ impl AuthorityPerEpochStore {
             verified_non_randomness_transactions,
             verified_randomness_transactions,
             notifications,
-            lock,
-            final_round,
             consensus_commit_prologue_root,
             assigned_versions,
         ) = self
@@ -3430,7 +3428,6 @@ impl AuthorityPerEpochStore {
                 &mut output,
                 &sequenced_non_randomness_transactions,
                 &sequenced_randomness_transactions,
-                &end_of_publish_transactions,
                 checkpoint_service,
                 cache_reader,
                 consensus_commit_info,
@@ -3447,6 +3444,12 @@ impl AuthorityPerEpochStore {
                 authority_metrics,
             )
             .await?;
+
+        let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
+            &mut output,
+            &end_of_publish_transactions,
+        )?;
+
         self.process_user_signatures(
             verified_non_randomness_transactions
                 .iter()
@@ -3793,7 +3796,6 @@ impl AuthorityPerEpochStore {
         output: &mut ConsensusCommitOutput,
         non_randomness_transactions: &[VerifiedSequencedConsensusTransaction],
         randomness_transactions: &[VerifiedSequencedConsensusTransaction],
-        end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
@@ -3812,9 +3814,7 @@ impl AuthorityPerEpochStore {
         Vec<Schedulable>,                      // non-randomness transactions to schedule
         Vec<Schedulable>,                      // randomness transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
-        Option<RwLockWriteGuard<ReconfigState>>,
-        bool,                   // true if final round
-        Option<TransactionKey>, // consensus commit prologue root
+        Option<TransactionKey>,                // consensus commit prologue root
         AssignedTxAndVersions,
     )> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transactions");
@@ -3964,7 +3964,6 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        let commit_has_deferred_txns = !deferred_txns.is_empty();
         let mut total_deferred_txns = 0;
         {
             let mut deferred_transactions =
@@ -4038,18 +4037,10 @@ impl AuthorityPerEpochStore {
             output,
         )?;
 
-        let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
-            output,
-            end_of_publish_transactions,
-            commit_has_deferred_txns,
-        )?;
-
         Ok((
             verified_non_randomness_certificates,
             verified_randomness_certificates,
             notifications,
-            lock,
-            final_round,
             consensus_commit_prologue_root,
             assigned_tx_and_versions,
         ))
@@ -4059,11 +4050,11 @@ impl AuthorityPerEpochStore {
         &self,
         output: &mut ConsensusCommitOutput,
         transactions: &[VerifiedSequencedConsensusTransaction],
-        commit_has_deferred_txns: bool,
     ) -> SuiResult<(
         Option<RwLockWriteGuard<ReconfigState>>,
         bool, // true if final round
     )> {
+        let commit_has_deferred_txns = output.has_deferred_transactions();
         let mut lock = None;
 
         for transaction in transactions {
