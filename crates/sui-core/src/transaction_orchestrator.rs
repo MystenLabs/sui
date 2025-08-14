@@ -373,17 +373,14 @@ where
 
                                 let input_objects = include_input_objects
                                     .then(|| self.validator_state.get_transaction_input_objects(&effects))
-                                    .map_or_else(
-                                        Vec::new,
-                                        |result| result.unwrap_or_default()
-                                    );
+                                    .transpose()
+                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
+
 
                                 let output_objects = include_output_objects
                                     .then(|| self.validator_state.get_transaction_output_objects(&effects))
-                                    .map_or_else(
-                                        Vec::new,
-                                        |result| result.unwrap_or_default()
-                                    );
+                                    .transpose()
+                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
 
                                 let response = QuorumTransactionResponse {
                                     effects: FinalizedEffects {
@@ -391,8 +388,8 @@ where
                                         finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
                                     },
                                     events,
-                                    input_objects: Some(input_objects),
-                                    output_objects: Some(output_objects),
+                                    input_objects,
+                                    output_objects,
                                     auxiliary_data: None,
                                 };
                                 return Ok((response, true));
