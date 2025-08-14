@@ -19,6 +19,26 @@ pub trait Connection: Send {
         task: Option<&str>,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
+    /// Returns a tuple of the committer watermarks for the task and its main pipeline in that
+    /// order. If there is no task watermark, no result is returned. If there is no main pipeline,
+    /// the task's own watermark is returned.
+    async fn committer_task_and_main_watermark(
+        &mut self,
+        pipeline: &'static str,
+        task: Option<&str>,
+    ) -> anyhow::Result<Option<(CommitterWatermark, CommitterWatermark)>> {
+        let task_watermark = self.committer_watermark(pipeline, task).await?;
+        let main_watermark = self.committer_watermark(pipeline, None).await?;
+
+        match (task_watermark, main_watermark) {
+            (Some(task_watermark), Some(main_watermark)) => {
+                Ok(Some((task_watermark, main_watermark)))
+            }
+            (Some(task_watermark), None) => Ok(Some((task_watermark, task_watermark))),
+            _ => Ok(None),
+        }
+    }
+
     /// Given a pipeline and optional indexer task, return the reader watermark from the database.
     /// This is used by the indexer to determine the new `reader_lo` or inclusive lower bound of
     /// available data. By default, there is no task name.
@@ -27,6 +47,18 @@ pub trait Connection: Send {
         pipeline: &'static str,
         task: Option<&str>,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
+
+    // /// Given a pipeline, return the reader watermark for all tasks of that pipeline. This is used
+    // /// by the indexer solely for concurrent pipelines to:
+    // /// - Determine the
+    // ///
+    // ///  hold back the pruner until all tasks
+    // /// record a committer hi watermark larger than the main pipeline's `[pruner_hi, reader_lo)`.
+    // async fn reader_watermarks(
+    //     &mut self,
+    //     pipeline: &'static str,
+    //     task: Option<&str>,
+    // ) -> anyhow::Result<Option<HashMap<String, ReaderWatermark>>>;
 
     /// For some pipeline and optional indexer task, get the bounds for the region that the pruner
     /// is allowed to prune, and the time in milliseconds the pruner must wait before it can begin
