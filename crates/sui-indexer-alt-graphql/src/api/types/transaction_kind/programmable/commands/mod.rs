@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod move_call;
+mod split_coins;
 mod transaction_argument;
 mod transfer_objects;
 
@@ -9,6 +10,7 @@ use async_graphql::*;
 use sui_types::transaction::Command as NativeCommand;
 
 pub use move_call::MoveCallCommand;
+pub use split_coins::SplitCoinsCommand;
 pub use transaction_argument::TransactionArgument;
 pub use transfer_objects::TransferObjectsCommand;
 
@@ -18,6 +20,7 @@ use crate::scope::Scope;
 #[derive(Union, Clone)]
 pub enum Command {
     MoveCall(MoveCallCommand),
+    SplitCoins(SplitCoinsCommand),
     TransferObjects(TransferObjectsCommand),
     Other(OtherCommand),
 }
@@ -34,6 +37,10 @@ impl Command {
     pub fn from(_scope: Scope, command: NativeCommand) -> Self {
         match command {
             NativeCommand::MoveCall(call) => Command::MoveCall(MoveCallCommand { native: *call }),
+            NativeCommand::SplitCoins(coin, amounts) => Command::SplitCoins(SplitCoinsCommand {
+                coin: Some(TransactionArgument::from(coin)),
+                amounts: amounts.into_iter().map(TransactionArgument::from).collect(),
+            }),
             NativeCommand::TransferObjects(objects, address) => {
                 Command::TransferObjects(TransferObjectsCommand {
                     inputs: objects.into_iter().map(TransactionArgument::from).collect(),

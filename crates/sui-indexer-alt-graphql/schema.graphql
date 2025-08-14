@@ -318,7 +318,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MoveCallCommand | TransferObjectsCommand | OtherCommand
+union Command = MoveCallCommand | SplitCoinsCommand | TransferObjectsCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -1569,6 +1569,20 @@ type SharedInput {
 	This has implications for scheduling: Transactions that just read shared objects at a certain version (mutable = false) can be executed concurrently, while transactions that write shared objects (mutable = true) must be executed serially with respect to each other.
 	"""
 	mutable: Boolean
+}
+
+"""
+Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as many as there are amounts.)
+"""
+type SplitCoinsCommand {
+	"""
+	The coin to split.
+	"""
+	coin: TransactionArgument
+	"""
+	The denominations to split off from the coin.
+	"""
+	amounts: [TransactionArgument!]!
 }
 
 """
