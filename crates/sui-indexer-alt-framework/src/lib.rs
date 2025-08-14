@@ -42,7 +42,11 @@ pub struct IndexerArgs {
     /// tasks, like backfills. By default there is no task name, and if left empty, watermark rows
     /// will be keyed by only the `pipeline`. If one is provided, the indexer will propagate the
     /// task name to each pipeline such that watermark rows will record both the pipeline and task
-    /// values.
+    /// values. The indexer without a task name is considered the main indexer, and similarly its
+    /// pipelines are considered the main pipelines. This means that watermark rows keyed by just
+    /// the pipeline are considered the main pipelines ... other tasks with the same pipeline name
+    /// must respect the main pipeline's watermark row by operating within the `[reader_lo,
+    /// committer_hi]` range.
     ///
     /// Example: An indexer with task "backfill-2024-01" running pipelines "events" and "objects"
     /// will create watermark entries for (pipeline="events", task="backfill-2024-01") and
@@ -53,16 +57,17 @@ pub struct IndexerArgs {
     /// Override for the checkpoint to start ingestion from. The exact behavior is dependent on a
     /// few factors:
     ///
-    /// - If the pipeline + task has already been run and there is an existing watermark entry, this
-    ///   flag will be ignored (with a warning) unless `--skip-watermark` is also supplied.
-    /// - If `--skip-watermark` is supplied, the pipeline will write data without updating
-    ///   watermarks, as long as the checkpoints being handled are not before the reader's lower
-    ///   bound.
-    /// - If the pipeline + task has not run before, the watermark will be set up to expect this
-    ///   checkpoint as the next one, and the reader's lower bound will be set to this checkpoint.
+    /// - For main pipelines (pipelines without a task name), this value is ignored if a watermark
+    ///   row already exists. The indexer will resume ingestion from the existing committer
+    ///   watermark. Otherwise, the indexer will start ingestion from the provided
+    ///   `first_checkpoint`.
+    /// - For pipelines with a task name, if the corresponding watermark row already exists, this
+    ///   value is ignored and the indexer will resume ingestion from the existing committer
+    ///   watermark. Even if the watermark row does not exist, these tasked pipelines must resume
+    ///   from a `checkpoint >= reader_lo` of the main pipeline.
     ///
-    /// By default (when not specified), ingestion will start just after the lowest checkpoint
-    /// watermark across all active pipelines.
+    /// For all cases where the provided `first_checkpoint` is not respected, ingestion will start
+    /// from the next checkpoint after the lowest watermark across all active pipelines.
     #[arg(long)]
     pub first_checkpoint: Option<u64>,
 
@@ -77,7 +82,7 @@ pub struct IndexerArgs {
     pub pipeline: Vec<String>,
 
     /// Don't write to the watermark tables for concurrent pipelines. When used with
-    /// `--first-checkpoint`, allows the pipeline to write data without updating watermarks, as long
+    /// `first_checkpoint`, allows the pipeline to write data without updating watermarks, as long
     /// as the checkpoints being handled are not before the reader's lower bound.
     #[arg(long)]
     pub skip_watermark: bool,
@@ -109,13 +114,16 @@ pub struct Indexer<S: Store> {
     /// Override for the checkpoint to start ingestion from. The exact behavior is dependent on a
     /// few factors:
     ///
+    /// - If the pipeline and optional task combination has not been run before, the watermark will
+    ///   be set up to expect this checkpoint as the next one, and the reader's lower bound will be
+    ///   set to this checkpoint.
     /// - If the pipeline + task has already been run and there is an existing watermark entry, this
-    ///   flag will be ignored (with a warning) unless `--skip-watermark` is also supplied.
+    ///   value will be ignored (with a warning) and ingestion will resume from the existing
+    ///   committer_hi watermark, unless `--skip-watermark` is also supplied.
     /// - If `--skip-watermark` is supplied, the pipeline will write data without updating
-    ///   watermarks, as long as the checkpoints being handled are not before the reader's lower
-    ///   bound.
-    /// - If the pipeline + task has not run before, the watermark will be set up to expect this
-    ///   checkpoint as the next one, and the reader's lower bound will be set to this checkpoint.
+    ///   watermarks, but only if `first_checkpoint` is greater than or equal to the current
+    ///   `reader_lo`. If `first_checkpoint < reader_lo`, the operation will fail to prevent writing
+    ///   data that the pruner has already cleaned up.
     ///
     /// By default (when not specified), ingestion will start just after the lowest checkpoint
     /// watermark across all active pipelines.
@@ -124,9 +132,9 @@ pub struct Indexer<S: Store> {
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
 
-    /// Don't write to the watermark tables for concurrent pipelines. When used with `first_checkpoint`,
-    /// allows the pipeline to write data without updating watermarks, as long as the checkpoints
-    /// being handled are not before the reader's lower bound.
+    /// Don't write to the watermark tables for concurrent pipelines. When used with
+    /// `first_checkpoint`, allows the pipeline to write data without updating watermarks, as long
+    /// as the checkpoints being handled are not before the reader's lower bound.
     skip_watermark: bool,
 
     /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
@@ -392,6 +400,13 @@ impl<S: Store> Indexer<S> {
                 }
             })?;
 
+        // I think the main logic goes here basiaclly
+        // check that if main pipeline, start >= reader_lo
+        // check if task pipeline, task_start >= main_reader_lo
+        // now how do we reconcile with a race condition? i.e reader_lo correct at time, but by the time the pipelines run ...
+        // pruner has caught up?
+        // update pruner logic to check on all tasks of the same pipeline?
+
         let expected_first_checkpoint = watermark
             .as_ref()
             .map(|w| w.checkpoint_hi_inclusive + 1)
@@ -408,13 +423,16 @@ impl<T: TransactionalStore> Indexer<T> {
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///
-    /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may
-    /// be required to handle pipelines that modify data in-place (where each update is not an
-    /// insert, but could be a modification of an existing row, where ordering between updates is
+    /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may be
+    /// required to handle pipelines that modify data in-place (where each update is not an insert,
+    /// but could be a modification of an existing row, where ordering between updates is
     /// important).
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
+    ///
+    /// The `skip-watermark` flag is not applicable to sequential pipelines because they commit data
+    /// and update watermarks together.
     pub async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
