@@ -5,11 +5,11 @@ use crate::api::scalars::sui_address::SuiAddress;
 use async_graphql::Object;
 use sui_types::move_package::TypeOrigin as NativeTypeOrigin;
 
-/// Information about which previous versions of a package introduced its types.
 pub struct TypeOrigin {
     native: NativeTypeOrigin,
 }
 
+/// Information about which previous versions of a package introduced its types.
 #[Object]
 impl TypeOrigin {
     /// Module defining the type.

@@ -1893,6 +1893,9 @@ type TxResult {
 	ix: Int
 }
 
+"""
+Information about which previous versions of a package introduced its types.
+"""
 type TypeOrigin {
 	"""
 	Module defining the type.
