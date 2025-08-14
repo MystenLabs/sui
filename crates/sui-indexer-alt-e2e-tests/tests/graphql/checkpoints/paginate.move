@@ -51,7 +51,15 @@
   }
   
   # Test pagination with epoch filter
-  paginatedCheckpointsAtEpoch: checkpoints(first: 5, filter: {atEpoch: 1}) {
+  paginatedCheckpointsAtEpochHasNextPage: checkpoints(first: 2, filter: {atEpoch: 1}) {
+    pageInfo { ...PageInfoFields }
+    edges {
+      node { ...CheckpointFields }
+    }
+  }
+
+  # Test pagination with epoch filter
+  paginatedCheckpointsAtEpochHasPreviousPage: checkpoints(last: 2, filter: {atEpoch: 1}) {
     pageInfo { ...PageInfoFields }
     edges {
       node { ...CheckpointFields }
@@ -78,6 +86,44 @@ fragment PageInfoFields on PageInfo {
   endCursor
   hasPreviousPage
   hasNextPage
+}
+
+//# run-graphql --cursors 6
+{
+  paginatedCheckpointsAtEpochHasNextPage: checkpoints(last: 1, before: "@{cursor_0}", filter: {atEpoch: 1}) {
+     pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors 0
+{
+  paginatedCheckpointsAtEpochHasPreviousPreviousPage: checkpoints(first: 1, after: "@{cursor_0}") {
+     pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
 }
 
 //# run-graphql --cursors 4

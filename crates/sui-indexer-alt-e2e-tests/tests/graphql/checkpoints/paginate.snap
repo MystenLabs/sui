@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 21 tasks
+processed 23 tasks
 
 init:
 A: object(0,0)
@@ -73,7 +73,7 @@ task 12, line 40:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 13, lines 43-81:
+task 13, lines 43-89:
 //# run-graphql
 Response: {
   "data": {
@@ -150,12 +150,12 @@ Response: {
         }
       ]
     },
-    "paginatedCheckpointsAtEpoch": {
+    "paginatedCheckpointsAtEpochHasNextPage": {
       "pageInfo": {
         "startCursor": "NA==",
-        "endCursor": "Ng==",
+        "endCursor": "NQ==",
         "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasNextPage": true
       },
       "edges": [
         {
@@ -167,6 +167,25 @@ Response: {
             }
           }
         },
+        {
+          "node": {
+            "sequenceNumber": 5,
+            "digest": "FA9ZXv3FJTMTq241DsSDtdevsRcfY8R86ZHSxGSZiqQ7",
+            "epoch": {
+              "epochId": 1
+            }
+          }
+        }
+      ]
+    },
+    "paginatedCheckpointsAtEpochHasPreviousPage": {
+      "pageInfo": {
+        "startCursor": "NQ==",
+        "endCursor": "Ng==",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
         {
           "node": {
             "sequenceNumber": 5,
@@ -199,23 +218,94 @@ Response: {
   }
 }
 
-task 14, lines 83-100:
+task 14, lines 91-108:
+//# run-graphql --cursors 6
+Response: {
+  "data": {
+    "paginatedCheckpointsAtEpochHasNextPage": {
+      "pageInfo": {
+        "startCursor": "NQ==",
+        "endCursor": "NQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "node": {
+            "sequenceNumber": 5,
+            "digest": "FA9ZXv3FJTMTq241DsSDtdevsRcfY8R86ZHSxGSZiqQ7",
+            "epoch": {
+              "epochId": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15, lines 110-127:
+//# run-graphql --cursors 0
+Response: {
+  "data": {
+    "paginatedCheckpointsAtEpochHasPreviousPreviousPage": {
+      "pageInfo": {
+        "startCursor": "MQ==",
+        "endCursor": "MQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "node": {
+            "sequenceNumber": 1,
+            "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
+            "epoch": {
+              "epochId": 0
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 129-146:
 //# run-graphql --cursors 4
 Response: {
   "data": {
     "checkpointsBeforeCursorFromBack": {
       "pageInfo": {
-        "startCursor": null,
-        "endCursor": null,
-        "hasPreviousPage": false,
-        "hasNextPage": false
+        "startCursor": "Mg==",
+        "endCursor": "Mw==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "node": {
+            "sequenceNumber": 2,
+            "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+            "epoch": {
+              "epochId": 0
+            }
+          }
+        },
+        {
+          "node": {
+            "sequenceNumber": 3,
+            "digest": "BpHa37pAosru2sLoCShqJB9ya2QMAYApdwfnjZYzNZPR",
+            "epoch": {
+              "epochId": 0
+            }
+          }
+        }
+      ]
     }
   }
 }
 
-task 15, lines 102-119:
+task 17, lines 148-165:
 //# run-graphql --cursors 0
 Response: {
   "data": {
@@ -259,7 +349,7 @@ Response: {
   }
 }
 
-task 16, lines 121-138:
+task 18, lines 167-184:
 //# run-graphql  --cursors 3
 Response: {
   "data": {
@@ -268,7 +358,7 @@ Response: {
         "startCursor": "MA==",
         "endCursor": "Mg==",
         "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasNextPage": true
       },
       "edges": [
         {
@@ -303,7 +393,7 @@ Response: {
   }
 }
 
-task 17, lines 140-172:
+task 19, lines 186-218:
 //# run-graphql  --cursors 0 3
 Response: {
   "data": {
@@ -328,33 +418,62 @@ Response: {
     },
     "checkpointsAtEpochBetweenCursorsFromBack": {
       "pageInfo": {
-        "startCursor": null,
-        "endCursor": null,
-        "hasPreviousPage": false,
-        "hasNextPage": false
+        "startCursor": "Mg==",
+        "endCursor": "Mg==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "node": {
+            "sequenceNumber": 2,
+            "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+            "epoch": {
+              "epochId": 0
+            }
+          }
+        }
+      ]
     }
   }
 }
 
-task 18, lines 174-191:
+task 20, lines 220-237:
 //# run-graphql  --cursors 6
 Response: {
   "data": {
     "checkpointsAtEpochBeforeCursorFromBack": {
       "pageInfo": {
-        "startCursor": null,
-        "endCursor": null,
+        "startCursor": "NA==",
+        "endCursor": "NQ==",
         "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "node": {
+            "sequenceNumber": 4,
+            "digest": "4aUMZk8P9km8GycBn3CMiECz4t1dajXzD7Xm64j2Cd8T",
+            "epoch": {
+              "epochId": 1
+            }
+          }
+        },
+        {
+          "node": {
+            "sequenceNumber": 5,
+            "digest": "FA9ZXv3FJTMTq241DsSDtdevsRcfY8R86ZHSxGSZiqQ7",
+            "epoch": {
+              "epochId": 1
+            }
+          }
+        }
+      ]
     }
   }
 }
 
-task 19, lines 193-209:
+task 21, lines 239-255:
 //# run-graphql --cursors 1
 Response: {
   "data": {
@@ -363,7 +482,7 @@ Response: {
         "startCursor": "MA==",
         "endCursor": "MA==",
         "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasNextPage": true
       },
       "edges": [
         {
@@ -376,7 +495,7 @@ Response: {
   }
 }
 
-task 20, lines 211-227:
+task 22, lines 257-273:
 //# run-graphql --cursors 0
 Response: {
   "data": {

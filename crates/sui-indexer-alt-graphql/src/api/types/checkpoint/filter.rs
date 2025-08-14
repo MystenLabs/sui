@@ -109,16 +109,6 @@ pub(crate) fn checkpoint_bounds(
         .map(|_| RangeInclusive::new(cp_lo, cp_hi))
 }
 
-/// Determines the maximum value in an arbitrary number of Option<impl Ord>.
-fn max_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
-    xs.into_iter().flatten().max()
-}
-
-/// Determines the minimum value in an arbitrary number of Option<impl Ord>.
-fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
-    xs.into_iter().flatten().min()
-}
-
 /// The cp_sequence_numbers within checkpoint bounds with cursors applied inclusively.
 ///
 /// pg_lo: The maximum of the cursor and the start of the checkpoint bound.
@@ -130,10 +120,7 @@ pub(super) fn cp_unfiltered(cp_bounds: &RangeInclusive<u64>, page: &Page<CCheckp
 
     // Inclusive cursor bounds
     let pg_lo = page.after().map_or(cp_lo, |cursor| cursor.max(cp_lo));
-    let pg_hi_inclusive = page
-        .before()
-        .map(|cursor| cursor.saturating_sub(1))
-        .map_or(cp_hi, |cursor| cursor.min(cp_hi));
+    let pg_hi_inclusive = page.before().map_or(cp_hi, |cursor| cursor.min(cp_hi));
 
     if page.is_from_front() {
         (pg_lo..=pg_hi_inclusive)
@@ -194,6 +181,16 @@ pub(super) async fn cp_by_epoch(
     };
 
     Ok(cp_unfiltered(&(cp_lo..=cp_hi_inclusive), page))
+}
+
+/// Determines the maximum value in an arbitrary number of Option<impl Ord>.
+fn max_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
+    xs.into_iter().flatten().max()
+}
+
+/// Determines the minimum value in an arbitrary number of Option<impl Ord>.
+fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
+    xs.into_iter().flatten().min()
 }
 
 #[cfg(test)]
