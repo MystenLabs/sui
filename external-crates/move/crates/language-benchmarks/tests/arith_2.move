@@ -1,7 +1,7 @@
 module 0x1::bench {
     const COUNT: u64 = 10_000u64;
 
-    public fun bench() {
+    public fun bench_add() {
         let mut sum = 0;
         let mut i = 0;
         while (i < COUNT) {
