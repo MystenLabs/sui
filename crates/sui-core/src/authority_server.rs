@@ -1191,9 +1191,9 @@ impl ValidatorService {
         let tx_digests = [tx_digest];
 
         let fastpath_effects_future: Pin<Box<dyn Future<Output = _> + Send>> =
-            if request.consensus_position.is_some() {
+            if let Some(consensus_position) = request.consensus_position {
                 Box::pin(self.wait_for_fastpath_effects(
-                    request.consensus_position.unwrap(),
+                    consensus_position,
                     &tx_digests,
                     request.include_details,
                     epoch_store,
@@ -1203,9 +1203,14 @@ impl ValidatorService {
             };
 
         tokio::select! {
-            // We always wait for finalized effects regardless of consensus position.
-            // This is safe because we have separated mysticeti fastpath outputs to a
-            // separate cache.
+            // Ensure that finalized effects are always prioritized.
+            biased;
+            // We always wait for effects regardless of consensus position via
+            // notify_read_executed_effects. This is safe because we have separated
+            // mysticeti fastpath outputs to a separate dirty cache
+            // UncommittedData::fastpath_transaction_outputs that will only get flushed
+            // once finalized. So the output of notify_read_executed_effects is
+            // guaranteed to be finalized effects or effects from QD execution.
             mut effects = self.state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects(
@@ -1305,8 +1310,7 @@ impl ValidatorService {
                 }
 
                 mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(tx_digests),
-                    if current_status == Some(ConsensusTxStatus::FastpathCertified) => {
-
+                    if current_status == Some(ConsensusTxStatus::FastpathCertified) || current_status == Some(ConsensusTxStatus::Finalized) => {
                     let outputs = outputs.pop().unwrap();
                     let effects = outputs.effects.clone();
 

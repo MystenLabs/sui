@@ -293,8 +293,10 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_wait_for_effects_fastpath_certified_only() {
     // This test exercises the path where the transaction is only fastpath certified.
-    // Waiting on effects acknowledgement should still succeed with consensus position.
-    // But it should timeout without consensus position.
+    // Tests three scenarios:
+    // 1. With consensus position and no details - should succeed
+    // 2. With consensus position and details - should succeed with fastpath outputs
+    // 3. Without consensus position - should timeout
     let test_context = TestContext::new().await;
 
     let transaction = test_context.build_test_transaction();
@@ -351,7 +353,35 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         _ => panic!("Expected Executed response"),
     }
 
-    // -------- Then, test getting effects acknowledgement without consensus position. --------
+    // -------- Then, test getting effects with details when consensus position is provided. --------
+
+    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+        transaction_digest: tx_digest,
+        consensus_position: Some(tx_position),
+        include_details: true,
+    })
+    .unwrap();
+
+    let response = test_context
+        .client
+        .wait_for_effects(request, None)
+        .await
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+    match response {
+        WaitForEffectsResponse::Executed {
+            details,
+            effects_digest,
+        } => {
+            assert!(details.is_some());
+            assert_eq!(effects_digest, exec_effects.digest());
+        }
+        _ => panic!("Expected Executed response"),
+    }
+
+    // -------- Finally, test getting effects acknowledgement without consensus position. --------
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
