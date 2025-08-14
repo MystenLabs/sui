@@ -11,6 +11,15 @@ use url::Url;
 
 use crate::RpcArgs;
 
+#[derive(clap::Args, Default, Clone, Debug)]
+pub struct TxExecFullNodeArgs {
+    /// gRPC URL for execution operations such as executeTransaction and simulateTransaction.
+    ///
+    /// If not provided, such operations will not work.
+    #[clap(long)]
+    pub full_node_rpc_url: Option<String>,
+}
+
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
     #[command(subcommand)]
@@ -33,6 +42,9 @@ pub enum Command {
         /// requests will be made to the database.
         #[clap(long)]
         bigtable_instance: Option<String>,
+
+        #[command(flatten)]
+        tx_exec_full_node: TxExecFullNodeArgs,
 
         #[command(flatten)]
         db_args: DbArgs,

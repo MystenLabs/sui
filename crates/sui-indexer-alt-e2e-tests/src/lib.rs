@@ -24,7 +24,8 @@ use sui_indexer_alt_consistent_store::{
 };
 use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::schema::watermarks, IndexerArgs};
 use sui_indexer_alt_graphql::{
-    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+    args::TxExecFullNodeArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs,
 };
 use sui_indexer_alt_jsonrpc::{
     config::RpcConfig as JsonRpcConfig, start_rpc as start_jsonrpc, NodeArgs as JsonRpcNodeArgs,
@@ -400,6 +401,7 @@ impl OffchainCluster {
         let graphql = start_graphql(
             Some(database_url.clone()),
             None,
+            TxExecFullNodeArgs::default(),
             DbArgs::default(),
             BigtableArgs::default(),
             graphql_args,

@@ -6,8 +6,8 @@ use std::{any::Any, net::SocketAddr, sync::Arc};
 use anyhow::{self, Context};
 use api::types::{address::IAddressable, object::IObject};
 use async_graphql::{
-    extensions::ExtensionFactory, http::GraphiQLSource, EmptyMutation, EmptySubscription,
-    ObjectType, Schema, SchemaBuilder, SubscriptionType,
+    extensions::ExtensionFactory, http::GraphiQLSource, EmptySubscription, ObjectType, Schema,
+    SchemaBuilder, SubscriptionType,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
@@ -42,13 +42,16 @@ use task::{
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use url::Url;
 
-use crate::api::query::Query;
 use crate::extensions::logging::{Logging, Session};
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
+use crate::{
+    api::{mutation::Mutation, query::Query},
+    args::TxExecFullNodeArgs,
+};
 
 mod api;
 pub mod args;
@@ -241,8 +244,8 @@ impl Default for RpcArgs {
 }
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
-pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
-    Schema::build(Query::default(), EmptyMutation, EmptySubscription)
+pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
+    Schema::build(Query::default(), Mutation, EmptySubscription)
         .register_output_type::<IAddressable>()
         .register_output_type::<IObject>()
 }
@@ -265,6 +268,7 @@ pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
 pub async fn start_rpc(
     database_url: Option<Url>,
     bigtable_instance: Option<String>,
+    tx_exec_full_node: TxExecFullNodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
     args: RpcArgs,
@@ -277,6 +281,17 @@ pub async fn start_rpc(
 ) -> anyhow::Result<JoinHandle<()>> {
     let rpc = RpcService::new(args, version, schema(), registry, cancel.child_token());
     let metrics = rpc.metrics();
+
+    // Create gRPC client for transaction execution/simulation
+    let grpc_client = if let Some(url) = &tx_exec_full_node.full_node_rpc_url {
+        Some(
+            sui_rpc_api::client::Client::new(url)
+                .map_err(|e| anyhow::anyhow!("Failed to create gRPC client: {}", e))?,
+        )
+    } else {
+        warn!("No gRPC URL provided. Transaction execution/simulation will not work");
+        None
+    };
 
     let pg_reader = PgReader::new(
         Some("graphql_db"),
@@ -354,7 +369,8 @@ pub async fn start_rpc(
         .data(pg_reader)
         .data(pg_loader)
         .data(kv_loader)
-        .data(package_resolver);
+        .data(package_resolver)
+        .data(grpc_client);
 
     let h_rpc = rpc.run().await?;
     let h_system_package_task = system_package_task.run();
@@ -371,7 +387,7 @@ pub async fn start_rpc(
 /// Handler for RPC requests (POST requests making GraphQL queries).
 async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(schema): Extension<Schema<Query, EmptyMutation, EmptySubscription>>,
+    Extension(schema): Extension<Schema<Query, Mutation, EmptySubscription>>,
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
