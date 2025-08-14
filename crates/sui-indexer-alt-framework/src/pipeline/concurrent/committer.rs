@@ -30,13 +30,12 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 ///
 /// The writing of each batch will be repeatedly retried on an exponential back-off until it
 /// succeeds. Once the write succeeds, the [WatermarkPart]s for that batch are sent on `tx` to the
-/// watermark task, as long as `skip_watermark` is not true.
+/// watermark task.
 ///
 /// This task will shutdown via its `cancel`lation token, or if its receiver or sender channels are
 /// closed.
 pub(super) fn committer<H: Handler + 'static>(
     config: CommitterConfig,
-    skip_watermark: bool,
     rx: mpsc::Receiver<BatchedRows<H>>,
     tx: mpsc::Sender<Vec<WatermarkPart>>,
     db: H::Store,
@@ -50,6 +49,9 @@ pub(super) fn committer<H: Handler + 'static>(
             &metrics.latest_partially_committed_checkpoint_timestamp_lag_ms,
             &metrics.latest_partially_committed_checkpoint,
         );
+
+        // maybe here if task just check that the checkpoints received ... basically don't send any less than the reader lo
+        // or in the collector ... or processor...? not sure
 
         match ReceiverStream::new(rx)
             .try_for_each_spawned(
@@ -187,7 +189,7 @@ pub(super) fn committer<H: Handler + 'static>(
                             }
                         };
 
-                        if !skip_watermark && tx.send(watermark).await.is_err() {
+                        if tx.send(watermark).await.is_err() {
                             info!(pipeline = H::NAME, "Watermark closed channel");
                             return Err(Break::Cancel);
                         }
@@ -315,8 +317,7 @@ mod tests {
     ///
     /// # Arguments
     /// * `store` - The mock store to use for testing
-    /// * `skip_watermark` - Whether to skip sending watermarks to the watermark channel
-    async fn setup_test(store: MockStore, skip_watermark: bool) -> TestSetup {
+    async fn setup_test(store: MockStore) -> TestSetup {
         let config = CommitterConfig::default();
         let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
@@ -326,16 +327,7 @@ mod tests {
 
         let store_clone = store.clone();
         let committer_handle = tokio::spawn(async move {
-            let _ = committer(
-                config,
-                skip_watermark,
-                batch_rx,
-                watermark_tx,
-                store_clone,
-                metrics,
-                cancel,
-            )
-            .await;
+            let _ = committer(config, batch_rx, watermark_tx, store_clone, metrics, cancel).await;
         });
 
         TestSetup {
@@ -348,7 +340,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_batch_processing() {
-        let mut setup = setup_test(MockStore::default(), false).await;
+        let mut setup = setup_test(MockStore::default()).await;
 
         // Send batches
         let batch1 = BatchedRows {
@@ -432,7 +424,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit_with_retries_for_commit_failure() {
-        let mut setup = setup_test(MockStore::default(), false).await;
+        let mut setup = setup_test(MockStore::default()).await;
 
         // Create a batch with a single item that will fail once before succeeding
         let batch = BatchedRows {
@@ -500,7 +492,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        let mut setup = setup_test(store, false).await;
+        let mut setup = setup_test(store).await;
 
         let batch = BatchedRows {
             values: vec![StoredData {
@@ -557,7 +549,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_batch_handling() {
-        let mut setup = setup_test(MockStore::default(), false).await;
+        let mut setup = setup_test(MockStore::default()).await;
 
         let empty_batch = BatchedRows {
             values: vec![], // Empty values
@@ -597,53 +589,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_skip_watermark_mode() {
-        let mut setup = setup_test(MockStore::default(), true).await;
-
-        let batch = BatchedRows {
-            values: vec![StoredData {
-                cp_sequence_number: 1,
-                tx_sequence_numbers: vec![1, 2, 3],
-                ..Default::default()
-            }],
-            watermark: vec![WatermarkPart {
-                watermark: CommitterWatermark {
-                    epoch_hi_inclusive: 0,
-                    checkpoint_hi_inclusive: 1,
-                    tx_hi: 3,
-                    timestamp_ms_hi_inclusive: 1000,
-                },
-                batch_rows: 1,
-                total_rows: 1,
-            }],
-        };
-
-        // Send the batch
-        setup.batch_tx.send(batch).await.unwrap();
-
-        // Wait for processing
-        tokio::time::sleep(Duration::from_millis(200)).await;
-
-        // Verify data was committed
-        {
-            let data = setup.store.data.lock().unwrap();
-            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
-        }
-
-        // Verify no watermark was sent (skip_watermark mode)
-        assert!(
-            setup.watermark_rx.try_recv().is_err(),
-            "No watermark should be sent in skip_watermark mode"
-        );
-
-        // Clean up
-        drop(setup.batch_tx);
-        let _ = setup.committer_handle.await;
-    }
-
-    #[tokio::test]
     async fn test_watermark_channel_closed() {
-        let setup = setup_test(MockStore::default(), false).await;
+        let setup = setup_test(MockStore::default()).await;
 
         let batch = BatchedRows {
             values: vec![StoredData {

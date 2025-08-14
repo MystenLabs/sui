@@ -38,9 +38,9 @@ pub(crate) mod bootstrap;
 pub mod config;
 pub(crate) mod handlers;
 
-/// Checks that the pipeline and task names don't include the reserved delimiter. The generalized
-/// indexer writes watermarks to the database with the format `pipeline@task` if task is set on the
-/// indexer, otherwise `pipeline`.
+/// Checks that pipeline and task names don't include the character `@` as this is used by the
+/// generalized indexer to write watermarks to the database with the format `pipeline@task` if a
+/// task name is set.
 fn validate_pipeline_and_task_names(value: &str) -> anyhow::Result<()> {
     const WATERMARK_DELIMITER: char = '@';
 
