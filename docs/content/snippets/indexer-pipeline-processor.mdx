@@ -1,4 +1,4 @@
-The `Processor` handles multiple tasks running concurrently for maximum throughput. It's primary responsibility is to convert raw checkpoint data into database-ready rows using parallel workers.
+The `Processor` is the concurrent processing engine, handling multiple tasks running at the same time for maximum throughput. Its primary responsibility is to convert raw checkpoint data into database-ready rows using parallel workers.
 
 The component handles this task by spawning `FANOUT` worker tasks (default: 10) for parallel processing. The `FANOUT` is the key configuration as it controls parallel processing capacity.
 

@@ -304,7 +304,7 @@ Key design principles:
 - **Handler abstraction:** Your business logic plugs into the framework.
 - **Automatic storage management:** Framework handles watermark tracking and data cleanup within the `Watermark` database.
 
-### Components {#concurrent-components}
+### Concurrent pipeline components {#concurrent-components}
 
 There are six components to concurrent pipelines.
 
@@ -317,8 +317,6 @@ There are six components to concurrent pipelines.
 
 #### `Processor` {#con-processor}
     
-The `Processor` is the concurrent processing engine.
-
 {@include: ../../snippets/indexer-pipeline-processor.mdx}
 
 #### `Collector` {#con-collector}
