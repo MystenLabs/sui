@@ -8,6 +8,7 @@ use crate::{
         BuildNamedAddresses, CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource,
     },
     documentation::build_docs,
+    shared,
     source_discovery::get_sources,
 };
 
@@ -43,7 +44,9 @@ pub async fn compile_package<W: Write, F: MoveFlavor>(
     env: &Environment,
     writer: &mut W,
 ) -> PackageResult<CompiledPackage> {
+    println!("Path to compile_package: {:?}", path);
     let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+    println!("Hello");
     BuildPlan::create(root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
@@ -151,7 +154,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
     };
 
     let compiled_package_info = CompiledPackageInfo {
-        package_name: root_package_name,
+        package_name,
         // // TODO: correct address alias instantiation
         // address_alias_instantiation: BTreeMap::new(),
         // TODO: compute source digest
@@ -159,15 +162,14 @@ pub fn build_all<W: Write, F: MoveFlavor>(
         build_flags: build_config.clone(),
     };
 
-    // TODO: take into consideration install dir flag
-    let under_path = project_root.join("build");
+    let under_path = shared::get_build_output_path(&project_root, build_config);
 
     save_to_disk(
         root_compiled_units.clone(),
         compiled_package_info.clone(),
         deps_compiled_units.clone(),
         compiled_docs,
-        root_package_name,
+        package_name,
         under_path,
     )?;
 
