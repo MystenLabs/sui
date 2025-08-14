@@ -7,8 +7,7 @@ use std::{collections::BTreeSet, io::Write, path::Path};
 use vfs::VfsPath;
 
 use crate::{
-    build_config::BuildConfig, compilation::build_all, compiled_package::CompiledPackage,
-    layout::CompiledPackageLayout,
+    build_config::BuildConfig, compilation::build_all, compiled_package::CompiledPackage, shared,
 };
 use move_compiler::{
     Compiler,
@@ -89,10 +88,9 @@ impl<F: MoveFlavor> BuildPlan<F> {
         let project_root = self.root_pkg.package_path().path();
         let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
 
-        self.clean(
-            &project_root.join(CompiledPackageLayout::Root.path()),
-            sorted_deps,
-        )?;
+        println!("Project root: {}", project_root.display());
+        println!("Sorted deps to keep: {:?}", sorted_deps);
+        self.clean(project_root, sorted_deps)?;
 
         Ok(compiled)
     }
@@ -137,8 +135,18 @@ impl<F: MoveFlavor> BuildPlan<F> {
 
     // Clean out old packages that are no longer used, or no longer used under the current
     // compilation flags
-    fn clean(&self, build_root: &Path, keep_paths: BTreeSet<PackageName>) -> PackageResult<()> {
-        for dir in std::fs::read_dir(build_root)? {
+    fn clean(&self, project_root: &Path, keep_paths: BTreeSet<PackageName>) -> PackageResult<()> {
+        // Compute the actual build directory based on install_dir configuration
+        let build_root = shared::get_build_output_path(project_root, &self.build_config);
+
+        println!("Build root to clean: {}", build_root.display());
+        
+        // Skip cleaning if the build directory doesn't exist yet
+        if !build_root.exists() {
+            return Ok(());
+        }
+        
+        for dir in std::fs::read_dir(&build_root)? {
             let path = dir?.path();
             if !keep_paths.iter().any(|name| path.ends_with(name.as_str())) {
                 if path.is_file() {

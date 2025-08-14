@@ -11,6 +11,7 @@ pub mod layout;
 pub mod lint_flag;
 pub mod model_builder;
 pub mod on_disk_package;
+pub mod shared;
 pub mod source_discovery;
 
 pub use compilation::compile_from_root_package;
