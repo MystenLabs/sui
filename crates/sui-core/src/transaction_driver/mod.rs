@@ -230,7 +230,7 @@ where
             .record_interaction_result(OperationFeedback {
                 authority_name: name,
                 display_name: auth_agg.get_display_name(&name),
-                operation: OperationType::Submit,
+                operation: OperationType::Finalize,
                 result: Ok(end_to_end_latency),
             });
 

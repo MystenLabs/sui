@@ -157,6 +157,12 @@ pub struct ScoreWeights {
     #[serde(default = "default_submit_latency_weight")]
     pub submit_latency_weight: f64,
 
+    /// Weight for finalize transaction latency.
+    ///
+    /// Controls importance of transaction finalization speed.
+    #[serde(default = "default_finalize_latency_weight")]
+    pub finalize_latency_weight: f64,
+
     /// Weight for effects retrieval latency.
     ///
     /// Controls importance of effects query speed.
@@ -191,6 +197,7 @@ impl Default for ScoreWeights {
             submit_latency_weight: default_submit_latency_weight(),
             effects_latency_weight: default_effects_latency_weight(),
             health_check_latency_weight: default_health_check_latency_weight(),
+            finalize_latency_weight: default_finalize_latency_weight(),
         }
     }
 }
@@ -222,13 +229,17 @@ fn default_reliability_weight() -> f64 {
 }
 
 fn default_submit_latency_weight() -> f64 {
-    0.4
+    0.2
 }
 
 fn default_effects_latency_weight() -> f64 {
-    0.4
+    0.3
 }
 
 fn default_health_check_latency_weight() -> f64 {
-    0.2
+    0.1
+}
+
+fn default_finalize_latency_weight() -> f64 {
+    0.4
 }

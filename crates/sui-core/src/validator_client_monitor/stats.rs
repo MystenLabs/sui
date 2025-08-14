@@ -233,6 +233,7 @@ impl ClientObservedStats {
                 OperationType::Submit => self.config.score_weights.submit_latency_weight,
                 OperationType::Effects => self.config.score_weights.effects_latency_weight,
                 OperationType::HealthCheck => self.config.score_weights.health_check_latency_weight,
+                OperationType::Finalize => self.config.score_weights.finalize_latency_weight,
             };
 
             // Skip if global stats are missing for this operation
