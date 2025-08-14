@@ -17,6 +17,7 @@ use super::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         epoch::Epoch,
+        move_package::PackageCheckpointFilter,
         move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
@@ -293,7 +294,7 @@ impl Query {
         after: Option<move_package::CPackage>,
         last: Option<u64>,
         before: Option<move_package::CPackage>,
-        filter: Option<CheckpointFilter>,
+        filter: Option<PackageCheckpointFilter>,
     ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "packages");

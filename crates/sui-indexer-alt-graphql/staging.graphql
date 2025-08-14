@@ -1173,6 +1173,17 @@ type OwnedOrImmutable {
 	object: Object
 }
 
+input PackageCheckpointFilter {
+	"""
+	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
+}
+
 """
 Identifies a specific version of a package.
 
@@ -1386,7 +1397,7 @@ type Query {
 	"""
 	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
 	"""
-	packages(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): MovePackageConnection
+	packages(first: Int, after: String, last: Int, before: String, filter: PackageCheckpointFilter): MovePackageConnection
 	"""
 	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	

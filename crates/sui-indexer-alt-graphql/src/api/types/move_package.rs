@@ -40,7 +40,6 @@ use crate::{
 
 use super::{
     address::AddressableImpl,
-    checkpoint::filter::CheckpointFilter,
     object::{self, CVersion, Object, ObjectImpl, VersionFilter},
     transaction::Transaction,
 };
@@ -68,6 +67,15 @@ pub(crate) struct PackageKey {
 
     /// If specified, tries to fetch the latest version as of this checkpoint.
     pub(crate) at_checkpoint: Option<UInt53>,
+}
+
+#[derive(InputObject, Default, Debug)]
+pub(crate) struct PackageCheckpointFilter {
+    /// Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+    pub(crate) after_checkpoint: Option<UInt53>,
+
+    /// Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+    pub(crate) before_checkpoint: Option<UInt53>,
 }
 
 /// Inner struct for the cursor produced while iterating over all package publishes.
@@ -495,7 +503,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CPackage>,
-        filter: CheckpointFilter,
+        filter: PackageCheckpointFilter,
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 
