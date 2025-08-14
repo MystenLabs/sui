@@ -21,6 +21,7 @@ pub enum OperationType {
     Submit,
     Effects,
     HealthCheck,
+    Finalize,
 }
 
 /// Feedback from TransactionDriver operations

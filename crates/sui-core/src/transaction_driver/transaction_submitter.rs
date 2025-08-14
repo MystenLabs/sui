@@ -119,6 +119,7 @@ impl TransactionSubmitter {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        let submit_start = Instant::now();
         let resp = timeout(
             SUBMIT_TRANSACTION_TIMEOUT,
             client.submit_transaction(raw_request.clone(), options.forwarded_client_addr),
@@ -138,6 +139,13 @@ impl TransactionSubmitter {
         // To fully utilize this error, we need to either pre-check the transaction
         // on the fullnode, or be able to categrize the error.
         .map_err(TransactionRequestError::RejectedAtValidator)?;
+
+        client_monitor.record_interaction_result(OperationFeedback {
+            authority_name: validator,
+            display_name: display_name.clone(),
+            operation: OperationType::Submit,
+            result: Ok(submit_start.elapsed()),
+        });
 
         Ok(resp)
     }
