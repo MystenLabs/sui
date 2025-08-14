@@ -95,6 +95,7 @@ members = [
   "crates/sui-analytics-indexer-derive",
   "crates/sui-authority-aggregation",
   "crates/sui-aws-orchestrator",
+  "crates/sui-bcs",
   "crates/sui-benchmark",
   "crates/sui-bridge",
   "crates/sui-bridge-cli",

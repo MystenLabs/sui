@@ -13397,6 +13397,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-bcs"
+version = "1.55.0"
+dependencies = [
+ "bcs",
+ "serde",
+ "serde_yaml 0.9.21",
+ "sui-types",
+]
+
+[[package]]
 name = "sui-benchmark"
 version = "0.0.0"
 dependencies = [

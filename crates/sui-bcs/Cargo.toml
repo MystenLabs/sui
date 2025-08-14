@@ -1,0 +1,18 @@
+[package]
+name = "sui-bcs"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+bcs = "0.1.4"
+serde = { version = "1.0.180", features = ["derive"] }
+serde_yaml = "0.9"
+
+[dev-dependencies]
+sui-types = { path = "../sui-types" }
+
+[lints]
+workspace = true
