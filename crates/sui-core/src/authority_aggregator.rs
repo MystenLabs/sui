@@ -1642,34 +1642,39 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
     }
 
     fn get_network_committee(&self) -> CommitteeWithNetworkMetadata {
-        self.get_genesis().committee_with_network()
+        self.get_genesis()
+            .unwrap_or_else(|| panic!("need either NetworkConfig or Genesis."))
+            .committee_with_network()
     }
 
     fn get_committee_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String> {
-        let state = self
-            .get_genesis()
-            .sui_system_object()
-            .into_genesis_version_for_tooling();
-        state
-            .validators
-            .active_validators
-            .iter()
-            .map(|v| {
-                let metadata = v.verified_metadata();
-                let name = metadata.sui_pubkey_bytes();
+        if let Some(genesis) = self.get_genesis() {
+            let state = genesis
+                .sui_system_object()
+                .into_genesis_version_for_tooling();
+            state
+                .validators
+                .active_validators
+                .iter()
+                .map(|v| {
+                    let metadata = v.verified_metadata();
+                    let name = metadata.sui_pubkey_bytes();
 
-                (name, metadata.name.clone())
-            })
-            .collect()
+                    (name, metadata.name.clone())
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        }
     }
 
-    fn get_genesis(&self) -> &Genesis {
+    fn get_genesis(&self) -> Option<&Genesis> {
         if let Some(network_config) = self.network_config {
-            &network_config.genesis
+            Some(&network_config.genesis)
         } else if let Some(genesis) = self.genesis {
-            genesis
+            Some(genesis)
         } else {
-            panic!("need either NetworkConfig or Genesis.");
+            None
         }
     }
 
