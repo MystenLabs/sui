@@ -140,12 +140,12 @@ impl<F: MoveFlavor> BuildPlan<F> {
         let build_root = shared::get_build_output_path(project_root, &self.build_config);
 
         println!("Build root to clean: {}", build_root.display());
-        
+
         // Skip cleaning if the build directory doesn't exist yet
         if !build_root.exists() {
             return Ok(());
         }
-        
+
         for dir in std::fs::read_dir(&build_root)? {
             let path = dir?.path();
             if !keep_paths.iter().any(|name| path.ends_with(name.as_str())) {
