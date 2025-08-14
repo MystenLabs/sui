@@ -98,8 +98,9 @@ fn find_bench_functions(modules: &[CompiledModule]) -> Vec<Identifier> {
         .flat_map(|module| {
             module.function_defs().iter().filter_map(|def| {
                 let handle = module.function_handle_at(def.function);
-                if module.identifier_at(handle.name).as_str().starts_with(BENCH_FUNCTION_PREFIX) {
-                    Some(Identifier::new(module.identifier_at(handle.name).as_str()).unwrap())
+                let fn_name = module.identifier_at(handle.name);
+                if fn_name.as_str().starts_with(BENCH_FUNCTION_PREFIX) {
+                    Some(fn_name.to_owned())
                 } else {
                     None
                 }
