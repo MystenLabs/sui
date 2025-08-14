@@ -29,7 +29,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
 use sui_types::messages_grpc::HandleTransactionResponse;
-use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
+use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::object::Object;
 use sui_types::transaction::{
     CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
