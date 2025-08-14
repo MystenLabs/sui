@@ -22,6 +22,8 @@ use move_vm_runtime::{runtime::MoveRuntime, shared::gas::UnmeteredGasMeter};
 use once_cell::sync::Lazy;
 use std::{path::PathBuf, sync::Arc};
 
+const BENCH_FUNCTION_PREFIX: &str = "bench_";
+
 static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
@@ -91,13 +93,12 @@ fn create_vm() -> InMemoryTestAdapter {
 }
 
 fn find_bench_functions(modules: &[CompiledModule]) -> Vec<Identifier> {
-    let name = "bench";
     modules
         .iter()
         .flat_map(|module| {
             module.function_defs().iter().filter_map(|def| {
                 let handle = module.function_handle_at(def.function);
-                if module.identifier_at(handle.name).as_str().starts_with(name) {
+                if module.identifier_at(handle.name).as_str().starts_with(BENCH_FUNCTION_PREFIX) {
                     Some(Identifier::new(module.identifier_at(handle.name).as_str()).unwrap())
                 } else {
                     None
