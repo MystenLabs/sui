@@ -77,7 +77,7 @@ mod address;
 mod config;
 mod crypto;
 mod dynamic_field;
-mod event;
+pub mod event;
 mod object;
 pub mod object_runtime;
 mod random;
@@ -301,6 +301,9 @@ impl NativesCostTable {
                     .event_emit_output_cost_per_byte()
                     .into(),
                 event_emit_cost_base: protocol_config.event_emit_cost_base().into(),
+                event_emit_auth_stream_cost: Some(protocol_config
+                    .event_emit_auth_stream_cost()
+                    .into()),
             },
 
             borrow_uid_cost_params: BorrowUidCostParams {
@@ -974,6 +977,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(ed25519::ed25519_verify),
         ),
         ("event", "emit", make_native!(event::emit)),
+        ("event", "emit_authenticated_impl", make_native!(event::emit_authenticated_impl)),
         (
             "event",
             "events_by_type",

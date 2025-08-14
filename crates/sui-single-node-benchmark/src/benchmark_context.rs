@@ -19,7 +19,7 @@ use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
-use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
+use sui_core::mock_checkpoint_builder::ValidatorKeypairProvider;
 use sui_types::transaction::{
     CertifiedTransaction, SignedTransaction, Transaction, VerifiedTransaction,
 };

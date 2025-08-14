@@ -1263,6 +1263,7 @@ pub struct ProtocolConfig {
     event_emit_value_size_derivation_cost_per_byte: Option<u64>,
     event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_output_cost_per_byte: Option<u64>,
+    event_emit_auth_stream_cost: Option<u64>,
 
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -2454,6 +2455,8 @@ impl ProtocolConfig {
             event_emit_value_size_derivation_cost_per_byte: Some(2),
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
+            // Cost for sui::event::emit_authenticated
+            event_emit_auth_stream_cost: Some(52),
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -3692,7 +3695,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
-                                    default_none_duration_for_new_keys: false,
+                                    default_none_duration_for_new_keys: false
                                 },
                             );
                     }
@@ -3773,7 +3776,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
-                                    default_none_duration_for_new_keys: false,
+                                    default_none_duration_for_new_keys: false
                                 },
                             );
 
@@ -3933,6 +3936,9 @@ impl ProtocolConfig {
                 93 => {
                     cfg.feature_flags
                         .consensus_checkpoint_signature_key_includes_digest = true;
+                    cfg.event_emit_auth_stream_cost = Some(52);
+                    cfg.feature_flags
+                        .enable_accumulators = true;
                 }
                 // Use this template when making changes:
                 //

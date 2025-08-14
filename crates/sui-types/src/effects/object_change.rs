@@ -3,7 +3,7 @@
 
 use crate::{
     base_types::{SuiAddress, VersionDigest},
-    digests::ObjectDigest,
+    digests::{Digest, ObjectDigest},
     object::{Object, Owner},
 };
 use move_core_types::language_storage::TypeTag;
@@ -67,7 +67,7 @@ impl EffectsObjectChange {
 
 /// If an object exists (at root-level) in the store prior to this transaction,
 /// it should be Exist, otherwise it's NonExist, e.g. wrapped objects should be
-/// NotExist.
+/// NonExist.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ObjectIn {
     NotExist,
@@ -85,8 +85,11 @@ pub enum AccumulatorOperation {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AccumulatorValue {
-    Integer(u64),
-    IntegerTuple(u64, u64),
+    Integer(u128),
+    IntegerTuple(u128, u128),
+    EventDigest(u64 /* event index in the transaction */, Digest),
+    // New accumulator types can be added here.
+    // For custom or complex types, we can use a `Vec<u8>` to store the raw value.
 }
 
 /// Accumulator objects are named by an address (can be an account address or a UID)
@@ -108,7 +111,8 @@ pub struct AccumulatorWriteV1 {
     pub address: AccumulatorAddress,
     /// The operation to be applied to the accumulator.
     pub operation: AccumulatorOperation,
-    /// The value to be merged into or split from the accumulator.
+    /// The cached deserialized value of the operation.
+    /// This is an optimization to avoid deserializing the value multiple times.
     pub value: AccumulatorValue,
 }
 
