@@ -229,17 +229,17 @@ fn default_reliability_weight() -> f64 {
 }
 
 fn default_submit_latency_weight() -> f64 {
-    0.2
+    0.0
 }
 
 fn default_effects_latency_weight() -> f64 {
-    0.3
+    0.0
 }
 
 fn default_health_check_latency_weight() -> f64 {
-    0.1
+    1.0
 }
 
 fn default_finalize_latency_weight() -> f64 {
-    0.4
+    0.0
 }
