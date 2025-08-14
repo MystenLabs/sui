@@ -51,18 +51,8 @@ fragment Arg on TransactionArgument {
           nodes {
             __typename
             ... on SplitCoinsCommand {
-              coin {
-                __typename
-                ... on Input { ix }
-                ... on TxResult { cmd ix }
-                ... on GasCoin { _ }
-              }
-              amounts {
-                __typename
-                ... on Input { ix }
-                ... on TxResult { cmd ix }
-                ... on GasCoin { _ }
-              }
+              coin { ...Arg }
+              amounts { ...Arg }
             }
           }
         }
@@ -70,3 +60,10 @@ fragment Arg on TransactionArgument {
     }
   }
 } 
+
+fragment Arg on TransactionArgument {
+  __typename
+  ... on Input { ix }
+  ... on TxResult { cmd ix }
+  ... on GasCoin { _ }
+}

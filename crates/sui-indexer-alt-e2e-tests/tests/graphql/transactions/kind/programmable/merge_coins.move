@@ -26,18 +26,8 @@
           nodes {
             __typename
             ... on MergeCoinsCommand {
-              coin {
-                __typename
-                ... on Input { ix }
-                ... on TxResult { cmd ix }
-                ... on GasCoin { _ }
-              }
-              coins {
-                __typename
-                ... on Input { ix }
-                ... on TxResult { cmd ix }
-                ... on GasCoin { _ }
-              }
+              coin { ...Arg }
+              coins { ...Arg }
             }
           }
         }
@@ -45,6 +35,14 @@
     }
   }
 }
+
+fragment Arg on TransactionArgument {
+  __typename
+  ... on Input { ix }
+  ... on TxResult { cmd ix }
+  ... on GasCoin { _ }
+}
+
 
 //# run-graphql
 { 
@@ -56,18 +54,8 @@
           nodes {
             __typename
             ... on MergeCoinsCommand {
-              coin {
-                __typename
-                ... on Input { ix }
-                ... on TxResult { cmd ix }
-                ... on GasCoin { _ }
-              }
-              coins {
-                __typename
-                ... on Input { ix }
-                ... on TxResult { cmd ix }
-                ... on GasCoin { _ }
-              }
+              coin { ...Arg }
+              coins { ...Arg }
             }
           }
         }
@@ -75,3 +63,10 @@
     }
   }
 } 
+
+fragment Arg on TransactionArgument {
+  __typename
+  ... on Input { ix }
+  ... on TxResult { cmd ix }
+  ... on GasCoin { _ }
+}
