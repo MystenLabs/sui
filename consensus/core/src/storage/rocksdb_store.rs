@@ -95,8 +95,8 @@ impl RocksDBStore {
         let index_digest_key = KeyIndexing::fixed(36);
         let index_index_digest_key = KeyIndexing::fixed(40);
         let commit_vote_key = KeyIndexing::fixed(76);
-        let u32_prefix = KeyType::prefix_uniform(3, 0);
-        let u64_prefix = KeyType::prefix_uniform(6, 0);
+        let u32_prefix = KeyType::uniform(1);
+        let u64_prefix = KeyType::uniform(1);
         let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
         let configs = vec![
             (
