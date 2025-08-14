@@ -1805,6 +1805,10 @@ type TransactionEffects {
 	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
 	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
+	"""
+	Transactions whose outputs this transaction depends upon.
+	"""
+	dependencies(first: Int, after: String, last: Int, before: String): TransactionConnection
 }
 
 input TransactionFilter {
