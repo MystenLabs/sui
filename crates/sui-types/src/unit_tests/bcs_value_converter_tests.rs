@@ -3,12 +3,10 @@
 
 use crate::base_types::*;
 use crate::bcs_value_converter::BcsConversionError;
-use crate::committee::EpochId;
 use crate::digests::*;
 use crate::effects::*;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
-use crate::gas::GasData;
 use crate::messages_checkpoint::*;
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::transaction::*;
@@ -109,7 +107,7 @@ fn test_gas_cost_summary_with_extra_fields() {
     use sui_bcs::Value;
 
     // Simulate a GasCostSummary from a future version with extra fields
-    let mut fields = vec![
+    let fields = vec![
         ("computationCost".to_string(), Value::U64(1000)),
         ("storageCost".to_string(), Value::U64(2000)),
         ("storageRebate".to_string(), Value::U64(500)),
@@ -254,57 +252,51 @@ fn test_transaction_effects_round_trip() {
     use crate::effects::TestEffectsBuilder;
     use crate::object::Owner;
 
-    // Create test TransactionEffectsV2 with non-trivial data
-    let effects = TestEffectsBuilder::new(TransactionDigest::random())
+    // Create a SenderSignedData for TestEffectsBuilder
+    let ptb = ProgrammableTransactionBuilder::new();
+    let gas_data = GasData {
+        payment: vec![(
+            ObjectID::random(),
+            Default::default(),
+            ObjectDigest::random(),
+        )],
+        owner: SuiAddress::random_for_testing_only(),
+        price: 1000,
+        budget: 10000,
+    };
+    let tx_data_v1 = TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(ptb.finish()),
+        sender: SuiAddress::random_for_testing_only(),
+        gas_data,
+        expiration: TransactionExpiration::None,
+    };
+    let tx_data = TransactionData::V1(tx_data_v1);
+    let sender_signed_data = SenderSignedData::new(tx_data, vec![]);
+
+    // Create test TransactionEffects with non-trivial data
+    let effects = TestEffectsBuilder::new(&sender_signed_data)
         .with_status(ExecutionStatus::Success)
-        .with_executed_epoch(5)
-        .with_gas_used(GasCostSummary {
-            computation_cost: 1000,
-            storage_cost: 500,
-            storage_rebate: 50,
-            non_refundable_storage_fee: 10,
-        })
-        .with_created(vec![
+        .with_created_objects(vec![
             (
-                (
-                    ObjectID::random(),
-                    SequenceNumber::from_u64(1),
-                    ObjectDigest::random(),
-                ),
+                ObjectID::random(),
                 Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             ),
             (
-                (
-                    ObjectID::random(),
-                    SequenceNumber::from_u64(2),
-                    ObjectDigest::random(),
-                ),
+                ObjectID::random(),
                 Owner::Shared {
                     initial_shared_version: SequenceNumber::from_u64(1),
                 },
             ),
         ])
-        .with_mutated(vec![(
+        .with_mutated_objects(vec![
             (
                 ObjectID::random(),
                 SequenceNumber::from_u64(3),
-                ObjectDigest::random(),
+                Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             ),
-            Owner::AddressOwner(SuiAddress::random_for_testing_only()),
-        )])
-        .with_deleted(vec![(
-            ObjectID::random(),
-            SequenceNumber::from_u64(4),
-            ObjectDigest::random(),
-        )])
-        .with_shared_objects(vec![(
-            ObjectID::random(),
-            SequenceNumber::from_u64(5),
-            ObjectDigest::random(),
-        )])
-        .with_dependencies(vec![
-            TransactionDigest::random(),
-            TransactionDigest::random(),
+        ])
+        .with_deleted_objects(vec![
+            (ObjectID::random(), SequenceNumber::from_u64(4)),
         ])
         .build();
 

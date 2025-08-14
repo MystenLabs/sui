@@ -694,7 +694,7 @@ mod tests {
     #[test]
     fn test_transaction_round_trip() {
         use sui_types::base_types::*;
-        use sui_types::gas::GasData;
+        use sui_types::transaction::GasData;
         use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
         use sui_types::transaction::*;
 

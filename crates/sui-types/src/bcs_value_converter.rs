@@ -182,7 +182,7 @@ where
     match value {
         Value::Seq(values) => values
             .iter()
-            .map(|v| converter(v))
+            .map(converter)
             .collect::<Result<Vec<_>, _>>(),
         _ => Err(BcsConversionError::TypeMismatch {
             field: field_name.to_string(),
@@ -286,7 +286,7 @@ impl ValueConverter for crate::base_types::SuiAddress {
                         }
                     }
                 }
-                Ok(crate::base_types::SuiAddress::from_bytes(&addr_bytes)
+                Ok(crate::base_types::SuiAddress::from_bytes(addr_bytes)
                     .map_err(|e| BcsConversionError::DeserializationError(e.to_string()))?)
             }
             _ => Err(BcsConversionError::TypeMismatch {
@@ -548,7 +548,6 @@ mod bcs_value_converter_tests;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::gas::GasCostSummary;
     use std::convert::TryFrom;
 
