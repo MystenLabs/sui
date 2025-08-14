@@ -254,7 +254,7 @@ Move.toml
         version : Optional String
         license : Optional String
         authors : Optional Array of String
-        implicit_dependencies : Boolean (default true)
+        system_dependencies : Optional Array of String (default None)
 
     environments : EnvironmentName → ChainID
 
@@ -368,7 +368,7 @@ above.
 
 2. recursively repin everything
     - explode the manifest dependencies so that there is a dep for every environment
-        - include implicit dependencies
+        - include system dependencies
     - resolve all direct external dependencies into internal dependencies
     - fetch all direct dependencies
         - note that the lockfiles of the dependencies are ignored
@@ -432,13 +432,14 @@ internal dependencies.
 Currently the only external resolver is mvr, and it will just look up the mvr name and convert it
 into a git dependency.
 
-## Implicit dependencies
+## System dependencies
 
-Unlike the current system, explicitly including an implicit dependency is an error; you disable
-implicit dependencies by adding `implicit_dependencies = false` to the `[package]` section of your
-manifest.
+Unlike the current system, explicitly including a system dependency is an error; you disable
+system dependencies by adding `system_dependencies = []` to the `[package]` section of your
+manifest. Each flavor can specify its default system dependencies (for Sui, that's `sui` and `std`).
+Non-default system dependencies can be specified like that: `system_dependencies = ["sui", "std", "sui_system"]`
 
-Like externally resolved dependencies, implicit dependencies will be pinned to different versions
+Like externally resolved dependencies, system dependencies will be pinned to different versions
 for each environment.
 
 ## Fetching

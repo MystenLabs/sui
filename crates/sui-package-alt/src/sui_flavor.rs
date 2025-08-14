@@ -51,6 +51,14 @@ impl SuiFlavor {
             ),
         ])
     }
+
+    /// The default dependencies are `sui` and `std`
+    fn default_system_dep_names() -> BTreeSet<PackageName> {
+        BTreeSet::from([
+            PackageName::new("sui").unwrap(),
+            PackageName::new("std").unwrap(),
+        ])
+    }
 }
 
 impl MoveFlavor for SuiFlavor {
@@ -71,14 +79,10 @@ impl MoveFlavor for SuiFlavor {
         ])
     }
 
-    fn system_deps_names() -> BTreeSet<PackageName> {
-        SuiFlavor::system_deps_names_map()
-            .into_keys()
-            .collect::<BTreeSet<_>>()
-    }
-
     // TODO this needs fixing, see todos
-    fn implicit_deps(environment: EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency> {
+    fn system_dependencies(
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
         let mut deps = BTreeMap::new();
         let deps_to_skip = ["DeepBook".into()];
         // TODO: we need to use packages for protocol version as well, so we need to fix this
@@ -123,6 +127,17 @@ impl MoveFlavor for SuiFlavor {
 
         deps
     }
+
+    fn default_system_dependencies(
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
+        let default_deps = Self::default_system_dep_names();
+
+        Self::system_dependencies(environment)
+            .into_iter()
+            .filter(|(name, _)| default_deps.contains(name))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -138,7 +153,7 @@ mod tests {
         let implicit_deps = ["sui", "std", "sui_system", "bridge"];
         let env = Environment::new("mainnet".into(), "35834a8a".into());
 
-        let deps = SuiFlavor::implicit_deps(env.id().into());
+        let deps = SuiFlavor::system_dependencies(env.id().into());
 
         for i in implicit_deps {
             assert!(
