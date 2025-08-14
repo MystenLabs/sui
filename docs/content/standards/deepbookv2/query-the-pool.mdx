@@ -18,7 +18,7 @@ For limit order, query its data using the following API functions
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
 ///   1. `[order_id]` order id of the order being queried
 ///   2. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns the order info of the order being queried
 public fun get_order_status<BaseAsset, QuoteAsset>(
@@ -42,7 +42,7 @@ API functions to query the depth of `level2` orders on both ask-side and bid-sid
 ///   2. `[price_high]` the upper price of the price interval to query, inclusive
 ///   3. `[clock]` Object ID of global system clock
 
-/// Returns the list of all valid prices and corresponding depthes
+/// Returns the list of all valid prices and corresponding depths
 public fun get_level2_book_status_bid_side<BaseAsset, QuoteAsset>(
      pool: &Pool<BaseAsset, QuoteAsset>,
      price_low: u64,
@@ -64,7 +64,7 @@ We provide API function to list all open orders under one account
 ///
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
 ///   1. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns list of user's all open orders
 public fun list_open_orders<BaseAsset, QuoteAsset>(
@@ -84,7 +84,7 @@ The API function to query the custodian account balance for users follows. Note 
 ///
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
 ///   1. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns user's base_asset_available, base_asset_locked,
 ///                quote_asset_available, quote_asset_locked
