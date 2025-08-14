@@ -2624,6 +2624,8 @@ dependencies = [
  "petgraph",
  "serde",
  "serde_yaml",
+ "tempfile",
+ "tokio",
  "tracing",
  "vfs",
 ]
