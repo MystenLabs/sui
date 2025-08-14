@@ -30,7 +30,7 @@ task 4, line 16:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 5, lines 18-46:
+task 5, lines 18-42:
 //# run-graphql
 Response: {
   "data": {
@@ -41,8 +41,7 @@ Response: {
             {
               "__typename": "SplitCoinsCommand",
               "coin": {
-                "__typename": "GasCoin",
-                "_": null
+                "__typename": "GasCoin"
               },
               "amounts": [
                 {
@@ -65,7 +64,7 @@ Response: {
   }
 }
 
-task 6, lines 48-76:
+task 6, lines 44-72:
 //# run-graphql
 Response: {
   "data": {
