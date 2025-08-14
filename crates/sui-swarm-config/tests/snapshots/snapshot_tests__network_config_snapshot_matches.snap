@@ -155,6 +155,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    transaction-initial-target-stake-percentage: 95
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -313,6 +314,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    transaction-initial-target-stake-percentage: 95
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -471,6 +473,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    transaction-initial-target-stake-percentage: 95
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -629,6 +632,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    transaction-initial-target-stake-percentage: 95
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -787,6 +791,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    transaction-initial-target-stake-percentage: 95
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -945,6 +950,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    transaction-initial-target-stake-percentage: 95
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1103,6 +1109,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    transaction-initial-target-stake-percentage: 95
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
