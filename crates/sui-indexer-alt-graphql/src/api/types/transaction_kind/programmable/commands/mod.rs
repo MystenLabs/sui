@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod merge_coins;
 mod move_call;
 mod split_coins;
 mod transaction_argument;
@@ -9,6 +10,7 @@ mod transfer_objects;
 use async_graphql::*;
 use sui_types::transaction::Command as NativeCommand;
 
+pub use merge_coins::MergeCoinsCommand;
 pub use move_call::MoveCallCommand;
 pub use split_coins::SplitCoinsCommand;
 pub use transaction_argument::TransactionArgument;
@@ -19,6 +21,7 @@ use crate::scope::Scope;
 /// A single command in the programmable transaction.
 #[derive(Union, Clone)]
 pub enum Command {
+    MergeCoins(MergeCoinsCommand),
     MoveCall(MoveCallCommand),
     SplitCoins(SplitCoinsCommand),
     TransferObjects(TransferObjectsCommand),
@@ -40,6 +43,10 @@ impl Command {
             NativeCommand::SplitCoins(coin, amounts) => Command::SplitCoins(SplitCoinsCommand {
                 coin: Some(TransactionArgument::from(coin)),
                 amounts: amounts.into_iter().map(TransactionArgument::from).collect(),
+            }),
+            NativeCommand::MergeCoins(coin, coins) => Command::MergeCoins(MergeCoinsCommand {
+                coin: Some(TransactionArgument::from(coin)),
+                coins: coins.into_iter().map(TransactionArgument::from).collect(),
             }),
             NativeCommand::TransferObjects(objects, address) => {
                 Command::TransferObjects(TransferObjectsCommand {

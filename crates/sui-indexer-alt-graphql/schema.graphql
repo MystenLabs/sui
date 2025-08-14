@@ -318,7 +318,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MoveCallCommand | SplitCoinsCommand | TransferObjectsCommand | OtherCommand
+union Command = MergeCoinsCommand | MoveCallCommand | SplitCoinsCommand | TransferObjectsCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -842,6 +842,20 @@ type Input {
 	ix: Int
 }
 
+
+"""
+Merges `coins` into the first `coin` (produces no results).
+"""
+type MergeCoinsCommand {
+	"""
+	The coin to merge into.
+	"""
+	coin: TransactionArgument
+	"""
+	The coins to be merged.
+	"""
+	coins: [TransactionArgument!]!
+}
 
 type MoveCallCommand {
 	"""
