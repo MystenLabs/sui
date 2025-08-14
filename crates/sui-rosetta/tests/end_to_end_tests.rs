@@ -32,7 +32,7 @@ async fn test_get_staked_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -133,7 +133,7 @@ async fn test_stake() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     let validator = client
         .governance_api()
@@ -197,7 +197,7 @@ async fn test_stake_all() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     let validator = client
         .governance_api()
@@ -265,7 +265,7 @@ async fn test_withdraw_stake() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     // First add some stakes
     let validator = client
@@ -391,7 +391,7 @@ async fn test_pay_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     let ops = serde_json::from_value(json!(
         [{
@@ -451,7 +451,7 @@ async fn test_pay_sui_multiple_times() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
 
     for i in 1..20 {
