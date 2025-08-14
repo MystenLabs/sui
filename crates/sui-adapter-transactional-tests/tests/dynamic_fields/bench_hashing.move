@@ -102,7 +102,7 @@ fun add_to_mmr(new_val: vector<u8>, mmr: &mut MerkleMountainRange) {
             *r = cur;
             return
         } else {
-            cur = hash_two_to_one(r, cur);
+            cur = hash_two_to_one_via_bcs(*r, cur);
             *r = vector::empty();
         };
         i = i + 1;
@@ -112,10 +112,30 @@ fun add_to_mmr(new_val: vector<u8>, mmr: &mut MerkleMountainRange) {
     mmr.digest_vec.push_back(cur);
 }
 
-// TODO: Add a prefix to distinguish inner hashes?
+public struct Tmp has drop {
+    e1: vector<u8>,
+    e2: vector<u8>,
+}
+
+fun hash_two_to_one_via_bcs(e1: vector<u8>, e2: vector<u8>): vector<u8> {
+    let tmp = Tmp {
+        e1: e1,
+        e2: e2,
+    };
+    let tmp_bytes = bcs::to_bytes(&tmp);
+    hash::blake2b256(&tmp_bytes)
+}
+
 fun hash_two_to_one(e1: &mut vector<u8>, e2: vector<u8>): vector<u8> {
     e1.append(e2);
     hash::blake2b256(e1)
+}
+
+fun hash_two_to_one_owned(e1: vector<u8>, e2: vector<u8>): vector<u8> {
+    let mut e3 = vector::empty();
+    e3.append(e1);
+    e3.append(e2);
+    hash::blake2b256(&e3)
 }
 
 }

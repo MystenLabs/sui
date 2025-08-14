@@ -3,6 +3,7 @@ module event_streams_ds::mmr;
 
 use sui::dynamic_field::{add, borrow_mut};
 use sui::hash;
+use sui::bcs;
 
 public struct Obj has key {
     id: object::UID,
@@ -44,7 +45,7 @@ fun add_to_mmr(new_val: vector<u8>, mmr: &mut MerkleMountainRange) {
             *r = cur;
             return
         } else {
-            cur = hash_two_to_one(r, cur);
+            cur = hash_two_to_one_via_bcs(*r, cur);
             *r = vector::empty();
         };
         i = i + 1;
@@ -54,17 +55,31 @@ fun add_to_mmr(new_val: vector<u8>, mmr: &mut MerkleMountainRange) {
     mmr.digest_vec.push_back(cur);
 }
 
-// TODO: Add a prefix to distinguish inner hashes?
-fun hash_two_to_one(e1: &mut vector<u8>, e2: vector<u8>): vector<u8> {
-    e1.append(e2);
-    hash::blake2b256(e1)
+// fun hash_two_to_one(e1: &mut vector<u8>, e2: vector<u8>): vector<u8> {
+//     e1.append(e2);
+//     hash::blake2b256(e1)
+// }
+
+// fun hash_two_to_one_owned(e1: vector<u8>, e2: vector<u8>): vector<u8> {
+//     let mut e3 = vector::empty();
+//     e3.append(e1);
+//     e3.append(e2);
+//     hash::blake2b256(&e3)
+// }
+
+public struct Tmp has drop {
+    e1: vector<u8>,
+    e2: vector<u8>,
 }
 
-fun hash_two_to_one_owned(e1: vector<u8>, e2: vector<u8>): vector<u8> {
-    let mut e3 = vector::empty();
-    e3.append(e1);
-    e3.append(e2);
-    hash::blake2b256(&e3)
+// TODO: Add a prefix to distinguish inner hashes?
+fun hash_two_to_one_via_bcs(e1: vector<u8>, e2: vector<u8>): vector<u8> {
+    let tmp = Tmp {
+        e1: e1,
+        e2: e2,
+    };
+    let tmp_bytes = bcs::to_bytes(&tmp);
+    hash::blake2b256(&tmp_bytes)
 }
 
 use std::debug::print;
@@ -98,7 +113,7 @@ fun test_mmr_addition() {
             vector[true, true, false]);
     print<MerkleMountainRange>(&mmr);
 
-    let x = hash_two_to_one_owned(fixed_new_val, fixed_new_val);
-    let y = hash_two_to_one_owned(x, x);
+    let x = hash_two_to_one_via_bcs(fixed_new_val, fixed_new_val);
+    let y = hash_two_to_one_via_bcs(x, x);
     assert!(mmr.digest_vec[2] == y);
 }
