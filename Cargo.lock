@@ -16627,6 +16627,7 @@ dependencies = [
  "static_assertions",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "sui-bcs",
  "sui-enum-compat-util",
  "sui-macros",
  "sui-protocol-config",

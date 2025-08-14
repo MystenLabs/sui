@@ -571,12 +571,14 @@ mod tests {
 
         use sui_types::base_types::{ObjectDigest, ObjectID, SuiAddress};
         use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-        use sui_types::transaction::{CallArg, GasData, ObjectArg, TransactionExpiration, TransactionKind};
+        use sui_types::transaction::{
+            CallArg, GasData, ObjectArg, TransactionExpiration, TransactionKind,
+        };
         use sui_types::transaction::{TransactionData, TransactionDataV1};
 
         // Create a TransactionData with inputs and commands
         let mut ptb = ProgrammableTransactionBuilder::new();
-        
+
         // Add some inputs
         let input1 = CallArg::Pure(vec![1, 2, 3, 4]); // Pure bytes input
         let input2 = CallArg::Object(ObjectArg::ImmOrOwnedObject((
@@ -584,29 +586,37 @@ mod tests {
             Default::default(),
             ObjectDigest::random(),
         )));
-        
+
         let _ = ptb.input(input1);
         let _ = ptb.input(input2);
-        
+
         // Add some transfer commands
-        let obj_arg = ptb.obj(ObjectArg::ImmOrOwnedObject((
-            ObjectID::random(),
-            Default::default(), 
-            ObjectDigest::random(),
-        ))).unwrap();
+        let obj_arg = ptb
+            .obj(ObjectArg::ImmOrOwnedObject((
+                ObjectID::random(),
+                Default::default(),
+                ObjectDigest::random(),
+            )))
+            .unwrap();
         let recipient = SuiAddress::random_for_testing_only();
         ptb.transfer_arg(recipient, obj_arg);
-        
+
         // Add another transfer to have multiple commands
-        let obj_arg2 = ptb.obj(ObjectArg::ImmOrOwnedObject((
-            ObjectID::random(),
-            Default::default(), 
-            ObjectDigest::random(),
-        ))).unwrap();
+        let obj_arg2 = ptb
+            .obj(ObjectArg::ImmOrOwnedObject((
+                ObjectID::random(),
+                Default::default(),
+                ObjectDigest::random(),
+            )))
+            .unwrap();
         ptb.transfer_arg(recipient, obj_arg2);
-        
+
         let gas_data = GasData {
-            payment: vec![(ObjectID::random(), Default::default(), ObjectDigest::random())],
+            payment: vec![(
+                ObjectID::random(),
+                Default::default(),
+                ObjectDigest::random(),
+            )],
             owner: SuiAddress::random_for_testing_only(),
             price: 1000,
             budget: 10000,
@@ -638,7 +648,7 @@ mod tests {
                     has_gas_data,
                     "TransactionDataV1 should have 'gas_data' field"
                 );
-                
+
                 // Check that the kind field is a ProgrammableTransaction with inputs and commands
                 let kind_field = fields.iter().find(|(name, _)| name == "kind").unwrap();
                 if let (_, Value::Enum(kind_variant, kind_value)) = kind_field {
@@ -647,17 +657,27 @@ mod tests {
                     if let Value::Struct(pt_fields) = &**kind_value {
                         let has_inputs = pt_fields.iter().any(|(name, _)| name == "inputs");
                         let has_commands = pt_fields.iter().any(|(name, _)| name == "commands");
-                        assert!(has_inputs, "ProgrammableTransaction should have 'inputs' field");
-                        assert!(has_commands, "ProgrammableTransaction should have 'commands' field");
-                        
+                        assert!(
+                            has_inputs,
+                            "ProgrammableTransaction should have 'inputs' field"
+                        );
+                        assert!(
+                            has_commands,
+                            "ProgrammableTransaction should have 'commands' field"
+                        );
+
                         // Verify we have inputs
-                        let inputs_field = pt_fields.iter().find(|(name, _)| name == "inputs").unwrap();
+                        let inputs_field =
+                            pt_fields.iter().find(|(name, _)| name == "inputs").unwrap();
                         if let (_, Value::Seq(inputs)) = inputs_field {
                             assert!(inputs.len() >= 2, "Should have at least 2 inputs");
                         }
-                        
-                        // Verify we have commands  
-                        let commands_field = pt_fields.iter().find(|(name, _)| name == "commands").unwrap();
+
+                        // Verify we have commands
+                        let commands_field = pt_fields
+                            .iter()
+                            .find(|(name, _)| name == "commands")
+                            .unwrap();
                         if let (_, Value::Seq(commands)) = commands_field {
                             assert!(commands.len() >= 2, "Should have at least 2 commands");
                         }
@@ -669,5 +689,136 @@ mod tests {
         } else {
             panic!("Expected Enum value for TransactionData");
         }
+    }
+
+    #[test]
+    fn test_transaction_round_trip() {
+        use sui_types::base_types::*;
+        use sui_types::gas::GasData;
+        use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+        use sui_types::transaction::*;
+
+        let parser = Parser::new().unwrap();
+
+        // Create a test transaction similar to the parsing test
+        let mut ptb = ProgrammableTransactionBuilder::new();
+        let recipient = SuiAddress::random_for_testing_only();
+        let obj_arg = ptb
+            .obj(ObjectArg::ImmOrOwnedObject((
+                ObjectID::random(),
+                Default::default(),
+                ObjectDigest::random(),
+            )))
+            .unwrap();
+        ptb.transfer_arg(recipient, obj_arg);
+
+        let gas_data = GasData {
+            payment: vec![(
+                ObjectID::random(),
+                Default::default(),
+                ObjectDigest::random(),
+            )],
+            owner: SuiAddress::random_for_testing_only(),
+            price: 1000,
+            budget: 10000,
+        };
+
+        let tx_data_v1 = TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(ptb.finish()),
+            sender: SuiAddress::random_for_testing_only(),
+            gas_data,
+            expiration: TransactionExpiration::None,
+        };
+
+        let tx_data = TransactionData::V1(tx_data_v1);
+
+        // Round-trip test: encode -> parse -> convert back
+        let encoded = bcs::to_bytes(&tx_data).unwrap();
+        let parsed = parser.parse(&encoded, "TransactionData").unwrap();
+        let converted_back = TransactionData::try_from(parsed).unwrap();
+
+        assert_eq!(tx_data, converted_back);
+    }
+
+    #[test]
+    fn test_transaction_effects_round_trip() {
+        use sui_types::base_types::*;
+        use sui_types::effects::*;
+        use sui_types::execution_status::ExecutionStatus;
+        use sui_types::gas::GasCostSummary;
+
+        let parser = Parser::new().unwrap();
+
+        // Create test TransactionEffectsV2
+        let effects_v2 = TransactionEffectsV2::default();
+        let effects = TransactionEffects::V2(effects_v2);
+
+        // Round-trip test: encode -> parse -> convert back
+        let encoded = bcs::to_bytes(&effects).unwrap();
+        let parsed = parser.parse(&encoded, "TransactionEffects").unwrap();
+        let converted_back = TransactionEffects::try_from(parsed).unwrap();
+
+        assert_eq!(effects, converted_back);
+    }
+
+    #[test]
+    fn test_checkpoint_summary_round_trip() {
+        use sui_types::committee::EpochId;
+        use sui_types::digests::*;
+        use sui_types::gas::GasCostSummary;
+        use sui_types::messages_checkpoint::*;
+
+        let parser = Parser::new().unwrap();
+
+        // Create test CheckpointSummary
+        let checkpoint = CheckpointSummary {
+            epoch: 1,
+            sequence_number: 100,
+            network_total_transactions: 1000,
+            content_digest: CheckpointContentsDigest::random(),
+            previous_digest: Some(CheckpointDigest::random()),
+            epoch_rolling_gas_cost_summary: GasCostSummary {
+                computation_cost: 100,
+                computation_cost_burned: 10,
+                storage_cost: 50,
+                storage_rebate: 5,
+                non_refundable_storage_fee: 1,
+            },
+            timestamp_ms: 1234567890,
+            checkpoint_commitments: vec![],
+            end_of_epoch_data: None,
+            version_specific_data: vec![],
+        };
+
+        // Round-trip test: encode -> parse -> convert back
+        let encoded = bcs::to_bytes(&checkpoint).unwrap();
+        let parsed = parser.parse(&encoded, "CheckpointSummary").unwrap();
+        let converted_back = CheckpointSummary::try_from(parsed).unwrap();
+
+        assert_eq!(checkpoint, converted_back);
+    }
+
+    #[test]
+    fn test_gas_cost_summary_round_trip() {
+        use sui_types::bcs_value_converter::ValueConverter;
+        use sui_types::gas::GasCostSummary;
+
+        let parser = Parser::new().unwrap();
+
+        // Create test GasCostSummary
+        let gas_summary = GasCostSummary {
+            computation_cost: 1000,
+            computation_cost_burned: 100,
+            storage_cost: 500,
+            storage_rebate: 50,
+            non_refundable_storage_fee: 10,
+        };
+
+        // Round-trip test: encode -> parse -> convert back
+        let encoded = bcs::to_bytes(&gas_summary).unwrap();
+        let parsed = parser.parse(&encoded, "GasCostSummary").unwrap();
+        let converted_back = GasCostSummary::try_from(parsed).unwrap();
+
+        assert_eq!(gas_summary, converted_back);
     }
 }

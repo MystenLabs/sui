@@ -583,3 +583,307 @@ pub fn enum_variant_order_derive(input: TokenStream) -> TokenStream {
         panic!("EnumVariantOrder can only be used with enums.");
     }
 }
+
+/// Derives TryFrom<sui_bcs::Value> for structs and enums.
+///
+/// This macro generates a TryFrom implementation that:
+/// - For structs: extracts required fields and ignores extra fields (forward compatibility)
+/// - For enums: matches known variants and returns UnknownVariant error for new ones
+///
+/// Field names in the Value are expected to match the Rust field names.
+/// For serde rename support, use #[bcs_value(rename = "...")]
+#[proc_macro_derive(BcsValueTryFrom, attributes(bcs_value))]
+pub fn bcs_value_try_from_derive(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    let name = &ast.ident;
+
+    let implementation = match ast.data {
+        Data::Struct(data_struct) => generate_struct_impl(name, &data_struct),
+        Data::Enum(data_enum) => generate_enum_impl(name, &data_enum),
+        Data::Union(_) => panic!("BcsValueTryFrom does not support unions"),
+    };
+
+    implementation.into()
+}
+
+fn generate_struct_impl(
+    name: &syn::Ident,
+    data_struct: &syn::DataStruct,
+) -> proc_macro2::TokenStream {
+    let field_extractions = data_struct.fields.iter().map(|field| {
+        let field_name = field.ident.as_ref().expect("Named fields required");
+        let field_type = &field.ty;
+        let field_name_str = field_name.to_string();
+
+        // Check for rename attribute
+        let bcs_name = field
+            .attrs
+            .iter()
+            .find_map(|attr| {
+                if attr.path().is_ident("bcs_value") {
+                    if let Ok(syn::Meta::NameValue(meta)) = attr.parse_args::<syn::Meta>() {
+                        if meta.path.is_ident("rename") {
+                            if let syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Str(lit_str),
+                                ..
+                            }) = &meta.value
+                            {
+                                return Some(lit_str.value());
+                            }
+                        }
+                    }
+                }
+                None
+            })
+            .unwrap_or_else(|| field_name_str.clone());
+
+        // Generate extraction based on field type
+        if is_option_type(field_type) {
+            let inner_type = extract_option_inner_type(field_type);
+            quote! {
+                let #field_name = if let Some(field_value) = fields.extract_field(#bcs_name) {
+                    crate::bcs_value_converter::value_to_option(
+                        field_value,
+                        #bcs_name,
+                        |v| <#inner_type>::try_from(v.clone())
+                    )?
+                } else {
+                    None
+                };
+            }
+        } else if is_primitive_type(field_type) {
+            // For primitive types, use direct matching since we can't implement TryFrom
+            quote! {
+                let #field_name = {
+                    let value = fields.extract_required_field(#bcs_name)?;
+                    #field_type::from_value(value, #bcs_name)?
+                };
+            }
+        } else {
+            quote! {
+                let #field_name = <#field_type>::try_from(
+                    fields.extract_required_field(#bcs_name)?.clone()
+                )?;
+            }
+        }
+    });
+
+    let field_names = data_struct
+        .fields
+        .iter()
+        .map(|field| field.ident.as_ref().expect("Named fields required"));
+
+    quote! {
+        impl ::std::convert::TryFrom<::sui_bcs::Value> for #name {
+            type Error = crate::bcs_value_converter::BcsConversionError;
+
+            fn try_from(value: ::sui_bcs::Value) -> ::std::result::Result<Self, Self::Error> {
+                use crate::bcs_value_converter::{StructFieldExtractor, ValueConverter};
+
+                match value {
+                    ::sui_bcs::Value::Struct(fields) => {
+                        #(#field_extractions)*
+
+                        Ok(#name {
+                            #(#field_names,)*
+                        })
+                    }
+                    _ => Err(crate::bcs_value_converter::BcsConversionError::TypeMismatch {
+                        field: stringify!(#name).to_string(),
+                        expected: "Struct".to_string(),
+                        got: format!("{:?}", value),
+                    }),
+                }
+            }
+        }
+    }
+}
+
+fn generate_enum_impl(name: &syn::Ident, data_enum: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let variant_matches = data_enum.variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        let variant_name_str = variant_name.to_string();
+
+        match &variant.fields {
+            syn::Fields::Unit => {
+                quote! {
+                    #variant_name_str => {
+                        match &**variant_value {
+                            ::sui_bcs::Value::Unit => Ok(#name::#variant_name),
+                            _ => Err(crate::bcs_value_converter::BcsConversionError::TypeMismatch {
+                                field: format!("{}::{}", stringify!(#name), #variant_name_str),
+                                expected: "Unit".to_string(),
+                                got: format!("{:?}", variant_value),
+                            }),
+                        }
+                    }
+                }
+            }
+            syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                // Newtype variant
+                let field_type = &fields.unnamed[0].ty;
+                quote! {
+                    #variant_name_str => {
+                        let inner = <#field_type>::try_from((**variant_value).clone())?;
+                        Ok(#name::#variant_name(inner))
+                    }
+                }
+            }
+            syn::Fields::Named(fields) => {
+                // Struct variant
+                let field_extractions = fields.named.iter().map(|field| {
+                    let field_name = field.ident.as_ref().expect("Named field required");
+                    let field_type = &field.ty;
+                    let field_name_str = field_name.to_string();
+
+                    if is_option_type(field_type) {
+                        let inner_type = extract_option_inner_type(field_type);
+                        quote! {
+                            let #field_name = if let Some(field_value) = fields.extract_field(#field_name_str) {
+                                crate::bcs_value_converter::value_to_option(
+                                    field_value,
+                                    #field_name_str,
+                                    |v| <#inner_type>::try_from(v.clone())
+                                )?
+                            } else {
+                                None
+                            };
+                        }
+                    } else {
+                        quote! {
+                            let #field_name = <#field_type>::try_from(
+                                fields.extract_required_field(#field_name_str)?.clone()
+                            )?;
+                        }
+                    }
+                });
+
+                let field_names = fields.named.iter().map(|field| {
+                    field.ident.as_ref().expect("Named field required")
+                });
+
+                quote! {
+                    #variant_name_str => {
+                        match &**variant_value {
+                            ::sui_bcs::Value::Struct(fields) => {
+                                use crate::bcs_value_converter::StructFieldExtractor;
+                                #(#field_extractions)*
+                                Ok(#name::#variant_name {
+                                    #(#field_names,)*
+                                })
+                            }
+                            _ => Err(crate::bcs_value_converter::BcsConversionError::TypeMismatch {
+                                field: format!("{}::{}", stringify!(#name), #variant_name_str),
+                                expected: "Struct".to_string(),
+                                got: format!("{:?}", variant_value),
+                            }),
+                        }
+                    }
+                }
+            }
+            _ => panic!("BcsValueTryFrom does not support tuple variants with multiple fields"),
+        }
+    });
+
+    quote! {
+        impl ::std::convert::TryFrom<::sui_bcs::Value> for #name {
+            type Error = crate::bcs_value_converter::BcsConversionError;
+
+            fn try_from(value: ::sui_bcs::Value) -> ::std::result::Result<Self, Self::Error> {
+                match value {
+                    ::sui_bcs::Value::Enum(variant_name, variant_value) => {
+                        match variant_name.as_str() {
+                            #(#variant_matches)*
+                            unknown => Err(crate::bcs_value_converter::BcsConversionError::UnknownVariant {
+                                variant: unknown.to_string(),
+                            }),
+                        }
+                    }
+                    _ => Err(crate::bcs_value_converter::BcsConversionError::TypeMismatch {
+                        field: stringify!(#name).to_string(),
+                        expected: "Enum".to_string(),
+                        got: format!("{:?}", value),
+                    }),
+                }
+            }
+        }
+    }
+}
+
+fn is_primitive_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        // Check for simple primitives
+        if let Some(segment) = type_path.path.segments.last() {
+            let ident_str = segment.ident.to_string();
+            if matches!(
+                ident_str.as_str(),
+                "u8" | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "bool"
+                    | "String"
+            ) {
+                return true;
+            }
+        }
+
+        // Check for sui-types that have ValueConverter implementations
+        let path_str = type_path
+            .path
+            .segments
+            .iter()
+            .map(|s| s.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("::");
+
+        matches!(
+            path_str.as_str(),
+            "ObjectID"
+                | "SuiAddress"
+                | "SequenceNumber"
+                | "ObjectDigest"
+                | "TransactionDigest"
+                | "CheckpointDigest"
+                | "CheckpointContentsDigest"
+                | "EpochId"
+                | "base_types::ObjectID"
+                | "base_types::SuiAddress"
+                | "base_types::SequenceNumber"
+                | "digests::ObjectDigest"
+                | "digests::TransactionDigest"
+                | "digests::CheckpointDigest"
+                | "digests::CheckpointContentsDigest"
+                | "committee::EpochId"
+        )
+    } else {
+        false
+    }
+}
+
+fn is_option_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == "Option";
+        }
+    }
+    false
+}
+
+fn extract_option_inner_type(ty: &syn::Type) -> &syn::Type {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                    return inner_ty;
+                }
+            }
+        }
+    }
+    panic!("Expected Option<T> type");
+}

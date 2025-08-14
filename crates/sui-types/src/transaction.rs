@@ -132,6 +132,7 @@ pub enum Reservation {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+
 pub enum WithdrawTypeParam {
     Balance(TypeInput),
 }
@@ -152,6 +153,7 @@ impl WithdrawTypeParam {
 
 // TODO(address-balances): Rename all the related structs and enums.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+
 pub struct BalanceWithdrawArg {
     /// The reservation of the balance to withdraw.
     pub reservation: Reservation,

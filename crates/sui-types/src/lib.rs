@@ -33,6 +33,7 @@ pub mod authenticator_state;
 pub mod balance;
 pub mod balance_change;
 pub mod base_types;
+pub mod bcs_value_converter;
 pub mod bridge;
 pub mod clock;
 pub mod coin;
