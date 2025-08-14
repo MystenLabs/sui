@@ -599,7 +599,7 @@ impl GlobalEnv {
     }
 
     /// Find all target modules and return in a vector
-    pub fn get_target_modules(&self) -> Vec<ModuleEnv> {
+    pub fn get_target_modules(&self) -> Vec<ModuleEnv<'_>> {
         let mut target_modules: Vec<ModuleEnv> = vec![];
         for module_env in self.get_modules() {
             if module_env.is_target() {
@@ -1335,7 +1335,7 @@ impl GlobalEnv {
     }
 
     /// Produce a TypeDisplayContext to print types within the scope of this env
-    pub fn get_type_display_ctx(&self) -> TypeDisplayContext {
+    pub fn get_type_display_ctx(&self) -> TypeDisplayContext<'_> {
         TypeDisplayContext::WithEnv {
             env: self,
             type_param_names: None,
@@ -3409,7 +3409,7 @@ impl<'env> FunctionEnv<'env> {
     }
 
     /// Produce a TypeDisplayContext to print types within the scope of this env
-    pub fn get_type_display_ctx(&self) -> TypeDisplayContext {
+    pub fn get_type_display_ctx(&self) -> TypeDisplayContext<'_> {
         let type_param_names = self
             .get_type_parameters()
             .iter()
