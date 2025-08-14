@@ -64,7 +64,7 @@ Response: {
   }
 }
 
-task 6, lines 44-72:
+task 6, lines 44-69:
 //# run-graphql
 Response: {
   "data": {

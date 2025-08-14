@@ -5,28 +5,29 @@
 
 //# programmable --sender A --inputs 100 200 @B  
 //> 0: SplitCoins(Gas, [Input(0), Input(1)]);
-//> 1: TransferObjects([NestedResult(0, 0), NestedResult(0, 1)], Input(2));
+//> 1: MergeCoins(Gas, [NestedResult(0, 0)]);
+//> 2: TransferObjects([NestedResult(0, 1)], Input(2));
 
 //# create-checkpoint
 
-//# programmable --sender A --inputs 50 @B
-//> 0: SplitCoins(Gas, [Input(0)]);
-//> 1: TransferObjects([NestedResult(0, 0)], Input(1));
+//# programmable --sender A --inputs 50 75
+//> 0: SplitCoins(Gas, [Input(0), Input(1)]);
+//> 1: MergeCoins(NestedResult(0, 0), [NestedResult(0, 1)]);
 
 //# create-checkpoint
 
 //# run-graphql
 {
-  # Split Gas with multiple amounts 
-  splitMultipleAmounts: transaction(digest: "@{digest_1}") {
+  # Merge one coin back into Gas coin
+  mergeIntoGas: transaction(digest: "@{digest_1}") {
     kind {
       ... on ProgrammableTransaction {
-        commands {
+        commands(first: 10) {
           nodes {
             __typename
-            ... on SplitCoinsCommand {
+            ... on MergeCoinsCommand {
               coin { ...Arg }
-              amounts { ...Arg }
+              coins { ...Arg }
             }
           }
         }
@@ -39,20 +40,22 @@ fragment Arg on TransactionArgument {
   __typename
   ... on Input { ix }
   ... on TxResult { cmd ix }
+  ... on GasCoin { _ }
 }
+
 
 //# run-graphql
 { 
-  # Split Gas with single amount
-  splitSingleAmount: transaction(digest: "@{digest_3}") {
+  # Merge split coins together
+  mergeSplitCoins: transaction(digest: "@{digest_3}") {
     kind {
       ... on ProgrammableTransaction {
-        commands {
+        commands(first: 10) {
           nodes {
             __typename
-            ... on SplitCoinsCommand {
+            ... on MergeCoinsCommand {
               coin { ...Arg }
-              amounts { ...Arg }
+              coins { ...Arg }
             }
           }
         }
