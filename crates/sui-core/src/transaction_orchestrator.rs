@@ -352,12 +352,12 @@ where
                 }
                 // Local effects might be available
                 local_effects_result = &mut local_effects_future => {
-                    debug!(
-                        ?tx_digest,
-                        "Effects became available while execution was running"
-                    );
                     match local_effects_result {
                         Ok(effects) => {
+                            debug!(
+                                ?tx_digest,
+                                "Effects became available while execution was running"
+                            );
                             if let Some(effects) = effects.into_iter().next() {
                                 let epoch = effects.executed_epoch();
                                 let events = if include_events {
