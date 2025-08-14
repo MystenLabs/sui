@@ -19,7 +19,7 @@ futures.workspace = true
 http.workspace = true
 ouroboros.workspace = true
 prometheus.workspace = true
-rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
+rocksdb = { version = "0.24.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 rustls-pemfile.workspace = true
 scoped-futures.workspace = true
 serde.workspace = true

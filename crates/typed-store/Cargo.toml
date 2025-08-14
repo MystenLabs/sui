@@ -23,7 +23,7 @@ once_cell.workspace = true
 tap.workspace = true
 prometheus.workspace = true
 hdrhistogram.workspace = true
-rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
+rocksdb = { version = "0.24.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
@@ -40,8 +40,8 @@ mysten-metrics.workspace = true
 [target.'cfg(not(windows))'.dependencies]
 tidehunter = {git = "https://github.com/andll/tidehunter.git", rev = "dd686f055375aa8fa2145618301bdfd5170a2a6b", version = "0.1.0", optional = true}
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-rocksdb = { version = "0.22.0", default-features = false, features = ["jemalloc"] }
+# [target.'cfg(not(target_env = "msvc"))'.dependencies]
+# rocksdb = { version = "0.24.0", default-features = false, features = ["jemalloc"] }
 
 [dev-dependencies]
 tempfile.workspace = true
