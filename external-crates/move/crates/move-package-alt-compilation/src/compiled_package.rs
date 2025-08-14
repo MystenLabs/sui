@@ -536,7 +536,8 @@ pub fn build_all<W: Write, F: MoveFlavor>(
     };
 
     let compiled_package_info = CompiledPackageInfo {
-        package_name: root_package_name,
+        // TODO: should this be package_name or root_package_name?
+        package_name,
         // // TODO: correct address alias instantiation
         // address_alias_instantiation: BTreeMap::new(),
         // TODO: compute source digest
@@ -544,15 +545,26 @@ pub fn build_all<W: Write, F: MoveFlavor>(
         build_flags: build_config.clone(),
     };
 
-    // TODO: take into consideration install dir flag
-    let under_path = project_root.join("build");
+    // set the build folder
+    let base_path = build_config
+        .install_dir
+        .as_ref()
+        .map(|dir| {
+            if dir.is_relative() {
+                project_root.join(dir)
+            } else {
+                dir.clone()
+            }
+        })
+        .unwrap_or_else(|| project_root.clone());
+    let under_path = base_path.join("build");
 
     save_to_disk(
         root_compiled_units.clone(),
         compiled_package_info.clone(),
         deps_compiled_units.clone(),
         compiled_docs,
-        root_package_name,
+        package_name,
         under_path,
     )?;
 
