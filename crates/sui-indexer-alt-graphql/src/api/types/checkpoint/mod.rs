@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
@@ -24,7 +22,6 @@ use crate::{
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
-    task::watermark::Watermarks,
 };
 
 use super::{
@@ -220,22 +217,18 @@ impl Checkpoint {
     ) -> Result<Connection<String, Checkpoint>, RpcError> {
         let mut conn = Connection::new(false, false);
 
-        let watermarks: &Arc<Watermarks> = ctx.data()?;
-
-        let cp_lo = watermarks
-            .pipeline_lo_watermark("cp_sequence_numbers")?
-            .checkpoint();
+        // TODO: (henrychen) Update when we figure out retention for key-value stores.
+        let cp_lo = 0;
         let cp_hi_inclusive = scope.checkpoint_viewed_at();
 
-        let cp_bounds = match checkpoint_bounds(
+        let Some(cp_bounds) = checkpoint_bounds(
             filter.after_checkpoint.map(u64::from),
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             cp_lo,
             cp_hi_inclusive,
-        ) {
-            Some(bounds) => bounds,
-            None => return Ok(Connection::new(false, false)),
+        ) else {
+            return Ok(Connection::new(false, false));
         };
 
         let results = if let Some(epoch) = filter.at_epoch {
