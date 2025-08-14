@@ -24,7 +24,7 @@ use sui_grpc_rosetta::types::{
 use sui_grpc_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;

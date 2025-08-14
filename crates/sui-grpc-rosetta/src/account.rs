@@ -30,7 +30,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 /// at which the balance lookup was performed.
 /// [Rosetta API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/account/get-an-account-balance)
 pub async fn balance(
-    State(ctx): State<OnlineServerContext>,
+    State(mut ctx): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<AccountBalanceRequest>, Error>,
 ) -> Result<AccountBalanceResponse, Error> {
@@ -39,14 +39,14 @@ pub async fn balance(
     let currencies = &request.currencies;
     let mut retry_attempts = 5;
     while retry_attempts > 0 {
-        let balances_first = get_balances(&ctx, &request, address, currencies.clone()).await?;
-        let checkpoint1 = get_checkpoint(&ctx).await?;
-        let mut checkpoint2 = get_checkpoint(&ctx).await?;
+        let balances_first = get_balances(&mut ctx, &request, address, currencies.clone()).await?;
+        let checkpoint1 = get_checkpoint(&mut ctx).await?;
+        let mut checkpoint2 = get_checkpoint(&mut ctx).await?;
         while checkpoint2 <= checkpoint1 {
-            checkpoint2 = get_checkpoint(&ctx).await?;
+            checkpoint2 = get_checkpoint(&mut ctx).await?;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        let balances_second = get_balances(&ctx, &request, address, currencies.clone()).await?;
+        let balances_second = get_balances(&mut ctx, &request, address, currencies.clone()).await?;
         if balances_first.eq(&balances_second) {
             info!(
                 "same balance for account {} at checkpoint {}",
@@ -67,7 +67,7 @@ pub async fn balance(
     Err(Error::RetryExhausted(String::from("retry")))
 }
 
-async fn get_checkpoint(ctx: &OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
+async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
     let request = GetCheckpointRequest {
         checkpoint_id: None, // None means get latest checkpoint
         read_mask: Some(FieldMask::from_paths(["sequence_number"])),
@@ -75,7 +75,7 @@ async fn get_checkpoint(ctx: &OnlineServerContext) -> Result<CheckpointSequenceN
 
     let response = ctx
         .grpc_client
-        .raw_client()
+        .ledger_client()
         .get_checkpoint(request)
         .await?
         .into_inner();
@@ -90,7 +90,7 @@ async fn get_checkpoint(ctx: &OnlineServerContext) -> Result<CheckpointSequenceN
 }
 
 async fn get_balances(
-    ctx: &OnlineServerContext,
+    ctx: &mut OnlineServerContext,
     request: &AccountBalanceRequest,
     address: SuiAddress,
     currencies: Currencies,
@@ -101,10 +101,11 @@ async fn get_balances(
     } else if !currencies.0.is_empty() {
         let balance_futures = currencies.0.iter().map(|currency| {
             let coin_type = currency.metadata.clone().coin_type.clone();
+            let mut grpc_client = ctx.grpc_client.clone();
             async move {
                 (
                     currency.clone(),
-                    get_account_balances(ctx, address, &coin_type).await,
+                    get_account_balances(&mut grpc_client, address, &coin_type).await,
                 )
             }
         });
@@ -130,18 +131,16 @@ async fn get_balances(
 }
 
 async fn get_account_balances(
-    ctx: &OnlineServerContext,
+    grpc_client: &mut sui_rpc::client::Client,
     address: SuiAddress,
-    coin_type: &String,
+    coin_type: &str,
 ) -> Result<i128, Error> {
-    let mut live_data_client = ctx.grpc_client.live_data_client();
-
     let request = GetBalanceRequest {
         owner: Some(address.to_string()),
         coin_type: Some(coin_type.to_string()),
     };
 
-    let response = live_data_client.get_balance(request).await?;
+    let response = grpc_client.live_data_client().get_balance(request).await?;
 
     let balance = response
         .into_inner()
@@ -217,7 +216,7 @@ async fn get_sub_account_balances(
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
 /// [Rosetta API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/account/get-an-account-unspent-coins)
 pub async fn coins(
-    State(context): State<OnlineServerContext>,
+    State(mut context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
 ) -> Result<AccountCoinsResponse, Error> {

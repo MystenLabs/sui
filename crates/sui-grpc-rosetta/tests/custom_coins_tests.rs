@@ -24,7 +24,7 @@ use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint};
 
 use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 
 #[tokio::test]
 async fn test_custom_coin_balance() {

@@ -17,7 +17,7 @@ use sui_grpc_rosetta::types::{
     TransactionIdentifierResponse,
 };
 use sui_keys::keystore::AccountKeystore;
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 use sui_types::crypto::SuiSignature;
 use test_cluster::TestClusterBuilder;
 
