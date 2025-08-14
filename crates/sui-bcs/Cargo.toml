@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0"
 bcs = "0.1.4"
 serde = { version = "1.0.180", features = ["derive"] }
 serde_yaml = "0.9"

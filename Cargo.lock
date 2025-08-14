@@ -13400,6 +13400,7 @@ dependencies = [
 name = "sui-bcs"
 version = "1.55.0"
 dependencies = [
+ "anyhow",
  "bcs",
  "serde",
  "serde_yaml 0.9.21",
