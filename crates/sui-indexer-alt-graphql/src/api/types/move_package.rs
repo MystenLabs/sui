@@ -3,6 +3,12 @@
 
 use std::sync::Arc;
 
+use super::{
+    address::AddressableImpl,
+    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
+    transaction::Transaction,
+};
+use crate::api::types::type_origin::TypeOrigin;
 use crate::{
     api::scalars::{
         base64::Base64,
@@ -18,7 +24,7 @@ use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
     dataloader::DataLoader,
-    Context, InputObject, Object, SimpleObject,
+    Context, InputObject, Object,
 };
 use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
 use serde::{Deserialize, Serialize};
@@ -34,14 +40,7 @@ use sui_sql_macro::query;
 use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     move_package::MovePackage as NativeMovePackage,
-    move_package::TypeOrigin as NativeTypeOrigin,
     object::Object as NativeObject,
-};
-
-use super::{
-    address::AddressableImpl,
-    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
-    transaction::Transaction,
 };
 
 pub(crate) struct MovePackage {
@@ -101,20 +100,6 @@ pub(crate) type CPackage = BcsCursor<PackageCursor>;
 
 /// Cursor for iterating over system packages. Points at a particular system package, by its ID.
 pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
-
-/// Information about which previous versions of a package introduced its types.
-#[derive(SimpleObject)]
-struct TypeOrigin {
-    /// Module defining the type.
-    module: String,
-
-    /// Name of the struct.
-    #[graphql(name = "struct")]
-    struct_: String,
-
-    /// The storage ID of the package that first defined this type.
-    defining_id: SuiAddress,
-}
 
 /// A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
@@ -291,22 +276,15 @@ impl MovePackage {
     }
 
     /// A table identifying which versions of a package introduced each of its types.
-    async fn type_origins(&self) -> Vec<TypeOrigin> {
-        self.contents
+    async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
+        let type_origins = self
+            .contents
             .type_origin_table()
             .iter()
-            .map(
-                |NativeTypeOrigin {
-                     module_name,
-                     datatype_name,
-                     package,
-                 }| TypeOrigin {
-                    module: module_name.clone(),
-                    struct_: datatype_name.clone(),
-                    defining_id: (*package).into(),
-                },
-            )
-            .collect()
+            .map(|native| TypeOrigin::from(native.clone()))
+            .collect();
+
+        Some(type_origins)
     }
 }
 

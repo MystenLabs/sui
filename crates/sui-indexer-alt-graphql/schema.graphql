@@ -921,7 +921,7 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	A table identifying which versions of a package introduced each of its types.
 	"""
-	typeOrigins: [TypeOrigin!]!
+	typeOrigins: [TypeOrigin!]
 }
 
 type MovePackageConnection {
@@ -1914,15 +1914,15 @@ type TypeOrigin {
 	"""
 	Module defining the type.
 	"""
-	module: String!
+	module: String
 	"""
 	Name of the struct.
 	"""
-	struct: String!
+	struct: String
 	"""
 	The storage ID of the package that first defined this type.
 	"""
-	definingId: SuiAddress!
+	definingId: SuiAddress
 }
 
 """
