@@ -19,6 +19,16 @@ pub trait Connection: Send {
         task: Option<&str>,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
+    async fn committer_task_and_main_watermark(
+        &mut self,
+        pipeline: &'static str,
+        task: Option<&str>,
+    ) -> anyhow::Result<Option<(CommitterWatermark, CommitterWatermark)>> {
+        let task_watermark = self.committer_watermark(pipeline, task).await?;
+        let main_watermark = self.committer_watermark(pipeline, None).await?;
+        Ok(task_watermark.zip(main_watermark))
+    }
+
     /// Given a pipeline and optional indexer task, return the reader watermark from the database.
     /// This is used by the indexer to determine the new `reader_lo` or inclusive lower bound of
     /// available data. By default, there is no task name.
