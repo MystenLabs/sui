@@ -1,5 +1,7 @@
 ---
 title: Node Tools
+description: Use the Sui CLI to interact with a Full node's validator commands. 
+keywords: [ sui cli, full node, delegator, fullnode, operation cap, report validators, join a committee, leave a committee, report a validator, proof of possession, generate proof of possession ]
 ---
 
 This guide focuses on using the Sui CLI `validator` commands. 
@@ -10,7 +12,7 @@ This tool only supports pending validators and active validators at the moment.
 
 :::
 
-## Preparation
+## Prerequisites
 
 1. Make sure you have completed all the [prerequisites](../developer/getting-started/sui-install.mdx#prerequisites).
 
@@ -34,7 +36,7 @@ This tool only supports pending validators and active validators at the moment.
 
 3. Run the following command to set up your Sui account and CLI environment. 
 
-    1. If this is the first time running this program, it will ask you to provide a Sui Fullnode Server URL and a meaningful environment alias. It will also generate a random key pair in `sui.keystore` and a config `client.yaml`. Swap in your validator account key if you already have one.
+    1. If this is the first time running this program, it will ask you to provide a Sui Full node Server URL and a meaningful environment alias. It will also generate a random key pair in `sui.keystore` and a config `client.yaml`. Swap in your validator account key if you already have one.
 
     2. If you already set it up, simply make sure 
       - `rpc` is correct in `client.yaml`. 
@@ -82,17 +84,17 @@ $ sui validator update-metadata --help
 ```
 
 You can update the following on-chain metadata:
-1. name
-1. description
-1. image URL
-1. project URL
-1. network address
-1. p2p address
-1. primary address
-1. worker address
-1. protocol public key
-1. network public key
-1. worker public key
+1. Name
+1. Description
+1. Image URL
+1. Project URL
+1. Network address
+1. P2P address
+1. Primary address
+1. Worker address
+1. Protocol public key
+1. Network public key
+1. Worker public key
 
 Notably, only the first 4 metadata listed above take effect immediately.
 
@@ -104,15 +106,15 @@ Run the following to see how to update each metadata.
 $ sui validator update-metadata --help
 ```
 
-#### Operation cap
+#### Operation Cap
 
 Operation Cap allows a validator to authorize another account to perform certain actions on behalf of this validator. Read about [Operation Cap here](./validator-tasks.mdx#operation-cap).
 
-The Operation Cap holder (either the validator itself or the delegatee) updates its Gas Price and reports validator peers with the Operation Cap.
+The Operation Cap holder (either the validator itself or the delegatee) updates its gas price and reports validator peers with the Operation Cap.
 
 #### Update gas price
 
-To update Gas Price, run
+To update the gas price, run
 
 ```sh
 $ sui validator update-gas-price <gas-price>
@@ -170,7 +172,7 @@ to submit an on-chain transaction to become a validator candidate. The parameter
 
 At this point you are validator candidate and can start to accept self staking and delegated staking. 
 
-**If you haven't, start a fullnode now to catch up with the network. When you officially join the committee but is not fully up-to-date, you cannot make meaningful contribution to the network and may be subject to peer reporting hence face the risk of reduced staking rewards for you and your delegators.**
+**If you haven't, start a Full node now to catch up with the network. When you officially join the committee but is not fully up-to-date, you cannot make meaningful contributions to the network and may be subject to peer reporting, hence facing the risk of reduced staking rewards for you and your delegator.**
 
 Once you collect enough staking amount, run
 

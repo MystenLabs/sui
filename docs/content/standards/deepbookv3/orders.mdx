@@ -1,9 +1,10 @@
 ---
-title: DeepBook Orders
-sidebar_label: Orders
+title: Orders
+description: Use DeepBookV3 to create limit and market orders, modify orders, or cancel orders. 
+keywords: [ limit orders, market orders, modify orders, cancel orders, balancemanager, deepbookv3, pay_with_deep, DEEP token, reduce order size, lower expiration time, order options, self-matching options, orderinfo, orderdeepprice, fill, events, place market order, withdraw amount, withdraw settled amount ]
 ---
 
-Users can create limit or market orders, modify orders, and cancel orders. The `BalanceManager` must have the necessary funds to process orders. DeepBook has four order options and three self matching options. If you set the `pay_with_deep` flag to `true`, trading fees are paid with the DEEP token. If you set the `pay_with_deep` flag to `false`, trading fees are paid with the input token.
+Users can create limit or market orders, modify orders, and cancel orders. The `BalanceManager` must have the necessary funds to process orders. DeepBookV3 has four order options and three self matching options. If you set the `pay_with_deep` flag to `true`, trading fees are paid with the DEEP token. If you set the `pay_with_deep` flag to `false`, trading fees are paid with the input token.
 
 Users can modify their existing order, reducing the size, lowering the expiration time, or both. Users cannot modify their order to increase their size or increase their expiration time. To do that, they must cancel the original order and place a new order.
 
@@ -27,7 +28,7 @@ The following constants define the options available for self-matching orders.
 
 ### OrderInfo struct
 
-Placing a limit order or a market order creates and returns an `OrderInfo` object. DeepBook automatically drops this object after the order completes or is placed in the book. Use `OrderInfo` to inspect the execution details of the request as it represents all order information. DeepBook does not catch any errors, so if there’s a failure of any kind, then the entire transaction fails.
+Placing a limit order or a market order creates and returns an `OrderInfo` object. DeepBookV3 automatically drops this object after the order completes or is placed in the book. Use `OrderInfo` to inspect the execution details of the request as it represents all order information. DeepBookV3 does not catch any errors, so if there’s a failure of any kind, then the entire transaction fails.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/book/order_info.move#struct=OrderInfo}
 
@@ -45,19 +46,19 @@ The `Fill` struct represents the results of a match between two orders. Use this
 
 ### Events
 
-DeepBook emits `OrderFilled` when a maker order is filled.
+DeepBookV3 emits `OrderFilled` when a maker order is filled.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/book/order_info.move#struct=OrderFilled}
 
-DeepBook emits `OrderCanceled` when a maker order is canceled.
+DeepBookV3 emits `OrderCanceled` when a maker order is canceled.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/book/order.move#struct=OrderCanceled}
 
-DeepBook emits `OrderModified` on modification of a maker order.
+DeepBookV3 emits `OrderModified` on modification of a maker order.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/book/order.move#struct=OrderModified}
 
-DeepBook emits `OrderPlaced` when it injects a maker order into the order book.
+DeepBookV3 emits `OrderPlaced` when it injects a maker order into the order book.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/book/order_info.move#struct=OrderPlaced}
 
@@ -72,7 +73,7 @@ You must combine a `BalanceManager` call of generating a `TradeProof` before pla
 
 ### Place market order
 
-Place a market order. Quantity is in base asset terms. Calls `place_limit_order` with a price of `MAX_PRICE` for bids and `MIN_PRICE` for asks. DeepBook cancels the order for any quantity not filled.
+Place a market order. Quantity is in base asset terms. Calls `place_limit_order` with a price of `MAX_PRICE` for bids and `MIN_PRICE` for asks. DeepBookV3 cancels the order for any quantity not filled.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=place_market_order noComments}
 
@@ -88,7 +89,7 @@ The `modify_order` function does not return anything. If the transaction is succ
 
 Cancel an order. The order must be owned by the `balance_manager`. The order is removed from the book and the `balance_manager` open orders. The `balance_manager` balance is updated with the order's remaining quantity.
 
-Similar to modify, `cancel_order` does not return anything. DeepBook emits `OrderCanceled` event.
+Similar to modify, `cancel_order` does not return anything. DeepBookV3 emits `OrderCanceled` event.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=cancel_order noComments}
 
@@ -97,3 +98,7 @@ Similar to modify, `cancel_order` does not return anything. DeepBook emits `Orde
 Withdraw settled amounts to the `balance_manager`. All orders automatically withdraw settled amounts. This can be called explicitly to withdraw all settled funds from the pool.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=withdraw_settled_amounts noComments}
+
+## Related links
+
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

@@ -10,7 +10,8 @@ import {
     IFileInfo,
     ILocalInfo,
     IDebugInfo,
-    readAllDebugInfos
+    readAllDebugInfos,
+    computeOptimizedLines,
 } from './debug_info_utils';
 import {
     INLINED_FRAME_ID_SAME_FILE,
@@ -401,33 +402,65 @@ export class Runtime extends EventEmitter {
         if (openedFilePath.endsWith(TRACE_FILE_EXT) && openedFileBaseName === EXT_EVENTS_TRACE_FILE_NAME) {
             // Trace containing external events. Reading all data required for debugging
             // assumes a certain directory structure rooted in `extRoot`, where the trace
-            // file is located. The `bytecode` directory contains disassembled bytecode
-            // files and their debug infos. The `source` directory contains Move source files
-            // and their debug infos.
+            // file is located. All relevant data is stored in direcotories that represent
+            // Move packages and named after their package ID (hexadecimal string of 64 characters).
+            // In each package directory, we have two subdirectories: `bytecode` and `source`.
+            // The `bytecode` directory contains disassembled bytecode files and their debug infos.
+            // The `source` directory (optionally) contains Move source files and their debug infos.
             const extRoot = path.dirname(openedFilePath);
-            const bytecodeDir = path.join(extRoot, 'bytecode');
-            hashToFileMap(bytecodeDir, this.filesMap, BCODE_FILE_EXT);
-            bcodeDebugInfosModMap = readAllDebugInfos(bytecodeDir, this.filesMap, true);
-            const sourceDir = path.join(extRoot, 'source');
-            if (fs.existsSync(sourceDir)) {
-                const sourceFilesMap = new Map<string, IFileInfo>();
-                hashToFileMap(sourceDir, sourceFilesMap, MOVE_FILE_EXT);
-                // We are getting files and debug infos from the source directory
-                // which is populated by the user. One way to do it would be to copy
-                // `build` directory of package to the source directory, which would
-                // contain all the required sources and debug infos. However, this
-                // build directory may also contain disassembled bytecode files and
-                // their corresponding debug infos, which need to be filtered out.
-                // This is accomplished by passing `mustHaveSourceFile` as `false`.
-                // and sourceFilesMap that contain only Move source files - this way,
-                // since disassembled bytecode files are not present in sourceFilesMap,
-                // debug infos for disassembled bytecode will be excluded.
-                srcDebugInfosModMap =
-                    readAllDebugInfos(sourceDir, sourceFilesMap, /* mustHaveSourceFile */ false);
-                sourceFilesMap.forEach((fileInfo, fileHash) => {
-                    this.filesMap.set(fileHash, fileInfo);
-                });
+
+            // find all directories that represent Move packages (0x followed by hex characters)
+            const pkgDirPattern = /^0x[0-9a-fA-F]+$/;
+            const extRootContents = fs.readdirSync(extRoot);
+            const pkgDirs = extRootContents.filter(dirOrFile => {
+                const fullPath = path.join(extRoot, dirOrFile);
+                return fs.statSync(fullPath).isDirectory() && pkgDirPattern.test(dirOrFile);
+            });
+
+            if (pkgDirs.length === 0) {
+                throw new Error(`No package directories found in ${extRoot}`);
             }
+
+            // iterate over each package directory
+            for (const pkgDir of pkgDirs) {
+                const pkgDirPath = path.join(extRoot, pkgDir);
+                const pkgVersionID = pkgDir.slice(2); // remove 0x prefix
+
+                const bytecodeDir = path.join(pkgDirPath, 'bytecode');
+                hashToFileMap(bytecodeDir, this.filesMap, BCODE_FILE_EXT);
+                const bcodeAllDebugInfoLinesMap = new Map<string, Set<number>>();
+                readAllDebugInfos(bytecodeDir, bcodeDebugInfosModMap, bcodeAllDebugInfoLinesMap, this.filesMap, true);
+                computeOptimizedLines(bcodeDebugInfosModMap, bcodeAllDebugInfoLinesMap, this.filesMap);
+                const sourceDir = path.join(pkgDirPath, 'source');
+                if (fs.existsSync(sourceDir)) {
+                    const sourceFilesMap = new Map<string, IFileInfo>();
+                    hashToFileMap(sourceDir, sourceFilesMap, MOVE_FILE_EXT);
+                    // We are getting files and debug infos from the source directory
+                    // which is populated by the user. One way to do it would be to copy
+                    // `build` directory of package to the source directory, which would
+                    // contain all the required sources and debug infos. However, this
+                    // build directory may also contain disassembled bytecode files and
+                    // their corresponding debug infos, which need to be filtered out.
+                    // This is accomplished by passing `mustHaveSourceFile` as `false`.
+                    // and sourceFilesMap that contain only Move source files - this way,
+                    // since disassembled bytecode files are not present in sourceFilesMap,
+                    // debug infos for disassembled bytecode will be excluded.
+                    const srcAllDebugInfoLinesMap = new Map<string, Set<number>>();
+                    readAllDebugInfos(
+                        sourceDir,
+                        srcDebugInfosModMap,
+                        srcAllDebugInfoLinesMap,
+                        sourceFilesMap,
+                        /* mustHaveSourceFile */ false,
+                        pkgVersionID
+                    );
+                    computeOptimizedLines(srcDebugInfosModMap, srcAllDebugInfoLinesMap, sourceFilesMap);
+                    sourceFilesMap.forEach((fileInfo, fileHash) => {
+                        this.filesMap.set(fileHash, fileInfo);
+                    });
+                }
+            }
+
             traceFilePath = openedFilePath;
         } else {
             // Trace containing only a single top-level Move function call,
@@ -464,7 +497,9 @@ export class Runtime extends EventEmitter {
                 ? srcSourceMapDir
                 : path.join(pkgRoot, 'build', pkg_name, 'debug_info');
 
-            srcDebugInfosModMap = readAllDebugInfos(srcDbgInfoDir, this.filesMap, true);
+            const srcAllDebugInfoLinesMap = new Map<string, Set<number>>();
+            readAllDebugInfos(srcDbgInfoDir, srcDebugInfosModMap, srcAllDebugInfoLinesMap, this.filesMap, true);
+            computeOptimizedLines(srcDebugInfosModMap, srcAllDebugInfoLinesMap, this.filesMap);
 
             // reconstruct trace file path from trace info
             traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + TRACE_FILE_EXT);
@@ -474,7 +509,9 @@ export class Runtime extends EventEmitter {
                 // create file maps for all bytecode files in the `disassembly` directory
                 hashToFileMap(disassemblyDir, this.filesMap, BCODE_FILE_EXT);
                 // created bytecode maps for disassembled bytecode files
-                bcodeDebugInfosModMap = readAllDebugInfos(disassemblyDir, this.filesMap, true);
+                const bcodeAllDebugInfoLinesMap = new Map<string, Set<number>>();
+                readAllDebugInfos(disassemblyDir, bcodeDebugInfosModMap, bcodeAllDebugInfoLinesMap, this.filesMap, true);
+                computeOptimizedLines(bcodeDebugInfosModMap, bcodeAllDebugInfoLinesMap, this.filesMap);
             }
         }
         Array.from(srcDebugInfosModMap.entries()).forEach((entry) => {

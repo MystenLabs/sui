@@ -1,6 +1,8 @@
 ---
 title: Orders SDK
 sidebar_label: Orders
+description: Learn how to use the DeepBookV3 SDK to leverage orders against pools.
+keywords: [ limit orders, market orders, modify orders, cancel orders, balancemanager, deepbookv3, pay_with_deep, DEEP token, reduce order size, lower expiration time, order options, self-matching options, orderinfo, orderdeepprice, fill, events, place market order, withdraw amount, withdraw settled amount ]
 ---
 
 Placing orders is a main function of any DeepBook integration. Before you can place orders, though, you must first set up a balance manager. See [DeepBookV3 SDK](../deepbookv3-sdk.mdx) for information on setting up a balance manager.
@@ -198,3 +200,9 @@ cancelOrder = (tx: Transaction) => {
   tx.add(this.deepBook.cancelAllOrders(poolKey, managerKey));
 };
 ```
+
+## Related links
+
+- [DeepBookV3 Indexer repository](https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3): The DeepBookV3 SDK repository on GitHub.
+- [DeepBookV3 SDK node package](https://www.npmjs.com/package/@mysten/deepbook-v3): The DeepBookV3 SDK node package on NPM.
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

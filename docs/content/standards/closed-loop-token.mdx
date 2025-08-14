@@ -1,14 +1,16 @@
 ---
 title: Closed-Loop Token
+description: Closed-Loop tokens can only be used for a specific service or by authorized users. 
+keywords: [token::keep, token::join, token::split, token::zero, token::destroy_zero, token::transfer, token::to_coin, token::from_coin, token::spend, closed-loop, closed-loop tokens, closed loop, difference between closed-loop and coin, coin vs closed-loop ]
 ---
 
 Using the Closed-Loop Token standard, you can limit the applications that can use the token and set up custom policies for transfers, spends, and conversions. The [`sui::token` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md) in the Sui framework defines the standard.
 
 ## Background and use cases
 
-The [Coin standard](./coin.mdx) on Sui is an example of an open-loop system - coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped.mdx), [freely transferable](/concepts/transfers/custom-rules.mdx#the-store-ability-and-transfer-rules) and you can store them in any application. The best real world analogy would be cash - hardly regulated and can be freely used and passed.
+The [Coin standard](./coin.mdx) on Sui is an example of an open-loop system. Coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped.mdx), [freely transferable](/concepts/transfers/custom-rules.mdx#the-store-ability-and-transfer-rules) and you can store them in any application. The best real world analogy would be cash as it is hardly regulated and can be freely used and passed.
 
-Some applications, however, require constraining the scope of the token to a specific purpose. For example, some applications might need a token that you can only use for a specific service, or that an authorized account can only use, or a token that you can block certain accounts from using. A real-world analogy would be a bank account - regulated, bank-controlled, and compliant with certain rules and policies.
+Some applications, however, require constraining the scope of the token to a specific purpose. For example, some applications might need a token that you can only use for a specific service, or that an authorized account can only use, or a token that you can block certain accounts from using. A real-world analogy would be a bank account that is regulated, bank-controlled, and compliant with certain rules and policies.
 
 ## Difference with Coin
 
@@ -70,11 +72,11 @@ You can reuse rules across different policies and applications; and you can free
 
 Tokens have a set of public and protected actions that you can use to manage the token. Public actions are available to everyone and don't require any authorization. They have similar APIs to coins, but operate on the `Token` type:
 
-- `token::keep` - send a token to the transaction sender
-- `token::join` - join two tokens
-- `token::split` - split a token into two, specify the amount to split
-- `token::zero` - create an empty (zero balance) token
-- `token::destroy_zero` - destroy a token with zero balance
+- `token::keep`: Send a token to the transaction sender
+- `token::join`: Join two tokens
+- `token::split`: Split a token into two, specify the amount to split
+- `token::zero`: Create an empty (zero balance) token
+- `token::destroy_zero`: Destroy a token with zero balance
 
 See [Coin Token Comparison](./closed-loop-token/coin-token-comparison.mdx) for coin and token methods comparison.
 
@@ -82,10 +84,10 @@ See [Coin Token Comparison](./closed-loop-token/coin-token-comparison.mdx) for c
 
 Protected actions are ones that issue an [`ActionRequest`](./closed-loop-token/action-request.mdx) - a hot-potato struct that must be resolved for the transaction to succeed. There are three main ways to resolve an `ActionRequest`, most common of which is via the [`TokenPolicy`](./closed-loop-token/token-policy.mdx).
 
-- `token::transfer` - transfer a token to a specified address
-- `token::to_coin` - convert a token to a coin
-- `token::from_coin` - convert a coin to a token
-- `token::spend` - spend a token on a specified address
+- `token::transfer`: Transfer a token to a specified address
+- `token::to_coin`: Convert a token to a coin
+- `token::from_coin`: Convert a coin to a token
+- `token::spend`: Spend a token on a specified address
 
 The previous methods are included in the base implementation, however it is possible to create `ActionRequest`s for custom actions.
 

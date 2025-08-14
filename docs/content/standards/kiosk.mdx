@@ -1,6 +1,7 @@
 ---
 title: Sui Kiosk
 description: Kiosk is a decentralized system for commerce applications on Sui. Kiosk is a part of the Sui framework, native to the system, and available to everyone.
+keywords: [kiosk, sui kiosk, create a kiosk, create kiosk with sui cli, kiosk sdk, TypeScript, kiosk owners, placing objects in kiosk, kiosk for buyers, kiosk creators, kiosk for creators, kiosk::take, kiosk::borrow, kiosk::borrow_mut, kiosk::borrow_val, lock item in kiosk, lock kiosk item, list item in kiosk, delist item, remove item from kiosk list, withdraw from kiosk ]
 ---
 
 Kiosk is a decentralized system for commerce applications on Sui. It consists of `Kiosk` objects - shared objects owned by individual parties that store assets and allow listing them for sale as well as utilize custom trading functionality - for example, an auction. While being highly decentralized, Sui Kiosk provides a set of strong guarantees:
@@ -98,10 +99,10 @@ In practice, these guarantees mean that:
 
 Sui Kiosk is a shared object that can store heterogeneous values, such as different sets of asset collectibles. When you add an asset to your kiosk, it has one of the following states:
 
-- PLACED - an item placed in the kiosk using the `kiosk::place` function. The kiosk owner can withdraw it and use it directly, borrow it (mutably or immutably), or list an item for sale.
-- LOCKED - an item placed in the kiosk using the `kiosk::lock` function. You can’t withdraw a Locked item from a kiosk, but you can borrow it mutably and list it for sale. Any item placed in a kiosk that has an associated kiosk lock policy have a LOCKED state.
-- LISTED - an item in the kiosk that is listed for sale using the `kiosk::list` or `kiosk::place_and_list` functions. You can’t modify an item while listed, but you can borrow it immutably or delist it, which returns it to its previous state.
-- LISTED EXCLUSIVELY - an item placed or locked in the kiosk by an extension that calls the `kiosk::list_with_purchase_cap` function. Only the kiosk owner can approve calling the function. The owner can only borrow it immutably. The extension must provide the functionality to delist / unlock the asset, or it might stay locked forever. Given that this action is explicitly performed by the owner - it is the responsibility of the owner to choose verified and audited extensions to use.
+- PLACED: An item placed in the kiosk using the `kiosk::place` function. The kiosk owner can withdraw it and use it directly, borrow it (mutably or immutably), or list an item for sale.
+- LOCKED: An item placed in the kiosk using the `kiosk::lock` function. You can’t withdraw a Locked item from a kiosk, but you can borrow it mutably and list it for sale. Any item placed in a kiosk that has an associated kiosk lock policy have a LOCKED state.
+- LISTED: An item in the kiosk that is listed for sale using the `kiosk::list` or `kiosk::place_and_list` functions. You can’t modify an item while listed, but you can borrow it immutably or delist it, which returns it to its previous state.
+- LISTED EXCLUSIVELY: An item placed or locked in the kiosk by an extension that calls the `kiosk::list_with_purchase_cap` function. Only the kiosk owner can approve calling the function. The owner can only borrow it immutably. The extension must provide the functionality to delist / unlock the asset, or it might stay locked forever. Given that this action is explicitly performed by the owner - it is the responsibility of the owner to choose verified and audited extensions to use.
 
 When someone purchases an asset from a kiosk, the asset leaves the kiosk and ownership transfers to the buyer’s address.
 
@@ -151,7 +152,7 @@ tx.moveCall({
 });
 ```
 
-### Create a Sui Kiosk with advanced options using the SUI CLI
+### Create a Sui Kiosk with advanced options using the Sui CLI
 
 Sui CLI does not support PTBs and transaction chaining yet. You can use the `kiosk::default` function instead.
 
@@ -361,9 +362,9 @@ When you use the `kiosk::purchase` function, it returns the purchased asset and 
 
 As a kiosk owner, you can access an asset placed or locked in a kiosk without taking the asset from the kiosk. You can always borrow the asset immutably. Whether you can mutably borrow an asset depends on the state of the asset. For example, you can’t borrow a listed asset because you can’t modify it while listed. The functions available include:
 
-- `kiosk::borrow` - returns an immutable reference to the asset
-- `kiosk::borrow_mut` - returns a mutable reference to the asset
-- `kiosk::borrow_val` - a PTB-friendly version of `borrow_mut`, which allows you to take an asset and place it back in the same transaction.
+- `kiosk::borrow`: Returns an immutable reference to the asset
+- `kiosk::borrow_mut`: Returns a mutable reference to the asset
+- `kiosk::borrow_val`: A PTB-friendly version of `borrow_mut`, which allows you to take an asset and place it back in the same transaction.
 
 ### Immutable borrow
 

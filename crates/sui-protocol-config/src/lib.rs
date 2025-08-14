@@ -3991,7 +3991,7 @@ impl ProtocolConfig {
             max_back_edges_per_function,
             max_back_edges_per_module,
             max_basic_blocks_in_script: None,
-            max_idenfitier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
+            max_identifier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
             disallow_self_identifier: self.feature_flags.disallow_self_identifier,
             allow_receiving_object_id: self.allow_receiving_object_id(),
             reject_mutable_random_on_entry_functions: self

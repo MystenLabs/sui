@@ -27,6 +27,7 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 pub mod error;
 
 pub mod accumulator_event;
+pub mod accumulator_metadata;
 pub mod accumulator_root;
 pub mod authenticator_state;
 pub mod balance;

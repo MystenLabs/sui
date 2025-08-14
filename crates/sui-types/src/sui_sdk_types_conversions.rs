@@ -205,27 +205,15 @@ impl From<Address> for crate::base_types::SuiAddress {
     }
 }
 
-impl From<crate::base_types::ObjectID> for ObjectId {
+impl From<crate::base_types::ObjectID> for Address {
     fn from(value: crate::base_types::ObjectID) -> Self {
         Self::new(value.into_bytes())
     }
 }
 
-impl From<ObjectId> for crate::base_types::ObjectID {
-    fn from(value: ObjectId) -> Self {
+impl From<Address> for crate::base_types::ObjectID {
+    fn from(value: Address) -> Self {
         Self::new(value.into_inner())
-    }
-}
-
-impl From<crate::base_types::SuiAddress> for ObjectId {
-    fn from(value: crate::base_types::SuiAddress) -> Self {
-        Self::new(value.to_inner())
-    }
-}
-
-impl From<ObjectId> for crate::base_types::SuiAddress {
-    fn from(value: ObjectId) -> Self {
-        crate::base_types::ObjectID::new(value.into_inner()).into()
     }
 }
 
@@ -457,38 +445,38 @@ impl From<StructTag> for crate::type_input::StructInput {
     }
 }
 
-impl From<crate::messages_checkpoint::CheckpointDigest> for CheckpointDigest {
-    fn from(value: crate::messages_checkpoint::CheckpointDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<CheckpointDigest> for crate::messages_checkpoint::CheckpointDigest {
-    fn from(value: CheckpointDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<crate::digests::TransactionDigest> for TransactionDigest {
-    fn from(value: crate::digests::TransactionDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<TransactionDigest> for crate::digests::TransactionDigest {
-    fn from(value: TransactionDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<crate::digests::ObjectDigest> for ObjectDigest {
+impl From<crate::digests::ObjectDigest> for Digest {
     fn from(value: crate::digests::ObjectDigest) -> Self {
         Self::new(value.into_inner())
     }
 }
 
-impl From<ObjectDigest> for crate::digests::ObjectDigest {
-    fn from(value: ObjectDigest) -> Self {
+impl From<Digest> for crate::digests::ObjectDigest {
+    fn from(value: Digest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<crate::digests::TransactionDigest> for Digest {
+    fn from(value: crate::digests::TransactionDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<Digest> for crate::digests::TransactionDigest {
+    fn from(value: Digest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<crate::messages_checkpoint::CheckpointDigest> for Digest {
+    fn from(value: crate::messages_checkpoint::CheckpointDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<Digest> for crate::messages_checkpoint::CheckpointDigest {
+    fn from(value: Digest) -> Self {
         Self::new(value.into_inner())
     }
 }
@@ -547,48 +535,48 @@ impl From<Bls12381PublicKey> for crate::crypto::AuthorityPublicKeyBytes {
     }
 }
 
-impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
-    fn from(value: UnchangedSharedKind) -> Self {
+impl From<UnchangedConsensusKind> for crate::effects::UnchangedConsensusKind {
+    fn from(value: UnchangedConsensusKind) -> Self {
         match value {
-            UnchangedSharedKind::ReadOnlyRoot { version, digest } => {
+            UnchangedConsensusKind::ReadOnlyRoot { version, digest } => {
                 Self::ReadOnlyRoot((version.into(), digest.into()))
             }
-            UnchangedSharedKind::MutateDeleted { version } => {
+            UnchangedConsensusKind::MutateDeleted { version } => {
                 Self::MutateConsensusStreamEnded(version.into())
             }
-            UnchangedSharedKind::ReadDeleted { version } => {
+            UnchangedConsensusKind::ReadDeleted { version } => {
                 Self::ReadConsensusStreamEnded(version.into())
             }
-            UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
-            UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
-            UnchangedSharedKind::PerEpochConfigWithSequenceNumber { .. } => todo!(),
+            UnchangedConsensusKind::Canceled { version } => Self::Cancelled(version.into()),
+            UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
+            UnchangedConsensusKind::PerEpochConfigWithSequenceNumber { .. } => todo!(),
         }
     }
 }
 
-impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
-    fn from(value: crate::effects::UnchangedSharedKind) -> Self {
+impl From<crate::effects::UnchangedConsensusKind> for UnchangedConsensusKind {
+    fn from(value: crate::effects::UnchangedConsensusKind) -> Self {
         match value {
-            crate::effects::UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
+            crate::effects::UnchangedConsensusKind::ReadOnlyRoot((version, digest)) => {
                 Self::ReadOnlyRoot {
                     version: version.into(),
                     digest: digest.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::MutateConsensusStreamEnded(version) => {
+            crate::effects::UnchangedConsensusKind::MutateConsensusStreamEnded(version) => {
                 Self::MutateDeleted {
                     version: version.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::ReadConsensusStreamEnded(version) => {
+            crate::effects::UnchangedConsensusKind::ReadConsensusStreamEnded(version) => {
                 Self::ReadDeleted {
                     version: version.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Canceled {
+            crate::effects::UnchangedConsensusKind::Cancelled(version) => Self::Canceled {
                 version: version.into(),
             },
-            crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+            crate::effects::UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
         }
     }
 }
@@ -751,7 +739,7 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             crate::execution_status::CommandArgumentError::InvalidValueUsage => Self::InvalidValueUsage,
             crate::execution_status::CommandArgumentError::InvalidObjectByValue => Self::InvalidObjectByValue,
             crate::execution_status::CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
-            crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::ConsensusObjectOperationNotAllowed,
             crate::execution_status::CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
             crate::execution_status::CommandArgumentError::InvalidTransferObject |
             crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument |
@@ -791,7 +779,7 @@ impl From<CommandArgumentError> for crate::execution_status::CommandArgumentErro
             CommandArgumentError::InvalidValueUsage => Self::InvalidValueUsage,
             CommandArgumentError::InvalidObjectByValue => Self::InvalidObjectByValue,
             CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
-            CommandArgumentError::SharedObjectOperationNotAllowed => {
+            CommandArgumentError::ConsensusObjectOperationNotAllowed => {
                 Self::SharedObjectOperationNotAllowed
             }
             CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
@@ -833,9 +821,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::WrittenObjectsTooLarge { current_size, max_size } => Self::WrittenObjectsTooLarge { object_size: current_size, max_object_size:max_size },
             crate::execution_status::ExecutionFailureStatus::CertificateDenied => Self::CertificateDenied,
             crate::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout,
-            crate::execution_status::ExecutionFailureStatus::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            crate::execution_status::ExecutionFailureStatus::SharedObjectOperationNotAllowed => Self::ConsensusObjectOperationNotAllowed,
             crate::execution_status::ExecutionFailureStatus::InputObjectDeleted => Self::InputObjectDeleted,
-            crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => Self::ExecutionCanceledDueToSharedObjectCongestion { congested_objects: congested_objects.0.into_iter().map(Into::into).collect() },
+            crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => Self::ExecutionCanceledDueToConsensusObjectCongestion { congested_objects: congested_objects.0.into_iter().map(Into::into).collect() },
             crate::execution_status::ExecutionFailureStatus::AddressDeniedForCoin { address, coin_type } => Self::AddressDeniedForCoin { address: address.into(), coin_type },
             crate::execution_status::ExecutionFailureStatus::CoinTypeGlobalPause { coin_type } => Self::CoinTypeGlobalPause { coin_type },
             crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToRandomnessUnavailable => Self::ExecutionCanceledDueToRandomnessUnavailable,
@@ -937,17 +925,17 @@ impl From<ExecutionError> for crate::execution_status::ExecutionFailureStatus {
             },
             ExecutionError::CertificateDenied => Self::CertificateDenied,
             ExecutionError::SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout,
-            ExecutionError::SharedObjectOperationNotAllowed => {
+            ExecutionError::ConsensusObjectOperationNotAllowed => {
                 Self::SharedObjectOperationNotAllowed
             }
             ExecutionError::InputObjectDeleted => Self::InputObjectDeleted,
-            ExecutionError::ExecutionCanceledDueToSharedObjectCongestion { congested_objects } => {
-                Self::ExecutionCancelledDueToSharedObjectCongestion {
-                    congested_objects: crate::execution_status::CongestedObjects(
-                        congested_objects.into_iter().map(Into::into).collect(),
-                    ),
-                }
-            }
+            ExecutionError::ExecutionCanceledDueToConsensusObjectCongestion {
+                congested_objects,
+            } => Self::ExecutionCancelledDueToSharedObjectCongestion {
+                congested_objects: crate::execution_status::CongestedObjects(
+                    congested_objects.into_iter().map(Into::into).collect(),
+                ),
+            },
             ExecutionError::AddressDeniedForCoin { address, coin_type } => {
                 Self::AddressDeniedForCoin {
                     address: address.into(),
@@ -982,7 +970,7 @@ impl From<ExecutionError> for crate::execution_status::ExecutionFailureStatus {
 impl From<crate::execution_status::MoveLocation> for MoveLocation {
     fn from(value: crate::execution_status::MoveLocation) -> Self {
         Self {
-            package: ObjectId::new(value.module.address().into_bytes()),
+            package: Address::new(value.module.address().into_bytes()),
             module: Identifier::new(value.module.name().as_str()).unwrap(),
             function: value.function,
             instruction: value.instruction,
@@ -1439,7 +1427,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             crate::transaction::EndOfEpochTransactionKind::BridgeStateCreate(chain_identifier) => {
                 Self::BridgeStateCreate {
-                    chain_id: CheckpointDigest::new(chain_identifier.as_bytes().to_owned()),
+                    chain_id: Digest::new(chain_identifier.as_bytes().to_owned()),
                 }
             }
             crate::transaction::EndOfEpochTransactionKind::BridgeCommitteeInit(sequence_number) => {

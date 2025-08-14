@@ -6,7 +6,7 @@ use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
-use crate::effects::{InputSharedObject, TransactionEffectsAPI, UnchangedSharedKind};
+use crate::effects::{InputConsensusObject, TransactionEffectsAPI, UnchangedConsensusKind};
 use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
@@ -173,15 +173,15 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         unimplemented!("Only supposed by v2 and above");
     }
 
-    fn input_shared_objects(&self) -> Vec<InputSharedObject> {
+    fn input_consensus_objects(&self) -> Vec<InputConsensusObject> {
         let modified: HashSet<_> = self.modified_at_versions.iter().map(|(r, _)| r).collect();
         self.shared_objects
             .iter()
             .map(|r| {
                 if modified.contains(&r.0) {
-                    InputSharedObject::Mutate(*r)
+                    InputConsensusObject::Mutate(*r)
                 } else {
-                    InputSharedObject::ReadOnly(*r)
+                    InputConsensusObject::ReadOnly(*r)
                 }
             })
             .collect()
@@ -319,14 +319,15 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         &self.gas_used
     }
 
-    fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)> {
-        self.input_shared_objects()
+    fn unchanged_consensus_objects(&self) -> Vec<(ObjectID, UnchangedConsensusKind)> {
+        self.input_consensus_objects()
             .iter()
             .filter_map(|o| match o {
-                // In effects v1, the only unchanged shared objects are read-only shared objects.
-                InputSharedObject::ReadOnly(oref) => {
-                    Some((oref.0, UnchangedSharedKind::ReadOnlyRoot((oref.1, oref.2))))
-                }
+                // In effects v1, the only unchanged consensus objects are read-only shared objects.
+                InputConsensusObject::ReadOnly(oref) => Some((
+                    oref.0,
+                    UnchangedConsensusKind::ReadOnlyRoot((oref.1, oref.2)),
+                )),
                 _ => None,
             })
             .collect()
@@ -352,21 +353,21 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         &mut self.dependencies
     }
 
-    fn unsafe_add_input_shared_object_for_testing(&mut self, kind: InputSharedObject) {
+    fn unsafe_add_input_consensus_object_for_testing(&mut self, kind: InputConsensusObject) {
         match kind {
-            InputSharedObject::Mutate(obj_ref) => {
+            InputConsensusObject::Mutate(obj_ref) => {
                 self.shared_objects.push(obj_ref);
                 self.modified_at_versions.push((obj_ref.0, obj_ref.1));
             }
-            InputSharedObject::ReadOnly(obj_ref) => {
+            InputConsensusObject::ReadOnly(obj_ref) => {
                 self.shared_objects.push(obj_ref);
             }
-            InputSharedObject::ReadConsensusStreamEnded(id, version)
-            | InputSharedObject::MutateConsensusStreamEnded(id, version) => {
+            InputConsensusObject::ReadConsensusStreamEnded(id, version)
+            | InputConsensusObject::MutateConsensusStreamEnded(id, version) => {
                 self.shared_objects
                     .push((id, version, ObjectDigest::OBJECT_DIGEST_DELETED));
             }
-            InputSharedObject::Cancelled(..) => {
+            InputConsensusObject::Cancelled(..) => {
                 panic!("Transaction cancellation is not supported in effect v1");
             }
         }

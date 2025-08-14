@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_metrics::MetricsArgs;
 
-pub use crate::rpc::RpcArgs;
+pub use crate::rpc::{RpcArgs, TlsArgs};
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {

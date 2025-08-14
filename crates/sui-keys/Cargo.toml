@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true
+colored.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 signature.workspace = true

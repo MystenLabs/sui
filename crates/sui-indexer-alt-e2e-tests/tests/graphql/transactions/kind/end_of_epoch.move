@@ -3,7 +3,7 @@
 
 //# init --protocol-version 70 --simulator
 
-//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee
+//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee --include-system-packages
 
 //# create-checkpoint
 
@@ -31,6 +31,13 @@
                 storageRebate
                 nonRefundableStorageFee
                 epochStartTimestamp
+                systemPackages {
+                  nodes {
+                    address
+                    version
+                    digest
+                  }
+                }
               }
               ... on RandomnessStateCreateTransaction {
                 _

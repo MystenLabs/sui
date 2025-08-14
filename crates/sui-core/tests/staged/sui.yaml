@@ -773,6 +773,12 @@ MoveObjectType_:
       Coin:
         NEWTYPE:
           TYPENAME: TypeTag
+    4:
+      SuiBalanceAccumulatorField: UNIT
+    5:
+      BalanceAccumulatorField:
+        NEWTYPE:
+          TYPENAME: TypeTag
 MovePackage:
   STRUCT:
     - id:
@@ -1184,11 +1190,11 @@ TransactionEffectsV2:
           TUPLE:
             - TYPENAME: ObjectID
             - TYPENAME: EffectsObjectChange
-    - unchanged_shared_objects:
+    - unchanged_consensus_objects:
         SEQ:
           TUPLE:
             - TYPENAME: ObjectID
-            - TYPENAME: UnchangedSharedKind
+            - TYPENAME: UnchangedConsensusKind
     - aux_data_digest:
         OPTION:
           TYPENAME: EffectsAuxDataDigest
@@ -1339,7 +1345,7 @@ TypedStoreError:
       MetricsReporting: UNIT
     5:
       RetryableTransactionError: UNIT
-UnchangedSharedKind:
+UnchangedConsensusKind:
   ENUM:
     0:
       ReadOnlyRoot:

@@ -1,6 +1,7 @@
 ---
 title: Sui Node Monitoring
 description: Monitor Sui node metrics to ensure the health and performance of your node.
+keywords: [ localhost:9184/metrics, no monitoring, node metrics, view metrics, monitor production. ]
 ---
 
 :::info
@@ -19,7 +20,7 @@ $ curl -s http://localhost:9184/metrics | grep -E 'sui_validator|sui_fullnode'
 
 ## Production monitoring
 
-For production monitoring, we recommend using [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/).
+For production monitoring, [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/) are recommended.
 
-You can use grafana agent, grafana alloy, or another tool to scrape the metrics from your node.
+You can use Grafana Agent, Grafana Alloy, or another tool to scrape the metrics from your node.
 

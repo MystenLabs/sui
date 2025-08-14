@@ -1431,6 +1431,67 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn clear_state_hashes_after_checkpoint(
+        &self,
+        last_committed_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+
+        let mut keys_to_remove = Vec::new();
+        for kv in tables
+            .running_root_state_hash
+            .safe_iter_with_bounds(Some(last_committed_checkpoint + 1), None)
+        {
+            let (checkpoint_seq, _) = kv?;
+            if checkpoint_seq > last_committed_checkpoint {
+                keys_to_remove.push(checkpoint_seq);
+            }
+        }
+
+        let mut checkpoint_keys_to_remove = Vec::new();
+        for kv in tables
+            .state_hash_by_checkpoint
+            .safe_iter_with_bounds(Some(last_committed_checkpoint + 1), None)
+        {
+            let (checkpoint_seq, _) = kv?;
+            if checkpoint_seq > last_committed_checkpoint {
+                checkpoint_keys_to_remove.push(checkpoint_seq);
+            }
+        }
+
+        if !keys_to_remove.is_empty() || !checkpoint_keys_to_remove.is_empty() {
+            let mut batch = self.db_batch()?;
+            if !keys_to_remove.is_empty() {
+                batch
+                    .delete_batch(&tables.running_root_state_hash, keys_to_remove.clone())
+                    .expect("db error");
+            }
+            if !checkpoint_keys_to_remove.is_empty() {
+                batch
+                    .delete_batch(
+                        &tables.state_hash_by_checkpoint,
+                        checkpoint_keys_to_remove.clone(),
+                    )
+                    .expect("db error");
+            }
+            batch.write().expect("db error");
+            for key in keys_to_remove {
+                info!(
+                    "Cleared running root state hash for checkpoint {} (after last committed checkpoint {})",
+                    key, last_committed_checkpoint
+                );
+            }
+            for key in checkpoint_keys_to_remove {
+                info!(
+                    "Cleared checkpoint state hash for checkpoint {} (after last committed checkpoint {})",
+                    key, last_committed_checkpoint
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn reference_gas_price(&self) -> u64 {
         self.epoch_start_state().reference_gas_price()
     }
@@ -2844,7 +2905,7 @@ impl AuthorityPerEpochStore {
     fn process_user_signatures<'a>(&self, certificates: impl Iterator<Item = &'a Schedulable>) {
         let sigs: Vec<_> = certificates
             .filter_map(|s| match s {
-                Schedulable::Transaction(certificate) | Schedulable::Withdraw(certificate, _) => {
+                Schedulable::Transaction(certificate) => {
                     Some((*certificate.digest(), certificate.tx_signatures().to_vec()))
                 }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
@@ -3568,7 +3629,10 @@ impl AuthorityPerEpochStore {
                         &mut shared_input_next_version,
                         cancelled_txns,
                     );
-                    version_assignment.push((*key.unwrap_digest(), assigned_versions));
+                    version_assignment.push((
+                        *key.unwrap_digest(),
+                        assigned_versions.shared_object_versions,
+                    ));
                 }
                 None => {}
             }
@@ -3789,23 +3853,6 @@ impl AuthorityPerEpochStore {
                 .push_back(Schedulable::RandomnessStateUpdate(self.epoch(), round));
         }
 
-        if self.accumulators_enabled() {
-            let checkpoint_height =
-                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
-
-            let non_random_settlement =
-                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
-            non_randomness_roots.insert(non_random_settlement.key());
-            verified_non_randomness_certificates.push_back(non_random_settlement);
-
-            if randomness_round.is_some() {
-                let randomness_settlement =
-                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
-                randomness_roots.insert(randomness_settlement.key());
-                verified_randomness_certificates.push_back(randomness_settlement);
-            }
-        }
-
         for entry in non_randomness_transactions
             .iter()
             .map(Either::Left)
@@ -3892,6 +3939,28 @@ impl AuthorityPerEpochStore {
                     non_randomness_roots.remove(&txn_key);
                     randomness_roots.remove(&txn_key);
                 }
+            }
+        }
+
+        if self.accumulators_enabled() {
+            // We insert settlement transactions to the end of the certificate queues.
+            // This is important for shared object version assignment to work correctly.
+            // Withdraw transactions will be using the accumulator version prior to the settlement,
+            // and settlements will bump the accumulator version at the end to reflect all
+            // balance changes during the commit.
+            let checkpoint_height =
+                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
+
+            let non_random_settlement =
+                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
+            non_randomness_roots.insert(non_random_settlement.key());
+            verified_non_randomness_certificates.push_back(non_random_settlement);
+
+            if randomness_round.is_some() {
+                let randomness_settlement =
+                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
+                randomness_roots.insert(randomness_settlement.key());
+                verified_randomness_certificates.push_back(randomness_settlement);
             }
         }
 
