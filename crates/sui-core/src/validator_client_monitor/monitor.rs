@@ -193,6 +193,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::Submit => "submit",
             OperationType::Effects => "effects",
             OperationType::HealthCheck => "health_check",
+            OperationType::Finalize => "finalize",
         };
 
         match feedback.result {
