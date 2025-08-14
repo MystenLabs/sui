@@ -247,7 +247,9 @@ fn attribute(
             let note = note.and_then(|symbol| match byte_string::decode(loc, symbol.as_ref()) {
                 Ok(v) => Some(v),
                 Err(e) => {
-                    context.add_diags(e);
+                    for diag in e.into_iter() {
+                        context.add_diag(diag.into_diagnostic());
+                    }
                     None
                 }
             });
@@ -606,7 +608,7 @@ fn attribute_value_to_minor_code(
         }
         P::AttributeValue_::ModuleAccess(chain) => {
             let chain_loc = chain.loc;
-            let crate::expansion::path_expander::ModuleAccessResult {
+            let crate::expansion::path_expander::AccessPath {
                 access,
                 ptys_opt,
                 is_macro,

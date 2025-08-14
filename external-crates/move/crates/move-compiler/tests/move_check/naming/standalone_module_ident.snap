@@ -26,7 +26,7 @@ error[E03006]: unexpected name in this position
   │                 ^^^^^^
   │                 │
   │                 Unexpected module identifier. A module identifier is not a valid expression
-  │                 Expected a module name
+  │                 Expected a module member name
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_check/naming/standalone_module_ident.move:10:17
@@ -35,4 +35,4 @@ error[E03006]: unexpected name in this position
    │                 ^^^^^^
    │                 │
    │                 Unexpected module identifier. A module identifier is not a valid expression
-   │                 Expected a module name
+   │                 Expected a module member name

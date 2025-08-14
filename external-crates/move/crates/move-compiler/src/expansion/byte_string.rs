@@ -2,14 +2,21 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{diag, diagnostics::Diagnostics, parser::syntax::make_loc};
+use crate::{diag, diagnostics::Diagnostic, parser::syntax::make_loc};
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 
 struct Context {
     file_hash: FileHash,
     start_offset: usize,
-    diags: Diagnostics,
+    diags: Vec<BytestringError>,
+}
+
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum BytestringError {
+    InvalidHexCharacter { loc: Loc, bad_char: char },
+    InvalidEscape { loc: Loc, bad_escape: String },
+    InvalidEscapeSeq { loc: Loc, bad_escape: char },
 }
 
 impl Context {
@@ -17,30 +24,74 @@ impl Context {
         Self {
             file_hash,
             start_offset,
-            diags: Diagnostics::new(),
+            diags: Vec::new(),
         }
     }
 
-    fn error(&mut self, start: usize, end: usize, err_text: String) {
-        let loc = make_loc(
+    fn escape_error(&mut self, start: usize, end: usize, bad_escape: String) {
+        let loc = self.make_file_loc(start, end);
+        self.diags
+            .push(BytestringError::InvalidEscape { loc, bad_escape });
+    }
+
+    fn char_error(&mut self, start: usize, end: usize, bad_char: char) {
+        let loc = self.make_file_loc(start, end);
+        self.diags
+            .push(BytestringError::InvalidHexCharacter { loc, bad_char });
+    }
+
+    fn escape_seq_error(&mut self, start: usize, end: usize, bad_escape: char) {
+        let loc = self.make_file_loc(start, end);
+        self.diags
+            .push(BytestringError::InvalidEscapeSeq { loc, bad_escape });
+    }
+
+    fn make_file_loc(&self, start: usize, end: usize) -> Loc {
+        make_loc(
             self.file_hash,
             self.start_offset + 2 + start, // add 2 for the beginning of the string
             self.start_offset + 2 + end,
-        );
-        self.diags
-            .add(diag!(Syntax::InvalidByteString, (loc, err_text)))
+        )
     }
 
     fn has_diags(&self) -> bool {
         !self.diags.is_empty()
     }
 
-    fn get_diags(self) -> Diagnostics {
+    fn get_diags(self) -> Vec<BytestringError> {
         self.diags
     }
 }
 
-pub fn decode(loc: Loc, text: &str) -> Result<Vec<u8>, Diagnostics> {
+impl BytestringError {
+    pub fn into_diagnostic(self) -> Diagnostic {
+        match self {
+            BytestringError::InvalidHexCharacter { loc, bad_char: c } => {
+                diag!(
+                    Syntax::InvalidByteString,
+                    (loc, format!("Invalid hexadecimal character: '{c}'"))
+                )
+            }
+            BytestringError::InvalidEscape {
+                loc,
+                bad_escape: err_text,
+            } => {
+                let err_text = format!(
+                    "Invalid escape: '\\x{}'. Hex literals are represented by two \
+             symbols: [\\x00-\\xFF].",
+                    err_text
+                );
+                diag!(Syntax::InvalidByteString, (loc, err_text))
+            }
+            BytestringError::InvalidEscapeSeq { loc, bad_escape } => {
+                let err_text = format!("Invalid escape sequence: '\\{bad_escape}'");
+                diag!(Syntax::InvalidByteString, (loc, err_text))
+            }
+        }
+    }
+}
+
+pub fn decode(loc: Loc, text: &str) -> Result<Vec<u8>, Vec<BytestringError>> {
     let file_hash = loc.file_hash();
     let start_offset = loc.start() as usize;
     let mut context = Context::new(file_hash, start_offset);
@@ -95,16 +146,11 @@ fn decode_(context: &mut Context, buffer: &mut Vec<u8>, chars: Vec<char>) {
 
                     // Unexpected end of text
                     (d0_opt @ Some(_), None) | (d0_opt @ None, None) => {
-                        let h = match d0_opt {
+                        let err_text = match d0_opt {
                             Some(d0) => format!("{}", d0),
                             None => "".to_string(),
                         };
-                        let err_text = format!(
-                            "Invalid escape: '\\x{}'. Hex literals are represented by two \
-                             symbols: [\\x00-\\xFF].",
-                            h
-                        );
-                        context.error(cur, len, err_text);
+                        context.escape_error(cur, len, err_text);
                         return;
                     }
 
@@ -114,14 +160,13 @@ fn decode_(context: &mut Context, buffer: &mut Vec<u8>, chars: Vec<char>) {
                 match hex::decode(hex) {
                     Ok(hex_buffer) => buffer.extend(hex_buffer),
                     Err(hex::FromHexError::InvalidHexCharacter { c, index }) => {
-                        let err_text = format!("Invalid hexadecimal character: '{}'", c);
-                        context.error(cur + 2 + index, cur + 2 + index, err_text);
+                        context.char_error(cur + 2 + index, cur + 2 + index, c);
                     }
                     Err(_) => unreachable!("ICE unexpected error parsing hex byte string value"),
                 }
             }
             c => {
-                context.error(cur, cur + 2, format!("Invalid escape sequence: '\\{}'", c));
+                context.escape_seq_error(cur, cur + 2, c);
             }
         }
     }

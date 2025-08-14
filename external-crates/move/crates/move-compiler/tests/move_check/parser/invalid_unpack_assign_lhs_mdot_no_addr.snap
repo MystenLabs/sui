@@ -21,7 +21,7 @@ error[E03006]: unexpected name in this position
   │         ^^^^
   │         │
   │         Unexpected module identifier. A module identifier is not a valid type
-  │         Expected a module name
+  │         Expected a module member name
 
 error[E04005]: expected a single type
    ┌─ tests/move_check/parser/invalid_unpack_assign_lhs_mdot_no_addr.move:10:9
