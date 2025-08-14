@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 91;
+const MAX_PROTOCOL_VERSION: u64 = 92;
 
 // Record history of protocol version allocations here:
 //
@@ -3916,6 +3916,9 @@ impl ProtocolConfig {
                 }
                 91 => {
                     cfg.feature_flags.per_command_shared_object_transfer_rules = true;
+                }
+                92 => {
+                    cfg.feature_flags.per_command_shared_object_transfer_rules = false;
                 }
                 // Use this template when making changes:
                 //
