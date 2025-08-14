@@ -60,8 +60,8 @@ impl Command {
                 })
             }
             NativeCommand::Publish(modules, dependencies) => Command::Publish(PublishCommand {
-                modules: modules.into_iter().map(Base64::from).collect(),
-                dependencies: dependencies.into_iter().map(SuiAddress::from).collect(),
+                modules: Some(modules.into_iter().map(Base64::from).collect()),
+                dependencies: Some(dependencies.into_iter().map(SuiAddress::from).collect()),
             }),
             _ => Command::Other(OtherCommand { dummy: None }),
         }

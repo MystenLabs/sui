@@ -9,8 +9,8 @@ use crate::api::scalars::{base64::Base64, sui_address::SuiAddress};
 #[derive(SimpleObject, Clone)]
 pub struct PublishCommand {
     /// Bytecode for the modules to be published, BCS serialized and Base64 encoded.
-    pub modules: Vec<Base64>,
+    pub modules: Option<Vec<Base64>>,
 
     /// IDs of the transitive dependencies of the package to be published.
-    pub dependencies: Vec<SuiAddress>,
+    pub dependencies: Option<Vec<SuiAddress>>,
 }
