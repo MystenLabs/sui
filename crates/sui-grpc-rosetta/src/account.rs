@@ -38,6 +38,7 @@ pub async fn balance(
     let address = request.account_identifier.address;
     let currencies = &request.currencies;
     let mut retry_attempts = 5;
+    //TODO this retry logic should probably be ripped out.
     while retry_attempts > 0 {
         let balances_first = get_balances(&mut ctx, &request, address, currencies.clone()).await?;
         let checkpoint1 = get_checkpoint(&mut ctx).await?;
@@ -67,6 +68,7 @@ pub async fn balance(
     Err(Error::RetryExhausted(String::from("retry")))
 }
 
+//TODO this can be a convenience method in the SDK.
 async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
     let request = GetCheckpointRequest {
         checkpoint_id: None, // None means get latest checkpoint
@@ -89,6 +91,7 @@ async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSeque
         .ok_or_else(|| Error::DataError("No sequence_number for checkpoint".to_string()))
 }
 
+//TODO this can be a convenience method in the SDK.
 async fn get_current_epoch(grpc_client: &mut sui_rpc::client::Client) -> Result<u64, Error> {
     let request = GetEpochRequest {
         epoch: None, // None means get current epoch
@@ -222,6 +225,8 @@ async fn get_sub_account_balances(
 
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
 /// [Rosetta API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/account/get-an-account-unspent-coins)
+/// TODO This API is supposed to return coins of all types, not just SUI. It also has a 'currencies' parameter that we
+/// are igorning which can be used to filter the type of coins that are returned.
 pub async fn coins(
     State(mut context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
@@ -229,6 +234,7 @@ pub async fn coins(
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
+    //TODO bound this list.
     let mut coins = Vec::new();
     let mut page_token = None;
 
