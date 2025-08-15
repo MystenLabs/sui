@@ -1,48 +1,47 @@
-name: Sync Fork & Check sui.yaml Changes
+name: 🔄 Sync sui.yaml from Upstream
 
 on:
   schedule:
-    - cron: "0 0 * * *"  
+    - cron: "0 0 * * *" 
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  sync-and-check:
+  sync-and-alert:
     runs-on: ubuntu-latest
     steps:
-      # Checkout fork
-      - uses: actions/checkout@v4
+      - name: Checkout Fork
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Configure Git user
-      - run: |
+      - name: Configure Git User
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # Add upstream and fetch
-      - run: |
+      - name: Add & Fetch Upstream
+        run: |
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
 
-      - name: Sync sui.yaml with upstream
+      - name: Sync sui.yaml
         id: sync_sui
         run: |
           git checkout main
           git restore --source upstream/main crates/sui-core/tests/staged/sui.yaml
-          # Kiểm tra file có thay đổi so với fork
           if ! git diff --quiet crates/sui-core/tests/staged/sui.yaml; then
             git add crates/sui-core/tests/staged/sui.yaml
-            git commit -m "Sync sui.yaml fully with upstream"
+            git commit -m "🔄 Sync sui.yaml fully with upstream"
             git push origin main
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Send Slack alert if sui.yaml changed
+      - name: Send Slack Alert
         if: steps.sync_sui.outputs.changed == 'true'
         run: |
           commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml)
