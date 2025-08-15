@@ -3,6 +3,7 @@
 
 mod merge_coins;
 mod move_call;
+mod publish;
 mod split_coins;
 mod transaction_argument;
 mod transfer_objects;
@@ -10,8 +11,11 @@ mod transfer_objects;
 use async_graphql::*;
 use sui_types::transaction::Command as NativeCommand;
 
+use crate::api::scalars::{base64::Base64, sui_address::SuiAddress};
+
 pub use merge_coins::MergeCoinsCommand;
 pub use move_call::MoveCallCommand;
+pub use publish::PublishCommand;
 pub use split_coins::SplitCoinsCommand;
 pub use transaction_argument::TransactionArgument;
 pub use transfer_objects::TransferObjectsCommand;
@@ -23,6 +27,7 @@ use crate::scope::Scope;
 pub enum Command {
     MergeCoins(MergeCoinsCommand),
     MoveCall(MoveCallCommand),
+    Publish(PublishCommand),
     SplitCoins(SplitCoinsCommand),
     TransferObjects(TransferObjectsCommand),
     Other(OtherCommand),
@@ -54,6 +59,10 @@ impl Command {
                     address: Some(TransactionArgument::from(address)),
                 })
             }
+            NativeCommand::Publish(modules, dependencies) => Command::Publish(PublishCommand {
+                modules: Some(modules.into_iter().map(Base64::from).collect()),
+                dependencies: Some(dependencies.into_iter().map(SuiAddress::from).collect()),
+            }),
             _ => Command::Other(OtherCommand { dummy: None }),
         }
     }

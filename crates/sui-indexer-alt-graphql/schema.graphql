@@ -318,7 +318,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MergeCoinsCommand | MoveCallCommand | SplitCoinsCommand | TransferObjectsCommand | OtherCommand
+union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -1256,6 +1256,20 @@ type ProtocolConfigs {
 	List all available feature flags and their values.
 	"""
 	featureFlags: [FeatureFlag!]!
+}
+
+"""
+Publishes a Move Package.
+"""
+type PublishCommand {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]
 }
 
 """
