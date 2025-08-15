@@ -1,9 +1,9 @@
-name: Sync Fork & Check sui.yaml Changes (Keep Workflows)
+name: Sync Fork & Check sui.yaml Changes
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 0 * * *"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -28,25 +28,9 @@ jobs:
           git remote add upstream https://github.com/MystenLabs/sui.git
           git fetch upstream main
 
-      - name: Backup workflows correctly
+      - name: Merge upstream into fork
         run: |
-          mkdir -p /tmp/workflows_backup
-          cp -r .github/workflows/* /tmp/workflows_backup/ || true
-
-      - name: Reset to upstream
-        run: git reset --hard upstream/main
-
-      - name: Restore workflows (keep local)
-        run: |
-          rm -rf .github/workflows
-          mkdir -p .github/workflows
-          cp -r /tmp/workflows_backup/* .github/workflows/
-
-      - name: Commit & Push code only
-        run: |
-          git add $(git ls-files | grep -v '^.github/workflows') || true
-          git commit -m "Sync with upstream (keep workflows)" || echo "No changes to commit"
-          git push origin main --force
+          git merge --no-edit upstream/main || echo "No merge needed"
 
       - name: Check if sui.yaml changed from upstream
         run: |
@@ -66,3 +50,7 @@ jobs:
           else
             echo "ℹ️ No changes to sui.yaml"
           fi
+
+      - name: Push changes back to fork
+        run: |
+          git push origin HEAD:main
