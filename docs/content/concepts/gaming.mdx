@@ -1,6 +1,7 @@
 ---
 title: Gaming on Sui
 description: Sui offers features like dynamic NFTs, kiosks, soulbound assets, and on-chain randomness, to provide builders with the tools to create immersive, transparent, and fair gaming experiences.
+keywords: [ gaming, game components, game features, game nfts, soulbound assets, create games on sui, build games on sui, sui object display, game economics, kiosk, sui kiosk, token economics ]
 ---
 
 import YTCarousel from "@site/src/components/YTCarousel"
@@ -231,12 +232,12 @@ On Sui, owned objects are either freely transferable or non-transferable. To ens
 
 The kiosk "owner" (although a shared object has no owner from the perspective of Sui, the smart contract ensures that only one address is permitted to access it) is allowed to:
 
-- Place Assets from their address inside the Kiosk.
-- Take Assets from the Kiosk back to their address.
-- Lock Assets from their address or already placed inside the Kiosk, making the “take” operation impossible.
-- Destroy a Kiosk that has no Assets inside.
-- List an Asset for sale with a price denoted in SUI.
-- List an Asset for sale only to a specific address, with the price denoted in SUI.
+- Place assets from their address inside the Kiosk.
+- Take assets from the Kiosk back to their address.
+- Lock assets from their address or already placed inside the Kiosk, making the “take” operation impossible.
+- Destroy a Kiosk that has no assets inside.
+- List an asset for sale with a price denoted in SUI.
+- List an asset for sale only to a specific address, with the price denoted in SUI.
 
 Any other address is allowed to:
 
@@ -247,27 +248,27 @@ The adoption of Kiosks implies that marketplaces become aggregators of “listed
 
 An Asset that has undergone the “lock” operation cannot undergo the “take” operation anymore; it can only undergo the “list” operation.
 
-### Transfer Policy
+### Transfer policy
 
-The “buy” operation requires the use of another Object called Transfer Policy. This is usually a Shared Object and contains Rules that govern the “buy” operation, the most common Rule being “Royalties.”
+The “buy” operation requires the use of another object called transfer policy. This is usually a shared object and contains rules that govern the “buy” operation, the most common rule being “Royalties.”
 
-A “buy” operation cannot be completed for an Asset without a defined Transfer Policy.
+A “buy” operation cannot be completed for an Asset without a defined transfer policy.
 
-An empty Transfer Policy, one that does not have Rules, means that the Asset is freely tradable. Since Kiosk only allows the “list” and “buy” pair of operations, a transfer is possible by setting the price to 0 SUI.
+An empty transfer policy, one that does not have rules, means that the asset is freely tradable. Since Kiosk only allows the “list” and “buy” pair of operations, a transfer is possible by setting the price to 0 SUI.
 
-Rules can be anything programmable with Move. To use marketplaces, an Asset creator should use Rules defined in https://github.com/MystenLabs/apps/tree/main/kiosk/sources/rules
+Rules can be anything programmable with Move. To use marketplaces, an Asset creator should use rules defined in https://github.com/MystenLabs/apps/tree/main/kiosk/sources/rules
 
-Common Rules include:
+Common rules include:
 
-- **Royalty Rule:** A percentage of the price that goes to the Asset creator (practically it goes inside the Transfer Policy and the creator may transfer it at any point in time).
-- **Floor Price Rule:** A minimum price that an Asset may be “listed” for.
-- **Lock Rule:** Enforce the Asset to be locked inside a Kiosk after a “buy” operation.
+- **Royalty rule:** A percentage of the price that goes to the asset creator (practically it goes inside the transfer policy and the creator may transfer it at any point in time).
+- **Floor price rule:** A minimum price that an Asset may be “listed” for.
+- **Lock rule:** Enforce the asset to be locked inside a Kiosk after a “buy” operation.
 
-The combination of the Lock Rule and the Royalty Rule enforces royalties to be paid to the creator. The Lock Rule ensures an Asset cannot be “taken” out of a Kiosk (to be freely traded), while the Royalty Rule ensures that any Asset traded through Kiosk will have royalties deducted from the transaction.
+The combination of the lock rule and the royalty rule enforces royalties to be paid to the creator. The lock rule ensures an asset cannot be “taken” out of a Kiosk (to be freely traded), while the royalty rule ensures that any asset traded through Kiosk will have royalties deducted from the transaction.
 
-Adding the Lock Rule is recommended when royalties are a strict requirement. As long as marketplaces support only Kiosk on Sui, even without the Lock Rule, users may not have other options. It is safe to assume that peer-to-peer trading is unsafe, and most, if not all, users will avoid it since there is no way to ensure the transaction will take place smoothly. In peer-to-peer transactions, someone has to initiate either the Asset transfer or the payment transfer, and there are no guarantees that the follow-up will take place.
+Adding the lock rule is recommended when royalties are a strict requirement. As long as marketplaces support only Kiosk on Sui, even without the lock rule, users may not have other options. It is safe to assume that peer-to-peer trading is unsafe, and most, if not all, users will avoid it since there is no way to ensure the transaction will take place smoothly. In peer-to-peer transactions, someone has to initiate either the asset transfer or the payment transfer, and there are no guarantees that the follow-up will take place.
 
-The most important thing is during the initial airdrop or minting of the asset to ensure the Asset is put inside a Kiosk and not sent to an address directly.
+The most important thing is during the initial airdrop or minting of the asset to ensure the asset is put inside a Kiosk and not sent to an address directly.
 
 ## Tools
 
