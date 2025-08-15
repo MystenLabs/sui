@@ -4,7 +4,6 @@
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
-use colored::Colorize;
 use tracing::debug;
 
 use super::paths::PackagePath;
@@ -37,6 +36,8 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// The lockfile we're operating on
     /// Invariant: lockfile.pinned matches graph, except that digests may differ
     lockfile: ParsedLockfile<F>,
+    /// The list of published ids for every dependency in the root package
+    deps_published_ids: Vec<OriginalID>,
 }
 
 /// Root package is the "public" entrypoint for operations with the package management.
@@ -61,6 +62,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
+        debug!("Loading RootPackage for {:?}", path.as_ref());
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
@@ -122,26 +124,18 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<Self> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
 
-        // warn if the root package has any direct deps with short shas
-        let pkg = graph.root_package();
-        if pkg.direct_deps().iter().any(|(_, p)| !p.has_full_sha()) {
-            let msg = "WARNING: found one or more short SHAs in the manifest's dependencies which \
-                    require to download the full git history.\n\nUse a full 40-characters sha if \
-                    possible."
-                .yellow();
-            println!("{}", msg);
-        }
-
         // check that there is a consistent linkage
-
         let _linkage = graph.linkage()?;
         graph.check_rename_from()?;
+
+        let deps_published_ids = _linkage.into_keys().collect();
 
         Ok(Self {
             package_path,
             environment: env,
             graph,
             lockfile,
+            deps_published_ids,
         })
     }
 
@@ -154,7 +148,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// The name of the root package
     pub fn name(&self) -> &PackageName {
-        self.graph.root_package().name()
+        self.package_graph().root_package().name()
     }
 
     /// The path to the root of the package
@@ -163,9 +157,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// Return the list of all packages in the root package's package graph (including itself and all
-    /// transitive dependencies).
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
-        self.graph.dependencies()
+    /// transitive dependencies). This includes the non-duplicate addresses only.
+    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+        self.graph.packages()
     }
 
     /// Return the linkage table for the root package. This contains an entry for each package that
@@ -213,6 +207,47 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
         &self.lockfile
+    }
+
+    /// Return the package graph for `env`
+    // TODO: what's the right API here?
+    pub fn package_graph(&self) -> &PackageGraph<F> {
+        &self.graph
+    }
+
+    pub fn lockfile(&self) -> &ParsedLockfile<F> {
+        &self.lockfile
+    }
+
+    /// Return the publication information for this environment.
+    pub fn publication(&self, env: EnvironmentName) -> PackageResult<Publication<F>> {
+        self.lockfile
+            .published
+            .get(&env)
+            .ok_or_else(|| {
+                PackageError::Generic(format!(
+                    "Could not find publication info for {} environment in package {}",
+                    env,
+                    self.name()
+                ))
+            })
+            .cloned()
+    }
+
+    // *** PATHS RELATED FUNCTIONS ***
+
+    /// Return the package path wrapper
+    pub fn package_path(&self) -> &PackagePath {
+        &self.package_path
+    }
+
+    /// Return a list of sorted package names
+    pub fn sorted_deps(&self) -> Vec<&PackageName> {
+        self.package_graph().sorted_deps()
+    }
+
+    pub fn deps_published_ids(&self) -> &Vec<OriginalID> {
+        &self.deps_published_ids
     }
 }
 
@@ -329,7 +364,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let mut root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
 
-        let new_lockfile = root.lockfile_for_testing().clone();
+        let new_lockfile = root.lockfile().clone();
 
         // TODO: put this snapshot in a more sensible place
         assert_snapshot!("test_lockfile_deps", new_lockfile.render_as_toml());

@@ -30,7 +30,9 @@ use sui_replay_2 as SR2;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
-use move_core_types::{account_address::AccountAddress, language_storage::TypeTag};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
+};
 use move_package::{source_package::parsed_manifest::Dependencies, BuildConfig as MoveBuildConfig};
 use prometheus::Registry;
 use serde::Serialize;
@@ -68,7 +70,7 @@ use sui_sdk::{
     SUI_TESTNET_URL,
 };
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     error::SuiError,
@@ -79,12 +81,14 @@ use sui_types::{
     move_package::{MovePackage, UpgradeCap},
     object::Owner,
     parse_sui_type_tag,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     signature::GenericSignature,
     sui_serde,
     transaction::{
-        InputObjectKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
-        TransactionKind,
+        InputObjectKind, ObjectArg, SenderSignedData, Transaction, TransactionData,
+        TransactionDataAPI, TransactionKind,
     },
+    SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use json_to_table::json_to_table;
@@ -100,6 +104,7 @@ use tabled::{
 };
 
 use move_symbol_pool::Symbol;
+use sui_keys::key_derive;
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
 
@@ -297,6 +302,28 @@ pub enum SuiClientCommands {
         #[clap(name = "owner_address")]
         address: Option<KeyIdentity>,
     },
+
+    /// Transfer object to party ownership
+    #[clap(name = "party-transfer")]
+    PartyTransfer {
+        /// Recipient address (or its alias if it's an address in the keystore)
+        #[clap(long)]
+        to: KeyIdentity,
+
+        /// ID of the object to transfer
+        #[clap(long)]
+        object_id: ObjectID,
+
+        #[clap(flatten)]
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
+    },
+
     /// Pay coins to recipients following specified amounts, with input coins.
     /// Length of recipients must be the same as that of amounts.
     #[clap(name = "pay")]
@@ -1578,12 +1605,14 @@ impl SuiClientCommands {
                 derivation_path,
                 word_length,
             } => {
-                let (address, phrase, scheme) = context.config.keystore.generate(
-                    key_scheme,
-                    alias.clone(),
-                    derivation_path,
-                    word_length,
-                )?;
+                let (address, keypair, scheme, phrase) =
+                    key_derive::generate_new_key(key_scheme, derivation_path, word_length)
+                        .map_err(|e| anyhow!("Failed to generate new key: {}", e))?;
+                context
+                    .config
+                    .keystore
+                    .import(alias.clone(), keypair)
+                    .await?;
 
                 let alias = match alias {
                     Some(x) => x,
@@ -1601,9 +1630,9 @@ impl SuiClientCommands {
             SuiClientCommands::RemoveAddress { alias_or_address } => {
                 let identity = KeyIdentity::from_str(&alias_or_address)
                     .map_err(|e| anyhow!("Invalid address or alias: {}", e))?;
-                let address: SuiAddress = context.config.keystore.get_by_identity(identity)?;
+                let address: SuiAddress = context.config.keystore.get_by_identity(&identity)?;
 
-                context.config.keystore.remove(address)?;
+                context.config.keystore.remove(address).await?;
 
                 SuiClientCommandResult::RemoveAddress(RemoveAddressOutput { alias_or_address })
             }
@@ -1925,6 +1954,71 @@ impl SuiClientCommands {
                     .await?;
 
                 SuiClientCommandResult::VerifySource
+            }
+            SuiClientCommands::PartyTransfer {
+                to,
+                object_id,
+                payment,
+                gas_data,
+                processing,
+            } => {
+                let signer = context.get_object_owner(&object_id).await?;
+                let to = context.get_identity_address(Some(to))?;
+                let client = context.get_client().await?;
+                let transaction_builder = client.transaction_builder();
+
+                let (full_obj_ref, object_type) = transaction_builder
+                    .get_full_object_ref_and_type(object_id)
+                    .await?;
+                let type_tag: TypeTag = match object_type {
+                    ObjectType::Struct(move_obj_type) => move_obj_type.into(),
+                    ObjectType::Package => return Err(anyhow!("Cannot transfer a package object")),
+                };
+
+                let mut builder = ProgrammableTransactionBuilder::new();
+                let object_input = builder.obj(match full_obj_ref.0 {
+                    FullObjectID::Fastpath(_) => {
+                        ObjectArg::ImmOrOwnedObject(full_obj_ref.as_object_ref())
+                    }
+                    FullObjectID::Consensus((id, initial_shared_version)) => {
+                        ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version,
+                            mutable: true,
+                        }
+                    }
+                })?;
+
+                let to_arg = builder.pure(to)?;
+                let party_result = builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::from_str("party")?,
+                    Identifier::from_str("single_owner")?,
+                    vec![],
+                    vec![to_arg],
+                );
+
+                builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::from_str("transfer")?,
+                    Identifier::from_str("public_party_transfer")?,
+                    vec![type_tag],
+                    vec![object_input, party_result],
+                );
+
+                let tx_kind = TransactionKind::programmable(builder.finish());
+
+                let gas_payment = transaction_builder.input_refs(&payment.gas).await?;
+
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
             SuiClientCommands::PTB(ptb) => {
                 ptb.execute(context).await?;
@@ -3307,7 +3401,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         let mut signatures = vec![context
             .config
             .keystore
-            .sign_secure(&signer, &tx_data, Intent::sui_transaction())?
+            .sign_secure(&signer, &tx_data, Intent::sui_transaction())
+            .await?
             .into()];
 
         if let Some(gas_sponsor) = gas_sponsor {
@@ -3316,7 +3411,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
                     context
                         .config
                         .keystore
-                        .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())?
+                        .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
+                        .await?
                         .into(),
                 );
             }

@@ -16,7 +16,7 @@ use move_binary_format::{
     errors::{Location, VMError, VMResult},
 };
 use move_command_line_common::files::verify_and_create_named_address_mapping;
-use move_compiler::{FullyCompiledProgram, editions::Edition, shared::PackagePaths};
+use move_compiler::{PreCompiledProgramInfo, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
@@ -67,7 +67,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
@@ -295,7 +295,7 @@ impl SimpleVMTestAdapter {
     }
 }
 
-pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
@@ -308,7 +308,7 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     )
     .unwrap();
     match program_res {
-        Ok(stdlib) => stdlib,
+        Ok(modules_info) => modules_info,
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, errors)

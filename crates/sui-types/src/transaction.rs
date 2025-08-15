@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, error::*, SUI_BRIDGE_OBJECT_ID};
-use crate::accumulator_root::derive_balance_account_object_id;
+use crate::accumulator_root::AccumulatorValue;
 use crate::authenticator_state::ActiveJwk;
+use crate::balance::Balance;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
@@ -133,6 +134,20 @@ pub enum Reservation {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawTypeParam {
     Balance(TypeInput),
+}
+
+impl WithdrawTypeParam {
+    pub fn get_type_tag(&self) -> UserInputResult<TypeTag> {
+        match self {
+            WithdrawTypeParam::Balance(type_param) => {
+                Ok(Balance::type_tag(type_param.to_type_tag().map_err(
+                    |e| UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    },
+                )?))
+            }
+        }
+    }
 }
 
 // TODO(address-balances): Rename all the related structs and enums.
@@ -1860,23 +1875,6 @@ impl TransactionData {
 
     pub fn new_transfer(
         recipient: SuiAddress,
-        object_ref: ObjectRef,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-        gas_price: u64,
-    ) -> Self {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_object(recipient, object_ref).unwrap();
-            builder.finish()
-        };
-        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
-    }
-
-    // TODO: Merge with `new_transfer` above and update existing callers.
-    pub fn new_transfer_full(
-        recipient: SuiAddress,
         full_object_ref: FullObjectRef,
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -1885,9 +1883,7 @@ impl TransactionData {
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder
-                .transfer_object_full(recipient, full_object_ref)
-                .unwrap();
+            builder.transfer_object(recipient, full_object_ref).unwrap();
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
@@ -2177,13 +2173,20 @@ pub trait TransactionDataAPI {
 
     fn expiration(&self) -> &TransactionExpiration;
 
-    fn shared_input_objects(&self) -> Vec<SharedInputObject>;
-
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)>;
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
+    fn shared_input_objects(&self) -> Vec<SharedInputObject>;
+
     fn receiving_objects(&self) -> Vec<ObjectRef>;
+
+    // Dependency (input, package & receiving) objects that already have a version,
+    // and do not require version assignment from consensus.
+    // Returns move objects, package objects and receiving objects.
+    fn fastpath_dependency_objects(
+        &self,
+    ) -> UserInputResult<(Vec<ObjectRef>, Vec<ObjectID>, Vec<ObjectRef>)>;
 
     /// Processes balance withdraws and returns a map from balance account object ID to total reservation.
     /// This method aggregates all withdraw operations for the same account by merging their reservations.
@@ -2270,10 +2273,6 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self.expiration
     }
 
-    fn shared_input_objects(&self) -> Vec<SharedInputObject> {
-        self.kind.shared_input_objects().collect()
-    }
-
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
         self.kind.move_calls()
     }
@@ -2291,8 +2290,33 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(inputs)
     }
 
+    fn shared_input_objects(&self) -> Vec<SharedInputObject> {
+        self.kind.shared_input_objects().collect()
+    }
+
     fn receiving_objects(&self) -> Vec<ObjectRef> {
         self.kind.receiving_objects()
+    }
+
+    fn fastpath_dependency_objects(
+        &self,
+    ) -> UserInputResult<(Vec<ObjectRef>, Vec<ObjectID>, Vec<ObjectRef>)> {
+        let mut move_objects = vec![];
+        let mut packages = vec![];
+        let mut receiving_objects = vec![];
+        self.input_objects()?.iter().for_each(|o| match o {
+            InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                move_objects.push(*object_ref);
+            }
+            InputObjectKind::MovePackage(package_id) => {
+                packages.push(*package_id);
+            }
+            InputObjectKind::SharedMoveObject { .. } => {}
+        });
+        self.receiving_objects().iter().for_each(|object_ref| {
+            receiving_objects.push(*object_ref);
+        });
+        Ok((move_objects, packages, receiving_objects))
     }
 
     fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>> {
@@ -2330,10 +2354,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
             }
             let WithdrawFrom::Sender = withdraw.withdraw_from;
-            let account_id = derive_balance_account_object_id(self.sender(), withdraw.type_param)
-                .map_err(|e| UserInputError::InvalidWithdrawReservation {
-                error: e.to_string(),
-            })?;
+            let account_id =
+                AccumulatorValue::get_field_id(self.sender(), &withdraw.type_param.get_type_tag()?)
+                    .map_err(|e| UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    })?;
+            dbg!(&account_id, self.sender());
             let entry = withdraw_map.entry(account_id);
             match entry {
                 Entry::Vacant(vacant) => {

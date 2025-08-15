@@ -131,7 +131,7 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
     let signing_payload = payloads.payloads.first().unwrap();
     let bytes = Hex::decode(&signing_payload.hex_bytes).unwrap();
     let signer = signing_payload.account_identifier.address;
-    let signature = keystore.sign_hashed(&signer, &bytes).unwrap();
+    let signature = keystore.sign_hashed(&signer, &bytes).await.unwrap();
     let public_key = keystore.export(&signer).unwrap().public();
 
     let combine: ConstructionCombineResponse = rosetta_client

@@ -110,7 +110,7 @@ pub async fn perform_zk_login_test_tx(
     )?;
 
     let sender = if test_multisig {
-        keystore.import(None, skp1)?;
+        keystore.import(None, skp1).await?;
         println!("Use multisig address as sender");
         SuiAddress::from(&multisig_pk)
     } else {
@@ -155,18 +155,24 @@ pub async fn perform_zk_login_test_tx(
     let final_sig = if test_multisig {
         let sig = if sign_with_sk {
             // Create a generic sig from the traditional keypair
-            GenericSignature::Signature(keystore.sign_secure(
-                &ephemeral_key_identifier,
-                &txb_res,
-                Intent::sui_transaction(),
-            )?)
+            GenericSignature::Signature(
+                keystore
+                    .sign_secure(
+                        &ephemeral_key_identifier,
+                        &txb_res,
+                        Intent::sui_transaction(),
+                    )
+                    .await?,
+            )
         } else {
             // Sign transaction with the ephemeral key
-            let signature = keystore.sign_secure(
-                &ephemeral_key_identifier,
-                &txb_res,
-                Intent::sui_transaction(),
-            )?;
+            let signature = keystore
+                .sign_secure(
+                    &ephemeral_key_identifier,
+                    &txb_res,
+                    Intent::sui_transaction(),
+                )
+                .await?;
 
             GenericSignature::from(ZkLoginAuthenticator::new(
                 zk_login_inputs,
@@ -180,11 +186,13 @@ pub async fn perform_zk_login_test_tx(
         multisig
     } else {
         // Sign transaction with the ephemeral key
-        let signature = keystore.sign_secure(
-            &ephemeral_key_identifier,
-            &txb_res,
-            Intent::sui_transaction(),
-        )?;
+        let signature = keystore
+            .sign_secure(
+                &ephemeral_key_identifier,
+                &txb_res,
+                Intent::sui_transaction(),
+            )
+            .await?;
 
         let single_sig = GenericSignature::from(ZkLoginAuthenticator::new(
             zk_login_inputs,

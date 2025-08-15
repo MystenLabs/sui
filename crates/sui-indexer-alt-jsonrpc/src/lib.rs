@@ -60,6 +60,11 @@ pub struct RpcArgs {
     /// the query itself will be logged as a warning.
     #[clap(long, default_value_t = Self::default().request_timeout_ms)]
     pub request_timeout_ms: u64,
+
+    /// Requests that take longer than this (in milliseconds) will be logged even if they succeed.
+    /// This should be shorter than `request_timeout_ms`.
+    #[clap(long, default_value_t = Self::default().slow_request_threshold_ms)]
+    pub slow_request_threshold_ms: u64,
 }
 
 pub struct RpcService {
@@ -75,6 +80,9 @@ pub struct RpcService {
     /// Maximum time a request can take to complete.
     request_timeout: Duration,
 
+    /// Threshold for logging slow requests.
+    slow_request_threshold: Duration,
+
     /// All the methods added to the server so far.
     modules: jsonrpsee::RpcModule<()>,
 
@@ -86,9 +94,15 @@ pub struct RpcService {
 }
 
 impl RpcArgs {
-    /// Requests that take longer than this should be logged for debugging.
+    /// Requests that take longer than this are terminated and logged for debugging.
     fn request_timeout(&self) -> Duration {
         Duration::from_millis(self.request_timeout_ms)
+    }
+
+    /// Requests that take longer than this are logged for debugging even if they succeed.
+    /// This threshold should be lower than the request timeout threshold.
+    fn slow_request_threshold(&self) -> Duration {
+        Duration::from_millis(self.slow_request_threshold_ms)
     }
 }
 
@@ -126,6 +140,7 @@ impl RpcService {
             server,
             metrics,
             request_timeout: rpc_args.request_timeout(),
+            slow_request_threshold: rpc_args.slow_request_threshold(),
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
@@ -154,6 +169,7 @@ impl RpcService {
             server,
             metrics,
             request_timeout,
+            slow_request_threshold,
             mut modules,
             schema,
             cancel,
@@ -172,6 +188,7 @@ impl RpcService {
             .layer(MetricsLayer::new(
                 metrics,
                 modules.method_names().map(|n| n.to_owned()).collect(),
+                slow_request_threshold,
             ));
 
         let handle = server
@@ -212,6 +229,7 @@ impl Default for RpcArgs {
             rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
             max_in_flight_requests: 2000,
             request_timeout_ms: 60_000,
+            slow_request_threshold_ms: 15_000,
         }
     }
 }

@@ -235,19 +235,37 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .collect())
 }
 
-#[test]
-fn test_read_keystore() {
-    use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+#[tokio::test]
+async fn test_read_keystore() {
+    use sui_keys::keystore::{
+        AccountKeystore, FileBasedKeystore, GenerateOptions, Keystore, LocalGenerate,
+    };
     use sui_types::crypto::SignatureScheme;
 
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
-    let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
+    let mut ks = Keystore::from(FileBasedKeystore::load_or_create(&path).unwrap());
     let key1 = ks
-        .generate(SignatureScheme::ED25519, None, None, None)
+        .generate(
+            None,
+            GenerateOptions::Local(LocalGenerate {
+                key_scheme: SignatureScheme::ED25519,
+                derivation_path: None,
+                word_length: None,
+            }),
+        )
+        .await
         .unwrap();
     let key2 = ks
-        .generate(SignatureScheme::Secp256k1, None, None, None)
+        .generate(
+            None,
+            GenerateOptions::Local(LocalGenerate {
+                key_scheme: SignatureScheme::Secp256k1,
+                derivation_path: None,
+                word_length: None,
+            }),
+        )
+        .await
         .unwrap();
 
     let accounts = read_prefunded_account(&path).unwrap();
@@ -257,11 +275,11 @@ fn test_read_keystore() {
         .collect::<BTreeMap<_, _>>();
 
     assert_eq!(2, acc_map.len());
-    assert!(acc_map.contains_key(&key1.0));
-    assert!(acc_map.contains_key(&key2.0));
+    assert!(acc_map.contains_key(&key1.address));
+    assert!(acc_map.contains_key(&key2.address));
 
-    let acc1 = acc_map[&key1.0].clone();
-    let acc2 = acc_map[&key2.0].clone();
+    let acc1 = acc_map[&key1.address].clone();
+    let acc2 = acc_map[&key2.address].clone();
 
     let schema1: SignatureScheme = acc1.curve_type.into();
     let schema2: SignatureScheme = acc2.curve_type.into();

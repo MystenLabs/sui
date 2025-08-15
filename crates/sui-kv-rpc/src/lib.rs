@@ -11,7 +11,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::{
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
-use sui_sdk_types::CheckpointDigest;
+use sui_sdk_types::Digest;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
 
@@ -147,7 +147,7 @@ async fn get_service_info(
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
     Ok(GetServiceInfoResponse {
-        chain_id: Some(CheckpointDigest::new(chain_id.as_bytes().to_owned()).to_string()),
+        chain_id: Some(Digest::new(chain_id.as_bytes().to_owned()).to_string()),
         chain: Some(chain_id.chain().as_str().into()),
         epoch: Some(checkpoint.epoch),
         checkpoint_height: Some(checkpoint.sequence_number),

@@ -121,6 +121,7 @@ pub(crate) async fn verify_zklogin_signature(
         true,
         true,
         Some(30),
+        true,
     );
 
     let bytes = bytes.0;

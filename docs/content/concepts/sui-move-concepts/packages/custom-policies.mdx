@@ -1,12 +1,14 @@
 ---
 title: Custom Upgrade Policies
+description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single-key ownership upgrades.
+keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ] 
 ---
 
-Protecting the ability to upgrade a package on chain using a single key can pose a security risk for several reasons:
+Protecting the ability to upgrade a package on-chain using a single key can pose a security risk for several reasons:
 
 {@include: ../../../snippets/upgrade-single-key-risk.mdx}
 
-To address the security risk of single-key upgrade ownership poses while still providing the opportunity to [upgrade live packages](./upgrade.mdx), Sui offers _custom upgrade policies_. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
+To address the security risk of single-key upgrade ownership while still providing the opportunity to [upgrade live packages](./upgrade.mdx), Sui offers _custom upgrade policies_. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
 
 ## Compatibility {#compatibility}
 

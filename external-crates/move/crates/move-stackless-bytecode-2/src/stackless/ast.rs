@@ -3,11 +3,11 @@
 
 use crate::utils::comma_separated;
 
-use move_binary_format::normalized::{Constant, FieldRef};
+use move_binary_format::normalized::{Constant, FieldRef, StructRef, Type, VariantRef};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
-use std::{collections::BTreeMap, vec};
+use std::{collections::BTreeMap, rc::Rc, vec};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -44,7 +44,7 @@ pub struct BasicBlock {
 pub enum Instruction {
     Return(Vec<Trivial>),
     AssignReg {
-        lhs: Vec<RegId>,
+        lhs: Vec<Register>,
         rhs: RValue,
     },
     StoreLoc {
@@ -61,15 +61,22 @@ pub enum Instruction {
     Nop,
     VariantSwitch {
         cases: Vec<Label>,
+        subject: Trivial,
     },
-    Drop(RegId), // Drop an operand in the case of a Pop operation
+    Drop(Register), // Drop an operand in the case of a Pop operation
     NotImplemented(String),
 }
 
 #[derive(Debug, Clone)]
 pub enum Trivial {
-    Register(RegId),
+    Register(Register),
     Immediate(Value),
+}
+
+#[derive(Debug, Clone)]
+pub struct Register {
+    pub(crate) name: RegId,
+    pub(crate) ty: Rc<Type<Symbol>>,
 }
 
 #[derive(Debug, Clone)]
@@ -138,25 +145,25 @@ pub enum PrimitiveOp {
 
 #[derive(Debug, Clone)]
 pub enum DataOp {
-    Pack,
-    Unpack,
+    Pack(Box<StructRef<Symbol>>),
+    Unpack(Box<StructRef<Symbol>>),
     ReadRef,
     WriteRef,
     FreezeRef,
     MutBorrowField(Box<FieldRef<Symbol>>),
     ImmBorrowField(Box<FieldRef<Symbol>>),
-    VecPack,
-    VecLen,
-    VecImmBorrow,
-    VecMutBorrow,
-    VecPushBack,
-    VecPopBack,
-    VecUnpack,
-    VecSwap,
-    PackVariant,
-    UnpackVariant,
-    UnpackVariantImmRef,
-    UnpackVariantMutRef,
+    VecPack(Rc<Type<Symbol>>),
+    VecLen(Rc<Type<Symbol>>),
+    VecImmBorrow(Rc<Type<Symbol>>),
+    VecMutBorrow(Rc<Type<Symbol>>),
+    VecPushBack(Rc<Type<Symbol>>),
+    VecPopBack(Rc<Type<Symbol>>),
+    VecUnpack(Rc<Type<Symbol>>),
+    VecSwap(Rc<Type<Symbol>>),
+    PackVariant(Box<VariantRef<Symbol>>),
+    UnpackVariant(Box<VariantRef<Symbol>>),
+    UnpackVariantImmRef(Box<VariantRef<Symbol>>),
+    UnpackVariantMutRef(Box<VariantRef<Symbol>>),
 }
 
 #[derive(Debug, Clone)]
@@ -256,10 +263,7 @@ impl std::fmt::Display for Instruction {
             Instruction::AssignReg { lhs, rhs } => write!(
                 f,
                 "{}{}{}",
-                lhs.iter()
-                    .map(|id| format!("reg_{id}"))
-                    .collect::<Vec<_>>()
-                    .join(", "),
+                comma_separated(lhs),
                 if lhs.is_empty() { "" } else { " = " },
                 rhs
             ),
@@ -273,17 +277,16 @@ impl std::fmt::Display for Instruction {
                 else_label,
             } => write!(f, "JumpIf({condition}, LBL_{then_label}, LBL_{else_label})"),
             Instruction::Abort(trivial) => write!(f, "Abort({trivial})"),
-            Instruction::VariantSwitch { cases } => {
-                write!(f, "VariantSwitch(")?;
-                for (i, case) in cases.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "Label({case})")?;
-                }
-                write!(f, ")")
-            }
-            Instruction::Drop(reg_id) => write!(f, "Drop({reg_id})"),
+            Instruction::VariantSwitch { cases, subject } => write!(
+                f,
+                "VariantSwitch(SUBJECT({subject}), {})",
+                cases
+                    .iter()
+                    .map(|case| format!("LBL_({case})"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Instruction::Drop(reg) => write!(f, "Drop({reg})"),
             Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
         }
@@ -293,9 +296,15 @@ impl std::fmt::Display for Instruction {
 impl std::fmt::Display for Trivial {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Trivial::Register(reg_id) => write!(f, "reg_{reg_id}"),
+            Trivial::Register(reg) => write!(f, "{reg}",),
             Trivial::Immediate(val) => write!(f, "Immediate({val})"),
         }
+    }
+}
+
+impl std::fmt::Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "reg_{} : {}", self.name, self.ty)
     }
 }
 
@@ -354,11 +363,54 @@ impl std::fmt::Display for PrimitiveOp {
 impl std::fmt::Display for DataOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DataOp::ImmBorrowField(_) => {
-                write!(f, "ImmBorrowField")
+            DataOp::Pack(struct_ref) => {
+                write!(f, "Pack<{}>", struct_ref.struct_.name)
             }
-            DataOp::MutBorrowField(_) => {
-                write!(f, "MutBorrowField")
+            DataOp::Unpack(struct_ref) => {
+                write!(f, "Unpack<{}>", struct_ref.struct_.name)
+            }
+
+            DataOp::ImmBorrowField(field_ref) => {
+                write!(f, "ImmBorrowField<{}>", field_ref.field.type_)
+            }
+            DataOp::MutBorrowField(field_ref) => {
+                write!(f, "MutBorrowField<{}>", field_ref.field.type_)
+            }
+            DataOp::VecPack(rc_type) => {
+                write!(f, "VecPack<{}>", rc_type)
+            }
+            DataOp::VecLen(rc_type) => {
+                write!(f, "VecLen<{}>", rc_type)
+            }
+            DataOp::VecImmBorrow(rc_type) => {
+                write!(f, "VecImmBorrow<{}>", rc_type)
+            }
+            DataOp::VecMutBorrow(rc_type) => {
+                write!(f, "VecMutBorrow<{}>", rc_type)
+            }
+            DataOp::VecPushBack(rc_type) => {
+                write!(f, "VecPushBack<{}>", rc_type)
+            }
+            DataOp::VecPopBack(rc_type) => {
+                write!(f, "VecPopBack<{}>", rc_type)
+            }
+            DataOp::VecUnpack(rc_type) => {
+                write!(f, "VecUnpack<{}>", rc_type)
+            }
+            DataOp::VecSwap(rc_type) => {
+                write!(f, "VecSwap<{}>", rc_type)
+            }
+            DataOp::PackVariant(variant_ref) => {
+                write!(f, "PackVariant<{}>", variant_ref.variant.name)
+            }
+            DataOp::UnpackVariant(variant_ref) => {
+                write!(f, "UnpackVariant<{}>", variant_ref.variant.name)
+            }
+            DataOp::UnpackVariantImmRef(variant_ref) => {
+                write!(f, "UnpackVariantImmRef<{}>", variant_ref.variant.name)
+            }
+            DataOp::UnpackVariantMutRef(variant_ref) => {
+                write!(f, "UnpackVariantMutRef<{}>", variant_ref.variant.name)
             }
             _ => write!(f, "{:?}", self),
         }

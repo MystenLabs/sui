@@ -1,6 +1,7 @@
 ---
 title: Sui Archives
 description: The archive is a historical record of all transactions on Sui. Enable archiving on your Full nodes as a best practice.
+keywords: [ archive, archive data, full node archive, node archive, fallback, archival fallback ] 
 ---
 
 A Sui archive is a history of all transaction data on Sui. In some cases, peer nodes may not catch up with all transactions and effects through synchronization if they lag behind the current epoch by more than the latest few epochs. In such cases, instead of relying on synchronization, peer nodes can fallback to downloading the relevant information from an archive.
@@ -11,7 +12,7 @@ Starting with the 1.51 release, the default archive bucket for mainnet switches 
 
 ## Set up archival fallback {#set-up-archival-fallback}
 
-To enable your node to fallback to an archive in case of lag, add this to your fullnode.yaml file:
+To enable your node to fallback to an archive in case of lag, add this to your `fullnode.yaml` file:
 
 <Tabs groupId="object-store">
 <TabItem value="mainnet" label="Mainnet">

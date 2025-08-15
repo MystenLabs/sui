@@ -20,7 +20,6 @@ use crate::{
 
 use super::*;
 use serde_spanned::Spanned;
-use sha2::{Digest as ShaDigest, Sha256};
 
 const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 
@@ -80,11 +79,9 @@ impl Manifest {
 
         let result = Self {
             inner: parsed,
-            digest: format!("{:X}", Sha256::digest(file_handle.source().as_ref())),
+            digest: compute_digest(file_handle.source()),
             file_handle,
         };
-
-        result.validate_manifest(file_handle)?;
 
         Ok(result)
     }
@@ -131,37 +128,6 @@ impl Manifest {
         &self.file_handle
     }
 
-    /// Validate the manifest contents, after deserialization.
-    ///
-    // TODO: add more validation
-    fn validate_manifest(&self, handle: FileHandle) -> ManifestResult<()> {
-        // Are there any environments?
-        if self.environments().is_empty() {
-            return Err(ManifestError::with_file(handle.path())(
-                ManifestErrorKind::NoEnvironments,
-            ));
-        }
-
-        // Do all dep-replacements have valid environments?
-        for (env, entries) in self.inner.dep_replacements.iter() {
-            if !self.environments().contains_key(env) {
-                let span = entries
-                    .first_key_value()
-                    .expect("dep-replacements.<env> only exists if it has a dep")
-                    .1
-                    .span();
-
-                let loc = Location::new(handle, span);
-
-                return Err(ManifestError::with_span(&loc)(
-                    ManifestErrorKind::MissingEnvironment { env: env.clone() },
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
     pub(crate) fn parsed(&self) -> &ParsedManifest {
         &self.inner
     }
@@ -177,7 +143,7 @@ impl ManifestError {
         }
     }
 
-    fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
+    pub(crate) fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
         move |e| ManifestError {
             kind: Box::new(e.into()),
             location: ErrorLocation::AtLoc(loc.clone()),
@@ -242,7 +208,6 @@ mod tests {
 
     /// The `environments` table may be missing
     #[test]
-    #[ignore] // TODO: this tests new behavior that isn't implemented yet
     fn empty_environments_allowed() {
         let manifest = load_manifest(
             r#"
@@ -253,11 +218,7 @@ mod tests {
         )
         .unwrap();
 
-        let default_env = default_environment();
-        assert_eq!(
-            manifest.environments().get(default_env.name()),
-            Some(default_env.id())
-        );
+        assert!(manifest.environments().is_empty());
     }
 
     /// Environment names in `dep-replacements` must be defined in `environments`

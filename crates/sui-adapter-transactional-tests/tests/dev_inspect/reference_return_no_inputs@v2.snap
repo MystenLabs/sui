@@ -36,13 +36,13 @@ task 4, lines 45-48:
 // This should be rejected by the borrow checker (in static PTBs)
 //> 0: test::m::pair_mut();
 //> test::m::swap_x(Result(0), Result(0));
-Error: Transaction Effects Status: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1
-Execution Error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 1, kind: InvalidReferenceArgument } in command 1
+Execution Error: CommandArgumentError { arg_idx: 1, kind: InvalidReferenceArgument } in command 1
 
 task 5, lines 50-53:
 //# programmable --dev-inspect
 // This should be rejected by the borrow checker (in static PTBs)
 //> 0: test::m::box_mut();
 //> test::m::swap_x(NestedResult(0,0), NestedResult(0,0));
-Error: Transaction Effects Status: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1
-Execution Error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 1, kind: InvalidReferenceArgument } in command 1
+Execution Error: CommandArgumentError { arg_idx: 1, kind: InvalidReferenceArgument } in command 1

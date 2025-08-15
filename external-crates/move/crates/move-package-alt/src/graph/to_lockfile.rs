@@ -22,13 +22,11 @@ impl<F: MoveFlavor> From<&PackageGraph<F>> for BTreeMap<PackageID, Pin> {
         // build index to id map
         for node in graph.node_indices() {
             let pkg_node = graph.node_weight(node).expect("node exists");
-            let suffix = name_to_suffix
-                .entry(pkg_node.package.name().clone())
-                .or_default();
+            let suffix = name_to_suffix.entry(pkg_node.name().clone()).or_default();
             let id = if *suffix == 0 {
-                pkg_node.package.name().to_string()
+                pkg_node.name().to_string()
             } else {
-                format!("{}_{suffix}", pkg_node.package.name())
+                format!("{}_{suffix}", pkg_node.name())
             };
             node_to_id.insert(node, id);
             *suffix += 1;
@@ -41,17 +39,18 @@ impl<F: MoveFlavor> From<&PackageGraph<F>> for BTreeMap<PackageID, Pin> {
 
             let deps: BTreeMap<PackageName, PackageID> = value
                 .inner
-                .edges_directed(node, petgraph::Direction::Outgoing)
-                .map(|e| (e.weight().clone(), node_to_id[&e.target()].clone()))
+                .edges(node)
+                .map(|e| (e.weight().name.clone(), node_to_id[&e.target()].clone()))
                 .collect();
 
             result.insert(
                 node_to_id[&node].to_string(),
                 Pin {
-                    source: pkg_node.package.dep_for_self().clone(),
-                    use_environment: Some(pkg_node.use_env.clone()),
-                    manifest_digest: pkg_node.package.digest().to_string(),
+                    source: pkg_node.dep_for_self().clone().into(),
+                    use_environment: Some(pkg_node.environment_name().clone()),
+                    manifest_digest: pkg_node.digest().to_string(),
                     deps,
+                    address_override: None, // TODO: this needs to be stored in the package node
                 },
             );
         }

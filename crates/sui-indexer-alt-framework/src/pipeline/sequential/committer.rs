@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    metrics::IndexerMetrics,
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
     store::{CommitterWatermark, Connection, TransactionalStore},
 };
@@ -85,6 +85,12 @@ where
         // demonstrate that the pipeline is making progress.
         let mut logger = WatermarkLogger::new("sequential_committer", &watermark);
 
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+            &metrics.watermarked_checkpoint_timestamp_lag,
+            &metrics.latest_watermarked_checkpoint_timestamp_lag_ms,
+            &metrics.watermark_checkpoint_in_db,
+        );
+
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
         let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
@@ -130,6 +136,7 @@ where
                     // writes by combining rows, but we will limit the number of checkpoints we try
                     // and batch together as a way to impose some limit on the size of the batch
                     // (and therefore the length of the write transaction).
+                    // docs::#batch  (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
                         if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                             break;
@@ -166,6 +173,7 @@ where
                             }
                         }
                     }
+                    // docs::/#batch
 
                     let elapsed = guard.stop_and_record();
                     debug!(
@@ -264,6 +272,11 @@ where
 
                     logger.log::<H>(&watermark, elapsed);
 
+                    checkpoint_lag_reporter.report_lag(
+                        watermark.checkpoint_hi_inclusive,
+                        watermark.timestamp_ms_hi_inclusive
+                    );
+
                     metrics
                         .total_committer_batches_succeeded
                         .with_label_values(&[H::NAME])
@@ -304,10 +317,12 @@ where
                         .with_label_values(&[H::NAME])
                         .set(watermark.timestamp_ms_hi_inclusive as i64);
 
+                    // docs::#send (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
                     let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive));
+                    // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
                     pending_rows -= batch_rows;
@@ -438,7 +453,7 @@ mod tests {
         config: SequentialConfig,
         store: MockStore,
     ) -> TestSetup {
-        let metrics = IndexerMetrics::new(&Registry::default());
+        let metrics = IndexerMetrics::new(None, &Registry::default());
         let cancel = CancellationToken::new();
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);

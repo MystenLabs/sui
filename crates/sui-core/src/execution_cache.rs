@@ -62,6 +62,7 @@ pub struct ExecutionCacheTraitPointers {
     pub transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     pub cache_writer: Arc<dyn ExecutionCacheWrite>,
     pub backing_store: Arc<dyn BackingStore + Send + Sync>,
+    pub child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
     pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
     pub object_store: Arc<dyn ObjectStore + Send + Sync>,
     pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
@@ -94,6 +95,7 @@ impl ExecutionCacheTraitPointers {
             transaction_cache_reader: cache.clone(),
             cache_writer: cache.clone(),
             backing_store: cache.clone(),
+            child_object_resolver: cache.clone(),
             backing_package_store: cache.clone(),
             object_store: cache.clone(),
             reconfig_api: cache.clone(),
@@ -521,6 +523,7 @@ pub trait TransactionCacheRead: Send + Sync {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>>;
 
@@ -533,10 +536,13 @@ pub trait TransactionCacheRead: Send + Sync {
     /// occurring!
     fn notify_read_executed_effects<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffects>> {
         async move {
-            let digests = self.notify_read_executed_effects_digests(digests).await;
+            let digests = self
+                .notify_read_executed_effects_digests(task_name, digests)
+                .await;
             // once digests are available, effects must be present as well
             self.multi_get_effects(&digests)
                 .into_iter()

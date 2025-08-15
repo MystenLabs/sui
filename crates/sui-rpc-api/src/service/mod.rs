@@ -3,4 +3,3 @@
 
 mod committee;
 pub(crate) mod health;
-pub(crate) mod protocol_config;

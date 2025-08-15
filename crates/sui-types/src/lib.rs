@@ -27,6 +27,7 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 pub mod error;
 
 pub mod accumulator_event;
+pub mod accumulator_metadata;
 pub mod accumulator_root;
 pub mod authenticator_state;
 pub mod balance;
@@ -237,6 +238,10 @@ impl<T: MoveTypeTagTrait> MoveTypeTagTrait for Vec<T> {
     fn get_type_tag() -> TypeTag {
         TypeTag::Vector(Box::new(T::get_type_tag()))
     }
+}
+
+pub trait MoveTypeTagTraitGeneric {
+    fn get_type_tag(type_params: &[TypeTag]) -> TypeTag;
 }
 
 pub fn is_primitive(

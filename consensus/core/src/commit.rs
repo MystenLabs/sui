@@ -165,7 +165,6 @@ impl TrustedCommit {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn new_for_test(
         index: CommitIndex,
         previous_digest: CommitDigest,
@@ -358,9 +357,19 @@ pub struct CommittedSubDag {
 
     /// Set by CommitObserver.
     ///
-    /// Whether the commit is produced from local DAG, or received through commit sync.
-    /// In the 2nd case, this commit may not have blocks in the local DAG to finalize it.
-    pub local: bool,
+    /// Indicates whether the commit was decided locally based on the local DAG.
+    ///
+    /// If true, `CommitFinalizer` can then assume a quorum of certificates are available
+    /// for each transaction in the commit if there is no reject vote, and proceed with
+    /// optimistic finalization of transactions.
+    ///
+    /// If the commit was decided by `UniversalCommitter`, this must be true.
+    /// If the commit was received from a peer via `CommitSyncer`, this must be false.
+    /// There may not be enough blocks in local DAG to decide on the commit.
+    ///
+    /// For safety, a previously locally decided commit may be recovered after restarting as
+    /// non-local, if its finalization state was not persisted.
+    pub decided_with_local_blocks: bool,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
@@ -384,7 +393,7 @@ impl CommittedSubDag {
             blocks,
             timestamp_ms,
             commit_ref,
-            local: true,
+            decided_with_local_blocks: true,
             reputation_scores_desc: vec![],
             rejected_transactions_by_block: BTreeMap::new(),
         }
@@ -431,7 +440,7 @@ impl fmt::Debug for CommittedSubDag {
 }
 
 // Recovers the full CommittedSubDag from block store, based on Commit.
-pub fn load_committed_subdag_from_store(
+pub(crate) fn load_committed_subdag_from_store(
     store: &dyn Store,
     commit: TrustedCommit,
     reputation_scores_desc: Vec<(AuthorityIndex, u64)>,

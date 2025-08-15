@@ -60,6 +60,7 @@ tonic-rustls.workspace = true
 sui-http.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
 telemetry-subscribers.workspace = true
@@ -67,3 +68,7 @@ telemetry-subscribers.workspace = true
 [build-dependencies]
 anemo-build.workspace = true
 tonic-build.workspace = true
+
+[[bench]]
+name = "commit_finalizer_bench"
+harness = false

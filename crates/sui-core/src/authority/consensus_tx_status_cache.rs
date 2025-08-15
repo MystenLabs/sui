@@ -106,7 +106,7 @@ impl ConsensusTxStatusCache {
         };
 
         // All code paths leading to here should have set the status.
-        debug!("Transaction status is set for {:?}: {:?}", pos, status);
+        debug!("Transaction status is set for {}: {:?}", pos, status);
         self.status_notify_read.notify(&pos, &status);
     }
 
@@ -170,6 +170,10 @@ impl ConsensusTxStatusCache {
         }
         // Send update through watch channel
         let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
+    }
+
+    pub fn get_last_committed_leader_round(&self) -> Option<u32> {
+        *self.last_committed_leader_round_rx.borrow()
     }
 
     /// Returns true if the position is too far ahead of the last committed round.

@@ -107,6 +107,7 @@ const addCodeInject = async function (source) {
 
           const isMove = language === "move";
           const isTs = language === "ts" || language === "js";
+          const isRust = language === "rust";
 
           if (fs.existsSync(fullPath) || fullPath.match(/^https/)) {
             let injectFileContent;
@@ -132,6 +133,7 @@ const addCodeInject = async function (source) {
               const componentKey = "#component=";
               const enumKey = "#enum=";
               const typeKey = "#type=";
+              const traitKey = "#trait=";
               const getName = (mark, key) => {
                 return mark.indexOf(key, mark) >= 0
                   ? mark.substring(mark.indexOf(key) + key.length).trim()
@@ -145,6 +147,7 @@ const addCodeInject = async function (source) {
               const componentName = getName(marker, componentKey);
               const enumName = getName(marker, enumKey);
               const typeName = getName(marker, typeKey);
+              const traitName = getName(marker, traitKey);
               if (funName) {
                 const funs = funName.split(",");
                 let funContent = [];
@@ -156,6 +159,8 @@ const addCodeInject = async function (source) {
                     funStr = `^(\\s*)*?(pub(lic)? )?(entry )?fu?n \\b${fn}\\b.*?}\\n(\\s*?})?(?=\\n)?`;
                   } else if (isTs) {
                     funStr = `^(\\s*)(async )?(export (default )?)?function \\b${fn}\\b.*?\\n\\1}\\n`;
+                  } else if (isRust) {
+                    funStr = `^(\\s*)(pub\\s+)?(async\\s+)?(const\\s+)?(unsafe\\s+)?(extern\\s+("[^"]+"\\s*)?)?fn\\s+${fn}\\s*(<[^>]*>)?\\s*\\([^)]*\\)\\s*(->\\s*[^;{]+)?\\s*[;{]`;
                   }
                   const funRE = new RegExp(funStr, "msi");
                   const funMatch = funRE.exec(injectFileContent);
@@ -192,23 +197,65 @@ const addCodeInject = async function (source) {
                 let structContent = [];
                 for (let struct of structs) {
                   struct = struct.trim();
-                  const structStr = `^(\\s*)*?(pub(lic)? )?struct \\b${struct}\\b.*?}`;
-                  const structRE = new RegExp(structStr, "msi");
-                  const structMatch = structRE.exec(injectFileContent);
+                  // Check for Rust short version
+                  let structStr = `^(\\s*)\\b(pub(lic)?\\s+)?struct\\s+${struct}\\b;\n`;
+                  let structRE = new RegExp(structStr, "msi");
+                  let structMatch = structRE.exec(injectFileContent);
+                  // If no match, check for Move type or Rust long
+                  if (!structMatch) {
+                    structStr = `^(\\s*)*?(pub(lic)? )?struct \\b${struct}\\b.*?}`;
+                    structRE = new RegExp(structStr, "msi");
+                    structMatch = structRE.exec(injectFileContent);
+                  }
+                  let preStruct;
                   if (structMatch) {
-                    let preStruct = utils.capturePrepend(
+                    preStruct = utils.capturePrepend(
                       structMatch,
                       injectFileContent,
                     );
                     structContent.push(
                       utils.removeLeadingSpaces(structMatch[0], preStruct),
                     );
+                  } else if (isRust) {
+                    structRE = new RegExp(structStrLong, "msi");
+                    structMatch = structRE.exec(injectFileContent);
+                    if (structMatch) {
+                      preStruct = utils.capturePrepend(
+                        structMatch,
+                        injectFileContent,
+                      );
+                      structContent.push(
+                        utils.removeLeadingSpaces(structMatch[0], preStruct),
+                      );
+                    }
                   } else {
                     injectFileContent =
                       "Struct not found. If code is formatted correctly, consider using code comments instead.";
                   }
                 }
                 injectFileContent = structContent.join("\n").trim();
+              } else if (traitName) {
+                const traits = traitName.split(",");
+                let traitContent = [];
+                for (let trait of traits) {
+                  trait = trait.trim();
+                  let traitStr = `^(\\s*)*?(pub(lic)? )?trait \\b${trait}\\b[\\s\\S]*?^\\}`;
+                  const traitRE = new RegExp(traitStr, "msi");
+                  const traitMatch = traitRE.exec(injectFileContent);
+                  if (traitMatch) {
+                    let preTrait = utils.capturePrepend(
+                      traitMatch,
+                      injectFileContent,
+                    );
+                    traitContent.push(
+                      utils.removeLeadingSpaces(traitMatch[0], preTrait),
+                    );
+                  } else {
+                    injectFileContent =
+                      "Struct not found. If code is formatted correctly, consider using code comments instead.";
+                  }
+                }
+                injectFileContent = traitContent.join("\n").trim();
               } else if (variableName) {
                 const vs = variableName.split(",");
                 let temp = "";
@@ -459,7 +506,8 @@ const addCodeInject = async function (source) {
                 }
                 injectFileContent = typeContent.join("\n").trim();
               } else {
-                const regexStr = `\\/\\/\\s?docs::${marker.trim()}\\b([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?${marker.trim()}\\b`;
+                // Capture everything beteen tags, ignoring content after marker on same line
+                const regexStr = `\\/\\/\\s?docs::${marker.trim()}\\b[^\\n]*\\n([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?${marker.trim()}\\b`;
                 const closingsStr = `\\/\\/\\s?docs::\\/${marker.trim()}\\b([)};]*)`;
 
                 const closingRE = new RegExp(closingsStr, "g");

@@ -9,12 +9,13 @@ use sui_rpc::proto::sui::rpc::v2beta2::CoinTreasury;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
-use sui_sdk_types::{ObjectId, StructTag};
+use sui_sdk_types::{Address, StructTag};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 const SUI_COIN_TREASURY: CoinTreasury = CoinTreasury {
     id: None,
     total_supply: Some(sui_types::gas_coin::TOTAL_SUPPLY_MIST),
+    supply_state: None,
 };
 
 #[tracing::instrument(skip(service))]
@@ -62,12 +63,13 @@ pub fn get_coin_info(
                 )
             })?
             .map(|value| CoinMetadata {
-                id: Some(ObjectId::from(value.id.id.bytes).to_string()),
+                id: Some(Address::from(value.id.id.bytes).to_string()),
                 decimals: Some(value.decimals.into()),
                 name: Some(value.name),
                 symbol: Some(value.symbol),
                 description: Some(value.description),
                 icon_url: value.icon_url,
+                metadata_cap_id: None,
             })
     } else {
         None
@@ -90,8 +92,9 @@ pub fn get_coin_info(
                 )
             })?
             .map(|treasury| CoinTreasury {
-                id: Some(ObjectId::from(treasury.id.id.bytes).to_string()),
+                id: Some(Address::from(treasury.id.id.bytes).to_string()),
                 total_supply: Some(treasury.total_supply.value),
+                supply_state: None,
             })
     } else if sui_types::gas_coin::GAS::is_gas(&core_coin_type) {
         Some(SUI_COIN_TREASURY)
@@ -117,11 +120,11 @@ pub fn get_coin_info(
                     )
                 })?
                 .map(|value| RegulatedCoinMetadata {
-                    id: Some(ObjectId::from(value.id.id.bytes).to_string()),
+                    id: Some(Address::from(value.id.id.bytes).to_string()),
                     coin_metadata_object: Some(
-                        ObjectId::from(value.coin_metadata_object.bytes).to_string(),
+                        Address::from(value.coin_metadata_object.bytes).to_string(),
                     ),
-                    deny_cap_object: Some(ObjectId::from(value.deny_cap_object.bytes).to_string()),
+                    deny_cap_object: Some(Address::from(value.deny_cap_object.bytes).to_string()),
                 })
         } else {
             None

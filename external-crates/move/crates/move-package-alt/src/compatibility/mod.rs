@@ -13,8 +13,6 @@ use crate::package::layout::SourcePackageLayout;
 use crate::package::paths::PackagePath;
 use crate::schema::PackageName;
 
-pub type LegacyAddressDeclarations = BTreeMap<String, Option<AccountAddress>>;
-pub type LegacyDevAddressDeclarations = BTreeMap<String, AccountAddress>;
 pub type LegacyVersion = (u64, u64, u64);
 pub type LegacySubstitution = BTreeMap<String, LegacySubstOrRename>;
 

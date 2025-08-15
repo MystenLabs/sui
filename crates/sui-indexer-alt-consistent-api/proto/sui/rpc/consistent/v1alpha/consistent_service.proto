@@ -1,0 +1,225 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.consistent.v1alpha;
+
+service ConsistentService {
+  rpc AvailableRange(AvailableRangeRequest) returns (AvailableRangeResponse);
+
+  rpc BatchGetBalances(BatchGetBalancesRequest)
+      returns (BatchGetBalancesResponse);
+
+  rpc GetBalance(GetBalanceRequest) returns (Balance);
+
+  rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse);
+
+  rpc ListObjectsByType(ListObjectsByTypeRequest) returns (ListObjectsResponse);
+
+  rpc ListOwnedObjects(ListOwnedObjectsRequest) returns (ListObjectsResponse);
+
+  rpc ServiceConfig(ServiceConfigRequest) returns (ServiceConfigResponse);
+}
+
+message AvailableRangeRequest {}
+
+message AvailableRangeResponse {
+  // The (inclusive) minimum checkpoint sequence number that the service can
+  // answer questions for.
+  optional uint64 min_checkpoint = 1;
+
+  // The (inclusive) maximum checkpoint sequence number that the service can
+  // answer questions for.
+  optional uint64 max_checkpoint = 2;
+
+  // The gaps between snapshots taken by the service, measured in checkpoints.
+  optional uint64 stride = 3;
+}
+
+message BatchGetBalancesRequest { repeated GetBalanceRequest requests = 1; }
+
+message BatchGetBalancesResponse { repeated Balance balances = 1; }
+
+message GetBalanceRequest {
+  // Required. The address of the owner whose balance is being requested.
+  optional string owner = 1;
+
+  // Required. The marker type for the coins being aggregated into this
+  // balance, e.g. `0x2::sui::SUI`.
+  optional string coin_type = 2;
+}
+
+message ListBalancesRequest {
+  // Required. The address of the owner whose balances are being requested.
+  optional string owner = 1;
+
+  // The maximum number of entries to return. The service may return fewer than
+  // this value.
+  //
+  // Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+  // page sizes.
+  optional uint32 page_size = 100;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the next page.
+  optional bytes after_token = 101;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the previous page.
+  optional bytes before_token = 102;
+
+  // Whether to fetch the next page from the front or back of the filtered
+  // range.
+  optional End end = 103;
+}
+
+message ListBalancesResponse {
+  // Whether there are more pages before this one.
+  optional bool has_previous_page = 1;
+
+  // Whether there are more pages after this one.
+  optional bool has_next_page = 2;
+
+  // Page of balances owned by the specified owner.
+  repeated Balance balances = 3;
+}
+
+message ListObjectsByTypeRequest {
+  // Required. Type filter to limit the types of objects listed.
+  //
+  // Accepts filters by the type's package, module, fully-qualified name, or a
+  // type instantiation:
+  //
+  //  - `0x2`
+  //  - `0x2::coin`
+  //  - `0x2::coin::Coin`
+  //  - `0x2::coin::Coin<0x2::sui::SUI>`
+  optional string object_type = 1;
+
+  // The maximum number of entries to return. The service may return fewer than
+  // this value.
+  //
+  // Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+  // page sizes.
+  optional uint32 page_size = 100;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the next page.
+  optional bytes after_token = 101;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the previous page.
+  optional bytes before_token = 102;
+
+  // Whether to fetch the next page from the front or back of the filtered
+  // range.
+  optional End end = 103;
+}
+
+message ListOwnedObjectsRequest {
+  // Required. The owner kind and address.
+  optional Owner owner = 1;
+
+  // Optional type filter to limit the types of objects listed.
+  //
+  // Accepts filters by the type's package, module, fully-qualified name, or a
+  // type instantiation:
+  //
+  //  - `0x2`
+  //  - `0x2::coin`
+  //  - `0x2::coin::Coin`
+  //  - `0x2::coin::Coin<0x2::sui::SUI>`
+  optional string object_type = 2;
+
+  // The maximum number of entries to return. The service may return fewer than
+  // this value.
+  //
+  // Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+  // page sizes.
+  optional uint32 page_size = 100;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the next page.
+  optional bytes after_token = 101;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the previous page.
+  optional bytes before_token = 102;
+
+  // Whether to fetch the next page from the front or back of the filtered
+  // range.
+  optional End end = 103;
+}
+
+message ListObjectsResponse {
+  // Whether there are more pages before this one.
+  optional bool has_previous_page = 1;
+
+  // Whether there are more pages after this one.
+  optional bool has_next_page = 2;
+
+  // Page of objects owned by the specified owner.
+  repeated Object objects = 3;
+}
+
+message ServiceConfigRequest {}
+
+message ServiceConfigResponse {
+  // The size of a page if one is not specified in the request.
+  optional uint32 default_page_size = 1;
+
+  // The maximum number of requests allowed in a batch request.
+  optional uint32 max_batch_size = 2;
+
+  // The maximum size of a page. Responses to requests that specify a size
+  // larger than this will be capped to return at most this many elements per
+  // page.
+  optional uint32 max_page_size = 3;
+}
+
+// Enum of different types of ownership for an object.
+message Owner {
+  enum OwnerKind {
+    OWNER_KIND_UNKNOWN = 0;
+    ADDRESS = 1;
+    OBJECT = 2;
+    SHARED = 3;
+    IMMUTABLE = 4;
+  }
+  optional OwnerKind kind = 1;
+
+  // Address or ObjectId of the owner
+  optional string address = 2;
+}
+
+// The side of the filtered range to fetch the next page from.
+enum End {
+  END_UNKNOWN = 0;
+  FRONT = 1;
+  BACK = 2;
+}
+
+message Balance {
+  // Address of the owner whose balance is being reported.
+  optional string owner = 1;
+
+  // The marker type for the coins being aggregated into this balance, e.g.
+  // `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`.
+  optional string coin_type = 2;
+
+  /// The total balance for coins of this type, owned by one address,
+  // denominated in its smallest unit.
+  optional uint64 balance = 3;
+
+  // Pagination cursor pointing to this balance entry, if this Balance is part
+  // of a paginated response.
+  optional bytes page_token = 100;
+}
+
+message Object {
+  optional string object_id = 1;
+  optional uint64 version = 2;
+  optional string digest = 3;
+  optional bytes page_token = 100;
+}

@@ -1,11 +1,14 @@
 ---
 title: Staking and Governance
+description: Learn how to stake DEEP tokens and take advantage of taker and minter incentives.
+keywords: [ taker fee, maker fee, stake, staking, governance, unstake, submit proposal, vote, claim rebates, deepbook pool, deepbook governance, deepbookv3 ]
 ---
 
 DeepBook's novel approach to governance allows users to update a single pool's three parameters: 
-  - taker fee rate
-  - maker fee rate
-  - stake required
+
+- Taker fee rate
+- Maker fee rate
+- Stake required
 
 Stake required is the amount of DEEP tokens a user must have staked in the pool to take advantage of taker and maker incentives. Each individual DeepBook pool has independent governance, and governance can be conducted every epoch. See [Design](./design.mdx#governance) to learn more about governance.
 
@@ -48,3 +51,7 @@ Users with non-zero voting power can vote on a proposal. All voting power is use
 Use `claim_rebates` to claim the rewards for the `balance_manager`. The `balance_manager` must have rewards to claim. The `balance_manager` data is updated with the claimed rewards.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=claim_rebates noComments}
+
+## Related links
+
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

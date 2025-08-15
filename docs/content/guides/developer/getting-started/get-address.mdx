@@ -1,6 +1,7 @@
 ---
 title: Get Sui Address
 description: You need an address on the Sui network before you can start trading NFTs, purchase SUI tokens, or perform other transactions.
+keywords: [ get an address, sui address, how to get sui address, sui wallets, slush, suiet, glass wallet, martian extension, surf wallet, private keys ]
 ---
 
 An address is a way to uniquely and anonymously identify an account that exists on the Sui blockchain network. In other words, an address is a way for a user to store and use tokens on the Sui network, without providing any personally identifying information (such as email address, phone number, and so on). For example, if you want to purchase a number of SUI tokens to play a game, you must specify an address where these tokens are to be deposited.
@@ -11,7 +12,6 @@ In Sui, an address is 32 bytes and is often encoded in hexadecimal with a `0x` p
 
 If you'd like to understand how a Sui address is derived from private keys and other cryptography related topics, see the [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) topic.
 
-
 ## How to obtain a Sui address
 
 Sui provides multiple ways to obtain a Sui address. The following are the two most common. 
@@ -20,7 +20,7 @@ Sui provides multiple ways to obtain a Sui address. The following are the two mo
 
 If you are using the Sui command line interface (CLI) to interact with the Sui network, you can use the `sui client` command to generate a new address. By default, when the Sui CLI runs for the first time it will prompt you to set up your local wallet, and then it generates one Sui address and the associated secret recovery phrase. Make sure you write down the secret recovery phrase and store it in a safe place. 
 
-To generate a new Sui address use `sui client new-address ed25519`, which specifies the keypair scheme flag to be of type `ed25519`.
+To generate a new Sui address use `sui client new-address ed25519`, which specifies the key pair scheme flag to be of type `ed25519`.
 
 For more information, see the [Sui Client CLI](../../../references/cli/client.mdx) documentation.
 
