@@ -3419,7 +3419,7 @@ impl AuthorityPerEpochStore {
 
         let (
             mut verified_non_randomness_transactions,
-            verified_randomness_transactions,
+            mut verified_randomness_transactions,
             notifications,
             cancelled_txns,
         ) = self
@@ -3442,6 +3442,28 @@ impl AuthorityPerEpochStore {
                 authority_metrics,
             )
             .await?;
+
+        if self.accumulators_enabled() {
+            // We insert settlement transactions to the end of the certificate queues.
+            // This is important for shared object version assignment to work correctly.
+            // Withdraw transactions will be using the accumulator version prior to the settlement,
+            // and settlements will bump the accumulator version at the end to reflect all
+            // balance changes during the commit.
+            let checkpoint_height =
+                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
+
+            let non_random_settlement =
+                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
+            roots.insert(non_random_settlement.key());
+            verified_non_randomness_transactions.push_back(non_random_settlement);
+
+            if randomness_round.is_some() {
+                let randomness_settlement =
+                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
+                randomness_roots.insert(randomness_settlement.key());
+                verified_randomness_transactions.push_back(randomness_settlement);
+            }
+        }
 
         // Add the consensus commit prologue transaction to the beginning of `verified_non_randomness_certificates`.
         let consensus_commit_prologue_root = self.add_consensus_commit_prologue_transaction(
@@ -3949,28 +3971,6 @@ impl AuthorityPerEpochStore {
                     non_randomness_roots.remove(&txn_key);
                     randomness_roots.remove(&txn_key);
                 }
-            }
-        }
-
-        if self.accumulators_enabled() {
-            // We insert settlement transactions to the end of the certificate queues.
-            // This is important for shared object version assignment to work correctly.
-            // Withdraw transactions will be using the accumulator version prior to the settlement,
-            // and settlements will bump the accumulator version at the end to reflect all
-            // balance changes during the commit.
-            let checkpoint_height =
-                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
-
-            let non_random_settlement =
-                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
-            non_randomness_roots.insert(non_random_settlement.key());
-            verified_non_randomness_certificates.push_back(non_random_settlement);
-
-            if randomness_round.is_some() {
-                let randomness_settlement =
-                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
-                randomness_roots.insert(randomness_settlement.key());
-                verified_randomness_certificates.push_back(randomness_settlement);
             }
         }
 
