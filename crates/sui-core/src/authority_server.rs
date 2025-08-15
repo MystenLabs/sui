@@ -262,7 +262,7 @@ impl ValidatorServiceMetrics {
             handle_submit_transaction_latency: register_histogram_with_registry!(
                 "validator_service_submit_transaction_latency",
                 "Latency of submit transaction handler",
-                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -733,15 +733,11 @@ impl ValidatorService {
                 .state
                 .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
             {
-                let events = if include_events {
-                    if signed_effects.events_digest().is_some() {
-                        Some(
-                            self.state
-                                .get_transaction_events(signed_effects.transaction_digest())?,
-                        )
-                    } else {
-                        None
-                    }
+                let events = if include_events && signed_effects.events_digest().is_some() {
+                    Some(
+                        self.state
+                            .get_transaction_events(signed_effects.transaction_digest())?,
+                    )
                 } else {
                     None
                 };
@@ -959,29 +955,23 @@ impl ValidatorService {
                     }
                     _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
                 };
-                let events = if include_events {
-                    if effects.events_digest().is_some() {
-                        Some(self.state.get_transaction_events(effects.transaction_digest())?)
-                    } else {
-                        None
-                    }
+                let events = if include_events && effects.events_digest().is_some() {
+                    Some(self.state.get_transaction_events(effects.transaction_digest())?)
                 } else {
                     None
                 };
 
-                let input_objects = include_input_objects
-                    .then(|| self.state.get_transaction_input_objects(&effects))
-                    .map_or_else(
-                        Vec::new,
-                        |result| result.unwrap_or_default()
-                    );
+                let input_objects = if include_input_objects {
+                    self.state.get_transaction_input_objects(&effects)?
+                } else {
+                    vec![]
+                };
 
-                let output_objects = include_output_objects
-                    .then(|| self.state.get_transaction_output_objects(&effects))
-                    .map_or_else(
-                        Vec::new,
-                        |result| result.unwrap_or_default()
-                    );
+                let output_objects = if include_output_objects {
+                    self.state.get_transaction_output_objects(&effects)?
+                } else {
+                    vec![]
+                };
 
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
                     epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
@@ -1191,9 +1181,9 @@ impl ValidatorService {
         let tx_digests = [tx_digest];
 
         let fastpath_effects_future: Pin<Box<dyn Future<Output = _> + Send>> =
-            if request.consensus_position.is_some() {
+            if let Some(consensus_position) = request.consensus_position {
                 Box::pin(self.wait_for_fastpath_effects(
-                    request.consensus_position.unwrap(),
+                    consensus_position,
                     &tx_digests,
                     request.include_details,
                     epoch_store,
@@ -1203,9 +1193,14 @@ impl ValidatorService {
             };
 
         tokio::select! {
-            // We always wait for finalized effects regardless of consensus position.
-            // This is safe because we have separated mysticeti fastpath outputs to a
-            // separate cache.
+            // Ensure that finalized effects are always prioritized.
+            biased;
+            // We always wait for effects regardless of consensus position via
+            // notify_read_executed_effects. This is safe because we have separated
+            // mysticeti fastpath outputs to a separate dirty cache
+            // UncommittedData::fastpath_transaction_outputs that will only get flushed
+            // once finalized. So the output of notify_read_executed_effects is
+            // guaranteed to be finalized effects or effects from QD execution.
             mut effects = self.state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects(
@@ -1305,8 +1300,7 @@ impl ValidatorService {
                 }
 
                 mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(tx_digests),
-                    if current_status == Some(ConsensusTxStatus::FastpathCertified) => {
-
+                    if current_status == Some(ConsensusTxStatus::FastpathCertified) || current_status == Some(ConsensusTxStatus::Finalized) => {
                     let outputs = outputs.pop().unwrap();
                     let effects = outputs.effects.clone();
 

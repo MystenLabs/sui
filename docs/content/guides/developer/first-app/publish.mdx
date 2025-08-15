@@ -38,7 +38,7 @@ In the **Object Changes** table, you can find the information about the package 
 ╰─────────────────────────────────────────────────────────────────────╯
 ```
 
-Your currently active address now has three objects (or more, if you had objects prior to this example). Assuming you are using a new address, running the `sui objects` command reveals what those objects are.
+Your currently active address now has three objects (or more, if you had objects prior to this example). Assuming you are using a new address, running the `sui client objects` command reveals what those objects are.
 
 ```
 $ sui client objects
@@ -84,7 +84,7 @@ flowchart TB
 
 ### Interact with the package
 
-Now that the package is on chain, you can call its functions to interact with the package. You can use the `sui client call` command to make individual calls to package functions, or you can construct more advanced blocks of transactions using the `sui client ptb` command. The `ptb` part of the command stands for [programmable transaction blocks](../../../concepts/transactions/prog-txn-blocks.mdx). In basic terms, PTBs allow you to group commands together in a single transaction for more efficient and cost-effective network activity.
+Now that the package is on-chain, you can call its functions to interact with the package. Use the `sui client call` command to make individual calls to package functions, or construct more advanced blocks of transactions using the `sui client ptb` command. The `ptb` part of the command stands for [programmable transaction blocks (PTBs)](../../../concepts/transactions/prog-txn-blocks.mdx). PTBs allow you to group commands together in a single transaction for more efficient and cost-effective network activity.
 
 ```mermaid
 flowchart TB

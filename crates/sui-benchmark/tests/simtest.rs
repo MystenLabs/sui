@@ -27,7 +27,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::node::{AuthorityOverloadConfig, ForkRecoveryConfig};
+    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -1466,6 +1466,7 @@ mod test {
         let fork_recovery_config = ForkRecoveryConfig {
             transaction_overrides: captured_effects,
             checkpoint_overrides: checkpoint_overrides_computed,
+            fork_crash_behavior: ForkCrashBehavior::ReturnError,
         };
 
         info!(

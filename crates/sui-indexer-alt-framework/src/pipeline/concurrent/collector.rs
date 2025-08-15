@@ -171,6 +171,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     }
                 }
 
+                // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
                     metrics
                         .total_collector_rows_received
@@ -188,6 +189,7 @@ pub(super) fn collector<H: Handler + 'static>(
                         poll.reset_immediately()
                     }
                 }
+                // docs::/#collector
             }
         }
     })

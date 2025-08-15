@@ -1,0 +1,99 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-9:
+//# programmable --sender A --inputs 100 200 @B  
+//> 0: SplitCoins(Gas, [Input(0), Input(1)]);
+//> 1: MergeCoins(Gas, [NestedResult(0, 0)]);
+//> 2: TransferObjects([NestedResult(0, 1)], Input(2));
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 11:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 13-15:
+//# programmable --sender A --inputs 50 75
+//> 0: SplitCoins(Gas, [Input(0), Input(1)]);
+//> 1: MergeCoins(NestedResult(0, 0), [NestedResult(0, 1)]);
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
+
+task 4, line 17:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, lines 19-44:
+//# run-graphql
+Response: {
+  "data": {
+    "mergeIntoGas": {
+      "kind": {
+        "commands": {
+          "nodes": [
+            {
+              "__typename": "SplitCoinsCommand"
+            },
+            {
+              "__typename": "MergeCoinsCommand",
+              "coin": {
+                "__typename": "GasCoin",
+                "_": null
+              },
+              "coins": [
+                {
+                  "__typename": "TxResult",
+                  "cmd": 0,
+                  "ix": 0
+                }
+              ]
+            },
+            {
+              "__typename": "TransferObjectsCommand"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 6, lines 47-72:
+//# run-graphql
+Response: {
+  "data": {
+    "mergeSplitCoins": {
+      "kind": {
+        "commands": {
+          "nodes": [
+            {
+              "__typename": "SplitCoinsCommand"
+            },
+            {
+              "__typename": "MergeCoinsCommand",
+              "coin": {
+                "__typename": "TxResult",
+                "cmd": 0,
+                "ix": 0
+              },
+              "coins": [
+                {
+                  "__typename": "TxResult",
+                  "cmd": 0,
+                  "ix": 1
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

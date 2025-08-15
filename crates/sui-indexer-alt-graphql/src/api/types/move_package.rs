@@ -3,6 +3,23 @@
 
 use std::sync::Arc;
 
+use super::{
+    address::AddressableImpl,
+    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
+    transaction::Transaction,
+};
+use crate::api::types::type_origin::TypeOrigin;
+use crate::{
+    api::scalars::{
+        base64::Base64,
+        cursor::{BcsCursor, JsonCursor},
+        sui_address::SuiAddress,
+        uint53::UInt53,
+    },
+    error::{bad_user_input, RpcError},
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
+};
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
@@ -24,24 +41,6 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     move_package::MovePackage as NativeMovePackage,
     object::Object as NativeObject,
-};
-
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        cursor::{BcsCursor, JsonCursor},
-        sui_address::SuiAddress,
-        uint53::UInt53,
-    },
-    error::{bad_user_input, RpcError},
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    address::AddressableImpl,
-    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
-    transaction::Transaction,
 };
 
 pub(crate) struct MovePackage {
@@ -274,6 +273,18 @@ impl MovePackage {
         ObjectImpl::from(&self.super_)
             .previous_transaction(ctx)
             .await
+    }
+
+    /// A table identifying which versions of a package introduced each of its types.
+    async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
+        let type_origins = self
+            .contents
+            .type_origin_table()
+            .iter()
+            .map(|native| TypeOrigin::from(native.clone()))
+            .collect();
+
+        Some(type_origins)
     }
 }
 

@@ -318,7 +318,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MoveCallCommand | TransferObjectsCommand | OtherCommand
+union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -843,6 +843,20 @@ type Input {
 }
 
 
+"""
+Merges `coins` into the first `coin` (produces no results).
+"""
+type MergeCoinsCommand {
+	"""
+	The coin to merge into.
+	"""
+	coin: TransactionArgument
+	"""
+	The coins to be merged.
+	"""
+	coins: [TransactionArgument!]!
+}
+
 type MoveCallCommand {
 	"""
 	The storage ID of the package the function being called is defined in.
@@ -918,6 +932,10 @@ type MovePackage implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	A table identifying which versions of a package introduced each of its types.
+	"""
+	typeOrigins: [TypeOrigin!]
 }
 
 type MovePackageConnection {
@@ -1238,6 +1256,20 @@ type ProtocolConfigs {
 	List all available feature flags and their values.
 	"""
 	featureFlags: [FeatureFlag!]!
+}
+
+"""
+Publishes a Move Package.
+"""
+type PublishCommand {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]
 }
 
 """
@@ -1568,6 +1600,20 @@ type SharedInput {
 }
 
 """
+Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as many as there are amounts.)
+"""
+type SplitCoinsCommand {
+	"""
+	The coin to split.
+	"""
+	coin: TransactionArgument
+	"""
+	The denominations to split off from the coin.
+	"""
+	amounts: [TransactionArgument!]!
+}
+
+"""
 Parameters that control the distribution of the stake subsidy.
 """
 type StakeSubsidy {
@@ -1801,6 +1847,10 @@ type TransactionEffects {
 	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
 	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
+	"""
+	Transactions whose outputs this transaction depends upon.
+	"""
+	dependencies(first: Int, after: String, last: Int, before: String): TransactionConnection
 }
 
 input TransactionFilter {
@@ -1886,6 +1936,24 @@ type TxResult {
 }
 
 """
+Information about which previous versions of a package introduced its types.
+"""
+type TypeOrigin {
+	"""
+	Module defining the type.
+	"""
+	module: String
+	"""
+	Name of the struct.
+	"""
+	struct: String
+	"""
+	The storage ID of the package that first defined this type.
+	"""
+	definingId: SuiAddress
+}
+
+"""
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
@@ -1922,6 +1990,28 @@ type UnchangedConsensusObjectEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+Upgrades a Move Package.
+"""
+type UpgradeCommand {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]
+	"""
+	ID of the package being upgraded.
+	"""
+	currentPackage: SuiAddress
+	"""
+	The `UpgradeTicket` authorizing the upgrade.
+	"""
+	upgradeTicket: TransactionArgument
 }
 
 type UserSignature {

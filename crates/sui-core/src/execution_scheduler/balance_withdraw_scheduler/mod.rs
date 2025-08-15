@@ -3,11 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    digests::TransactionDigest,
-    transaction::Reservation,
-};
+use sui_types::{base_types::ObjectID, digests::TransactionDigest, transaction::Reservation};
 
 mod balance_read;
 mod naive_scheduler;
@@ -44,9 +40,6 @@ pub(crate) struct ScheduleResult {
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
 pub struct BalanceSettlement {
-    /// The accumulator version at which the settlement was committed.
-    /// i.e. the root accumulator object is now at this version after the settlement.
-    pub accumulator_version: SequenceNumber,
     /// The balance changes for each account object ID.
     /// This is currently unused because the naive scheduler
     /// always load the latest balance during scheduling.

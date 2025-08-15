@@ -103,7 +103,7 @@ use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
-    PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
+    PendingCheckpoint, PendingCheckpointInfo,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, IndirectStateObserver, SequencedConsensusTransaction,
@@ -3513,25 +3513,25 @@ impl AuthorityPerEpochStore {
             let should_write_random_checkpoint =
                 randomness_round.is_some() || (dkg_failed && !randomness_roots.is_empty());
 
-            let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
+            let pending_checkpoint = PendingCheckpoint {
                 roots: non_randomness_roots,
                 details: PendingCheckpointInfo {
                     timestamp_ms: consensus_commit_info.timestamp,
                     last_of_epoch: final_round && !should_write_random_checkpoint,
                     checkpoint_height,
                 },
-            });
+            };
             self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
 
             if should_write_random_checkpoint {
-                let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
+                let pending_checkpoint = PendingCheckpoint {
                     roots: randomness_roots.into_iter().collect(),
                     details: PendingCheckpointInfo {
                         timestamp_ms: consensus_commit_info.timestamp,
                         last_of_epoch: final_round,
                         checkpoint_height: checkpoint_height + 1,
                     },
-                });
+                };
                 self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
             }
         }
@@ -4560,7 +4560,7 @@ impl AuthorityPerEpochStore {
     pub(crate) fn write_pending_checkpoint(
         &self,
         output: &mut ConsensusCommitOutput,
-        checkpoint: &PendingCheckpointV2,
+        checkpoint: &PendingCheckpoint,
     ) -> SuiResult {
         assert!(
             !self.pending_checkpoint_exists(&checkpoint.height())?,
@@ -4587,7 +4587,7 @@ impl AuthorityPerEpochStore {
     pub fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointHeight>,
-    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
+    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpoint)>> {
         Ok(self
             .consensus_quarantine
             .read()

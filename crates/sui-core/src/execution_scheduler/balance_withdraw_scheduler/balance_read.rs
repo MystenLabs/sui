@@ -49,6 +49,7 @@ pub(crate) struct MockBalanceRead {
 
 #[cfg(test)]
 struct MockBalanceReadInner {
+    cur_version: SequenceNumber,
     balances: BTreeMap<ObjectID, BTreeMap<SequenceNumber, u64>>,
 }
 
@@ -58,39 +59,33 @@ impl MockBalanceRead {
         init_version: SequenceNumber,
         init_balances: BTreeMap<ObjectID, u64>,
     ) -> Self {
-        let read = Self {
-            inner: Arc::new(RwLock::new(MockBalanceReadInner {
-                balances: BTreeMap::new(),
-            })),
-        };
-        let balance_changes = init_balances
+        let balances = init_balances
             .iter()
-            .map(|(account_id, balance)| (*account_id, *balance as i128))
+            .map(|(account_id, balance)| {
+                (*account_id, BTreeMap::from_iter([(init_version, *balance)]))
+            })
             .collect::<BTreeMap<_, _>>();
-        read.settle_balance_changes(init_version, balance_changes);
-        read
+        Self {
+            inner: Arc::new(RwLock::new(MockBalanceReadInner {
+                cur_version: init_version,
+                balances,
+            })),
+        }
     }
 
-    pub(crate) fn settle_balance_changes(
-        &self,
-        new_accumulator_version: SequenceNumber,
-        balance_changes: BTreeMap<ObjectID, i128>,
-    ) {
-        self.inner
-            .write()
-            .settle_balance_changes(new_accumulator_version, balance_changes);
+    pub(crate) fn settle_balance_changes(&self, balance_changes: BTreeMap<ObjectID, i128>) {
+        let mut inner = self.inner.write();
+        inner.settle_balance_changes(balance_changes);
     }
 }
 
 #[cfg(test)]
 impl MockBalanceReadInner {
-    fn settle_balance_changes(
-        &mut self,
-        new_accumulator_version: SequenceNumber,
-        balance_changes: BTreeMap<ObjectID, i128>,
-    ) {
+    fn settle_balance_changes(&mut self, balance_changes: BTreeMap<ObjectID, i128>) {
+        let new_accumulator_version = self.cur_version.next();
+        self.cur_version = new_accumulator_version;
         for (account_id, balance_change) in balance_changes {
-            let balance = self.get_account_balance(&account_id, new_accumulator_version);
+            let balance = self.get_account_balance(&account_id, self.cur_version);
             let new_balance = balance as i128 + balance_change;
             assert!(new_balance >= 0);
             self.balances
