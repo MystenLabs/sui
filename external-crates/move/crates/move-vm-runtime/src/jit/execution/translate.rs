@@ -114,6 +114,7 @@ impl PackageContext<'_> {
         vtable_entry: &VirtualTableKey,
     ) -> Option<VMPointer<Function>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
+        // Use Location::Package error to report this.
         if vtable_entry.package_key != self.original_id {
             return None;
         }

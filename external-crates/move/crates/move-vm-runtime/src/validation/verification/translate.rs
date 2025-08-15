@@ -74,27 +74,14 @@ fn check_natives(context: &Context, in_module: &CompiledModule) -> VMResult<()> 
         natives: &NativeFunctions,
         module: &CompiledModule,
     ) -> PartialVMResult<()> {
-        for (idx, native_function) in module
-            .function_defs()
-            .iter()
-            .filter(|fdv| fdv.is_native())
-            .enumerate()
-        {
+        for native_function in module.function_defs().iter().filter(|fdv| fdv.is_native()) {
             let fh = module.function_handle_at(native_function.function);
             let mh = module.module_handle_at(fh.module);
-            natives
-                .resolve(
-                    module.address_identifier_at(mh.address),
-                    module.identifier_at(mh.name).as_str(),
-                    module.identifier_at(fh.name).as_str(),
-                )
-                .map_err(|_| {
-                    verification_error(
-                        StatusCode::MISSING_DEPENDENCY,
-                        IndexKind::FunctionHandle,
-                        idx as TableIndex,
-                    )
-                })?;
+            natives.resolve(
+                module.address_identifier_at(mh.address),
+                module.identifier_at(mh.name).as_str(),
+                module.identifier_at(fh.name).as_str(),
+            )?;
         }
 
         // TODO: fix check and error code if we leave something around for native structs.
