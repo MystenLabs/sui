@@ -1399,3 +1399,6 @@ ZkLoginPublicIdentifier:
   STRUCT:
     - data:
         TYPENAME: SenderSignedData
+    - auth_signature:
+        TYPENAME: EmptySignInfo
+
