@@ -39,14 +39,15 @@ impl<A: Clone> RequestRetrier<A> {
         let preferred_validators_num = std::env::var("PREFERRED_VALIDATORS_NUM")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or_else(|| auth_agg.committee.num_members() / 3);
-        
-        debug!("Using preferred_validators_num: {}", preferred_validators_num);
-        
-        let selected_validators = client_monitor.select_shuffled_preferred_validators(
-            &auth_agg.committee,
-            preferred_validators_num,
+            .unwrap_or(5);
+
+        debug!(
+            "Using preferred_validators_num: {}",
+            preferred_validators_num
         );
+
+        let selected_validators = client_monitor
+            .select_shuffled_preferred_validators(&auth_agg.committee, preferred_validators_num);
         let remaining_clients = selected_validators
             .into_iter()
             .map(|name| (name, auth_agg.authority_clients[&name].clone()))
