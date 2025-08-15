@@ -27,7 +27,6 @@ jobs:
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
 
-      # Sync sui.yaml from upstream (full overwrite)
       - name: Sync sui.yaml with upstream
         id: sync_sui
         run: |
@@ -41,6 +40,7 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Send Slack alert if sui.yaml changed
         if: steps.sync_sui.outputs.changed == 'true'
