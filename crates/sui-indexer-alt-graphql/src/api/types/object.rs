@@ -28,7 +28,7 @@ use sui_types::{
     object::Object as NativeObject,
     transaction::GenesisObject,
 };
-use tokio::join;
+use tokio::{join, sync::OnceCell};
 
 use crate::{
     api::scalars::{
@@ -110,11 +110,12 @@ pub(crate) enum IObject {
     Object(Object),
 }
 
+#[derive(Clone)]
 pub(crate) struct Object {
     pub(crate) super_: Address,
     pub(crate) version: SequenceNumber,
     pub(crate) digest: ObjectDigest,
-    pub(crate) contents: Option<Arc<NativeObject>>,
+    pub(crate) contents: OnceCell<Option<Arc<NativeObject>>>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -274,7 +275,7 @@ impl Object {
             super_: address,
             version,
             digest,
-            contents: None,
+            contents: OnceCell::new(),
         }
     }
 
@@ -289,7 +290,7 @@ impl Object {
             super_: address,
             version: native.version(),
             digest: native.digest(),
-            contents: Some(Arc::new(native)),
+            contents: OnceCell::from(Some(Arc::new(native))),
         }
     }
 
@@ -409,7 +410,7 @@ impl Object {
             super_: address,
             version: contents.version(),
             digest: contents.digest(),
-            contents: Some(contents),
+            contents: OnceCell::from(Some(contents)),
         }
     }
 
@@ -653,27 +654,16 @@ impl Object {
         Ok(conn)
     }
 
-    /// Returns a copy of this object but with its contents pre-fetched.
-    pub(crate) async fn inflated(&self, ctx: &Context<'_>) -> Result<Self, RpcError<Error>> {
-        Ok(Self {
-            super_: self.super_.clone(),
-            version: self.version,
-            digest: self.digest,
-            contents: self.contents(ctx).await?,
-        })
-    }
-
-    /// Return a copy of the object's contents, either cached in the object or fetched from the KV
-    /// store.
+    /// Return the object's contents, lazily loading it if necessary.
     pub(crate) async fn contents(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Arc<NativeObject>>, RpcError<Error>> {
-        if self.contents.is_some() {
-            Ok(self.contents.clone())
-        } else {
-            contents(ctx, self.super_.address.into(), self.version.into()).await
-        }
+    ) -> Result<&Option<Arc<NativeObject>>, RpcError<Error>> {
+        self.contents
+            .get_or_try_init(async || {
+                contents(ctx, self.super_.address.into(), self.version.into()).await
+            })
+            .await
     }
 }
 
