@@ -662,11 +662,11 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee" }
-sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee" }
-sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8bc0ff524a3a60561f1ba6315399f6f09e2b85b3", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8bc0ff524a3a60561f1ba6315399f6f09e2b85b3", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8bc0ff524a3a60561f1ba6315399f6f09e2b85b3" }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8bc0ff524a3a60561f1ba6315399f6f09e2b85b3" }
+sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8bc0ff524a3a60561f1ba6315399f6f09e2b85b3" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
