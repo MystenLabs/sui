@@ -56,7 +56,7 @@ impl KvLoader {
         &self,
         id: ObjectID,
         version: u64,
-    ) -> Result<Option<Object>, Arc<Error>> {
+    ) -> Result<Option<Object>, Error> {
         let key = VersionedObjectKey(id, version);
         match self {
             Self::Bigtable(loader) => loader.load_one(key).await,
@@ -64,12 +64,12 @@ impl KvLoader {
                 .load_one(key)
                 .await?
                 .and_then(|stored| {
-                    stored.serialized_object.map(
-                        |serialized_object| -> Result<Object, Arc<Error>> {
-                            bcs::from_bytes(serialized_object.as_slice())
-                                .map_err(|e| Arc::new(Error::Serde(e.into())))
-                        },
-                    )
+                    stored
+                        .serialized_object
+                        .map(|serialized_object| -> Result<Object, Error> {
+                            Ok(bcs::from_bytes(serialized_object.as_slice())
+                                .context("Failed to deserialize object")?)
+                        })
                 })
                 .transpose(),
         }
@@ -78,25 +78,23 @@ impl KvLoader {
     pub async fn load_many_objects(
         &self,
         keys: Vec<VersionedObjectKey>,
-    ) -> Result<HashMap<VersionedObjectKey, Object>, Arc<Error>> {
+    ) -> Result<HashMap<VersionedObjectKey, Object>, Error> {
         match self {
             Self::Bigtable(loader) => loader.load_many(keys).await,
-            Self::Pg(loader) => loader
-                .load_many(keys)
-                .await?
-                .into_iter()
-                .flat_map(|(key, stored)| {
-                    stored.serialized_object.map(
-                        |serialized_object| -> Result<(VersionedObjectKey, Object), Arc<Error>> {
-                            Ok((
-                                key,
-                                bcs::from_bytes(serialized_object.as_slice())
-                                    .map_err(|e| Arc::new(Error::Serde(e.into())))?,
-                            ))
-                        },
-                    )
-                })
-                .collect(),
+            Self::Pg(loader) => {
+                let stored_objects = loader.load_many(keys).await?;
+                let mut results = HashMap::new();
+
+                for (key, stored) in stored_objects {
+                    if let Some(serialized_object) = stored.serialized_object {
+                        let object = bcs::from_bytes(serialized_object.as_slice())
+                            .context("Failed to deserialize object")?;
+                        results.insert(key, object);
+                    }
+                }
+
+                Ok(results)
+            }
         }
     }
 
@@ -109,7 +107,7 @@ impl KvLoader {
             CheckpointContents,
             AuthorityQuorumSignInfo<true>,
         )>,
-        Arc<Error>,
+        Error,
     > {
         let key = CheckpointKey(sequence_number);
         match self {
@@ -119,14 +117,14 @@ impl KvLoader {
                 .await?
                 .map(|stored| {
                     let summary: CheckpointSummary = bcs::from_bytes(&stored.checkpoint_summary)
-                        .map_err(|e| Error::Serde(e.into()))?;
+                        .context("Failed to deserialize checkpoint summary")?;
 
                     let contents: CheckpointContents = bcs::from_bytes(&stored.checkpoint_contents)
-                        .map_err(|e| Error::Serde(e.into()))?;
+                        .context("Failed to deserialize checkpoint contents")?;
 
                     let signature: AuthorityQuorumSignInfo<true> =
                         bcs::from_bytes(&stored.validator_signatures)
-                            .map_err(|e| Error::Serde(e.into()))?;
+                            .context("Failed to deserialize validator signatures")?;
 
                     Ok((summary, contents, signature))
                 })
@@ -137,7 +135,7 @@ impl KvLoader {
     pub async fn load_one_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Option<TransactionContents>, Arc<Error>> {
+    ) -> Result<Option<TransactionContents>, Error> {
         let key = TransactionKey(digest);
         match self {
             Self::Bigtable(loader) => Ok(loader

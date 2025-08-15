@@ -7,7 +7,6 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
-    error::Error,
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache, PackageResolver},
     pg_reader::db::DbArgs,
@@ -59,7 +58,7 @@ impl Context {
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
         cancel: CancellationToken,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, anyhow::Error> {
         let pg_reader = PgReader::new(None, database_url, db_args, registry, cancel).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 

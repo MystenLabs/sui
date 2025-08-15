@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Context as _;
 use async_graphql::dataloader::Loader;
@@ -12,7 +9,7 @@ use diesel::sql_types::{Array, BigInt, Bytea};
 use sui_indexer_alt_schema::packages::{StoredPackage, StoredPackageOriginalId};
 use sui_types::base_types::ObjectID;
 
-use crate::{error::Error as ReadError, pg_reader::PgReader};
+use crate::{error::Error, pg_reader::PgReader};
 
 /// Key for fetching the original ID of a package
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -27,13 +24,6 @@ pub struct CheckpointBoundedOriginalPackageKey(pub ObjectID, pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VersionedOriginalPackageKey(pub ObjectID, pub u64);
 
-#[derive(thiserror::Error, Debug, Clone)]
-#[error(transparent)]
-pub enum Error {
-    Deserialization(#[from] Arc<anyhow::Error>),
-    Read(#[from] Arc<ReadError>),
-}
-
 #[async_trait::async_trait]
 impl Loader<PackageOriginalIdKey> for PgReader {
     type Value = StoredPackageOriginalId;
@@ -47,7 +37,7 @@ impl Loader<PackageOriginalIdKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
         let query = diesel::sql_query(
@@ -74,7 +64,7 @@ impl Loader<PackageOriginalIdKey> for PgReader {
         )
         .bind::<Array<Bytea>, _>(ids);
 
-        let stored: Vec<StoredPackageOriginalId> = conn.results(query).await.map_err(Arc::new)?;
+        let stored: Vec<StoredPackageOriginalId> = conn.results(query).await?;
         let id_to_stored: HashMap<_, _> = stored
             .iter()
             .map(|package| (&package.package_id[..], package))
@@ -103,7 +93,7 @@ impl Loader<CheckpointBoundedOriginalPackageKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
         let cps: Vec<_> = keys.iter().map(|k| k.1 as i64).collect();
@@ -140,15 +130,14 @@ impl Loader<CheckpointBoundedOriginalPackageKey> for PgReader {
         .bind::<Array<Bytea>, _>(ids)
         .bind::<Array<BigInt>, _>(cps);
 
-        let stored_packages: Vec<StoredPackage> = conn.results(query).await.map_err(Arc::new)?;
+        let stored_packages: Vec<StoredPackage> = conn.results(query).await?;
 
         // A single data loader request may contain multiple keys for the same package ID. Store
         // them in an ordered map, so that we can find the latest version for each key.
         let mut key_to_stored = BTreeMap::new();
         for package in stored_packages {
             let id = ObjectID::from_bytes(&package.original_id)
-                .context("Failed to deserialize ObjectID")
-                .map_err(Arc::new)?;
+                .context("Failed to deserialize ObjectID")?;
 
             let cp_sequence_number = package.cp_sequence_number as u64;
             key_to_stored.insert(
@@ -180,7 +169,7 @@ impl Loader<VersionedOriginalPackageKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
         let versions: Vec<_> = keys.iter().map(|k| k.1 as i64).collect();
@@ -214,7 +203,7 @@ impl Loader<VersionedOriginalPackageKey> for PgReader {
         .bind::<Array<Bytea>, _>(ids)
         .bind::<Array<BigInt>, _>(versions);
 
-        let stored_packages: Vec<StoredPackage> = conn.results(query).await.map_err(Arc::new)?;
+        let stored_packages: Vec<StoredPackage> = conn.results(query).await?;
         let key_to_stored: HashMap<_, _> = stored_packages
             .iter()
             .map(|stored| {

@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeSet, HashMap};
 
 use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
@@ -23,12 +20,12 @@ pub struct TxBalanceChangeKey(pub TransactionDigest);
 #[async_trait::async_trait]
 impl Loader<TxBalanceChangeKey> for PgReader {
     type Value = StoredTxBalanceChange;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[TxBalanceChangeKey],
-    ) -> Result<HashMap<TxBalanceChangeKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<TxBalanceChangeKey, Self::Value>, Error> {
         use tx_balance_changes::dsl as b;
         use tx_digests::dsl as t;
 
@@ -36,7 +33,7 @@ impl Loader<TxBalanceChangeKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
         let balance_changes: Vec<(Vec<u8>, StoredTxBalanceChange)> = conn
@@ -46,8 +43,7 @@ impl Loader<TxBalanceChangeKey> for PgReader {
                     .select((t::tx_digest, StoredTxBalanceChange::as_select()))
                     .filter(t::tx_digest.eq_any(digests)),
             )
-            .await
-            .map_err(Arc::new)?;
+            .await?;
 
         let digest_to_balance_changes: HashMap<_, _> = balance_changes.into_iter().collect();
 

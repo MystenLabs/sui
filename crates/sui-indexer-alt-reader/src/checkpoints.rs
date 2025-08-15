@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeSet, HashMap};
 
 use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
@@ -23,25 +20,24 @@ pub struct CheckpointKey(pub u64);
 #[async_trait::async_trait]
 impl Loader<CheckpointKey> for PgReader {
     type Value = StoredCheckpoint;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[CheckpointKey],
-    ) -> Result<HashMap<CheckpointKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<CheckpointKey, Self::Value>, Error> {
         use kv_checkpoints::dsl as c;
 
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let seqs: BTreeSet<_> = keys.iter().map(|d| d.0 as i64).collect();
         let checkpoints: Vec<StoredCheckpoint> = conn
             .results(c::kv_checkpoints.filter(c::sequence_number.eq_any(seqs)))
-            .await
-            .map_err(Arc::new)?;
+            .await?;
 
         Ok(checkpoints
             .into_iter()
@@ -57,12 +53,12 @@ impl Loader<CheckpointKey> for BigtableReader {
         CheckpointContents,
         AuthorityQuorumSignInfo<true>,
     );
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[CheckpointKey],
-    ) -> Result<HashMap<CheckpointKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<CheckpointKey, Self::Value>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
