@@ -14,6 +14,7 @@ use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
     TransactionEffects, TransactionEffectsAPI,
 };
+use sui_types::gas_coin::GasCoin;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, ObjectArg, TransactionKind};
 use sui_types::{
@@ -147,6 +148,22 @@ impl MergedValueIntermediate {
     }
 }
 
+fn get_sui_in_accumulator_event(address: &AccumulatorAddress, value: &AccumulatorValue) -> u64 {
+    match &address.ty {
+        TypeTag::Struct(struct_tag) => {
+            if !GasCoin::is_gas_balance(struct_tag) {
+                0
+            } else {
+                match value {
+                    AccumulatorValue::Integer(v) => *v,
+                    AccumulatorValue::IntegerTuple(_, _) => fatal!("invalid accumulator value"),
+                }
+            }
+        }
+        _ => 0,
+    }
+}
+
 // TODO(address-balances): This currently only creates a single accumulator update transaction.
 // To support multiple accumulator update transactions, we need to:
 // - have each transaction take the accumulator root as a "non-exclusive mutable" input
@@ -176,6 +193,9 @@ pub fn create_accumulator_update_transactions(
     let mut updates = HashMap::<_, Update>::new();
 
     let mut addresses = HashMap::<_, AccumulatorAddress>::new();
+
+    let mut total_input_sui = 0;
+    let mut total_output_sui = 0;
 
     for effect in ckpt_effects {
         let tx = effect.transaction_digest();
@@ -212,9 +232,11 @@ pub fn create_accumulator_update_transactions(
 
             match operation {
                 AccumulatorOperation::Merge => {
+                    total_input_sui += get_sui_in_accumulator_event(&address, &value);
                     entry.merge.accumulate_into(value);
                 }
                 AccumulatorOperation::Split => {
+                    total_output_sui += get_sui_in_accumulator_event(&address, &value);
                     entry.split.accumulate_into(value);
                 }
             }
@@ -234,13 +256,21 @@ pub fn create_accumulator_update_transactions(
     let epoch_arg = builder.pure(epoch).unwrap();
     let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
     let idx_arg = builder.pure(0u64).unwrap();
+    let total_input_sui_arg = builder.pure(total_input_sui).unwrap();
+    let total_output_sui_arg = builder.pure(total_output_sui).unwrap();
 
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         ACCUMULATOR_SETTLEMENT_MODULE.into(),
         ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
         vec![],
-        vec![epoch_arg, checkpoint_height_arg, idx_arg],
+        vec![
+            epoch_arg,
+            checkpoint_height_arg,
+            idx_arg,
+            total_input_sui_arg,
+            total_output_sui_arg,
+        ],
     );
 
     let num_updates = updates.len();

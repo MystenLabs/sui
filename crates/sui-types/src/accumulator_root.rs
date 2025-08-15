@@ -6,11 +6,11 @@ use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::TransactionDigest,
     dynamic_field::{
-        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject,
+        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject, Field,
         DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
     },
     error::{SuiError, SuiResult},
-    object::{Object, Owner},
+    object::{MoveObject, Object, Owner},
     storage::{ChildObjectResolver, ObjectStore},
     MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -206,6 +206,28 @@ impl AccumulatorValue {
             Owner::ObjectOwner(SUI_ACCUMULATOR_ROOT_ADDRESS.into()),
             TransactionDigest::genesis_marker(),
         )
+    }
+}
+
+impl TryFrom<&MoveObject> for AccumulatorValue {
+    type Error = SuiError;
+    fn try_from(value: &MoveObject) -> Result<Self, Self::Error> {
+        value
+            .type_()
+            .is_balance_accumulator_field()
+            .then(|| {
+                value
+                    .to_rust::<Field<AccumulatorKey, U128>>()
+                    .map(|f| f.value)
+            })
+            .flatten()
+            .map(Self::U128)
+            .ok_or_else(|| {
+                SuiError::DynamicFieldReadError(format!(
+                    "Dynamic field {:?} is not a AccumulatorValue",
+                    value.id()
+                ))
+            })
     }
 }
 
