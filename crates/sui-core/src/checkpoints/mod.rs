@@ -91,7 +91,7 @@ pub struct EpochStats {
     pub total_gas_reward: u64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
     pub last_of_epoch: bool,
@@ -100,60 +100,10 @@ pub struct PendingCheckpointInfo {
     pub checkpoint_height: CheckpointHeight,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpoint {
-    pub roots: Vec<TransactionDigest>,
-    pub details: PendingCheckpointInfo,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PendingCheckpointV2 {
-    // This is an enum for future upgradability, though at the moment there is only one variant.
-    V2(PendingCheckpointV2Contents),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PendingCheckpointV2Contents {
     pub roots: Vec<TransactionKey>,
     pub details: PendingCheckpointInfo,
-}
-
-impl PendingCheckpointV2 {
-    pub fn as_v2(&self) -> &PendingCheckpointV2Contents {
-        match self {
-            PendingCheckpointV2::V2(contents) => contents,
-        }
-    }
-
-    pub fn into_v2(self) -> PendingCheckpointV2Contents {
-        match self {
-            PendingCheckpointV2::V2(contents) => contents,
-        }
-    }
-
-    pub fn expect_v1(self) -> PendingCheckpoint {
-        let v2 = self.into_v2();
-        PendingCheckpoint {
-            roots: v2
-                .roots
-                .into_iter()
-                .map(|root| *root.unwrap_digest())
-                .collect(),
-            details: v2.details,
-        }
-    }
-
-    pub fn roots(&self) -> &Vec<TransactionKey> {
-        &self.as_v2().roots
-    }
-
-    pub fn details(&self) -> &PendingCheckpointInfo {
-        &self.as_v2().details
-    }
-
-    pub fn height(&self) -> CheckpointHeight {
-        self.details().checkpoint_height
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1258,7 +1208,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(
         &mut self,
-        pendings: Vec<PendingCheckpointV2>,
+        pendings: Vec<PendingCheckpoint>,
     ) -> CheckpointBuilderResult<CheckpointSequenceNumber> {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
         let last_details = pendings.last().unwrap().details().clone();
@@ -1372,7 +1322,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all)]
     async fn resolve_checkpoint_transactions(
         &self,
-        pending_checkpoints: Vec<PendingCheckpointV2>,
+        pending_checkpoints: Vec<PendingCheckpoint>,
     ) -> SuiResult<(Vec<TransactionEffects>, HashSet<TransactionDigest>)> {
         let _scope = monitored_scope("CheckpointBuilder::resolve_checkpoint_transactions");
 
@@ -1386,7 +1336,7 @@ impl CheckpointBuilder {
         let mut tx_roots = HashSet::new();
 
         for pending_checkpoint in pending_checkpoints.into_iter() {
-            let mut pending = pending_checkpoint.into_v2();
+            let mut pending = pending_checkpoint;
             debug!(
                 checkpoint_commit_height = pending.details.checkpoint_height,
                 "Resolving checkpoint transactions for pending checkpoint.",
@@ -2974,7 +2924,7 @@ impl CheckpointService {
     fn write_and_notify_checkpoint_for_testing(
         &self,
         epoch_store: &AuthorityPerEpochStore,
-        checkpoint: PendingCheckpointV2,
+        checkpoint: PendingCheckpoint,
     ) -> SuiResult {
         use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
 
@@ -3058,20 +3008,13 @@ impl PendingCheckpoint {
     pub fn height(&self) -> CheckpointHeight {
         self.details.checkpoint_height
     }
-}
 
-impl PendingCheckpointV2 {}
+    pub fn roots(&self) -> &Vec<TransactionKey> {
+        &self.roots
+    }
 
-impl From<PendingCheckpoint> for PendingCheckpointV2 {
-    fn from(value: PendingCheckpoint) -> Self {
-        PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-            roots: value
-                .roots
-                .into_iter()
-                .map(TransactionKey::Digest)
-                .collect(),
-            details: value.details,
-        })
+    pub fn details(&self) -> &PendingCheckpointInfo {
+        &self.details
     }
 }
 
@@ -3482,8 +3425,8 @@ mod tests {
         }
     }
 
-    fn p(i: u64, t: Vec<u8>, timestamp_ms: u64) -> PendingCheckpointV2 {
-        PendingCheckpointV2::V2(PendingCheckpointV2Contents {
+    fn p(i: u64, t: Vec<u8>, timestamp_ms: u64) -> PendingCheckpoint {
+        PendingCheckpoint {
             roots: t
                 .into_iter()
                 .map(|t| TransactionKey::Digest(d(t)))
@@ -3493,7 +3436,7 @@ mod tests {
                 last_of_epoch: false,
                 checkpoint_height: i,
             },
-        })
+        }
     }
 
     fn d(i: u8) -> TransactionDigest {
