@@ -298,6 +298,7 @@ async fn test_successful_certified_effects() {
             *name,
             submit_tx_resp,
             &options,
+            false,
         )
         .await;
 
@@ -337,6 +338,7 @@ async fn test_successful_certified_effects() {
             *name,
             submit_tx_resp,
             &options,
+            false,
         )
         .await;
 
@@ -400,6 +402,7 @@ async fn test_transaction_rejected_non_retriable() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -465,6 +468,7 @@ async fn test_transaction_rejected_retriable() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -536,6 +540,7 @@ async fn test_transaction_rejected_with_conflicts() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -597,6 +602,7 @@ async fn test_transaction_expired() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -680,6 +686,7 @@ async fn test_mixed_rejected_and_expired() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -721,6 +728,7 @@ async fn test_mixed_rejected_and_expired() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -812,6 +820,7 @@ async fn test_mixed_rejected_reasons() {
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
+                false,
             )
             .await;
 
@@ -862,6 +871,7 @@ async fn test_mixed_rejected_reasons() {
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
+                false,
             )
             .await;
 
@@ -910,6 +920,7 @@ async fn test_mixed_rejected_reasons() {
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
+                false,
             )
             .await;
 
@@ -961,6 +972,7 @@ async fn test_mixed_rejected_reasons() {
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
+                false,
             )
             .await;
 
@@ -1008,6 +1020,7 @@ async fn test_mixed_rejected_reasons() {
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
+                false,
             )
             .await;
 
@@ -1093,6 +1106,7 @@ async fn test_forked_execution() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -1183,6 +1197,7 @@ async fn test_aborted_with_multiple_effects() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -1278,6 +1293,7 @@ async fn test_full_effects_retry_loop() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -1365,6 +1381,7 @@ async fn test_full_effects_digest_mismatch() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 
@@ -1440,6 +1457,7 @@ async fn test_request_retrier_exhaustion() {
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
+            false,
         )
         .await;
 

@@ -41,6 +41,7 @@ use crate::{
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 
 #[cfg(test)]
 #[path = "unit_tests/effects_certifier_tests.rs"]
@@ -68,10 +69,12 @@ impl EffectsCertifier {
         mut current_target: AuthorityName,
         submit_txn_resp: SubmitTxResponse,
         options: &SubmitTransactionOptions,
+        is_single_writer_tx: bool,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        let start_time = Instant::now();
         // When consensus position is provided, wait for finalized and fastpath outputs at the validators' side.
         // Otherwise, only wait for finalized effects.
         // Skip the first attempt to get full effects if it is already provided.
@@ -159,6 +162,14 @@ impl EffectsCertifier {
                                 result: Ok(latency),
                             });
                         }
+                        self.metrics
+                            .certified_finalized_effects_latency
+                            .with_label_values(&[if is_single_writer_tx {
+                                TX_TYPE_SINGLE_WRITER_TX
+                            } else {
+                                TX_TYPE_SHARED_OBJ_TX
+                            }])
+                            .observe(start_time.elapsed().as_secs_f64());
                         return Ok(
                             self.get_quorum_transaction_response(effects_digest, executed_data)
                         );
