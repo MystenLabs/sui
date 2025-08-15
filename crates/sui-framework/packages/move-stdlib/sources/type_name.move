@@ -37,18 +37,15 @@ public struct TypeName has copy, drop, store {
     name: String,
 }
 
-/// Return a value representation of the type `T`.  Package IDs
-/// that appear in fully qualified type names in the output from
-/// this function are defining IDs (the ID of the package in
-/// storage that first introduced the type).
-public native fun get<T>(): TypeName;
+/// Return a value representation of the type `T`. Package IDs that appear in fully qualified type
+/// names in the output from this function are defining IDs (the ID of the package in storage that
+/// first introduced the type).
+public native fun with_defining_ids<T>(): TypeName;
 
-/// Return a value representation of the type `T`.  Package IDs
-/// that appear in fully qualified type names in the output from
-/// this function are original IDs (the ID of the first version of
-/// the package, even if the type in question was introduced in a
-/// later upgrade).
-public native fun get_with_original_ids<T>(): TypeName;
+/// Return a value representation of the type `T`. Package IDs that appear in fully qualified type
+/// names in the output from this function are original IDs (the ID of the first version of
+/// the package, even if the type in question was introduced in a later upgrade).
+public native fun with_original_ids<T>(): TypeName;
 
 /// Returns true iff the TypeName represents a primitive type, i.e. one of
 /// u8, u16, u32, u64, u128, u256, bool, address, vector.
@@ -74,13 +71,13 @@ public fun is_primitive(self: &TypeName): bool {
 }
 
 /// Get the String representation of `self`
-public fun borrow_string(self: &TypeName): &String {
+public fun as_string(self: &TypeName): &String {
     &self.name
 }
 
 /// Get Address string (Base16 encoded), first part of the TypeName.
 /// Aborts if given a primitive type.
-public fun get_address(self: &TypeName): String {
+public fun address_string(self: &TypeName): String {
     assert!(!self.is_primitive(), ENonModuleType);
 
     // Base16 (string) representation of an address has 2 symbols per byte.
@@ -100,7 +97,7 @@ public fun get_address(self: &TypeName): String {
 
 /// Get name of the module.
 /// Aborts if given a primitive type.
-public fun get_module(self: &TypeName): String {
+public fun module_string(self: &TypeName): String {
     assert!(!self.is_primitive(), ENonModuleType);
 
     // Starts after address and a double colon: `<addr as HEX>::`
@@ -124,4 +121,31 @@ public fun get_module(self: &TypeName): String {
 /// Convert `self` into its inner String
 public fun into_string(self: TypeName): String {
     self.name
+}
+
+// === Deprecated ===
+
+#[deprecated(note = b"Renamed to `with_defining_ids` for clarity.")]
+public fun get<T>(): TypeName {
+    with_defining_ids<T>()
+}
+
+#[deprecated(note = b"Renamed to `with_original_ids` for clarity.")]
+public fun get_with_original_ids<T>(): TypeName {
+    with_original_ids<T>()
+}
+
+#[deprecated(note = b"Renamed to `as_string` for consistency.")]
+public fun borrow_string(self: &TypeName): &String {
+    self.as_string()
+}
+
+#[deprecated(note = b"Renamed to `address_string` for consistency.")]
+public fun get_address(self: &TypeName): String {
+    self.address_string()
+}
+
+#[deprecated(note = b"Renamed to `module_string` for consistency.")]
+public fun get_module(self: &TypeName): String {
+    self.module_string()
 }

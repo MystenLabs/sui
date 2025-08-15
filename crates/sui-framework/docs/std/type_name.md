@@ -7,13 +7,18 @@ Functionality for converting Move types into values. Use with care!
 
 -  [Struct `TypeName`](#std_type_name_TypeName)
 -  [Constants](#@Constants_0)
+-  [Function `with_defining_ids`](#std_type_name_with_defining_ids)
+-  [Function `with_original_ids`](#std_type_name_with_original_ids)
+-  [Function `is_primitive`](#std_type_name_is_primitive)
+-  [Function `as_string`](#std_type_name_as_string)
+-  [Function `address_string`](#std_type_name_address_string)
+-  [Function `module_string`](#std_type_name_module_string)
+-  [Function `into_string`](#std_type_name_into_string)
 -  [Function `get`](#std_type_name_get)
 -  [Function `get_with_original_ids`](#std_type_name_get_with_original_ids)
--  [Function `is_primitive`](#std_type_name_is_primitive)
 -  [Function `borrow_string`](#std_type_name_borrow_string)
 -  [Function `get_address`](#std_type_name_get_address)
 -  [Function `get_module`](#std_type_name_get_module)
--  [Function `into_string`](#std_type_name_into_string)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -142,17 +147,16 @@ The type is not from a package/module. It is a primitive type.
 
 
 
-<a name="std_type_name_get"></a>
+<a name="std_type_name_with_defining_ids"></a>
 
-## Function `get`
+## Function `with_defining_ids`
 
-Return a value representation of the type <code>T</code>.  Package IDs
-that appear in fully qualified type names in the output from
-this function are defining IDs (the ID of the package in
-storage that first introduced the type).
+Return a value representation of the type <code>T</code>. Package IDs that appear in fully qualified type
+names in the output from this function are defining IDs (the ID of the package in storage that
+first introduced the type).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get">get</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_with_defining_ids">with_defining_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
 </code></pre>
 
 
@@ -161,25 +165,23 @@ storage that first introduced the type).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get">get</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_with_defining_ids">with_defining_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>;
 </code></pre>
 
 
 
 </details>
 
-<a name="std_type_name_get_with_original_ids"></a>
+<a name="std_type_name_with_original_ids"></a>
 
-## Function `get_with_original_ids`
+## Function `with_original_ids`
 
-Return a value representation of the type <code>T</code>.  Package IDs
-that appear in fully qualified type names in the output from
-this function are original IDs (the ID of the first version of
-the package, even if the type in question was introduced in a
-later upgrade).
+Return a value representation of the type <code>T</code>. Package IDs that appear in fully qualified type
+names in the output from this function are original IDs (the ID of the first version of
+the package, even if the type in question was introduced in a later upgrade).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_with_original_ids">with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
 </code></pre>
 
 
@@ -188,7 +190,7 @@ later upgrade).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_with_original_ids">with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>;
 </code></pre>
 
 
@@ -238,14 +240,14 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
 
 </details>
 
-<a name="std_type_name_borrow_string"></a>
+<a name="std_type_name_as_string"></a>
 
-## Function `borrow_string`
+## Function `as_string`
 
 Get the String representation of <code>self</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_borrow_string">borrow_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_as_string">as_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -254,7 +256,7 @@ Get the String representation of <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_borrow_string">borrow_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): &String {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_as_string">as_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): &String {
     &self.name
 }
 </code></pre>
@@ -263,15 +265,15 @@ Get the String representation of <code>self</code>
 
 </details>
 
-<a name="std_type_name_get_address"></a>
+<a name="std_type_name_address_string"></a>
 
-## Function `get_address`
+## Function `address_string`
 
 Get Address string (Base16 encoded), first part of the TypeName.
 Aborts if given a primitive type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_address">get_address</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_address_string">address_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -280,7 +282,7 @@ Aborts if given a primitive type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_address">get_address</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_address_string">address_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
     <b>assert</b>!(!self.<a href="../std/type_name.md#std_type_name_is_primitive">is_primitive</a>(), <a href="../std/type_name.md#std_type_name_ENonModuleType">ENonModuleType</a>);
     // Base16 (<a href="../std/string.md#std_string">string</a>) representation of an <b>address</b> <b>has</b> 2 symbols per byte.
     <b>let</b> len = <a href="../std/address.md#std_address_length">address::length</a>() * 2;
@@ -300,15 +302,15 @@ Aborts if given a primitive type.
 
 </details>
 
-<a name="std_type_name_get_module"></a>
+<a name="std_type_name_module_string"></a>
 
-## Function `get_module`
+## Function `module_string`
 
 Get name of the module.
 Aborts if given a primitive type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_module">get_module</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_module_string">module_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
 </code></pre>
 
 
@@ -317,7 +319,7 @@ Aborts if given a primitive type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_module">get_module</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_module_string">module_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
     <b>assert</b>!(!self.<a href="../std/type_name.md#std_type_name_is_primitive">is_primitive</a>(), <a href="../std/type_name.md#std_type_name_ENonModuleType">ENonModuleType</a>);
     // Starts after <b>address</b> and a double colon: `&lt;addr <b>as</b> HEX&gt;::`
     <b>let</b> <b>mut</b> i = <a href="../std/address.md#std_address_length">address::length</a>() * 2 + 2;
@@ -359,6 +361,126 @@ Convert <code>self</code> into its inner String
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_into_string">into_string</a>(self: <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
     self.name
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_get"></a>
+
+## Function `get`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get">get</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get">get</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a> {
+    <a href="../std/type_name.md#std_type_name_with_defining_ids">with_defining_ids</a>&lt;T&gt;()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_get_with_original_ids"></a>
+
+## Function `get_with_original_ids`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a> {
+    <a href="../std/type_name.md#std_type_name_with_original_ids">with_original_ids</a>&lt;T&gt;()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_borrow_string"></a>
+
+## Function `borrow_string`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_borrow_string">borrow_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_borrow_string">borrow_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): &String {
+    self.<a href="../std/type_name.md#std_type_name_as_string">as_string</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_get_address"></a>
+
+## Function `get_address`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_address">get_address</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_address">get_address</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
+    self.<a href="../std/type_name.md#std_type_name_address_string">address_string</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_get_module"></a>
+
+## Function `get_module`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_module">get_module</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_module">get_module</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
+    self.<a href="../std/type_name.md#std_type_name_module_string">module_string</a>()
 }
 </code></pre>
 

@@ -4870,13 +4870,31 @@ length
 TypeName
 	public struct
 	0x1::type_name
+with_defining_ids
+	public fun
+	0x1::type_name
+with_original_ids
+	public fun
+	0x1::type_name
+is_primitive
+	public fun
+	0x1::type_name
+as_string
+	public fun
+	0x1::type_name
+address_string
+	public fun
+	0x1::type_name
+module_string
+	public fun
+	0x1::type_name
+into_string
+	public fun
+	0x1::type_name
 get
 	public fun
 	0x1::type_name
 get_with_original_ids
-	public fun
-	0x1::type_name
-is_primitive
 	public fun
 	0x1::type_name
 borrow_string
@@ -4886,9 +4904,6 @@ get_address
 	public fun
 	0x1::type_name
 get_module
-	public fun
-	0x1::type_name
-into_string
 	public fun
 	0x1::type_name
 bitwise_not
