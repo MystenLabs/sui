@@ -7,6 +7,7 @@ mod publish;
 mod split_coins;
 mod transaction_argument;
 mod transfer_objects;
+mod upgrade;
 
 use async_graphql::*;
 use sui_types::transaction::Command as NativeCommand;
@@ -19,6 +20,7 @@ pub use publish::PublishCommand;
 pub use split_coins::SplitCoinsCommand;
 pub use transaction_argument::TransactionArgument;
 pub use transfer_objects::TransferObjectsCommand;
+pub use upgrade::UpgradeCommand;
 
 use crate::scope::Scope;
 
@@ -30,6 +32,7 @@ pub enum Command {
     Publish(PublishCommand),
     SplitCoins(SplitCoinsCommand),
     TransferObjects(TransferObjectsCommand),
+    Upgrade(UpgradeCommand),
     Other(OtherCommand),
 }
 
@@ -63,6 +66,14 @@ impl Command {
                 modules: Some(modules.into_iter().map(Base64::from).collect()),
                 dependencies: Some(dependencies.into_iter().map(SuiAddress::from).collect()),
             }),
+            NativeCommand::Upgrade(modules, dependencies, current_package, upgrade_ticket) => {
+                Command::Upgrade(UpgradeCommand {
+                    modules: Some(modules.into_iter().map(Base64::from).collect()),
+                    dependencies: Some(dependencies.into_iter().map(SuiAddress::from).collect()),
+                    current_package: Some(SuiAddress::from(current_package)),
+                    upgrade_ticket: Some(TransactionArgument::from(upgrade_ticket)),
+                })
+            }
             _ => Command::Other(OtherCommand { dummy: None }),
         }
     }

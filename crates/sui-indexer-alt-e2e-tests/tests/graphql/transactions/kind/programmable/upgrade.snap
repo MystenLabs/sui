@@ -1,0 +1,60 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-11:
+//# publish --sender A --upgradeable
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5289600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-18:
+//# upgrade --package test --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5289600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, line 20:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 22-47:
+//# run-graphql
+Response: {
+  "data": {
+    "upgradeTest": {
+      "kind": {
+        "commands": {
+          "nodes": [
+            {
+              "__typename": "MoveCallCommand"
+            },
+            {
+              "__typename": "UpgradeCommand",
+              "modules": [
+                "oRzrCwYAAAAGAQACAwIFBQcDBwoUCB4gDD4QAAEAAAABAAABAwVoZWxsbw1zaW1wbGVfbW9kdWxlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAIGKwAAAAAAAAACAA=="
+              ],
+              "dependencies": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001",
+                "0x0000000000000000000000000000000000000000000000000000000000000002"
+              ],
+              "currentPackage": "0x093349dc7c41fc317038e0b76b134bf044728c4fbb6a36da985af43dd552f707",
+              "upgradeTicket": {
+                "__typename": "TxResult",
+                "cmd": 0,
+                "ix": null
+              }
+            },
+            {
+              "__typename": "MoveCallCommand"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
