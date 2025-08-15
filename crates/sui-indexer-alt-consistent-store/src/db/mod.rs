@@ -3,7 +3,9 @@
 #![allow(dead_code)]
 
 use std::{
+    cmp,
     collections::BTreeMap,
+    marker,
     ops::{Bound, RangeBounds, RangeInclusive},
     path::Path,
     sync::{Arc, RwLock},
@@ -73,12 +75,6 @@ pub(crate) struct Watermark {
     pub timestamp_ms_hi_inclusive: u64,
 }
 
-/// A snapshot along with its associated watermark
-struct Snapshot<'a> {
-    snapshot: Arc<rocksdb::Snapshot<'a>>,
-    watermark: Watermark,
-}
-
 /// Database internals in a self-referential struct that owns the database as well as handles from
 /// that databases (for column families and snapshots). This data structure is not inherently
 /// thread-safe, but access to it is protected by [`Db`]'s API.
@@ -98,7 +94,7 @@ struct Inner {
     /// Snapshots from `db`, ordered by checkpoint sequence number, along with their watermarks.
     #[borrows()]
     #[covariant]
-    snapshots: BTreeMap<u64, Snapshot<'this>>,
+    snapshots: BTreeMap<u64, (Arc<rocksdb::Snapshot<'this>>, Watermark)>,
 }
 
 /// A raw iterator along with its encoded upper and lower bounds.
@@ -156,15 +152,13 @@ impl Db {
     /// Register a new snapshot at the checkpoint specified in the watermark. This could result in
     /// the oldest (by checkpoint) snapshot being dropped to ensure the number of snapshots remain
     /// at or below `capacity`.
-    pub(crate) fn snapshot(&self, watermark: Watermark) {
+    pub(crate) fn take_snapshot(&self, watermark: Watermark) {
         self.0.write().expect("poisoned").with_mut(|f| {
             f.snapshots.insert(
                 watermark.checkpoint_hi_inclusive,
-                Snapshot {
-                    snapshot: Arc::new(f.db.snapshot()),
-                    watermark,
-                },
+                (Arc::new(f.db.snapshot()), watermark),
             );
+
             if f.snapshots.len() > *f.capacity {
                 f.snapshots.pop_first();
             }
@@ -212,10 +206,10 @@ impl Db {
     /// `cp_hi_inclusive`, or `None` if there are no snapshots. Returns the watermark range.
     pub(crate) fn snapshot_range(&self, cp_hi_inclusive: u64) -> Option<RangeInclusive<Watermark>> {
         self.0.read().expect("poisoned").with_snapshots(|s| {
-            let (_, lo_s) = s.first_key_value()?;
-            let (_, hi_s) = s.range(..=cp_hi_inclusive).next_back()?;
+            let (_, (_, lo)) = s.first_key_value()?;
+            let (_, (_, hi)) = s.range(..=cp_hi_inclusive).next_back()?;
 
-            Some(lo_s.watermark..=hi_s.watermark)
+            Some(*lo..=*hi)
         })
     }
 
@@ -426,11 +420,9 @@ impl Db {
 
     fn at_snapshot(&self, checkpoint: u64) -> Result<Arc<rocksdb::Snapshot<'_>>, Error> {
         self.0.read().expect("poisoned").with(|f| {
-            let Some(sw) = f.snapshots.get(&checkpoint) else {
+            let Some((snapshot, _)) = f.snapshots.get(&checkpoint) else {
                 return Err(Error::NotInRange { checkpoint });
             };
-
-            let snapshot = sw.snapshot.clone();
 
             // SAFETY: Decouple the lifetime of the Snapshot from the lifetime of the
             // RwLockReadGuard.
@@ -438,7 +430,8 @@ impl Db {
             // The lifetime annotation on Snapshot couples its lifetime with the DB it came from,
             // which is owned by `self` through `Inner`, so it is safe to extend the lifetime of
             // the column family from that of the read guard, to that of `self` using `transmute`.
-            let snapshot: Arc<rocksdb::Snapshot<'_>> = unsafe { std::mem::transmute(snapshot) };
+            let snapshot: Arc<rocksdb::Snapshot<'_>> =
+                unsafe { std::mem::transmute(snapshot.clone()) };
 
             Ok(snapshot)
         })
@@ -504,19 +497,20 @@ impl Db {
 }
 
 /// SAFETY: [`Db`] wraps an `RwLock` which protects access to its internals.
-unsafe impl std::marker::Sync for Db {}
-unsafe impl std::marker::Send for Db {}
+unsafe impl marker::Sync for Db {}
+unsafe impl marker::Send for Db {}
 
-impl PartialOrd for Watermark {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+/// Watermarks are identified by their checkpoint, so comparison can be limited to them.
+impl Ord for Watermark {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.checkpoint_hi_inclusive
+            .cmp(&other.checkpoint_hi_inclusive)
     }
 }
 
-impl Ord for Watermark {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.checkpoint_hi_inclusive
-            .cmp(&other.checkpoint_hi_inclusive)
+impl PartialOrd for Watermark {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -598,7 +592,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
         assert!(db.get::<u64, u64>(0, &cf, &42u64).unwrap().is_none());
     }
 
@@ -609,7 +603,7 @@ pub(crate) mod tests {
         let cf = db.cf("test").unwrap();
 
         for i in 0..10 {
-            db.snapshot(wm(i));
+            db.take_snapshot(wm(i));
         }
 
         // The first 6 snapshots should be dropped.
@@ -634,7 +628,7 @@ pub(crate) mod tests {
         let cf = db.cf("test").unwrap();
 
         // Register an empty snapshot.
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         let k = 42u64;
         let v0 = 43u64;
@@ -663,7 +657,7 @@ pub(crate) mod tests {
 
         {
             // Once the snapshot has been taken, the write is visible.
-            db.snapshot(wm(1));
+            db.take_snapshot(wm(1));
             assert_eq!(db.get(1, &cf, &k).unwrap(), Some(v0));
         }
 
@@ -675,7 +669,7 @@ pub(crate) mod tests {
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k), bcs::to_bytes(&v1).unwrap());
         db.write("test", wm(2), batch).unwrap();
-        db.snapshot(wm(2));
+        db.take_snapshot(wm(2));
 
         {
             // A new value has been written, and a snapshot taken, we can now read the value at
@@ -702,7 +696,7 @@ pub(crate) mod tests {
         batch.put_cf(&cf, key::encode(&k2), bcs::to_bytes(&v2).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
         db.write("test", wm(0), batch).unwrap();
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         let mut res = db
             .multi_get(0, &cf, [&k0, &k1, &k2, &k3])
@@ -724,7 +718,7 @@ pub(crate) mod tests {
         batch.put_cf(&cf, key::encode(&k1), bcs::to_bytes(&v1).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
         db.write("test", wm(1), batch).unwrap();
-        db.snapshot(wm(1));
+        db.take_snapshot(wm(1));
 
         let mut res = db
             .multi_get(1, &cf, [&k0, &k1, &k2, &k3])
@@ -804,7 +798,7 @@ pub(crate) mod tests {
             assert_eq!(db.watermark("test").unwrap(), Some(wm(1)));
 
             // ...and once there is a snapshot, the data can be read.
-            db.snapshot(wm(1));
+            db.take_snapshot(wm(1));
             assert_eq!(db.get(1, &cf, &42u64).unwrap(), Some(43u64));
         }
 
@@ -824,7 +818,7 @@ pub(crate) mod tests {
             );
 
             // But once the snapshot has been taken, the data is still there.
-            db.snapshot(wm(1));
+            db.take_snapshot(wm(1));
             assert_eq!(db.get(1, &cf, &42u64).unwrap(), Some(43u64));
         }
     }
@@ -843,7 +837,7 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(0), batch).unwrap();
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         let actual: Result<Vec<(u64, u64)>, Error> =
             db.iter(0, &cf, (U::<u64>, U)).unwrap().collect();
@@ -976,7 +970,7 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(0), batch).unwrap();
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(key::encode(&4u64));
@@ -1021,7 +1015,7 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(0), batch).unwrap();
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         // Create an iterator from the first snapshot.
         let mut i0: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
@@ -1037,7 +1031,7 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(1), batch).unwrap();
-        db.snapshot(wm(1));
+        db.take_snapshot(wm(1));
 
         // Create an iterator from the next snapshot.
         let mut i1: iter::FwdIter<u64, u64> = db.iter(1, &cf, (U::<u64>, U)).unwrap();
@@ -1057,7 +1051,7 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(2), batch).unwrap();
-        db.snapshot(wm(2));
+        db.take_snapshot(wm(2));
 
         // Finish iterating through the second iterator.
         let kv1: Result<Vec<(u64, u64)>, Error> = (&mut i1).collect();
@@ -1101,14 +1095,14 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(0), batch).unwrap();
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         // Create an iterator from the first snapshot.
         let iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
 
         // Create more snapshots...
         for i in 1..5 {
-            db.snapshot(wm(i));
+            db.take_snapshot(wm(i));
         }
 
         // ...such that the first snapshot gets dropped.
@@ -1139,7 +1133,7 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(0), batch).unwrap();
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         let actual: Result<Vec<(u64, u64)>, Error> =
             db.iter_rev(0, &cf, (U::<u64>, U)).unwrap().collect();
@@ -1277,7 +1271,7 @@ pub(crate) mod tests {
         }
 
         db.write("test", wm(0), batch).unwrap();
-        db.snapshot(wm(0));
+        db.take_snapshot(wm(0));
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(key::encode(&5u64));
