@@ -520,20 +520,20 @@ pub fn program(
         reporter,
     };
 
+    // TODO: How would we go about discarding the extensions thare are not defined under the root
+    // package? Perhaps by file path? That seems ad-hoc; is there another way?
     let module_members = {
         let mut members = UniqueMap::new();
         all_module_members(
             &mut member_computation_context,
             &prog.named_address_maps,
             &mut members,
-            true,
             &prog.source_definitions,
         );
         all_module_members(
             &mut member_computation_context,
             &prog.named_address_maps,
             &mut members,
-            true,
             &prog.lib_definitions,
         );
 
@@ -873,9 +873,15 @@ fn module(
         context.spec_deprecated(module_def.name.0.loc, /* is_error */ false);
         return;
     }
+    let is_extension = module_def.is_extension && context
+        .env()
+        .supports_feature(package_name, FeatureGate::ModuleExtension);
+
     let (mident, mod_) = module_(context, package_name, module_address, module_def);
-    if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
-        duplicate_module(context, module_map, mident, old_loc)
+    if !is_extension {
+        if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
+            duplicate_module(context, module_map, mident, old_loc)
+        }
     }
     context.address = None
 }
@@ -913,6 +919,7 @@ fn module_(
         loc,
         address,
         is_spec_module: _,
+        is_extension: _,
         name,
         members,
         definition_mode: _,
@@ -1127,6 +1134,82 @@ fn check_visibility_modifiers(
     }
 }
 
+// This function takes a parsed program apart and (a) discards any address definition forms,
+// translating them into module forms, and (b) organizes modules by if they are xtensions or not,
+// ensuring extension modules appear after the non-extension modules.
+// It also checks module addresses and ensures that they are properly assigned in order to
+// correctly discard the address definitions.
+fn pre_process_program(
+    context: &mut Context,
+    program: P::Program,
+) -> P::Program {
+    fn process_package_definition(
+        context: &mut Context,
+        named_address_map: &NamedAddressMaps,
+        def: P::PackageDefinition,
+    ) -> Vec<P::PackageDefinition> {
+        match def {
+            P::Definition::Module(m) => {
+                let module_paddr = std::mem::take(&mut m.address);
+                let module_addr = module_paddr.map(|addr| {
+                    let address = top_level_address(
+                        &mut context.defn_context,
+                        /* suggest_declaration */ true,
+                        addr,
+                    );
+                    sp(addr.loc, address)
+                });
+                m.address = module_addr;
+                vec![P::PackageDefinition {
+                    package,
+                    named_address_map,
+                    def: P::Definition::Module(m),
+                    target_kind,
+                }];
+            }
+            P::Definition::Address(a) => {
+                let addr = top_level_address(
+                    &mut context.defn_context,
+                    /* suggest_declaration */ false,
+                    a.addr,
+                );
+                a.modules.into_iter().map(|mut m| {
+                    m.address = Some(check_module_address(
+                        context,
+                        a.loc,
+                        addr,
+                        &mut m,
+                    ));
+                    P::PackageDefinition {
+                        package,
+                        named_address_map,
+                        def: P::Definition::Module(m),
+                        target_kind,
+                    }}).collect();
+                }
+            }
+        }
+
+    let P::Program { named_address_maps, source_definitions, lib_definitions } = program;
+
+    let source_definitions = source_definitions
+        .into_iter()
+        .flat_map(|def| {
+            process_package_definition(context, &named_address_maps, def)
+        })
+        .collect();
+
+    let lib_definitions = lib_definitions
+        .into_iter()
+        .flat_map(|def| {
+            process_package_definition(context, &named_address_maps, def)
+        })
+        .collect();
+
+
+
+}
+
 // -------------------------------------------------------------------------------------------------
 // Warning Filters
 // -------------------------------------------------------------------------------------------------
@@ -1266,14 +1349,28 @@ fn all_module_members<'a>(
     context: &mut DefnContext,
     named_addr_maps: &NamedAddressMaps,
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
     defs: impl IntoIterator<Item = &'a P::PackageDefinition>,
 ) {
+    // partition definitions into address-based and module-based
+    let (address_defs, module_defs): (Vec<_>, Vec<_>) = defs
+        .into_iter()
+        .partition(|def| matches!(def.def, P::Definition::Address(_)));
+    // further partition module definitions based on if they are extensions, toward better error
+    // reporting
+    let (extension_defs, module_defs): (Vec<_>, Vec<_>) = module_defs
+        .into_iter()
+        .partition(|def| {
+            let P::Definition::Module(m) = &def.def else {
+                unreachable!("Module definitions should have been partitioned out");
+            };
+            m.is_extension
+        });
+
     for P::PackageDefinition {
         named_address_map: named_address_map_index,
         def,
         ..
-    } in defs
+    } in address_defs.into_iter().chain(module_defs.into_iter()).chain(extension_defs.into_iter())
     {
         let named_addr_map = named_addr_maps.get(*named_address_map_index);
         match def {
@@ -1288,7 +1385,7 @@ fn all_module_members<'a>(
                     // Error will be handled when the module is compiled
                     None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
                 };
-                module_members(members, always_add, addr, m)
+                module_members(members, addr, m)
             }
             P::Definition::Address(addr_def) => {
                 let addr = top_level_address_(
@@ -1297,8 +1394,11 @@ fn all_module_members<'a>(
                     /* suggest_declaration */ false,
                     addr_def.addr,
                 );
-                for m in &addr_def.modules {
-                    module_members(members, always_add, addr, m)
+                // Partition modules based on if they are extensions, toward better error reporting
+                let (extension_defs, mod_defs): (Vec<_>, Vec<_>) =
+                    addr_def.modules.iter().partition(|m| m.is_extension);
+                for m in mod_defs.into_iter().chain(extension_defs.into_iter()) {
+                    module_members(members, addr, m)
                 }
             }
         };
@@ -1307,14 +1407,10 @@ fn all_module_members<'a>(
 
 fn module_members(
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
     address: Address,
     m: &P::ModuleDefinition,
 ) {
     let mident = sp(m.name.loc(), ModuleIdent_::new(address, m.name));
-    if !always_add && members.contains_key(&mident) {
-        return;
-    }
     let mut cur_members = members.remove(&mident).unwrap_or_default();
     for mem in &m.members {
         match mem {

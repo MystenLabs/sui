@@ -4469,12 +4469,19 @@ fn parse_module(
 ) -> Result<(ModuleDefinition, Option<Vec<Attributes>>), Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
 
-    let is_spec_module = if context.tokens.peek() == Tok::Spec {
+    let (is_spec_module, is_extension) = if context.tokens.peek() == Tok::Spec {
         context.tokens.advance()?;
-        true
+        (true, false)
+    } else if context.tokens.peek() == Tok::Extend {
+        context.check_feature(
+            FeatureGate::ModuleExtension,
+            context.tokens.current_token_loc(),
+        );
+        consume_token(context.tokens, Tok::Extend)?;
+        (false, true)
     } else {
         consume_token(context.tokens, Tok::Module)?;
-        false
+        (false, false)
     };
     let sp!(n1_loc, n1_) = parse_leading_name_access(context)?;
     let (address, name) = match (n1_, context.tokens.peek()) {
@@ -4561,6 +4568,20 @@ fn parse_module(
         start_loc,
         context.tokens.previous_end_loc(),
     );
+    if is_extension {
+        // Ensure there is always a mode on extension definitions. We opt to error here instead of
+        // returning a definition for risk avoidance.
+        if !(attributes.iter().any(|attr| !attr.value.modes().is_empty())) {
+            let diag = diag!(
+                Syntax::InvalidModifier,
+                (
+                    loc,
+                    "Module extensions must have a 'mode' or 'test_only' attribute"
+                )
+            );
+            return Err(Box::new(diag));
+        }
+    }
     let def = ModuleDefinition {
         doc,
         attributes,
@@ -4568,6 +4589,7 @@ fn parse_module(
         address,
         name,
         is_spec_module,
+        is_extension,
         members,
         definition_mode,
     };
