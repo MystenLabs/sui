@@ -5,3 +5,6 @@ extend-ignore-re = [
 
 [default.extend-words]
 groth = "groth"
+
+[files]
+extend-exclude = ["**/*.excalidraw"]
