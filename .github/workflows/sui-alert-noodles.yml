@@ -28,29 +28,28 @@ jobs:
           git remote add upstream https://github.com/MystenLabs/sui.git
           git fetch upstream main
 
-      - name: Merge upstream into fork
+      - name: Checkout latest upstream commit
         run: |
-          git merge --no-edit upstream/main || echo "No merge needed"
+          git checkout upstream/main
 
-      - name: Check if sui.yaml changed from upstream
+      - name: Check if sui.yaml changed in latest upstream commit
         run: |
-          echo "Comparing changes from last commit..."
+          echo "Checking for changes in sui.yaml..."
           if git diff --name-only HEAD^ HEAD | grep -q '^crates/sui-core/tests/staged/sui.yaml$'; then
             commit_hash=$(git log -1 --pretty=format:'%h')
             commit_author=$(git log -1 --pretty=format:'%an')
             commit_msg=$(git log -1 --pretty=format:'%s')
-            commit_url="https://github.com/${{ github.repository }}/commit/${commit_hash}"
 
-            slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
+            slack_mentions="@chungnk @Link @Richard Nguyen"
 
-            echo "✅ sui.yaml was updated — sending Slack alert"
+            echo "🚨 sui.yaml was updated — sending Slack alert"
             curl -X POST -H 'Content-type: application/json' \
-              --data "{\"text\":\"🚨 *sui.yaml was updated!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
+              --data "{\"text\":\":rotating_light: sui.yaml was updated in upstream!\n• Commit: ${commit_hash}\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
               ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
           else
             echo "ℹ️ No changes to sui.yaml"
           fi
 
-      - name: Push changes back to fork
+      - name: Push latest upstream commit to fork
         run: |
-          git push origin HEAD:main
+          git push origin HEAD:main --force
