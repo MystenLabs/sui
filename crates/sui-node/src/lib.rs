@@ -2254,7 +2254,7 @@ impl SuiNode {
             .unwrap_or_default();
 
         match behavior {
-            ForkCrashBehavior::InfiniteLoop => {
+            ForkCrashBehavior::AwaitForkRecovery => {
                 error!(
                     checkpoint_seq = checkpoint_seq,
                     checkpoint_digest = ?checkpoint_digest,
@@ -2301,7 +2301,7 @@ impl SuiNode {
             .unwrap_or_default();
 
         match behavior {
-            ForkCrashBehavior::InfiniteLoop => {
+            ForkCrashBehavior::AwaitForkRecovery => {
                 error!(
                     tx_digest = ?tx_digest,
                     expected_effects_digest = ?expected_effects_digest,

@@ -226,9 +226,9 @@ pub struct NodeConfig {
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ForkCrashBehavior {
-    #[serde(rename = "infinite-loop")]
+    #[serde(rename = "await-fork-recovery")]
     #[default]
-    InfiniteLoop,
+    AwaitForkRecovery,
     /// Return an error instead of blocking forever. This is primarily for testing.
     #[serde(rename = "return-error")]
     ReturnError,
