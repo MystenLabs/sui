@@ -1395,5 +1395,10 @@ ZkLoginPublicIdentifier:
         TYPENAME: CheckpointSummary
     - auth_signature:
         TYPENAME: AuthorityQuorumSignInfo
-
+"sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>":
+  STRUCT:
+    - data:
+        TYPENAME: SenderSignedData
+    - auth_signature:
+        TYPENAME: EmptySignInfo
 
