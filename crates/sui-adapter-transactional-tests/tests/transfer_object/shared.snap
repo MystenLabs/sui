@@ -56,7 +56,7 @@ Debug of error: InvalidTransferObject at command Some(0)
 task 7, line 37:
 //# transfer-object 3,0 --sender A --recipient B
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command Some(0)
+Debug of error: SharedObjectOperationNotAllowed at command None
 
 task 8, line 39:
 //# view-object 2,0
