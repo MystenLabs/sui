@@ -77,7 +77,6 @@ const config = {
         schema: "../../crates/sui-graphql-rpc/schema.graphql",
         rootPath: "../content", // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/sui-graphql/alpha/reference",
-        homepage: false,
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
         },
@@ -90,7 +89,6 @@ const config = {
         schema: "../../crates/sui-indexer-alt-graphql/schema.graphql",
         rootPath: "../content",
         baseURL: "references/sui-api/sui-graphql/beta/reference",
-        homepage: false,
         docOptions: {
           frontMatter: {
             isGraphQlBeta: true,

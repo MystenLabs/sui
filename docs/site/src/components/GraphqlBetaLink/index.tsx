@@ -26,7 +26,7 @@ export default function GraphqlBetaLink({ title }) {
       <>
         ⚠️ This is the <strong className="mx-1">beta</strong> version of the Sui
         GraphQL schema. The beta schema will replace the{" "}
-        <Link href="/references/sui-api/sui-graphql/alpha/reference/operations/directives/include">
+        <Link href="/references/sui-api/sui-graphql/alpha/reference">
           alpha GraphQL schema
         </Link>{" "}
         upon its official release.
