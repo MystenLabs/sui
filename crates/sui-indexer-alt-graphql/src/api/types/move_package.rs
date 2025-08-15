@@ -3,24 +3,6 @@
 
 use std::sync::Arc;
 
-use super::{
-    address::AddressableImpl,
-    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
-    transaction::Transaction,
-};
-use crate::api::types::linkage::Linkage;
-use crate::api::types::type_origin::TypeOrigin;
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        cursor::{BcsCursor, JsonCursor},
-        sui_address::SuiAddress,
-        uint53::UInt53,
-    },
-    error::{bad_user_input, RpcError},
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
@@ -42,6 +24,28 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     move_package::MovePackage as NativeMovePackage,
     object::Object as NativeObject,
+};
+
+use crate::{
+    api::scalars::{
+        base64::Base64,
+        cursor::{BcsCursor, JsonCursor},
+        sui_address::SuiAddress,
+        uint53::UInt53,
+    },
+    error::{bad_user_input, RpcError},
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
+};
+
+use super::{
+    address::AddressableImpl,
+    linkage::Linkage,
+    move_object::MoveObject,
+    object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
+    object_filter::{ObjectFilter, Validator as OFValidator},
+    transaction::Transaction,
+    type_origin::TypeOrigin,
 };
 
 pub(crate) struct MovePackage {
@@ -108,6 +112,21 @@ impl MovePackage {
     /// The MovePackage's ID.
     pub(crate) async fn address(&self) -> SuiAddress {
         AddressableImpl::from(&self.super_.super_).address()
+    }
+
+    /// Objects owned by this package, optionally filtered by type.
+    pub(crate) async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+        #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
+    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+        AddressableImpl::from(&self.super_.super_)
+            .objects(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// The version of this package that this content comes from.

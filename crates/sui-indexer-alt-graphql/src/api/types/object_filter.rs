@@ -44,6 +44,13 @@ pub(crate) struct Validator {
     allow_empty: bool,
 }
 
+impl Validator {
+    /// Create a validator that allows empty filters.
+    pub(crate) fn allows_empty() -> Self {
+        Self { allow_empty: true }
+    }
+}
+
 impl ObjectFilter {
     /// Try to create a filter whose results are the intersection of `self`'s results and `other`'s
     /// results. May return `None` if the filters are incompatible (would result in no matches)

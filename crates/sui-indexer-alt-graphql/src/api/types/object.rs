@@ -48,7 +48,7 @@ use super::{
     address::{Address, AddressableImpl},
     move_object::MoveObject,
     move_package::MovePackage,
-    object_filter::ObjectFilter,
+    object_filter::{ObjectFilter, Validator as OFValidator},
     transaction::Transaction,
 };
 
@@ -260,6 +260,21 @@ impl Object {
     ) -> Result<Connection<String, Object>, RpcError<Error>> {
         ObjectImpl::from(self)
             .object_versions_before(ctx, first, after, last, before, filter)
+            .await
+    }
+
+    /// Objects owned by this object, optionally filtered by type.
+    pub(crate) async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+        #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
+    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
+        AddressableImpl::from(&self.super_)
+            .objects(ctx, first, after, last, before, filter)
             .await
     }
 
