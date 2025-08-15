@@ -102,7 +102,7 @@ impl ConsensusTxStatusCache {
                 entry.insert(status);
                 if status == ConsensusTxStatus::FastpathCertified {
                     // Only path where a status can be set to fastpath certified.
-                    inner.fastpath_certified.insert(pos);
+                    assert!(inner.fastpath_certified.insert(pos));
                 }
             }
             Entry::Occupied(mut entry) => {
@@ -115,7 +115,7 @@ impl ConsensusTxStatusCache {
                         entry.insert(status);
                         if old_status == ConsensusTxStatus::FastpathCertified {
                             // Only path where a status can transition out of fastpath certified.
-                            inner.fastpath_certified.remove(&pos);
+                            assert!(inner.fastpath_certified.remove(&pos));
                         }
                     }
                     // This happens when statuses arrive out-of-order, and is a no-op.
@@ -194,11 +194,16 @@ impl ConsensusTxStatusCache {
         // Send update through watch channel.
         let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
 
-        // Remove transactions that are expired.
         let mut inner = self.inner.write();
+
+        // Remove transactions that are expired.
         while let Some((position, _)) = inner.transaction_status.first_key_value() {
             if position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= leader_round {
-                inner.transaction_status.pop_first();
+                let (pos, status) = inner.transaction_status.pop_first().unwrap();
+                // Ensure the transaction is not in the fastpath certified set.
+                if status == ConsensusTxStatus::FastpathCertified {
+                    assert!(inner.fastpath_certified.remove(&pos));
+                }
             } else {
                 break;
             }
