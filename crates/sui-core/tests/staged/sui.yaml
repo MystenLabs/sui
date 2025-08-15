@@ -1400,6 +1400,3 @@ ZkLoginPublicIdentifier:
     - data:
         TYPENAME: SenderSignedData
     - auth_signature:
-        TYPENAME: EmptySignInfo
-
-##Test234567
