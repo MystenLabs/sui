@@ -73,6 +73,10 @@ type Address implements IAddressable {
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
 	address: SuiAddress!
+	"""
+	Objects owned by this address, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 }
 
 """
@@ -836,6 +840,10 @@ An address uniquely represents either the public key of an account, or an object
 """
 interface IAddressable {
 	address: SuiAddress!
+	"""
+	Objects owned by this address, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 }
 
 
@@ -981,9 +989,42 @@ type MoveObject implements IAddressable & IObject {
 	"""
 	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
 	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+}
+
+type MoveObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
@@ -994,6 +1035,10 @@ type MovePackage implements IAddressable & IObject {
 	The MovePackage's ID.
 	"""
 	address: SuiAddress!
+	"""
+	Objects owned by this package, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 	"""
 	The version of this package that this content comes from.
 	"""
@@ -1161,6 +1206,10 @@ type Object implements IAddressable & IObject {
 	Paginate all versions of this object before this one.
 	"""
 	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 	"""
 	The transaction that created this version of the object.
 	"""
