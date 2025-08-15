@@ -2,7 +2,7 @@ name: Sync Fork & Check sui.yaml Changes
 
 on:
   schedule:
-    - cron: "0 0 * * *" 
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions:
@@ -22,36 +22,33 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Prepare upstream remote
+      - name: Add & fetch upstream
         run: |
           git remote remove upstream || true
           git remote add upstream https://github.com/MystenLabs/sui.git
           git fetch upstream main
 
-      - name: Merge upstream into fork
+      - name: Check if sui.yaml changed in upstream
         run: |
-          git merge --no-edit upstream/main || echo "No merge needed"
+          echo "Checking for changes in sui.yaml from upstream..."
+          if git diff --name-only HEAD upstream/main | grep -q '^crates/sui-core/tests/staged/sui.yaml$'; then
+            commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml)
+            commit_author=$(git log upstream/main -1 --pretty=format:'%an' -- crates/sui-core/tests/staged/sui.yaml)
+            commit_msg=$(git log upstream/main -1 --pretty=format:'%s' -- crates/sui-core/tests/staged/sui.yaml)
+            commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
 
-      - name: Check if sui.yaml changed in last commit
-        run: |
-          echo "Comparing changes from last commit..."
-          if git diff --name-only HEAD^ HEAD | grep -q '^crates/sui-core/tests/staged/sui.yaml$'; then
-            commit_hash=$(git log -1 --pretty=format:'%h')
-            commit_author=$(git log -1 --pretty=format:'%an')
-            commit_msg=$(git log -1 --pretty=format:'%s')
-            commit_url="https://github.com/${{ github.repository }}/commit/${commit_hash}"
-      
-            # List ID tag
             slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
-      
-            echo "✅ sui.yaml was updated — sending Slack alert"
+
+            echo "✅ sui.yaml was updated in upstream — sending Slack alert"
             curl -X POST -H 'Content-type: application/json' \
-              --data "{\"text\":\"🚨 *sui.yaml was updated!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
+              --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
               ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
           else
-            echo "ℹ️ No changes to sui.yaml"
+            echo "ℹ️ No changes to sui.yaml in upstream"
           fi
 
-      - name: Push changes back to fork
+      - name: Reset fork to match upstream
         run: |
-          git push origin HEAD:main
+          echo "Resetting fork/main to match upstream/main..."
+          git reset --hard upstream/main
+          git push origin HEAD:main --force
