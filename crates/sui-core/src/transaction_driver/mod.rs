@@ -113,7 +113,12 @@ where
         loop {
             // TODO(fastpath): Check local state before submitting transaction
             match self
-                .drive_transaction_once(tx_digest, raw_request.clone(), &options)
+                .drive_transaction_once(
+                    tx_digest,
+                    raw_request.clone(),
+                    &options,
+                    is_single_writer_tx,
+                )
                 .await
             {
                 Ok(resp) => {
@@ -161,6 +166,7 @@ where
         tx_digest: &TransactionDigest,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
+        is_single_writer_tx: bool,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let start_time = Instant::now();
         let auth_agg = self.authority_aggregator.load();
@@ -186,6 +192,7 @@ where
                 name,
                 submit_txn_resp,
                 options,
+                is_single_writer_tx,
             )
             .await?;
 
