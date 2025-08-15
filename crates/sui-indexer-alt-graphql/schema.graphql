@@ -943,6 +943,50 @@ type MoveCallCommand {
 }
 
 """
+A MoveObject is a kind of Object that reprsents data stored on-chain.
+"""
+type MoveObject implements IAddressable & IObject {
+	"""
+	The MoveObject's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+}
+
+"""
 A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 """
 type MovePackage implements IAddressable & IObject {
@@ -1091,6 +1135,10 @@ type Object implements IAddressable & IObject {
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	Attempts to convert the object into a MoveObject.
+	"""
+	asMoveObject: MoveObject
 	"""
 	Attempts to convert the object into a MovePackage.
 	"""

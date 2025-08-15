@@ -49,7 +49,7 @@ pub(crate) struct MovePackage {
     super_: Object,
 
     /// Move package specific data, extracted from the native representation of the generic object.
-    contents: NativeMovePackage,
+    native: NativeMovePackage,
 }
 
 /// Identifies a specific version of a package.
@@ -123,7 +123,7 @@ impl MovePackage {
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
     /// name, followed by module bytes), in alphabetic order by module name.
     async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(self.contents.serialized_module_map())?;
+        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
         Ok(Some(bytes.into()))
     }
 
@@ -203,7 +203,7 @@ impl MovePackage {
 
     /// The Base64-encoded BCS serialization of this package, as a `MovePackage`.
     async fn package_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(&self.contents).context("Failed to serialize MovePackage")?;
+        let bytes = bcs::to_bytes(&self.native).context("Failed to serialize MovePackage")?;
         Ok(Some(Base64(bytes)))
     }
 
@@ -286,7 +286,7 @@ impl MovePackage {
     /// The transitive dependencies of this package.
     async fn linkage(&self) -> Option<Vec<Linkage>> {
         let linkage = self
-            .contents
+            .native
             .linkage_table()
             .iter()
             .map(|(object_id, upgrade_info)| Linkage {
@@ -301,7 +301,7 @@ impl MovePackage {
     /// A table identifying which versions of a package introduced each of its types.
     async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
         let type_origins = self
-            .contents
+            .native
             .type_origin_table()
             .iter()
             .map(|native| TypeOrigin::from(native.clone()))
@@ -315,9 +315,12 @@ impl MovePackage {
     /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
     /// is not a package. This is more efficient when you already have the native object.
     pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
-        let contents = native.data.try_as_package()?.clone();
+        let package = native.data.try_as_package()?.clone();
         let super_ = Object::from_contents(scope, Arc::new(native));
-        Some(Self { super_, contents })
+        Some(Self {
+            super_,
+            native: package,
+        })
     }
 
     /// Try to downcast an `Object` to a `MovePackage`. This function returns `None` if `object`'s
@@ -330,13 +333,13 @@ impl MovePackage {
             return Ok(None);
         };
 
-        let Some(contents) = super_contents.data.try_as_package().cloned() else {
+        let Some(package) = super_contents.data.try_as_package().cloned() else {
             return Ok(None);
         };
 
         Ok(Some(Self {
             super_: object.clone(),
-            contents,
+            native: package,
         }))
     }
 
@@ -441,12 +444,15 @@ impl MovePackage {
         let native: NativeObject = bcs::from_bytes(&stored.serialized_object)
             .context("Failed to deserialize package as object")?;
 
-        let Some(contents) = native.data.try_as_package().cloned() else {
+        let Some(package) = native.data.try_as_package().cloned() else {
             return Ok(None);
         };
 
         let super_ = Object::from_contents(scope, Arc::new(native));
-        Ok(Some(Self { super_, contents }))
+        Ok(Some(Self {
+            super_,
+            native: package,
+        }))
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
