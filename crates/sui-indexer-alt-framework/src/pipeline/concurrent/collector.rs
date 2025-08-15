@@ -171,7 +171,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     }
                 }
 
-                // docs::#collector (see docs/content/references/contribute/mdx-components.mdx#code-inject)
+                // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
                     metrics
                         .total_collector_rows_received

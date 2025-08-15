@@ -1,1 +1,1 @@
-DROP TABLE transaction_digests;
+DROP TABLE IF EXISTS transaction_digests;

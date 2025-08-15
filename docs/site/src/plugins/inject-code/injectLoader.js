@@ -507,7 +507,7 @@ const addCodeInject = async function (source) {
                 injectFileContent = typeContent.join("\n").trim();
               } else {
                 // Capture everything beteen tags, ignoring content after marker on same line
-                const regexStr = `\\/\\/\\s?docs::${marker.trim()}\\b\\s.*\\n([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?${marker.trim()}\\b`;
+                const regexStr = `\\/\\/\\s?docs::${marker.trim()}\\b[^\\n]*\\n([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?${marker.trim()}\\b`;
                 const closingsStr = `\\/\\/\\s?docs::\\/${marker.trim()}\\b([)};]*)`;
 
                 const closingRE = new RegExp(closingsStr, "g");

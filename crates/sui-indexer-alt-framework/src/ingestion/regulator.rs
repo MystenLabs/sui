@@ -56,13 +56,13 @@ where
                     break;
                 }
 
-                // docs::#regulator (see docs/content/references/contribute/mdx-components.mdx#code-inject)
+                // docs::#regulator (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 Some((name, hi)) = ingest_hi_rx.recv() => {
                     subscribers_hi.insert(name, hi);
                     ingest_hi = subscribers_hi.values().copied().min().map(|hi| hi + buffer_size as u64);
                 }
                 // docs::/#regulator
-                // docs::#bound (see docs/content/references/contribute/mdx-components.mdx#code-inject)
+                // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 res = checkpoint_tx.send(*cp), if ingest_hi.is_none_or(|hi| *cp <= hi) => if res.is_ok() {
                     checkpoints.next();
                 } else {

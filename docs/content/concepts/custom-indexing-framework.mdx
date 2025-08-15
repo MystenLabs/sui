@@ -57,12 +57,17 @@ Both the indexing framework and your code manage the processing layer, which is 
 The framework then exposes specific interfaces that you implement to define your data processing logic. Some common APIs include:
 
 - `process()`: Transform raw checkpoint data (transactions, events, object changes) into your desired database rows. This is where you extract meaningful information, filter relevant data, and format it for storage.
-{@inject: crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
-    
 - `commit()`: Store your processed data to the database with proper transaction handling. The framework calls this with batches of processed data for efficient bulk operations.
 - `prune()`: Clean up old data based on your retention policies (optional). Useful for managing database size by removing outdated records while preserving recent data.
 
 Sequential and concurrent pipeline types and their trade-offs are detailed in [Pipeline Architecture](./custom-indexer/pipeline-architecture.mdx).
+
+<details>
+<summary>
+`CheckpointData` struct
+</summary>
+{@inject: crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
+</details>
 
 ### Storage layer
 
@@ -78,4 +83,4 @@ Your indexer runs as one executable program with multiple coordinated background
 
 - [Pipeline Architecture](./custom-indexer/pipeline-architecture.mdx): The structure of the available indexer pipelines (sequential and concurrent) and the advantages of using one over the other.
 - [Life of a Transaction](./sui-architecture/transaction-lifecycle.mdx): The life of a transaction on the Sui network has some differences compared to those from other blockchains.
-- [Build a Custom Indexer](../guides/developer/advanced/custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data. This guide walks you through the process.
+- [Build Your First Custom Indexer](../guides/developer/advanced/custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data. This guide walks you through the process.

@@ -21,10 +21,10 @@ Both pipeline types can handle updates in place, aggregations, and complex busin
 Start here for most use cases. Provides more straightforward implementation and maintenance.
 
 <ul className="list-none pl-2">
-<li><span className="text-sui-success-dark">✓</span> You want straightforward implementation with direct commits and simple queries</li>
-<li><span className="text-sui-success-dark">✓</span> Team prefers predictable, easy-to-debug behavior</li>
-<li><span className="text-sui-success-dark">✓</span> Current performance meets your requirements</li>
-<li><span className="text-sui-success-dark">✓</span> Operational simplicity is valued</li>
+<li><span className="text-sui-success-dark">✓</span> You want straightforward implementation with direct commits and simple queries.</li>
+<li><span className="text-sui-success-dark">✓</span> Team prefers predictable, easy-to-debug behavior.</li>
+<li><span className="text-sui-success-dark">✓</span> Current performance meets your requirements.</li>
+<li><span className="text-sui-success-dark">✓</span> Operational simplicity is valued.</li>
 </ul>
 
 ### Concurrent pipeline
@@ -85,7 +85,7 @@ Checkpoint Processing Timeline:
 [1000] [1001] [1002] [1003] [1004] [1005]
   ✓      ✓      ✗      ✓      ✗      ✗
          ^
-  checkpoint_hi = 1001
+  checkpoint_hi_inclusive = 1001
 
 ✓ = Committed (all data written)
 ✗ = Not Committed (processing or failed)
@@ -97,7 +97,7 @@ After the checkpoint 1002 is committed, you can safely read data up to 1003.
 
 ```sh
 [1000] [1001] [1002] [1003] [1004] [1005]
-  ✓      ✓      ✓      ✓      ✗       ✓
+  ✓      ✓      ✓      ✓      ✗       ✗
 [---- SAFE TO READ -------]
 (start   →   checkpoint_hi_inclusive at 1003)
 ```
@@ -108,9 +108,9 @@ Pruning is enabled for pipelines configured with a retention policy. For example
 
 ```sh
 [998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
- 🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✓      ✗
+ 🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✗      ✗
               ^                    ^
-       reader_lo = 1000       checkpoint_hi = 1003
+       reader_lo = 1000       checkpoint_hi_inclusive = 1003
 
 🗑️ = Pruned (deleted)
 ✓ = Committed  
@@ -125,18 +125,18 @@ Current watermarks:
 
 - `reader_lo` = 1000:
        - Lowest checkpoint guaranteed to be available.
-       - Calculated as: `reader_lo = checkpoint_hi - retention + 1`.
+       - Calculated as: `reader_lo = checkpoint_hi_inclusive - retention + 1`.
        - `reader_lo` = 1003 - 4 + 1 = 1000.
 
-- `pruner_hi` = 999:
-       - Highest checkpoint that has been deleted.
+- `pruner_hi` = 1000:
+       - Highest exclusive checkpoint that has been deleted.
        - Checkpoints 998 and 999 were deleted to save space.
 
 Clear safe zones:
 
 ```sh
 [998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
- 🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✓      ✗
+ 🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✗      ✓
 
 [--PRUNED--][--- Safe Reading Zone ---] [--- Processing ---]             
 ```
@@ -149,8 +149,11 @@ Clear safe zones:
 [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
  🗑️     ✓      ✓      ✓      ✓      ✓      ✗      ✓      ✗
         ^                           ^
- reader_lo = 1000           checkpoint_hi = 1004 (advanced by 1!)
+ reader_lo = 1000           checkpoint_hi_inclusive = 1004 (advanced by 1)
+ pruner_hi = 1000
 ```
+
+With checkpoint 1004 now committed, `checkpoint_hi_inclusive` can advance from 1003 to 1004 because there are no gaps up to 1004. Note that `reader_lo` and `pruner_hi` haven't changed yet.
 
 **Step 2:** Reader watermark updates periodically.
 
@@ -158,9 +161,13 @@ Clear safe zones:
 [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
  🗑️     ✓      ✓      ✓      ✓      ✓      ✗      ✓      ✗
                ^                   ^
-        reader_lo = 1001    checkpoint_hi = 1004
+        reader_lo = 1001    checkpoint_hi_inclusive = 1004
         (1004 - 4 + 1 = 1001)
+
+pruner_hi = 1000 (unchanged as pruner hasn't run yet)
 ```
+
+A separate reader watermark update task (running periodically, configurable) advances `reader_lo` to 1001 (calculated as `1004 - 4 + 1 = 1001`) based on the retention policy. However, the pruner hasn't run yet, so `pruner_hi` remains at 1000.
 
 **Step 3:** Pruner runs after safety delay.
 
@@ -168,14 +175,15 @@ Clear safe zones:
 [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
  🗑️     🗑️     ✓      ✓      ✓      ✓      ✗      ✓      ✗
                ^                   ^
-        reader_lo = 1001    checkpoint_hi = 1004
-        
-pruner_hi = 1000 (just deleted checkpoint 1000)
+        reader_lo = 1001    checkpoint_hi_inclusive = 1004
+        pruner_hi = 1001
 ```
+
+Because `pruner_hi` (1000) < `reader_lo` (1001), the pruner detects that some checkpoints are outside of the retention window. It cleans up all elements up to `reader_lo` (deleting checkpoint 1000) and updates `pruner_hi` to `reader_lo` (1001).
 
 :::info
 
-Checkpoints older than `reader_lo` might still be temporarily available due to an intentional delay that protects in-flights queries from premature data removal.
+Checkpoints older than `reader_lo` might still be temporarily available because of an intentional delay that protects in-flight queries from premature data removal or because the pruner has not finished working yet.
 
 :::
 
@@ -191,7 +199,7 @@ The sequential pipeline consists of only two main components, making it signific
 
 The ingestion layer (`Regulator` + `Broadcaster`) and `Processor` components use the same backpressure mechanisms, same `FANOUT` parallel processing, and same `processor()` implementation as the concurrent pipeline.
 
-The key difference is the dramatically simplified pipeline core with just a single `Committer` component that handles ordering, batching, and database commits. Concurrent pipelines, in contrast, have five separate components in addition to the `Processor`: `Collector`, `Committer`, `Commit Watermark`, `Reader Watermark`, and `Pruner`.
+The key difference is the dramatically simplified pipeline core with just a single `Committer` component that handles ordering, batching, and database commits. Concurrent pipelines, in contrast, have five separate components in addition to the `Processor`: `Collector`, `Committer`, `CommitterWatermark`, `ReaderWatermark`, and `Pruner`.
 
 ### Sequential pipeline components {#sequential-components}
 
@@ -224,11 +232,11 @@ To customize, your code uses two key functions that the committer calls:
 
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs#fun=commit}
 
-### Backpressure mechanisms
-
-![Backpressure sequential pipeline architecture](./images/backpressure-sequential.png)
+### Sequential pipeline backpressure mechanisms
 
 Sequential pipelines use two layers of backpressure to prevent memory overflow and ordering-related deadlocks:
+
+![Backpressure sequential pipeline architecture](./images/backpressure-sequential.png)
 
 #### Channel-based backpressure
 
@@ -241,7 +249,7 @@ Sequential pipelines use the same channel-based flow control as concurrent pipel
 
 Sequential pipelines must process checkpoints in strict order (N, then N+1, then N+2...). If checkpoint N is missing, they cannot commit later checkpoints, even if available.
 
-Without regulation, missing checkpoints can cause deadlocks in situations like the following one:
+Without regulation, missing checkpoints can cause deadlocks in situations such as:
 
 1. Pipeline waits for checkpoint 100.
 1. Checkpoint 100 gets dropped or delayed.
@@ -301,7 +309,7 @@ The concurrent pipeline transforms raw checkpoint data into indexed database rec
 Key design principles:
 
 - **Watermark coordination:** Safe out-of-order processing with consistency guarantees.
-- **Handler abstraction:** Your business logic plugs into the framework.
+- **Handler abstraction:** Where your business logic plugs into the framework.
 - **Automatic storage management:** Framework handles watermark tracking and data cleanup within the `Watermark` database.
 
 ### Concurrent pipeline components {#concurrent-components}
@@ -311,8 +319,8 @@ There are six components to concurrent pipelines.
 1. [Processor](#con-processor)
 1. [Collector](#con-collector)
 1. [Committer](#con-committer)
-1. [Commit Watermark](#con-commit-watermark)
-1. [Reader Watermark](#con-reader-watermark)
+1. [CommitterWatermark](#con-commit-watermark)
+1. [ReaderWatermark](#con-reader-watermark)
 1. [Pruner](#con-pruner)
 
 #### `Processor` {#con-processor}
@@ -340,7 +348,7 @@ The `Committer` primarily writes batched data to the database using parallel con
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/mod.rs#struct=CommitterConfig}
 
 - Each writer calls your `Handler::commit()` method with exponential backoff retry.
-- Reports successful writes to `CommitWatermark` component.
+- Reports successful writes to the `CommitterWatermark` component.
 
 :::important
 
@@ -348,15 +356,15 @@ The `Committer` tasks don't actually perform database operations. Rather, it cal
 
 :::
 
-#### `Commit Watermark` {#con-commit-watermark}
+#### `CommitterWatermark` {#con-commit-watermark}
 
-The primary responsibility of the commit `Watermark` is to track which checkpoints are fully committed and update `checkpoint_hi_inclusive` in the `Watermark` table.
+The primary responsibility of the `CommitterWatermark` is to track which checkpoints are fully committed and update `checkpoint_hi_inclusive` in the `Watermark` table.
 
-The `Watermark` receives `WatermarkParts` from successful `Committer` writes.
+The `CommitterWatermark` receives `WatermarkParts` from successful `Committer` writes.
 
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/mod.rs#struct=WatermarkPart}
     
-The `Watermark` maintains an in-memory map of checkpoint completion status, advancing `checkpoint_hi_inclusive` only when there are no gaps in the sequence. Periodically, it writes the new `checkpoint_hi_inclusive` to the `Watermark` database.
+The `CommitterWatermark` maintains an in-memory map of checkpoint completion status, advancing `checkpoint_hi_inclusive` only when there are no gaps in the sequence. Periodically, it writes the new `checkpoint_hi_inclusive` to the `Watermark` database.
 
 This component enforces the critical rule that `checkpoint_hi_inclusive` can advance only when all data up to that point is committed with no gaps. This component enforces that critical rule. See the [watermark system](#watermark-system) for details.
 
@@ -364,13 +372,13 @@ By using polling, updates happen on a configurable interval (`watermark_interval
 
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/mod.rs#struct=CommitterConfig highlight=watermark_interval_ms}
 
-#### `Reader Watermark` {#con-reader-watermark}
+#### `ReaderWatermark` {#con-reader-watermark}
 
-The primary responsibility of the reader `Watermark` is to calculate and update `reader_lo` to maintain the retention policy and provide safe pruning boundaries.
+The primary responsibility of the `ReaderWatermark` is to calculate and update `reader_lo` to maintain the retention policy and provide safe pruning boundaries.
 
-The reader `Watermark` polls the `Watermark` database periodically (`interval_ms`) to check current `checkpoint_hi_inclusive`. It then calculates the new `reader_lo = checkpoint_hi_inclusive - retention + 1` value and updates the `reader_lo` and `pruner_timestamp` in the `Watermark` database. This behavior provides the safety buffer that prevents premature pruning.
+The `ReaderWatermark` polls the `Watermark` database periodically (`interval_ms`) to check current `checkpoint_hi_inclusive`. It then calculates the new `reader_lo = checkpoint_hi_inclusive - retention + 1` value and updates the `reader_lo` and `pruner_timestamp` in the `Watermark` database. This behavior provides the safety buffer that prevents premature pruning.
 
-The `reader_lo` value represents the lowest checkpoint guaranteed to be available. This component ensures your retention policy is maintained. See the [watermark system](#watermark-system) for details.
+The `reader_lo` value represents the lowest checkpoint guaranteed to be available. This component ensures your retention policy is maintained. See the [watermark system](#watermark-system) section for details.
 
 #### `Pruner` {#con-pruner}
 
@@ -421,21 +429,21 @@ The framework components (`Committer`, `Pruner`) are orchestrators that manage c
 
 ### Watermark table management
 
-The `Watermarks` table manages all watermark coordination. It is critical for recovery, as the framework reads this table to resume from the correct checkpoint.
+The `Watermark` table manages all watermark coordination. It is critical for recovery, as the framework reads this table to resume from the correct checkpoint.
 
-The framework automatically creates and manages a `Watermarks` table in your database when you first run your indexer. The table might have only one row per pipeline, allowing multiple indexers to share the same database.
+The framework automatically creates and manages a `Watermark` table in your database when you first run your indexer. The table might have only one row per pipeline, allowing multiple indexers to share the same database.
 
-`Watermarks` schema:
+`Watermark` schema:
 
 {@inject: crates/sui-pg-db/src/schema.rs noComments}
 
-## Backpressure mechanisms {#concurrent-backpressure}
+###  Concurrent pipeline backpressure mechanisms {#concurrent-backpressure}
 
 With the component architecture detailed, let's examine how the pipeline prevents memory overflow through cascading backpressure using inter-component channels.
 
 ![Concurrent Backpressure Pipeline](./images/backpressure-concurrent.png)
 
-### Channel-level blocking with fixed sizes
+#### Channel-level blocking with fixed sizes
 
 Each channel has a fixed buffer size that automatically blocks when full:
 
@@ -457,7 +465,7 @@ Each channel has a fixed buffer size that automatically blocks when full:
 
 When any channel fills, pressure automatically propagates backward through the entire pipeline.
 
-### Component-level blocking
+#### Component-level blocking
 
 At the component level, the `Collector` respects memory limits and stops accepting when `pending_rows ≥ MAX_PENDING_ROWS`.
 
@@ -465,7 +473,7 @@ At the component level, the `Collector` respects memory limits and stops accepti
     
 Database connection limits are also in place. The `Committer` blocks when all connections are busy.
 
-### Application-level coordination
+#### Application-level coordination
 
 `Watermark` feedback provides application-level coordination by reporting progress to the `Regulator` through `Watermark` updates. Further coordination is provided via bounded ingestion, where the `Regulator` only signals fetches within a bounded range ahead of the current watermark.
 
@@ -473,7 +481,7 @@ Database connection limits are also in place. The `Committer` blocks when all co
     
 Finally, memory protection ensures the entire system operates within predictable memory bounds.
 
-### Backpressure in practice
+#### Backpressure in practice
 
 Basic example: Slow database scenario
 
@@ -498,11 +506,11 @@ What happens:
 - Stable memory usage (no growth).
 - System remains responsive, just at reduced throughput.
 
-## Performance tuning
+### Performance tuning
 
 The following sections detail the configuration settings you can implement for optimal performance.
 
-### Concurrent pipeline Handler constants
+#### Concurrent pipeline `Handler` constants
 
 `Handler` constants are the most direct way to tune pipeline behavior. These are implemented as associated constants in your `Handler` trait implementation.
 
@@ -531,7 +539,7 @@ Tuning guidelines:
 - **`MAX_PENDING_ROWS`:** Controls how much data can accumulate when the committer falls behind. Higher values provide more buffer space but use more memory during bottlenecks.
 - **`MAX_WATERMARK_UPDATES`:** Lower for sparse pipelines (rare events), keep default for dense pipelines.
 
-### CommitterConfig optimization
+#### `CommitterConfig` optimization
 
 The `CommitterConfig` controls how data flows from collection to database commits:
 
@@ -553,11 +561,11 @@ let config = ConcurrentConfig {
 
 Tuning guidelines:
 
-- **`write_concurrency`:** Higher values result in faster throughput but more database connections; `ensure total_pipelines` × `write_concurrency` < `db_connection_pool_size`.
+- **`write_concurrency`:** Higher values result in faster throughput but more database connections; `ensure total_pipelines × write_concurrency < db_connection_pool_size`.
 - **`collect_interval_ms`:** Lower values reduce latency but increase CPU overhead.
 - **`watermark_interval_ms`:** Controls how often watermarks are updated. Higher values reduce database contention from frequent watermark writes but make the indexer slower to respond to pipeline progress.
 
-## PrunerConfig Settings
+### `PrunerConfig` settings
 
 Configure data retention and pruning performance:
 

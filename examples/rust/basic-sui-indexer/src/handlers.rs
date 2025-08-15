@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs::#processordeps
+// docs::#processordeps (see sui/docs/content/guides/developer/advanced/custom-indexer.mdx)
 use std::sync::Arc;
 use anyhow::Result;
 use sui_indexer_alt_framework::{
@@ -9,10 +9,16 @@ use sui_indexer_alt_framework::{
     types::full_checkpoint_content::CheckpointData,
 };
 
-
 use crate::models::StoredTransactionDigest;
 use crate::schema::transaction_digests::dsl::*;
 // docs::/#processordeps
+// docs::#handlerdeps
+use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::{
+    postgres::{Connection, Db},
+    pipeline::sequential::Handler,
+};
+// docs::/#handlerdeps
 
 pub struct TransactionDigestHandler;
 
@@ -37,12 +43,6 @@ impl Processor for TransactionDigestHandler {
 }
 // docs::/#processor
 // docs::#handler
-use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    postgres::{Connection, Db},
-    pipeline::sequential::Handler,
-};
-
 #[async_trait::async_trait]
 impl Handler for TransactionDigestHandler {
     type Store = Db;
@@ -66,3 +66,4 @@ impl Handler for TransactionDigestHandler {
         Ok(inserted)
     }
 }
+// docs::/#handler
