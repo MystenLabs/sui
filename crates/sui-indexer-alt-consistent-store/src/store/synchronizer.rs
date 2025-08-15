@@ -200,7 +200,7 @@ fn synchronizer(
                             warn!(pipeline, "Synchronizer stuck, pre-snapshot")
                         }) => if w.is_leader() {
                             if let Some(watermark) = current_watermark {
-                                db.snapshot(watermark);
+                                db.take_snapshot(watermark);
                             } else {
                                 error!(pipeline, next_snapshot_checkpoint, "No watermark available for snapshot");
                                 break;
