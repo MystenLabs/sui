@@ -1,4 +1,4 @@
-name: Sync Fork & Check sui.yaml Changes
+name: Sync Fork & Check sui.yaml Changes (Keep Workflows)
 
 on:
   schedule:
@@ -22,33 +22,49 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Add & fetch upstream
+      - name: Prepare upstream remote
         run: |
           git remote remove upstream || true
           git remote add upstream https://github.com/MystenLabs/sui.git
           git fetch upstream main
 
-      - name: Check if sui.yaml changed in upstream
+      - name: Backup workflows
         run: |
-          echo "Checking for changes in sui.yaml from upstream..."
-          if git diff --name-only HEAD upstream/main | grep -q '^crates/sui-core/tests/staged/sui.yaml$'; then
-            commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml)
-            commit_author=$(git log upstream/main -1 --pretty=format:'%an' -- crates/sui-core/tests/staged/sui.yaml)
-            commit_msg=$(git log upstream/main -1 --pretty=format:'%s' -- crates/sui-core/tests/staged/sui.yaml)
-            commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
+          mkdir -p /tmp/workflows_backup
+          cp -r .github/workflows /tmp/workflows_backup || true
 
+      - name: Reset to upstream
+        run: |
+          git reset --hard upstream/main
+
+      - name: Restore workflows
+        run: |
+          mkdir -p .github
+          cp -r /tmp/workflows_backup .github/workflows || true
+          git add .github/workflows || true
+
+      - name: Check if sui.yaml changed from upstream
+        run: |
+          echo "Comparing changes from last commit..."
+          if git diff --name-only HEAD^ HEAD | grep -q '^crates/sui-core/tests/staged/sui.yaml$'; then
+            commit_hash=$(git log -1 --pretty=format:'%h')
+            commit_author=$(git log -1 --pretty=format:'%an')
+            commit_msg=$(git log -1 --pretty=format:'%s')
+            commit_url="https://github.com/${{ github.repository }}/commit/${commit_hash}"
+
+            # List Slack ID tag
             slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
 
-            echo "✅ sui.yaml was updated in upstream — sending Slack alert"
+            echo "✅ sui.yaml was updated — sending Slack alert"
             curl -X POST -H 'Content-type: application/json' \
-              --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
+              --data "{\"text\":\"🚨 *sui.yaml was updated!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
               ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
           else
-            echo "ℹ️ No changes to sui.yaml in upstream"
+            echo "ℹ️ No changes to sui.yaml"
           fi
 
-      - name: Reset fork to match upstream
+      - name: Commit & Push changes back to fork
         run: |
-          echo "Resetting fork/main to match upstream/main..."
-          git reset --hard upstream/main
-          git push origin HEAD:main --force
+          git add -A
+          git commit -m "Sync with upstream (keep workflows)" || echo "No changes to commit"
+          git push origin main --force
