@@ -73,9 +73,27 @@ const config = {
     [
       "@graphql-markdown/docusaurus",
       {
+        id: "alpha",
         schema: "../../crates/sui-graphql-rpc/schema.graphql",
         rootPath: "../content", // docs will be generated under rootPath/baseURL
-        baseURL: "references/sui-api/sui-graphql/reference",
+        baseURL: "references/sui-api/sui-graphql/alpha/reference",
+        loaders: {
+          GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
+        },
+      },
+    ],
+    [
+      "@graphql-markdown/docusaurus",
+      {
+        id: "beta",
+        schema: "../../crates/sui-indexer-alt-graphql/schema.graphql",
+        rootPath: "../content",
+        baseURL: "references/sui-api/sui-graphql/beta/reference",
+        docOptions: {
+          frontMatter: {
+            isGraphQlBeta: true,
+          },
+        },
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
         },

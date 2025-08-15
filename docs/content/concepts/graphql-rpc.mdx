@@ -213,7 +213,7 @@ Fields that return a paginated response accept at least the following optional p
 
 They also return a type that conforms to the [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm), meaning its name ends in `Connection`, and it contains at least the following fields:
 
-- `pageInfo`, of type <a href="/references/sui-api/sui-graphql/reference/objects/page-info" data-noBrokenLinkCheck='true'>PageInfo</a>, which indicates whether there are more pages before or after the page returned.
+- `pageInfo`, of type <a href="/references/sui-api/sui-graphql/beta/reference/types/objects/page-info" data-noBrokenLinkCheck='true'>PageInfo</a>, which indicates whether there are more pages before or after the page returned.
 - `nodes`, the content of the paginated response, as a list of the type being paginated (`TransactionBlock` in the previous example).
 - `edges`, similar to `nodes` but associating each node with its [cursor](#cursors).
 
