@@ -6,7 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
-use crate::accumulators::create_accumulator_update_transactions;
+use crate::accumulators::AccumulatorSettlementTxBuilder;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -17,6 +17,7 @@ pub use crate::checkpoints::checkpoint_output::{
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
@@ -1254,12 +1255,14 @@ impl CheckpointBuilder {
         let tx_key =
             TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
 
-        let (settlement_txns, num_updates) = create_accumulator_update_transactions(
-            &self.epoch_store,
-            checkpoint_height,
+        let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.effects_store.as_ref()),
             sorted_tx_effects_included_in_checkpoint,
         );
+
+        let settlements = builder.get_balance_settlements();
+        let num_updates = builder.num_updates();
+        let settlement_txns = builder.build_tx(&self.epoch_store, checkpoint_height);
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
@@ -1311,6 +1314,10 @@ impl CheckpointBuilder {
                 fx
             );
         }
+
+        self.state
+            .execution_scheduler()
+            .settle_balances(settlements);
 
         (tx_key, settlement_effects)
     }
@@ -1448,7 +1455,7 @@ impl CheckpointBuilder {
                 // should only include the digests of transactions that were originally roots in
                 // the pending checkpoint. It is later used to identify transactions which were
                 // added as dependencies, so that those transactions can be waited on using
-                // `consensus_messages_processed_notify()`. System transctions (such as
+                // `consensus_messages_processed_notify()`. System transactions (such as
                 // settlements) are exempt from this already.
                 sorted.extend(settlement_effects);
             }
