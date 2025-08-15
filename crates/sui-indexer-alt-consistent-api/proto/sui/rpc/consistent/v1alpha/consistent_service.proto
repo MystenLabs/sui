@@ -36,15 +36,17 @@ message AvailableRangeResponse {
   // The (inclusive) maximum epoch that the service can answer questions for.
   optional uint64 max_epoch = 101;
 
-  // The (exclusive) transaction upperbound (by sequence number) that the
-  // service can answer questions for.
-  optional uint64 max_transaction = 102;
+  // The total number of transactions that have executed on chain by the end of
+  // the `max_checkpoint`.
+  optional uint64 total_transactions = 102;
 
   // The (inclusive) maximum timestamp that the service can answer questions
   // for, in milliseconds since the Unix epoch.
   optional uint64 max_timestamp_ms = 103;
 
   // The gaps between snapshots taken by the service, measured in checkpoints.
+  // Accessible checkpoints in the available range are evenly spaced out
+  // `stride` checkpoints apart.
   optional uint64 stride = 200;
 }
 
