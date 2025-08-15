@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use parking_lot::RwLock;
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+
+use consensus_types::block::Round;
+use mysten_common::sync::notify_read::NotifyRead;
+use parking_lot::{RwLock, RwLockWriteGuard};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages_consensus::ConsensusPosition,
 };
 use tokio::sync::watch;
 use tracing::debug;
-
-use mysten_common::sync::notify_read::NotifyRead;
 
 /// The number of consensus rounds to retain transaction status information before garbage collection.
 /// Used to expire positions from old rounds, as well as to check if a transaction is too far ahead of the last committed round.
@@ -37,7 +38,11 @@ pub(crate) enum NotifyReadConsensusTxStatusResult {
 }
 
 pub(crate) struct ConsensusTxStatusCache {
+    // GC depth in consensus.
+    consensus_gc_depth: u32,
+
     inner: RwLock<Inner>,
+
     status_notify_read: NotifyRead<ConsensusPosition, ConsensusTxStatus>,
     /// Watch channel for last committed leader round updates
     last_committed_leader_round_tx: watch::Sender<Option<u32>>,
@@ -48,12 +53,21 @@ pub(crate) struct ConsensusTxStatusCache {
 struct Inner {
     /// A map of transaction position to its status from consensus.
     transaction_status: BTreeMap<ConsensusPosition, ConsensusTxStatus>,
+    /// Consensus positions that are currently in the fastpath certified state.
+    fastpath_certified: BTreeSet<ConsensusPosition>,
 }
 
 impl ConsensusTxStatusCache {
-    pub fn new() -> Self {
+    pub fn new(consensus_gc_depth: Round) -> Self {
+        assert!(
+            consensus_gc_depth < CONSENSUS_STATUS_RETENTION_ROUNDS,
+            "{} vs {}",
+            consensus_gc_depth,
+            CONSENSUS_STATUS_RETENTION_ROUNDS
+        );
         let (last_committed_leader_round_tx, last_committed_leader_round_rx) = watch::channel(None);
         Self {
+            consensus_gc_depth,
             inner: Default::default(),
             status_notify_read: Default::default(),
             last_committed_leader_round_tx,
@@ -62,14 +76,23 @@ impl ConsensusTxStatusCache {
     }
 
     pub fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
-        let mut inner = self.inner.write();
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
-            if pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS < last_committed_leader_round {
+            if pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= last_committed_leader_round {
                 // Ignore stale status updates.
                 return;
             }
         }
 
+        let mut inner = self.inner.write();
+        self.set_transaction_status_inner(&mut inner, pos, status);
+    }
+
+    fn set_transaction_status_inner(
+        &self,
+        inner: &mut RwLockWriteGuard<Inner>,
+        pos: ConsensusPosition,
+        status: ConsensusTxStatus,
+    ) {
         // Calls to set_transaction_status are async and can be out of order.
         // Makes sure this is tolerated by handling state transitions properly.
         let status_entry = inner.transaction_status.entry(pos);
@@ -77,6 +100,10 @@ impl ConsensusTxStatusCache {
             Entry::Vacant(entry) => {
                 // Set the status for the first time.
                 entry.insert(status);
+                if status == ConsensusTxStatus::FastpathCertified {
+                    // Only path where a status can be set to fastpath certified.
+                    inner.fastpath_certified.insert(pos);
+                }
             }
             Entry::Occupied(mut entry) => {
                 let old_status = *entry.get();
@@ -86,6 +113,10 @@ impl ConsensusTxStatusCache {
                     // FastpathCertified is transient and can be updated to other statuses.
                     (ConsensusTxStatus::FastpathCertified, _) => {
                         entry.insert(status);
+                        if old_status == ConsensusTxStatus::FastpathCertified {
+                            // Only path where a status can transition out of fastpath certified.
+                            inner.fastpath_certified.remove(&pos);
+                        }
                     }
                     // This happens when statuses arrive out-of-order, and is a no-op.
                     (
@@ -140,7 +171,7 @@ impl ConsensusTxStatusCache {
             loop {
                 if let Some(last_committed_leader_round) = *round_rx.borrow() {
                     if consensus_position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
-                        < last_committed_leader_round
+                        <= last_committed_leader_round
                     {
                         return last_committed_leader_round;
                     }
@@ -160,6 +191,10 @@ impl ConsensusTxStatusCache {
 
     pub async fn update_last_committed_leader_round(&self, leader_round: u32) {
         debug!("Updating last committed leader round: {}", leader_round);
+        // Send update through watch channel.
+        let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
+
+        // Remove transactions that are expired.
         let mut inner = self.inner.write();
         while let Some((position, _)) = inner.transaction_status.first_key_value() {
             if position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= leader_round {
@@ -168,12 +203,33 @@ impl ConsensusTxStatusCache {
                 break;
             }
         }
-        // Send update through watch channel
-        let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
+
+        // GC fastpath certified transactions.
+        // In theory, notify_read_transaction_status_change() could return `Rejected` status directly
+        // to waiters on GC'ed transactions.
+        // But it is necessary to track the number of fastpath certified status anyway for end of epoch.
+        // So rejecting every fastpath certified transaction here.
+        while let Some(position) = inner.fastpath_certified.first().cloned() {
+            if position.block.round + self.consensus_gc_depth <= leader_round {
+                // Reject GC'ed transactions that were previously fastpath certified.
+                self.set_transaction_status_inner(
+                    &mut inner,
+                    position,
+                    ConsensusTxStatus::Rejected,
+                );
+            } else {
+                break;
+            }
+        }
     }
 
     pub fn get_last_committed_leader_round(&self) -> Option<u32> {
         *self.last_committed_leader_round_rx.borrow()
+    }
+
+    #[cfg(test)]
+    pub fn get_num_fastpath_certified(&self) -> usize {
+        self.inner.read().fastpath_certified.len()
     }
 
     /// Returns true if the position is too far ahead of the last committed round.
@@ -222,7 +278,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_and_get_transaction_status() {
-        let cache = ConsensusTxStatusCache::new();
+        let cache = ConsensusTxStatusCache::new(60);
         let tx_pos = create_test_tx_position(1, 0);
 
         // Set initial status
@@ -240,7 +296,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_notification() {
-        let cache = Arc::new(ConsensusTxStatusCache::new());
+        let cache = Arc::new(ConsensusTxStatusCache::new(60));
         let tx_pos = create_test_tx_position(1, 0);
 
         // Spawn a task that waits for status update
@@ -267,7 +323,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_round_expiration() {
-        let cache = ConsensusTxStatusCache::new();
+        let cache = ConsensusTxStatusCache::new(60);
         let tx_pos = create_test_tx_position(1, 0);
 
         // Set initial status
@@ -290,7 +346,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_status_updates() {
-        let cache = ConsensusTxStatusCache::new();
+        let cache = ConsensusTxStatusCache::new(60);
         let tx_pos = create_test_tx_position(1, 0);
 
         // Set initial status
@@ -314,7 +370,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_expired_rounds() {
-        let cache = ConsensusTxStatusCache::new();
+        let cache = ConsensusTxStatusCache::new(60);
 
         // Add transactions for multiple rounds
         for round in 1..=5 {
@@ -339,7 +395,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_operations() {
-        let cache = Arc::new(ConsensusTxStatusCache::new());
+        let cache = Arc::new(ConsensusTxStatusCache::new(60));
         let tx_pos = create_test_tx_position(1, 0);
 
         // Spawn multiple tasks that wait for status
@@ -371,7 +427,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_out_of_order_status_updates() {
-        let cache = Arc::new(ConsensusTxStatusCache::new());
+        let cache = Arc::new(ConsensusTxStatusCache::new(60));
         let tx_pos = create_test_tx_position(1, 0);
 
         // First update status to Finalized.
@@ -397,6 +453,100 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             cache.get_transaction_status(&tx_pos),
+            Some(ConsensusTxStatus::Finalized)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fastpath_certified_tracking() {
+        let cache = Arc::new(ConsensusTxStatusCache::new(60));
+
+        // Initially, no fastpath certified transactions
+        assert_eq!(cache.get_num_fastpath_certified(), 0);
+
+        // Add fastpath certified transactions
+        let tx_pos1 = create_test_tx_position(100, 0);
+        let tx_pos2 = create_test_tx_position(100, 1);
+        let tx_pos3 = create_test_tx_position(101, 2);
+        let tx_pos4 = create_test_tx_position(102, 3);
+
+        cache.set_transaction_status(tx_pos1, ConsensusTxStatus::FastpathCertified);
+        assert_eq!(cache.get_num_fastpath_certified(), 1);
+
+        cache.set_transaction_status(tx_pos2, ConsensusTxStatus::FastpathCertified);
+        assert_eq!(cache.get_num_fastpath_certified(), 2);
+
+        cache.set_transaction_status(tx_pos3, ConsensusTxStatus::FastpathCertified);
+        assert_eq!(cache.get_num_fastpath_certified(), 3);
+
+        cache.set_transaction_status(tx_pos4, ConsensusTxStatus::FastpathCertified);
+        assert_eq!(cache.get_num_fastpath_certified(), 4);
+
+        // Add a non-fastpath certified transaction
+        let tx_pos5 = create_test_tx_position(103, 4);
+        cache.set_transaction_status(tx_pos5, ConsensusTxStatus::Finalized);
+        assert_eq!(cache.get_num_fastpath_certified(), 4);
+
+        // Transition one fastpath certified to finalized
+        cache.set_transaction_status(tx_pos1, ConsensusTxStatus::Finalized);
+        assert_eq!(cache.get_num_fastpath_certified(), 3);
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos1),
+            Some(ConsensusTxStatus::Finalized)
+        );
+
+        // Transition another fastpath certified to rejected
+        cache.set_transaction_status(tx_pos2, ConsensusTxStatus::Rejected);
+        assert_eq!(cache.get_num_fastpath_certified(), 2);
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos2),
+            Some(ConsensusTxStatus::Rejected)
+        );
+
+        // Test GC of fastpath certified transactions
+        // tx_pos3 is at round 101, with gc_depth=60, it will be GC'd when leader round >= 161
+        // tx_pos4 is at round 102, with gc_depth=60, it will be GC'd when leader round >= 162
+        cache.update_last_committed_leader_round(160).await;
+        assert_eq!(cache.get_num_fastpath_certified(), 2);
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos3),
+            Some(ConsensusTxStatus::FastpathCertified)
+        );
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos4),
+            Some(ConsensusTxStatus::FastpathCertified)
+        );
+
+        // GC tx_pos3 at round 161
+        cache.update_last_committed_leader_round(161).await;
+        assert_eq!(cache.get_num_fastpath_certified(), 1);
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos3),
+            Some(ConsensusTxStatus::Rejected)
+        );
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos4),
+            Some(ConsensusTxStatus::FastpathCertified)
+        );
+
+        // GC tx_pos4 at round 162
+        cache.update_last_committed_leader_round(162).await;
+        assert_eq!(cache.get_num_fastpath_certified(), 0);
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos4),
+            Some(ConsensusTxStatus::Rejected)
+        );
+
+        // Test that setting a transaction directly to non-fastpath doesn't affect count
+        let tx_pos6 = create_test_tx_position(200, 5);
+        cache.set_transaction_status(tx_pos6, ConsensusTxStatus::Finalized);
+        assert_eq!(cache.get_num_fastpath_certified(), 0);
+
+        // Can't transition from finalized back to fastpath certified
+        cache.set_transaction_status(tx_pos6, ConsensusTxStatus::FastpathCertified);
+        assert_eq!(cache.get_num_fastpath_certified(), 0);
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos6),
             Some(ConsensusTxStatus::Finalized)
         );
     }
