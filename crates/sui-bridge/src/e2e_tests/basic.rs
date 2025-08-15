@@ -31,7 +31,6 @@ use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_types::bridge::{
     get_bridge, BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH,
 };
-use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tracing::info;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
