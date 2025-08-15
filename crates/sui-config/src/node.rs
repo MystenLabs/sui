@@ -223,6 +223,17 @@ pub struct NodeConfig {
     pub fork_recovery: Option<ForkRecoveryConfig>,
 }
 
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ForkCrashBehavior {
+    #[serde(rename = "await-fork-recovery")]
+    #[default]
+    AwaitForkRecovery,
+    /// Return an error instead of blocking forever. This is primarily for testing.
+    #[serde(rename = "return-error")]
+    ReturnError,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ForkRecoveryConfig {
@@ -235,6 +246,10 @@ pub struct ForkRecoveryConfig {
     /// Used to repoint checkpoints to correct versions after a fork
     #[serde(default)]
     pub checkpoint_overrides: BTreeMap<u64, String>,
+
+    /// Behavior when a fork is detected after recovery attempts
+    #[serde(default)]
+    pub fork_crash_behavior: ForkCrashBehavior,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
