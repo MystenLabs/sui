@@ -30,4 +30,4 @@ Contents: t2::o2::Obj2 {
 task 4, line 30:
 //# run t2::o2::transfer_to_single_owner --args object(2,0)
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command Some(0)
+Debug of error: SharedObjectOperationNotAllowed at command None
