@@ -15,9 +15,10 @@ use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
         address::Address,
-        checkpoint::Checkpoint,
+        checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         epoch::Epoch,
-        move_package::{self, CheckpointFilter, MovePackage, PackageKey},
+        move_package::PackageCheckpointFilter,
+        move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
@@ -61,6 +62,26 @@ impl Query {
             .unwrap_or(scope.checkpoint_viewed_at());
 
         Ok(Checkpoint::with_sequence_number(scope, sequence_number))
+    }
+
+    /// Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
+    async fn checkpoints(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CCheckpoint>,
+        last: Option<u64>,
+        before: Option<CCheckpoint>,
+        filter: Option<CheckpointFilter>,
+    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "checkpoints");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let filter = filter.unwrap_or_default();
+
+        Checkpoint::paginate(ctx, scope, page, filter).await
     }
 
     /// Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
@@ -273,7 +294,7 @@ impl Query {
         after: Option<move_package::CPackage>,
         last: Option<u64>,
         before: Option<move_package::CPackage>,
-        filter: Option<CheckpointFilter>,
+        filter: Option<PackageCheckpointFilter>,
     ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "packages");

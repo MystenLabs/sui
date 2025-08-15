@@ -68,9 +68,8 @@ pub(crate) struct PackageKey {
     pub(crate) at_checkpoint: Option<UInt53>,
 }
 
-/// Filter for paginating packages published within a range of checkpoints.
 #[derive(InputObject, Default, Debug)]
-pub(crate) struct CheckpointFilter {
+pub(crate) struct PackageCheckpointFilter {
     /// Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
     pub(crate) after_checkpoint: Option<UInt53>,
 
@@ -523,7 +522,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CPackage>,
-        filter: CheckpointFilter,
+        filter: PackageCheckpointFilter,
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 
