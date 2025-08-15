@@ -38,7 +38,7 @@ use crate::{
         sui_address::SuiAddress,
         uint53::UInt53,
     },
-    error::{bad_user_input, not_available, RpcError},
+    error::{bad_user_input, feature_unavailable, RpcError},
     intersect,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -560,16 +560,42 @@ impl Object {
 
         let refs = match filter {
             ObjectFilter {
-                owner_kind: None | Some(OwnerKind::Address | OwnerKind::Object),
-                owner: Some(_),
-                type_: _,
-            } => return Err(not_available("'ADDRESS' and 'OBJECT' owner kinds")),
+                owner_kind: kind @ (None | Some(OwnerKind::Address | OwnerKind::Object)),
+                owner: Some(address),
+                type_,
+            } => {
+                consistent_reader
+                    .list_owned_objects(
+                        checkpoint,
+                        kind.unwrap_or(OwnerKind::Address).into(),
+                        Some(address.to_string()),
+                        type_.map(|t| t.to_string()),
+                        Some(page.limit() as u32),
+                        page.after().map(|c| c.1.clone()),
+                        page.before().map(|c| c.1.clone()),
+                        page.is_from_front(),
+                    )
+                    .await
+            }
 
             ObjectFilter {
-                owner_kind: Some(OwnerKind::Shared | OwnerKind::Immutable),
+                owner_kind: Some(kind @ (OwnerKind::Shared | OwnerKind::Immutable)),
                 owner: None,
-                type_: Some(_),
-            } => return Err(not_available("'SHARED' and 'IMMUTABLE' owner kinds")),
+                type_: Some(type_),
+            } => {
+                consistent_reader
+                    .list_owned_objects(
+                        checkpoint,
+                        kind.into(),
+                        None,
+                        Some(type_.to_string()),
+                        Some(page.limit() as u32),
+                        page.after().map(|c| c.1.clone()),
+                        page.before().map(|c| c.1.clone()),
+                        page.is_from_front(),
+                    )
+                    .await
+            }
 
             ObjectFilter {
                 owner_kind: None,
@@ -595,7 +621,7 @@ impl Object {
         }
         .map_err(|e| match e {
             consistent_reader::Error::NotConfigured => {
-                not_available("paginating the live object set")
+                feature_unavailable("paginating the live object set")
             }
 
             consistent_reader::Error::OutOfRange(_) => {

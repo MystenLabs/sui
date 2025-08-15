@@ -12,10 +12,10 @@ use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
 /// <https://www.apollographql.com/docs/apollo-server/data/errors/#built-in-error-codes>
 pub(crate) mod code {
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
+    pub const FEATURE_UNAVAILABLE: &str = "FEATURE_UNAVAILABLE";
     pub const GRAPHQL_PARSE_FAILED: &str = "GRAPHQL_PARSE_FAILED";
     pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
-    pub const NOT_AVAILABLE: &str = "NOT_AVAILABLE";
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
 }
 
@@ -24,8 +24,9 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     /// An error that is the user's fault.
     BadUserInput(Arc<E>),
 
-    /// A user error related to pagination and cursors.
-    Pagination(#[from] pagination::Error),
+    /// This feature is not available, because GraphQL does not have access to the underlying
+    /// store.
+    FeatureUnavailable { what: &'static str },
 
     /// An error that is produced by the framework, it gets wrapped so that we can add an error
     /// extension to it.
@@ -34,9 +35,8 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     /// An error produced by the internal workings of the service (our fault).
     InternalError(Arc<anyhow::Error>),
 
-    /// This feature is not available, because GraphQL does not have access to the underlying
-    /// store.
-    NotAvailable { what: &'static str },
+    /// A user error related to pagination and cursors.
+    Pagination(#[from] pagination::Error),
 
     /// The request took too long to process.
     RequestTimeout { kind: &'static str, limit: Duration },
@@ -49,9 +49,11 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 ext.set("code", code::BAD_USER_INPUT);
             }),
 
-            RpcError::Pagination(err) => err.to_string().extend_with(|_, ext| {
-                ext.set("code", code::BAD_USER_INPUT);
-            }),
+            RpcError::FeatureUnavailable { what } => {
+                format!("{what} not available").extend_with(|_, ext| {
+                    ext.set("code", code::FEATURE_UNAVAILABLE);
+                })
+            }
 
             RpcError::GraphQlError(mut err) => {
                 fill_error_code(&mut err.extensions, code::INTERNAL_SERVER_ERROR);
@@ -75,11 +77,9 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 })
             }
 
-            RpcError::NotAvailable { what } => {
-                format!("{what} not available").extend_with(|_, ext| {
-                    ext.set("code", code::NOT_AVAILABLE);
-                })
-            }
+            RpcError::Pagination(err) => err.to_string().extend_with(|_, ext| {
+                ext.set("code", code::BAD_USER_INPUT);
+            }),
 
             RpcError::RequestTimeout { kind, limit } => {
                 format!("{kind} timed out after {:.2}s", limit.as_secs_f64()).extend_with(
@@ -138,8 +138,8 @@ pub(crate) fn bad_user_input<E: std::error::Error>(err: E) -> RpcError<E> {
 }
 
 /// Signal that feature `what` is not available.
-pub(crate) fn not_available<E: std::error::Error>(what: &'static str) -> RpcError<E> {
-    RpcError::NotAvailable { what }
+pub(crate) fn feature_unavailable<E: std::error::Error>(what: &'static str) -> RpcError<E> {
+    RpcError::FeatureUnavailable { what }
 }
 
 /// Signal a timeout. `kind` specifies what operation timed out and is included in the error

@@ -16,7 +16,7 @@ use diesel::{
 use futures::future::OptionFuture;
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableReader,
-    consistent_reader::{self, AvailableRangeResponse, ConsistentReader},
+    consistent_reader::{self, proto::AvailableRangeResponse, ConsistentReader},
     pg_reader::PgReader,
 };
 use sui_sql_macro::query;
