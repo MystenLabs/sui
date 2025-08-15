@@ -61,7 +61,7 @@ mod checked {
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
         effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
-        error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind, SuiError},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
         execution_config_utils::to_binary_config,
@@ -1034,20 +1034,20 @@ mod checked {
                 written_objects.insert(id, object);
             }
 
-            finish(
-                protocol_config,
-                state_view,
-                gas_charger,
-                &ref_context.borrow(),
-                &by_value_shared_objects,
-                &consensus_owner_objects,
-                loaded_runtime_objects,
-                written_objects,
-                created_object_ids,
-                deleted_object_ids,
-                user_events,
-                accumulator_events,
-            )
+                finish(
+                    protocol_config,
+                    state_view,
+                    gas_charger,
+                    &ref_context.borrow(),
+                    &by_value_shared_objects,
+                    &consensus_owner_objects,
+                    loaded_runtime_objects,
+                    written_objects,
+                    created_object_ids,
+                    deleted_object_ids,
+                    user_events,
+                    accumulator_events,
+                )
         }
 
         /// Convert a VM Error to an execution one
@@ -1532,7 +1532,7 @@ mod checked {
             result?;
         }
 
-        let user_events = user_events
+        let user_events: Vec<Event> = user_events
             .into_iter()
             .map(|(module_id, tag, contents)| {
                 Event::new(
@@ -1547,9 +1547,29 @@ mod checked {
 
         let accumulator_events = accumulator_events
             .into_iter()
-            .map(|accum_event| match accum_event.value {
+            .enumerate()
+            .map(|(_, accum_event)| match accum_event.value {
                 MoveAccumulatorValue::U64(amount) => {
-                    let value = AccumulatorValue::Integer(amount);
+                    let value = AccumulatorValue::Integer(amount.into());
+                    let address = AccumulatorAddress::new(
+                        accum_event.target_addr.into(),
+                        accum_event.target_ty,
+                    );
+
+                    let write = AccumulatorWriteV1 {
+                        address,
+                        operation: accum_event.action.into_sui_accumulator_action(),
+                        value,
+                    };
+
+                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                }
+                MoveAccumulatorValue::MoveValue(_ty, _struct_tag, _val) => todo!(),
+                MoveAccumulatorValue::EventRef(event_idx) => {
+                    let event = &user_events[event_idx as usize];
+                    let tx_digest = tx_context.digest();
+                    let digest = event.unique_digest(tx_digest, event_idx as usize);
+                    let value = AccumulatorValue::EventDigest(event_idx, digest);
                     let address = AccumulatorAddress::new(
                         accum_event.target_addr.into(),
                         accum_event.target_ty,
@@ -1564,7 +1584,7 @@ mod checked {
                     AccumulatorEvent::new(accum_event.accumulator_id, write)
                 }
             })
-            .collect();
+                .collect();
 
         Ok(ExecutionResults::V2(ExecutionResultsV2 {
             written_objects,

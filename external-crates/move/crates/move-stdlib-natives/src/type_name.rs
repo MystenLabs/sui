@@ -68,6 +68,45 @@ pub fn make_native_get(use_original_id: bool, gas_params: GetGasParameters) -> N
     })
 }
 
+fn package_id(
+    use_original_id: bool,
+    gas_params: &GetGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    arguments: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert_eq!(ty_args.len(), 1);
+    debug_assert!(arguments.is_empty());
+
+    // Charge base fee
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    // Extract type tag to get package information
+    let type_tag = if use_original_id {
+        context.type_to_runtime_type_tag(&ty_args[0])
+    } else {
+        context.type_to_type_tag(&ty_args[0])
+    }?;
+    
+    let package_address = match &type_tag {
+        move_core_types::language_storage::TypeTag::Struct(struct_tag) => {
+            struct_tag.address
+        }
+        // For primitive types, return zero address
+        _ => move_core_types::account_address::AccountAddress::ZERO,
+    };
+
+    let address_value = Value::address(package_address);
+
+    Ok(NativeResult::ok(context.gas_used(), smallvec![address_value]))
+}
+
+pub fn make_package_id(use_original_id: bool, gas_params: GetGasParameters) -> NativeFunction {
+    Arc::new(move |context, ty_args, args| {
+        package_id(use_original_id, &gas_params, context, ty_args, args)
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct GasParameters {
     pub get: GetGasParameters,
@@ -81,7 +120,15 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
         ),
         (
             "get_with_original_ids",
-            make_native_get(/* use_original_id */ true, gas_params.get),
+            make_native_get(/* use_original_id */ true, gas_params.get.clone()),
+        ),
+        (
+            "package_id",
+            make_package_id(/* use_original_id */ false, gas_params.get.clone()),
+        ),
+        (
+            "original_package_id",
+            make_package_id(/* use_original_id */ true, gas_params.get),
         ),
     ];
 

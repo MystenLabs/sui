@@ -28,6 +28,22 @@
 /// ```
 module sui::event;
 
+use std::type_name;
+use sui::dynamic_field;
+use sui::accumulator;
+use sui::hash;
+use sui::bcs;
+
+const ENotSystemAddress: u64 = 0;
+
+/// Merkle Mountain Range data structure for efficiently storing
+/// and proving membership in a growing list of checkpoint event roots
+public struct MerkleMountainRange has copy, store, drop {
+    /// Index i contains either a merkle root of height 2^i or an empty vector.
+    /// This binary representation allows efficient appending and proofs.
+    digest_vec: vector<vector<u8>>,
+}
+
 /// Emit a custom Move event, sending the data offchain.
 ///
 /// Used for creating custom indexes and tracking onchain
@@ -37,6 +53,136 @@ module sui::event;
 /// phantom parameters, eg `emit(MyEvent<phantom T>)`.
 public native fun emit<T: copy + drop>(event: T);
 
+public use fun destroy_stream as EventStream.destroy;
+public use fun destroy_cap as EventStreamCap.destroy;
+public use fun emit_authenticated as EventStreamCap.emit;
+public use fun new_cap as EventStream.get_cap;
+
+#[allow(unused_field)]
+public struct EventStreamDigest has store {
+    /// Merkle Mountain Range storing merkle roots of event sets from each checkpoint
+    digest: MerkleMountainRange,
+    /// Last checkpoint at which the event stream was written.
+    last_checkpoint: u64,
+    /// Number of events in the stream.
+    num_events: u64,
+}
+
+/// Initialize an empty Merkle Mountain Range
+fun init_mmr(): MerkleMountainRange {
+    MerkleMountainRange {
+        digest_vec: vector::empty(),
+    }
+}
+
+/// Add a new value to the MMR using the standard MMR append algorithm
+fun add_to_mmr(new_val: vector<u8>, mmr: &mut MerkleMountainRange) {
+    let mut i = 0;
+    let mut cur = new_val;
+    
+    while (i < vector::length(&mmr.digest_vec)) {
+        let r = vector::borrow_mut(&mut mmr.digest_vec, i);
+        if (vector::is_empty(r)) {
+            *r = cur;
+            return
+        } else {
+            cur = hash_two_to_one_via_bcs(*r, cur);
+            *r = vector::empty();
+        };
+        i = i + 1;
+    };
+
+    // Vector length insufficient. Increase by 1.
+    mmr.digest_vec.push_back(cur);
+}
+
+/// Helper struct for BCS serialization of two hash values
+public struct HashPair has drop {
+    left: vector<u8>,
+    right: vector<u8>,
+}
+
+/// Hash two values together using BCS serialization and Blake2b
+fun hash_two_to_one_via_bcs(left: vector<u8>, right: vector<u8>): vector<u8> {
+    let pair = HashPair {
+        left: left,
+        right: right,
+    };
+    let pair_bytes = bcs::to_bytes(&pair);
+    hash::blake2b256(&pair_bytes)
+}
+
+entry fun update_head(accumulator_root: &mut accumulator::AccumulatorRoot, stream_id: address, new_root: vector<u8>, ctx: &TxContext) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+
+    let name = accumulator::accumulator_key<EventStreamDigest>(stream_id);
+    if (dynamic_field::exists_with_type<accumulator::Key<EventStreamDigest>, EventStreamDigest>(accumulator_root.id(), copy name)) {
+        let digest: &mut EventStreamDigest = dynamic_field::borrow_mut<accumulator::Key<EventStreamDigest>, EventStreamDigest>(accumulator_root.id_mut(), name);
+        add_to_mmr(new_root, &mut digest.digest);
+    } else {
+        let mut initial_mmr = init_mmr();
+        add_to_mmr(new_root, &mut initial_mmr);
+        let digest = EventStreamDigest {
+            digest: initial_mmr,
+            last_checkpoint: 0,
+            num_events: 0,
+        };
+        dynamic_field::add<accumulator::Key<EventStreamDigest>, EventStreamDigest>(accumulator_root.id_mut(), name, digest);
+    };
+}
+
+// A unique identifier for an event stream.
+public struct EventStream has key, store {
+    id: UID,
+}
+
+public fun new_event_stream(ctx: &mut TxContext): EventStream {
+    EventStream {
+        id: object::new(ctx),
+    }
+}
+
+public fun destroy_stream(stream: EventStream) {
+    let EventStream { id } = stream;
+    id.delete();
+}
+
+/// A capability to write to a given event stream. 
+public struct EventStreamCap has key, store {
+    id: UID,
+    stream_id: address,
+}
+
+public fun new_cap(stream: &EventStream, ctx: &mut TxContext): EventStreamCap {
+    EventStreamCap {
+        id: object::new(ctx),
+        stream_id: stream.id.to_address(),
+    }
+}
+
+public fun destroy_cap(cap: EventStreamCap) {
+    let EventStreamCap { id, .. } = cap;
+    id.delete();
+}
+
+public fun emit_authenticated<T: copy + drop>(cap: &EventStreamCap, event: T) {
+    let accumulator_addr = accumulator::accumulator_address<EventStreamDigest>(cap.stream_id);
+
+    emit_authenticated_impl<EventStreamDigest, T>(accumulator_addr, cap.stream_id, event);
+}
+
+public fun emit_authenticated_default<T: copy + drop>(event: T) {
+    let stream_id = type_name::original_package_id<T>();
+    let accumulator_addr = accumulator::accumulator_address<EventStreamDigest>(stream_id);
+    emit_authenticated_impl<EventStreamDigest, T>(accumulator_addr, stream_id, event);
+}
+
+native fun emit_authenticated_impl<StreamDigestT, T: copy + drop>(
+    accumulator_id: address,
+    stream: address,
+    event: T,
+);
+
 #[test_only]
 /// Get the total number of events emitted during execution so far
 public native fun num_events(): u32;
@@ -45,3 +191,71 @@ public native fun num_events(): u32;
 /// Get all events of type `T` emitted during execution.
 /// Can only be used in testing,
 public native fun events_by_type<T: copy + drop>(): vector<T>;
+
+#[test]
+fun test_mmr_addition() {
+    let mut mmr = init_mmr();
+    let fixed_new_val = vector::tabulate!(32, |_| 2);
+
+    // Initial MMR should be empty
+    assert!(vector::all!(&mmr.digest_vec, |x| vector::is_empty(x)));
+
+    // Round 1: Add first element - should be at position 0
+    add_to_mmr(fixed_new_val, &mut mmr);
+    assert!(vector::map_ref!(&mmr.digest_vec, |x| vector::is_empty(x)) == 
+            vector[false]);
+
+    // Round 2: Add second element - should trigger merge and clear position 0
+    add_to_mmr(fixed_new_val, &mut mmr);
+    assert!(vector::map_ref!(&mmr.digest_vec, |x| vector::is_empty(x)) == 
+            vector[true, false]);
+
+    // Round 3: Add third element - should place at position 0
+    add_to_mmr(fixed_new_val, &mut mmr);
+    assert!(vector::map_ref!(&mmr.digest_vec, |x| vector::is_empty(x)) == 
+            vector[false, false]);
+
+    // Round 4: Add fourth element - should trigger cascade merge to position 2
+    add_to_mmr(fixed_new_val, &mut mmr);
+    assert!(vector::map_ref!(&mmr.digest_vec, |x| vector::is_empty(x)) == 
+            vector[true, true, false]);
+
+    // Verify the final hash represents all 4 elements
+    let x = hash_two_to_one_via_bcs(fixed_new_val, fixed_new_val);
+    let y = hash_two_to_one_via_bcs(x, x);
+    assert!(mmr.digest_vec[2] == y);
+}
+
+#[test]
+fun test_mmr_with_different_values() {
+    let mut mmr = init_mmr();
+    
+    // Create different values like we would get from different events  
+    let val1 = vector[150, 121, 52, 32]; // Similar to what we see in test output
+    let val2 = vector[42, 233, 246, 96];  // Different hash
+    let val3 = vector[148, 79, 131, 129]; // Different hash  
+    let val4 = vector[50, 231, 238, 28];  // Different hash
+
+    // Verify these values are actually different
+    assert!(val1 != val2);
+    assert!(val2 != val3);
+    assert!(val3 != val4);
+
+    // Add them one by one and verify MMR behavior
+    add_to_mmr(val1, &mut mmr);
+    add_to_mmr(val2, &mut mmr);  
+    // After second add, position 0 should be empty, position 1 should have merged hash
+    assert!(vector::is_empty(&mmr.digest_vec[0]));
+    assert!(!vector::is_empty(&mmr.digest_vec[1]));
+
+    add_to_mmr(val3, &mut mmr);
+    // Position 0 should now have val3, position 1 should still have the merged hash
+    assert!(!vector::is_empty(&mmr.digest_vec[0]));
+    assert!(!vector::is_empty(&mmr.digest_vec[1]));
+
+    add_to_mmr(val4, &mut mmr);
+    // Final state: positions 0,1 empty, position 2 has the final merged hash
+    assert!(vector::is_empty(&mmr.digest_vec[0]));
+    assert!(vector::is_empty(&mmr.digest_vec[1]));
+    assert!(!vector::is_empty(&mmr.digest_vec[2]));
+}
