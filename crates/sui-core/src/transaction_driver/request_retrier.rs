@@ -4,6 +4,7 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use sui_types::base_types::AuthorityName;
+use tracing::debug;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -35,9 +36,16 @@ impl<A: Clone> RequestRetrier<A> {
         auth_agg: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
     ) -> Self {
+        let preferred_validators_num = std::env::var("PREFERRED_VALIDATORS_NUM")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or_else(|| auth_agg.committee.num_members() / 3);
+        
+        debug!("Using preferred_validators_num: {}", preferred_validators_num);
+        
         let selected_validators = client_monitor.select_shuffled_preferred_validators(
             &auth_agg.committee,
-            auth_agg.committee.num_members() / 3,
+            preferred_validators_num,
         );
         let remaining_clients = selected_validators
             .into_iter()
