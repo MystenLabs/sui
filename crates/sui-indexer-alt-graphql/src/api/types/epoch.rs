@@ -5,6 +5,7 @@ use super::{
     move_package::{self, CSysPackage, MovePackage},
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
 use crate::api::types::safe_mode::{from_system_state, SafeMode};
 use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
@@ -112,6 +113,43 @@ impl Epoch {
         };
 
         Ok(Some(DateTime::from_ms(contents.start_timestamp_ms)?))
+    }
+
+    /// The transactions in this epoch, optionally filtered by transaction filters.
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
+            return Ok(None);
+        };
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Epoch", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
+        let cp_hi = end.as_ref().map_or_else(
+            || self.scope.checkpoint_viewed_at_exclusive_bound(),
+            |end| end.cp_hi as u64,
+        );
+
+        let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+            after_checkpoint: cp_lo_exclusive.map(UInt53::from),
+            before_checkpoint: Some(UInt53::from(cp_hi)),
+            ..Default::default()
+        }) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Ok(Some(
+            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+        ))
     }
 
     /// The system packages used by all transactions in this epoch.

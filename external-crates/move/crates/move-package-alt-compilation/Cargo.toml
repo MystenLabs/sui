@@ -27,3 +27,7 @@ serde.workspace = true
 serde_yaml.workspace = true
 tracing.workspace = true
 vfs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true

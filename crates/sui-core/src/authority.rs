@@ -54,6 +54,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     pin::Pin,
+    str::FromStr,
     sync::Arc,
     vec,
 };
@@ -73,6 +74,8 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::storage::ChildObjectResolver;
+use sui_types::storage::InputKey;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
@@ -104,7 +107,7 @@ use sui_json_rpc_types::{
     SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, TransactionFilter,
 };
-use sui_macros::{fail_point, fail_point_async, fail_point_if};
+use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::authenticator_state::get_authenticator_state;
@@ -114,7 +117,7 @@ use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::effects::{
-    InputSharedObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
+    InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, UserInputError};
@@ -256,10 +259,12 @@ pub struct AuthorityMetrics {
     total_certs: IntCounter,
     total_cert_attempts: IntCounter,
     total_effects: IntCounter,
+    // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
     sponsored_tx: IntCounter,
     tx_already_processed: IntCounter,
     num_input_objs: Histogram,
+    // TODO: this tracks consensus object count, not just shared. Consider renaming.
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
@@ -876,11 +881,7 @@ impl ExecutionEnv {
     }
 
     pub fn with_assigned_versions(mut self, assigned_versions: AssignedVersions) -> Self {
-        if !assigned_versions.is_empty() {
-            self.assigned_versions = assigned_versions;
-            // scheduling source cannot be fast path if assigned versions are set
-            self.scheduling_source = SchedulingSource::NonFastPath;
-        }
+        self.assigned_versions = assigned_versions;
         self
     }
 
@@ -892,6 +893,75 @@ impl ExecutionEnv {
     pub fn with_insufficient_balance(mut self) -> Self {
         self.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
         self
+    }
+}
+
+#[derive(Debug)]
+pub struct ForkRecoveryState {
+    /// Transaction digest to effects digest overrides
+    transaction_overrides:
+        parking_lot::RwLock<HashMap<TransactionDigest, TransactionEffectsDigest>>,
+    /// Checkpoint sequence to checkpoint digest overrides  
+    checkpoint_overrides: parking_lot::RwLock<HashMap<CheckpointSequenceNumber, CheckpointDigest>>,
+}
+
+impl Default for ForkRecoveryState {
+    fn default() -> Self {
+        Self {
+            transaction_overrides: parking_lot::RwLock::new(HashMap::new()),
+            checkpoint_overrides: parking_lot::RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+impl ForkRecoveryState {
+    pub fn new(config: Option<&sui_config::node::ForkRecoveryConfig>) -> Result<Self, SuiError> {
+        let Some(config) = config else {
+            return Ok(Self::default());
+        };
+
+        let mut transaction_overrides = HashMap::new();
+        for (tx_digest_str, effects_digest_str) in &config.transaction_overrides {
+            let tx_digest = TransactionDigest::from_str(tx_digest_str).map_err(|_| {
+                SuiError::Unknown(format!("Invalid transaction digest: {}", tx_digest_str))
+            })?;
+            let effects_digest =
+                TransactionEffectsDigest::from_str(effects_digest_str).map_err(|_| {
+                    SuiError::Unknown(format!("Invalid effects digest: {}", effects_digest_str))
+                })?;
+            transaction_overrides.insert(tx_digest, effects_digest);
+        }
+
+        let mut checkpoint_overrides = HashMap::new();
+        for (seq_num, checkpoint_digest_str) in &config.checkpoint_overrides {
+            let checkpoint_digest =
+                CheckpointDigest::from_str(checkpoint_digest_str).map_err(|_| {
+                    SuiError::Unknown(format!(
+                        "Invalid checkpoint digest: {}",
+                        checkpoint_digest_str
+                    ))
+                })?;
+            checkpoint_overrides.insert(*seq_num, checkpoint_digest);
+        }
+
+        Ok(Self {
+            transaction_overrides: parking_lot::RwLock::new(transaction_overrides),
+            checkpoint_overrides: parking_lot::RwLock::new(checkpoint_overrides),
+        })
+    }
+
+    pub fn get_transaction_override(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<TransactionEffectsDigest> {
+        self.transaction_overrides.read().get(tx_digest).copied()
+    }
+
+    pub fn get_checkpoint_override(
+        &self,
+        seq_num: &CheckpointSequenceNumber,
+    ) -> Option<CheckpointDigest> {
+        self.checkpoint_overrides.read().get(seq_num).copied()
     }
 }
 
@@ -950,6 +1020,9 @@ pub struct AuthorityState {
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
+
+    /// Fork recovery state for handling equivocation after forks
+    fork_recovery_state: Option<ForkRecoveryState>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1136,22 +1209,15 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        // timeout in tests can be reduced to exercise error paths, if QD properly retries
-        // failures to lock on objects waiting for future versions.
-        if epoch_store.protocol_config().mysticeti_fastpath() {
-            let timeout = if cfg!(msim) {
-                Duration::from_millis(100)
-            } else {
-                WAIT_FOR_FASTPATH_INPUT_TIMEOUT
-            };
-            if !self
-                .wait_for_fastpath_dependency_objects(&transaction, epoch_store.epoch(), timeout)
+        if epoch_store.protocol_config().mysticeti_fastpath()
+            && !self
+                .wait_for_fastpath_dependency_objects(&transaction, epoch_store.epoch())
                 .await?
-            {
-                debug!("fastpath input objects are still unavailable after waiting");
-                // Proceed with input checks to generate a proper error.
-            }
+        {
+            debug!("fastpath input objects are still unavailable after waiting");
+            // Proceed with input checks to generate a proper error.
         }
+
         self.handle_sign_transaction(epoch_store, transaction).await
     }
 
@@ -1300,22 +1366,45 @@ impl AuthorityState {
             .inc();
     }
 
-    /// Waits for fastpath (owned, package) dependency objects to become available,
-    /// until the specified max_wait timeout.
-    /// Returns true if all fastpath dependency objects are available, false otherwise.
+    /// Waits for fastpath (owned, package) dependency objects to become available.
+    /// Returns true if a chosen set of fastpath dependency objects are available,
+    /// returns false otherwise after an internal timeout.
     pub(crate) async fn wait_for_fastpath_dependency_objects(
         &self,
         transaction: &VerifiedTransaction,
         epoch: EpochId,
-        max_wait: Duration,
     ) -> SuiResult<bool> {
         let txn_data = transaction.data().transaction_data();
-        let fastpath_dependency_objects = txn_data.fastpath_dependency_objects()?;
-        if fastpath_dependency_objects.is_empty() {
+        let (move_objects, packages, receiving_objects) = txn_data.fastpath_dependency_objects()?;
+
+        // Gather and filter input objects to wait for.
+        let fastpath_dependency_objects: Vec<_> = move_objects
+            .into_iter()
+            .filter_map(|obj_ref| self.should_wait_for_dependency_object(obj_ref))
+            .chain(
+                packages
+                    .into_iter()
+                    .map(|package_id| InputKey::Package { id: package_id }),
+            )
+            .collect();
+        let receiving_keys: HashSet<_> = receiving_objects
+            .into_iter()
+            .filter_map(|receiving_obj_ref| {
+                self.should_wait_for_dependency_object(receiving_obj_ref)
+            })
+            .collect();
+        if fastpath_dependency_objects.is_empty() && receiving_keys.is_empty() {
             return Ok(true);
         }
-        // It is ok to not check receiving objects, unless it turns out to be a common failure.
-        let receiving_keys = HashSet::new();
+
+        // Use shorter wait timeout in simtests to exercise server-side error paths and
+        // client-side retry logic.
+        let max_wait = if cfg!(msim) {
+            Duration::from_millis(200)
+        } else {
+            WAIT_FOR_FASTPATH_INPUT_TIMEOUT
+        };
+
         match timeout(
             max_wait,
             self.get_object_cache_reader().notify_read_input_objects(
@@ -1331,6 +1420,42 @@ impl AuthorityState {
             // and allow the caller to skip the rest of input checks?
             Err(_) => Ok(false),
         }
+    }
+
+    /// Returns Some(inputKey) if the object reference should be waited on until it is
+    /// finalized, before proceeding to input checks.
+    ///
+    /// Incorrect decisions here should only affect user experience, not safety:
+    /// - Waiting unnecessarily adds latency to transaction signing and submission.
+    /// - Not waiting when needed may cause the transaction to be rejected because input object is unavailable.
+    fn should_wait_for_dependency_object(&self, obj_ref: ObjectRef) -> Option<InputKey> {
+        let (obj_id, cur_version, _digest) = obj_ref;
+        let Some(latest_obj_ref) = self
+            .get_object_cache_reader()
+            .get_latest_object_ref_or_tombstone(obj_id)
+        else {
+            // Object might not have been created.
+            return Some(InputKey::VersionedObject {
+                id: FullObjectID::new(obj_id, None),
+                version: cur_version,
+            });
+        };
+        let latest_digest = latest_obj_ref.2;
+        if latest_digest == ObjectDigest::OBJECT_DIGEST_DELETED {
+            // Do not wait for deleted object and rely on input check instead.
+            return None;
+        }
+        let latest_version = latest_obj_ref.1;
+        if cur_version <= latest_version {
+            // Do not wait for version that already exists or has been consumed.
+            // Let the input check to handle them and return the proper error.
+            return None;
+        }
+        // Wait for the object version to become available.
+        Some(InputKey::VersionedObject {
+            id: FullObjectID::new(obj_id, None),
+            version: cur_version,
+        })
     }
 
     /// Wait for a certificate to be executed.
@@ -1436,13 +1561,25 @@ impl AuthorityState {
     pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        execution_env: ExecutionEnv,
+        mut execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
         let tx_digest = certificate.digest();
+
+        if let Some(fork_recovery) = &self.fork_recovery_state {
+            if let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest) {
+                warn!(
+                    ?tx_digest,
+                    original_digest = ?execution_env.expected_effects_digest,
+                    override_digest = ?override_digest,
+                    "Applying fork recovery override for transaction effects digest"
+                );
+                execution_env.expected_effects_digest = Some(override_digest);
+            }
+        }
 
         // prevent concurrent executions of the same tx.
         let tx_guard = epoch_store.acquire_tx_guard(certificate)?;
@@ -1827,8 +1964,8 @@ impl AuthorityState {
         self.metrics.total_effects.inc();
         self.metrics.total_certs.inc();
 
-        let shared_object_count = effects.input_shared_objects().len();
-        if shared_object_count > 0 {
+        let consensus_object_count = effects.input_consensus_objects().len();
+        if consensus_object_count > 0 {
             self.metrics.shared_obj_tx.inc();
         }
 
@@ -1842,7 +1979,7 @@ impl AuthorityState {
             .observe(input_object_count as f64);
         self.metrics
             .num_shared_objects
-            .observe(shared_object_count as f64);
+            .observe(consensus_object_count as f64);
         self.metrics.batch_size.observe(
             certificate
                 .data()
@@ -1965,18 +2102,58 @@ impl AuthorityState {
                     actual_effects = ?effects,
                     "fork detected!"
                 );
-                panic!(
-                    "Transaction {} is expected to have effects digest {}, but got {}!",
+                if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
                     tx_digest,
                     expected_effects_digest,
                     effects.digest(),
+                ) {
+                    error!("Failed to record transaction fork: {e}");
+                }
+
+                fail_point_if!("kill_transaction_fork_node", || {
+                    #[cfg(msim)]
+                    {
+                        tracing::error!(
+                            fatal = true,
+                            "Fork recovery test: killing node due to transaction effects fork for digest: {}",
+                            tx_digest
+                        );
+                        sui_simulator::task::shutdown_current_node();
+                    }
+                });
+
+                fatal!(
+                    "Transaction {} is expected to have effects digest {}, but got {}!",
+                    tx_digest,
+                    expected_effects_digest,
+                    effects.digest()
                 );
             }
         }
 
-        fail_point_if!("cp_execution_nondeterminism", || {
+        fail_point_arg!("simulate_fork_during_execution", |(
+            forked_validators,
+            full_halt,
+            effects_overrides,
+            fork_probability,
+        ): (
+            std::sync::Arc<
+                std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+            >,
+            bool,
+            std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>,
+            f32,
+        )| {
             #[cfg(msim)]
-            self.create_fail_state(certificate, epoch_store, &mut effects);
+            self.simulate_fork_during_execution(
+                certificate,
+                epoch_store,
+                &mut effects,
+                forked_validators,
+                full_halt,
+                effects_overrides,
+                fork_probability,
+            );
         });
 
         // index certificate
@@ -2681,30 +2858,76 @@ impl AuthorityState {
     }
 
     #[cfg(msim)]
-    fn create_fail_state(
+    fn simulate_fork_during_execution(
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         effects: &mut TransactionEffects,
+        forked_validators: std::sync::Arc<
+            std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+        >,
+        full_halt: bool,
+        effects_overrides: std::sync::Arc<
+            std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+        >,
+        fork_probability: f32,
     ) {
         use std::cell::RefCell;
         thread_local! {
-            static FAIL_STATE: RefCell<(u64, HashSet<AuthorityName>)> = RefCell::new((0, HashSet::new()));
+            static TOTAL_FAILING_STAKE: RefCell<u64> = RefCell::new(0);
         }
         if !certificate.data().intent_message().value.is_system_tx() {
             let committee = epoch_store.committee();
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
-                FAIL_STATE.with_borrow_mut(|fail_state| {
-                    //let (&mut failing_stake, &mut failing_validators) = fail_state;
-                    if fail_state.0 < committee.validity_threshold() {
-                        fail_state.0 += cur_stake;
-                        fail_state.1.insert(self.name);
+                TOTAL_FAILING_STAKE.with_borrow_mut(|total_stake| {
+                    let should_fork = if full_halt {
+                        // For partial fork, fork enough nodes to cause true split brain
+                        *total_stake <= committee.validity_threshold()
+                    } else {
+                        // For partial fork, only fork up to but not including validity threshold
+                        *total_stake + cur_stake < committee.validity_threshold()
+                    };
+
+                    if should_fork {
+                        *total_stake += cur_stake;
+
+                        if let Ok(mut external_set) = forked_validators.lock() {
+                            external_set.insert(self.name);
+                            info!("forked_validators: {:?}", external_set);
+                        }
                     }
 
-                    if fail_state.1.contains(&self.name) {
-                        info!("cp_exec failing tx");
-                        effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                    if let Ok(external_set) = forked_validators.lock() {
+                        if external_set.contains(&self.name) {
+                            // If effects_overrides is empty, deterministically select a tx_digest to fork with 1/100 probability.
+                            // Fork this transaction and record the digest and the original effects to original_effects.
+                            // If original_effects is nonempty and contains a key matching this transaction digest (i.e.
+                            // the transaction was forked on a different validator), fork this txn as well.
+
+                            let tx_digest = certificate.digest().to_string();
+                            if let Ok(mut overrides) = effects_overrides.lock() {
+                                if overrides.contains_key(&tx_digest)
+                                    || overrides.is_empty()
+                                        && sui_simulator::random::deterministic_probability(
+                                            &tx_digest,
+                                            fork_probability,
+                                        )
+                                {
+                                    let original_effects_digest = effects.digest().to_string();
+                                    overrides
+                                        .insert(tx_digest.clone(), original_effects_digest.clone());
+                                    info!(
+                                        ?tx_digest,
+                                        ?original_effects_digest,
+                                        "Captured forked effects digest for transaction"
+                                    );
+                                    info!("cp_exec failing tx");
+                                    effects.gas_cost_summary_mut_for_testing().computation_cost +=
+                                        1;
+                                }
+                            }
+                        }
                     }
                 });
             }
@@ -3232,6 +3455,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionSchedulerWrapper::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
+            execution_cache_trait_pointers.child_object_resolver.clone(),
             execution_cache_trait_pointers
                 .transaction_cache_reader
                 .clone(),
@@ -3274,6 +3498,12 @@ impl AuthorityState {
         } else {
             None
         };
+
+        let fork_recovery_state = config.fork_recovery.as_ref().map(|fork_config| {
+            ForkRecoveryState::new(Some(fork_config))
+                .expect("Failed to initialize fork recovery state")
+        });
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3298,6 +3528,7 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             traffic_controller,
+            fork_recovery_state,
         });
 
         let state_clone = Arc::downgrade(&state);
@@ -3332,6 +3563,10 @@ impl AuthorityState {
 
     pub fn get_backing_store(&self) -> &Arc<dyn BackingStore + Send + Sync> {
         &self.execution_cache_trait_pointers.backing_store
+    }
+
+    pub fn get_child_object_resolver(&self) -> &Arc<dyn ChildObjectResolver + Send + Sync> {
+        &self.execution_cache_trait_pointers.child_object_resolver
     }
 
     pub fn get_backing_package_store(&self) -> &Arc<dyn BackingPackageStore + Send + Sync> {
@@ -3842,6 +4077,10 @@ impl AuthorityState {
     /// Chain Identifier is the digest of the genesis checkpoint.
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
+    }
+
+    pub fn get_fork_recovery_state(&self) -> Option<&ForkRecoveryState> {
+        self.fork_recovery_state.as_ref()
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -4786,8 +5025,12 @@ impl AuthorityState {
             let modules = system_package.modules().to_vec();
             // In simtests, we could override the current built-in framework packages.
             #[cfg(msim)]
-            let modules = framework_injection::get_override_modules(&system_package.id, self.name)
-                .unwrap_or(modules);
+            let modules =
+                match framework_injection::get_override_modules(&system_package.id, self.name) {
+                    Some(overrides) if overrides.is_empty() => continue,
+                    Some(overrides) => overrides,
+                    None => modules,
+                };
 
             let Some(obj_ref) = sui_framework::compare_system_package(
                 &self.get_object_store(),
@@ -5993,6 +6236,24 @@ pub mod framework_injection {
         });
     }
 
+    pub fn set_system_packages(packages: Vec<SystemPackage>) {
+        OVERRIDE.with(|bs| {
+            let mut new_packages_not_to_include: BTreeSet<_> =
+                BuiltInFramework::all_package_ids().into_iter().collect();
+            for pkg in &packages {
+                new_packages_not_to_include.remove(&pkg.id);
+            }
+            for pkg in packages {
+                bs.borrow_mut()
+                    .insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
+            }
+            for empty_pkg in new_packages_not_to_include {
+                bs.borrow_mut()
+                    .insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
+            }
+        });
+    }
+
     pub fn get_override_bytes(package_id: &ObjectID, name: AuthorityName) -> Option<Vec<Vec<u8>>> {
         OVERRIDE.with(|cfg| {
             cfg.borrow().get(package_id).and_then(|entry| match entry {
@@ -6123,16 +6384,16 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for kind in effects.input_shared_objects() {
+        for kind in effects.input_consensus_objects() {
             match kind {
-                InputSharedObject::Mutate(obj_ref) | InputSharedObject::ReadOnly(obj_ref) => {
+                InputConsensusObject::Mutate(obj_ref) | InputConsensusObject::ReadOnly(obj_ref) => {
                     if let Some(w) = object_store.get_object_by_key(&obj_ref.0, obj_ref.1) {
                         shared_objects.push(ObjDumpFormat::new(w))
                     }
                 }
-                InputSharedObject::ReadConsensusStreamEnded(..)
-                | InputSharedObject::MutateConsensusStreamEnded(..)
-                | InputSharedObject::Cancelled(..) => (), // TODO: consider record congested objects.
+                InputConsensusObject::ReadConsensusStreamEnded(..)
+                | InputConsensusObject::MutateConsensusStreamEnded(..)
+                | InputConsensusObject::Cancelled(..) => (), // TODO: consider record congested objects.
             }
         }
 

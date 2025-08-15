@@ -24,7 +24,9 @@ use sui_types::{base_types::SequenceNumber, TypeTag};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
-    effects::{InputSharedObject, TransactionEffects, TransactionEffectsAPI, UnchangedSharedKind},
+    effects::{
+        InputConsensusObject, TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind,
+    },
     object::Object,
     transaction::{
         CallArg, Command, GasData, InputObjects, ObjectArg, TransactionData, TransactionDataAPI,
@@ -425,40 +427,40 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<ObjectKey>, anyh
     Ok(object_keys)
 }
 
-// Get the input shared objects and unchanged shared objects from the transaction effects
+// Get the input shared objects and unchanged consensus objects from the transaction effects
 fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<ObjectKey>, anyhow::Error> {
     let mut object_keys = effects
-        .input_shared_objects()
+        .input_consensus_objects()
         .iter()
-        .map(|input_shared_object| match input_shared_object {
-            InputSharedObject::MutateConsensusStreamEnded(object_id, version)
-            | InputSharedObject::ReadConsensusStreamEnded(object_id, version)
-            | InputSharedObject::Cancelled(object_id, version) => ObjectKey {
+        .map(|input_consensus_object| match input_consensus_object {
+            InputConsensusObject::MutateConsensusStreamEnded(object_id, version)
+            | InputConsensusObject::ReadConsensusStreamEnded(object_id, version)
+            | InputConsensusObject::Cancelled(object_id, version) => ObjectKey {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             },
-            InputSharedObject::Mutate((object_id, version, _digest))
-            | InputSharedObject::ReadOnly((object_id, version, _digest)) => ObjectKey {
+            InputConsensusObject::Mutate((object_id, version, _digest))
+            | InputConsensusObject::ReadOnly((object_id, version, _digest)) => ObjectKey {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             },
         })
         .collect::<BTreeSet<_>>();
     effects
-        .unchanged_shared_objects()
+        .unchanged_consensus_objects()
         .iter()
         .for_each(|(obj_id, kind)| match kind {
-            UnchangedSharedKind::ReadOnlyRoot((ver, _digest)) => {
+            UnchangedConsensusKind::ReadOnlyRoot((ver, _digest)) => {
                 object_keys.insert(ObjectKey {
                     object_id: *obj_id,
                     version_query: VersionQuery::Version(ver.value()),
                 });
             }
-            UnchangedSharedKind::MutateConsensusStreamEnded(_)
-            | UnchangedSharedKind::ReadConsensusStreamEnded(_)
-            | UnchangedSharedKind::Cancelled(_)
-            | UnchangedSharedKind::PerEpochConfig => {
-                trace!("Ignored `UnchangedSharedKind`: {:?}", kind);
+            UnchangedConsensusKind::MutateConsensusStreamEnded(_)
+            | UnchangedConsensusKind::ReadConsensusStreamEnded(_)
+            | UnchangedConsensusKind::Cancelled(_)
+            | UnchangedConsensusKind::PerEpochConfig => {
+                trace!("Ignored `UnchangedConsensusKind`: {:?}", kind);
             }
         });
     Ok(object_keys)

@@ -4,7 +4,7 @@ description: Besides Mainnet, Sui offers Testnet, Devnet, and local networks tha
 keywords: [ testnet, devnet, mainnet, connect to network, available networks, sui networks, connect to a network, connect to testnet, connect to devnet, connect to mainnet, sui testnet, sui devnet, sui mainnet ]
 ---
 
-Sui has Mainnet, Devnet, and Testnet networks available. You can use one of the test networks, Devnet or Testnet, to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](./local-network.mdx) for local development. 
+Sui offers three networks: Mainnet, Devnet, and Testnet. You can use one of the test networks, Devnet or Testnet, to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](./local-network.mdx) for local development. 
 
 The Sui Testnet and Devnet networks consist of several validator nodes to validate each network's transactions. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](/references/sui-api.mdx).
 
@@ -27,7 +27,7 @@ Sui provides [Sui command line interface (CLI)](/references/cli/client.mdx) to i
 
 ## Environment set up
 
-First, [Install Sui](./sui-install.mdx#install-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through Discord for the network you are using: [Devnet](https://discordapp.com/channels/916379725201563759/971488439931392130) or [Testnet](https://discord.com/channels/916379725201563759/1037811694564560966). If connected to Localnet, use cURL to request tokens from your [local faucet](./local-network.mdx#use-the-local-faucet).
+First, [Install Sui](./sui-install.mdx#install-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through Discord for the network you are using: [Devnet](https://discordapp.com/channels/916379725201563759/971488439931392130) or [Testnet](https://discord.com/channels/916379725201563759/1037811694564560966). If connected to a local network, use cURL to request tokens from your [local faucet](./local-network.mdx#use-the-local-faucet).
 
 To check whether Sui is already installed, run the following command:
 
@@ -73,7 +73,7 @@ Environment alias for [<URL-ENTERED>] :
 Type an alias name and press **Enter**.
 
 ```
-Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
+Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
 ```
 
 Press **0**, **1**, or **2** to select a key scheme and the press **Enter**.
@@ -81,7 +81,7 @@ Press **0**, **1**, or **2** to select a key scheme and the press **Enter**.
 Sui returns a message similar to the following (depending on the key scheme you selected) that includes the address and 12-word recovery phrase for the address:
 
 ```
-Generated new keypair for address with scheme "ed25519" [0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442]
+Generated new key pair for address with scheme "ed25519" [0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442]
 Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud speed grocery]
 ```
 

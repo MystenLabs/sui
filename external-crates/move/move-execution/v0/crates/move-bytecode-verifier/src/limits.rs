@@ -189,9 +189,9 @@ impl<'a> LimitsVerifier<'a> {
 
     /// Verifies the lengths of all identifers are valid
     fn verify_identifiers(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        if let Some(max_idenfitier_len) = config.max_idenfitier_len {
+        if let Some(max_identifier_len) = config.max_identifier_len {
             for (idx, identifier) in self.resolver.identifiers().iter().enumerate() {
-                if identifier.len() > (max_idenfitier_len as usize) {
+                if identifier.len() > (max_identifier_len as usize) {
                     return Err(verification_error(
                         StatusCode::IDENTIFIER_TOO_LONG,
                         IndexKind::Identifier,

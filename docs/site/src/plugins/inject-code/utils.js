@@ -145,10 +145,29 @@ exports.checkBracesBalance = (str) => {
   return openBraces.length === closeBraces.length;
 };
 
+const highlightLine = (text, options) => {
+  if (isOption(options, "highlight")) {
+    const h = options.find((option) => option.includes("highlight"));
+    const key = h.includes("=") ? h.split("=")[1].replace(/}$/, "") : undefined;
+
+    if (typeof key !== "undefined") {
+      const lines = text.split("\n");
+      const matchingLines = lines
+        .map((line, idx) => (line.includes(key) ? idx + 1 : null))
+        .filter((n) => n !== null);
+
+      return matchingLines.join(",");
+    }
+  }
+
+  return ""; // Highlight option not present
+};
+
 // Output codeblocks
 exports.formatOutput = (language, title, content, options) => {
+  const lines = highlightLine(content, options);
   if (options && isOption(options, "notitle")) {
-    return `\`\`\`${language}\n${content.replace(/\t/g, "  ")}\n\`\`\``;
+    return `\`\`\`${language} {${lines}}\n${content.replace(/\t/g, "  ")}\n\`\`\``;
   }
-  return `\`\`\`${language} title="${title}"\n${content.replace(/\t/g, "  ")}\n\`\`\``;
+  return `\`\`\`${language} {${lines}} title="${title}"\n${content.replace(/\t/g, "  ")}\n\`\`\``;
 };

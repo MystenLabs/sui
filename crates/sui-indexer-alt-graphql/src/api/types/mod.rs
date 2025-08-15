@@ -22,6 +22,7 @@ pub(crate) mod system_parameters;
 pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
 pub(crate) mod transaction_kind;
+mod type_origin;
 pub(crate) mod unchanged_consensus_object;
 pub(crate) mod user_signature;
 pub(crate) mod validator_aggregated_signature;

@@ -872,6 +872,65 @@ type ConsensusCommitPrologueTransaction {
 }
 
 """
+The transaction accpeted a consensus object as input, but its execution was cancelled.
+"""
+type ConsensusObjectCancelled {
+	"""
+	ID of the consensus object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned consensus object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: UInt53!
+}
+
+"""
+The transaction accepted a consensus object as input, but only to read it.
+"""
+type ConsensusObjectRead {
+	"""
+	ID of the object being read.
+	"""
+	address: SuiAddress!
+	"""
+	Version of the object being read.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
+	digest: String!
+	"""
+	The object at this version.  May not be available due to pruning.
+	"""
+	object: Object
+}
+
+"""
+The transaction accepted a consensus object as input, but its consensus stream ended before the
+transaction executed. This can happen for ConsensusAddressOwner objects where the stream ends
+but the object itself is not deleted.
+"""
+type ConsensusObjectStreamEnded {
+	"""
+	ID of the consensus object.
+	"""
+	address: SuiAddress!
+	"""
+	The version of the consensus object that was assigned to this transaction during by consensus,
+	during sequencing.
+	"""
+	version: UInt53!
+	"""
+	Whether this transaction intended to use this consensus object mutably or not. See
+	`SharedInput.mutable` for further details.
+	"""
+	mutable: Boolean!
+}
+
+"""
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
@@ -3655,64 +3714,6 @@ type SharedInput {
 }
 
 """
-The transaction accpeted a shared object as input, but its execution was cancelled.
-"""
-type SharedObjectCancelled {
-	"""
-	ID of the shared object.
-	"""
-	address: SuiAddress!
-	"""
-	The assigned shared object version. It is a special version indicating transaction cancellation reason.
-	"""
-	version: UInt53!
-}
-
-"""
-The transaction accepted a shared object as input, but it was deleted before the transaction
-executed.
-"""
-type SharedObjectDelete {
-	"""
-	ID of the shared object.
-	"""
-	address: SuiAddress!
-	"""
-	The version of the shared object that was assigned to this transaction during by consensus,
-	during sequencing.
-	"""
-	version: UInt53!
-	"""
-	Whether this transaction intended to use this shared object mutably or not. See
-	`SharedInput.mutable` for further details.
-	"""
-	mutable: Boolean!
-}
-
-"""
-The transaction accepted a shared object as input, but only to read it.
-"""
-type SharedObjectRead {
-	"""
-	ID of the object being read.
-	"""
-	address: SuiAddress!
-	"""
-	Version of the object being read.
-	"""
-	version: UInt53!
-	"""
-	32-byte hash that identifies the object's contents at this version, encoded as a Base58
-	string.
-	"""
-	digest: String!
-	"""
-	The object at this version.  May not be available due to pruning.
-	"""
-	object: Object
-}
-
-"""
 Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as
 many as there are amounts.)
 """
@@ -4330,9 +4331,9 @@ type TransactionBlockEffects {
 	"""
 	gasEffects: GasEffects
 	"""
-	Shared objects that are referenced by but not changed by this transaction.
+	Consensus objects that are referenced by but not changed by this transaction.
 	"""
-	unchangedSharedObjects(first: Int, after: String, last: Int, before: String): UnchangedSharedObjectConnection!
+	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection!
 	"""
 	The effect this transaction had on objects on-chain.
 	"""
@@ -4523,14 +4524,14 @@ but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 scalar UInt53
 
 """
-Details pertaining to shared objects that are referenced by but not changed by a transaction.
+Details pertaining to consensus objects that are referenced by but not changed by a transaction.
 This information is considered part of the effects, because although the transaction specifies
-the shared object as input, consensus must schedule it and pick the version that is actually
+the consensus object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
+union UnchangedConsensusObject = ConsensusObjectRead | ConsensusObjectStreamEnded | ConsensusObjectCancelled
 
-type UnchangedSharedObjectConnection {
+type UnchangedConsensusObjectConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -4538,21 +4539,21 @@ type UnchangedSharedObjectConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [UnchangedSharedObjectEdge!]!
+	edges: [UnchangedConsensusObjectEdge!]!
 	"""
 	A list of nodes.
 	"""
-	nodes: [UnchangedSharedObject!]!
+	nodes: [UnchangedConsensusObject!]!
 }
 
 """
 An edge in a connection.
 """
-type UnchangedSharedObjectEdge {
+type UnchangedConsensusObjectEdge {
 	"""
 	The item at the end of the edge
 	"""
-	node: UnchangedSharedObject!
+	node: UnchangedConsensusObject!
 	"""
 	A cursor for use in pagination
 	"""

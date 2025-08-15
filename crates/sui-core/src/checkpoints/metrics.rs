@@ -27,6 +27,8 @@ pub struct CheckpointMetrics {
     pub checkpoint_creation_latency_ms: MystenHistogram,
     pub remote_checkpoint_forks: IntCounter,
     pub split_brain_checkpoint_forks: IntCounter,
+    pub checkpoint_fork_crash_mode: IntGaugeVec,
+    pub transaction_fork_crash_mode: IntGaugeVec,
     pub last_created_checkpoint_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     pub last_created_checkpoint_age_ms: MystenHistogram,
@@ -148,6 +150,20 @@ impl CheckpointMetrics {
             split_brain_checkpoint_forks: register_int_counter_with_registry!(
                 "split_brain_checkpoint_forks",
                 "Number of checkpoints that have resulted in a split brain",
+                registry
+            )
+            .unwrap(),
+            checkpoint_fork_crash_mode: register_int_gauge_vec_with_registry!(
+                "checkpoint_fork_crash_mode",
+                "Indicates node is in crash mode due to checkpoint fork",
+                &["checkpoint_seq", "checkpoint_digest_prefix", "detected_at"],
+                registry
+            )
+            .unwrap(),
+            transaction_fork_crash_mode: register_int_gauge_vec_with_registry!(
+                "transaction_fork_crash_mode",
+                "Indicates node is in crash mode due to transaction fork",
+                &["tx_digest_prefix", "expected_effects_prefix", "actual_effects_prefix", "detected_at"],
                 registry
             )
             .unwrap(),

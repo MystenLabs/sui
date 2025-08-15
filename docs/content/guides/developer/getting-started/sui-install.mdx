@@ -15,7 +15,7 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey or later
 - Microsoft Windows - Windows 10 and 11
 
-::::info[Fastest method]
+:::info[Fastest method]
 
 ## Quick install using Homebrew, Chocolatey, or suiup {#install-homebrew}
 
@@ -23,7 +23,7 @@ Sui supports the following operating systems:
 
 :::note
 
-If you use this method to install Sui, you are all set. The quick install is suitable for most use cases. The remaining installation methods are for those wanting more control over the installation process.
+The quick install is suitable for most use cases. The remaining installation methods are for those wanting more control over the installation process.
 
 :::
 ::::
@@ -99,15 +99,19 @@ Each Sui release provides a set of binaries for several operating systems. You c
 
 </Tabs>
 
-:::info
-
-Running binaries other than `sui` might require installing prerequisites itemized in the following section.
-
-:::
+:::tip
+Running binaries other than `sui` might require installing prerequisites listed in the following section.
+::::
 
 #### Confirm the installation {#confirm-the-installation}
 
-To confirm that Sui installed correctly, type `sui --version` in your console or terminal and press Enter. The response should provide the Sui version installed. If the console or terminal responds with a command not found error, make sure the full path to your Sui binaries is included in your `PATH` variable.
+To confirm that Sui installed correctly:
+
+1. Open a terminal or console
+2. Type `sui --version` and press Enter
+3. Verify the displayed version matches your expected installation
+
+If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
 
 ## Install from Cargo {#install-sui-binaries-from-source}
 
@@ -137,7 +141,9 @@ If you previously installed the Sui binaries, you can update them to the most re
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
 
-The `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Unless it is enabled you will not be able to use these two features.
+:::info
+The `tracing` feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you enable tracing.
+:::
 
 ## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
 
@@ -150,7 +156,7 @@ After downloading, open a console to the file's location and change its permissi
 $ chmod 755 sui-node
 ```
 
-Add the file's location to your PATH variable if it's directory is not already included. Follow the steps in [Sui Full Node Configuration](../../operator/sui-full-node) to complete the setup.
+Add the file's location to your PATH variable if its directory is not already included. Follow the steps in [Configure a Sui full node](../../operator/sui-full-node.mdx) to complete the setup.
 
 ## Build from source
 
@@ -160,7 +166,7 @@ To install Sui from source, you first need to install its [prerequisites](#prere
 
 You can also download the [source code](/references/contribute/sui-environment.mdx) to have local access to files.
 
-#### Prerequisites {#prerequisites}
+### Prerequisites {#prerequisites}
 
 Your system needs the following prerequisites available to successfully install Sui.
 
@@ -432,7 +438,7 @@ Sui requires the following additional tools on computers running Windows.
 
 </Tabs>
 
-## Using Sui from command line
+## Using Sui from the command line
 
 With Sui installed, you can interact with Sui networks using the Sui CLI. For more details, see the [Sui CLI](/references/cli.mdx) reference.
 
@@ -442,13 +448,17 @@ If you use VSCode, you can install the [Move extension](https://marketplace.visu
 You can install the extension either by searching the fully-qualified extension name, `Mysten.move`, in the extension view, or by pressing `Ctrl-P` or `Cmd-P` and typing `ext install mysten.move`.
 Installing the Move extension also installs the appropriate `move-analyzer` binary for your operating system, as well as the [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension, and [Move Syntax](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax) extension.
 
-There are also community Move packages for [Emacs](https://github.com/amnn/move-mode), [Vim](https://github.com/yanganto/move.vim), and [Zed](https://github.com/Tzal3x/move-zed-extension).
+Community-supported Move packages are available for these editors:
+
+- [Emacs](https://github.com/amnn/move-mode)
+- [Vim](https://github.com/yanganto/move.vim)
+- [Zed](https://github.com/Tzal3x/move-zed-extension)
 
 ## Next steps {#next-steps}
 
-Now that you have Sui installed, it's time to start developing. Check out the following topics to start working with Sui:
+Now that you have Sui installed:
 
-- Read about the [Sui CLI](/references/cli.mdx), the most straightforward way to start exploring Sui networks.
-- [Learn about the available networks](./connect.mdx) and connect to one.
-- [Get some coins](./get-coins.mdx) on a development network.
-- [Build your first dApp](../first-app.mdx) to start your on-chain journey.
+- Explore the [Sui CLI reference](/references/cli.mdx) to learn command line operations.
+- [Connect to a network](./connect.mdx) to interact with the Sui ecosystem.
+- [Acquire test coins](./get-coins.mdx) for development purposes.
+- [Build your first dApp](../first-app.mdx) using Sui's programmable transaction model.

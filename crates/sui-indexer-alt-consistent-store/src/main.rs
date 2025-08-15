@@ -9,7 +9,7 @@ use sui_indexer_alt_consistent_store::{
     config::ServiceConfig,
     start_service,
 };
-use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::{uptime, MetricsService};
 use tokio::{fs, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -73,6 +73,11 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             });
+
+            metrics
+                .registry()
+                .register(uptime(VERSION)?)
+                .context("Failed to register uptime metric.")?;
 
             let h_service = start_service(
                 database_path,

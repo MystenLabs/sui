@@ -14,7 +14,7 @@ use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::utils::to_sender_signed_transaction;
 
-use super::shared_object_version_manager::AssignedTxAndVersions;
+use super::shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions};
 use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
 
@@ -119,7 +119,7 @@ pub async fn execute_certificate_with_execution_error(
                 .unwrap()
         }
     } else {
-        vec![]
+        AssignedVersions::non_withdraw(vec![])
     };
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -448,7 +448,7 @@ pub async fn send_consensus(
         .into_iter()
         .next()
         .map(|(_, v)| v)
-        .unwrap_or(vec![]);
+        .unwrap_or_else(|| AssignedVersions::non_withdraw(vec![]));
 
     let certs = vec![(
         VerifiedExecutableTransaction::new_from_certificate(cert.clone()),

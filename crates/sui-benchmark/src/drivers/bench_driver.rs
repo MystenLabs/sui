@@ -64,10 +64,6 @@ pub struct BenchMetrics {
     pub num_success_cmds: IntCounterVec,
 }
 
-const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.1, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.5, 5., 10., 20., 30., 60., 90.,
-];
-
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
         BenchMetrics {
@@ -123,7 +119,7 @@ impl BenchMetrics {
                 "latency_s",
                 "Total time in seconds to return a response",
                 &["workload", "client_type"],
-                LATENCY_SEC_BUCKETS.to_vec(),
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

@@ -289,6 +289,10 @@ where
         let transaction = request.transaction.clone();
         let tx_digest = *transaction.digest();
 
+        let include_events = request.include_events;
+        let include_input_objects = request.include_input_objects;
+        let include_output_objects = request.include_output_objects;
+
         // Track whether TD is being used for this transaction
         let using_td = Arc::new(AtomicBool::new(false));
 
@@ -348,22 +352,44 @@ where
                 }
                 // Local effects might be available
                 local_effects_result = &mut local_effects_future => {
-                    debug!(
-                        ?tx_digest,
-                        "Effects became available while execution was running"
-                    );
                     match local_effects_result {
                         Ok(effects) => {
+                            debug!(
+                                ?tx_digest,
+                                "Effects became available while execution was running"
+                            );
                             if let Some(effects) = effects.into_iter().next() {
                                 let epoch = effects.executed_epoch();
+                                let events = if include_events {
+                                    if effects.events_digest().is_some() {
+                                        Some(self.validator_state.get_transaction_events(effects.transaction_digest())
+                                            .map_err(QuorumDriverError::QuorumDriverInternalError)?)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
+
+                                let input_objects = include_input_objects
+                                    .then(|| self.validator_state.get_transaction_input_objects(&effects))
+                                    .transpose()
+                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
+
+
+                                let output_objects = include_output_objects
+                                    .then(|| self.validator_state.get_transaction_output_objects(&effects))
+                                    .transpose()
+                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
+
                                 let response = QuorumTransactionResponse {
                                     effects: FinalizedEffects {
                                         effects,
                                         finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
                                     },
-                                    events: None,
-                                    input_objects: None,
-                                    output_objects: None,
+                                    events,
+                                    input_objects,
+                                    output_objects,
                                     auxiliary_data: None,
                                 };
                                 return Ok((response, true));

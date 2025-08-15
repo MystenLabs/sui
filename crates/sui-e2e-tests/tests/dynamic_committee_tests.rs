@@ -194,8 +194,8 @@ impl StressTestRunner {
             println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
         }
 
-        println!("SHARED:");
-        for kind in effects.input_shared_objects() {
+        println!("CONSENSUS:");
+        for kind in effects.input_consensus_objects() {
             let (obj_id, version) = kind.id_and_version();
             let object = state
                 .get_object_store()
