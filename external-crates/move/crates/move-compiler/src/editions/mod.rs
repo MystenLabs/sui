@@ -52,6 +52,7 @@ pub enum FeatureGate {
     TypeHoles,
     Lambda,
     ModuleLabel,
+    ModuleExtension,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -145,7 +146,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[];
 
 const E2024_BETA_FEATURES: &[FeatureGate] = &[];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::ModuleExtension];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 

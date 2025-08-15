@@ -275,6 +275,7 @@ pub struct ModuleDefinition {
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
     pub is_spec_module: bool,
+    pub is_extension: bool,
     pub definition_mode: ModuleDefinitionMode,
     pub members: Vec<ModuleMember>,
 }

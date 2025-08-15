@@ -94,6 +94,7 @@ pub enum Tok {
     BlockLabel,
     MinusGreater,
     For,
+    Extend,
 }
 
 impl fmt::Display for Tok {
@@ -177,6 +178,7 @@ impl fmt::Display for Tok {
             BlockLabel => "'<Identifier>",
             MinusGreater => "->",
             For => "for",
+            Extend => "extend",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -969,6 +971,10 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
             "type" => Tok::Type,
             "match" => Tok::Match,
             "for" => Tok::For,
+            _ => Tok::Identifier,
+        },
+        _ if edition.supports(FeatureGate::ModuleExtension) => match name {
+            "extend" => Tok::Extend,
             _ => Tok::Identifier,
         },
         _ => Tok::Identifier,
