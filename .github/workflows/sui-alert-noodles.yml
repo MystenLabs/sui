@@ -40,7 +40,7 @@ jobs:
             commit_author=$(git log -1 --pretty=format:'%an')
             commit_msg=$(git log -1 --pretty=format:'%s')
 
-            slack_mentions="@chungnk @Link @Richard Nguyen"
+            slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
 
             echo "🚨 sui.yaml was updated — sending Slack alert"
             curl -X POST -H 'Content-type: application/json' \
