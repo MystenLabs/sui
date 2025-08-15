@@ -79,7 +79,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive. Replace references to this location in subsequent steps if you choose a different directory.
 
-    :::note
+    :::info
 
     Windows does not natively support .tgz files, but you can use a free compressed file app like [7Zip](https://7-zip.org/) to extract.
 
@@ -140,8 +140,8 @@ If you previously installed the Sui binaries, you can update them to the most re
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
 
-:::note
-The `tracing` feature enables Move test coverage and debugger support in the Sui CLI. These features will not be available unless tracing is enabled.
+:::info
+The `tracing` feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you enable tracing.
 :::
 
 ## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
@@ -457,7 +457,7 @@ Community-supported Move packages are available for these editors:
 
 Now that you have Sui installed:
 
-- Explore the [Sui CLI reference](/references/cli.mdx) to learn command line operations
-- [Connect to a network](./connect.mdx) to interact with the Sui ecosystem
-- [Acquire test coins](./get-coins.mdx) for development purposes
-- [Build your first dApp](../first-app.mdx) using Sui's programmable transaction model
+- Explore the [Sui CLI reference](/references/cli.mdx) to learn command line operations.
+- [Connect to a network](./connect.mdx) to interact with the Sui ecosystem.
+- [Acquire test coins](./get-coins.mdx) for development purposes.
+- [Build your first dApp](../first-app.mdx) using Sui's programmable transaction model.
