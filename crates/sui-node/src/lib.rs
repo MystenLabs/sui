@@ -2027,10 +2027,30 @@ impl SuiNode {
         }
     }
 
-    async fn shutdown(&self) {
-        if let Some(validator_components) = &*self.validator_components.lock().await {
-            validator_components.consensus_manager.shutdown().await;
+    pub async fn shutdown(&self) {
+        tracing::info!("Starting graceful shutdown of SuiNode");
+
+        // Shutdown HTTP servers first to stop accepting new requests
+        if let Some(http_server) = &self.http_servers.http {
+            tracing::info!("Shutting down HTTP JSON-RPC server");
+            http_server.shutdown().await;
+            tracing::info!("HTTP JSON-RPC server shutdown completed");
         }
+
+        if let Some(https_server) = &self.http_servers.https {
+            tracing::info!("Shutting down HTTPS JSON-RPC server");
+            https_server.shutdown().await;
+            tracing::info!("HTTPS JSON-RPC server shutdown completed");
+        }
+
+        // Shutdown validator components if they exist
+        if let Some(validator_components) = &*self.validator_components.lock().await {
+            tracing::info!("Shutting down consensus manager");
+            validator_components.consensus_manager.shutdown().await;
+            tracing::info!("Consensus manager shutdown completed");
+        }
+
+        tracing::info!("SuiNode graceful shutdown completed");
     }
 
     async fn reconfigure_state(

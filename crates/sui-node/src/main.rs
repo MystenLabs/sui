@@ -125,6 +125,8 @@ fn main() {
     // if it deadlocks.
     let node_once_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
     let node_once_cell_clone = node_once_cell.clone();
+    let node_once_cell_clone2 = node_once_cell.clone();
+    let node_once_cell_clone3 = node_once_cell.clone();
 
     // let sui-node signal main to shutdown runtimes
     let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
@@ -159,9 +161,8 @@ fn main() {
         }
     });
 
-    let node_once_cell_clone = node_once_cell.clone();
     runtimes.metrics.spawn(async move {
-        let node = node_once_cell_clone.get().await;
+        let node = node_once_cell_clone2.get().await;
         let chain_identifier = node.state().get_chain_identifier().to_string();
         info!("Sui chain identifier: {chain_identifier}");
         prometheus_registry
@@ -180,7 +181,7 @@ fn main() {
     });
 
     runtimes.metrics.spawn(async move {
-        let node = node_once_cell.get().await;
+        let node = node_once_cell_clone3.get().await;
         let state = node.state();
         loop {
             send_telemetry_event(state.clone(), is_validator).await;
@@ -193,22 +194,32 @@ fn main() {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(wait_termination(runtime_shutdown_rx));
+        .block_on(wait_termination(runtime_shutdown_rx, node_once_cell.clone()));
 
     // Drop and wait all runtimes on main thread
     drop(runtimes);
 }
 
 #[cfg(not(unix))]
-async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>) {
+async fn wait_termination(
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
+    node_once_cell: Arc<AsyncOnceCell<Arc<sui_node::SuiNode>>>,
+) {
     tokio::select! {
-        _ = tokio::signal::ctrl_c() => {},
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("Received SIGINT, triggering graceful shutdown");
+            let node = node_once_cell.get().await;
+            node.shutdown().await;
+        },
         _ = shutdown_rx.recv() => {},
     }
 }
 
 #[cfg(unix)]
-async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>) {
+async fn wait_termination(
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
+    node_once_cell: Arc<AsyncOnceCell<Arc<sui_node::SuiNode>>>,
+) {
     use futures::FutureExt;
     use tokio::signal::unix::*;
 
@@ -218,8 +229,16 @@ async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>)
     let shutdown_recv = shutdown_rx.recv().boxed();
 
     tokio::select! {
-        _ = sigint => {},
-        _ = sigterm_recv => {},
+        _ = sigint => {
+            tracing::info!("Received SIGINT, triggering graceful shutdown");
+            let node = node_once_cell.get().await;
+            node.shutdown().await;
+        },
+        _ = sigterm_recv => {
+            tracing::info!("Received SIGTERM, triggering graceful shutdown");
+            let node = node_once_cell.get().await;
+            node.shutdown().await;
+        },
         _ = shutdown_recv => {},
     }
 }
