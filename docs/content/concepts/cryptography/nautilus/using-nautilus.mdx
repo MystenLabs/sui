@@ -108,7 +108,7 @@ Frontend code is not included in this guide. The Move call is demonstrated using
 
     :::
 
-##Step 1. To run the weather example as is, you don't need to modify `allowed_endpoints.yaml` because it already includes `api.weatherapi.com`. Follow the prompts to enter the required values. This step demonstrates how to store a secret (an API key) using AWS Secrets Manager, so you can avoid including the secret in the public application code.
+1. To run the weather example as is, you don't need to modify `allowed_endpoints.yaml` because it already includes `api.weatherapi.com`. Follow the prompts to enter the required values. This step demonstrates how to store a secret (an API key) using AWS Secrets Manager, so you can avoid including the secret in the public application code.
 
     ```sh
     Enter EC2 instance base name: weather # anything you like
@@ -119,7 +119,7 @@ Frontend code is not included in this guide. The Move call is demonstrated using
     ```
     For the Twitter example, this secret value refers to the API Bearer Token associated with your Twitter Developer account.
 
-##Step 2. If completed successfully, changes are generated in `/src/nautilus-server/run.sh` and `expose_enclave.sh`. Commit these changes, as they are required when building the enclave image.
+2. If completed successfully, changes are generated in `/src/nautilus-server/run.sh` and `expose_enclave.sh`. Commit these changes, as they are required when building the enclave image.
 
     :::info
 
@@ -128,9 +128,9 @@ Frontend code is not included in this guide. The Move call is demonstrated using
 
     :::
 
-##Step 3. Connect to your instance and clone the repository. For detailed instructions, see [Connect to your Linux instance using SSH](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-linux-inst-ssh.html#connect-linux-inst-sshClient) in the AWS documentation.
+3. Connect to your instance and clone the repository. For detailed instructions, see [Connect to your Linux instance using SSH](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-linux-inst-ssh.html#connect-linux-inst-sshClient) in the AWS documentation.
 
-##Step 4. You should now be inside the directory containing the server code, including the committed file changes from the previous step. Next, build the enclave image, run it, and expose the HTTP endpoint on port 3000. 
+4. You should now be inside the directory containing the server code, including the committed file changes from the previous step. Next, build the enclave image, run it, and expose the HTTP endpoint on port 3000. 
 
     ```sh
     $ cd nautilus/
@@ -144,7 +144,7 @@ Frontend code is not included in this guide. The Move call is demonstrated using
 
     :::
 
-##Step 5. Congratulations! You can now interact with the enclave from the outside world. You can find the `PUBLIC_IP` in the AWS console.
+5. Congratulations! You can now interact with the enclave from the outside world. You can find the `PUBLIC_IP` in the AWS console.
 
     ```sh
     $ curl -H 'Content-Type: application/json' -X GET http://<PUBLIC_IP>:3000/health_check
@@ -152,7 +152,7 @@ Frontend code is not included in this guide. The Move call is demonstrated using
     $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://<PUBLIC_IP>:3000/process_data
     ```
 
-##Step 6. Optionally, you can set up an application load balancer (ALB) for the EC2 instance with an SSL/TLS certificate from AWS Certificate Manager (ACM), and configure Amazon Route 53 for DNS routing. For more information, see the [ACM User Guide](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and the [ALB Guide](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html).
+6. Optionally, you can set up an application load balancer (ALB) for the EC2 instance with an SSL/TLS certificate from AWS Certificate Manager (ACM), and configure Amazon Route 53 for DNS routing. For more information, see the [ACM User Guide](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and the [ALB Guide](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html).
 
 ## Develop your own Nautilus server
 
