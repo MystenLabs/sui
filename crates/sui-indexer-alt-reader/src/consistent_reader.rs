@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Context};
 use prometheus::Registry;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
+    consistent_service_client::ConsistentServiceClient, AvailableRangeRequest, End,
     ListObjectsByTypeRequest, Object, CHECKPOINT_METADATA,
 };
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
@@ -136,10 +136,11 @@ impl ConsistentReader {
     pub async fn list_objects_by_type(
         &self,
         checkpoint: u64,
-        object_type: &str,
+        object_type: String,
         page_size: Option<u32>,
         after_token: Option<Vec<u8>>,
         before_token: Option<Vec<u8>>,
+        is_from_front: bool,
     ) -> Result<Page<ObjectRef>, Error> {
         let response = self
             .request(
@@ -147,11 +148,15 @@ impl ConsistentReader {
                 Some(checkpoint),
                 |mut client, request| async move { client.list_objects_by_type(request).await },
                 ListObjectsByTypeRequest {
-                    object_type: Some(object_type.to_string()),
+                    object_type: Some(object_type),
                     page_size,
                     after_token: after_token.map(Into::into),
                     before_token: before_token.map(Into::into),
-                    ..Default::default()
+                    end: if is_from_front {
+                        Some(End::Front.into())
+                    } else {
+                        Some(End::Back.into())
+                    },
                 },
             )
             .await?;
