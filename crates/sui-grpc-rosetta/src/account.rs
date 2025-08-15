@@ -9,7 +9,8 @@ use futures::future::join_all;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::{
-    GetBalanceRequest, GetCheckpointRequest, GetEpochRequest, ListOwnedObjectsRequest,
+    Checkpoint, CheckpointSummary, GetBalanceRequest, GetCheckpointRequest, GetEpochRequest,
+    ListOwnedObjectsRequest, Object,
 };
 use sui_sdk::SUI_COIN_TYPE;
 use sui_sdk_types::Address;
@@ -72,7 +73,9 @@ pub async fn balance(
 async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
     let request = GetCheckpointRequest {
         checkpoint_id: None, // None means get latest checkpoint
-        read_mask: Some(FieldMask::from_paths(["sequence_number"])),
+        read_mask: Some(FieldMask::from_paths([
+            Checkpoint::SEQUENCE_NUMBER_FIELD.name
+        ])),
     };
 
     let response = ctx
@@ -95,7 +98,7 @@ async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSeque
 async fn get_current_epoch(grpc_client: &mut sui_rpc::client::Client) -> Result<u64, Error> {
     let request = GetEpochRequest {
         epoch: None, // None means get current epoch
-        read_mask: Some(FieldMask::from_paths(["epoch"])),
+        read_mask: Some(FieldMask::from_paths([CheckpointSummary::EPOCH_FIELD.name])),
     };
 
     let response = grpc_client
@@ -244,7 +247,11 @@ pub async fn coins(
             object_type: Some(SUI_COIN_TYPE.to_string()),
             page_size: Some(5000),
             page_token,
-            read_mask: Some(FieldMask::from_paths(["object_id", "version", "balance"])),
+            read_mask: Some(FieldMask::from_paths([
+                Object::OBJECT_ID_FIELD.name,
+                Object::VERSION_FIELD.name,
+                Object::BALANCE_FIELD.name,
+            ])),
         };
 
         let response = context
