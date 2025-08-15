@@ -46,10 +46,12 @@ public use fun emit_authenticated as EventStreamCap.emit;
 
 #[allow(unused_field)]
 public struct EventStreamHead has store {
-    /// Merkle root for all events in the current checkpoint.
-    root: vector<u8>,
-    /// Hash of the previous version of the head object.
-    prev: vector<u8>,
+    /// Merkle Mountain Range of all events in the stream.
+    mmr: vector<vector<u8>>,
+    /// Checkpoint sequence number at which the event stream was written.
+    checkpoint_seq: u64,
+    /// Number of events in the stream.
+    num_events: u64,
 }
 
 // A unique identifier for an event stream.
@@ -68,23 +70,16 @@ public fun destroy_stream(stream: EventStream) {
     id.delete();
 }
 
-/// A capability to write to a given event stream
+/// A capability to write to a given event stream. 
 public struct EventStreamCap has key, store {
     id: UID,
     stream_id: address,
 }
 
-public fun get_cap(stream: &EventStream, ctx: &mut TxContext): EventStreamCap {
+public fun new_cap(stream: &EventStream, ctx: &mut TxContext): EventStreamCap {
     EventStreamCap {
         id: object::new(ctx),
         stream_id: stream.id.to_address(),
-    }
-}
-
-public fun default_event_stream_cap<T: copy + drop>(ctx: &mut TxContext): EventStreamCap {
-    EventStreamCap {
-        id: object::new(ctx),
-        stream_id: type_name::get_original_package_id<T>(),
     }
 }
 
@@ -95,14 +90,20 @@ public fun destroy_cap(cap: EventStreamCap) {
 
 public fun emit_authenticated<T: copy + drop>(cap: &EventStreamCap, event: T) {
     let accumulator_addr = accumulator::accumulator_address<EventStreamHead>(cap.stream_id);
-
     emit_authenticated_impl<EventStreamHead, T>(accumulator_addr, cap.stream_id, event);
 }
 
-/// TODO: needs verifier rule like `emit` to ensure it is only called in package that defines `T`
-/// Like `emit`, but also adds an on-chain committment to the event to the
-/// stream `stream`.
-native fun emit_authenticated_impl<StreamHeadT, T: copy + drop>(accumulator_id: address, stream: address, event: T);
+public fun emit_authenticated_default<T: copy + drop>(event: T) {
+    let stream_id = type_name::original_package_id<T>();
+    let accumulator_addr = accumulator::accumulator_address<EventStreamHead>(stream_id);
+    emit_authenticated_impl<EventStreamHead, T>(accumulator_addr, stream_id, event);
+}
+
+native fun emit_authenticated_impl<StreamHeadT, T: copy + drop>(
+    accumulator_id: address,
+    stream: address,
+    event: T,
+);
 
 #[test_only]
 /// Get the total number of events emitted during execution so far
