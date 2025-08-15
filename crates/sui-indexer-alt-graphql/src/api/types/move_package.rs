@@ -326,9 +326,7 @@ impl MovePackage {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let super_ = object.inflated(ctx).await?;
-
-        let Some(super_contents) = &super_.contents else {
+        let Some(super_contents) = object.contents(ctx).await? else {
             return Ok(None);
         };
 
@@ -336,7 +334,10 @@ impl MovePackage {
             return Ok(None);
         };
 
-        Ok(Some(Self { super_, contents }))
+        Ok(Some(Self {
+            super_: object.clone(),
+            contents,
+        }))
     }
 
     /// Fetch a package by its key. The key can either specify an exact version to fetch, an
