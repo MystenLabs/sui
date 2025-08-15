@@ -30,6 +30,7 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
+    grpc_full_node_client::{GrpcFullNodeArgs, GrpcFullNodeClient},
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
@@ -42,16 +43,13 @@ use task::{
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use url::Url;
 
+use crate::api::{mutation::Mutation, query::Query};
 use crate::extensions::logging::{Logging, Session};
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
-use crate::{
-    api::{mutation::Mutation, query::Query},
-    args::TxExecFullNodeArgs,
-};
 
 mod api;
 pub mod args;
@@ -268,7 +266,7 @@ pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
 pub async fn start_rpc(
     database_url: Option<Url>,
     bigtable_instance: Option<String>,
-    tx_exec_full_node: TxExecFullNodeArgs,
+    full_node_args: GrpcFullNodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
     args: RpcArgs,
@@ -282,16 +280,8 @@ pub async fn start_rpc(
     let rpc = RpcService::new(args, version, schema(), registry, cancel.child_token());
     let metrics = rpc.metrics();
 
-    // Create gRPC client for transaction execution/simulation
-    let grpc_client = if let Some(url) = &tx_exec_full_node.full_node_rpc_url {
-        Some(
-            sui_rpc_api::client::Client::new(url)
-                .map_err(|e| anyhow::anyhow!("Failed to create gRPC client: {}", e))?,
-        )
-    } else {
-        warn!("No gRPC URL provided. Transaction execution/simulation will not work");
-        None
-    };
+    // Create gRPC full node client wrapper
+    let grpc_client = GrpcFullNodeClient::new(full_node_args, cancel.child_token()).await?;
 
     let pg_reader = PgReader::new(
         Some("graphql_db"),

@@ -3,7 +3,7 @@
 
 use async_graphql::{Context, Object, Result};
 
-use crate::error::RpcError;
+use crate::{api::types::transaction_execution_input::TransactionExecutionInput, error::RpcError};
 
 pub struct Mutation;
 
@@ -12,7 +12,7 @@ pub struct Mutation;
 impl Mutation {
     /// Execute a transaction, committing its effects on chain.
     ///
-    /// - `txBytes` is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
+    /// - `transaction` contains the transaction data in the desired format.
     /// - `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
     ///
     /// Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
@@ -21,7 +21,7 @@ impl Mutation {
     async fn execute_transaction(
         &self,
         _ctx: &Context<'_>,
-        _tx_bytes: String,
+        _transaction: TransactionExecutionInput,
         _signatures: Vec<String>,
     ) -> Result<String, RpcError> {
         todo!("execute_transaction implementation")

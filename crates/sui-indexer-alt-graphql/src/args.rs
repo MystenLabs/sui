@@ -5,20 +5,12 @@ use std::path::PathBuf;
 
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::grpc_full_node_client::GrpcFullNodeArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use url::Url;
 
 use crate::RpcArgs;
-
-#[derive(clap::Args, Default, Clone, Debug)]
-pub struct TxExecFullNodeArgs {
-    /// gRPC URL for execution operations such as executeTransaction and simulateTransaction.
-    ///
-    /// If not provided, such operations will not work.
-    #[clap(long)]
-    pub full_node_rpc_url: Option<String>,
-}
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
@@ -44,7 +36,7 @@ pub enum Command {
         bigtable_instance: Option<String>,
 
         #[command(flatten)]
-        tx_exec_full_node: TxExecFullNodeArgs,
+        full_node: GrpcFullNodeArgs,
 
         #[command(flatten)]
         db_args: DbArgs,

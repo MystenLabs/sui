@@ -14807,6 +14807,7 @@ dependencies = [
  "sui-kvstore",
  "sui-package-resolver",
  "sui-pg-db",
+ "sui-rpc-api",
  "sui-sql-macro",
  "sui-types",
  "thiserror 1.0.69",
