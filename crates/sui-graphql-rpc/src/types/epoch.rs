@@ -219,16 +219,12 @@ impl Epoch {
             Error::Internal(format!("Error deserializing commitments: {e}")).extend()
         })?;
 
-        commitments
-            .into_iter()
-            .next()
-            .map(|commitment| match commitment {
-                EpochCommitment::ECMHLiveObjectSetDigest(digest) => {
-                    Ok(Base58::encode(digest.digest.into_inner()))
-                }
-                _ => Err(Error::Internal("Expected ECMHLiveObjectSetDigest".to_string()).extend()),
-            })
-            .transpose()
+        for commitment in commitments {
+            if let EpochCommitment::ECMHLiveObjectSetDigest(digest) = commitment {
+                return Ok(Some(Base58::encode(digest.digest.into_inner())));
+            }
+        }
+        Ok(None)
     }
 
     /// The epoch's corresponding checkpoints.

@@ -165,7 +165,7 @@ pub struct ObjectCheckpointStates {
 }
 
 impl ObjectCheckpointStates {
-    pub fn new(contents: BTreeMap<ObjectID, Option<ObjectDigest>>) -> Self {
+    fn new(contents: BTreeMap<ObjectID, Option<ObjectDigest>>) -> Self {
         Self {
             contents: contents
                 .into_iter()
