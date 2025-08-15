@@ -21,15 +21,10 @@ pub use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::Availab
 
 use crate::metrics::ConsistentReaderMetrics;
 
-macro_rules! internal_error {
-    ($e:expr) => {
-        Error::Internal(anyhow!($e))
-    };
-}
-
+/// Like `anyhow::bail!`, but returns this module's `Error` type, not `anyhow::Error`.
 macro_rules! bail {
     ($e:expr) => {
-        return Err(internal_error!($e));
+        return Err(Error::Internal(anyhow!($e)));
     };
 }
 
