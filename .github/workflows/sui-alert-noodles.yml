@@ -2,7 +2,7 @@ name: Sync Fork & Check sui.yaml Changes
 
 on:
   schedule:
-    - cron: "0 0 * * *"  # chạy mỗi ngày lúc 00:00
+    - cron: "0 0 * * *"  
   workflow_dispatch:
 
 permissions:
@@ -26,19 +26,21 @@ jobs:
       - run: |
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
-          
+
+      # Sync sui.yaml from upstream (full overwrite)
       - name: Sync sui.yaml with upstream
         id: sync_sui
         run: |
           git checkout main
-          git checkout upstream/main -- crates/sui-core/tests/staged/sui.yaml
-          if git diff --quiet crates/sui-core/tests/staged/sui.yaml; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            git commit -m "Sync sui.yaml with upstream"
+          git restore --source upstream/main crates/sui-core/tests/staged/sui.yaml
+          # Kiểm tra file có thay đổi so với fork
+          if ! git diff --quiet crates/sui-core/tests/staged/sui.yaml; then
+            git add crates/sui-core/tests/staged/sui.yaml
+            git commit -m "Sync sui.yaml fully with upstream"
             git push origin main
             echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
 
       - name: Send Slack alert if sui.yaml changed
         if: steps.sync_sui.outputs.changed == 'true'
