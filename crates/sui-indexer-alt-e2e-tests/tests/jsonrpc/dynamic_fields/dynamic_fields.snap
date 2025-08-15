@@ -361,7 +361,7 @@ Response: {
 }
 
 task 17, lines 120-124:
-//# run-jsonrpc --cursors bcs(@{obj_10_0},4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
 Response: {
   "jsonrpc": "2.0",
   "id": 3,
@@ -400,7 +400,7 @@ Response: {
 }
 
 task 18, lines 126-130:
-//# run-jsonrpc --cursors bcs(@{obj_10_0},4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
 Response: {
   "jsonrpc": "2.0",
   "id": 4,

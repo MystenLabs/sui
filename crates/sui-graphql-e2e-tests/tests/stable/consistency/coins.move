@@ -134,7 +134,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_1_1},2)
+//# run-graphql --cursors bcs(bcs(@{obj_1_1}),2)
 # There should be two coins, and the coin owners should be the same as the owner of the first coin in the previous query
 {
   availableRange {
@@ -162,7 +162,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_1_1},1)
+//# run-graphql --cursors bcs(bcs(@{obj_1_1}),1)
 # Outside of available range
 {
   availableRange {
@@ -190,7 +190,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_1_1},0)
+//# run-graphql --cursors bcs(bcs(@{obj_1_1}),0)
 # Outside of available range
 {
   availableRange {

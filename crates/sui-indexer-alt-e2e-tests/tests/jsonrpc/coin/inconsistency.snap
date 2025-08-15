@@ -98,7 +98,7 @@ task 8, line 37:
 Checkpoint created: 2
 
 task 9, lines 39-43:
-//# run-jsonrpc --cursors bcs(@{obj_1_0},1,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),1,4)
 Response: {
   "jsonrpc": "2.0",
   "id": 1,
