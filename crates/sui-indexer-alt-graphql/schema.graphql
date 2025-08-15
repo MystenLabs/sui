@@ -318,7 +318,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | OtherCommand
+union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -1990,6 +1990,28 @@ type UnchangedConsensusObjectEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+Upgrades a Move Package.
+"""
+type UpgradeCommand {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]
+	"""
+	ID of the package being upgraded.
+	"""
+	currentPackage: SuiAddress
+	"""
+	The `UpgradeTicket` authorizing the upgrade.
+	"""
+	upgradeTicket: TransactionArgument
 }
 
 type UserSignature {
