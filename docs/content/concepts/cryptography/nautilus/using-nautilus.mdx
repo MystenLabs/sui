@@ -173,6 +173,9 @@ $ cd src/nautilus-server/
 $ RUST_LOG=debug API_KEY=045a27812dbe456392913223221306 cargo run --features=weather-example --bin nautilus-server
 $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://localhost:3000/process_data
 ```
+
+<details>
+<summary>Output</summary>
 ```json
 {
   "response":
@@ -188,6 +191,8 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
   "signature":"b75d2d44c4a6b3c676fe087465c0e85206b101e21be6cda4c9ab2fd4ba5c0d8c623bf0166e274c5491a66001d254ce4c8c345b78411fdee7225111960cff250a"
 }
 ```
+</details>
+
 
 ### Troubleshooting
 
@@ -197,8 +202,8 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
 $ curl -H 'Content-Type: application/json' -X GET http://<PUBLIC_IP>:3000/health_check
 ```
 
-<summary>Output</summary>
 <details>
+<summary>Output</summary>
 ```json
 {
   "pk":"f343dae1df7f2c4676612368e40bf42878e522349e4135c2caa52bc79f0fc6e2",
@@ -232,8 +237,8 @@ $ make ENCLAVE_APP=weather-example
 $ cat out/nitro.pcrs
 ```
 
-<summary>Output</summary>
 <details>
+<summary>Output</summary>
 ```sh
 911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR0
 911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR1
@@ -322,8 +327,8 @@ $ make ENCLAVE_APP=twitter-example
 $ cat out/nitro.pcrs
 ```
 
-<summary>Output</summary>
 <details>
+<summary>Output</summary>
 ```sh
 968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR0
 968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR1
@@ -373,8 +378,8 @@ You can now write your frontend code to interact with the enclave for computatio
 $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://<PUBLIC_IP>:3000/process_data
 ```
 
-<summary>Output</summary>
 <details>
+<summary>Output</summary>
 ```json
 {
   "response":
