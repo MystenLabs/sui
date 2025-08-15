@@ -46,6 +46,7 @@ use crate::{
 
 use super::{
     address::{Address, AddressableImpl},
+    move_object::MoveObject,
     move_package::MovePackage,
     object_filter::ObjectFilter,
     transaction::Transaction,
@@ -106,6 +107,7 @@ use super::{
     )
 )]
 pub(crate) enum IObject {
+    MoveObject(MoveObject),
     MovePackage(MovePackage),
     Object(Object),
 }
@@ -193,6 +195,14 @@ impl Object {
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
     async fn digest(&self) -> String {
         ObjectImpl::from(self).digest()
+    }
+
+    /// Attempts to convert the object into a MoveObject.
+    async fn as_move_object(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<MoveObject>, RpcError<Error>> {
+        MoveObject::from_object(self, ctx).await
     }
 
     /// Attempts to convert the object into a MovePackage.

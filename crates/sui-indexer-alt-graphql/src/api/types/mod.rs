@@ -11,6 +11,7 @@ pub(crate) mod gas;
 pub(crate) mod gas_effects;
 pub(crate) mod gas_input;
 mod linkage;
+pub(crate) mod move_object;
 pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;
