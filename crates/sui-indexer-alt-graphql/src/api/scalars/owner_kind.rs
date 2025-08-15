@@ -4,6 +4,7 @@
 use std::fmt;
 
 use async_graphql::Enum;
+use sui_indexer_alt_reader::consistent_reader::proto;
 
 /// Filter on who owns an object.
 #[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
@@ -19,6 +20,17 @@ pub(crate) enum OwnerKind {
 
     /// Object is frozen.
     Immutable,
+}
+
+impl From<OwnerKind> for proto::owner::OwnerKind {
+    fn from(kind: OwnerKind) -> Self {
+        match kind {
+            OwnerKind::Address => proto::owner::OwnerKind::Address,
+            OwnerKind::Object => proto::owner::OwnerKind::Object,
+            OwnerKind::Shared => proto::owner::OwnerKind::Shared,
+            OwnerKind::Immutable => proto::owner::OwnerKind::Immutable,
+        }
+    }
 }
 
 impl fmt::Display for OwnerKind {
