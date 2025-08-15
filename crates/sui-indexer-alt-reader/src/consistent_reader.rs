@@ -8,8 +8,9 @@ use std::time::Duration;
 use anyhow::{anyhow, Context};
 use prometheus::Registry;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    consistent_service_client::ConsistentServiceClient, AvailableRangeRequest, End,
-    ListObjectsByTypeRequest, Object, CHECKPOINT_METADATA,
+    consistent_service_client::ConsistentServiceClient, owner::OwnerKind, AvailableRangeRequest,
+    AvailableRangeResponse, End, ListObjectsByTypeRequest, ListOwnedObjectsRequest, Object, Owner,
+    CHECKPOINT_METADATA,
 };
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use tokio_util::sync::CancellationToken;
@@ -17,7 +18,7 @@ use tonic::transport::Channel;
 use tracing::instrument;
 use url::Url;
 
-pub use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::AvailableRangeResponse;
+pub use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as proto;
 
 use crate::metrics::ConsistentReaderMetrics;
 
@@ -149,6 +150,59 @@ impl ConsistentReader {
                 |mut client, request| async move { client.list_objects_by_type(request).await },
                 ListObjectsByTypeRequest {
                     object_type: Some(object_type),
+                    page_size,
+                    after_token: after_token.map(Into::into),
+                    before_token: before_token.map(Into::into),
+                    end: if is_from_front {
+                        Some(End::Front.into())
+                    } else {
+                        Some(End::Back.into())
+                    },
+                },
+            )
+            .await?;
+
+        let has_next_page = response.has_next_page();
+        let has_previous_page = response.has_previous_page();
+
+        let results = response
+            .objects
+            .into_iter()
+            .map(TryFrom::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Page {
+            results,
+            has_next_page,
+            has_previous_page,
+        })
+    }
+
+    /// Paginate live objects at `checkpoint`, with owner described by `kind` and `address`, and an
+    /// optional `object_type` filter.
+    #[instrument(skip(self), level = "debug")]
+    pub async fn list_owned_objects(
+        &self,
+        checkpoint: u64,
+        kind: OwnerKind,
+        address: Option<String>,
+        object_type: Option<String>,
+        page_size: Option<u32>,
+        after_token: Option<Vec<u8>>,
+        before_token: Option<Vec<u8>>,
+        is_from_front: bool,
+    ) -> Result<Page<ObjectRef>, Error> {
+        let response = self
+            .request(
+                "list_owned_objects",
+                Some(checkpoint),
+                |mut client, request| async move { client.list_owned_objects(request).await },
+                ListOwnedObjectsRequest {
+                    owner: Some(Owner {
+                        kind: Some(kind.into()),
+                        address,
+                    }),
+                    object_type,
                     page_size,
                     after_token: after_token.map(Into::into),
                     before_token: before_token.map(Into::into),
