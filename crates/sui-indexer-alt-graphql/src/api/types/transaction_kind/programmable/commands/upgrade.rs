@@ -11,10 +11,10 @@ use super::TransactionArgument;
 #[derive(SimpleObject, Clone)]
 pub struct UpgradeCommand {
     /// Bytecode for the modules to be published, BCS serialized and Base64 encoded.
-    pub modules: Vec<Base64>,
+    pub modules: Option<Vec<Base64>>,
 
     /// IDs of the transitive dependencies of the package to be published.
-    pub dependencies: Vec<SuiAddress>,
+    pub dependencies: Option<Vec<SuiAddress>>,
 
     /// ID of the package being upgraded.
     pub current_package: Option<SuiAddress>,

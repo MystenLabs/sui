@@ -68,8 +68,8 @@ impl Command {
             }),
             NativeCommand::Upgrade(modules, dependencies, current_package, upgrade_ticket) => {
                 Command::Upgrade(UpgradeCommand {
-                    modules: modules.into_iter().map(Base64::from).collect(),
-                    dependencies: dependencies.into_iter().map(SuiAddress::from).collect(),
+                    modules: Some(modules.into_iter().map(Base64::from).collect()),
+                    dependencies: Some(dependencies.into_iter().map(SuiAddress::from).collect()),
                     current_package: Some(SuiAddress::from(current_package)),
                     upgrade_ticket: Some(TransactionArgument::from(upgrade_ticket)),
                 })

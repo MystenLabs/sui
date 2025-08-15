@@ -2003,11 +2003,11 @@ type UpgradeCommand {
 	"""
 	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
 	"""
-	modules: [Base64!]!
+	modules: [Base64!]
 	"""
 	IDs of the transitive dependencies of the package to be published.
 	"""
-	dependencies: [SuiAddress!]!
+	dependencies: [SuiAddress!]
 	"""
 	ID of the package being upgraded.
 	"""
