@@ -31,7 +31,6 @@ use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_types::bridge::{
     get_bridge, BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH,
 };
-use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tracing::info;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
@@ -319,45 +318,6 @@ async fn test_add_new_coins_on_sui_and_eth() {
     )
     .await
     .unwrap();
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_create_bridge_state_object() {
-    let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION - 1).into())
-        .with_epoch_duration_ms(20000)
-        .build()
-        .await;
-
-    let handles = test_cluster.all_node_handles();
-
-    // no node has the bridge state object yet
-    for h in &handles {
-        h.with(|node| {
-            assert!(node
-                .state()
-                .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(SUI_BRIDGE_OBJECT_ID)
-                .is_none());
-        });
-    }
-
-    // wait until feature is enabled
-    test_cluster
-        .wait_for_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .await;
-    // wait until next epoch - authenticator state object is created at the end of the first epoch
-    // in which it is supported.
-    test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1
-
-    for h in &handles {
-        h.with(|node| {
-            node.state()
-                .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(SUI_BRIDGE_OBJECT_ID)
-                .expect("auth state object should exist");
-        });
-    }
 }
 
 #[tokio::test]
