@@ -11,7 +11,7 @@ use crate::crypto::{
     AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
 use crate::digests::{Digest, ObjectDigest};
-use crate::effects::{ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
+use crate::effects::{TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::full_checkpoint_content::CheckpointData;
 use crate::gas::GasCostSummary;
@@ -34,7 +34,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
@@ -129,21 +128,13 @@ impl Default for ECMHLiveObjectSetDigest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectCheckpointState {
     pub id: ObjectID,
+    /// This could be None if the object was deleted or wrapped in the transaction.
     pub digest: Option<ObjectDigest>,
 }
 
 impl ObjectCheckpointState {
     pub fn new(id: ObjectID, digest: Option<ObjectDigest>) -> Self {
         Self { id, digest }
-    }
-}
-
-impl From<ObjectChange> for ObjectCheckpointState {
-    fn from(object_change: ObjectChange) -> Self {
-        Self {
-            id: object_change.id,
-            digest: object_change.output_digest,
-        }
     }
 }
 
@@ -174,10 +165,13 @@ pub struct ObjectCheckpointStates {
 }
 
 impl ObjectCheckpointStates {
-    pub fn new(contents: Vec<ObjectCheckpointState>) -> Self {
-        let mut contents = contents;
-        contents.sort();
-        Self { contents }
+    pub fn new(contents: BTreeMap<ObjectID, Option<ObjectDigest>>) -> Self {
+        Self {
+            contents: contents
+                .into_iter()
+                .map(|(id, digest)| ObjectCheckpointState::new(id, digest))
+                .collect::<Vec<_>>(),
+        }
     }
 
     /// Compute the Merkle root of the object checkpoint states.
@@ -224,31 +218,15 @@ impl CheckpointArtifacts {
 
 impl From<&[&TransactionEffects]> for CheckpointArtifacts {
     fn from(effects: &[&TransactionEffects]) -> Self {
-        let all_object_changes = effects
-            .iter()
-            .map(|e| e.object_changes())
-            .collect::<Vec<_>>();
-
-        let mut latest_object_states: BTreeMap<ObjectID, ObjectCheckpointState> = BTreeMap::new();
-        for object_changes in all_object_changes {
-            for object_change in object_changes {
-                match latest_object_states.entry(object_change.id) {
-                    Entry::Occupied(mut entry) => {
-                        let existing = entry.get_mut();
-                        *existing = object_change.into();
-                    }
-                    Entry::Vacant(entry) => {
-                        entry.insert(object_change.into());
-                    }
-                }
+        let mut latest_object_states = BTreeMap::new();
+        for e in effects {
+            for object_change in e.object_changes() {
+                latest_object_states.insert(object_change.id, object_change.output_digest);
             }
         }
 
-        let latest_object_states =
-            ObjectCheckpointStates::new(latest_object_states.into_values().collect::<Vec<_>>());
-
         Self {
-            latest_object_states,
+            latest_object_states: ObjectCheckpointStates::new(latest_object_states),
         }
     }
 }
