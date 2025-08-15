@@ -1,0 +1,11 @@
+The `Processor` is the concurrent processing engine, handling multiple tasks running at the same time for maximum throughput. Its primary responsibility is to convert raw checkpoint data into database-ready rows using parallel workers.
+
+The component handles this task by spawning `FANOUT` worker tasks (default: 10) for parallel processing. The `FANOUT` is the key configuration as it controls parallel processing capacity.
+
+{@inject: crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=FANOUT}
+    
+Each worker calls your `Handler::process()` method independently. 
+
+{@inject: crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=values}
+
+Each of these workers can process different checkpoints simultaneously and in any order. The workers send their processed data to the `Collector` with checkpoint metadata.
