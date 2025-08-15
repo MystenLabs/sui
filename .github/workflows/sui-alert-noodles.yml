@@ -2,7 +2,7 @@ name: Sync Fork & Check sui.yaml Changes
 
 on:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 0 * * *"  # chạy mỗi ngày lúc 00:00
   workflow_dispatch:
 
 permissions:
@@ -12,40 +12,38 @@ jobs:
   sync-and-check:
     runs-on: ubuntu-latest
     steps:
+      # Checkout fork
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # Configure Git user
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      # Add upstream and fetch
       - run: |
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
-
-      - name: Check sui.yaml in upstream
-        id: check_upstream
-        run: |
-          commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml || true)
-          if [ -n "$commit_hash" ]; then
-            echo "sui_yaml_changed=true" >> $GITHUB_OUTPUT
-            echo "commit_hash=$commit_hash" >> $GITHUB_OUTPUT
-          else
-            echo "sui_yaml_changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Merge upstream if needed
-        if: steps.check_upstream.outputs.sui_yaml_changed == 'true'
+          
+      - name: Sync sui.yaml with upstream
+        id: sync_sui
         run: |
           git checkout main
-          git merge upstream/main --no-edit
-          git push origin main
+          git checkout upstream/main -- crates/sui-core/tests/staged/sui.yaml
+          if git diff --quiet crates/sui-core/tests/staged/sui.yaml; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m "Sync sui.yaml with upstream"
+            git push origin main
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Send Slack alert if sui.yaml changed
-        if: steps.check_upstream.outputs.sui_yaml_changed == 'true'
+        if: steps.sync_sui.outputs.changed == 'true'
         run: |
-          commit_hash=${{ steps.check_upstream.outputs.commit_hash }}
+          commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml)
           commit_author=$(git log -1 --pretty=format:'%an' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
           commit_msg=$(git log -1 --pretty=format:'%s' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
           commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
