@@ -34,14 +34,18 @@ jobs:
           cp -r .github/workflows /tmp/workflows_backup || true
 
       - name: Reset to upstream
-        run: |
-          git reset --hard upstream/main
+        run: git reset --hard upstream/main
 
-      - name: Restore workflows
+      - name: Restore workflows (keep local)
         run: |
-          mkdir -p .github
-          cp -r /tmp/workflows_backup .github/workflows || true
-          git add .github/workflows || true
+          rm -rf .github/workflows
+          cp -r /tmp/workflows_backup .github/workflows
+
+      - name: Commit & Push code only
+        run: |
+          git add $(git ls-files | grep -v '^.github/workflows') || true
+          git commit -m "Sync with upstream (keep workflows)" || echo "No changes to commit"
+          git push origin main --force
 
       - name: Check if sui.yaml changed from upstream
         run: |
@@ -52,7 +56,6 @@ jobs:
             commit_msg=$(git log -1 --pretty=format:'%s')
             commit_url="https://github.com/${{ github.repository }}/commit/${commit_hash}"
 
-            # List Slack ID tag
             slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
 
             echo "✅ sui.yaml was updated — sending Slack alert"
@@ -62,9 +65,3 @@ jobs:
           else
             echo "ℹ️ No changes to sui.yaml"
           fi
-
-      - name: Commit & Push changes back to fork
-        run: |
-          git add -A
-          git commit -m "Sync with upstream (keep workflows)" || echo "No changes to commit"
-          git push origin main --force
