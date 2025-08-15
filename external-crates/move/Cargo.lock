@@ -2302,6 +2302,7 @@ dependencies = [
  "ethnum",
  "hex",
  "indexmap 2.8.0",
+ "insta",
  "leb128",
  "move-proc-macros",
  "num",
