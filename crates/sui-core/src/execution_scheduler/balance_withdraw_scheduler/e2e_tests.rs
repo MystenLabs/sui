@@ -172,9 +172,8 @@ impl TestEnv {
 
     fn settle_balances(&mut self, balance_changes: BTreeMap<ObjectID, i128>) {
         let mut accumulator_object = self.get_accumulator_object();
-        let accumulator_version = accumulator_object.version().next();
+        let next_version = accumulator_object.version().next();
         self.scheduler.settle_balances(BalanceSettlement {
-            accumulator_version,
             balance_changes: balance_changes.clone(),
         });
         for (object_id, balance_change) in balance_changes {
@@ -188,7 +187,7 @@ impl TestEnv {
                 .data
                 .try_as_move_mut()
                 .unwrap()
-                .increment_version_to(accumulator_version);
+                .increment_version_to(next_version);
             self.state
                 .get_cache_writer()
                 .write_object_entry_for_test(account_object);
@@ -197,7 +196,7 @@ impl TestEnv {
             .data
             .try_as_move_mut()
             .unwrap()
-            .increment_version_to(accumulator_version);
+            .increment_version_to(next_version);
         self.state
             .get_cache_writer()
             .write_object_entry_for_test(accumulator_object);

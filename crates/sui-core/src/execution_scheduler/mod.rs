@@ -24,7 +24,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use transaction_manager::TransactionManager;
 
-mod balance_withdraw_scheduler;
+pub(crate) mod balance_withdraw_scheduler;
 pub(crate) mod execution_scheduler_impl;
 mod overload_tracker;
 pub(crate) mod transaction_manager;
