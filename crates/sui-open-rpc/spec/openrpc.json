@@ -5563,6 +5563,17 @@
           }
         }
       },
+      "CheckpointArtifactsDigest": {
+        "type": "object",
+        "required": [
+          "digest"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/Digest"
+          }
+        }
+      },
       "CheckpointCommitment": {
         "oneOf": [
           {
@@ -5573,6 +5584,18 @@
             "properties": {
               "ECMHLiveObjectSetDigest": {
                 "$ref": "#/components/schemas/ECMHLiveObjectSetDigest"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "CheckpointArtifactsDigest"
+            ],
+            "properties": {
+              "CheckpointArtifactsDigest": {
+                "$ref": "#/components/schemas/CheckpointArtifactsDigest"
               }
             },
             "additionalProperties": false

@@ -7,6 +7,7 @@ pub mod base;
 pub mod committee;
 pub mod events;
 pub mod objects;
+pub mod ocs;
 
 // Proofs
 pub mod transaction_proof;
