@@ -1,96 +1,28 @@
 ---
-title: Custom Indexing on Walrus Blob Attributes
+title: Using the Custom Indexer Framework to Index Walrus Metadata Attributes
 description: Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Integrating a custom Sui Indexer with Walrus can provide novel user experiences.
 ---
 
 This topic covers integration of the Sui Indexer with the Walrus protocol. Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs. Walrus is operated and controlled by the Walrus Foundation. For the most accurate and up-to-date inormation on Walrus, consult the official [Walrus Docs](https://docs.wal.app/).
 
-Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Each blob file stored on Walrus is represented by a corresponding [`Blob` object on Sui](https://docs.wal.app/dev-guide/sui-struct.html#blob-and-storage-objects), and this associated object can optionally have a `Metadata` [dynamic field](../../../../concepts/dynamic-fields.mdx). If set, this dynamic field is [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes).
+Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Each blob file stored on Walrus is represented by a corresponding [`Blob` object on Sui](https://docs.wal.app/dev-guide/sui-struct.html#blob-and-storage-objects), and this associated object can optionally have a `Metadata` [dynamic field](../../../../concepts/dynamic-fields.mdx) (key-value extensions to on-chain objects to flexibly extend an object's data at runtime). If set, this dynamic field is [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes).
 
-OpenDAL is an open-source, cross-platform, unified abstraction layer that provides a standardized API for interacting with a variety of storage backends (local or remote) without needing to know their implementation details. Support for OpenDAL `read`, `write`, `delete`, `list`, and `stat` operations is available based on a path prefix on Walrus. 
+This guide shows how to index and query this metadata through a simple blog platform example. Users can:
+- Upload blog posts with titles
+- View their own posts and metrics
+- Delete posts they created
+- Edit post titles
+- Browse posts by other publishers
 
-As an example, assume a service exists that enables a user to upload files by file path. Behind the scenes, the service uploads content to Walrus, which creates a new `Blob` object on Sui. The service then creates a `Metadata` dynamic field on that Blob object and sets the `path` value. Additional uploads to the same file path are allowed, and are considered newer versions of the same file when indexing the chain. The service also has a `delete` API that accepts a file path and optional version, which deletes the latest `Metadata` and `Blob` object on Sui or at a particular version, if specified.
+Assume an existing service that handles uploads to Walrus. When a Blob and its associated object is created on Walrus, the service will additionally create a Metadata dynamic field with key-value pairs for `publisher` - the Sui Address that uploaded the blob, `blob_id`, `view_count`, and `title`. The service restricts users from modifying the `publisher`, `blob_id`, and `view_count` pairs, but the `title` can be updated by the respective publisher.
 
-Your task is to enhance this service with additional abilities. The service should also enable users to:
-
-- Provide a file path to retrieve the file at that location. By default, this references the latest version of the file.
-- Provide a file path and version to view the file.
-- Provide a path prefix to filter their files.
-- See a paginated list of all their files.
-
-To support these features, you can use the custom indexer framework to build an indexer that listens to these object changes, maintaining a mapping of paths to `Blob` IDs. Other dApps can then choose to extend and index metadata for their own needs. 
+Then, to support the above features, you can use the Custom Indexer Framework to track these Metadata dynamic fields.
 
 ## Data modeling
 
-You can fulfill the remaining requirements with two tables. The `walrus_blob` table has checkpoint granularity, so if multiple modifications occur within a single checkpoint, the latest entry persists. On the other hand, the append-only `walrus_blob_historical` table records all modifications at version, and uses the lamport version of the transaction it was deleted with or wrapped in.
+One way to model this is with a single table that maps publisher addresses to their blog posts. The table is keyed on `dynamic_field_id`, which uniquely identifies each Metadata dynamic field on Sui. For context, when a publisher uploads a blog post, Walrus will either create a new Blob, or reuse an existing one if the content already exists on-chain. As such, the Blob ID is not a reliable primary key. Fortunately, each upload also creates a unique Sui Blob object. When you add the Metadata attribute dynamic field to this Sui Blob object, the dynamic field's ID is derived from the parent object, and so you can guarantee primary key uniqueness, while using the ID that is closest to where your dapp data lies.
 
-When you delete metadata on chain, the `walrus_blob` table records this transaction by updating the existing entry’s `cp_sequence_number` value and setting `deleted = TRUE`. Conversely, the `walrus_blob_historical` table writes a new record with most of the fields set to `NULL`. These records serve as tombstone rows that the pruner deletes.
-
-Table and index creation looks like the following:
-
-```sql
--- This table maps file paths to their latest dynamic field metadata. The dynamic_field_id
--- references a Metadata dynamic field on a Sui Blob object, which provides access to both the
--- blob_id pointing to the actual file contents and the address_owner of the Blob object.
-CREATE TABLE IF NOT EXISTS walrus_blob (
-    -- Address that owns the Blob object on Sui
-    address_owner               BYTEA         NOT NULL,
-    -- File path associated with the Walrus Blob
-    file_path                   TEXT          NOT NULL,
-    -- The blob ID deterministically derived from the content of a blob and the Walrus configuration
-    blob_id                     BYTEA         NOT NULL,
-    -- ObjectID of the Blob object on Sui that owns the Metadata dynamic field
-    owner_id                    BYTEA         NOT NULL,
-    -- ID of the Metadata dynamic field
-    dynamic_field_id            BYTEA         NOT NULL,
-    -- Checkpoint sequence number that produced the state of the dynamic field
-    cp_sequence_number          BIGINT        NOT NULL,
-    -- Sentinel value to indicate whether the record is a tombstone
-    deleted                     BOOLEAN       DEFAULT FALSE,
-    PRIMARY KEY (address_owner, file_path)
-);
-
--- This index supports querying on a path prefix for the blob_id. The partial index ignores records
--- marked for deletion.
-CREATE INDEX IF NOT EXISTS walrus_blob_covering_idx ON walrus_blob
-(address_owner, file_path TEXT_PATTERN_OPS)
-INCLUDE (blob_id)
-WHERE deleted = FALSE;
-
--- This index supports the pruner, which selects deletable records within a checkpoint range.
-CREATE INDEX IF NOT EXISTS walrus_blob_can_delete_idx ON walrus_blob
-(cp_sequence_number, deleted)
-WHERE deleted = TRUE;
-
--- This table tracks historical changes to relevant Metadata dynamic fields. Unlike the main table,
--- the historical table is keyed on dynamic_field_id and df_version to capture the full history of
--- object changes.
-CREATE TABLE IF NOT EXISTS walrus_blob_historical (
-    -- ID of the Metadata dynamic field of key-value attributes on the Blob object
-    dynamic_field_id            BYTEA         NOT NULL,
-    -- Version of the Metadata dynamic field
-    df_version                  BIGINT        NOT NULL,
-    cp_sequence_number          BIGINT        NOT NULL,
-    -- ObjectID of the Blob object on Sui that owns the Metadata dynamic field
-    owner_id                    BYTEA,
-    -- Address that owns the Blob object on Sui
-    address_owner               BYTEA,
-    file_path                   TEXT,
-    -- The blob ID deterministically derived from the content of a blob and the Walrus configuration
-    blob_id                     BYTEA,
-    PRIMARY KEY (dynamic_field_id, df_version)
-);
-
--- This index supports querying previous versions of a file on the exact file_path.
-CREATE INDEX IF NOT EXISTS walrus_blob_historical_version_idx ON walrus_blob_historical
-(address_owner, file_path, df_version DESC)
-WHERE file_path IS NOT NULL;
-
--- Pruning on the historical table can be done by simply dropping records within the pruning range.
-CREATE INDEX IF NOT EXISTS walrus_blob_historical_cp_sequence_number_idx ON walrus_blob_historical
-(cp_sequence_number);
-
-```
+{@inject: examples/rust/walrus-attributes-indexer/migrations/2025-08-11-194316_blog-post/up.sql}
 
 You could technically fulfill the requirements with just the historical table, but this significantly complicates read operations. For example, to get the latest files for an `address_owner`, your queries would need to:
 
@@ -102,38 +34,15 @@ This essentially rebuilds a subset of the `walrus_blob` table any time you invok
 
 ### Reads
 
-With your tables built, you can construct the queries for your read functions.
+The main query pattern is to load the blog posts of a publisher.
 
-Load paginated list of files:
 
 ```sql
-SELECT blob_id
-FROM walrus_blob 
-WHERE address_owner = $1 AND deleted = FALSE
-ORDER BY file_path
+SELECT *
+FROM blog_post
+WHERE publisher = $1
+ORDER BY title
 LIMIT $2;
-```
-
-Get file version history:
-
-```sql
-SELECT cp_sequence_number, dynamic_field_id, blob_id, owner_id
-FROM walrus_blob_historical 
-WHERE address_owner = $1 AND file_path = $2
-ORDER BY cp_sequence_number DESC
-LIMIT 20;
-```
-
-Filter file by path prefix:
-
-```sql
-SELECT blob_id
-FROM walrus_blob 
-WHERE address_owner = $1 
-  AND file_path LIKE 'prefix%'
-  AND deleted = FALSE
-ORDER BY file_path
-LIMIT $3;
 ```
 
 ## Indexing implementation
@@ -204,7 +113,7 @@ Because `walrus_blob` is solely responsible for returning the live object set, y
 
 ## Additional considerations
 
-Other details to keep in mind when indexing Walrus blobs. 
+Other details to keep in mind when indexing Walrus blobs.
 
 ### Lifetimes and expiration
 
@@ -214,17 +123,17 @@ All Walrus blobs have a lifetime associated with them, so you also need to track
 - Watch all `BlobCertified` events.
 - Constructs PTBs that make calls to manage blob lifetime **and** ping the `Metadata` dynamic field in the same transaction.
 
-If a builder finds it undesirable to do additional work on the write side, then they are limited to the first two options. This necessitates two pipelines, one to do the work in the previous section of indexing metadata, and another to index `BlobCertified` events (or `Blob` object changes.) 
+If a builder finds it undesirable to do additional work on the write side, then they are limited to the first two options. This necessitates two pipelines, one to do the work in the previous section of indexing metadata, and another to index `BlobCertified` events (or `Blob` object changes.)
 
-Otherwise, you can continue using a single pipeline. 
+Otherwise, you can continue using a single pipeline.
 
 ### Mutations to a dynamic field
 
 In this design, if a user wants to `move` a file through the service, they would have to upload contents to a new file path, and then delete the existing file. On Sui, this would create a new `Blob` object, a new `Metadata` dynamic field on the `Blob` object, and then delete the existing `Blob` object and `Metadata`. This is a bit convoluted, as there is a method on the smart contract to [directly update the existing Metadata](https://github.com/MystenLabs/walrus/blob/main/contracts/walrus/sources/system/blob.move#L355). However, these mutations introduce additional complexity for the indexer.
 
-Because the `walrus_blob` table is keyed on `(address_owner, file_path)`, if you rename some metadata such that `(df_id, "test/a")` → `(df_id, "test/b")`, the indexer records the change as a new entry. This culminates in the read query erroneously reporting that the user has two files, `test/a` and `test/b`. On the other hand, if you update `walrus_blob` to key on dynamic field ID instead, overwrites (new files uploaded to the same file path) are treated as entirely separate files instead of later versions of the same file. In essence, a table keyed on `file_path` can handle overwrites, but not renames, while a table keyed on `dynamic_field_id` can track renames, but not overwrites. 
+Because the `walrus_blob` table is keyed on `(address_owner, file_path)`, if you rename some metadata such that `(df_id, "test/a")` → `(df_id, "test/b")`, the indexer records the change as a new entry. This culminates in the read query erroneously reporting that the user has two files, `test/a` and `test/b`. On the other hand, if you update `walrus_blob` to key on dynamic field ID instead, overwrites (new files uploaded to the same file path) are treated as entirely separate files instead of later versions of the same file. In essence, a table keyed on `file_path` can handle overwrites, but not renames, while a table keyed on `dynamic_field_id` can track renames, but not overwrites.
 
-One possible approach is to detect rename mutations (input state of dynamic field is different from output state of dynamic field) and commit two writes to `walrus_blob`. One write to set the existing row as a sentinel row, and then another write to create a new entry to reflect the rename. The historical table also needs a tombstone for the old path and a new entry for the new path. 
+One possible approach is to detect rename mutations (input state of dynamic field is different from output state of dynamic field) and commit two writes to `walrus_blob`. One write to set the existing row as a sentinel row, and then another write to create a new entry to reflect the rename. The historical table also needs a tombstone for the old path and a new entry for the new path.
 
 ## Related links
 
