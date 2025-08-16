@@ -170,7 +170,7 @@ pub mod tests {
             let watermark = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
             assert!(conn
-                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
+                .set_committer_watermark(ConcurrentPipeline1::NAME, None, watermark)
                 .await
                 .unwrap());
         }
@@ -188,12 +188,12 @@ pub mod tests {
             let watermark1 = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
             assert!(conn
-                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
+                .set_committer_watermark(ConcurrentPipeline1::NAME, None, watermark1)
                 .await
                 .unwrap());
             let watermark2 = CommitterWatermark::new_for_testing(20);
             assert!(conn
-                .set_committer_watermark(ConcurrentPipeline2::NAME, watermark2)
+                .set_committer_watermark(ConcurrentPipeline2::NAME, None, watermark2)
                 .await
                 .unwrap());
         }
