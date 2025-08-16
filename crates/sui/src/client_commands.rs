@@ -742,6 +742,11 @@ pub struct TxProcessingArgs {
     /// Perform a dry run of the transaction, without executing it.
     #[arg(long)]
     pub dry_run: bool,
+    /// (Experimental) First perform a dry run; only if it succeeds (execution status Success)
+    /// then sign & execute the real transaction. On failure, returns the dry run result and
+    /// exits with non-zero status (as an error). Mutually exclusive with --dry-run.
+    #[arg(long, conflicts_with = "dry_run")]
+    pub verify_first: bool,
     /// Perform a dev inspect
     #[arg(long)]
     pub dev_inspect: bool,
@@ -3288,6 +3293,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     let TxProcessingArgs {
         tx_digest,
         dry_run,
+        verify_first,
         dev_inspect,
         serialize_unsigned_transaction,
         serialize_signed_transaction,
@@ -3334,6 +3340,38 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             None,
         )
         .await;
+    }
+
+    // verify-first flow: do a dry run first; if success continue, else return error with dry run info
+    if verify_first {
+        let dry_run_result = match execute_dry_run(
+            context,
+            signer,
+            tx_kind.clone(),
+            gas_budget,
+            gas_price,
+            gas_payment.clone(),
+            None,
+        )
+        .await
+        {
+            Ok(r) => r, // Ok(DryRun)
+            Err(e) => {
+                return Err(anyhow!(
+                    "--verify-first dry run failed before execution: {e}"
+                ))
+            }
+        };
+        if let SuiClientCommandResult::DryRun(dr) = &dry_run_result {
+            if dr.effects.status() != &SuiExecutionStatus::Success {
+                // Return an error embedding status + keep pretty dry run printed already.
+                let status = format!("{:?}", dr.effects.status());
+                return Err(anyhow!(
+                    "--verify-first dry run failed, aborting execution. Status: {status}"
+                ));
+            }
+        }
+        // Proceed (gas_budget remains optional; reuse estimation path below if needed)
     }
 
     let gas_budget = match gas_budget {
