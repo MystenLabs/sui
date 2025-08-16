@@ -28,6 +28,9 @@
 /// ```
 module sui::event;
 
+use std::type_name;
+use sui::accumulator;
+
 /// Emit a custom Move event, sending the data offchain.
 ///
 /// Used for creating custom indexes and tracking onchain
@@ -36,6 +39,72 @@ module sui::event;
 /// The type `T` is the main way to index the event, and can contain
 /// phantom parameters, eg `emit(MyEvent<phantom T>)`.
 public native fun emit<T: copy + drop>(event: T);
+
+public use fun destroy_stream as EventStream.destroy;
+public use fun destroy_cap as EventStreamCap.destroy;
+public use fun emit_authenticated as EventStreamCap.emit;
+
+#[allow(unused_field)]
+public struct EventStreamDigest has store {
+    /// Merkle Mountain Range of all events in the stream.
+    digest: vector<vector<u8>>,
+    /// Last checkpoint at which the event stream was written.
+    last_checkpoint: u64,
+    /// Number of events in the stream.
+    num_events: u64,
+}
+
+// A unique identifier for an event stream.
+public struct EventStream has key, store {
+    id: UID,
+}
+
+public fun new_event_stream(ctx: &mut TxContext): EventStream {
+    EventStream {
+        id: object::new(ctx),
+    }
+}
+
+public fun destroy_stream(stream: EventStream) {
+    let EventStream { id } = stream;
+    id.delete();
+}
+
+/// A capability to write to a given event stream. 
+public struct EventStreamCap has key, store {
+    id: UID,
+    stream_id: address,
+}
+
+public fun new_cap(stream: &EventStream, ctx: &mut TxContext): EventStreamCap {
+    EventStreamCap {
+        id: object::new(ctx),
+        stream_id: stream.id.to_address(),
+    }
+}
+
+public fun destroy_cap(cap: EventStreamCap) {
+    let EventStreamCap { id, .. } = cap;
+    id.delete();
+}
+
+public fun emit_authenticated<T: copy + drop>(cap: &EventStreamCap, event: T) {
+    let accumulator_addr = accumulator::accumulator_address<EventStreamDigest>(cap.stream_id);
+
+    emit_authenticated_impl<EventStreamDigest, T>(accumulator_addr, cap.stream_id, event);
+}
+
+public fun emit_authenticated_default<T: copy + drop>(event: T) {
+    let stream_id = type_name::original_package_id<T>();
+    let accumulator_addr = accumulator::accumulator_address<EventStreamDigest>(stream_id);
+    emit_authenticated_impl<EventStreamDigest, T>(accumulator_addr, stream_id, event);
+}
+
+native fun emit_authenticated_impl<StreamDigestT, T: copy + drop>(
+    accumulator_id: address,
+    stream: address,
+    event: T,
+);
 
 #[test_only]
 /// Get the total number of events emitted during execution so far
