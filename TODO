@@ -1,0 +1,7 @@
+- first check compile errors and propose recommended fixes
+- ensure that the validity checks reject user transactions that attempt to use InputObjectMutability::NonExclusiveWrite
+- transactional tests:
+  - add new arg for trans test runner `nonexclusivewrite` which becomes a InputObjectMutability::NonExclusiveWrite
+  - create test that creates a shared object and passes the object as a nonexclusivewrite arg.
+    - it should be passed to a function that adds a dynamic field
+    - run the test and capture the output snapshot

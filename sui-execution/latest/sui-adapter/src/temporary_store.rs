@@ -162,6 +162,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
     pub(crate) fn ensure_active_inputs_mutated(&mut self) {
+        // TODO: do not mutate input objects if they are non-exclusive write
         let mut to_be_updated = vec![];
         for id in self.mutable_input_refs.keys() {
             if !self.execution_results.modified_objects.contains(id) {

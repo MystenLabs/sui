@@ -71,7 +71,8 @@ impl Display for Pretty<'_, FullPTB> {
                     CallArg::Object(ObjectArg::ImmOrOwnedObject(o)) => {
                         builder.push_record(vec![format!("{i:<3} Imm/Owned Object  ID: {}", o.0)]);
                     }
-                    CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+                    CallArg::Object(ObjectArg::SharedObject { id, .. })
+                    | CallArg::Object(ObjectArg::SharedObjectV2 { id, .. }) => {
                         builder.push_record(vec![format!("{i:<3} Shared Object     ID: {}", id)]);
                     }
                     CallArg::Object(ObjectArg::Receiving(o)) => {

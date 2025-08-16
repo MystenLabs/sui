@@ -335,7 +335,7 @@ impl SharedObjectCongestionTracker {
         let end_cost = start_cost.saturating_add(tx_cost);
 
         for obj in shared_input_objects {
-            if obj.mutable {
+            if obj.is_accessed_exclusively() {
                 let old_end_cost = self.object_execution_cost.insert(obj.id, end_cost);
                 assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
             }
@@ -426,7 +426,7 @@ mod object_cost_tests {
     use sui_types::base_types::{random_object_ref, SequenceNumber};
     use sui_types::crypto::{get_key_pair, AccountKeyPair};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{CallArg, ObjectArg, VerifiedTransaction};
+    use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, VerifiedTransaction};
     use sui_types::Identifier;
 
     fn construct_shared_input_objects(objects: &[(ObjectID, bool)]) -> Vec<SharedInputObject> {
@@ -435,7 +435,11 @@ mod object_cost_tests {
             .map(|(id, mutable)| SharedInputObject {
                 id: *id,
                 initial_shared_version: SequenceNumber::new(),
-                mutable: *mutable,
+                mutability: if *mutable {
+                    SharedObjectMutability::Mutable
+                } else {
+                    SharedObjectMutability::Immutable
+                },
             })
             .collect()
     }
