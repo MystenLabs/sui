@@ -26,7 +26,6 @@ pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
 pub(crate) mod transaction_execution_input;
 pub(crate) mod transaction_kind;
-pub(crate) mod type_filter;
 mod type_origin;
 pub(crate) mod unchanged_consensus_object;
 pub(crate) mod user_signature;

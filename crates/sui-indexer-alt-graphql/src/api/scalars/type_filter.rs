@@ -1,11 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::*;
 use move_core_types::language_storage::StructTag;
 use std::{fmt, str::FromStr};
-use sui_types::{parse_sui_address, parse_sui_module_id, parse_sui_struct_tag};
+use sui_types::{
+    parse_sui_address, parse_sui_module_id, parse_sui_struct_tag, parse_sui_type_tag, TypeTag,
+};
 
 use crate::api::scalars::{impl_string_input, sui_address::SuiAddress};
+
+/// A GraphQL scalar for accepting a type as input (exact type with all type parameters).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TypeInput(pub TypeTag);
 
 /// GraphQL scalar containing a filter on types. The filter can be one of:
 ///
@@ -24,42 +31,12 @@ pub(crate) enum TypeFilter {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[error("Invalid type, expected: package::module::type[<type_params, ...>] or primitive type")]
+pub(crate) struct TypeInputError;
+
+#[derive(thiserror::Error, Debug)]
 #[error("Invalid filter format, expected: package[::module[::type[<type_params, ...>]]]")]
-pub(crate) struct Error;
-
-impl_string_input!(TypeFilter);
-
-impl FromStr for TypeFilter {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Error> {
-        if let Ok(tag) = parse_sui_struct_tag(s) {
-            // Try to parse as a struct tag first (most specific)
-            Ok(TypeFilter::Type(tag))
-        } else if let Ok(module) = parse_sui_module_id(s) {
-            // Then try as a module ID
-            Ok(TypeFilter::Module(
-                SuiAddress::from(*module.address()),
-                module.name().to_string(),
-            ))
-        } else if let Ok(package) = parse_sui_address(s) {
-            // Finally try as just a package address
-            Ok(TypeFilter::Package(package.into()))
-        } else {
-            Err(Error)
-        }
-    }
-}
-
-impl fmt::Display for TypeFilter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TypeFilter::Package(p) => write!(f, "{p}"),
-            TypeFilter::Module(p, m) => write!(f, "{p}::{m}"),
-            TypeFilter::Type(t) => write!(f, "{}", t.to_canonical_display(/* with_prefix */ true)),
-        }
-    }
-}
+pub(crate) struct TypeFilterError;
 
 impl TypeFilter {
     /// Try to create a filter whose results are the intersection of `self`'s results and `other`'s
@@ -103,9 +80,111 @@ impl TypeFilter {
     }
 }
 
+impl_string_input!(TypeInput);
+impl_string_input!(TypeFilter);
+
+impl From<TypeInput> for TypeTag {
+    fn from(input: TypeInput) -> Self {
+        input.0
+    }
+}
+
+impl FromStr for TypeInput {
+    type Err = TypeInputError;
+
+    fn from_str(s: &str) -> Result<Self, TypeInputError> {
+        if let Ok(tag) = parse_sui_type_tag(s) {
+            Ok(TypeInput(tag))
+        } else {
+            Err(TypeInputError)
+        }
+    }
+}
+
+impl FromStr for TypeFilter {
+    type Err = TypeFilterError;
+
+    fn from_str(s: &str) -> Result<Self, TypeFilterError> {
+        if let Ok(tag) = parse_sui_struct_tag(s) {
+            // Try to parse as a struct tag first (most specific)
+            Ok(TypeFilter::Type(tag))
+        } else if let Ok(module) = parse_sui_module_id(s) {
+            // Then try as a module ID
+            Ok(TypeFilter::Module(
+                SuiAddress::from(*module.address()),
+                module.name().to_string(),
+            ))
+        } else if let Ok(package) = parse_sui_address(s) {
+            // Finally try as just a package address
+            Ok(TypeFilter::Package(package.into()))
+        } else {
+            Err(TypeFilterError)
+        }
+    }
+}
+
+impl fmt::Display for TypeInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.to_canonical_display(/* with_prefix */ true))
+    }
+}
+
+impl fmt::Display for TypeFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeFilter::Package(p) => write!(f, "{p}"),
+            TypeFilter::Module(p, m) => write!(f, "{p}::{m}"),
+            TypeFilter::Type(t) => write!(f, "{}", t.to_canonical_display(/* with_prefix */ true)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
+
     use super::*;
+
+    #[test]
+    fn test_parse_type_input() {
+        let inputs: Vec<_> = [
+            "u8",
+            "address",
+            "bool",
+            "0x2::coin::Coin",
+            "0x2::coin::Coin<0x2::sui::SUI>",
+            "vector<u256>",
+            "vector<0x3::staking_pool::StakedSui>",
+        ]
+        .into_iter()
+        .map(|i| TypeInput::from_str(i).unwrap().to_string())
+        .collect();
+
+        assert_snapshot!(&inputs.join("\n"), @r###"
+        u8
+        address
+        bool
+        0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin
+        0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>
+        vector<u256>
+        vector<0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui>
+        "###);
+    }
+
+    #[test]
+    fn test_invalid_type_input() {
+        for invalid_type_input in [
+            "not_a_real_type",
+            "0x1:missing::colon",
+            "0x2",
+            "0x2::coin",
+            "0x2::trailing::",
+            "0x3::mismatched::bra<0x4::ke::ts",
+            "vector",
+        ] {
+            assert!(TypeInput::from_str(invalid_type_input).is_err());
+        }
+    }
 
     #[test]
     fn test_parse_type_filter() {
