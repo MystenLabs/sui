@@ -69,7 +69,7 @@ pub async fn run_benchmark(
         indexer_args,
         client_args,
         indexer_config,
-        false, /* with_genesis */
+        None,
         &Registry::new(),
         CancellationToken::new(),
     )
