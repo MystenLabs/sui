@@ -8,6 +8,7 @@ pub(crate) mod date_time;
 pub(crate) mod digest;
 pub(crate) mod owner_kind;
 pub(crate) mod sui_address;
+pub(crate) mod type_filter;
 pub(crate) mod uint53;
 
 /// Opt-in to an implementation of `ScalarType` for a `$Type` that implements `FromStr`, solely for
