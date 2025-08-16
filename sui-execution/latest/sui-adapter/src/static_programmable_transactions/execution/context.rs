@@ -162,7 +162,7 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
 impl Locations {
     /// NOTE! This does not charge gas and should not be used directly. It is exposed for
     /// dev-inspect
-    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation, ExecutionError> {
+    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation<'_>, ExecutionError> {
         Ok(match location {
             T::Location::TxContext => ResolvedLocation::Local(self.tx_context_value.local(0)?),
             T::Location::GasCoin => {
@@ -461,7 +461,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )
     }
 
-    pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+    pub fn object_runtime(&self) -> Result<&ObjectRuntime<'_>, ExecutionError> {
         self.native_extensions
             .get::<ObjectRuntime>()
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))

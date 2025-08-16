@@ -34,7 +34,7 @@ pub trait TUIInterface {
 
     /// Function called on each redraw. The `TUIOutput` contains that updated
     /// data to display on each pane.
-    fn on_redraw(&mut self, line_number: u16, column_number: u16) -> TUIOutput;
+    fn on_redraw(&mut self, line_number: u16, column_number: u16) -> TUIOutput<'_>;
 
     /// Bounds the line number so that it does not run past the text.
     fn bound_line(&self, line_number: u16) -> u16;
@@ -60,7 +60,7 @@ impl DebugInterface {
 impl TUIInterface for DebugInterface {
     const LEFT_TITLE: &'static str = "Left pane";
     const RIGHT_TITLE: &'static str = "Right pane";
-    fn on_redraw(&mut self, line_number: u16, column_number: u16) -> TUIOutput {
+    fn on_redraw(&mut self, line_number: u16, column_number: u16) -> TUIOutput<'_> {
         TUIOutput {
             left_screen: self
                 .text

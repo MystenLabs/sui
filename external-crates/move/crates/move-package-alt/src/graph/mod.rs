@@ -217,7 +217,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         &self.inner[self.root_index]
     }
 
-    pub fn root_package_info(&self) -> PackageInfo<F> {
+    pub fn root_package_info(&self) -> PackageInfo<'_, F> {
         PackageInfo {
             graph: self,
             node: self.root_index,
@@ -227,7 +227,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// Return the list of packages that are in the linkage table, as well as
     /// the unpublished ones in the package graph.
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
-    pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+    pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<'_, F>>> {
         let mut linkage = self.linkage()?;
 
         // Populate ALL the linkage elements

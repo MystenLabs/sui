@@ -349,7 +349,7 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter {
+    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::new(
             &self.flags,
             &self.known_filter_names,

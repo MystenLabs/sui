@@ -274,7 +274,7 @@ impl MatchContext<true> for Context<'_> {
         self.env
     }
 
-    fn reporter(&self) -> &DiagnosticReporter {
+    fn reporter(&self) -> &DiagnosticReporter<'_> {
         &self.reporter
     }
 

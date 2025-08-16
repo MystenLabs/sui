@@ -263,7 +263,7 @@ mod checked {
             })
         }
 
-        pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+        pub fn object_runtime(&self) -> Result<&ObjectRuntime<'_>, ExecutionError> {
             self.native_extensions
                 .get::<ObjectRuntime>()
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
