@@ -249,6 +249,7 @@ impl ValidatorConfigBuilder {
             state_accumulator_v2: self.global_state_hash_v2,
             enable_soft_bundle: true,
             enable_validator_tx_finalizer: true,
+            transaction_initial_target_stake_percentage: 95,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
             execution_time_observer_config: self.execution_time_observer_config,
@@ -558,6 +559,7 @@ impl FullnodeConfigBuilder {
             enable_soft_bundle: true,
             // This is a validator specific feature.
             enable_validator_tx_finalizer: false,
+            transaction_initial_target_stake_percentage: 95,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
             execution_time_observer_config: None,

@@ -83,6 +83,7 @@ pub struct QuorumDriver<A: Clone> {
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<QuorumDriverMetrics>,
     max_retry_times: u32,
+    transaction_initial_target_stake_percentage: u64,
 }
 
 impl<A: Clone> QuorumDriver<A> {
@@ -93,6 +94,7 @@ impl<A: Clone> QuorumDriver<A> {
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u32,
+        transaction_initial_target_stake_percentage: u64,
     ) -> Self {
         Self {
             validators,
@@ -101,6 +103,7 @@ impl<A: Clone> QuorumDriver<A> {
             notifier,
             metrics,
             max_retry_times,
+            transaction_initial_target_stake_percentage,
         }
     }
 
@@ -295,11 +298,18 @@ where
         &self,
         transaction: Transaction,
         client_addr: Option<SocketAddr>,
+        target_stake_percentage: u64,
     ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
         let auth_agg = self.validators.load();
         let _tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
         let tx_digest = *transaction.digest();
-        let result = auth_agg.process_transaction(transaction, client_addr).await;
+        let result = auth_agg
+            .process_transaction_with_target_stake(
+                transaction,
+                client_addr,
+                target_stake_percentage,
+            )
+            .await;
 
         self.process_transaction_result(result, tx_digest).await
     }
@@ -458,6 +468,7 @@ where
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u32,
+        transaction_initial_target_stake_percentage: u64,
     ) -> Self {
         let (task_tx, task_rx) = mpsc::channel::<QuorumDriverTask>(TASK_QUEUE_SIZE);
         let (subscriber_tx, subscriber_rx) =
@@ -469,6 +480,7 @@ where
             notifier,
             metrics.clone(),
             max_retry_times,
+            transaction_initial_target_stake_percentage,
         ));
         let metrics_clone = metrics.clone();
         let processor_handle = {
@@ -533,6 +545,9 @@ where
             notifier: Arc::new(NotifyRead::new()),
             metrics: self.quorum_driver_metrics.clone(),
             max_retry_times: self.quorum_driver.max_retry_times,
+            transaction_initial_target_stake_percentage: self
+                .quorum_driver
+                .transaction_initial_target_stake_percentage,
         });
         let metrics = self.quorum_driver_metrics.clone();
         let processor_handle = {
@@ -600,45 +615,54 @@ where
 
         let timer = Instant::now();
         let (tx_cert, newly_formed) = match tx_cert {
-            None => match quorum_driver
-                .process_transaction(transaction.clone(), client_addr)
-                .await
-            {
-                Ok(ProcessTransactionResult::Certified {
-                    certificate,
-                    newly_formed,
-                }) => {
-                    debug!(?tx_digest, "Transaction processing succeeded");
-                    (certificate, newly_formed)
+            None => {
+                // On first attempt (retry_times == 0), use configured percentage of stake to reduce load
+                // On retries (retry_times > 0), use 100% of stake for maximum reliability
+                let target_stake_percentage = if old_retry_times == 0 {
+                    quorum_driver.transaction_initial_target_stake_percentage
+                } else {
+                    100
+                };
+                match quorum_driver
+                    .process_transaction(transaction.clone(), client_addr, target_stake_percentage)
+                    .await
+                {
+                    Ok(ProcessTransactionResult::Certified {
+                        certificate,
+                        newly_formed,
+                    }) => {
+                        debug!(?tx_digest, "Transaction processing succeeded");
+                        (certificate, newly_formed)
+                    }
+                    Ok(ProcessTransactionResult::Executed(effects_cert, events)) => {
+                        debug!(
+                            ?tx_digest,
+                            "Transaction processing succeeded with effects directly"
+                        );
+                        let response = QuorumDriverResponse {
+                            effects_cert,
+                            events: Some(events),
+                            input_objects: None,
+                            output_objects: None,
+                            auxiliary_data: None,
+                        };
+                        quorum_driver.notify(transaction, &Ok(response), old_retry_times + 1);
+                        return;
+                    }
+                    Err(err) => {
+                        Self::handle_error(
+                            quorum_driver,
+                            request,
+                            err,
+                            None,
+                            old_retry_times,
+                            "get tx cert",
+                            client_addr,
+                        );
+                        return;
+                    }
                 }
-                Ok(ProcessTransactionResult::Executed(effects_cert, events)) => {
-                    debug!(
-                        ?tx_digest,
-                        "Transaction processing succeeded with effects directly"
-                    );
-                    let response = QuorumDriverResponse {
-                        effects_cert,
-                        events: Some(events),
-                        input_objects: None,
-                        output_objects: None,
-                        auxiliary_data: None,
-                    };
-                    quorum_driver.notify(transaction, &Ok(response), old_retry_times + 1);
-                    return;
-                }
-                Err(err) => {
-                    Self::handle_error(
-                        quorum_driver,
-                        request,
-                        err,
-                        None,
-                        old_retry_times,
-                        "get tx cert",
-                        client_addr,
-                    );
-                    return;
-                }
-            },
+            }
             Some(tx_cert) => (tx_cert, false),
         };
 
@@ -791,6 +815,7 @@ pub struct QuorumDriverHandlerBuilder<A: Clone> {
     notifier: Option<Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>>,
     reconfig_observer: Option<Arc<dyn ReconfigObserver<A> + Sync + Send>>,
     max_retry_times: u32,
+    transaction_initial_target_stake_percentage: u64,
 }
 
 impl<A> QuorumDriverHandlerBuilder<A>
@@ -804,7 +829,13 @@ where
             notifier: None,
             reconfig_observer: None,
             max_retry_times: TX_MAX_RETRY_TIMES,
+            transaction_initial_target_stake_percentage: 95, // Default to 95% if not configured
         }
+    }
+
+    pub fn with_transaction_initial_target_stake_percentage(mut self, percentage: u64) -> Self {
+        self.transaction_initial_target_stake_percentage = percentage;
+        self
     }
 
     pub(crate) fn with_notifier(
@@ -839,6 +870,7 @@ where
                 .expect("Reconfig observer is missing"),
             self.metrics,
             self.max_retry_times,
+            self.transaction_initial_target_stake_percentage,
         )
     }
 }
