@@ -1,0 +1,22 @@
+[package]
+name = "walrus-attributes-indexer"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1.61"
+clap = { version = "4.4", features = ["derive"] }
+diesel = "2.2"
+diesel_migrations = "2.2"
+diesel-async = "0.5"
+tokio = "1.44"
+url = "2.3.1"
+bcs = "0.1.4"
+tracing = "0.1.37"
+serde = { version = "1.0.144", features = ["derive", "rc"] }
+
+sui-indexer-alt-framework = { git = "https://github.com/MystenLabs/sui.git", branch = "testnet" }
+move-core-types = { git = "https://github.com/MystenLabs/sui", branch="testnet" }
