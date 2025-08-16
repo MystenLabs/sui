@@ -1268,7 +1268,7 @@ impl AuthorityState {
     /// But if the transaction has been finalized, the signing will fail.
     /// TODO(mysticeti-fastpath): Assess whether we want to optimize the case when the transaction
     /// has already been finalized executed.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
     pub(crate) fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,

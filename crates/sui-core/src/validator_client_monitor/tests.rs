@@ -3,7 +3,6 @@
 
 use super::*;
 use crate::validator_client_monitor::stats::{ClientObservedStats, ValidatorClientStats};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::validator_client_monitor_config::{ScoreWeights, ValidatorClientMonitorConfig};
@@ -162,12 +161,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        // Create display names map for testing
-        let display_names: HashMap<AuthorityName, String> = validators
-            .iter()
-            .map(|v| (*v, v.concise().to_string()))
-            .collect();
-        let all_stats = stats.get_all_validator_stats(&committee, &display_names);
+        let all_stats = stats.get_all_validator_stats(&committee);
         assert_eq!(all_stats.len(), 2);
 
         // Validator 1 should have higher score
@@ -226,12 +220,7 @@ mod client_stats_tests {
         );
 
         // Should be excluded (score 0)
-        // Create display names map for testing
-        let display_names: HashMap<AuthorityName, String> = validators
-            .iter()
-            .map(|v| (*v, v.concise().to_string()))
-            .collect();
-        let all_stats = stats.get_all_validator_stats(&committee, &display_names);
+        let all_stats = stats.get_all_validator_stats(&committee);
         let score = *all_stats.get(&validator).unwrap();
         assert_eq!(score, 0.0);
 
@@ -239,12 +228,7 @@ mod client_stats_tests {
         sleep(Duration::from_millis(150)).await;
 
         // Should be included again (score > 0)
-        // Create display names map for testing
-        let display_names: HashMap<AuthorityName, String> = validators
-            .iter()
-            .map(|v| (*v, v.concise().to_string()))
-            .collect();
-        let all_stats = stats.get_all_validator_stats(&committee, &display_names);
+        let all_stats = stats.get_all_validator_stats(&committee);
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
     }
@@ -388,12 +372,7 @@ mod client_stats_tests {
             vec![(validator, 1)].into_iter().collect(),
         );
 
-        // Create display names map for testing
-        let display_names: HashMap<AuthorityName, String> = validators
-            .iter()
-            .map(|v| (*v, v.concise().to_string()))
-            .collect();
-        let all_stats = stats.get_all_validator_stats(&committee, &display_names);
+        let all_stats = stats.get_all_validator_stats(&committee);
         // Should have a partial score even with only one operation type
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
@@ -662,12 +641,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        // Create display names map for testing
-        let display_names: HashMap<AuthorityName, String> = validators
-            .iter()
-            .map(|v| (*v, v.concise().to_string()))
-            .collect();
-        let all_stats = stats.get_all_validator_stats(&committee, &display_names);
+        let all_stats = stats.get_all_validator_stats(&committee);
         // Validator 1 should have higher score due to fast effects (high weight)
         let score1 = *all_stats.get(&validator1).unwrap();
         let score2 = *all_stats.get(&validator2).unwrap();

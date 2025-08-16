@@ -343,7 +343,7 @@ impl LocalValidatorAggregatorProxy {
                 .with_reconfig_observer(reconfig_observer.clone());
         let qd_handler = qd_handler_builder.start();
         let qd = qd_handler.clone_quorum_driver();
-        let client_metrics = Arc::new(ValidatorClientMetrics::new(&Registry::new()));
+        let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
 
         // For benchmark, pass None to use default validator client monitor config
         let td = TransactionDriver::new(
