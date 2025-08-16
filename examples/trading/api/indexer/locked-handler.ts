@@ -21,7 +21,7 @@ type LockDestroyed = {
 /**
  * Handles all events emitted by the `lock` module.
  * Data is modelled in a way that allows writing to the db in any order (DESC or ASC) without
- * resulting in data incosistencies.
+ * resulting in data inconsistencies.
  * We're constructing the updates to support multiple events involving a single record
  * as part of the same batch of events (but using a single write/record to the DB).
  * */

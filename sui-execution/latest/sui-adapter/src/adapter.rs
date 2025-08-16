@@ -197,7 +197,7 @@ mod checked {
 
     /// Run both the Move verifier and the Sui verifier, checking just for timeouts. Returns Ok(())
     /// if the verifier completes within the module meter limit and the ticks are successfully
-    /// transfered to the package limit (regardless of whether verification succeeds or not).
+    /// transferred to the package limit (regardless of whether verification succeeds or not).
     fn verify_module_timeout_only(
         module: &CompiledModule,
         verifier_config: &VerifierConfig,
