@@ -53,6 +53,7 @@ use sui_graphql_rpc::{
     test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
 
+use crate::external_signer::ExternalKeysCommand;
 use move_core_types::account_address::AccountAddress;
 use serde_json::json;
 use sui_keys::key_derive::generate_new_key;
@@ -299,6 +300,18 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         cmd: KeyToolCommand,
     },
+    /// Manage keys on external signers
+    ExternalKeys {
+        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+        #[clap(long)]
+        keystore_path: Option<PathBuf>,
+        /// Return command outputs in json format
+        #[clap(long, global = true)]
+        json: bool,
+        /// Subcommands.
+        #[clap(subcommand)]
+        cmd: ExternalKeysCommand,
+    },
     /// Client for interacting with the Sui network.
     #[clap(name = "client")]
     Client {
@@ -443,15 +456,27 @@ impl SuiCommand {
             }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool {
-                keystore_path,
+                keystore_path: _,
                 json,
                 cmd,
             } => {
-                let keystore_path =
-                    keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
-                let mut keystore =
-                    Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
-                cmd.execute(&mut keystore).await?.print(!json);
+                let config_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
+                let mut context = WalletContext::new(&config_path)?;
+
+                cmd.execute(&mut context).await?.print(!json);
+                Ok(())
+            }
+            SuiCommand::ExternalKeys {
+                keystore_path: _,
+                json,
+                cmd,
+            } => {
+                let client_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
+                let mut config = PersistedConfig::<SuiClientConfig>::read(&client_path)?;
+
+                cmd.execute(config.external_keys.as_mut())
+                    .await?
+                    .print(!json);
                 Ok(())
             }
             SuiCommand::Client {

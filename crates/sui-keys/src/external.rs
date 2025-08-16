@@ -201,6 +201,13 @@ impl External {
             })?;
 
         self.keys.insert((&key.public_key).into(), key.clone());
+        self.aliases.insert(
+            (&key.public_key).into(),
+            Alias {
+                alias: self.create_alias(None)?,
+                public_key_base64: key.public_key.encode_base64(),
+            },
+        );
         self.save().await?;
         Ok(key)
     }
@@ -813,6 +820,11 @@ mod tests {
         let keys = external.keys;
         let key = keys.get(&SuiAddress::from_str(ADDRESS).expect("Invalid address format"));
         assert!(key.is_some());
+
+        let alias = external
+            .aliases
+            .get(&SuiAddress::from_str(ADDRESS).expect("Invalid address format"));
+        assert!(alias.is_some());
     }
 
     #[tokio::test]
