@@ -15,6 +15,7 @@ use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockKind};
+use sui_sdk_types::Address;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
@@ -193,8 +194,8 @@ pub struct AmountMetadata {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct SubBalance {
-    pub stake_id: ObjectID,
-    pub validator: SuiAddress,
+    pub stake_id: Address,
+    pub validator: Address,
     #[serde(with = "str_format")]
     pub value: i128,
 }

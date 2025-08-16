@@ -13809,7 +13809,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=cab42748a4c00072c6be00a08755b6c71274aaee#cab42748a4c00072c6be00a08755b6c71274aaee"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8bc0ff524a3a60561f1ba6315399f6f09e2b85b3#8bc0ff524a3a60561f1ba6315399f6f09e2b85b3"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -14361,6 +14361,7 @@ dependencies = [
  "move-core-types",
  "mysten-metrics",
  "once_cell",
+ "prost-types",
  "quick-js",
  "rand 0.8.5",
  "reqwest 0.12.9",
@@ -14375,7 +14376,9 @@ dependencies = [
  "sui-keys",
  "sui-move-build",
  "sui-node",
+ "sui-rpc",
  "sui-sdk",
+ "sui-sdk-types",
  "sui-swarm-config",
  "sui-types",
  "telemetry-subscribers",
@@ -14383,6 +14386,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
+ "tonic 0.13.1",
  "tracing",
  "typed-store",
 ]
@@ -15852,7 +15856,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=cab42748a4c00072c6be00a08755b6c71274aaee#cab42748a4c00072c6be00a08755b6c71274aaee"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8bc0ff524a3a60561f1ba6315399f6f09e2b85b3#8bc0ff524a3a60561f1ba6315399f6f09e2b85b3"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16009,7 +16013,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=cab42748a4c00072c6be00a08755b6c71274aaee#cab42748a4c00072c6be00a08755b6c71274aaee"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8bc0ff524a3a60561f1ba6315399f6f09e2b85b3#8bc0ff524a3a60561f1ba6315399f6f09e2b85b3"
 dependencies = [
  "base64ct",
  "bcs",

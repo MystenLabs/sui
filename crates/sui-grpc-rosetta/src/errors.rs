@@ -72,7 +72,9 @@ pub enum Error {
     #[error(transparent)]
     SuiError(#[from] SuiError),
     #[error(transparent)]
-    SuiRpcError(#[from] sui_sdk::error::Error),
+    SuiJsonRpcError(#[from] sui_sdk::error::Error),
+    #[error(transparent)]
+    SuiRpcError(#[from] tonic::Status),
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
     #[error(transparent)]
