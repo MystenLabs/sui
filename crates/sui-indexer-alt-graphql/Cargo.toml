@@ -56,6 +56,9 @@ sui-indexer-alt-schema.workspace = true
 sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
+sui-rpc.workspace = true
+sui-rpc-api.workspace = true
+sui-sdk-types.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
 
