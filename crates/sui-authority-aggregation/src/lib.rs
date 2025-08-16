@@ -83,10 +83,16 @@ where
     let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
         .clone()
         .into_iter()
-        .map(|name| {
-            let client = authority_clients[&name].clone();
-            let execute = map_each_authority.clone();
-            monitored_future!(async move { (name.clone(), execute(name, client).await,) })
+        .filter_map(|name| {
+            // authority_clients may be a subset of the full committee
+            if let Some(client) = authority_clients.get(&name).cloned() {
+                let execute = map_each_authority.clone();
+                Some(monitored_future!(async move {
+                    (name.clone(), execute(name, client).await)
+                }))
+            } else {
+                None
+            }
         })
         .collect();
     if let Some(prefetch_timeout) = prefetch_timeout {
