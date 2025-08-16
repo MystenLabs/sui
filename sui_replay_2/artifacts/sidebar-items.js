@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ARTIFACTS","ARTIFACTS_ENCODING_COMPRESSION_EXT","ARTIFACTS_ENCODING_EXT"],"enum":["Artifact","EncodingType"],"struct":["ArtifactManager","ArtifactMember"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["JsonRpcResult"],"struct":["RemoteError","Request","Response","TwoPointZero"],"type":["BatchRequest","BatchResponse","RequestID"]};
