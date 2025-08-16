@@ -36,7 +36,6 @@ use sui_indexer_alt_reader::{
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
 };
-use sui_package_resolver::Resolver;
 use task::{
     chain_identifier,
     watermark::{WatermarkTask, WatermarksLock},
@@ -324,15 +323,12 @@ pub async fn start_rpc(
         KvLoader::new_with_pg(pg_loader.clone())
     };
 
-    let package_resolver = Arc::new(Resolver::new_with_limits(
-        PackageCache::new(DbPackageStore::new(pg_loader.clone())),
-        config.limits.package_resolver(),
-    ));
+    let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
         pg_reader.clone(),
-        package_resolver.clone(),
+        package_store.clone(),
         cancel.child_token(),
     );
 
@@ -372,7 +368,7 @@ pub async fn start_rpc(
         .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
-        .data(package_resolver)
+        .data(package_store)
         .data(grpc_client);
 
     let h_rpc = rpc.run().await?;

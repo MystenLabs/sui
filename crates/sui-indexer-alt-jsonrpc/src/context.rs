@@ -8,7 +8,7 @@ use prometheus::Registry;
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
     kv_loader::KvLoader,
-    package_resolver::{DbPackageStore, PackageCache, PackageResolver},
+    package_resolver::{DbPackageStore, PackageCache},
     pg_reader::db::DbArgs,
     pg_reader::PgReader,
 };
@@ -35,7 +35,7 @@ pub(crate) struct Context {
 
     /// Access to the database for accessing information about types from their packages (again
     /// through the same connection pool as `reader`).
-    package_resolver: PackageResolver,
+    package_resolver: Arc<Resolver<Arc<PackageCache>>>,
 
     /// Access to the RPC's metrics.
     metrics: Arc<RpcMetrics>,
@@ -76,7 +76,7 @@ impl Context {
             KvLoader::new_with_pg(pg_loader.clone())
         };
 
-        let store = PackageCache::new(DbPackageStore::new(pg_loader.clone()));
+        let store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
         let package_resolver = Arc::new(Resolver::new_with_limits(
             store,
             config.package_resolver.clone(),
@@ -110,8 +110,8 @@ impl Context {
     }
 
     /// For querying type and function signature information.
-    pub(crate) fn package_resolver(&self) -> &PackageResolver {
-        &self.package_resolver
+    pub(crate) fn package_resolver(&self) -> &Resolver<Arc<PackageCache>> {
+        self.package_resolver.as_ref()
     }
 
     /// Access to the RPC metrics.
