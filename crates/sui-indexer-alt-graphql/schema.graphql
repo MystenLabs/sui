@@ -848,6 +848,16 @@ interface IAddressable {
 
 
 """
+Interface implemented by types that represent a Move object on-chain (A Move value whose type has `key`).
+"""
+interface IMoveObject {
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+}
+
+"""
 Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
 """
 interface IObject {
@@ -953,7 +963,7 @@ type MoveCallCommand {
 """
 A MoveObject is a kind of Object that reprsents data stored on-chain.
 """
-type MoveObject implements IAddressable & IObject {
+type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	The MoveObject's ID.
 	"""

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{connection::Connection, Context, Interface, Object};
 use sui_types::object::MoveObject as NativeMoveObject;
 use tokio::sync::OnceCell;
 
@@ -29,6 +29,24 @@ pub(crate) struct MoveObject {
     native: OnceCell<Option<Arc<NativeMoveObject>>>,
 }
 
+/// Interface implemented by types that represent a Move object on-chain (A Move value whose type has `key`).
+#[allow(clippy::duplicated_attributes)]
+#[derive(Interface)]
+#[graphql(
+    name = "IMoveObject",
+    field(
+        name = "move_object_bcs",
+        ty = "Result<Option<Base64>, RpcError<object::Error>>",
+        desc = "The Base64-encoded BCS serialize of this object, as a `MoveObject`."
+    )
+)]
+pub(crate) enum IMoveObject {
+    MoveObject(MoveObject),
+}
+
+/// Type to implement GraphQL fields that are shared by all MoveObjects.
+pub(crate) struct MoveObjectImpl<'o>(pub &'o MoveObject);
+
 /// A MoveObject is a kind of Object that reprsents data stored on-chain.
 #[Object]
 impl MoveObject {
@@ -52,12 +70,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        let Some(native) = self.native(ctx).await? else {
-            return Ok(None);
-        };
-
-        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MovePackage")?;
-        Ok(Some(Base64(bytes)))
+        MoveObjectImpl(self).move_object_bcs(ctx).await
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -188,5 +201,19 @@ impl MoveObject {
                 Ok(Some(Arc::new(native.clone())))
             })
             .await
+    }
+}
+
+impl MoveObjectImpl<'_> {
+    pub(crate) async fn move_object_bcs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+        let Some(native) = self.0.native(ctx).await? else {
+            return Ok(None);
+        };
+
+        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MoveObject")?;
+        Ok(Some(Base64(bytes)))
     }
 }
