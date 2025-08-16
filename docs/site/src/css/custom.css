@@ -321,6 +321,16 @@ div[role="tabpanel"] {
   @apply !bg-sui-blue-primary
 }
 
+/** code **/
+
+code { 
+  @apply p-1;
+}
+
+a code:not(:is(.table-of-contents a code)) { 
+  @apply bg-sui-blue-bright/10 text-sui-hero-dark dark:bg-sui-hero-dark dark:text-sui-blue-bright/90;
+}
+
 /** navbar search field **/
 
 .DocSearch-Button-Container {
