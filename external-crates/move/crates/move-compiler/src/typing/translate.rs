@@ -301,15 +301,19 @@ fn module<'env>(
         syntax_methods,
         use_funs,
         friends,
+        stdlib_definitions,
         structs: nstructs,
         enums: nenums,
         functions: nfunctions,
         constants: nconstants,
     } = mdef;
+
     context.current_module = Some(ident);
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter);
     context.add_use_funs_scope(use_funs);
+    context.add_stdlib_definitions(stdlib_definitions);
+
     process_module_attributes(&mut context, &attributes);
     let structs = Mutex::new(UniqueMap::new());
     let enums = Mutex::new(UniqueMap::new());
@@ -1331,6 +1335,32 @@ pub fn typing_error<T: ToString, F: FnOnce() -> T>(
             (loc, msg),
             (rloc, "Unable to infer the type. Recursive type found."),
         ),
+        IncompatibleConstraints((lhs_loc, lhs_kind), (rhs_loc, rhs_kind)) => {
+            let m1 = if from_subtype {
+                format!("Given a {} literal", lhs_kind)
+            } else {
+                format!(
+                    "Found a {} literal. It is not compatible with the other type.",
+                    lhs_kind
+                )
+            };
+            let m2 = if from_subtype {
+                format!("Expected a {} literal", rhs_kind)
+            } else {
+                format!(
+                    "Found a {} literal. It is not compatible with the other type.",
+                    rhs_kind
+                )
+            };
+            let mut diag = diag!(
+                TypeSafety::InvariantError,
+                (loc, msg),
+                (lhs_loc, m1),
+                (rhs_loc, m2)
+            );
+            diag.add_note("Inferred value types must be compatible");
+            diag
+        }
     }
 }
 
@@ -1628,6 +1658,10 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
             core::make_num_tvar(context, eloc),
             TE::Value(sp(vloc, Value_::InferredNum(v))),
+        ),
+        NE::Value(sp!(vloc, Value_::InferredString(v))) => (
+            core::make_string_tvar(context, eloc),
+            TE::Value(sp(vloc, Value_::InferredString(v))),
         ),
         NE::Value(sp!(vloc, v)) => (v.type_(vloc).unwrap(), TE::Value(sp(vloc, v))),
 
@@ -2179,24 +2213,24 @@ fn binop(
         }
 
         Sub | Add | Mul | Mod | Div => {
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             context.add_numeric_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             context.add_numeric_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
-            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             (operand_ty.clone(), operand_ty)
         }
 
         BitOr | BitAnd | Xor => {
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             context.add_bits_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
-            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             (operand_ty.clone(), operand_ty)
         }
 
         Shl | Shr => {
             let msg = || format!("Invalid argument to '{}'", &bop);
             let u8ty = Type_::u8(er.exp.loc);
-            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             subtype(context, er.exp.loc, msg, er.ty.clone(), u8ty);
+            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             (el.ty.clone(), el.ty.clone())
         }
 
@@ -2993,7 +3027,7 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
             ));
             context.error_type(loc)
         }
-        sp!(tloc, Var(i)) if !context.subst.is_num_var(&i) => {
+        sp!(tloc, Var(i)) if !context.subst.is_value_constrainted_var(&i) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),

@@ -25,7 +25,7 @@ error[E04005]: expected a single type
   ┌─ tests/move_check/typing/assign_wrong_arity.move:7:9
   │
 7 │         x = (0, 1, 2);
-  │         ^   --------- Expected a single type, but found expression list type: '(u64, u64, u64)'
+  │         ^   --------- Expected a single type, but found expression list type: '({integer}, {integer}, {integer})'
   │         │    
   │         Invalid type for local
 

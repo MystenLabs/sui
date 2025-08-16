@@ -2620,6 +2620,10 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
             context.add_diag(ice!((loc, "ICE not expanded to value")));
             HV::U64(0)
         }
+        EV::InferredString(_) => {
+            context.add_diag(ice!((loc, "ICE not expanded to value")));
+            HV::Vector(Box::new(H::BaseType_::u8(loc)), vec![])
+        }
         EV::Address(a) => HV::Address(a.into_addr_bytes()),
         EV::U8(u) => HV::U8(u),
         EV::U16(u) => HV::U16(u),
