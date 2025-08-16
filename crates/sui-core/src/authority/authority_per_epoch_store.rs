@@ -1118,9 +1118,7 @@ impl AuthorityPerEpochStore {
             };
 
         let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
-            Some(ConsensusTxStatusCache::new(
-                protocol_config.consensus_gc_depth(),
-            ))
+            Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()))
         } else {
             None
         };

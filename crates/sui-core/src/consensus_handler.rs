@@ -1824,11 +1824,17 @@ mod tests {
                     consensus_tx_status_cache.get_transaction_status(&position),
                     Some(ConsensusTxStatus::Rejected)
                 );
-            } else {
-                // Expect non-rejected transactions to be marked as fastpath certified.
+            } else if txn_idx % 2 == 0 {
+                // Expect owned object transactions to be marked as fastpath certified.
                 assert_eq!(
                     consensus_tx_status_cache.get_transaction_status(&position),
-                    Some(ConsensusTxStatus::FastpathCertified)
+                    Some(ConsensusTxStatus::FastpathCertified),
+                );
+            } else {
+                // Expect shared object transactions to be marked as fastpath certified.
+                assert_eq!(
+                    consensus_tx_status_cache.get_transaction_status(&position),
+                    None,
                 );
             }
         }

@@ -55,6 +55,8 @@ struct Inner {
     transaction_status: BTreeMap<ConsensusPosition, ConsensusTxStatus>,
     /// Consensus positions that are currently in the fastpath certified state.
     fastpath_certified: BTreeSet<ConsensusPosition>,
+    /// The last leader round updated in update_last_committed_leader_round().
+    last_committed_leader_round: Option<Round>,
 }
 
 impl ConsensusTxStatusCache {
@@ -189,12 +191,25 @@ impl ConsensusTxStatusCache {
         }
     }
 
-    pub async fn update_last_committed_leader_round(&self, leader_round: u32) {
-        debug!("Updating last committed leader round: {}", leader_round);
-        // Send update through watch channel.
-        let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
+    pub async fn update_last_committed_leader_round(&self, last_committed_leader_round: u32) {
+        debug!(
+            "Updating last committed leader round: {}",
+            last_committed_leader_round
+        );
 
         let mut inner = self.inner.write();
+
+        // Consensus only bumps GC round after generating a commit. So if we expire and GC transactions
+        // based on the latest committed leader round, we may expire transactions in the current commit, or
+        // make these transactions' statuses very short lived.
+        // So we only expire and GC transactions with the previous committed leader round.
+        let Some(leader_round) = inner
+            .last_committed_leader_round
+            .replace(last_committed_leader_round)
+        else {
+            // This is the first update. Do not expire or GC any transactions.
+            return;
+        };
 
         // Remove transactions that are expired.
         while let Some((position, _)) = inner.transaction_status.first_key_value() {
@@ -226,6 +241,9 @@ impl ConsensusTxStatusCache {
                 break;
             }
         }
+
+        // Send update through watch channel.
+        let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
     }
 
     pub fn get_last_committed_leader_round(&self) -> Option<u32> {
@@ -334,7 +352,13 @@ mod tests {
         // Set initial status
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
 
-        // Update last committed round to trigger expiration up to including round 2.
+        // Set initial leader round which doesn't GC anything.
+        cache
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
+            .await;
+
+        // Update with round that will trigger GC using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
+        // This will expire transactions up to and including round 1
         cache
             .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
             .await;
@@ -383,19 +407,55 @@ mod tests {
             cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
         }
 
-        // Update last committed round to expire early rounds up to including round 3.
+        // Set initial leader round which doesn't GC anything.
+        cache
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
+            .await;
+
+        // No rounds should be cleaned up yet since this was the initial update
+        {
+            let inner = cache.inner.read();
+            let rounds = inner
+                .transaction_status
+                .keys()
+                .map(|p| p.block.round)
+                .collect::<Vec<_>>();
+            assert_eq!(rounds, vec![1, 2, 3, 4, 5]);
+        }
+
+        // Update that triggers GC using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
+        // This will expire transactions up to and including round 2
         cache
             .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 3)
             .await;
 
-        // Verify early rounds are cleaned up
-        let inner = cache.inner.read();
-        let rounds = inner
-            .transaction_status
-            .keys()
-            .map(|p| p.block.round)
-            .collect::<Vec<_>>();
-        assert_eq!(rounds, vec![4, 5]);
+        // Verify rounds 1-2 are cleaned up, 3-5 remain
+        {
+            let inner = cache.inner.read();
+            let rounds = inner
+                .transaction_status
+                .keys()
+                .map(|p| p.block.round)
+                .collect::<Vec<_>>();
+            assert_eq!(rounds, vec![3, 4, 5]);
+        }
+
+        // Another update using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 3) for GC
+        // This will expire transactions up to and including round 3
+        cache
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 4)
+            .await;
+
+        // Verify rounds 1-3 are cleaned up, 4-5 remain
+        {
+            let inner = cache.inner.read();
+            let rounds = inner
+                .transaction_status
+                .keys()
+                .map(|p| p.block.round)
+                .collect::<Vec<_>>();
+            assert_eq!(rounds, vec![4, 5]);
+        }
     }
 
     #[tokio::test]
@@ -509,8 +569,10 @@ mod tests {
         );
 
         // Test GC of fastpath certified transactions
-        // tx_pos3 is at round 101, with gc_depth=60, it will be GC'd when leader round >= 161
-        // tx_pos4 is at round 102, with gc_depth=60, it will be GC'd when leader round >= 162
+        // tx_pos3 is at round 101, with gc_depth=60, it will be GC'd when prev leader round >= 161
+        // tx_pos4 is at round 102, with gc_depth=60, it will be GC'd when prev leader round >= 162
+
+        // Set initial leader round which doesn't GC anything.
         cache.update_last_committed_leader_round(160).await;
         assert_eq!(cache.get_num_fastpath_certified(), 2);
         assert_eq!(
@@ -522,8 +584,23 @@ mod tests {
             Some(ConsensusTxStatus::FastpathCertified)
         );
 
-        // GC tx_pos3 at round 161
+        // Update to 161: uses 160 for GC
+        // tx_pos3: 101 + 60 = 161, 161 <= 160 is false, so NOT GC'd yet
         cache.update_last_committed_leader_round(161).await;
+        assert_eq!(cache.get_num_fastpath_certified(), 2);
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos3),
+            Some(ConsensusTxStatus::FastpathCertified)
+        );
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos4),
+            Some(ConsensusTxStatus::FastpathCertified)
+        );
+
+        // Update to 162: uses 161 for GC
+        // tx_pos3: 101 + 60 = 161, 161 <= 161 is true, so GC'd
+        // tx_pos4: 102 + 60 = 162, 162 <= 161 is false, so NOT GC'd
+        cache.update_last_committed_leader_round(162).await;
         assert_eq!(cache.get_num_fastpath_certified(), 1);
         assert_eq!(
             cache.get_transaction_status(&tx_pos3),
@@ -534,8 +611,9 @@ mod tests {
             Some(ConsensusTxStatus::FastpathCertified)
         );
 
-        // GC tx_pos4 at round 162
-        cache.update_last_committed_leader_round(162).await;
+        // Update to 163: uses 162 for GC
+        // tx_pos4: 102 + 60 = 162, 162 <= 162 is true, so GC'd
+        cache.update_last_committed_leader_round(163).await;
         assert_eq!(cache.get_num_fastpath_certified(), 0);
         assert_eq!(
             cache.get_transaction_status(&tx_pos4),
