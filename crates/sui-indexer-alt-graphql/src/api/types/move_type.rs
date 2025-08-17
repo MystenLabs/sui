@@ -273,6 +273,15 @@ impl MoveType {
             scope,
         }))
     }
+
+    /// Construct a `MoveType` from a native `TypeTag`. Use this when surfacing a stored type i.e.
+    /// not user input.
+    pub(crate) fn from_native(tag: TypeTag, scope: Scope) -> Self {
+        Self {
+            native: tag.into(),
+            scope,
+        }
+    }
 }
 
 impl TryFrom<TypeInput> for MoveTypeSignature {
