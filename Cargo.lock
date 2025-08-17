@@ -14696,6 +14696,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "prometheus",
+ "prost-types",
  "serde",
  "serde_json",
  "sui-default-config",
