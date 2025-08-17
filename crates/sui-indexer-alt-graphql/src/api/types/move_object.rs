@@ -15,6 +15,8 @@ use crate::{
 
 use super::{
     address::AddressableImpl,
+    move_type::MoveType,
+    move_value::MoveValue,
     object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     transaction::Transaction,
@@ -34,6 +36,11 @@ pub(crate) struct MoveObject {
 #[derive(Interface)]
 #[graphql(
     name = "IMoveObject",
+    field(
+        name = "contents",
+        ty = "Result<Option<MoveValue>, RpcError<object::Error>>",
+        desc = "The structured representation of the object's contents."
+    ),
     field(
         name = "move_object_bcs",
         ty = "Result<Option<Base64>, RpcError<object::Error>>",
@@ -63,6 +70,14 @@ impl MoveObject {
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
     pub(crate) async fn digest(&self) -> String {
         ObjectImpl::from(&self.super_).digest()
+    }
+
+    /// The structured representation of the object's contents.
+    pub(crate) async fn contents(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
+        MoveObjectImpl(self).contents(ctx).await
     }
 
     /// The Base64-encoded BCS serialize of this object, as a `MoveObject`.
@@ -205,6 +220,22 @@ impl MoveObject {
 }
 
 impl MoveObjectImpl<'_> {
+    pub(crate) async fn contents(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
+        let Some(native) = self.0.native(ctx).await? else {
+            return Ok(None);
+        };
+
+        let type_ = MoveType::from_native(
+            native.type_().clone().into(),
+            self.0.super_.super_.scope.clone(),
+        );
+
+        Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
+    }
+
     pub(crate) async fn move_object_bcs(
         &self,
         ctx: &Context<'_>,

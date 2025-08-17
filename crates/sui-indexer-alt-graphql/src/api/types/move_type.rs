@@ -122,23 +122,9 @@ impl MoveType {
     /// Structured representation of the "shape" of values that match this type. May return no
     /// layout if the type is invalid.
     async fn layout(&self) -> Result<Option<MoveTypeLayout>, RpcError> {
-        let Ok(tag) = self.native.to_type_tag() else {
+        let Some(layout) = self.layout_impl().await? else {
             return Ok(None);
         };
-
-        let layout = self
-            .scope
-            .package_resolver()
-            .type_layout(tag)
-            .await
-            .map_err(|err| {
-                internal_resolution_error(err, || {
-                    format!(
-                        "Error calculating layout for {}",
-                        self.native.to_canonical_display(/* with_prefix */ true)
-                    )
-                })
-            })?;
 
         Ok(Some(MoveTypeLayout::try_from(layout)?))
     }
@@ -281,6 +267,29 @@ impl MoveType {
             native: tag.into(),
             scope,
         }
+    }
+
+    /// Get the annotated type layout for this type, if it is valid.
+    pub(crate) async fn layout_impl(&self) -> Result<Option<A::MoveTypeLayout>, RpcError> {
+        let Ok(tag) = self.native.to_type_tag() else {
+            return Ok(None);
+        };
+
+        let layout = self
+            .scope
+            .package_resolver()
+            .type_layout(tag)
+            .await
+            .map_err(|err| {
+                internal_resolution_error(err, || {
+                    format!(
+                        "Error calculating layout for {}",
+                        self.native.to_canonical_display(/* with_prefix */ true)
+                    )
+                })
+            })?;
+
+        Ok(Some(layout))
     }
 }
 

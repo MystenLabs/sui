@@ -6,6 +6,7 @@ pub(crate) mod big_int;
 pub(crate) mod cursor;
 pub(crate) mod date_time;
 pub(crate) mod digest;
+pub(crate) mod json;
 pub(crate) mod owner_kind;
 pub(crate) mod sui_address;
 pub(crate) mod type_filter;

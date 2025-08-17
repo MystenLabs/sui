@@ -70,6 +70,10 @@
       nodes {
         address
         version
+        contents {
+          type { repr }
+          json
+        }
       }
     }
   }
@@ -80,6 +84,10 @@
       nodes {
         address
         version
+        contents {
+          type { repr }
+          json
+        }
       }
     }
   }
@@ -90,6 +98,10 @@
       nodes {
         address
         version
+        contents {
+          type { repr }
+          json
+        }
       }
     }
   }
@@ -100,6 +112,10 @@
       nodes {
         address
         version
+        contents {
+          type { repr }
+          json
+        }
       }
     }
   }
@@ -110,6 +126,10 @@
       nodes {
         address
         version
+        contents {
+          type { repr }
+          json
+        }
       }
     }
   }
@@ -120,6 +140,10 @@
       nodes {
         address
         version
+        contents {
+          type { repr }
+          json
+        }
       }
     }
   }
@@ -135,6 +159,10 @@
           nodes {
             address
             version
+            contents {
+              type { repr }
+              json
+            }
           }
         }
       }

@@ -17,7 +17,7 @@ task 2, line 10:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 12-23:
+task 3, lines 12-27:
 //# run-graphql
 Response: {
   "data": {
@@ -25,13 +25,22 @@ Response: {
       "objectBcs": "AAEBAgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHpgalAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAJXmDaTN9/8Me8Ls9qOM7J6Xg4QCrKcwjLGSUh7RlNrGATDwAAAAAA",
       "asMoveObject": {
         "objectBcs": "AAEBAgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHpgalAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAJXmDaTN9/8Me8Ls9qOM7J6Xg4QCrKcwjLGSUh7RlNrGATDwAAAAAA",
-        "moveObjectBcs": "AQECAAAAAAAAACi/9elqSlwPc0glnHq/39mZQFwCuenA0NWexmmlOxBMemBqUDHZEAEA"
+        "moveObjectBcs": "AQECAAAAAAAAACi/9elqSlwPc0glnHq/39mZQFwCuenA0NWexmmlOxBMemBqUDHZEAEA",
+        "contents": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+          },
+          "json": {
+            "balance": "299999998012000",
+            "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+          }
+        }
       }
     }
   }
 }
 
-task 4, lines 25-32:
+task 4, lines 29-36:
 //# run-graphql
 Response: {
   "data": {

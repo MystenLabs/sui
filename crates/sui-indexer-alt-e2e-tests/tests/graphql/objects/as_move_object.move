@@ -18,6 +18,10 @@
     asMoveObject {
       objectBcs
       moveObjectBcs
+      contents {
+        type { repr }
+        json
+      }
     }
   }
 }

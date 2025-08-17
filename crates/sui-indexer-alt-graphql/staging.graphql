@@ -852,6 +852,10 @@ Interface implemented by types that represent a Move object on-chain (A Move val
 """
 interface IMoveObject {
 	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
 	moveObjectBcs: Base64
@@ -898,6 +902,11 @@ type Input {
 	ix: Int
 }
 
+
+"""
+Arbitrary JSON data.
+"""
+scalar JSON
 
 """
 Information used by a package to link to a specific version of its dependency.
@@ -998,6 +1007,10 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
@@ -1229,6 +1242,31 @@ type MoveTypeSignature =
     }
 """
 scalar MoveTypeSignature
+
+type MoveValue {
+	"""
+	The BCS representation of this value, Base64-encoded.
+	"""
+	bcs: Base64
+	"""
+	Representation of a Move value in JSON, where:
+	
+	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Balances, Strings, and Urls are represented as JSON strings.
+	- Vectors of bytes are represented as Base64 blobs, and other vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Enums are represented by JSON objects, with a field named `@variant` containing the variant name.
+	- Empty optional values are represented by `null`.
+	"""
+	json: JSON
+	"""
+	The value's type.
+	"""
+	type: MoveType
+}
 
 """
 A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
@@ -1961,6 +1999,10 @@ type ServiceConfig {
 	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
 	"""
 	maxMoveValueDepth: Int
+	"""
+	Maximum budget in bytes to spend when outputting a structured `MoveValue`.
+	"""
+	maxMoveValueBound: Int
 }
 
 """
