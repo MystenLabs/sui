@@ -12,6 +12,8 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 use sui_macros::EnumVariantOrder;
 
+use crate::base_types::MoveObjectType;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 pub struct StructInput {
     pub address: AccountAddress,
@@ -239,6 +241,12 @@ impl StructInput {
             data: self,
             with_prefix,
         }
+    }
+}
+
+impl From<MoveObjectType> for TypeInput {
+    fn from(obj: MoveObjectType) -> Self {
+        Self::from(TypeTag::from(obj))
     }
 }
 

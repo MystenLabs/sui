@@ -17,6 +17,7 @@ pub(crate) mod code {
     pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
+    pub const RESOURCE_EXHAUSTED: &str = "RESOURCE_EXHAUSTED";
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -40,6 +41,9 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
 
     /// The request took too long to process.
     RequestTimeout { kind: &'static str, limit: Duration },
+
+    /// Expended some limit, such as node count, depth, etc, during query execution.
+    ResourceExhausted(Arc<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
@@ -88,6 +92,10 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                     },
                 )
             }
+
+            RpcError::ResourceExhausted(err) => err.to_string().extend_with(|_, ext| {
+                ext.set("code", code::RESOURCE_EXHAUSTED);
+            }),
         }
     }
 }
@@ -146,6 +154,15 @@ pub(crate) fn feature_unavailable<E: std::error::Error>(what: &'static str) -> R
 /// message.
 pub(crate) fn request_timeout(kind: &'static str, limit: Duration) -> RpcError {
     RpcError::RequestTimeout { kind, limit }
+}
+
+/// Signal some resource has been consumed during query execution.
+pub(crate) fn resource_exhausted<R, E>(err: R) -> RpcError<E>
+where
+    R: std::error::Error + Send + Sync + 'static,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    RpcError::ResourceExhausted(Arc::new(err))
 }
 
 /// Add a code to the error, if one does not exist already in the error extensions.
