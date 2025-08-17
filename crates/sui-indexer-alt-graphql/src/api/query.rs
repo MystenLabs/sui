@@ -12,13 +12,13 @@ use crate::{
 };
 
 use super::{
-    scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
+    scalars::{digest::Digest, sui_address::SuiAddress, type_filter::TypeInput, uint53::UInt53},
     types::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         epoch::Epoch,
-        move_package::PackageCheckpointFilter,
-        move_package::{self, MovePackage, PackageKey},
+        move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
+        move_type::{self, MoveType},
         object::{self, Object, ObjectKey, VersionFilter},
         object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
@@ -190,6 +190,23 @@ impl Query {
             .map(|d| TransactionEffects::fetch(ctx, scope.clone(), d));
 
         try_join_all(effects).await
+    }
+
+    /// Fetch types by their string representations.
+    ///
+    /// Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+    ///
+    /// Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
+    async fn multi_get_types(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Vec<Option<MoveType>>, RpcError<move_type::Error>> {
+        let types = keys
+            .into_iter()
+            .map(|t| async move { MoveType::canonicalize(t.into(), self.scope(ctx)?).await });
+
+        try_join_all(types).await
     }
 
     /// Fetch an object by its address.
@@ -424,6 +441,19 @@ impl Query {
         let filter = filter.unwrap_or_default();
 
         Transaction::paginate(ctx, scope, page, filter).await
+    }
+
+    /// Fetch a structured representation of a concrete type, including its layout information.
+    ///
+    /// Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+    ///
+    /// Fails if the type is malformed, returns `null` if a type mentioned does not exist.
+    async fn type_(
+        &self,
+        ctx: &Context<'_>,
+        type_: TypeInput,
+    ) -> Result<Option<MoveType>, RpcError<move_type::Error>> {
+        MoveType::canonicalize(type_.into(), self.scope(ctx)?).await
     }
 }
 

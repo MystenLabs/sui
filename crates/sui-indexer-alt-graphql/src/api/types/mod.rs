@@ -13,6 +13,7 @@ pub(crate) mod gas_input;
 mod linkage;
 pub(crate) mod move_object;
 pub(crate) mod move_package;
+pub(crate) mod move_type;
 pub(crate) mod object;
 pub(crate) mod object_change;
 pub(crate) mod object_filter;

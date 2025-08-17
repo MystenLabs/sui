@@ -941,6 +941,28 @@ type MergeCoinsCommand {
 	coins: [TransactionArgument!]!
 }
 
+"""
+Abilities are keywords in Sui Move that define how types behave at the compiler level.
+"""
+enum MoveAbility {
+	"""
+	Enables values to be copied.
+	"""
+	COPY
+	"""
+	Enables values to be popped/dropped.
+	"""
+	DROP
+	"""
+	Enables values to be held directly in global storage.
+	"""
+	KEY
+	"""
+	Enables values to be held inside a struct in global storage.
+	"""
+	STORE
+}
+
 type MoveCallCommand {
 	"""
 	The storage ID of the package the function being called is defined in.
@@ -1140,6 +1162,73 @@ type MovePackageEdge {
 	"""
 	cursor: String!
 }
+
+"""
+Represents concrete types (no type parameters, no references).
+"""
+type MoveType {
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
+	repr: String!
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: MoveTypeSignature!
+	"""
+	Structured representation of the "shape" of values that match this type. May return no
+	layout if the type is invalid.
+	"""
+	layout: MoveTypeLayout
+	"""
+	The abilities this concrete type has. Returns no abilities if the type is invalid.
+	"""
+	abilities: [MoveAbility!]
+}
+
+"""
+The shape of a concrete Move Type (a type with all its type parameters instantiated with concrete types), corresponding to the following recursive type:
+
+type MoveTypeLayout =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeLayout }
+  | {
+      struct: {
+        type: string,
+        fields: [{ name: string, layout: MoveTypeLayout }],
+      }
+    }
+  | { enum: [{
+          type: string,
+          variants: [{
+              name: string,
+              fields: [{ name: string, layout: MoveTypeLayout }],
+          }]
+      }]
+  }
+"""
+scalar MoveTypeLayout
+
+"""
+The signature of a concrete Move Type (a type with all its type parameters instantiated with concrete types, that contains no references), corresponding to the following recursive type:
+
+type MoveTypeSignature =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeSignature }
+  | {
+      datatype: {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [MoveTypeSignature],
+      }
+    }
+"""
+scalar MoveTypeSignature
 
 """
 A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
@@ -1611,6 +1700,14 @@ type Query {
 	"""
 	multiGetTransactionEffects(keys: [String!]!): [TransactionEffects]!
 	"""
+	Fetch types by their string representations.
+	
+	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+	
+	Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
+	"""
+	multiGetTypes(keys: [String!]!): [MoveType]!
+	"""
 	Fetch an object by its address.
 	
 	If `version` is specified, the object will be fetched at that exact version.
@@ -1690,6 +1787,14 @@ type Query {
 	The transactions that exist in the network, optionally filtered by transaction filters.
 	"""
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+	"""
+	Fetch a structured representation of a concrete type, including its layout information.
+	
+	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+	
+	Fails if the type is malformed, returns `null` if a type mentioned does not exist.
+	"""
+	type(type: String!): MoveType
 }
 
 """
