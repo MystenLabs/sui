@@ -21,10 +21,6 @@ fn call<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "call.move");
 }
 
-fn call_2<M: Measurement + 'static>(c: &mut Criterion<M>) {
-    bench(c, "call_2.move");
-}
-
 fn natives<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "natives.move");
 }
@@ -44,7 +40,6 @@ criterion_group!(
         arith,
         basic_alloc,
         call,
-        call_2,
         natives,
         transfers,
         vector,
