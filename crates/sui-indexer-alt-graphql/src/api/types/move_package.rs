@@ -142,7 +142,7 @@ impl MovePackage {
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
     /// name, followed by module bytes), in alphabetic order by module name.
     async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(self.contents.serialized_module_map())?;
+        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
         Ok(Some(bytes.into()))
     }
 
@@ -305,7 +305,7 @@ impl MovePackage {
     /// The transitive dependencies of this package.
     async fn linkage(&self) -> Option<Vec<Linkage>> {
         let linkage = self
-            .contents
+            .native
             .linkage_table()
             .iter()
             .map(|(object_id, upgrade_info)| Linkage {
