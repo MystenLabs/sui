@@ -13,10 +13,6 @@ fn arith<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "arith.move");
 }
 
-fn arith_2<M: Measurement + 'static>(c: &mut Criterion<M>) {
-    bench(c, "arith_2.move");
-}
-
 fn basic_alloc<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "basic_alloc.move");
 }
@@ -46,7 +42,6 @@ criterion_group!(
     config = wall_time_measurement();
     targets =
         arith,
-        arith_2,
         basic_alloc,
         call,
         call_2,
