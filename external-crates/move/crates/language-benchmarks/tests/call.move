@@ -1,9 +1,23 @@
 module 0x1::bench {
+    const COUNT: u64 = 10_000u64;
+
     //
     // Global helpers
     //
     fun check(check: bool, code: u64) {
         if (check) () else abort code
+    }
+
+    fun empty_function(): u64 {
+        1
+    }
+
+    public fun bench_call_empty_function(): u64 {
+        let mut i = 0;
+        while (i < COUNT) {
+            i = i + empty_function();
+        };
+        i
     }
 
     public fun bench_call() {
