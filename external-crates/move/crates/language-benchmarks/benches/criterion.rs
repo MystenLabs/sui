@@ -17,8 +17,16 @@ fn basic_alloc<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "basic_alloc.move");
 }
 
+fn branch<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "branch.move");
+}
+
 fn call<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "call.move");
+}
+
+fn loops<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "loop.move");
 }
 
 fn natives<M: Measurement + 'static>(c: &mut Criterion<M>) {
@@ -39,7 +47,9 @@ criterion_group!(
     targets =
         arith,
         basic_alloc,
+        branch,
         call,
+        loops,
         natives,
         transfers,
         vector,
