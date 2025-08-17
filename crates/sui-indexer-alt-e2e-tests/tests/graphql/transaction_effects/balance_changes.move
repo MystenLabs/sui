@@ -29,7 +29,7 @@
         owner {
           address
         }
-        coinType
+        coinType { repr }
         amount
       }
     }
@@ -48,7 +48,7 @@
         owner {
             address
         }
-        coinType
+        coinType { repr }
         amount
       }
     }
@@ -69,7 +69,7 @@
           owner {
             address
           }
-          coinType
+          coinType { repr }
           amount
         }
       }
