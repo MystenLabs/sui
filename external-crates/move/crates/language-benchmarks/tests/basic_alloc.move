@@ -15,7 +15,7 @@ module 0x1::bench {
         alloc
     }
 
-    public fun bench() {
+    public fun bench_alloc_struct() {
 	    let LargeStruct { a: _, b: _, c: _, d: _, e: _, f: _, g: _, h: i } = bench_inner();
         let _i = i;
     }
