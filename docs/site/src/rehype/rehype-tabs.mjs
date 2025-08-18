@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+// 
 // This is a rehype plugin that finds <tabs> / <tabitem> in the AST (from Markdown or MDX) and rewrites
 // them into the exact DOM that Docusaurus’ native Tabs component renders. 
 // That way, tabs authored in plain .md look and behave like real <Tabs>.

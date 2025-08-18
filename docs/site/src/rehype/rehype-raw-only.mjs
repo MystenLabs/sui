@@ -1,4 +1,7 @@
-// THis rehype plugin runs rehype-raw on MD/MDX files so raw HTML inside them gets parsed 
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+// 
+// This rehype plugin runs rehype-raw on MD/MDX files so raw HTML inside them gets parsed 
 // and merged into the HAST (the HTML AST). 
 // It also tells rehype-raw to ignore MDX nodes so it doesn’t try to compile them.
 

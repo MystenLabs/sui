@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+//
 // Replaces the @docusaurus-plugin-includes feature, which is not compatible with Docusaurus 3.8
 // Expands {@include: path} and {@inject: path[#selector] [options...]} BEFORE the default remark plugins,
 // so admonitions/tables/etc. still parse.
