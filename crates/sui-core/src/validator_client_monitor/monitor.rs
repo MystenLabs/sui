@@ -248,22 +248,25 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         // Since the cached scores are updated periodically, it is possible that it was ran on
         // an out-of-date committee.
 
-        let validator_with_scores: Vec<_> = committee
+        let mut validator_with_scores: Vec<_> = committee
             .names()
             .map(|v| (*v, cached_scores.get(v).copied().unwrap_or(0.0)))
             .collect();
 
+        // Sort validators by scores in descending order
+        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
         let k = k.min(validator_with_scores.len());
 
-        // Use choose_multiple_weighted to select k validators based on their scores
+        // Take the top k highest scoring validators and apply weighted selection on them
         let selected_validators: Vec<AuthorityName> = if k > 0 {
-            validator_with_scores
+            let top_k_validators: Vec<_> = validator_with_scores.iter().take(k).copied().collect();
+            top_k_validators
                 .choose_multiple_weighted(&mut rng, k, |(_, score)| score.max(0.01)) // Ensure minimum weight
                 .map(|result| result.map(|(v, _)| *v).collect())
                 .unwrap_or_else(|_| {
                     // Fallback to shuffled selection if weighted selection fails
-                    let mut validators: Vec<_> =
-                        validator_with_scores.iter().map(|(v, _)| *v).collect();
+                    let mut validators: Vec<_> = top_k_validators.iter().map(|(v, _)| *v).collect();
                     validators.shuffle(&mut rng);
                     validators.into_iter().take(k).collect()
                 })
