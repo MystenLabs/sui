@@ -9,5 +9,5 @@ pub struct TransactionExecutionInput {
     /// BCS-encoded transaction bytes (Base64).
     ///
     /// This is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
-    pub tx_bytes: String,
+    pub transaction_data_bcs: String,
 }

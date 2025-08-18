@@ -1833,7 +1833,7 @@ input TransactionExecutionInput {
 	
 	This is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
 	"""
-	txBytes: String!
+	transactionDataBcs: String!
 }
 
 input TransactionFilter {
