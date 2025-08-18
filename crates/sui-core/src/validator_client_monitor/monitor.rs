@@ -218,19 +218,19 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         client_stats.record_interaction_result(feedback, &self.metrics);
     }
 
-    /// Select validators based on client-observed performance with shuffled top k.
+    /// Select validators based on client-observed performance using weighted selection.
     ///
     /// We need to pass the current committee here because it is possible
     /// that the fullnode is in the middle of a committee change when this
     /// is called, and we need to maintain an invariant that the selected
     /// validators are always in the committee passed in.
     ///
-    /// We shuffle the top k validators to avoid the same validator being selected
-    /// too many times in a row and getting overloaded.
+    /// Uses weighted selection based on validator scores to probabilistically
+    /// select the first k validators, then returns remaining validators ordered by score.
     ///
     /// Returns a vector containing:
-    /// 1. The top `k` validators by score (shuffled)
-    /// 2. The remaining validators ordered by score (not shuffled)
+    /// 1. The first `k` validators selected using weighted sampling based on scores
+    /// 2. The remaining validators ordered by score (highest to lowest)
     pub fn select_shuffled_preferred_validators(
         &self,
         committee: &Committee,
@@ -247,16 +247,43 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
         // Since the cached scores are updated periodically, it is possible that it was ran on
         // an out-of-date committee.
-        let mut validator_with_scores: Vec<_> = committee
+
+        let validator_with_scores: Vec<_> = committee
             .names()
             .map(|v| (*v, cached_scores.get(v).copied().unwrap_or(0.0)))
             .collect();
-        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
         let k = k.min(validator_with_scores.len());
-        validator_with_scores[..k].shuffle(&mut rng);
 
-        validator_with_scores.into_iter().map(|(v, _)| v).collect()
+        // Use choose_multiple_weighted to select k validators based on their scores
+        let selected_validators: Vec<AuthorityName> = if k > 0 {
+            validator_with_scores
+                .choose_multiple_weighted(&mut rng, k, |(_, score)| score.max(0.01)) // Ensure minimum weight
+                .map(|result| result.map(|(v, _)| *v).collect())
+                .unwrap_or_else(|_| {
+                    // Fallback to shuffled selection if weighted selection fails
+                    let mut validators: Vec<_> =
+                        validator_with_scores.iter().map(|(v, _)| *v).collect();
+                    validators.shuffle(&mut rng);
+                    validators.into_iter().take(k).collect()
+                })
+        } else {
+            Vec::new()
+        };
+
+        // Get remaining validators sorted by score (excluding already selected ones)
+        let selected_set: std::collections::HashSet<_> =
+            selected_validators.iter().cloned().collect();
+        let mut remaining_validators: Vec<_> = validator_with_scores
+            .into_iter()
+            .filter(|(v, _)| !selected_set.contains(v))
+            .collect();
+        remaining_validators.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        // Combine selected validators with remaining sorted validators
+        let mut result = selected_validators;
+        result.extend(remaining_validators.into_iter().map(|(v, _)| v));
+        result
     }
 
     #[cfg(test)]
