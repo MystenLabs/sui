@@ -318,7 +318,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
+union Command = MakeMoveVecCommand | MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -842,6 +842,16 @@ type Input {
 	ix: Int
 }
 
+
+"""
+Create a vector (can be empty).
+"""
+type MakeMoveVecCommand {
+	"""
+	The values to pack into the vector, all of the same type.
+	"""
+	elements: [TransactionArgument!]
+}
 
 """
 Merges `coins` into the first `coin` (produces no results).
