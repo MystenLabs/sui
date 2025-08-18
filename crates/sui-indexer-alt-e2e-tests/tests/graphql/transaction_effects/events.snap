@@ -6,25 +6,25 @@ processed 11 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-35:
+task 1, lines 6-36:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 5791200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6368800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 36-38:
+task 2, lines 37-39:
 //# run test::events_test::emit_event --sender A --args 42
 events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 39-41:
+task 3, lines 40-42:
 //# run test::events_test::emit_multiple_events --sender A
 events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 42-44:
+task 4, lines 43-45:
 //# programmable --sender A --inputs 100 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -32,11 +32,11 @@ created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, line 46:
+task 5, line 47:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 48-69:
+task 6, lines 49-74:
 //# run-graphql
 Response: {
   "data": {
@@ -53,9 +53,18 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "edM4dqCRDBjUHGiAu4szEwUBOC1V1mKE2m5fjiGoJY8LZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHnnTOHagkQwY1BxogLuLMxMFATgtVdZihNpuX44hqCWPC2V2ZW50c190ZXN0CVRlc3RFdmVudAAeFUhlbGxvIGZyb20gdGVzdCBldmVudCoAAAAAAAAA",
+            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAeFUhlbGxvIGZyb20gdGVzdCBldmVudCoAAAAAAAAA",
+            "contents": {
+              "type": {
+                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+              },
+              "json": {
+                "message": "Hello from test event",
+                "value": "42"
+              }
+            },
             "transaction": {
-              "digest": "EBQvwCcAgXNESe6T4uzbcJjXvcRZMdqcQDab5u87vY4o"
+              "digest": "3QXGQcUWzKsiqfcdrZwMXp6jFZDErSc59PyvJ7osufCf"
             }
           }
         ]
@@ -64,7 +73,7 @@ Response: {
   }
 }
 
-task 7, lines 71-92:
+task 7, lines 76-101:
 //# run-graphql
 Response: {
   "data": {
@@ -81,9 +90,18 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "edM4dqCRDBjUHGiAu4szEwUBOC1V1mKE2m5fjiGoJY8LZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHnnTOHagkQwY1BxogLuLMxMFATgtVdZihNpuX44hqCWPC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "contents": {
+              "type": {
+                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+              },
+              "json": {
+                "message": "First event",
+                "value": "1"
+              }
+            },
             "transaction": {
-              "digest": "2XgXXUkgPn7j8RtqDKeNm6782kHHwbqJ7az6o92sVSg4"
+              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
             }
           },
           {
@@ -92,9 +110,18 @@ Response: {
             },
             "sequenceNumber": 1,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "edM4dqCRDBjUHGiAu4szEwUBOC1V1mKE2m5fjiGoJY8LZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHnnTOHagkQwY1BxogLuLMxMFATgtVdZihNpuX44hqCWPC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "contents": {
+              "type": {
+                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+              },
+              "json": {
+                "message": "Second event",
+                "value": "2"
+              }
+            },
             "transaction": {
-              "digest": "2XgXXUkgPn7j8RtqDKeNm6782kHHwbqJ7az6o92sVSg4"
+              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
             }
           }
         ]
@@ -103,7 +130,7 @@ Response: {
   }
 }
 
-task 8, lines 94-115:
+task 8, lines 103-128:
 //# run-graphql
 Response: {
   "data": {
@@ -120,9 +147,18 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "edM4dqCRDBjUHGiAu4szEwUBOC1V1mKE2m5fjiGoJY8LZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHnnTOHagkQwY1BxogLuLMxMFATgtVdZihNpuX44hqCWPC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "contents": {
+              "type": {
+                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+              },
+              "json": {
+                "message": "First event",
+                "value": "1"
+              }
+            },
             "transaction": {
-              "digest": "2XgXXUkgPn7j8RtqDKeNm6782kHHwbqJ7az6o92sVSg4"
+              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
             }
           }
         ]
@@ -131,7 +167,7 @@ Response: {
   }
 }
 
-task 9, lines 117-138:
+task 9, lines 130-155:
 //# run-graphql
 Response: {
   "data": {
@@ -148,9 +184,18 @@ Response: {
             },
             "sequenceNumber": 1,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "edM4dqCRDBjUHGiAu4szEwUBOC1V1mKE2m5fjiGoJY8LZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHnnTOHagkQwY1BxogLuLMxMFATgtVdZihNpuX44hqCWPC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "contents": {
+              "type": {
+                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+              },
+              "json": {
+                "message": "Second event",
+                "value": "2"
+              }
+            },
             "transaction": {
-              "digest": "2XgXXUkgPn7j8RtqDKeNm6782kHHwbqJ7az6o92sVSg4"
+              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
             }
           }
         ]
@@ -159,7 +204,7 @@ Response: {
   }
 }
 
-task 10, lines 140-161:
+task 10, lines 157-182:
 //# run-graphql
 Response: {
   "data": {

@@ -643,6 +643,10 @@ type Epoch {
 
 type Event {
 	"""
+	The Move value emitted for this event.
+	"""
+	contents: MoveValue
+	"""
 	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
 	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
 	"""

@@ -5,28 +5,29 @@
 
 //# publish
 module test::events_test {
+    use std::ascii;
     use sui::event;
 
     public struct TestEvent has copy, drop {
-        message: vector<u8>,
+        message: ascii::String,
         value: u64,
     }
 
     public entry fun emit_event(value: u64) {
         event::emit(TestEvent {
-            message: b"Hello from test event",
+            message: ascii::string(b"Hello from test event"),
             value,
         });
     }
 
     public entry fun emit_multiple_events() {
         event::emit(TestEvent {
-            message: b"First event",
+            message: ascii::string(b"First event"),
             value: 1,
         });
 
         event::emit(TestEvent {
-            message: b"Second event",
+            message: ascii::string(b"Second event"),
             value: 2,
         });
     }
@@ -60,6 +61,10 @@ module test::events_test {
         sequenceNumber
         timestamp
         eventBcs
+        contents {
+          type { repr }
+          json
+        }
         transaction {
           digest
         }
@@ -83,6 +88,10 @@ module test::events_test {
         sequenceNumber
         timestamp
         eventBcs
+        contents {
+          type { repr }
+          json
+        }
         transaction {
           digest
         }
@@ -106,6 +115,10 @@ module test::events_test {
         sequenceNumber
         timestamp
         eventBcs
+        contents {
+          type { repr }
+          json
+        }
         transaction {
           digest
         }
@@ -129,6 +142,10 @@ module test::events_test {
         sequenceNumber
         timestamp
         eventBcs
+        contents {
+          type { repr }
+          json
+        }
         transaction {
           digest
         }
@@ -152,6 +169,10 @@ module test::events_test {
         sequenceNumber
         timestamp
         eventBcs
+        contents {
+          type { repr }
+          json
+        }
         transaction {
           digest
         }
