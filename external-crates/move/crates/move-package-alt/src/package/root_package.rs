@@ -158,14 +158,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies). This includes the non-duplicate addresses only.
-    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<'_, F>>> {
         self.graph.packages()
     }
 
     /// Return the linkage table for the root package. This contains an entry for each package that
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
-    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<'_, F>>> {
         todo!()
     }
 
