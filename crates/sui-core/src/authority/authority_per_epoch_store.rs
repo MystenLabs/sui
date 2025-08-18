@@ -367,6 +367,9 @@ pub struct AuthorityPerEpochStore {
     /// Used to notify all epoch specific tasks that user certs are closed.
     user_certs_closed_notify: NotifyOnce,
 
+    // Sent EndOfPublish message in this epoch
+    end_of_publish_sent: RwLock<bool>,
+
     /// This lock acts as a barrier for tasks that should not be executed in parallel with reconfiguration
     /// See comments in AuthorityPerEpochStore::epoch_terminated() on how this is used
     /// Crash recovery note: we write next epoch in the database first, and then use this lock to
@@ -1144,6 +1147,7 @@ impl AuthorityPerEpochStore {
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_notify,
             user_certs_closed_notify: NotifyOnce::new(),
+            end_of_publish_sent: RwLock::new(false),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
             executed_transactions_to_checkpoint_notify_read: NotifyRead::new(),
@@ -4560,6 +4564,34 @@ impl AuthorityPerEpochStore {
         shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &transaction);
 
         Ok(ConsensusCertificateResult::SuiTransaction(transaction))
+    }
+
+    /// If reconfig state is RejectUserCerts, and we just drained the list we need to
+    /// send EndOfPublish to signal other validators that we are not submitting more certificates to the epoch.
+    pub(crate) fn should_send_end_of_publish(&self) -> bool {
+        let reconfig_state = self.get_reconfig_state_read_lock_guard();
+        if !reconfig_state.is_reject_user_certs() {
+            // Still accepting user transactions, or already received 2f+1 EOP messages.
+            // Either way we don't need to send EOP.
+            return false;
+        }
+        let should_send = self.pending_consensus_certificates_empty()
+            && self
+                .consensus_tx_status_cache
+                .as_ref()
+                .is_none_or(|c| c.get_num_fastpath_certified() == 0);
+        if !should_send {
+            // Cannot send EOP before finalizing remaining transactions.
+            return false;
+        }
+        let mut end_of_publish_sent = self.end_of_publish_sent.write();
+        if *end_of_publish_sent {
+            // EndOfPublish message has been sent in this epoch.
+            return false;
+        }
+        // Send EOP message.
+        *end_of_publish_sent = true;
+        true
     }
 
     pub(crate) fn write_pending_checkpoint(

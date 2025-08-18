@@ -250,8 +250,7 @@ impl ConsensusTxStatusCache {
         *self.last_committed_leader_round_rx.borrow()
     }
 
-    #[cfg(test)]
-    pub fn get_num_fastpath_certified(&self) -> usize {
+    pub(crate) fn get_num_fastpath_certified(&self) -> usize {
         self.inner.read().fastpath_certified.len()
     }
 
