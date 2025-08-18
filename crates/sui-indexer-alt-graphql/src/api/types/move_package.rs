@@ -302,6 +302,13 @@ impl MovePackage {
 
         Some(type_origins)
     }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let bytes = bcs::to_bytes(self.contents.serialized_module_map())?;
+        Ok(Some(bytes.into()))
+    }
 }
 
 impl MovePackage {

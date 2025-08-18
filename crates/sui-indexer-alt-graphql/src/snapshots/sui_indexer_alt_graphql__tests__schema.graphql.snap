@@ -972,6 +972,11 @@ type MovePackage implements IAddressable & IObject {
 	A table identifying which versions of a package introduced each of its types.
 	"""
 	typeOrigins: [TypeOrigin!]
+	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+	name, followed by module bytes), in alphabetic order by module name.
+	"""
+	moduleBcs: Base64
 }
 
 type MovePackageConnection {
