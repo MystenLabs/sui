@@ -214,6 +214,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) certifier_output_blocks: IntCounterVec,
     pub(crate) certifier_rejected_transactions: IntCounterVec,
     pub(crate) certifier_accepted_transactions: IntCounterVec,
+    pub(crate) certifier_block_rounds: HistogramVec,
     pub(crate) finalizer_buffered_commits: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
@@ -512,6 +513,12 @@ impl NodeMetrics {
             certifier_accepted_transactions: register_int_counter_vec_with_registry!(
                 "certifier_accepted_transactions",
                 "Number of transactions accepted by authority in transaction certifier",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            certifier_block_rounds: register_histogram_vec_with_registry!(
+                "certifier_block_rounds",
+                "The number of rounds that it took for a block to be certified by the transaction certifier",
                 &["authority"],
                 registry,
             ).unwrap(),
