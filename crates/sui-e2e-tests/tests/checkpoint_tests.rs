@@ -176,3 +176,50 @@ async fn test_checkpoint_timestamps_non_decreasing() {
 
     assert!(checkpoints_checked > 0, "Test created only 1 checkpoint",);
 }
+
+#[sim_test]
+async fn test_checkpoint_fork_detection_storage() {
+    use sui_types::messages_checkpoint::CheckpointDigest;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
+
+    // Get the first validator for testing
+    let validator_handle = test_cluster
+        .swarm
+        .validator_node_handles()
+        .into_iter()
+        .next()
+        .expect("No validator found");
+
+    // Test 1: Basic fork detection storage functionality
+    validator_handle.with(|node| {
+        let checkpoint_store = node.state().checkpoint_store.clone();
+        let fork_seq = 42;
+        let fork_digest = CheckpointDigest::random();
+
+        assert!(checkpoint_store
+            .get_checkpoint_fork_detected()
+            .unwrap()
+            .is_none());
+
+        checkpoint_store
+            .record_checkpoint_fork_detected(fork_seq, fork_digest)
+            .expect("Failed to record checkpoint fork");
+
+        let retrieved = checkpoint_store.get_checkpoint_fork_detected().unwrap();
+        assert!(retrieved.is_some());
+        let (retrieved_seq, retrieved_digest) = retrieved.unwrap();
+        assert_eq!(retrieved_seq, fork_seq);
+        assert_eq!(retrieved_digest, fork_digest);
+
+        checkpoint_store.clear_checkpoint_fork_detected().unwrap();
+        let retrieved_after_clear = checkpoint_store.get_checkpoint_fork_detected().unwrap();
+        assert!(
+            retrieved_after_clear.is_none(),
+            "Fork state should be cleared"
+        );
+    });
+}

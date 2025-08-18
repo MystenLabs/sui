@@ -136,6 +136,7 @@ where
                     // writes by combining rows, but we will limit the number of checkpoints we try
                     // and batch together as a way to impose some limit on the size of the batch
                     // (and therefore the length of the write transaction).
+                    // docs::#batch  (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
                         if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                             break;
@@ -172,6 +173,7 @@ where
                             }
                         }
                     }
+                    // docs::/#batch
 
                     let elapsed = guard.stop_and_record();
                     debug!(
@@ -315,10 +317,12 @@ where
                         .with_label_values(&[H::NAME])
                         .set(watermark.timestamp_ms_hi_inclusive as i64);
 
+                    // docs::#send (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
                     let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive));
+                    // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
                     pending_rows -= batch_rows;

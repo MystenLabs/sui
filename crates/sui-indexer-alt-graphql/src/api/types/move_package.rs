@@ -8,6 +8,7 @@ use super::{
     object::{self, CVersion, Object, ObjectImpl, VersionFilter},
     transaction::Transaction,
 };
+use crate::api::types::linkage::Linkage;
 use crate::api::types::type_origin::TypeOrigin;
 use crate::{
     api::scalars::{
@@ -70,7 +71,7 @@ pub(crate) struct PackageKey {
 
 /// Filter for paginating packages published within a range of checkpoints.
 #[derive(InputObject, Default, Debug)]
-pub(crate) struct CheckpointFilter {
+pub(crate) struct PackageCheckpointFilter {
     /// Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
     pub(crate) after_checkpoint: Option<UInt53>,
 
@@ -273,6 +274,21 @@ impl MovePackage {
         ObjectImpl::from(&self.super_)
             .previous_transaction(ctx)
             .await
+    }
+
+    /// The transitive dependencies of this package.
+    async fn linkage(&self) -> Option<Vec<Linkage>> {
+        let linkage = self
+            .contents
+            .linkage_table()
+            .iter()
+            .map(|(object_id, upgrade_info)| Linkage {
+                object_id,
+                upgrade_info,
+            })
+            .collect();
+
+        Some(linkage)
     }
 
     /// A table identifying which versions of a package introduced each of its types.
@@ -523,7 +539,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CPackage>,
-        filter: CheckpointFilter,
+        filter: PackageCheckpointFilter,
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 

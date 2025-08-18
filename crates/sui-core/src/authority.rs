@@ -2102,6 +2102,13 @@ impl AuthorityState {
                     actual_effects = ?effects,
                     "fork detected!"
                 );
+                if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
+                    tx_digest,
+                    expected_effects_digest,
+                    effects.digest(),
+                ) {
+                    error!("Failed to record transaction fork: {e}");
+                }
 
                 fail_point_if!("kill_transaction_fork_node", || {
                     #[cfg(msim)]
@@ -2115,11 +2122,11 @@ impl AuthorityState {
                     }
                 });
 
-                panic!(
+                fatal!(
                     "Transaction {} is expected to have effects digest {}, but got {}!",
                     tx_digest,
                     expected_effects_digest,
-                    effects.digest(),
+                    effects.digest()
                 );
             }
         }
