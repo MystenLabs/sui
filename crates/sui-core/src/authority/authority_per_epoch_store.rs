@@ -4473,7 +4473,7 @@ impl AuthorityPerEpochStore {
         debug!(
             ?tracking_id,
             tx_digest = ?transaction.digest(),
-            "handle_consensus_transaction UserTransaction",
+            "Processing consensus transactions from user (CertifiedTransaction and UserTransaction)",
         );
 
         if !self
@@ -4566,15 +4566,17 @@ impl AuthorityPerEpochStore {
         Ok(ConsensusCertificateResult::SuiTransaction(transaction))
     }
 
-    /// If reconfig state is RejectUserCerts, and we just drained the list we need to
-    /// send EndOfPublish to signal other validators that we are not submitting more certificates to the epoch.
+    /// If reconfig state is RejectUserCerts, and there is no fastpath transaction left to be
+    /// finalized, send EndOfPublish to signal to other authorities that this authority is
+    /// not voting for or executing more transactions in this epoch.
     pub(crate) fn should_send_end_of_publish(&self) -> bool {
         let reconfig_state = self.get_reconfig_state_read_lock_guard();
         if !reconfig_state.is_reject_user_certs() {
             // Still accepting user transactions, or already received 2f+1 EOP messages.
-            // Either way we don't need to send EOP.
+            // Either way EOP cannot or does not need to be sent.
             return false;
         }
+
         let should_send = self.pending_consensus_certificates_empty()
             && self
                 .consensus_tx_status_cache
@@ -4584,6 +4586,7 @@ impl AuthorityPerEpochStore {
             // Cannot send EOP before finalizing remaining transactions.
             return false;
         }
+
         let mut end_of_publish_sent = self.end_of_publish_sent.write();
         if *end_of_publish_sent {
             // EndOfPublish message has been sent in this epoch.
