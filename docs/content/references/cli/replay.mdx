@@ -1,0 +1,128 @@
+---
+title: Sui Replay CLI
+description: Use the Sui CLI to replay a given transaction to view its effects.
+---
+
+Replay is a tool that allows you to replay a given transaction to check and analyze the transaction effects. In a nutshell, the replay tool will locally execute the transaction and compare its effects to the effects that exist on chain. 
+
+With Replay, you can pass the `--trace` flag to generate execution traces that can be used with the Move debugger to debug that transaction locally. For more information about the Move debugger, see the [Move Debugger](../ide/debugger.mdx) page.
+
+## Usage 
+The main command for replaying a transaction follows. For all available flags and arguments, run `sui client replay-transaction --help`.
+
+```
+sui client replay-transaction --tx-digest <digest>
+```
+
+After running this command, the tool generates a directory corresponding to the digest in the current directory: `<cur_directory>/.replay/<digest>`, unless you set the `--output-dir` flag.
+After successfully running the previous command, your console provides a response similar to the following:
+```
+Successfully replayed transaction
+
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: 5sbk5UYpQv1i84zkSBSWmowAmPTxw71U7Bb1gbiW5w4y                                              │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 816                                                                               │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x03ff4587a65631bb43648a204588789e95c556eb3f577a0bbca49f0c70724fb6                         │
+│  │ Owner: Account Address ( 0xdae936b5ac98927cf44e9270dd3a045d04d17dd167f744e619d3ba79207f7068 )  │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: 5a6zqDPxZi1iPYE4QCGGd9D2WN9fMzZGgAq4LQvYDKsH                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x1e67adaf36d79a3f9e37dde8a8ea24122d4360b537cbaed29612c06267a5d23b                         │
+│  │ Owner: Object ID: ( 0xe83c2da3f26cedac7ced3652dbfae0df591aeb51818d45fb33e91364d551d0cd )       │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: 7CXwfqNEnXVHHDuFMxNQvpF7TqSDo65RkMh3byXX3qtW                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x4044f18055b2eafa176865303c1d8aa257d2d750e4a003c24e86e2fab2151d4b                         │
+│  │ Owner: Object ID: ( 0xa676f00193c93b812da927baf1e51bd408c2a32b14104df6c1af2b0e874f33ad )       │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: B5qvW4VTQXHotjJ9becki57bnD45fcJvWN8gTzWViVN4                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x8ece4cb6de126eb5c7a375f90c221bdc16c81ad8f6f894af08e0b6c25fb50a45                         │
+│  │ Owner: Shared( 414117256 )                                                                     │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: 68jzyz67fHfS3xczermH8FUmDXg82pJ75t8SWLkq5W3G                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0xd7aaa813f0ee8b63ea5a1ea85849a74f8d48210358b53d0de710de29566d6247                         │
+│  │ Owner: Object ID: ( 0xa30645bc6016097b9182a25eb57a50522a1c08216416b21be8fef564aeb6e0fe )       │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: A57sAtSpBT6nmUMqbas5w6Kh6a7guhTgZTxM1JeQavy1                                           │
+│  └──                                                                                              │
+│ Shared Objects:                                                                                   │
+│  ┌──                                                                                              │
+│  │ ID: 0x8ece4cb6de126eb5c7a375f90c221bdc16c81ad8f6f894af08e0b6c25fb50a45                         │
+│  │ Version: 524747424                                                                             │
+│  │ Digest: AHtPqe2Spt5N1ba5QiBtnkj3yBNTNV27av8FSKgbaS21                                           │
+│  └──                                                                                              │
+│ Deleted Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0xf2a44b7b1de81c8fbf11635411fa7cd2cdc8ae64b48dae13928d4d91066cf13b                         │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: 7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0xfe02a0286e87e702c6c9ccd87c3392033bdaf571aeed2f48982591e8ea5f21f5                         │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: 7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz                                           │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0x03ff4587a65631bb43648a204588789e95c556eb3f577a0bbca49f0c70724fb6                         │
+│  │ Owner: Account Address ( 0xdae936b5ac98927cf44e9270dd3a045d04d17dd167f744e619d3ba79207f7068 )  │
+│  │ Version: 524747425                                                                             │
+│  │ Digest: 5a6zqDPxZi1iPYE4QCGGd9D2WN9fMzZGgAq4LQvYDKsH                                           │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 11187200 MIST                                                                    │
+│    Computation Cost: 1000000 MIST                                                                 │
+│    Storage Rebate: 13031568 MIST                                                                  │
+│    Non-refundable Storage Fee: 131632 MIST                                                        │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    jTwsncjYXYtioZqfTZSpjLUaxWrNT2vyhSgjP3P9XGG                                                    │
+│    36GM8UKe7M71qQkSY468vnxcApxFuMErx4M8vF5fQdLs                                                   │
+│    4h5punxCyApywJVsWaux7Ym7mf7tzBECjp2avZTaLdue                                                   │
+│    BvfZzvfVD8SYPAx6De3CVFrgrxdSVgEACqxtvBtiHm7R                                                   │
+│    D3AKQmh6WsSv74cGeXpdE5cg3TdRHcptapPd2ySBQdFX                                                   │
+│    D7LMC2Jzf9LH2FmeW4WW2qbHDgEBCfduDhFH3Y2LpQAH                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+Transaction Gas Report for 5sbk5UYpQv1i84zkSBSWmowAmPTxw71U7Bb1gbiW5w4y
+
+╭────────────────────────────┬──────────╮
+│ Gas Info                   │          │
+├────────────────────────────┼──────────┤
+│ Computation Cost           │ 1000000  │
+│ Storage Cost               │ 11187200 │
+│ Storage Rebate             │ 13031568 │
+│ Non-Refundable Storage Fee │ 131632   │
+│ Gas Used                   │ 947      │
+│ Gas Budget                 │ 3089992  │
+│ Gas Price                  │ 1000     │
+│ Reference Gas Price        │ 1000     │
+│ Storage Gas Price          │ 76       │
+│ Rebate Rate                │ 9900     │
+╰────────────────────────────┴──────────╯
+
+╭────────────────────────────────────────────────────────────────────┬───────┬────────────┬────────────╮
+│ Object ID                                                          │ Bytes │ Old Rebate │ New Rebate │
+├────────────────────────────────────────────────────────────────────┼───────┼────────────┼────────────┤
+│ 0x03ff4587a65631bb43648a204588789e95c556eb3f577a0bbca49f0c70724fb6 │ 130   │ 988000     │ 988000     │
+│ 0x1e67adaf36d79a3f9e37dde8a8ea24122d4360b537cbaed29612c06267a5d23b │ 461   │ 3503600    │ 3503600    │
+│ 0x4044f18055b2eafa176865303c1d8aa257d2d750e4a003c24e86e2fab2151d4b │ 398   │ 3024800    │ 3024800    │
+│ 0x8ece4cb6de126eb5c7a375f90c221bdc16c81ad8f6f894af08e0b6c25fb50a45 │ 175   │ 1330000    │ 1330000    │
+│ 0xd7aaa813f0ee8b63ea5a1ea85849a74f8d48210358b53d0de710de29566d6247 │ 308   │ 2340800    │ 2340800    │
+│ 0xf2a44b7b1de81c8fbf11635411fa7cd2cdc8ae64b48dae13928d4d91066cf13b │ 0     │ 988000     │ 0          │
+│ 0xfe02a0286e87e702c6c9ccd87c3392033bdaf571aeed2f48982591e8ea5f21f5 │ 0     │ 988000     │ 0          │
+╰────────────────────────────────────────────────────────────────────┴───────┴────────────┴────────────╯
+````
+
+The response above provides the transaction effects information, gas report, and a more detailed list of the each object's size and cost. For more information about
+the gas cost, please refer to the [gas in sui](../../concepts/tokenomics/gas-in-sui.mdx) page.

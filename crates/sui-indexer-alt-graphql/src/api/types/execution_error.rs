@@ -3,6 +3,7 @@
 
 use anyhow::{self, Context as _};
 use async_graphql::{Context, Object};
+use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer_alt_reader::package_resolver::PackageResolver;
 use sui_package_resolver::CleverError;
 use sui_types::{
@@ -125,6 +126,25 @@ impl ExecutionError {
             ErrorConstants::Rendered { identifier, .. } => Some(identifier.clone()),
             ErrorConstants::Raw { identifier, .. } => Some(identifier.clone()),
         })
+    }
+
+    /// An associated constant for the error. Only populated for clever errors.
+    ///
+    /// Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
+    async fn constant(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        use sui_package_resolver::ErrorConstants;
+
+        let Some(clever_error) = self.clever_error(ctx).await? else {
+            return Ok(None);
+        };
+
+        let constant = match &clever_error.error_info {
+            ErrorConstants::None => None,
+            ErrorConstants::Rendered { constant, .. } => Some(constant.clone()),
+            ErrorConstants::Raw { bytes, .. } => Some(Base64::encode(bytes)),
+        };
+
+        Ok(constant)
     }
 }
 

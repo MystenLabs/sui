@@ -242,19 +242,6 @@ impl ProgrammableTransactionBuilder {
     pub fn transfer_object(
         &mut self,
         recipient: SuiAddress,
-        object_ref: ObjectRef,
-    ) -> anyhow::Result<()> {
-        let rec_arg = self.pure(recipient).unwrap();
-        let obj_arg = self.obj(ObjectArg::ImmOrOwnedObject(object_ref));
-        self.commands
-            .push(Command::TransferObjects(vec![obj_arg?], rec_arg));
-        Ok(())
-    }
-
-    // TODO: Merge with `transfer_object` above and update existing callers.
-    pub fn transfer_object_full(
-        &mut self,
-        recipient: SuiAddress,
         full_object_ref: FullObjectRef,
     ) -> anyhow::Result<()> {
         let rec_arg = self.pure(recipient).unwrap();

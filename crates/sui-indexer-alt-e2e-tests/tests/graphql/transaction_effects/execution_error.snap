@@ -97,7 +97,7 @@ task 18, line 132:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 19, lines 134-145:
+task 19, lines 134-146:
 //# run-graphql
 Response: {
   "data": {
@@ -107,7 +107,7 @@ Response: {
   }
 }
 
-task 20, lines 147-167:
+task 20, lines 148-170:
 //# run-graphql
 Response: {
   "data": {
@@ -116,7 +116,8 @@ Response: {
         "abortCode": "42",
         "sourceLineNumber": null,
         "instructionOffset": 1,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     },
     "abort255": {
@@ -124,13 +125,14 @@ Response: {
         "abortCode": "255",
         "sourceLineNumber": null,
         "instructionOffset": 1,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     }
   }
 }
 
-task 21, lines 169-252:
+task 21, lines 172-264:
 //# run-graphql
 Response: {
   "data": {
@@ -139,7 +141,8 @@ Response: {
         "abortCode": "13906834328962203649",
         "sourceLineNumber": 36,
         "instructionOffset": 1,
-        "identifier": "ECleverU8"
+        "identifier": "ECleverU8",
+        "constant": "10"
       }
     },
     "cleverU16": {
@@ -147,7 +150,8 @@ Response: {
         "abortCode": "13906834341847236611",
         "sourceLineNumber": 39,
         "instructionOffset": 1,
-        "identifier": "ECleverU16"
+        "identifier": "ECleverU16",
+        "constant": "20"
       }
     },
     "cleverU64": {
@@ -155,7 +159,8 @@ Response: {
         "abortCode": "13906834354732269573",
         "sourceLineNumber": 42,
         "instructionOffset": 1,
-        "identifier": "ECleverU64"
+        "identifier": "ECleverU64",
+        "constant": "100"
       }
     },
     "cleverAddress": {
@@ -163,7 +168,8 @@ Response: {
         "abortCode": "13906834367617302535",
         "sourceLineNumber": 45,
         "instructionOffset": 1,
-        "identifier": "ECleverAddress"
+        "identifier": "ECleverAddress",
+        "constant": "0x0000000000000000000000000000000000000000000000000000000000000042"
       }
     },
     "cleverString": {
@@ -171,7 +177,8 @@ Response: {
         "abortCode": "13906834380502335497",
         "sourceLineNumber": 48,
         "instructionOffset": 1,
-        "identifier": "ECleverString"
+        "identifier": "ECleverString",
+        "constant": "This is a clever error message"
       }
     },
     "cleverWithCode": {
@@ -179,7 +186,8 @@ Response: {
         "abortCode": "15",
         "sourceLineNumber": 51,
         "instructionOffset": 1,
-        "identifier": "ECleverWithCode"
+        "identifier": "ECleverWithCode",
+        "constant": "Error with explicit code"
       }
     },
     "cleverRaw": {
@@ -187,7 +195,8 @@ Response: {
         "abortCode": "13906834406272401421",
         "sourceLineNumber": 54,
         "instructionOffset": 1,
-        "identifier": "ECleverRaw"
+        "identifier": "ECleverRaw",
+        "constant": "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw=="
       }
     },
     "assertFailure": {
@@ -195,7 +204,8 @@ Response: {
         "abortCode": "13906834423451484159",
         "sourceLineNumber": 57,
         "instructionOffset": 1,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     },
     "nonExistentFunction": {
@@ -203,13 +213,14 @@ Response: {
         "abortCode": null,
         "sourceLineNumber": null,
         "instructionOffset": null,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     }
   }
 }
 
-task 22, lines 254-292:
+task 22, lines 266-308:
 //# run-graphql
 Response: {
   "data": {
@@ -218,7 +229,8 @@ Response: {
         "abortCode": null,
         "sourceLineNumber": null,
         "instructionOffset": 2,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     },
     "arithmeticOverflow": {
@@ -226,7 +238,8 @@ Response: {
         "abortCode": null,
         "sourceLineNumber": null,
         "instructionOffset": 2,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     },
     "divisionByZero": {
@@ -234,7 +247,8 @@ Response: {
         "abortCode": null,
         "sourceLineNumber": null,
         "instructionOffset": 2,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     },
     "vectorOutOfBounds": {
@@ -242,7 +256,8 @@ Response: {
         "abortCode": null,
         "sourceLineNumber": null,
         "instructionOffset": 4,
-        "identifier": null
+        "identifier": null,
+        "constant": null
       }
     }
   }

@@ -16,9 +16,9 @@ use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+use sui_sdk_types::Address;
 use sui_sdk_types::Argument;
 use sui_sdk_types::Command;
-use sui_sdk_types::ObjectId;
 use sui_types::base_types::ObjectRef;
 use sui_types::move_package::MovePackage;
 use sui_types::transaction::CallArg;
@@ -87,7 +87,7 @@ pub fn resolve_transaction(
 
 pub(super) struct NormalizedPackages {
     pool: normalized::RcPool,
-    packages: HashMap<ObjectId, NormalizedPackage>,
+    packages: HashMap<Address, NormalizedPackage>,
 }
 
 struct NormalizedPackage {
@@ -450,9 +450,9 @@ fn resolve_object(
     called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
-    object_id: ObjectId,
+    object_id: Address,
     version: Option<sui_sdk_types::Version>,
-    digest: Option<sui_sdk_types::ObjectDigest>,
+    digest: Option<sui_sdk_types::Digest>,
     _mutable: Option<bool>,
 ) -> Result<ObjectArg> {
     let id = object_id.into();
@@ -505,7 +505,7 @@ fn resolve_shared_input(
     called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
-    object_id: ObjectId,
+    object_id: Address,
 ) -> Result<ObjectArg> {
     let id = object_id.into();
     let object = reader
@@ -701,9 +701,9 @@ fn find_arg_uses(
 }
 
 struct UnresolvedObjectReference {
-    object_id: ObjectId,
+    object_id: Address,
     version: Option<sui_sdk_types::Version>,
-    digest: Option<sui_sdk_types::ObjectDigest>,
+    digest: Option<sui_sdk_types::Digest>,
 }
 
 impl TryFrom<&sui_rpc::proto::sui::rpc::v2beta2::ObjectReference> for UnresolvedObjectReference {
@@ -740,9 +740,9 @@ impl TryFrom<&sui_rpc::proto::sui::rpc::v2beta2::ObjectReference> for Unresolved
 struct UnresolvedInput<'a> {
     pub kind: Option<sui_rpc::proto::sui::rpc::v2beta2::input::InputKind>,
     pub pure: Option<&'a Bytes>,
-    pub object_id: Option<sui_sdk_types::ObjectId>,
+    pub object_id: Option<sui_sdk_types::Address>,
     pub version: Option<sui_sdk_types::Version>,
-    pub digest: Option<sui_sdk_types::ObjectDigest>,
+    pub digest: Option<sui_sdk_types::Digest>,
     pub mutable: Option<bool>,
     pub literal: Option<&'a prost_types::Value>,
 }

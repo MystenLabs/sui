@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{
     Deserialize, Deserializer,
-    de::{self, Visitor},
+    de::{self, SeqAccess, Visitor},
 };
 use serde_spanned::Spanned;
 
@@ -49,16 +49,13 @@ pub struct PackageMetadata {
 }
 
 /// The `implicit-deps` field of a manifest
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImplicitDepMode {
-    /// There is no `implicit-deps` field
-    Enabled,
+    /// There is no `implicit-deps` field, or there's `implicit-deps = ["foo", "bar"]`
+    Enabled(Option<Vec<String>>),
 
     /// `implicit-deps = false`
     Disabled,
-
-    /// this is only possible in a legacy package
-    Legacy,
 
     /// `implicit-deps = "internal"`
     Testing,
@@ -142,7 +139,7 @@ struct RField {
 
 impl Default for ImplicitDepMode {
     fn default() -> Self {
-        Self::Enabled
+        Self::Enabled(None)
     }
 }
 
@@ -152,12 +149,12 @@ impl<'de> Deserialize<'de> for ImplicitDepMode {
         D: Deserializer<'de>,
     {
         struct ImplicitDepModeVisitor;
-        impl Visitor<'_> for ImplicitDepModeVisitor {
+        impl<'de> Visitor<'de> for ImplicitDepModeVisitor {
             type Value = ImplicitDepMode;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 // there's other things you can write, but we won't advertise that
-                formatter.write_str("the value false")
+                formatter.write_str("the value false or a vector of names")
             }
 
             fn visit_bool<E: de::Error>(self, b: bool) -> Result<Self::Value, E> {
@@ -180,6 +177,18 @@ impl<'de> Deserialize<'de> for ImplicitDepMode {
                         "the only valid value for `implicit-deps` is `implicit-deps = false`",
                     ))
                 }
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(s) = seq.next_element::<String>()? {
+                    values.push(s)
+                }
+
+                Ok(Self::Value::Enabled(Some(values)))
             }
         }
 
@@ -438,7 +447,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(manifest.package.implicit_deps == ImplicitDepMode::Enabled);
+        assert!(manifest.package.implicit_deps == ImplicitDepMode::Enabled(None));
     }
 
     /// You can turn implicit deps off
@@ -455,6 +464,25 @@ mod tests {
         .unwrap();
 
         assert!(manifest.package.implicit_deps == ImplicitDepMode::Disabled);
+    }
+
+    /// You can define specific implicit deps.
+    #[test]
+    fn parse_specific_implicit_deps() {
+        let manifest: ParsedManifest = toml_edit::de::from_str(
+            r#"
+                [package]
+                name = "test"
+                edition = "2024"
+                implicit-deps = ["foo", "bar"]
+                "#,
+        )
+        .unwrap();
+
+        assert!(
+            manifest.package.implicit_deps
+                == ImplicitDepMode::Enabled(Some(vec!["foo".to_string(), "bar".to_string()]))
+        );
     }
 
     /// You can ask for internal implicit deps

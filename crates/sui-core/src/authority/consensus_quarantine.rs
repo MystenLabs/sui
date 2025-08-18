@@ -42,7 +42,7 @@ use crate::{
         epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration},
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
-    checkpoints::{CheckpointHeight, PendingCheckpointV2},
+    checkpoints::{CheckpointHeight, PendingCheckpoint},
     consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
@@ -72,7 +72,7 @@ pub(crate) struct ConsensusCommitOutput {
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
-    pending_checkpoints: Vec<PendingCheckpointV2>,
+    pending_checkpoints: Vec<PendingCheckpoint>,
 
     // random beacon state
     next_randomness_round: Option<(RandomnessRound, TimestampMs)>,
@@ -119,7 +119,7 @@ impl ConsensusCommitOutput {
     fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointHeight>,
-    ) -> impl Iterator<Item = &PendingCheckpointV2> {
+    ) -> impl Iterator<Item = &PendingCheckpoint> {
         self.pending_checkpoints.iter().filter(move |cp| {
             if let Some(last) = last {
                 cp.height() > last
@@ -193,7 +193,7 @@ impl ConsensusCommitOutput {
             .extend(deferral_keys.iter().cloned());
     }
 
-    pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpointV2) {
+    pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpoint) {
         self.pending_checkpoints.push(checkpoint);
     }
 
@@ -612,7 +612,12 @@ impl ConsensusOutputQuarantine {
                 .checkpoint_height
                 .expect("non-genesis checkpoint must have height");
             if let Some(highest) = highest_committed_height {
-                assert!(checkpoint_height > highest);
+                assert!(
+                    checkpoint_height >= highest,
+                    "current checkpoint height {} must be no less than highest committed height {}",
+                    checkpoint_height,
+                    highest
+                );
             }
 
             highest_committed_height = Some(checkpoint_height);
@@ -791,7 +796,7 @@ impl ConsensusOutputQuarantine {
     pub(super) fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointHeight>,
-    ) -> Vec<(CheckpointHeight, PendingCheckpointV2)> {
+    ) -> Vec<(CheckpointHeight, PendingCheckpoint)> {
         let mut checkpoints = Vec::new();
         for output in &self.output_queue {
             checkpoints.extend(

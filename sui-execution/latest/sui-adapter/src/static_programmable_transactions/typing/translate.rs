@@ -241,15 +241,27 @@ pub fn transaction<Mode: ExecutionMode>(
         .map(|(i, c)| {
             let idx = i as u16;
             context.current_command = idx;
-            let (c, tys) =
+            let (c_, tys) =
                 command::<Mode>(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
             context.results.push(tys.clone());
-            Ok((sp(idx, c), tys))
+            let c = T::Command_ {
+                command: c_,
+                result_type: tys,
+                // computed later
+                drop_values: vec![],
+                // computed later
+                consumed_shared_objects: vec![],
+            };
+            Ok(sp(idx, c))
         })
         .collect::<Result<Vec<_>, ExecutionError>>()?;
     let mut ast = context.finish(commands);
     // mark the last usage of references as Move instead of Copy
     scope_references::transaction(&mut ast);
+    // mark unused results to be dropped
+    unused_results::transaction(&mut ast);
+    // track shared object IDs
+    consumed_shared_objects::transaction(&mut ast)?;
     Ok(ast)
 }
 
@@ -257,7 +269,7 @@ fn command<Mode: ExecutionMode>(
     env: &Env,
     context: &mut Context,
     command: L::Command,
-) -> Result<(T::Command_, T::ResultType), ExecutionError> {
+) -> Result<(T::Command__, T::ResultType), ExecutionError> {
     Ok(match command {
         L::Command::MoveCall(lmc) => {
             let L::MoveCall {
@@ -307,7 +319,7 @@ fn command<Mode: ExecutionMode>(
             }
             let result = function.signature.return_.clone();
             (
-                T::Command_::MoveCall(Box::new(T::MoveCall {
+                T::Command__::MoveCall(Box::new(T::MoveCall {
                     function,
                     arguments: args,
                 })),
@@ -329,7 +341,7 @@ fn command<Mode: ExecutionMode>(
                 CommandArgumentError::InvalidTransferObject,
             )?;
             let address = argument(env, context, objects.len(), address_loc, Type::Address)?;
-            (T::Command_::TransferObjects(objects, address), vec![])
+            (T::Command__::TransferObjects(objects, address), vec![])
         }
         L::Command::SplitCoins(lcoin, lamounts) => {
             let coin_loc = one_location(context, 0, lcoin)?;
@@ -347,7 +359,7 @@ fn command<Mode: ExecutionMode>(
                 std::iter::repeat_with(|| Type::U64),
             )?;
             let result = vec![coin_type.clone(); amounts.len()];
-            (T::Command_::SplitCoins(coin_type, coin, amounts), result)
+            (T::Command__::SplitCoins(coin_type, coin, amounts), result)
         }
         L::Command::MergeCoins(ltarget, lcoins) => {
             let target_loc = one_location(context, 0, ltarget)?;
@@ -364,7 +376,7 @@ fn command<Mode: ExecutionMode>(
                 coin_locs,
                 std::iter::repeat_with(|| coin_type.clone()),
             )?;
-            (T::Command_::MergeCoins(coin_type, target, coins), vec![])
+            (T::Command__::MergeCoins(coin_type, target, coins), vec![])
         }
         L::Command::MakeMoveVec(Some(ty), lelems) => {
             let elem_locs = locations(context, 0, lelems)?;
@@ -376,7 +388,7 @@ fn command<Mode: ExecutionMode>(
                 std::iter::repeat_with(|| ty.clone()),
             )?;
             (
-                T::Command_::MakeMoveVec(ty.clone(), elems),
+                T::Command__::MakeMoveVec(ty.clone(), elems),
                 vec![env.vector_type(ty)?],
             )
         }
@@ -408,7 +420,7 @@ fn command<Mode: ExecutionMode>(
             )?;
             elems.insert(0, first_arg);
             (
-                T::Command_::MakeMoveVec(first_ty.clone(), elems),
+                T::Command__::MakeMoveVec(first_ty.clone(), elems),
                 vec![env.vector_type(first_ty)?],
             )
         }
@@ -419,7 +431,7 @@ fn command<Mode: ExecutionMode>(
             } else {
                 vec![env.upgrade_cap_type()?.clone()]
             };
-            (T::Command_::Publish(items, object_ids, linkage), result)
+            (T::Command__::Publish(items, object_ids, linkage), result)
         }
         L::Command::Upgrade(items, object_ids, object_id, la, linkage) => {
             let location = one_location(context, 0, la)?;
@@ -427,7 +439,7 @@ fn command<Mode: ExecutionMode>(
             let a = argument(env, context, 0, location, expected_ty)?;
             let res = env.upgrade_receipt_type()?;
             (
-                T::Command_::Upgrade(items, object_ids, object_id, a, linkage),
+                T::Command__::Upgrade(items, object_ids, object_id, a, linkage),
                 vec![res.clone()],
             )
         }
@@ -765,29 +777,29 @@ mod scope_references {
     /// of a Copy.
     pub fn transaction(ast: &mut T::Transaction) {
         let mut used: BTreeSet<(u16, u16)> = BTreeSet::new();
-        for (c, _tys) in ast.commands.iter_mut().rev() {
+        for c in ast.commands.iter_mut().rev() {
             command(&mut used, c);
         }
     }
 
-    fn command(used: &mut BTreeSet<(u16, u16)>, sp!(_, command): &mut T::Command) {
-        match command {
-            T::Command_::MoveCall(mc) => arguments(used, &mut mc.arguments),
-            T::Command_::TransferObjects(objects, recipient) => {
+    fn command(used: &mut BTreeSet<(u16, u16)>, sp!(_, c): &mut T::Command) {
+        match &mut c.command {
+            T::Command__::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command__::TransferObjects(objects, recipient) => {
                 argument(used, recipient);
                 arguments(used, objects);
             }
-            T::Command_::SplitCoins(_, coin, amounts) => {
+            T::Command__::SplitCoins(_, coin, amounts) => {
                 arguments(used, amounts);
                 argument(used, coin);
             }
-            T::Command_::MergeCoins(_, target, coins) => {
+            T::Command__::MergeCoins(_, target, coins) => {
                 arguments(used, coins);
                 argument(used, target);
             }
-            T::Command_::MakeMoveVec(_, xs) => arguments(used, xs),
-            T::Command_::Publish(_, _, _) => (),
-            T::Command_::Upgrade(_, _, _, x, _) => argument(used, x),
+            T::Command__::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command__::Publish(_, _, _) => (),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(used, x),
         }
     }
 
@@ -823,6 +835,216 @@ mod scope_references {
                 }
             }
             _ => (),
+        }
+    }
+}
+
+//**************************************************************************************************
+// Unused results
+//**************************************************************************************************
+
+mod unused_results {
+    use indexmap::IndexSet;
+
+    use crate::{sp, static_programmable_transactions::typing::ast as T};
+
+    /// Finds what `Result` indexes are never used in the transaction.
+    /// For each command, marks the indexes of result values with `drop` that are never referred to
+    /// via `Result`.
+    pub fn transaction(ast: &mut T::Transaction) {
+        // Collect all used result locations (i, j) across all commands
+        let mut used: IndexSet<(u16, u16)> = IndexSet::new();
+        for c in &ast.commands {
+            command(&mut used, c);
+        }
+
+        // For each command, mark unused result indexes with `drop`
+        for (i, sp!(_, c)) in ast.commands.iter_mut().enumerate() {
+            debug_assert!(c.drop_values.is_empty());
+            let i = i as u16;
+            c.drop_values = c
+                .result_type
+                .iter()
+                .enumerate()
+                .map(|(j, ty)| (j as u16, ty))
+                .map(|(j, ty)| ty.abilities().has_drop() && !used.contains(&(i, j)))
+                .collect();
+        }
+    }
+
+    fn command(used: &mut IndexSet<(u16, u16)>, sp!(_, c): &T::Command) {
+        match &c.command {
+            T::Command__::MoveCall(mc) => arguments(used, &mc.arguments),
+            T::Command__::TransferObjects(objects, recipient) => {
+                argument(used, recipient);
+                arguments(used, objects);
+            }
+            T::Command__::SplitCoins(_, coin, amounts) => {
+                arguments(used, amounts);
+                argument(used, coin);
+            }
+            T::Command__::MergeCoins(_, target, coins) => {
+                arguments(used, coins);
+                argument(used, target);
+            }
+            T::Command__::MakeMoveVec(_, elements) => arguments(used, elements),
+            T::Command__::Publish(_, _, _) => (),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(used, x),
+        }
+    }
+
+    fn arguments(used: &mut IndexSet<(u16, u16)>, args: &[T::Argument]) {
+        for arg in args {
+            argument(used, arg)
+        }
+    }
+
+    fn argument(used: &mut IndexSet<(u16, u16)>, sp!(_, (arg_, _)): &T::Argument) {
+        if let T::Location::Result(i, j) = arg_.location() {
+            used.insert((i, j));
+        }
+    }
+}
+
+//**************************************************************************************************
+// consumed shared object IDs
+//**************************************************************************************************
+
+mod consumed_shared_objects {
+
+    use crate::{
+        sp, static_programmable_transactions::loading::ast as L,
+        static_programmable_transactions::typing::ast as T,
+    };
+    use sui_types::{base_types::ObjectID, error::ExecutionError};
+
+    // Shared object (non-party) IDs contained in each location
+    struct Context {
+        // (legacy) shared object IDs that are used as inputs
+        inputs: Vec<Option<ObjectID>>,
+        results: Vec<Vec<Option<Vec<ObjectID>>>>,
+    }
+
+    impl Context {
+        pub fn new(ast: &T::Transaction) -> Self {
+            let T::Transaction {
+                bytes: _,
+                objects,
+                pure: _,
+                receiving: _,
+                commands: _,
+            } = ast;
+            let inputs = objects
+                .iter()
+                .map(|o| match &o.arg {
+                    L::ObjectArg::SharedObject {
+                        id,
+                        kind: L::SharedObjectKind::Legacy,
+                        ..
+                    } => Some(*id),
+                    L::ObjectArg::ImmObject(_)
+                    | L::ObjectArg::OwnedObject(_)
+                    | L::ObjectArg::SharedObject {
+                        kind: L::SharedObjectKind::Party,
+                        ..
+                    } => None,
+                })
+                .collect::<Vec<_>>();
+            Self {
+                inputs,
+                results: vec![],
+            }
+        }
+    }
+
+    /// Finds what shared objects are taken by-value by each command and must be either
+    /// deleted or re-shared.
+    /// MakeMoveVec is the only command that can take shared objects by-value and propagate them
+    /// for another command.
+    pub fn transaction(ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+        let mut context = Context::new(ast);
+
+        // For each command, find what shared objects are taken by-value and mark them as being
+        // consumed
+        for c in &mut ast.commands {
+            debug_assert!(c.value.consumed_shared_objects.is_empty());
+            command(&mut context, c)?;
+            debug_assert!(context.results.last().unwrap().len() == c.value.result_type.len());
+        }
+        Ok(())
+    }
+
+    fn command(context: &mut Context, sp!(_, c): &mut T::Command) -> Result<(), ExecutionError> {
+        let mut acc = vec![];
+        match &c.command {
+            T::Command__::MoveCall(mc) => arguments(context, &mut acc, &mc.arguments),
+            T::Command__::TransferObjects(objects, recipient) => {
+                argument(context, &mut acc, recipient);
+                arguments(context, &mut acc, objects);
+            }
+            T::Command__::SplitCoins(_, coin, amounts) => {
+                arguments(context, &mut acc, amounts);
+                argument(context, &mut acc, coin);
+            }
+            T::Command__::MergeCoins(_, target, coins) => {
+                arguments(context, &mut acc, coins);
+                argument(context, &mut acc, target);
+            }
+            T::Command__::MakeMoveVec(_, elements) => arguments(context, &mut acc, elements),
+            T::Command__::Publish(_, _, _) => (),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(context, &mut acc, x),
+        }
+        let (consumed, result) = match &c.command {
+            // make move vec does not "consume" any by-value shared objects, and can propagate
+            // them to a later command
+            T::Command__::MakeMoveVec(_, _) => {
+                assert_invariant!(
+                    c.result_type.len() == 1,
+                    "MakeMoveVec must return a single value"
+                );
+                (vec![], vec![Some(acc)])
+            }
+            // these commands do not propagate shared objects, and consume any in the acc
+            T::Command__::MoveCall(_)
+            | T::Command__::TransferObjects(_, _)
+            | T::Command__::SplitCoins(_, _, _)
+            | T::Command__::MergeCoins(_, _, _)
+            | T::Command__::Publish(_, _, _)
+            | T::Command__::Upgrade(_, _, _, _, _) => (acc, vec![None; c.result_type.len()]),
+        };
+        c.consumed_shared_objects = consumed;
+        context.results.push(result);
+        Ok(())
+    }
+
+    fn arguments(context: &mut Context, acc: &mut Vec<ObjectID>, args: &[T::Argument]) {
+        for arg in args {
+            argument(context, acc, arg)
+        }
+    }
+
+    fn argument(context: &mut Context, acc: &mut Vec<ObjectID>, sp!(_, (arg_, _)): &T::Argument) {
+        let T::Argument__::Use(T::Usage::Move(loc)) = arg_ else {
+            // only Move usage can take shared objects by-value since they cannot be copied
+            return;
+        };
+        match loc {
+            // no shared objects in these locations
+            T::Location::TxContext
+            | T::Location::GasCoin
+            | T::Location::PureInput(_)
+            | T::Location::ReceivingInput(_) => (),
+            T::Location::ObjectInput(i) => {
+                if let Some(id) = context.inputs[*i as usize] {
+                    acc.push(id);
+                }
+            }
+
+            T::Location::Result(i, j) => {
+                if let Some(ids) = &context.results[*i as usize][*j as usize] {
+                    acc.extend(ids.iter().copied());
+                }
+            }
         }
     }
 }

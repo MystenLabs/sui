@@ -44,6 +44,7 @@ exclude = [
   "external-crates/move/crates/move-proc-macros",
   "external-crates/move/crates/move-regex-borrow-graph",
   "external-crates/move/crates/move-stackless-bytecode",
+  "external-crates/move/crates/move-stackless-bytecode-2",
   "external-crates/move/crates/move-stdlib",
   "external-crates/move/crates/move-stdlib-natives",
   "external-crates/move/crates/move-symbol-pool",
@@ -123,6 +124,7 @@ members = [
   "crates/sui-graphql-rpc",
   "crates/sui-graphql-rpc-client",
   "crates/sui-graphql-rpc-headers",
+  "crates/sui-grpc-rosetta",
   "crates/sui-http",
   "crates/sui-indexer",
   "crates/sui-indexer-alt",
@@ -207,6 +209,7 @@ members = [
   "crates/typed-store-error",
   "crates/typed-store-workspace-hack",
   "crates/x",
+  "external-crates/move/crates/jsonrpc",
   "sui-execution",
   "sui-execution/cut",
   "sui-execution/latest/sui-adapter",
@@ -225,7 +228,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.54.0"
+version = "1.55.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -408,7 +411,10 @@ ipnetwork = "0.20.0"
 iso8601 = "0.6.3"
 itertools = "0.13.0"
 tikv-jemalloc-ctl = "^0.5"
-tikv-jemallocator = { version = "^0.5", features = ["profiling", "disable_initial_exec_tls"] }
+tikv-jemallocator = { version = "^0.5", features = [
+  "profiling",
+  "disable_initial_exec_tls",
+] }
 jsonrpsee = { version = "0.24.9", features = [
   "server",
   "macros",
@@ -428,8 +434,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "45b88cffa3f50d6f2022d0b422ca4a077ac96a98", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "45b88cffa3f50d6f2022d0b422ca4a077ac96a98", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -450,6 +456,7 @@ once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
 parquet = "54"
+pin-project = "1"
 pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.10.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
@@ -612,6 +619,7 @@ move-core-types = { path = "external-crates/move/crates/move-core-types" }
 move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
 move-package = { path = "external-crates/move/crates/move-package" }
 move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
+jsonrpc = { path = "external-crates/move/crates/jsonrpc" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
 move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
 move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
@@ -622,6 +630,7 @@ move-command-line-common = { path = "external-crates/move/crates/move-command-li
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
+move-stackless-bytecode-2 = { path = "external-crates/move/crates/move-stackless-bytecode-2" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
@@ -653,11 +662,11 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
-sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
-sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee" }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee" }
+sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cab42748a4c00072c6be00a08755b6c71274aaee" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -740,6 +749,7 @@ sui-proxy = { path = "crates/sui-proxy" }
 sui-replay = { path = "crates/sui-replay" }
 sui-replay-2 = { path = "crates/sui-replay-2" }
 sui-rosetta = { path = "crates/sui-rosetta" }
+sui-grpc-rosetta = { path = "crates/sui-grpc-rosetta" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
 sui-simulator = { path = "crates/sui-simulator" }

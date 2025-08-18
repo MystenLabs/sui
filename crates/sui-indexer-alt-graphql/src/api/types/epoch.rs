@@ -5,8 +5,14 @@ use super::{
     move_package::{self, CSysPackage, MovePackage},
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
+use crate::api::types::safe_mode::{from_system_state, SafeMode};
+use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
 use crate::api::types::storage_fund::StorageFund;
+use crate::api::types::system_parameters::{
+    from_system_parameters_v1, from_system_parameters_v2, SystemParameters,
+};
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     api::types::validator_set::ValidatorSet,
@@ -16,6 +22,7 @@ use crate::{
 };
 use anyhow::Context as _;
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Error, Object};
+use fastcrypto::encoding::{Base58, Encoding};
 use futures::try_join;
 use std::sync::Arc;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
@@ -25,7 +32,9 @@ use sui_indexer_alt_reader::{
 };
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
+use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use tokio::sync::OnceCell;
 
@@ -104,6 +113,43 @@ impl Epoch {
         };
 
         Ok(Some(DateTime::from_ms(contents.start_timestamp_ms)?))
+    }
+
+    /// The transactions in this epoch, optionally filtered by transaction filters.
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
+            return Ok(None);
+        };
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Epoch", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
+        let cp_hi = end.as_ref().map_or_else(
+            || self.scope.checkpoint_viewed_at_exclusive_bound(),
+            |end| end.cp_hi as u64,
+        );
+
+        let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+            after_checkpoint: cp_lo_exclusive.map(UInt53::from),
+            before_checkpoint: Some(UInt53::from(cp_hi)),
+            ..Default::default()
+        }) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Ok(Some(
+            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+        ))
     }
 
     /// The system packages used by all transactions in this epoch.
@@ -288,6 +334,88 @@ impl Epoch {
         };
 
         Ok(Some(storage_fund))
+    }
+
+    /// Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+    async fn safe_mode(&self, ctx: &Context<'_>) -> Result<Option<SafeMode>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let safe_mode = from_system_state(&system_state);
+
+        Ok(Some(safe_mode))
+    }
+
+    /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+    /// This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+    async fn system_state_version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(system_state.system_state_version().into()))
+    }
+
+    /// Details of the system that are decided during genesis.
+    async fn system_parameters(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<SystemParameters>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let system_parameters = match system_state {
+            SuiSystemState::V1(inner) => from_system_parameters_v1(inner.parameters),
+            SuiSystemState::V2(inner) => from_system_parameters_v2(inner.parameters),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(system_parameters))
+    }
+
+    /// Parameters related to the subsidy that supplements staking rewards
+    async fn system_stake_subsidy(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<StakeSubsidy>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let stake_subsidy = match system_state {
+            SuiSystemState::V1(inner) => from_stake_subsidy_v1(inner.stake_subsidy),
+            SuiSystemState::V2(inner) => from_stake_subsidy_v1(inner.stake_subsidy),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(stake_subsidy))
+    }
+
+    /// A commitment by the committee at the end of epoch on the contents of the live object set at that time.
+    /// This can be used to verify state snapshots.
+    async fn live_object_set_digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        let Some(end) = self.end(ctx).await? else {
+            return Ok(None);
+        };
+
+        let commitments: Vec<CheckpointCommitment> = bcs::from_bytes(&end.epoch_commitments)
+            .context("Failed to deserialize epoch commitments")?;
+
+        let digest = commitments.into_iter().next().map(
+            |CheckpointCommitment::ECMHLiveObjectSetDigest(digest)| {
+                Base58::encode(digest.digest.into_inner())
+            },
+        );
+
+        Ok(digest)
     }
 }
 

@@ -31,6 +31,8 @@ pub(crate) enum TransactionRequestError {
     // Rejected by the validator when voting on the transaction.
     #[error("{0}")]
     RejectedAtValidator(SuiError),
+    #[error("Transaction rejected by consensus")]
+    RejectedByConsensus,
     // Transaction status has been dropped from cache at the validator.
     #[error("Transaction status expired")]
     StatusExpired(EpochId, u32),
@@ -211,6 +213,18 @@ impl std::fmt::Display for AggregatedRequestErrors {
     }
 }
 
+// TODO(fastpath): This is a temporary fix to unify the error message between QD and TD.
+// Match special handling of UserInputError in sui-json-rpc/src/error.rs NonRecoverableTransactionError
+fn format_transaction_request_error(error: &TransactionRequestError) -> String {
+    match error {
+        TransactionRequestError::RejectedAtValidator(sui_error) => match sui_error {
+            SuiError::UserInputError { error: user_error } => user_error.to_string(),
+            _ => sui_error.to_string(),
+        },
+        _ => error.to_string(),
+    }
+}
+
 pub(crate) fn aggregate_request_errors(
     errors: Vec<(AuthorityName, StakeUnit, TransactionRequestError)>,
 ) -> AggregatedRequestErrors {
@@ -219,7 +233,7 @@ pub(crate) fn aggregate_request_errors(
 
     for (name, stake, error) in errors {
         total_stake += stake;
-        let key = error.to_string();
+        let key = format_transaction_request_error(&error);
         let entry = aggregated_errors.entry(key).or_default();
         entry.0.push(name);
         entry.1 += stake;
@@ -258,5 +272,12 @@ impl std::fmt::Display for AggregatedEffectsDigests {
             .join("; ");
         write!(f, "{}", msg)?;
         Ok(())
+    }
+}
+
+impl AggregatedEffectsDigests {
+    #[cfg(test)]
+    pub fn total_stake(&self) -> StakeUnit {
+        self.digests.iter().map(|(_, _, stake)| stake).sum()
     }
 }

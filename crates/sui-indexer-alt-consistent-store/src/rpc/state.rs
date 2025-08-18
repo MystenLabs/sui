@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use tonic::metadata::AsciiMetadataValue;
 
-use crate::config::RpcConfig;
+use crate::config::{ConsistencyConfig, RpcConfig};
 use crate::schema::Schema;
 use crate::store::Store;
 
@@ -21,8 +21,11 @@ pub(crate) struct State {
     /// Access to the database.
     pub store: Store<Schema>,
 
-    /// Configuration
-    pub config: Arc<RpcConfig>,
+    /// RPC Configuration
+    pub rpc_config: Arc<RpcConfig>,
+
+    /// Configuration for the consistent range.
+    pub consistency_config: Arc<ConsistencyConfig>,
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -496,6 +496,17 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state)
     }
 
+    pub fn is_deleted(&self, id: &ObjectID) -> bool {
+        self.state.deleted_ids.contains(id)
+    }
+
+    pub fn is_transferred(&self, id: &ObjectID) -> Option<Owner> {
+        self.state
+            .transfers
+            .get(id)
+            .map(|(owner, _, _)| owner.clone())
+    }
+
     pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
         let loaded_child_objects = self.loaded_runtime_objects();
         let child_effects = self.child_object_store.take_effects().map_err(|e| {

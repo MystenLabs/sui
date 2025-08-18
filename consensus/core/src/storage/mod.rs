@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(test)]
-pub(crate) mod mem_store;
+pub mod mem_store;
 pub mod rocksdb_store;
 
 #[cfg(test)]

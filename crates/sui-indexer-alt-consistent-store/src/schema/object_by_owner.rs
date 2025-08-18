@@ -20,9 +20,9 @@ use sui_indexer_alt_framework::types::{
 pub(crate) struct Key {
     pub(crate) kind: OwnerKind,
 
-    /// `None` if the object is a MovePackage, `Some` and the object's type if it is a MoveObject.
+    /// The object's type (only MoveObjects are indexed)
     #[bincode(with_serde)]
-    pub(crate) type_: Option<StructTag>,
+    pub(crate) type_: StructTag,
 
     /// If the object is coin-like (has a balance), this field stores the bitwise negation (one's
     /// complement) of the balance. This ensures coin-like objects are ordered in descending order
@@ -44,13 +44,13 @@ pub(crate) enum OwnerKind {
 }
 
 impl Key {
-    pub(crate) fn from_object(obj: &Object) -> Key {
-        Key {
+    pub(crate) fn from_object(obj: &Object) -> Option<Key> {
+        Some(Key {
             kind: OwnerKind::from_owner(obj.owner()),
-            type_: obj.type_().map(|t| t.clone().into()),
+            type_: obj.type_()?.clone().into(),
             balance: obj.as_coin_maybe().map(|coin| !coin.balance.value()),
             object_id: obj.id(),
-        }
+        })
     }
 }
 

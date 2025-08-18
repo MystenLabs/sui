@@ -2050,3 +2050,98 @@ impl StringPool for ArcPool {
         s.0.as_ident_str()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_bytecode_vec<S: Hash + Eq>(codes: Vec<Bytecode<S>>) -> Vec<Bytecode<S>> {
+        codes
+    }
+
+    #[test]
+    fn test_get_successors_ret_and_abort() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::Ret, Bytecode::Abort]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Ret and Abort should have no successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    fn test_get_successors_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::LdU8(42),
+            Bytecode::Branch(2),
+            Bytecode::LdU8(42),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Branch should only have the branch target as successor
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_conditional_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::BrTrue(2),
+            Bytecode::BrFalse(2),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Conditional branch should have both the branch target and next instruction as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_variant_switch() {
+        let jt = Rc::new(VariantJumpTable {
+            enum_: Rc::new(Enum {
+                defining_module: ModuleId {
+                    address: AccountAddress::ZERO,
+                    name: Identifier::new("E").unwrap(),
+                },
+                name: Identifier::new("E").unwrap(),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+                variants: IndexMap::new(),
+            }),
+            jump_table: JumpTableInner::Full(vec![1, 2]),
+        });
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::VariantSwitch(jt.clone()),
+            Bytecode::Ret,
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![jt];
+
+        // VariantSwitch should have all jump table offsets as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_get_successors_fallthrough() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::LdU8(42), Bytecode::LdU8(43), Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // LdU8 is not a branch, so successor is next instruction
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+        assert_eq!(Bytecode::get_successors(2, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Program counter out of bounds")]
+    fn test_get_successors_out_of_bounds() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+        // pc out of bounds should panic
+        Bytecode::get_successors(10, &code, &jump_tables);
+    }
+}

@@ -22,7 +22,7 @@ pub(crate) struct NaiveBalanceWithdrawScheduler {
     balance_read: Arc<dyn AccountBalanceRead>,
     last_settled_version_sender: watch::Sender<SequenceNumber>,
     // We must keep a receiver alive to make sure sends go through and can update the last settled version.
-    _receiver: watch::Receiver<SequenceNumber>,
+    last_settled_version_receiver: watch::Receiver<SequenceNumber>,
 }
 
 impl NaiveBalanceWithdrawScheduler {
@@ -30,12 +30,12 @@ impl NaiveBalanceWithdrawScheduler {
         balance_read: Arc<dyn AccountBalanceRead>,
         last_settled_accumulator_version: SequenceNumber,
     ) -> Arc<Self> {
-        let (last_settled_version_sender, _receiver) =
+        let (last_settled_version_sender, last_settled_version_receiver) =
             watch::channel(last_settled_accumulator_version);
         Arc::new(Self {
             balance_read,
             last_settled_version_sender,
-            _receiver,
+            last_settled_version_receiver,
         })
     }
 }
@@ -136,13 +136,11 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
         }
     }
 
-    async fn settle_balances(&self, settlement: BalanceSettlement) {
-        debug!(
-            "Settling balances for version {:?}",
-            settlement.accumulator_version
-        );
-        let _ = self
-            .last_settled_version_sender
-            .send(settlement.accumulator_version);
+    // We don't use the settlement information in the naive scheduler.
+    // Instead, the withdraw scheduling always read the balance state fro storage.
+    async fn settle_balances(&self, _settlement: BalanceSettlement) {
+        let next_version = self.last_settled_version_receiver.borrow().next();
+        debug!("Settling balances for version {:?}", next_version);
+        let _ = self.last_settled_version_sender.send(next_version);
     }
 }

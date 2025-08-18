@@ -4,10 +4,13 @@
 
 use std::{convert::Infallible, str::FromStr, sync::Arc};
 
+use anyhow::anyhow;
 use tonic::{
     metadata::{MetadataMap, MetadataValue},
     Status,
 };
+
+use crate::db;
 
 pub(super) trait StatusCode {
     fn code(&self) -> tonic::Code;
@@ -87,5 +90,15 @@ where
                 Status::with_metadata(tonic::Code::Internal, top.to_string(), meta)
             }
         }
+    }
+}
+
+/// Convert a database error into an RPC error. Most database errors map to internal errors, but a
+/// `NotInRange` error gets its own variant.
+pub(super) fn db_error<E>(err: db::error::Error, context: &'static str) -> RpcError<E> {
+    if let db::error::Error::NotInRange { checkpoint } = err {
+        RpcError::NotInRange(checkpoint)
+    } else {
+        anyhow!(err).context(context).into()
     }
 }

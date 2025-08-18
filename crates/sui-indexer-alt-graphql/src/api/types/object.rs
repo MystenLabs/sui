@@ -9,7 +9,7 @@ use async_graphql::{
     dataloader::DataLoader,
     Context, InputObject, Interface, Object,
 };
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::KvLoader,
@@ -20,10 +20,12 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
+use sui_pg_db::sql;
 use sui_types::{
-    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
+    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress, TransactionDigest},
     digests::ObjectDigest,
     object::Object as NativeObject,
+    transaction::GenesisObject,
 };
 use tokio::join;
 
@@ -261,6 +263,21 @@ impl Object {
         }
     }
 
+    /// Construct a GraphQL representation of an `Object` from a raw object bundled into the genesis transaction.
+    pub(crate) fn from_genesis_object(scope: Scope, genesis_obj: GenesisObject) -> Self {
+        let GenesisObject::RawObject { data, owner } = genesis_obj;
+        let native =
+            NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis_marker());
+        let address = Address::with_address(scope, native.id().into());
+
+        Self {
+            super_: address,
+            version: native.version(),
+            digest: native.digest(),
+            contents: Some(Arc::new(native)),
+        }
+    }
+
     /// Fetch an object by its key. The key can either specify an exact version to fetch, an
     /// upperbound against a "root version", an upperbound against a checkpoint, or none of the
     /// above.
@@ -425,9 +442,25 @@ impl Object {
         let mut conn = Connection::new(false, false);
 
         let pg_reader: &PgReader = ctx.data()?;
+
         let mut query = v::obj_versions
-            .filter(v::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
             .filter(v::object_id.eq(address.to_vec()))
+            .filter(sql!(as Bool,
+                r#"
+                    object_version <= (SELECT
+                        m.object_version
+                    FROM
+                        obj_versions m
+                    WHERE
+                        m.object_id = obj_versions.object_id
+                    AND m.cp_sequence_number <= {BigInt}
+                    ORDER BY
+                        m.cp_sequence_number DESC,
+                        m.object_version DESC
+                    LIMIT 1)
+                "#,
+                scope.checkpoint_viewed_at() as i64,
+            ))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
 
@@ -440,13 +473,9 @@ impl Object {
         }
 
         query = if page.is_from_front() {
-            query
-                .order_by(v::cp_sequence_number)
-                .then_order_by(v::object_version)
+            query.order_by(v::object_version)
         } else {
-            query
-                .order_by(v::cp_sequence_number.desc())
-                .then_order_by(v::object_version.desc())
+            query.order_by(v::object_version.desc())
         };
 
         if let Some(after) = page.after() {

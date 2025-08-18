@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
-    "start": "node src/utils/grpc-download.js && docusaurus graphql-to-doc; rm '../content/references/sui-api/sui-graphql/reference/generated.md'; node src/utils/getopenrpcspecs.js; docusaurus start",
-    "build": "node src/utils/grpc-download.js && docusaurus graphql-to-doc; rm '../content/references/sui-api/sui-graphql/reference/generated.md'; node src/utils/getopenrpcspecs.js; docusaurus build",
+    "start": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus start",
+    "build": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
@@ -69,6 +69,7 @@
     "@babel/plugin-transform-react-jsx": "^7.23.4",
     "@docusaurus/module-type-aliases": "^3.1.1",
     "@tsconfig/docusaurus": "^1.0.5",
+    "@types/react": "^19.1.9",
     "typescript": "^4.7.4"
   },
   "resolutions": {

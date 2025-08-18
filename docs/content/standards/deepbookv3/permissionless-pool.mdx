@@ -1,9 +1,10 @@
 ---
 title: Permissionless Pool Creation
 description: Learn how to create a pool permissionlessly.
+keywords: [ pool, create pool, permissionlessly, permissionless, SUI, USDC, SUI/USDC, DEEP price point, MIST ]
 ---
 
-The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBook Design](./design.mdx#pool) to learn more about the structure of pools.
+The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBookV3 Design](./design.mdx#pool) to learn more about the structure of pools.
 
 ## API
 
@@ -50,3 +51,7 @@ The `update_allowed_versions()` function takes a pool and the registry, and upda
 This is very important after contract upgrades to ensure the newest contract can be used on the pool.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=update_allowed_versions noComments}
+
+## Related links
+
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

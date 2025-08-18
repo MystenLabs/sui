@@ -35,9 +35,6 @@ impl PackagePath {
     /// directory at `dir` and that it contains a valid Move package, i.e., it has a `Move.toml`
     /// file.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
-        if dir.as_os_str() == "." {
-            panic!()
-        }
         let path = dir
             .canonicalize()
             .map_err(|e| PackagePathError::InvalidDirectory { path: dir.clone() })?;

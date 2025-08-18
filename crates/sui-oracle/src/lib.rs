@@ -499,7 +499,7 @@ impl OnChainDataUploader {
             rgp,
         );
 
-        let signed_tx = self.wallet_ctx.sign_transaction(&tx);
+        let signed_tx = self.wallet_ctx.sign_transaction(&tx).await;
         let tx_digest = *signed_tx.digest();
 
         let timer_start = Instant::now();

@@ -78,7 +78,7 @@ task 8, lines 77-81:
 //> 1: t2::o2::freezer(Input(1));
 // Merge and then try to add as dof
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 9, lines 82-86:
 //# programmable --sender A --inputs object(2,0) object(3,0) object(4,0)
@@ -86,7 +86,7 @@ task 9, lines 82-86:
 //> 1: t2::o2::dofer(Input(2), Input(1));
 // Merge and then try to add as df
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 10, lines 87-91:
 //# programmable --sender A --inputs object(2,0) object(3,0) object(4,0)
@@ -94,7 +94,7 @@ task 10, lines 87-91:
 //> 1: t2::o2::dfer(Input(2), Input(1));
 // Merge and then try to transfer it
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 11, lines 92-96:
 //# programmable --sender A --inputs object(2,0) object(3,0) object(4,0)
@@ -102,7 +102,7 @@ task 11, lines 92-96:
 //> 1: t2::o2::transferer(Input(1));
 // Merge and then try to transfer it with PTB transfer
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 12, lines 97-101:
 //# programmable --sender A --inputs object(2,0) object(3,0) object(4,0) @A
@@ -110,7 +110,7 @@ task 12, lines 97-101:
 //> 1: TransferObjects([Input(1)], Input(3));
 // **Merge shared into shared**
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 13, line 103:
 //# run t2::o2::mint_shared_coin
@@ -178,7 +178,7 @@ task 19, lines 116-120:
 //> 1: t2::o2::freezer(Input(1));
 // Merge and then try to add as dof
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 20, lines 121-125:
 //# programmable --sender A --inputs object(13,0) object(14,0) object(15,0)
@@ -186,7 +186,7 @@ task 20, lines 121-125:
 //> 1: t2::o2::dofer(Input(2), Input(1));
 // Merge and then try to add as df
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 21, lines 126-130:
 //# programmable --sender A --inputs object(13,0) object(14,0) object(15,0)
@@ -194,7 +194,7 @@ task 21, lines 126-130:
 //> 1: t2::o2::dfer(Input(2), Input(1));
 // Merge and then try to transfer it
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 22, lines 131-135:
 //# programmable --sender A --inputs object(13,0) object(14,0) object(15,0)
@@ -202,11 +202,11 @@ task 22, lines 131-135:
 //> 1: t2::o2::transferer(Input(1));
 // Merge and then try to transfer it with PTB transfer
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
 
 task 23, lines 136-138:
 //# programmable --sender A --inputs object(13,0) object(14,0) object(15,0) @A
 //> 0: MergeCoins(Input(1), [Input(0)]);
 //> 1: TransferObjects([Input(1)], Input(3));
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)

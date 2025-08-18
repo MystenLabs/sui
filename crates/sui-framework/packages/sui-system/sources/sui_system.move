@@ -548,6 +548,16 @@ public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<addr
     wrapper.load_system_state_mut().active_validator_addresses()
 }
 
+/// Getter returning addresses of the currently active validators by reference.
+public fun active_validator_addresses_ref(wrapper: &SuiSystemState): vector<address> {
+    wrapper.load_system_state_ref().active_validator_addresses()
+}
+
+/// Getter returns the voting power of the active validators, values are voting power in the scale of 10000.
+public fun active_validator_voting_powers(wrapper: &SuiSystemState): VecMap<address, u64> {
+    wrapper.load_system_state_ref().active_validator_voting_powers()
+}
+
 /// Calculate the rewards for a given staked SUI object.
 /// Used in the package, and can be dev-inspected.
 public(package) fun calculate_rewards(
@@ -612,6 +622,15 @@ fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInnerV2 {
 
 fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
     load_inner_maybe_upgrade(self)
+}
+
+fun load_system_state_ref(self: &SuiSystemState): &SuiSystemStateInnerV2 {
+    let inner: &SuiSystemStateInnerV2 = dynamic_field::borrow(
+        &self.id,
+        self.version,
+    );
+    assert!(inner.system_state_version() == self.version, EWrongInnerVersion);
+    inner
 }
 
 fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {

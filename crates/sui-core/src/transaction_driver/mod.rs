@@ -35,7 +35,9 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    validator_client_monitor::{ValidatorClientMetrics, ValidatorClientMonitor},
 };
+use sui_config::NodeConfig;
 
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
@@ -46,11 +48,12 @@ pub struct SubmitTransactionOptions {
 }
 
 pub struct TransactionDriver<A: Clone> {
-    authority_aggregator: ArcSwap<AuthorityAggregator<A>>,
+    authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     state: Mutex<State>,
     metrics: Arc<TransactionDriverMetrics>,
     submitter: TransactionSubmitter,
     certifier: EffectsCertifier,
+    client_monitor: Arc<ValidatorClientMonitor<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -61,14 +64,27 @@ where
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<TransactionDriverMetrics>,
+        node_config: Option<&NodeConfig>,
+        client_metrics: Arc<ValidatorClientMetrics>,
     ) -> Arc<Self> {
+        let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
+
+        // Extract validator client monitor config from NodeConfig or use default
+        let monitor_config = node_config
+            .and_then(|nc| nc.validator_client_monitor_config.clone())
+            .unwrap_or_default();
+        let client_monitor =
+            ValidatorClientMonitor::new(monitor_config, client_metrics, shared_swap.clone());
+
         let driver = Arc::new(Self {
-            authority_aggregator: ArcSwap::new(authority_aggregator),
+            authority_aggregator: shared_swap,
             state: Mutex::new(State::new()),
             metrics: metrics.clone(),
             submitter: TransactionSubmitter::new(metrics.clone()),
             certifier: EffectsCertifier::new(metrics),
+            client_monitor,
         });
+
         driver.enable_reconfig(reconfig_observer);
         driver
     }
@@ -84,7 +100,10 @@ where
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
+        self.metrics.total_transactions_submitted.inc();
+
         const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
+        // Exponential backoff with jitter to prevent thundering herd on retries
         let mut backoff = ExponentialBackoff::from_millis(100)
             .max_delay(MAX_RETRY_DELAY)
             .map(jitter);
@@ -105,10 +124,20 @@ where
                             TX_TYPE_SHARED_OBJ_TX
                         }])
                         .observe(settlement_finality_latency);
+                    // Record the number of retries for successful transaction
+                    self.metrics
+                        .transaction_retries
+                        .with_label_values(&["success"])
+                        .observe(attempts as f64);
                     return Ok(resp);
                 }
                 Err(e) => {
                     if !e.is_retriable() {
+                        // Record the number of retries for failed transaction
+                        self.metrics
+                            .transaction_retries
+                            .with_label_values(&["failure"])
+                            .observe(attempts as f64);
                         return Err(e);
                     }
                     tracing::info!(
@@ -133,15 +162,27 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
 
-        // Get consensus position using TransactionSubmitter
         let (name, submit_txn_resp) = self
             .submitter
-            .submit_transaction(&auth_agg, tx_digest, raw_request, options)
+            .submit_transaction(
+                &auth_agg,
+                &self.client_monitor,
+                tx_digest,
+                raw_request,
+                options,
+            )
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .get_certified_finalized_effects(&auth_agg, tx_digest, name, submit_txn_resp, options)
+            .get_certified_finalized_effects(
+                &auth_agg,
+                &self.client_monitor,
+                tx_digest,
+                name,
+                submit_txn_resp,
+                options,
+            )
             .await
     }
 
@@ -174,15 +215,20 @@ where
             "Transaction Driver updating AuthorityAggregator with committee {}",
             new_authorities.committee
         );
+
         self.authority_aggregator.store(new_authorities);
     }
 }
 
 // Chooses the percentage of transactions to be driven by TransactionDriver.
 pub fn choose_transaction_driver_percentage() -> u8 {
-    // Currently, TD cannot work in non-test environments.
-    if std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME).is_ok() {
-        return 0;
+    // Currently, TD cannot work in mainnet.
+    if let Ok(chain) =
+        std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME)
+    {
+        if chain == "mainnet" {
+            return 0;
+        }
     }
 
     if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {

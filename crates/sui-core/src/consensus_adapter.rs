@@ -335,6 +335,11 @@ impl ConsensusAdapter {
         self.consensus_throughput_profiler.store(Some(profiler))
     }
 
+    /// Get the current number of in-flight transactions
+    pub fn num_inflight_transactions(&self) -> u64 {
+        self.num_inflight_transactions.load(Ordering::Relaxed)
+    }
+
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
         // todo - get_all_pending_consensus_transactions is called twice when
@@ -1038,7 +1043,8 @@ impl ConsensusAdapter {
             };
 
             let checkpoint_synced_future = if let SequencedConsensusTransactionKey::External(
-                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
+                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number)
+                | ConsensusTransactionKey::CheckpointSignatureV2(_, checkpoint_sequence_number, _),
             ) = transaction_key
             {
                 // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence

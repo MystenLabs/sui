@@ -68,7 +68,7 @@ impl RpcMetrics {
     pub(crate) fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             watermark_epoch: register_int_gauge_vec_with_registry!(
-                "watermark_epoch",
+                "graphql_watermark_epoch",
                 "The epoch that the RPC considers to be the latest, for this pipeline",
                 &["pipeline"],
                 registry
@@ -76,7 +76,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_checkpoint: register_int_gauge_vec_with_registry!(
-                "watermark_checkpoint",
+                "graphql_watermark_checkpoint",
                 "The checkpoint sequence number that the RPC considers to be the latest, for this pipeline",
                 &["pipeline"],
                 registry
@@ -84,7 +84,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_transaction: register_int_gauge_vec_with_registry!(
-                "watermark_transaction",
+                "graphql_watermark_transaction",
                 "This RPC's exclusive upper bound on transaction sequence numbers, for this pipeline",
                 &["pipeline"],
                 registry
@@ -92,7 +92,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_timestamp_ms: register_int_gauge_vec_with_registry!(
-                "watermark_timestamp_ms",
+                "graphql_watermark_timestamp_ms",
                 "The timestamp in milliseconds of the checkpoint that the RPC considers to be the latest, for this pipeline",
                 &["pipeline"],
                 registry
@@ -100,7 +100,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_reader_epoch_lo: register_int_gauge_vec_with_registry!(
-                "watermark_reader_epoch_lo",
+                "graphql_watermark_reader_epoch_lo",
                 "The earliest epoch that the RPC has data for, for this pipeline",
                 &["pipeline"],
                 registry
@@ -108,7 +108,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_reader_checkpoint_lo: register_int_gauge_vec_with_registry!(
-                "watermark_reader_checkpoint_lo",
+                "graphql_watermark_reader_checkpoint_lo",
                 "The earliest checkpoint that the RPC has data for, for this pipeline",
                 &["pipeline"],
                 registry
@@ -116,7 +116,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_reader_transaction_lo: register_int_gauge_vec_with_registry!(
-                "watermark_reader_transaction_lo",
+                "graphql_watermark_reader_transaction_lo",
                 "The earliest transaction that the RPC has data for, for this pipeline",
                 &["pipeline"],
                 registry

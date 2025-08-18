@@ -5,7 +5,7 @@ use crate::RpcError;
 use crate::RpcService;
 use sui_rpc::proto::sui::rpc::v2beta2::GetServiceInfoResponse;
 use sui_rpc::proto::timestamp_ms_to_proto;
-use sui_sdk_types::CheckpointDigest;
+use sui_sdk_types::Digest;
 use tap::Pipe;
 
 #[tracing::instrument(skip(service))]
@@ -23,7 +23,7 @@ pub fn get_service_info(service: &RpcService) -> Result<GetServiceInfoResponse, 
         .pipe(Some);
 
     GetServiceInfoResponse {
-        chain_id: Some(CheckpointDigest::new(service.chain_id().as_bytes().to_owned()).to_string()),
+        chain_id: Some(Digest::new(service.chain_id().as_bytes().to_owned()).to_string()),
         chain: Some(service.chain_id().chain().as_str().into()),
         epoch: Some(latest_checkpoint.epoch()),
         checkpoint_height: Some(latest_checkpoint.sequence_number),

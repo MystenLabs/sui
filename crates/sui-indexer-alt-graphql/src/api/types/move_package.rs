@@ -3,6 +3,23 @@
 
 use std::sync::Arc;
 
+use super::{
+    address::AddressableImpl,
+    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
+    transaction::Transaction,
+};
+use crate::api::types::type_origin::TypeOrigin;
+use crate::{
+    api::scalars::{
+        base64::Base64,
+        cursor::{BcsCursor, JsonCursor},
+        sui_address::SuiAddress,
+        uint53::UInt53,
+    },
+    error::{bad_user_input, RpcError},
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
+};
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
@@ -24,24 +41,6 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     move_package::MovePackage as NativeMovePackage,
     object::Object as NativeObject,
-};
-
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        cursor::{BcsCursor, JsonCursor},
-        sui_address::SuiAddress,
-        uint53::UInt53,
-    },
-    error::{bad_user_input, RpcError},
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    address::AddressableImpl,
-    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
-    transaction::Transaction,
 };
 
 pub(crate) struct MovePackage {
@@ -275,9 +274,29 @@ impl MovePackage {
             .previous_transaction(ctx)
             .await
     }
+
+    /// A table identifying which versions of a package introduced each of its types.
+    async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
+        let type_origins = self
+            .contents
+            .type_origin_table()
+            .iter()
+            .map(|native| TypeOrigin::from(native.clone()))
+            .collect();
+
+        Some(type_origins)
+    }
 }
 
 impl MovePackage {
+    /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
+    /// is not a package. This is more efficient when you already have the native object.
+    pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
+        let contents = native.data.try_as_package()?.clone();
+        let super_ = Object::from_contents(scope, Arc::new(native));
+        Some(Self { super_, contents })
+    }
+
     /// Try to downcast an `Object` to a `MovePackage`. This function returns `None` if `object`'s
     /// contents cannot be fetched, or it is not a package.
     pub(crate) async fn from_object(

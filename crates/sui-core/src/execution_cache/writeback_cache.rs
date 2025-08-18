@@ -942,6 +942,14 @@ impl WritebackCache {
         }
 
         let tx_digest = *transaction.digest();
+        debug!(
+            ?tx_digest,
+            "Writing transaction output objects to cache: {:?}",
+            written
+                .values()
+                .map(|o| (o.id(), o.version()))
+                .collect::<Vec<_>>(),
+        );
         let effects_digest = effects.digest();
 
         self.metrics.record_cache_write("transaction_block");

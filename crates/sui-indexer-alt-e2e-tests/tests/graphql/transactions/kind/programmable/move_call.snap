@@ -1,0 +1,91 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-37:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 39-44:
+//# programmable --sender A --inputs 42u64 1000u64 @A @B
+//> 0: test::move_call_test::create_test_object(Input(0));
+//> 1: test::move_call_test::get_object_value(Result(0));
+//> 2: test::move_call_test::check_gas_coin(Gas);
+//> 3: SplitCoins(Gas, [Input(0), Input(0)]);
+//> 4: test::move_call_test::transfer_coins(NestedResult(3,0), NestedResult(3, 1), Input(2));
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 46:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 48-69:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": {
+      "kind": {
+        "commands": {
+          "nodes": [
+            {
+              "functionName": "create_test_object",
+              "arguments": [
+                {
+                  "__typename": "Input",
+                  "ix": 0
+                }
+              ]
+            },
+            {
+              "functionName": "get_object_value",
+              "arguments": [
+                {
+                  "__typename": "TxResult",
+                  "cmd": 0,
+                  "ix": null
+                }
+              ]
+            },
+            {
+              "functionName": "check_gas_coin",
+              "arguments": [
+                {
+                  "__typename": "GasCoin",
+                  "_": null
+                }
+              ]
+            },
+            {},
+            {
+              "functionName": "transfer_coins",
+              "arguments": [
+                {
+                  "__typename": "TxResult",
+                  "cmd": 3,
+                  "ix": 0
+                },
+                {
+                  "__typename": "TxResult",
+                  "cmd": 3,
+                  "ix": 1
+                },
+                {
+                  "__typename": "Input",
+                  "ix": 2
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

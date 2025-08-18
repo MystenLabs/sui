@@ -41,6 +41,7 @@ pub struct IngestionConfig {
 }
 
 #[DefaultConfig]
+#[derive(Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ConsistencyConfig {
     /// The number of snapshots to keep in the buffer.
@@ -49,14 +50,16 @@ pub struct ConsistencyConfig {
     /// The stride between checkpoints.
     pub stride: u64,
 
-    /// The size of the buffer for storing checkpoints.
+    /// The size of the buffer for queueing up writes for checkpoints, before they are committed.
     pub buffer_size: usize,
 }
 
 #[DefaultConfig]
 #[derive(Default)]
 pub struct PipelineLayer {
+    pub balances: Option<CommitterLayer>,
     pub object_by_owner: Option<CommitterLayer>,
+    pub object_by_type: Option<CommitterLayer>,
 }
 
 #[DefaultConfig]
@@ -110,7 +113,9 @@ impl PipelineLayer {
     /// configure.
     pub fn example() -> Self {
         Self {
-            object_by_owner: Some(Default::default()),
+            balances: Some(CommitterLayer::default()),
+            object_by_owner: Some(CommitterLayer::default()),
+            object_by_type: Some(CommitterLayer::default()),
         }
     }
 }

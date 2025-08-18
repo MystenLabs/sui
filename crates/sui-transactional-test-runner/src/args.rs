@@ -216,6 +216,32 @@ pub struct AdvanceEpochCommand {
     pub count: Option<u64>,
     #[clap(long = "create-random-state")]
     pub create_random_state: bool,
+    #[clap(long = "create-authenticator-state")]
+    pub create_authenticator_state: bool,
+    #[clap(long = "create-authenticator-state-expire")]
+    pub create_authenticator_state_expire: bool,
+    #[clap(long = "create-deny-list-state")]
+    pub create_deny_list_state: bool,
+    #[clap(long = "create-bridge-state")]
+    pub create_bridge_state: bool,
+    #[clap(long = "create-bridge-committee")]
+    pub create_bridge_committee: bool,
+    #[clap(long = "include-system-packages")]
+    pub include_system_packages: bool,
+}
+
+impl From<&AdvanceEpochCommand> for simulacrum::AdvanceEpochConfig {
+    fn from(cmd: &AdvanceEpochCommand) -> Self {
+        Self {
+            create_random_state: cmd.create_random_state,
+            create_authenticator_state: cmd.create_authenticator_state,
+            create_authenticator_state_expire: cmd.create_authenticator_state_expire,
+            create_deny_list_state: cmd.create_deny_list_state,
+            create_bridge_state: cmd.create_bridge_state,
+            create_bridge_committee: cmd.create_bridge_committee,
+            include_system_packages: cmd.include_system_packages,
+        }
+    }
 }
 
 #[derive(Debug, clap::Parser)]
@@ -226,6 +252,18 @@ pub struct SetRandomStateCommand {
     pub random_bytes: String,
     #[clap(long = "randomness-initial-version")]
     pub randomness_initial_version: u64,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct AuthenticatorStateUpdateCommand {
+    #[clap(long = "round")]
+    pub round: u64,
+    /// List of JWK issuers (e.g., "google.com,microsoft.com").
+    /// Key IDs will be automatically generated as "key1", "key2", etc.
+    #[clap(long = "jwk-iss", action = clap::ArgAction::Append)]
+    pub jwk_iss: Vec<String>,
+    #[clap(long = "authenticator-obj-initial-shared-version")]
+    pub authenticator_obj_initial_shared_version: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -241,6 +279,7 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     AdvanceEpoch(AdvanceEpochCommand),
     AdvanceClock(AdvanceClockCommand),
     SetRandomState(SetRandomStateCommand),
+    AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand),
     ViewCheckpoint,
     RunGraphql(RunGraphqlCommand),
     RunJsonRpc(RunJsonRpcCommand),
@@ -285,6 +324,11 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
             Some(("set-random-state", matches)) => {
                 SuiSubcommand::SetRandomState(SetRandomStateCommand::from_arg_matches(matches)?)
             }
+            Some(("authenticator-state-update", matches)) => {
+                SuiSubcommand::AuthenticatorStateUpdate(
+                    AuthenticatorStateUpdateCommand::from_arg_matches(matches)?,
+                )
+            }
             Some(("view-checkpoint", _)) => SuiSubcommand::ViewCheckpoint,
             Some(("run-graphql", matches)) => {
                 SuiSubcommand::RunGraphql(RunGraphqlCommand::from_arg_matches(matches)?)
@@ -327,6 +371,9 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(AdvanceEpochCommand::command().name("advance-epoch"))
             .subcommand(AdvanceClockCommand::command().name("advance-clock"))
             .subcommand(SetRandomStateCommand::command().name("set-random-state"))
+            .subcommand(
+                AuthenticatorStateUpdateCommand::command().name("authenticator-state-update"),
+            )
             .subcommand(clap::Command::new("view-checkpoint"))
             .subcommand(RunGraphqlCommand::command().name("run-graphql"))
             .subcommand(RunJsonRpcCommand::command().name("run-jsonrpc"))

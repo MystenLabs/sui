@@ -262,8 +262,7 @@ impl MovePackage {
     /// tables.
     pub fn new_initial<'p>(
         modules: &[CompiledModule],
-        max_move_package_size: u64,
-        move_binary_format_version: u32,
+        protocol_config: &ProtocolConfig,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
@@ -277,8 +276,7 @@ impl MovePackage {
             runtime_id,
             OBJECT_START_VERSION,
             modules,
-            max_move_package_size,
-            move_binary_format_version,
+            protocol_config,
             type_origin_table,
             transitive_dependencies,
         )
@@ -306,8 +304,7 @@ impl MovePackage {
             runtime_id,
             new_version,
             modules,
-            protocol_config.max_move_package_size(),
-            protocol_config.move_binary_format_version(),
+            protocol_config,
             type_origin_table,
             transitive_dependencies,
         )
@@ -369,8 +366,7 @@ impl MovePackage {
         self_id: ObjectID,
         version: SequenceNumber,
         modules: &[CompiledModule],
-        max_move_package_size: u64,
-        move_binary_format_version: u32,
+        protocol_config: &ProtocolConfig,
         type_origin_table: Vec<TypeOrigin>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
@@ -388,7 +384,7 @@ impl MovePackage {
             );
 
             let mut bytes = Vec::new();
-            let version = if move_binary_format_version > VERSION_6 {
+            let version = if protocol_config.move_binary_format_version() > VERSION_6 {
                 module.version
             } else {
                 VERSION_6
@@ -398,12 +394,16 @@ impl MovePackage {
         }
 
         immediate_dependencies.remove(&self_id);
-        let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
+        let linkage_table = build_linkage_table(
+            immediate_dependencies,
+            transitive_dependencies,
+            protocol_config,
+        )?;
         Self::new(
             storage_id,
             version,
             module_map,
-            max_move_package_size,
+            protocol_config.max_move_package_size(),
             type_origin_table,
             linkage_table,
         )
@@ -666,6 +666,7 @@ where
 fn build_linkage_table<'p>(
     mut immediate_dependencies: BTreeSet<ObjectID>,
     transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
+    protocol_config: &ProtocolConfig,
 ) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
     let mut linkage_table = BTreeMap::new();
     let mut dep_linkage_tables = vec![];
@@ -676,19 +677,35 @@ fn build_linkage_table<'p>(
         // deserialization is OK
         let original_id = transitive_dep.original_package_id();
 
-        if immediate_dependencies.remove(&original_id) {
-            // Found an immediate dependency, mark it as seen, and stash a reference to its linkage
-            // table to check later.
-            dep_linkage_tables.push(&transitive_dep.linkage_table);
-        }
+        let imm_dep = immediate_dependencies.remove(&original_id);
 
-        linkage_table.insert(
-            original_id,
-            UpgradeInfo {
-                upgraded_id: transitive_dep.id,
-                upgraded_version: transitive_dep.version,
-            },
-        );
+        if protocol_config.dependency_linkage_error() {
+            dep_linkage_tables.push(&transitive_dep.linkage_table);
+            let existing = linkage_table.insert(
+                original_id,
+                UpgradeInfo {
+                    upgraded_id: transitive_dep.id,
+                    upgraded_version: transitive_dep.version,
+                },
+            );
+
+            if existing.is_some() {
+                return Err(ExecutionErrorKind::InvalidLinkage.into());
+            }
+        } else {
+            if imm_dep {
+                // Found an immediate dependency, mark it as seen, and stash a reference to its linkage
+                // table to check later.
+                dep_linkage_tables.push(&transitive_dep.linkage_table);
+            }
+            linkage_table.insert(
+                original_id,
+                UpgradeInfo {
+                    upgraded_id: transitive_dep.id,
+                    upgraded_version: transitive_dep.version,
+                },
+            );
+        }
     }
     // (1) Every dependency is represented in the transitive dependencies
     if !immediate_dependencies.is_empty() {

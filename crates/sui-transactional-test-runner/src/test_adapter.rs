@@ -21,7 +21,7 @@ use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
-    Flags, FullyCompiledProgram,
+    Flags, PreCompiledProgramInfo,
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -336,7 +336,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -764,12 +764,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand {
-                count,
-                create_random_state,
-            }) => {
-                for _ in 0..count.unwrap_or(1) {
-                    self.executor.advance_epoch(create_random_state).await?;
+            SuiSubcommand::AdvanceEpoch(cmd) => {
+                for _ in 0..cmd.count.unwrap_or(1) {
+                    self.executor.advance_epoch((&cmd).into()).await?;
                 }
                 let epoch = self.get_latest_epoch_id()?;
                 Ok(Some(format!("Epoch advanced: {epoch}")))
@@ -825,6 +822,51 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
                 self.execute_txn(tx.into()).await?;
                 Ok(None)
+            }
+            SuiSubcommand::AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand {
+                round,
+                jwk_iss,
+                authenticator_obj_initial_shared_version,
+            }) => {
+                use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+                use sui_types::authenticator_state::ActiveJwk;
+
+                let current_epoch = self.get_latest_epoch_id()?;
+
+                // Create ActiveJwk instances with auto-generated key IDs
+                // Example: --jwk-iss "google.com,microsoft.com"
+                // Results in: [(google.com, key1), (microsoft.com, key2)]
+                let active_jwks: Vec<ActiveJwk> = jwk_iss
+                    .iter()
+                    .enumerate()
+                    .map(|(index, iss)| ActiveJwk {
+                        jwk_id: JwkId::new(iss.clone(), format!("key{}", index + 1)),
+                        jwk: JWK {
+                            kty: "RSA".to_string(),
+                            e: "AQAB".to_string(),
+                            n: "test_modulus_value".to_string(),
+                            alg: "RS256".to_string(),
+                        },
+                        epoch: current_epoch,
+                    })
+                    .collect();
+
+                let auth_obj_version = authenticator_obj_initial_shared_version
+                    .map(SequenceNumber::from_u64)
+                    .unwrap_or_else(SequenceNumber::new);
+
+                let tx = VerifiedTransaction::new_authenticator_state_update(
+                    current_epoch,
+                    round,
+                    active_jwks,
+                    auth_obj_version,
+                );
+
+                self.execute_txn(tx.into()).await?;
+                Ok(Some(format!(
+                    "AuthenticatorStateUpdate executed at epoch {} round {}",
+                    current_epoch, round
+                )))
             }
             SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
                 let obj = get_obj!(fake_id);
@@ -1764,7 +1806,7 @@ impl SuiTestAdapter {
         }
 
         let mut unchanged_shared_ids = effects
-            .unchanged_shared_objects()
+            .unchanged_consensus_objects()
             .iter()
             .map(|(id, _)| *id)
             .collect::<Vec<_>>();
@@ -2250,7 +2292,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
@@ -2284,7 +2326,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "bridge", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
+    let pre_compiled_program = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
             paths: vec![
@@ -2301,7 +2343,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         None,
     )
     .unwrap();
-    match fully_compiled_res {
+    match pre_compiled_program {
         Err((files, diags)) => {
             eprintln!("!!!Sui framework failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, diags)
