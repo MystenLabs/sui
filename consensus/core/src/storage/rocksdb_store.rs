@@ -155,6 +155,7 @@ impl Store for RocksDBStore {
         let mut batch = self.blocks.batch();
         for block in write_batch.blocks {
             let block_ref = block.reference();
+            tracing::info!("Writing block {block_ref:?}");
             batch
                 .insert_batch(
                     &self.blocks,
@@ -208,6 +209,7 @@ impl Store for RocksDBStore {
         }
 
         batch.write()?;
+        tracing::info!("Committed");
         fail_point!("consensus-store-after-write");
         Ok(())
     }
