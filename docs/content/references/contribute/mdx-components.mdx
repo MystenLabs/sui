@@ -1,6 +1,6 @@
 ---
 title: MDX Components
-draft: true
+description: Extensions to the Sui docs rendering engine.
 ---
 
 Sui Docs uses the MDX format for its network documentation, which allows [JSX in markdown content](https://mdxjs.com/). Sui uses features provided by Docusaurus, plugins from its community, and custom plugins in an effort to improve reader experience. None of these features are required in your markdown contributions to the Sui documentation, but the Sui community might include them if it improves experience.
@@ -199,7 +199,8 @@ You can include specific sections of Move code using the following constructs ap
 - Module: #module=MODULE::NAME
 - Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION
 - Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT
-- Variables: #var=variableName, anotherVariable
+- Trait: #trait=TRAIT_NAME,ANOTHER_TRAIT
+- Variables: #var=variableName,anotherVariable
 - Move import: #use=LIBRARY::NAME
 - React component: #component=ComponentName
 - Type declaration: #type=TypeName
@@ -329,6 +330,7 @@ You can include a space-limited list of options after the @inject call. The foll
 - `noTests`: Remove tests from captured section of code.
 - `noTitle`: Don't place a hyperlinked title at the top of the code block.
 - `singleSpace`: If the code source has spurious whitespace, use this option to display code without extra spaces between lines. Useful when the code uses extra blank lines for readability. 
+- `highlight`: Highlight a single line out of the injected code. Use a word (such as a variable name) in the line you want highlighted. 
 
 For example, `{@inject: examples/move/example.source#module=example::example noComments noTests noTitle singleSpace}`
 
@@ -406,3 +408,31 @@ The import statement can go anywhere, but it's typically added to the top of the
 import YTCarousel from "@site/src/components/YTCarousel"
 
 <YTCarousel ids={["dQw4w9WgXcQ","EwTZ2xpQwpA","1TewCPi92ro"]}/>
+
+## Step titles
+
+It is recommended to use an actual ordered list when documenting processes. Each list item step should consist of a single instruction for the user. On occasion, however, you might want to have a group of instructions for each step, making it impractical for a standard ordered list. The step titles feature enables the use of numbered steps and sub-steps in a heading, where you can then group a set of instructions in a single step.
+
+### When to use
+
+Use when you detail a long process with multiple technologies, or a process that otherwise requires lengthy contextual content. Do not create a verbose ordered list or one where list item #1 requires several pages of depth before the reader gets to list item #2. If you find that you're creating such a process list, then it might be a good candidate for step headings. Having steps in the title of longer processes helps readers recall where they left off if they don't complete the task set, and enables them to easily navigate back using the ToC. 
+
+### How to use
+
+To create step headings, add a `step` or `substep` suffix to the usual heading levels. 
+
+For instance, to create a level 2 heading, write `##step Buy peanuts`, which is the same as typing `## Step 1: Buy peanuts`.
+
+The feature supports one level of [`nesting`](/) using the `substep` suffix in the same manner. Don't forget to use the proper number of hashes in relation to the parent step. Continuing the example, you might have `###substep Buy Cracker Jacks`, which would be the same as typing `### Step 1.1: Buy Cracker Jacks`.
+
+##step Buy peanuts
+
+Buy me some peanuts.
+
+###substep Buy Cracker Jacks
+
+And Cracker Jacks.
+
+##step Come back
+
+I don't care if I ever come back.

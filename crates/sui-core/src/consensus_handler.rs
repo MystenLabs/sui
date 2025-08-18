@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
 use consensus_types::block::TransactionIndex;
+use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{debug_fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::{
@@ -1330,6 +1331,22 @@ impl ConsensusBlockHandler {
         self.backpressure_subscriber.await_no_backpressure().await;
 
         let _scope = monitored_scope("ConsensusBlockHandler::handle_certified_blocks");
+
+        // Avoid triggering fastpath execution or setting transaction status to fastpath certified, during reconfiguration.
+        let reconfiguration_lock = self.epoch_store.get_reconfig_state_read_lock_guard();
+        if !reconfiguration_lock.should_accept_user_certs() {
+            debug!(
+                "Skipping fastpath execution because epoch {} is closing user transactions: {}",
+                self.epoch_store.epoch(),
+                blocks_output
+                    .blocks
+                    .iter()
+                    .map(|b| b.block.reference().to_string())
+                    .join(", "),
+            );
+            return;
+        }
+
         self.metrics.consensus_block_handler_block_processed.inc();
         let epoch = self.epoch_store.epoch();
         let parsed_transactions = blocks_output
@@ -1360,17 +1377,18 @@ impl ConsensusBlockHandler {
                         .inc();
                     continue;
                 }
-                self.epoch_store
-                    .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
-
                 self.metrics
                     .consensus_block_handler_txn_processed
                     .with_label_values(&["certified"])
                     .inc();
+
                 if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
                     if tx.is_consensus_tx() {
                         continue;
                     }
+                    // Only set fastpath certified status on transactions intended for fastpath execution.
+                    self.epoch_store
+                        .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
                     let tx = VerifiedTransaction::new_unchecked(*tx);
                     executable_transactions.push(Schedulable::Transaction(
                         VerifiedExecutableTransaction::new_from_consensus(
@@ -1385,10 +1403,10 @@ impl ConsensusBlockHandler {
         if executable_transactions.is_empty() {
             return;
         }
-
         self.metrics
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
+
         self.transaction_manager_sender.send(
             executable_transactions,
             Default::default(),
@@ -1806,11 +1824,17 @@ mod tests {
                     consensus_tx_status_cache.get_transaction_status(&position),
                     Some(ConsensusTxStatus::Rejected)
                 );
-            } else {
-                // Expect non-rejected transactions to be marked as fastpath certified.
+            } else if txn_idx % 2 == 0 {
+                // Expect owned object transactions to be marked as fastpath certified.
                 assert_eq!(
                     consensus_tx_status_cache.get_transaction_status(&position),
-                    Some(ConsensusTxStatus::FastpathCertified)
+                    Some(ConsensusTxStatus::FastpathCertified),
+                );
+            } else {
+                // Expect shared object transactions to be marked as fastpath certified.
+                assert_eq!(
+                    consensus_tx_status_cache.get_transaction_status(&position),
+                    None,
                 );
             }
         }

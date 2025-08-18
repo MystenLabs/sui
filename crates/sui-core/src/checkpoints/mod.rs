@@ -215,7 +215,11 @@ impl CheckpointStoreTables {
             ("epoch_last_checkpoint_map", config_u64.clone()),
             (
                 "watermarks",
-                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config),
+                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config.clone()),
+            ),
+            (
+                "transaction_fork_detected",
+                ThConfig::new_with_config(1, 1, KeyType::uniform(1), watermarks_config),
             ),
         ];
         Self::open_tables_read_write(
