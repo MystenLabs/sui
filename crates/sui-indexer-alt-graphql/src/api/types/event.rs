@@ -14,7 +14,9 @@ use crate::{
     scope::Scope,
 };
 
-use super::{address::Address, transaction::Transaction};
+use super::{
+    address::Address, move_type::MoveType, move_value::MoveValue, transaction::Transaction,
+};
 
 #[derive(Clone)]
 pub(crate) struct Event {
@@ -29,9 +31,14 @@ pub(crate) struct Event {
 }
 
 // TODO(DVX-1200): Support sendingModule - MoveModule
-// TODO(DVX-1203): contents - MoveValue
 #[Object]
 impl Event {
+    /// The Move value emitted for this event.
+    async fn contents(&self) -> Option<MoveValue> {
+        let type_ = MoveType::from_native(self.native.type_.clone().into(), self.scope.clone());
+        Some(MoveValue::new(type_, self.native.contents.clone()))
+    }
+
     /// The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
     /// This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
     async fn event_bcs(&self) -> Result<Option<Base64>, RpcError> {
