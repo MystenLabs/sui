@@ -844,6 +844,24 @@ type Input {
 
 
 """
+Information used by a package to link to a specific version of its dependency.
+"""
+type Linkage {
+	"""
+	The ID on-chain of the first version of the dependency.
+	"""
+	originalId: SuiAddress
+	"""
+	The ID on-chain of the version of the dependency that this package depends on.
+	"""
+	upgradedId: SuiAddress
+	"""
+	The version of the dependency that this package depends on.
+	"""
+	version: UInt53
+}
+
+"""
 Create a vector (can be empty).
 """
 type MakeMoveVecCommand {
@@ -942,6 +960,10 @@ type MovePackage implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transitive dependencies of this package.
+	"""
+	linkage: [Linkage!]
 	"""
 	A table identifying which versions of a package introduced each of its types.
 	"""

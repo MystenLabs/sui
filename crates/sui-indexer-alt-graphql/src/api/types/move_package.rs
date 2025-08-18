@@ -8,6 +8,7 @@ use super::{
     object::{self, CVersion, Object, ObjectImpl, VersionFilter},
     transaction::Transaction,
 };
+use crate::api::types::linkage::Linkage;
 use crate::api::types::type_origin::TypeOrigin;
 use crate::{
     api::scalars::{
@@ -273,6 +274,21 @@ impl MovePackage {
         ObjectImpl::from(&self.super_)
             .previous_transaction(ctx)
             .await
+    }
+
+    /// The transitive dependencies of this package.
+    async fn linkage(&self) -> Option<Vec<Linkage>> {
+        let linkage = self
+            .contents
+            .linkage_table()
+            .iter()
+            .map(|(object_id, upgrade_info)| Linkage {
+                object_id,
+                upgrade_info,
+            })
+            .collect();
+
+        Some(linkage)
     }
 
     /// A table identifying which versions of a package introduced each of its types.
