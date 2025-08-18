@@ -108,6 +108,10 @@ impl ConsensusCommitOutput {
         self.deleted_deferred_txns.iter().cloned()
     }
 
+    pub fn has_deferred_transactions(&self) -> bool {
+        !self.deferred_txns.is_empty()
+    }
+
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
         self.next_randomness_round.as_ref().map(|(_, ts)| *ts)
     }
