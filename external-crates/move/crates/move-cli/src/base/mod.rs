@@ -6,6 +6,7 @@ pub mod coverage;
 pub mod disassemble;
 pub mod docgen;
 pub mod info;
+pub mod call_trace;
 pub mod migrate;
 pub mod new;
 pub mod profile;

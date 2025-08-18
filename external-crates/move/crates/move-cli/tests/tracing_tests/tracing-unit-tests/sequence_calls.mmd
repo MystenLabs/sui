@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    box rgba(70, 150, 220, 0.80) Package 0x1
+    participant P3 as "calls::g"
+    participant P6 as "calls::h"
+    participant P4 as "calls::i"
+    participant P1 as "calls::f"
+    participant P0 as "calls::test_complex_nested_calls"
+    participant P2 as "calls::k"
+    end
+    participant P7 as Entry
+
+    P7->>+P0: test_complex_nested_calls
+    P0->>+P1: f
+    P1->>+P2: k
+    P2-->>-P1: return
+    P1->>+P3: g
+    P3->>+P4: i
+    P4-->>-P3: return
+    P3->>+P6: h
+    P6-->>-P3: return
+    P3->>+P6: h
+    P6-->>-P3: return
+    P3-->>-P1: return
+    P1-->>-P0: return
+    P0-->>-P7: return
+

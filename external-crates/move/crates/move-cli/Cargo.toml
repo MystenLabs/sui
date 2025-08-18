@@ -22,6 +22,7 @@ toml_edit.workspace = true
 walkdir.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+regex.workspace = true
 
 move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true
