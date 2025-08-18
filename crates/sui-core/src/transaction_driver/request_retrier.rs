@@ -35,8 +35,10 @@ impl<A: Clone> RequestRetrier<A> {
         auth_agg: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
     ) -> Self {
-        let selected_validators =
-            client_monitor.select_shuffled_preferred_validators(&auth_agg.committee, 10);
+        let selected_validators = client_monitor.select_shuffled_preferred_validators(
+            &auth_agg.committee,
+            auth_agg.committee.num_members() / 3,
+        );
         let remaining_clients = selected_validators
             .into_iter()
             .map(|name| (name, auth_agg.authority_clients[&name].clone()))
