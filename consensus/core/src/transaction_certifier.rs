@@ -364,6 +364,15 @@ impl CertifierState {
                         )
                         .as_secs_f64(),
                     );
+
+                let latency =
+                    Duration::from_millis(certified_block.block.timestamp_ms().saturating_sub(now));
+                self.context
+                    .metrics
+                    .node_metrics
+                    .certifier_block_latency
+                    .with_label_values(&[&authority_name])
+                    .observe(latency.as_secs_f64());
                 certified_blocks.push(certified_block);
             }
         }

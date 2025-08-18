@@ -4,10 +4,11 @@
 use std::sync::Arc;
 
 use prometheus::{
-    exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    exponential_buckets, linear_buckets, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    IntGaugeVec, Registry,
 };
 
 use crate::network::metrics::NetworkMetrics;
@@ -215,6 +216,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) certifier_rejected_transactions: IntCounterVec,
     pub(crate) certifier_accepted_transactions: IntCounterVec,
     pub(crate) certifier_block_rounds: HistogramVec,
+    pub(crate) certifier_block_latency: HistogramVec,
     pub(crate) finalizer_buffered_commits: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
@@ -520,6 +522,14 @@ impl NodeMetrics {
                 "certifier_block_rounds",
                 "The number of rounds that it took for a block to be certified by the transaction certifier",
                 &["authority"],
+                linear_buckets(0.0, 1.0, 10).unwrap(),
+                registry,
+            ).unwrap(),
+            certifier_block_latency: register_histogram_vec_with_registry!(
+                "certifier_block_latency",
+                "The latency of a block being certified by the transaction certifier",
+                &["authority"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
