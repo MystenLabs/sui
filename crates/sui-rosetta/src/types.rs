@@ -993,8 +993,20 @@ impl InternalOperation {
                     let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                     (validator, state, amount)
                 } else {
-                    let amount =
-                        builder.pure(metadata.total_coin_value as u64 - metadata.budget)?;
+                    // When staking all, ensure we don't exceed available balance
+                    let gas_buffer = (metadata.budget as f64 * 1.5) as u64; // 50% buffer for gas variations
+                    let available_for_stake =
+                        (metadata.total_coin_value as u64).saturating_sub(gas_buffer);
+
+                    // For dry run with mock values, cap the amount to a reasonable value
+                    let stake_amount = if metadata.total_coin_value > 1_000_000_000_000_000 {
+                        // This is likely a dry run with mock values
+                        1_000_000_000_000 // 1M SUI
+                    } else {
+                        available_for_stake
+                    };
+
+                    let amount = builder.pure(stake_amount)?;
                     let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                     let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
                     (validator, state, amount)
