@@ -366,7 +366,7 @@ impl CertifierState {
                     );
 
                 let latency =
-                    Duration::from_millis(certified_block.block.timestamp_ms().saturating_sub(now));
+                    Duration::from_millis(now.saturating_sub(certified_block.block.timestamp_ms()));
                 self.context
                     .metrics
                     .node_metrics
@@ -457,7 +457,7 @@ impl CertifierState {
                             .as_secs_f64(),
                         );
                     let latency = Duration::from_millis(
-                        certified_block.block.timestamp_ms().saturating_sub(now),
+                        now.saturating_sub(certified_block.block.timestamp_ms()),
                     );
                     self.context
                         .metrics
