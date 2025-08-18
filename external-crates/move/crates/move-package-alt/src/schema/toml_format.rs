@@ -1,3 +1,12 @@
+use toml_edit::{
+    DocumentMut, InlineTable, Item, KeyMut, Table, Value,
+    visit_mut::{self, VisitMut},
+};
+
+pub trait RenderToml {
+    fn render_as_toml(&self) -> String;
+}
+
 /// Replace every inline table in [toml] with an implicit standard table (implicit tables are not
 /// included if they have no keys directly inside them)
 pub fn expand_toml(toml: &mut DocumentMut) {

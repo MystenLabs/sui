@@ -1,26 +1,30 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use serde::{Deserialize, Deserializer, de};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_spanned::Spanned;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
+    toml_format::RenderToml,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
 /// names in the `[environments]` table of the manifest
 pub type EnvironmentID = String;
 
-// Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
-// writing these files should use [toml_edit] to set / preserve the formatting, since these are
-// user-editable files
-#[derive(Debug, Deserialize, Clone)]
+// Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
+// tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
+// implement [Serialize] and provide [render_as_toml], primarily for generating tests
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
+
+    #[serde(default)]
+    pub local_environments: BTreeMap<EnvironmentName, EnvironmentName>,
 
     #[serde(default)]
     pub dependencies: BTreeMap<Spanned<PackageName>, DefaultDependency>,
@@ -32,7 +36,7 @@ pub struct ParsedManifest {
 }
 
 /// The `[package]` section of a manifest
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
@@ -119,6 +123,12 @@ pub struct ManifestGitDependency {
 #[derive(Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
+}
+
+impl RenderToml for ParsedManifest {
+    fn render_as_toml(&self) -> String {
+        todo!()
+    }
 }
 
 impl<'de> Deserialize<'de> for ManifestDependencyInfo {
@@ -637,7 +647,7 @@ mod tests {
         assert_snapshot!(error, @r###"
         TOML parse error at line 1, column 1
           |
-        1 | 
+        1 |
           | ^
         missing field `package`
         "###);

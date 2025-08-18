@@ -4,15 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
-    ffi::OsString,
     fmt::Debug,
     path::{Path, PathBuf},
 };
 
 use thiserror::Error;
-
-use super::EnvironmentName;
 
 /// A canonical path to a directory containing a loaded Move package (in particular, the directory
 /// must have a Move.toml)
@@ -24,8 +20,8 @@ pub enum PackagePathError {
     #[error("Invalid directory at `{path}`")]
     InvalidDirectory { path: PathBuf },
 
-    #[error("Package does not have a Move.toml file at `{path}`")]
-    InvalidPackage { path: PathBuf },
+    #[error("Package does not have a Move.toml file at `{path_to_toml}`")]
+    InvalidPackage { path_to_toml: PathBuf },
 }
 
 pub type PackagePathResult<T> = Result<T, PackagePathError>;
@@ -47,7 +43,7 @@ impl PackagePath {
 
         if !result.manifest_path().exists() {
             return Err(PackagePathError::InvalidPackage {
-                path: result.manifest_path(),
+                path_to_toml: result.manifest_path(),
             });
         }
 
@@ -63,29 +59,19 @@ impl PackagePath {
         self.0.join("Move.toml")
     }
 
+    /// The path to the lockfile
     pub fn lockfile_path(&self) -> PathBuf {
         self.0.join("Move.lock")
     }
 
-    pub fn lockfile_by_env_path(&self, env: &str) -> PathBuf {
-        self.0.join(format!(".Move.{env}.lock"))
+    /// The path to the publications file
+    pub fn publications_path(&self) -> PathBuf {
+        self.0.join("Move.published")
     }
 
-    pub fn env_lockfiles(&self) -> std::io::Result<BTreeMap<EnvironmentName, PathBuf>> {
-        let mut result = BTreeMap::new();
-
-        let dir = std::fs::read_dir(self)?;
-        for entry in dir {
-            let Ok(file) = entry else { continue };
-
-            let Some(env_name) = lockname_to_env_name(file.file_name()) else {
-                continue;
-            };
-
-            result.insert(env_name, file.path());
-        }
-
-        Ok(result)
+    /// The path to the local publications file
+    pub fn publications_local_path(&self) -> PathBuf {
+        self.0.join("Move.published.local")
     }
 }
 
@@ -95,34 +81,16 @@ impl AsRef<Path> for PackagePath {
     }
 }
 
-/// Given a filename of the form `Move.<env>.lock`, returns `<env>`.
-fn lockname_to_env_name(filename: OsString) -> Option<EnvironmentName> {
-    let Ok(filename) = filename.into_string() else {
-        return None;
-    };
-
-    let prefix = ".Move.";
-    let suffix = ".lock";
-
-    if filename.starts_with(prefix) && filename.ends_with(suffix) {
-        let start_index = prefix.len();
-        let end_index = filename.len() - suffix.len();
-
-        if start_index < end_index {
-            return Some(filename[start_index..end_index].to_string());
-        }
-    }
-
-    None
-}
-
 #[cfg(test)]
 mod tests {
+    use move_command_line_common::testing::insta::assert_snapshot;
+
     use super::*;
     use std::fs;
 
+    /// ensures that [PackagePath::path] returns a canonicalized path
     #[test]
-    fn test_new() {
+    fn test_canonicalization() {
         let temp_dir = tempfile::tempdir().unwrap();
 
         // Create the directory structure: temp_dir/A/B/C
@@ -146,35 +114,16 @@ mod tests {
         assert_eq!(package_path.path(), &b.canonicalize().unwrap());
     }
 
+    /// You must create a package path from the directory containing the `Move.toml` file, rather
+    /// than the path to `Move.toml` itself
     #[test]
-    fn test_move_toml_path() {
+    fn test_move_toml_path_fails() {
         let temp_dir = tempfile::tempdir().unwrap();
         let manifest_path = temp_dir.path().join("Move.toml");
 
         // Create a Move.toml file in the temporary directory
         fs::write(&manifest_path, "[package]\nname = 'test_package'\n").unwrap();
 
-        assert!(PackagePath::new(manifest_path).is_err());
-    }
-
-    #[test]
-    fn test_lockname_to_env_name() {
-        assert_eq!(
-            lockname_to_env_name(OsString::from(".Move.test.lock")),
-            Some("test".to_string())
-        );
-        assert_eq!(
-            lockname_to_env_name(OsString::from(".Move.3vcga23.lock")),
-            Some("3vcga23".to_string())
-        );
-        assert_eq!(
-            lockname_to_env_name(OsString::from(".Mve.test.lock.lock")),
-            None
-        );
-
-        assert_eq!(lockname_to_env_name(OsString::from(".Move.lock")), None);
-        assert_eq!(lockname_to_env_name(OsString::from(".Move.test.loc")), None);
-        assert_eq!(lockname_to_env_name(OsString::from(".Move.testloc")), None);
-        assert_eq!(lockname_to_env_name(OsString::from(".Move.test")), None);
+        assert_snapshot!(PackagePath::new(manifest_path).unwrap_err().to_string(), @"");
     }
 }

@@ -35,7 +35,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     graph: PackageGraph<F>,
     /// The lockfile we're operating on
     /// Invariant: lockfile.pinned matches graph, except that digests may differ
-    lockfile: ParsedLockfile<F>,
+    lockfile: ParsedLockfile,
     /// The list of published ids for every dependency in the root package
     deps_published_ids: Vec<OriginalID>,
 }
@@ -193,7 +193,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Read the lockfile from the root directory, returning an empty structure if none exists
     /// TODO(Manos): Do we wanna try to read this when loading, to make sure we can operate on it?
     /// That will avoid doing all the work (to repin / publish etc), and then be unable to operate it.
-    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile<F>> {
+    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile> {
         let path = package_path.lockfile_path();
         debug!("loading lockfile {:?}", path);
 
@@ -205,7 +205,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(toml_edit::de::from_str(file.source())?)
     }
 
-    pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
+    pub fn lockfile_for_testing(&self) -> &ParsedLockfile {
         &self.lockfile
     }
 

@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use crate::flavor::MoveFlavor;
 
 use super::{
-    EnvironmentID, EnvironmentName, PublishAddresses,
+    EnvironmentID, EnvironmentName, PublishAddresses, RenderToml,
     toml_format::{expand_toml, flatten_toml},
 };
 
 /// The schema for a `Move.published` or a `Move.published.local` file
-pub struct PublicationFile<F: MoveFlavor>(BTreeMap<EnvironmentName, Publication<F>>);
+pub type PublicationFile<F> = BTreeMap<EnvironmentName, Publication<F>>;
 
 /// A `Publication` is a historical record describing the state of a package when it was published.
 /// It contains
@@ -22,6 +22,8 @@ pub struct Publication<F: MoveFlavor> {
     #[serde(flatten)]
     pub addresses: PublishAddresses,
     pub chain_id: EnvironmentID,
+    // TODO: pub version: F::PublishedVersion,
+    pub version: String,
 
     /// Additional flavor-specific fields, such as an upgrade capability or information for source
     /// verification
@@ -29,15 +31,9 @@ pub struct Publication<F: MoveFlavor> {
     pub metadata: F::PublishedMetadata,
 }
 
-impl<F: MoveFlavor> PublicationFile<F> {
-    pub fn render_as_toml(&self) -> String {
-        todo!()
-    }
-}
-
-impl<F: MoveFlavor> Publication<F> {
+impl<F: MoveFlavor> RenderToml for PublicationFile<F> {
     /// Pretty-print `self` as TOML
-    pub fn render_as_toml(&self) -> String {
+    fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
         expand_toml(&mut toml);
         flatten_toml(&mut toml["dependencies"]);

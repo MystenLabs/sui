@@ -9,7 +9,10 @@
 pub mod git;
 mod paths;
 
+pub mod dep_builder;
 pub mod graph_builder;
+pub mod legacy_package_builder;
+pub mod package_builder;
 
 use indoc::formatdoc;
 use paths::PathExt;
