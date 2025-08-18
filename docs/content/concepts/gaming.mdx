@@ -1,6 +1,8 @@
 ---
 title: Gaming on Sui
 description: Sui offers features like dynamic NFTs, kiosks, soulbound assets, and on-chain randomness, to provide builders with the tools to create immersive, transparent, and fair gaming experiences.
+mdx:
+  format: md
 ---
 
 import YTCarousel from "@site/src/components/YTCarousel"
@@ -45,7 +47,7 @@ On Sui, everything is an object and all objects are NFTs. For the purpose of the
 
 You can view an object on Sui as a key-value pair data structure. In Move, the smart contract language of Sui, objects are defined as a `struct`. As an example, consider the game board of a tic-tac-toe game: 
 
-{@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
+{@inject:  ../../../examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
 
 The first key-value pair for any object is `id: address`, which is a unique value of type `UID`. Every object has a different address, which is why every object is an NFT because this mandatory key-value pair sets each object apart and makes it unique.
 
@@ -53,7 +55,7 @@ The first key-value pair for any object is `id: address`, which is a unique valu
 
 Smart contracts contain the functions that create objects. Using the previous example, the function (`new`) that creates the object represented (a digital tic-tac-toe gameboard) provides the values for each attribute. The Sui framework creates the UID that uniquely identifies this particular game.
 
-{@inject: examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
+{@inject:  ../../../examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
 
 This is an on-chain action, or transaction. In this case, the transaction is a request to the chain to create an object. You provide the necessary data to the function and pay the gas fee for the computation effort of the network validators. The result is the creation of a new NFT that exists on the Sui blockchain at the address (`id`).
 
@@ -69,11 +71,13 @@ For more information on the computation of gas fees, see [Sui Gas Pricing](./tok
 
 On Sui, you can include one object inside of another (dynamic fields). For example, an object named `Parent` might contain objects of type `Child`. The smart contract can provide the necessary functions to add and remove the child objects from their parents. 
 
-{@inject: examples/move/dynamic_fields/sources/example.move#struct=Parent,Child}
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#struct=Parent}
+
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#struct=Child}
 
 The function to add child objects to a parent might resemble the following. In this case, `ofield` is an alias for the `sui::dynamic_object_field` package.
 
-{@inject: examples/move/dynamic_fields/sources/example.move#fun=add_child}
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#fun=add_child}
 
 You can apply dynamic fields to many use cases. An object named `TicketBooth`, for example, could contain objects of type `ConcertTicket`. An object of type `Car` might have a field named `is_functioning` that is `false` until all necessary objects (`Engine`, `Tires`, `Body`, `Wheel`) are present, at which point it can automatically update its `is_functioning` field to `true`.
 

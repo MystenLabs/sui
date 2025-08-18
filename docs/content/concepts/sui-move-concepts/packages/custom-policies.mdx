@@ -2,6 +2,8 @@
 title: Custom Upgrade Policies
 description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single-key ownership upgrades.
 keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ] 
+mdx:
+  format: md
 ---
 
 Protecting the ability to upgrade a package on-chain using a single key can pose a security risk for several reasons:
@@ -42,7 +44,7 @@ Package upgrades must occur end-to-end in a single transaction and are composed 
 
 While step 2 is a built-in command, steps 1 and 3 are implemented as Move functions. The Sui framework provides their most basic implementation:
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#fun=authorize_upgrade,commit_upgrade noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#fun=authorize_upgrade,commit_upgrade noComments}
 
 These are the functions that `sui client upgrade` calls for authorization and commit. Custom upgrade policies work by guarding
 access to a package `UpgradeCap` (and therefore to calls of these functions) behind extra conditions that are specific to that policy
@@ -55,7 +57,7 @@ Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and 
 
 The `UpgradeCap` is the central type responsible for coordinating package upgrades.
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeCap noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeCap noComments}
 
 Publishing a package creates the `UpgradeCap` object and upgrading the package updates that object. The owner of this object has permission to:
 
@@ -72,7 +74,7 @@ And its API guarantees the following properties:
 
 ## UpgradeTicket {#upgradeticket}
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeTicket noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeTicket noComments}
 
 An `UpgradeTicket` is proof that an upgrade has been authorized. This authorization is specific to:
 
@@ -111,7 +113,7 @@ BUILDING test
 
 ## UpgradeReceipt {#upgradereceipt}
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeReceipt noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeReceipt noComments}
 
 The `UpgradeReceipt` is proof that the `Upgrade` command ran successfully, and Sui added the new package to the set of created
 objects for the transaction. It is used to update its `UpgradeCap` (identified by `cap: ID`) with the ID of the latest package in its
@@ -705,9 +707,12 @@ console.log(result);
 ```
 
 <details>
-  <summary>
-  `publish.js`
-  </summary>
+
+<summary>
+
+`publish.js`
+
+</summary>
 
 ```js
 import { execSync } from 'child_process';

@@ -24,7 +24,8 @@ Some base quantity may be left over, if the input quantity is not divisible by l
 
 You can overestimate the amount of DEEP required. The remaining balance is returned.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=swap_exact_base_for_quote noComments}
+```move reference 
+https://github.com/MystenLabs/deepbookv3/blob/master/packages/deepbook/sources/pool.move#fun=swap_exact_base_for_quote noComments}
 
 ### Swap exact quote for base
 
@@ -36,13 +37,15 @@ Swap exact quote quantity without needing a `balance_manager`. You can overestim
 
 Some quote quantity might be left over if the input quantity is not divisible by lot size.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=swap_exact_quote_for_base noComments}
+```move reference 
+https://github.com/MystenLabs/deepbookv3/blob/master/packages/deepbook/sources/pool.move#fun=swap_exact_quote_for_base noComments}
 
 ### Swap exact quantity
 
 This function is what the previous two functions call with `coin::zero()` set for the third coin. Users can call this directly for base → quote or quote → base as long as base or quote have a zero value.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=swap_exact_quantity noComments}
+```move reference 
+https://github.com/MystenLabs/deepbookv3/blob/master/packages/deepbook/sources/pool.move#fun=swap_exact_quantity noComments}
 
 ## Related links
 

@@ -5,9 +5,24 @@ import { themes } from "prism-react-renderer";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
+const npm2yarn = require('@docusaurus/remark-plugin-npm2yarn');
+import rehypeRawFiles from './src/rehype/rehype-raw-only.mjs';
+import rehypeTabsMd from './src/rehype/rehype-tabs.mjs';
+
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
+
+const lightCodeTheme = require("prism-react-renderer/themes/github");
+const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
+
+const mdxPass = [
+  'mdxJsxFlowElement',
+  'mdxJsxTextElement',
+  'mdxFlowExpression',
+  'mdxTextExpression',
+  'mdxjsEsm',
+];
 
 require("dotenv").config();
 
@@ -81,12 +96,7 @@ const config = {
         },
       },
     ],
-    [
-      "docusaurus-plugin-includes",
-      {
-        postBuildDeletedFolders: ["../snippets"],
-      },
-    ],
+    require.resolve('./src/plugins/tabs-md-client/index.mjs'),
     async function myPlugin(context, options) {
       return {
         name: "docusaurus-tailwindcss",
@@ -113,7 +123,7 @@ const config = {
           routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
           // the double docs below is a fix for having the path set to ../content
-          editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
+          editUrl: "https://github.com/MystenLabs/sui/tree/main/docs",
           /*disableVersioning: true,
           lastVersion: "current",
           versions: {
@@ -130,16 +140,16 @@ const config = {
             keywords: ["checkpoint"],
             extendDefaults: true,
           },
+          beforeDefaultRemarkPlugins: [
+                [require('./src/js/remark-includes.cjs'), { docsDir: path.join(__dirname, 'content') }],
+          ],
           remarkPlugins: [
             math,
-            [
-              require("@docusaurus/remark-plugin-npm2yarn"),
-              { sync: true, converters: ["yarn", "pnpm"] },
-            ],
+            [npm2yarn, { sync: true, converters: ['yarn', 'pnpm'] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
           ],
-          rehypePlugins: [katex],
+          rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd],
         },
         theme: {
           customCss: [
@@ -151,6 +161,7 @@ const config = {
     ],
   ],
   scripts: [
+    {src: './src/js/tabs-md.js', defer: true},
     {
       src: "/js/clarity.js",
       async: true,
@@ -173,7 +184,7 @@ const config = {
       type: "text/css",
     },
   ],
-  themes: ["@docusaurus/theme-mermaid", "docusaurus-theme-frontmatter"],
+  themes: ["@docusaurus/theme-mermaid", "docusaurus-theme-github-codeblock"],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
@@ -183,6 +194,7 @@ const config = {
           autoCollapseCategories: false,
         },
       },
+    
       navbar: {
         title: "Sui Documentation",
         logo: {
@@ -229,10 +241,14 @@ const config = {
         style: "dark",
         copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/MystenLabs/sui/blob/main/docs/site/LICENSE">CC BY 4.0</a>`,
       },
+      codeblock: {
+        showGithubLink: true,
+        githubLinkLabel: 'View on GitHub',
+      },
       prism: {
-        theme: themes.github,
-        darkTheme: themes.nightOwl,
-        additionalLanguages: ["rust", "typescript", "toml", "json"],
+      theme: lightCodeTheme,
+      darkTheme: darkCodeTheme,
+      additionalLanguages: ["rust", "typescript", "toml", "json"],
       },
     }),
 };
