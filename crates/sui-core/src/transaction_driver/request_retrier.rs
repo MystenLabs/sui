@@ -39,7 +39,7 @@ impl<A: Clone> RequestRetrier<A> {
         let preferred_validators_num = std::env::var("PREFERRED_VALIDATORS_NUM")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(5);
+            .unwrap_or(10);
 
         debug!(
             "Using preferred_validators_num: {}",
