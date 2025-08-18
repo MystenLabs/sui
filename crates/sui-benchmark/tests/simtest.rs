@@ -27,7 +27,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::node::{AuthorityOverloadConfig, ForkRecoveryConfig};
+    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -539,7 +539,7 @@ mod test {
             max_deferral_rounds = if rng.gen_bool(0.5) {
                 rng.gen_range(0..20) // Short deferral round (testing cancellation)
             } else {
-                rng.gen_range(1000..10000) // Large deferral round (testing liveness)
+                rng.gen_range(500..1000) // Large deferral round (testing liveness)
             };
             if rng.gen_bool(0.5) {
                 allow_overage_factor = rng.gen_range(1..100);
@@ -1466,6 +1466,7 @@ mod test {
         let fork_recovery_config = ForkRecoveryConfig {
             transaction_overrides: captured_effects,
             checkpoint_overrides: checkpoint_overrides_computed,
+            fork_crash_behavior: ForkCrashBehavior::ReturnError,
         };
 
         info!(

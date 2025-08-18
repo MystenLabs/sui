@@ -6,7 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
-use crate::accumulators::create_accumulator_update_transactions;
+use crate::accumulators::AccumulatorSettlementTxBuilder;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -17,6 +17,7 @@ pub use crate::checkpoints::checkpoint_output::{
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
@@ -56,7 +57,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
-use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
+use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
@@ -83,6 +84,8 @@ use typed_store::{
     TypedStoreError,
 };
 
+const TRANSACTION_FORK_DETECTED_KEY: u8 = 0;
+
 pub type CheckpointHeight = u64;
 
 pub struct EpochStats {
@@ -91,7 +94,7 @@ pub struct EpochStats {
     pub total_gas_reward: u64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
     pub last_of_epoch: bool,
@@ -100,60 +103,10 @@ pub struct PendingCheckpointInfo {
     pub checkpoint_height: CheckpointHeight,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpoint {
-    pub roots: Vec<TransactionDigest>,
-    pub details: PendingCheckpointInfo,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PendingCheckpointV2 {
-    // This is an enum for future upgradability, though at the moment there is only one variant.
-    V2(PendingCheckpointV2Contents),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PendingCheckpointV2Contents {
     pub roots: Vec<TransactionKey>,
     pub details: PendingCheckpointInfo,
-}
-
-impl PendingCheckpointV2 {
-    pub fn as_v2(&self) -> &PendingCheckpointV2Contents {
-        match self {
-            PendingCheckpointV2::V2(contents) => contents,
-        }
-    }
-
-    pub fn into_v2(self) -> PendingCheckpointV2Contents {
-        match self {
-            PendingCheckpointV2::V2(contents) => contents,
-        }
-    }
-
-    pub fn expect_v1(self) -> PendingCheckpoint {
-        let v2 = self.into_v2();
-        PendingCheckpoint {
-            roots: v2
-                .roots
-                .into_iter()
-                .map(|root| *root.unwrap_digest())
-                .collect(),
-            details: v2.details,
-        }
-    }
-
-    pub fn roots(&self) -> &Vec<TransactionKey> {
-        &self.as_v2().roots
-    }
-
-    pub fn details(&self) -> &PendingCheckpointInfo {
-        &self.as_v2().details
-    }
-
-    pub fn height(&self) -> CheckpointHeight {
-        self.details().checkpoint_height
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -196,6 +149,16 @@ pub struct CheckpointStoreTables {
     /// Watermarks used to determine the highest verified, fully synced, and
     /// fully executed checkpoints
     pub(crate) watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
+
+    /// Stores transaction fork detection information
+    pub(crate) transaction_fork_detected: DBMap<
+        u8,
+        (
+            TransactionDigest,
+            TransactionEffectsDigest,
+            TransactionEffectsDigest,
+        ),
+    >,
 }
 
 fn full_checkpoint_content_table_default_config() -> DBOptions {
@@ -252,7 +215,11 @@ impl CheckpointStoreTables {
             ("epoch_last_checkpoint_map", config_u64.clone()),
             (
                 "watermarks",
-                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config),
+                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config.clone()),
+            ),
+            (
+                "transaction_fork_detected",
+                ThConfig::new_with_config(1, 1, KeyType::uniform(1), watermarks_config),
             ),
         ];
         Self::open_tables_read_write(
@@ -626,6 +593,14 @@ impl CheckpointStore {
                 "Local checkpoint fork detected!",
             );
 
+            // Record the fork in the database before crashing
+            if let Err(e) = self.record_checkpoint_fork_detected(
+                *local_checkpoint.sequence_number(),
+                local_checkpoint.digest(),
+            ) {
+                error!("Failed to record checkpoint fork in database: {:?}", e);
+            }
+
             fail_point_arg!(
                 "kill_checkpoint_fork_node",
                 |checkpoint_overrides: std::sync::Arc<
@@ -990,6 +965,75 @@ impl CheckpointStore {
         self.delete_highest_executed_checkpoint_test_only()?;
         Ok(())
     }
+
+    pub fn record_checkpoint_fork_detected(
+        &self,
+        checkpoint_seq: CheckpointSequenceNumber,
+        checkpoint_digest: CheckpointDigest,
+    ) -> Result<(), TypedStoreError> {
+        info!(
+            checkpoint_seq = checkpoint_seq,
+            checkpoint_digest = ?checkpoint_digest,
+            "Recording checkpoint fork detection in database"
+        );
+        self.tables.watermarks.insert(
+            &CheckpointWatermark::CheckpointForkDetected,
+            &(checkpoint_seq, checkpoint_digest),
+        )
+    }
+
+    pub fn get_checkpoint_fork_detected(
+        &self,
+    ) -> Result<Option<(CheckpointSequenceNumber, CheckpointDigest)>, TypedStoreError> {
+        self.tables
+            .watermarks
+            .get(&CheckpointWatermark::CheckpointForkDetected)
+    }
+
+    pub fn clear_checkpoint_fork_detected(&self) -> Result<(), TypedStoreError> {
+        self.tables
+            .watermarks
+            .remove(&CheckpointWatermark::CheckpointForkDetected)
+    }
+
+    pub fn record_transaction_fork_detected(
+        &self,
+        tx_digest: TransactionDigest,
+        expected_effects_digest: TransactionEffectsDigest,
+        actual_effects_digest: TransactionEffectsDigest,
+    ) -> Result<(), TypedStoreError> {
+        info!(
+            tx_digest = ?tx_digest,
+            expected_effects_digest = ?expected_effects_digest,
+            actual_effects_digest = ?actual_effects_digest,
+            "Recording transaction fork detection in database"
+        );
+        self.tables.transaction_fork_detected.insert(
+            &TRANSACTION_FORK_DETECTED_KEY,
+            &(tx_digest, expected_effects_digest, actual_effects_digest),
+        )
+    }
+
+    pub fn get_transaction_fork_detected(
+        &self,
+    ) -> Result<
+        Option<(
+            TransactionDigest,
+            TransactionEffectsDigest,
+            TransactionEffectsDigest,
+        )>,
+        TypedStoreError,
+    > {
+        self.tables
+            .transaction_fork_detected
+            .get(&TRANSACTION_FORK_DETECTED_KEY)
+    }
+
+    pub fn clear_transaction_fork_detected(&self) -> Result<(), TypedStoreError> {
+        self.tables
+            .transaction_fork_detected
+            .remove(&TRANSACTION_FORK_DETECTED_KEY)
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -998,6 +1042,7 @@ pub enum CheckpointWatermark {
     HighestSynced,
     HighestExecuted,
     HighestPruned,
+    CheckpointForkDetected,
 }
 
 struct CheckpointStateHasher {
@@ -1258,7 +1303,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(
         &mut self,
-        pendings: Vec<PendingCheckpointV2>,
+        pendings: Vec<PendingCheckpoint>,
     ) -> CheckpointBuilderResult<CheckpointSequenceNumber> {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
         let last_details = pendings.last().unwrap().details().clone();
@@ -1304,12 +1349,14 @@ impl CheckpointBuilder {
         let tx_key =
             TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
 
-        let (settlement_txns, num_updates) = create_accumulator_update_transactions(
-            &self.epoch_store,
-            checkpoint_height,
+        let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.effects_store.as_ref()),
             sorted_tx_effects_included_in_checkpoint,
         );
+
+        let settlements = builder.get_balance_settlements();
+        let num_updates = builder.num_updates();
+        let settlement_txns = builder.build_tx(&self.epoch_store, checkpoint_height);
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
@@ -1362,6 +1409,10 @@ impl CheckpointBuilder {
             );
         }
 
+        self.state
+            .execution_scheduler()
+            .settle_balances(settlements);
+
         (tx_key, settlement_effects)
     }
 
@@ -1372,7 +1423,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all)]
     async fn resolve_checkpoint_transactions(
         &self,
-        pending_checkpoints: Vec<PendingCheckpointV2>,
+        pending_checkpoints: Vec<PendingCheckpoint>,
     ) -> SuiResult<(Vec<TransactionEffects>, HashSet<TransactionDigest>)> {
         let _scope = monitored_scope("CheckpointBuilder::resolve_checkpoint_transactions");
 
@@ -1386,7 +1437,7 @@ impl CheckpointBuilder {
         let mut tx_roots = HashSet::new();
 
         for pending_checkpoint in pending_checkpoints.into_iter() {
-            let mut pending = pending_checkpoint.into_v2();
+            let mut pending = pending_checkpoint;
             debug!(
                 checkpoint_commit_height = pending.details.checkpoint_height,
                 "Resolving checkpoint transactions for pending checkpoint.",
@@ -1498,7 +1549,7 @@ impl CheckpointBuilder {
                 // should only include the digests of transactions that were originally roots in
                 // the pending checkpoint. It is later used to identify transactions which were
                 // added as dependencies, so that those transactions can be waited on using
-                // `consensus_messages_processed_notify()`. System transctions (such as
+                // `consensus_messages_processed_notify()`. System transactions (such as
                 // settlements) are exempt from this already.
                 sorted.extend(settlement_effects);
             }
@@ -2974,7 +3025,7 @@ impl CheckpointService {
     fn write_and_notify_checkpoint_for_testing(
         &self,
         epoch_store: &AuthorityPerEpochStore,
-        checkpoint: PendingCheckpointV2,
+        checkpoint: PendingCheckpoint,
     ) -> SuiResult {
         use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
 
@@ -3058,20 +3109,13 @@ impl PendingCheckpoint {
     pub fn height(&self) -> CheckpointHeight {
         self.details.checkpoint_height
     }
-}
 
-impl PendingCheckpointV2 {}
+    pub fn roots(&self) -> &Vec<TransactionKey> {
+        &self.roots
+    }
 
-impl From<PendingCheckpoint> for PendingCheckpointV2 {
-    fn from(value: PendingCheckpoint) -> Self {
-        PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-            roots: value
-                .roots
-                .into_iter()
-                .map(TransactionKey::Digest)
-                .collect(),
-            details: value.details,
-        })
+    pub fn details(&self) -> &PendingCheckpointInfo {
+        &self.details
     }
 }
 
@@ -3130,6 +3174,50 @@ mod tests {
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::transaction::VerifiedTransaction;
     use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_fork_detection_storage() {
+        let store = CheckpointStore::new_for_tests();
+        // checkpoint fork
+        let seq_num = 42;
+        let digest = CheckpointDigest::random();
+
+        assert!(store.get_checkpoint_fork_detected().unwrap().is_none());
+
+        store
+            .record_checkpoint_fork_detected(seq_num, digest)
+            .unwrap();
+
+        let retrieved = store.get_checkpoint_fork_detected().unwrap();
+        assert!(retrieved.is_some());
+        let (retrieved_seq, retrieved_digest) = retrieved.unwrap();
+        assert_eq!(retrieved_seq, seq_num);
+        assert_eq!(retrieved_digest, digest);
+
+        store.clear_checkpoint_fork_detected().unwrap();
+        assert!(store.get_checkpoint_fork_detected().unwrap().is_none());
+
+        // txn fork
+        let tx_digest = TransactionDigest::random();
+        let expected_effects = TransactionEffectsDigest::random();
+        let actual_effects = TransactionEffectsDigest::random();
+
+        assert!(store.get_transaction_fork_detected().unwrap().is_none());
+
+        store
+            .record_transaction_fork_detected(tx_digest, expected_effects, actual_effects)
+            .unwrap();
+
+        let retrieved = store.get_transaction_fork_detected().unwrap();
+        assert!(retrieved.is_some());
+        let (retrieved_tx, retrieved_expected, retrieved_actual) = retrieved.unwrap();
+        assert_eq!(retrieved_tx, tx_digest);
+        assert_eq!(retrieved_expected, expected_effects);
+        assert_eq!(retrieved_actual, actual_effects);
+
+        store.clear_transaction_fork_detected().unwrap();
+        assert!(store.get_transaction_fork_detected().unwrap().is_none());
+    }
 
     #[sim_test]
     pub async fn checkpoint_builder_test() {
@@ -3482,8 +3570,8 @@ mod tests {
         }
     }
 
-    fn p(i: u64, t: Vec<u8>, timestamp_ms: u64) -> PendingCheckpointV2 {
-        PendingCheckpointV2::V2(PendingCheckpointV2Contents {
+    fn p(i: u64, t: Vec<u8>, timestamp_ms: u64) -> PendingCheckpoint {
+        PendingCheckpoint {
             roots: t
                 .into_iter()
                 .map(|t| TransactionKey::Digest(d(t)))
@@ -3493,7 +3581,7 @@ mod tests {
                 last_of_epoch: false,
                 checkpoint_height: i,
             },
-        })
+        }
     }
 
     fn d(i: u8) -> TransactionDigest {

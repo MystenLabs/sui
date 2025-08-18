@@ -33,11 +33,9 @@ impl TestScheduler {
         }
     }
 
-    fn settle_balance_changes(&self, version: SequenceNumber, changes: BTreeMap<ObjectID, i128>) {
-        self.mock_read
-            .settle_balance_changes(version, changes.clone());
+    fn settle_balance_changes(&self, changes: BTreeMap<ObjectID, i128>) {
+        self.mock_read.settle_balance_changes(changes.clone());
         self.scheduler.settle_balances(BalanceSettlement {
-            accumulator_version: version,
             balance_changes: changes,
         });
     }
@@ -109,11 +107,9 @@ async fn test_already_executed() {
 
     // Settle multiple versions to advance the accumulator
     let v1 = init_version.next();
-    let v2 = v1.next();
-    let v3 = v2.next();
-    test.settle_balance_changes(v1, BTreeMap::new());
-    test.settle_balance_changes(v2, BTreeMap::new());
-    test.settle_balance_changes(v3, BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
 
     // Give some time for the settlements to be processed
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -161,8 +157,7 @@ async fn test_already_executed_multiple_transactions() {
     );
 
     // Advance the accumulator version
-    let next_version = init_version.next();
-    test.settle_balance_changes(next_version, BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
@@ -196,14 +191,11 @@ async fn test_already_executed_after_out_of_order_settlement() {
     let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
 
     let v1 = v0.next();
-    let v2 = v1.next();
-    let v3 = v2.next();
-
     // Settle out of order: v3, v2, v1
     // This tests that the scheduler correctly handles out-of-order settlements
-    test.settle_balance_changes(v3, BTreeMap::new());
-    test.settle_balance_changes(v2, BTreeMap::new());
-    test.settle_balance_changes(v1, BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -246,7 +238,7 @@ async fn test_not_already_executed_exact_version() {
 
     // Settle the next version
     let next_version = init_version.next();
-    test.settle_balance_changes(next_version, BTreeMap::from([(account, -50i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -50i128)]));
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
@@ -272,18 +264,14 @@ async fn test_already_executed_with_sequential_settlements() {
     let account = ObjectID::random();
     let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
 
-    let v1 = v0.next();
-    let v2 = v1.next();
-    let v3 = v2.next();
-
     // Settle in order so they are processed immediately
-    test.settle_balance_changes(v1, BTreeMap::from([(account, -20i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -20i128)]));
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    test.settle_balance_changes(v2, BTreeMap::from([(account, -30i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -30i128)]));
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    test.settle_balance_changes(v3, BTreeMap::from([(account, -40i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -40i128)]));
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     // Now v0, v1, and v2 should all return AlreadyExecuted
@@ -323,7 +311,7 @@ async fn test_basic_settlement() {
     .await;
 
     let next_version = init_version.next();
-    test.settle_balance_changes(next_version, BTreeMap::from([(account, -50i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -50i128)]));
 
     let receivers = test
         .scheduler
@@ -342,10 +330,8 @@ async fn test_out_of_order_settlements() {
     let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
 
     let v1 = v0.next();
-    let v2 = v1.next();
-
-    test.settle_balance_changes(v2, BTreeMap::from([(account, -80i128)]));
-    test.settle_balance_changes(v1, BTreeMap::from([(account, -20i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -80i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -20i128)]));
 
     // Give time for settlements to be processed
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -448,7 +434,7 @@ async fn test_multi_settlements() {
     .await;
 
     let next_version = init_version.next();
-    test.settle_balance_changes(next_version, BTreeMap::from([(account, -50i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -50i128)]));
 
     let receivers = test
         .scheduler
@@ -460,7 +446,7 @@ async fn test_multi_settlements() {
     .await;
 
     let next_version = next_version.next();
-    test.settle_balance_changes(next_version, BTreeMap::from([(account, -50i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -50i128)]));
 
     let receivers = test
         .scheduler
@@ -479,16 +465,14 @@ async fn test_settlement_far_ahead_of_schedule() {
     let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
     let v1 = v0.next();
     let v2 = v1.next();
-    let v3 = v2.next();
-
     // From v0 to v1, we reserve 100, but does not withdraw anything.
-    test.settle_balance_changes(v1, BTreeMap::from([]));
+    test.settle_balance_changes(BTreeMap::from([]));
 
     // From v1 to v2, we reserve 100, and withdraw 50.
-    test.settle_balance_changes(v2, BTreeMap::from([(account, -50i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -50i128)]));
 
     // From v2 to v3, we reserve 50, and withdraw 50.
-    test.settle_balance_changes(v3, BTreeMap::from([(account, -50i128)]));
+    test.settle_balance_changes(BTreeMap::from([(account, -50i128)]));
 
     // Give time for settlements to be processed
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -575,7 +559,7 @@ async fn test_withdraw_entire_balance() {
         .scheduler
         .schedule_withdraws(next_version, withdraws2.clone());
 
-    test.settle_balance_changes(next_version, BTreeMap::new());
+    test.settle_balance_changes(BTreeMap::new());
 
     wait_for_results(
         receivers1,
@@ -674,8 +658,8 @@ async fn stress_test() {
             let test_clone = test.clone();
             let settlements = settlements.clone();
             let settle_task = tokio::spawn(async move {
-                for (version, balance_changes) in settlements {
-                    test_clone.settle_balance_changes(version, balance_changes);
+                for (_version, balance_changes) in settlements {
+                    test_clone.settle_balance_changes(balance_changes);
                     tokio::time::sleep(Duration::from_millis(5)).await;
                 }
             });

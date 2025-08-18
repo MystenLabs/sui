@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
-    "start": "node src/utils/grpc-download.js && docusaurus graphql-to-doc; rm '../content/references/sui-api/sui-graphql/reference/generated.md'; node src/utils/getopenrpcspecs.js; docusaurus start",
-    "build": "node src/utils/grpc-download.js && docusaurus graphql-to-doc; rm '../content/references/sui-api/sui-graphql/reference/generated.md'; node src/utils/getopenrpcspecs.js; docusaurus build",
+    "start": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus start",
+    "build": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",

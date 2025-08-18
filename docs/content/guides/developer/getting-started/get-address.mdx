@@ -12,7 +12,6 @@ In Sui, an address is 32 bytes and is often encoded in hexadecimal with a `0x` p
 
 If you'd like to understand how a Sui address is derived from private keys and other cryptography related topics, see the [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) topic.
 
-
 ## How to obtain a Sui address
 
 Sui provides multiple ways to obtain a Sui address. The following are the two most common. 
@@ -21,7 +20,7 @@ Sui provides multiple ways to obtain a Sui address. The following are the two mo
 
 If you are using the Sui command line interface (CLI) to interact with the Sui network, you can use the `sui client` command to generate a new address. By default, when the Sui CLI runs for the first time it will prompt you to set up your local wallet, and then it generates one Sui address and the associated secret recovery phrase. Make sure you write down the secret recovery phrase and store it in a safe place. 
 
-To generate a new Sui address use `sui client new-address ed25519`, which specifies the keypair scheme flag to be of type `ed25519`.
+To generate a new Sui address use `sui client new-address ed25519`, which specifies the key pair scheme flag to be of type `ed25519`.
 
 For more information, see the [Sui Client CLI](../../../references/cli/client.mdx) documentation.
 
