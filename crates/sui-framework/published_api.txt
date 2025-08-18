@@ -1201,7 +1201,7 @@ try_get
 contains
 	public fun
 	0x2::vec_map
-size
+length
 	public fun
 	0x2::vec_map
 is_empty
@@ -1232,6 +1232,9 @@ get_entry_by_idx_mut
 	public fun
 	0x2::vec_map
 remove_entry_by_idx
+	public fun
+	0x2::vec_map
+size
 	public fun
 	0x2::vec_map
 Party
@@ -2092,7 +2095,7 @@ remove
 contains
 	public fun
 	0x2::vec_set
-size
+length
 	public fun
 	0x2::vec_set
 is_empty
@@ -2105,6 +2108,9 @@ from_keys
 	public fun
 	0x2::vec_set
 keys
+	public fun
+	0x2::vec_set
+size
 	public fun
 	0x2::vec_set
 Table

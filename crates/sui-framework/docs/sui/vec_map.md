@@ -15,7 +15,7 @@ title: Module `sui::vec_map`
 -  [Function `get`](#sui_vec_map_get)
 -  [Function `try_get`](#sui_vec_map_try_get)
 -  [Function `contains`](#sui_vec_map_contains)
--  [Function `size`](#sui_vec_map_size)
+-  [Function `length`](#sui_vec_map_length)
 -  [Function `is_empty`](#sui_vec_map_is_empty)
 -  [Function `destroy_empty`](#sui_vec_map_destroy_empty)
 -  [Function `into_keys_values`](#sui_vec_map_into_keys_values)
@@ -26,6 +26,7 @@ title: Module `sui::vec_map`
 -  [Function `get_entry_by_idx`](#sui_vec_map_get_entry_by_idx)
 -  [Function `get_entry_by_idx_mut`](#sui_vec_map_get_entry_by_idx_mut)
 -  [Function `remove_entry_by_idx`](#sui_vec_map_remove_entry_by_idx)
+-  [Function `size`](#sui_vec_map_size)
 
 
 <pre><code><b>use</b> <a href="../std/option.md#std_option">std::option</a>;
@@ -259,7 +260,7 @@ Pop the most recently inserted entry from the map. Aborts if the map is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_pop">pop</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): (K, V) {
-    <b>assert</b>!(self.contents.length() != 0, <a href="../sui/vec_map.md#sui_vec_map_EMapEmpty">EMapEmpty</a>);
+    <b>assert</b>!(self.contents.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>() != 0, <a href="../sui/vec_map.md#sui_vec_map_EMapEmpty">EMapEmpty</a>);
     <b>let</b> <a href="../sui/vec_map.md#sui_vec_map_Entry">Entry</a> { key, value } = self.contents.pop_back();
     (key, value)
 }
@@ -381,14 +382,14 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 
 </details>
 
-<a name="sui_vec_map_size"></a>
+<a name="sui_vec_map_length"></a>
 
-## Function `size`
+## Function `length`
 
 Return the number of entries in <code>self</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_length">length</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;): u64
 </code></pre>
 
 
@@ -397,8 +398,8 @@ Return the number of entries in <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): u64 {
-    self.contents.length()
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_length">length</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): u64 {
+    self.contents.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>()
 }
 </code></pre>
 
@@ -423,7 +424,7 @@ Return true if <code>self</code> has 0 elements, false otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_is_empty">is_empty</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): bool {
-    self.<a href="../sui/vec_map.md#sui_vec_map_size">size</a>() == 0
+    self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>() == 0
 }
 </code></pre>
 
@@ -480,7 +481,7 @@ The output keys and values are stored in insertion order, *not* sorted by key.
     // reverse the vector so the output <a href="../sui/vec_map.md#sui_vec_map_keys">keys</a> and values will appear in insertion order
     contents.reverse();
     <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> n = contents.length();
+    <b>let</b> n = contents.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>();
     <b>let</b> <b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_keys">keys</a> = vector[];
     <b>let</b> <b>mut</b> values = vector[];
     <b>while</b> (i &lt; n) {
@@ -519,11 +520,11 @@ and are *not* sorted.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_from_keys_values">from_keys_values</a>&lt;K: <b>copy</b>, V&gt;(<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>: vector&lt;K&gt;, <b>mut</b> values: vector&lt;V&gt;): <a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt; {
-    <b>assert</b>!(<a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.length() == values.length(), <a href="../sui/vec_map.md#sui_vec_map_EUnequalLengths">EUnequalLengths</a>);
+    <b>assert</b>!(<a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>() == values.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>(), <a href="../sui/vec_map.md#sui_vec_map_EUnequalLengths">EUnequalLengths</a>);
     <a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.reverse();
     values.reverse();
     <b>let</b> <b>mut</b> map = <a href="../sui/vec_map.md#sui_vec_map_empty">empty</a>();
-    <b>while</b> (<a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.length() != 0) map.<a href="../sui/vec_map.md#sui_vec_map_insert">insert</a>(<a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.pop_back(), values.pop_back());
+    <b>while</b> (<a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>() != 0) map.<a href="../sui/vec_map.md#sui_vec_map_insert">insert</a>(<a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.pop_back(), values.pop_back());
     <a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>.<a href="../sui/vec_map.md#sui_vec_map_destroy_empty">destroy_empty</a>();
     values.<a href="../sui/vec_map.md#sui_vec_map_destroy_empty">destroy_empty</a>();
     map
@@ -553,7 +554,7 @@ Do not assume any particular ordering.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_keys">keys</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): vector&lt;K&gt; {
     <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> n = self.contents.length();
+    <b>let</b> n = self.contents.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>();
     <b>let</b> <b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_keys">keys</a> = vector[];
     <b>while</b> (i &lt; n) {
         <b>let</b> <b>entry</b> = self.contents.<a href="../sui/borrow.md#sui_borrow">borrow</a>(i);
@@ -587,7 +588,7 @@ Note that map entries are stored in insertion order, *not* sorted by key.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, key: &K): Option&lt;u64&gt; {
     <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> n = <a href="../sui/vec_map.md#sui_vec_map_size">size</a>(self);
+    <b>let</b> n = self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>();
     <b>while</b> (i &lt; n) {
         <b>if</b> (&self.contents[i].key == key) {
             <b>return</b> option::some(i)
@@ -636,7 +637,7 @@ Note that map entries are stored in insertion order, *not* sorted by key.
 
 Return a reference to the <code>idx</code>th entry of <code>self</code>. This gives direct access into the backing array of the map--use with caution.
 Note that map entries are stored in insertion order, *not* sorted by key.
-Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec_map.md#sui_vec_map_size">size</a>(self)</code>
+Aborts if <code>idx</code> is greater than or equal to <code>self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>()</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_get_entry_by_idx">get_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &V)
@@ -649,7 +650,7 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_get_entry_by_idx">get_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &V) {
-    <b>assert</b>!(idx &lt; <a href="../sui/vec_map.md#sui_vec_map_size">size</a>(self), <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
+    <b>assert</b>!(idx &lt; self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>(), <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> <b>entry</b> = &self.contents[idx];
     (&<b>entry</b>.key, &<b>entry</b>.value)
 }
@@ -665,7 +666,7 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec
 
 Return a mutable reference to the <code>idx</code>th entry of <code>self</code>. This gives direct access into the backing array of the map--use with caution.
 Note that map entries are stored in insertion order, *not* sorted by key.
-Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec_map.md#sui_vec_map_size">size</a>(self)</code>
+Aborts if <code>idx</code> is greater than or equal to <code>self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>()</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_get_entry_by_idx_mut">get_entry_by_idx_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &<b>mut</b> V)
@@ -678,7 +679,7 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_get_entry_by_idx_mut">get_entry_by_idx_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &<b>mut</b> V) {
-    <b>assert</b>!(idx &lt; <a href="../sui/vec_map.md#sui_vec_map_size">size</a>(self), <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
+    <b>assert</b>!(idx &lt; self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>(), <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> <b>entry</b> = &<b>mut</b> self.contents[idx];
     (&<b>entry</b>.key, &<b>mut</b> <b>entry</b>.value)
 }
@@ -693,7 +694,7 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec
 ## Function `remove_entry_by_idx`
 
 Remove the entry at index <code>idx</code> from self.
-Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec_map.md#sui_vec_map_size">size</a>(self)</code>
+Aborts if <code>idx</code> is greater than or equal to <code>self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>()</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_remove_entry_by_idx">remove_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (K, V)
@@ -706,9 +707,34 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui/vec
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_remove_entry_by_idx">remove_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: u64): (K, V) {
-    <b>assert</b>!(idx &lt; <a href="../sui/vec_map.md#sui_vec_map_size">size</a>(self), <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
+    <b>assert</b>!(idx &lt; self.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>(), <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> <a href="../sui/vec_map.md#sui_vec_map_Entry">Entry</a> { key, value } = self.contents.<a href="../sui/vec_map.md#sui_vec_map_remove">remove</a>(idx);
     (key, value)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_vec_map_size"></a>
+
+## Function `size`
+
+Return the number of entries in <code>self</code>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;K, V&gt;): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_map.md#sui_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui/vec_map.md#sui_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): u64 {
+    self.contents.<a href="../sui/vec_map.md#sui_vec_map_length">length</a>()
 }
 </code></pre>
 
