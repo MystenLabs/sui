@@ -38,6 +38,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     cached_scores: RwLock<Option<HashMap<AuthorityName, f64>>>,
+    last_consensus_scores: RwLock<Option<(u64, Vec<u64>)>>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -60,6 +61,7 @@ where
             client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
             cached_scores: RwLock::new(None),
+            last_consensus_scores: RwLock::new(None),
         });
 
         let monitor_clone = monitor.clone();
@@ -117,7 +119,7 @@ where
                     .await
                     {
                         // TODO: Actually use the response details.
-                        Ok(Ok(_response)) => {
+                        Ok(Ok(response)) => {
                             let latency = start.elapsed();
                             monitor.record_interaction_result(OperationFeedback {
                                 authority_name: name,
@@ -125,6 +127,10 @@ where
                                 operation: OperationType::HealthCheck,
                                 result: Ok(latency),
                             });
+                            monitor.set_last_consensus_scores(
+                                response.last_consensus_scores_index,
+                                response.last_consensus_scores,
+                            );
                         }
                         Ok(Err(_)) => {
                             let _latency = start.elapsed();
@@ -219,6 +225,33 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         client_stats.record_interaction_result(feedback, &self.metrics);
     }
 
+    pub fn set_last_consensus_scores(&self, commit_index: u64, last_consensus_scores: Vec<u64>) {
+        if last_consensus_scores.is_empty() {
+            return;
+        }
+
+        let mut scores = self.last_consensus_scores.write();
+        if let Some(scores_val) = scores.as_ref() {
+            if scores_val.0 > commit_index {
+                return;
+            }
+        }
+
+        // updating scores
+        for (score, authority_name) in last_consensus_scores
+            .iter()
+            .zip(self.authority_aggregator.load().committee.names())
+        {
+            let display_name = self
+                .authority_aggregator
+                .load()
+                .get_display_name(authority_name);
+            debug!("Validator {}: score {}", display_name, score);
+        }
+
+        *scores = Some((commit_index, last_consensus_scores));
+    }
+
     /// Select validators based on client-observed performance with shuffled top k.
     ///
     /// We need to pass the current committee here because it is possible
@@ -240,17 +273,20 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
 
-        let Some(cached_scores) = self.cached_scores.read().clone() else {
+        let Some(cached_scores) = self.last_consensus_scores.read().clone() else {
             let mut validators: Vec<_> = committee.names().cloned().collect();
             validators.shuffle(&mut rng);
             return validators;
         };
 
+        let cached_scores = cached_scores.1.clone();
+
         // Since the cached scores are updated periodically, it is possible that it was ran on
         // an out-of-date committee.
         let mut validator_with_scores: Vec<_> = committee
             .names()
-            .map(|v| (*v, cached_scores.get(v).copied().unwrap_or(0.0)))
+            .zip(cached_scores.iter())
+            .map(|(v, score)| (*v, *score))
             .collect();
         validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 

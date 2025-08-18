@@ -254,6 +254,8 @@ impl AuthorityAPI for LocalAuthorityClient {
             num_inflight_execution_transactions: 0,
             last_committed_leader_round: 1000,
             last_locally_built_checkpoint: 500,
+            last_consensus_scores: vec![],
+            last_consensus_scores_index: 0,
         };
 
         typed_response.try_into().map_err(|e| {
@@ -494,6 +496,8 @@ impl AuthorityAPI for MockAuthorityApi {
             num_inflight_execution_transactions: 0,
             last_committed_leader_round: 1000,
             last_locally_built_checkpoint: 500,
+            last_consensus_scores: vec![],
+            last_consensus_scores_index: 0,
         };
 
         typed_response.try_into().map_err(|e| {
