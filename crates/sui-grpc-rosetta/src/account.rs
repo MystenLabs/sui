@@ -73,9 +73,7 @@ pub async fn balance(
 async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
     let request = GetCheckpointRequest {
         checkpoint_id: None, // None means get latest checkpoint
-        read_mask: Some(FieldMask::from_paths([
-            Checkpoint::SEQUENCE_NUMBER_FIELD.name
-        ])),
+        read_mask: Some(FieldMask::from_paths([Checkpoint::SEQUENCE_NUMBER_FIELD])),
     };
 
     let response = ctx
