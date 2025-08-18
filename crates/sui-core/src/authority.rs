@@ -1023,6 +1023,8 @@ pub struct AuthorityState {
 
     /// Fork recovery state for handling equivocation after forks
     fork_recovery_state: Option<ForkRecoveryState>,
+
+    pub consensus_scores: Arc<ArcSwap<(u64, Vec<u64>)>>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -3529,6 +3531,7 @@ impl AuthorityState {
             congestion_tracker: Arc::new(CongestionTracker::new()),
             traffic_controller,
             fork_recovery_state,
+            consensus_scores: Arc::new(ArcSwap::new(Arc::new((0, vec![])))),
         });
 
         let state_clone = Arc::downgrade(&state);

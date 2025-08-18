@@ -134,6 +134,7 @@ impl ConsensusHandlerInitializer {
             self.state.metrics.clone(),
             self.throughput_calculator.clone(),
             self.backpressure_manager.subscribe(),
+            self.state.consensus_scores.clone(),
         )
     }
 
@@ -544,6 +545,7 @@ pub struct ConsensusHandler<C> {
     additional_consensus_state: AdditionalConsensusState,
 
     backpressure_subscriber: BackpressureSubscriber,
+    consensus_scores: Arc<ArcSwap<(u64, Vec<u64>)>>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -560,6 +562,7 @@ impl<C> ConsensusHandler<C> {
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
+        consensus_scores: Arc<ArcSwap<(u64, Vec<u64>)>>,
     ) -> Self {
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
@@ -592,6 +595,7 @@ impl<C> ConsensusHandler<C> {
                 commit_rate_estimate_window_size,
             ),
             backpressure_subscriber,
+            consensus_scores,
         }
     }
 
@@ -749,6 +753,22 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
                 leader_author,
             ));
+        }
+
+        // Update the consensus scores only when there is a commit that has provided it.
+        if let Some(mut reputation_score_sorted_desc) =
+            consensus_commit.reputation_score_sorted_desc()
+        {
+            // sort the scores by the authority name in ascending order
+            reputation_score_sorted_desc.sort_by_key(|(index, _)| *index);
+
+            self.consensus_scores.store(Arc::new((
+                commit_info.round,
+                reputation_score_sorted_desc
+                    .iter()
+                    .map(|(_, score)| *score)
+                    .collect::<Vec<u64>>(),
+            )));
         }
 
         update_low_scoring_authorities(
@@ -1619,6 +1639,7 @@ mod tests {
             metrics,
             Arc::new(throughput_calculator),
             backpressure_manager.subscribe(),
+            Arc::new(ArcSwap::new(Arc::new((0, vec![])))),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -2110,6 +2131,7 @@ mod tests {
             metrics,
             Arc::new(throughput),
             backpressure.subscribe(),
+            Arc::new(ArcSwap::new(Arc::new((0, vec![])))),
         );
 
         handler.handle_consensus_commit(commit).await;

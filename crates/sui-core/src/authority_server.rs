@@ -1605,11 +1605,17 @@ impl ValidatorService {
             .map(|(_, summary)| summary.sequence_number)
             .unwrap_or(0);
 
+        let consensus_scores = state.consensus_scores.load_full();
+        let (last_consensus_scores_index, last_consensus_scores) =
+            consensus_scores.as_ref().clone();
+
         let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
             num_inflight_consensus_transactions,
             num_inflight_execution_transactions,
             last_locally_built_checkpoint,
             last_committed_leader_round,
+            last_consensus_scores,
+            last_consensus_scores_index,
         };
 
         let raw_response = typed_response
