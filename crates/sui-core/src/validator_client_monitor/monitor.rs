@@ -232,7 +232,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
         let mut scores = self.last_consensus_scores.write();
         if let Some(scores_val) = scores.as_ref() {
-            if scores_val.0 > commit_index {
+            if scores_val.0 >= commit_index {
                 return;
             }
         }
