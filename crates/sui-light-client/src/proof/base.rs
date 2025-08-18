@@ -3,8 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 use sui_types::{
-    base_types::ObjectRef,
+    base_types::{ObjectID, ObjectRef},
     committee::Committee,
+    digests::ObjectDigest,
     event::{Event, EventID},
     full_checkpoint_content::CheckpointData,
     messages_checkpoint::{CertifiedCheckpointSummary, VerifiedCheckpoint},
@@ -16,6 +17,7 @@ use crate::proof::{
     error::{ProofError, ProofResult},
     events::EventsTarget,
     objects::ObjectsTarget,
+    ocs::{OCSProof, OCSTarget, OCSTargetType},
     transaction_proof::TransactionProof,
 };
 
@@ -36,6 +38,7 @@ pub enum ProofTarget {
     Objects(ObjectsTarget),
     Events(EventsTarget),
     Committee(CommitteeTarget),
+    ObjectCheckpointState(OCSTarget),
 }
 
 impl ProofTarget {
@@ -50,6 +53,18 @@ impl ProofTarget {
     pub fn new_committee(committee: Committee) -> Self {
         ProofTarget::Committee(CommitteeTarget { committee })
     }
+
+    pub fn new_object_checkpoint_state(
+        id: ObjectID,
+        digest: Option<ObjectDigest>,
+        target_type: OCSTargetType,
+    ) -> ProofResult<Self> {
+        Ok(ProofTarget::ObjectCheckpointState(OCSTarget::new(
+            id,
+            digest,
+            target_type,
+        )?))
+    }
 }
 
 impl ProofBuilder for ProofTarget {
@@ -58,6 +73,7 @@ impl ProofBuilder for ProofTarget {
             ProofTarget::Objects(target) => target.construct(checkpoint),
             ProofTarget::Events(target) => target.construct(checkpoint),
             ProofTarget::Committee(target) => target.construct(checkpoint),
+            ProofTarget::ObjectCheckpointState(target) => target.construct(checkpoint),
         }
     }
 }
@@ -84,6 +100,9 @@ pub enum ProofContents {
 
     /// Used by CommitteeTarget.
     CommitteeProof(CommitteeProof),
+
+    /// Used by ObjectCheckpointStatesTarget.
+    ObjectCheckpointStateProof(OCSProof),
 }
 
 impl ProofVerifier for Proof {
@@ -106,6 +125,14 @@ impl ProofVerifier for Proof {
                     return Err(ProofError::MismatchedTargetAndProofType);
                 }
             }
+            ProofTarget::ObjectCheckpointState(_) => {
+                if !matches!(
+                    self.proof_contents,
+                    ProofContents::ObjectCheckpointStateProof(_)
+                ) {
+                    return Err(ProofError::MismatchedTargetAndProofType);
+                }
+            }
         }
 
         self.proof_contents.verify(&self.targets, &verified_summary)
@@ -117,6 +144,7 @@ impl ProofContentsVerifier for ProofContents {
         match self {
             ProofContents::TransactionProof(proof) => proof.verify(targets, summary),
             ProofContents::CommitteeProof(proof) => proof.verify(targets, summary),
+            ProofContents::ObjectCheckpointStateProof(proof) => proof.verify(targets, summary),
         }
     }
 }
