@@ -141,7 +141,7 @@ const config = {
           routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
           // the double docs below is a fix for having the path set to ../content
-          editUrl: "https://github.com/MystenLabs/sui/tree/main/docs",
+          editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
           /*disableVersioning: true,
           lastVersion: "current",
           versions: {
@@ -154,12 +154,17 @@ const config = {
             "current",
             "1.0.0",
           ],*/
+          exclude: ['**/content/snippets/*', '**/references/framework/**',],
           admonitions: {
             keywords: ["checkpoint"],
             extendDefaults: true,
           },
           beforeDefaultRemarkPlugins: [
-                [require('./src/js/remark-includes.cjs'), { docsDir: path.join(__dirname, 'content') }],
+                 [require('./src/js/remark-includes.cjs'), { 
+                docsDir: path.join(__dirname, 'content'), 
+                excludePaths: [
+                  path.join(__dirname, 'content/references/framework')]},
+                ],
           ],
           remarkPlugins: [
             math,

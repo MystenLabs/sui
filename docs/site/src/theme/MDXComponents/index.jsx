@@ -5,6 +5,7 @@
 
 import React from 'react';
 import MDXComponents from '@theme-original/MDXComponents';
+import CodeFromFile from '@site/src/components/CodeFromFile';
 
 
 import Tabs from '@theme/Tabs';
@@ -14,4 +15,5 @@ export default {
   ...MDXComponents,
   Tabs,
   TabItem,
+  CodeFromFile,
 };

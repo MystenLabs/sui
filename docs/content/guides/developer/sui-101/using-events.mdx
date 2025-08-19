@@ -65,7 +65,9 @@ $ curl -X POST https://fullnode.mainnet.sui.io:443 \
 
 <details>
 <summary>
+
 A successful `curl` return
+
 </summary>
 
 ```json
@@ -161,7 +163,9 @@ The TypeScript SDK provides a wrapper for the `suix_queryEvents` method: [`clien
 
 <details>
 <summary>
-    TypeScript SDK queryEvents example
+
+TypeScript SDK queryEvents example
+
 </summary>
 
 ```ts
@@ -305,8 +309,11 @@ async fn main() -> Result<(), anyhow::Error> {
 You can use GraphQL to query events instead of JSON RPC. The following example queries are in the [`sui-graphql-rpc` crate](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/event_connection) in the Sui repo. 
 
 <details>
+
 <summary>
+
 Event connection
+
 </summary>
 
 {@inject: ../../../../../crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql}
@@ -314,8 +321,11 @@ Event connection
 </details>
 
 <details>
+
 <summary>
+
 Filter events by sender
+
 </summary>
 
 {@inject: ../../../../../crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql}
@@ -337,8 +347,11 @@ Using a custom indexer provides a near-real time monitoring of events, so is mos
 To monitor events, you need a database to store checkpoint data. The [Trustless Swap](../app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
 
 <details>
+
 <summary>
+
 `event-indexer.ts` from Trustless Swap
+
 </summary>
 
 {@inject: ../../../../../examples/trading/api/indexer/event-indexer.ts noComments}
@@ -348,8 +361,11 @@ To monitor events, you need a database to store checkpoint data. The [Trustless 
 Trustless Swap incorporates handlers to process each event type that triggers. For the `locked` event, the handler in `locked-handler.ts` fires and updates the Prisma database accordingly.
 
 <details>
+
 <summary>
+
 `locked-handler.ts` from Trustless Swap
+
 </summary>
 
 {@inject: ../../../../../examples/trading/api/indexer/locked-handler.ts}

@@ -66,8 +66,11 @@ Take care not to expose the secret key for your address to the public.
 The example uses a single file to create the smart contract for the project (`regulated_coin.move`). The contract defines the regulated coin when you publish it to the network. The treasury capability (`TreasuryCap`) and deny capability (`DenyCapV2`) are transferred to the address that publishes the contract. The `TreasuryCap` permits the bearer to mint or burn coins (`REGULATED_COIN` in this example), and the `DenyCapV2` bearer can add and remove addresses from the list of unauthorized users. 
 
 <details>
+
 <summary>
+
 `regulated_coin.move`
+
 </summary>
 
 {@inject: ../../../../../examples/regulated-coin/move/sources/regulated_coin.move}
@@ -99,32 +102,46 @@ The TypeScript and Rust clients handle the call to the `coin` package's `mint` f
 For all `Coin` functions available, see the Sui framework [`coin` module documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md). The following functions are the most common. 
 
 <details>
+
 <summary>
+
   `coin::mint<T>`
+
 </summary>
 
 {@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint}
 
 </details>
 <details>
+
 <summary>
+
   `coin::mint_balance<T>`
+
 </summary>
 
 {@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_balance}
 
 </details>
+
 <details>
+
 <summary>
+
   `coin::mint_and_transfer<T>`
+
 </summary>
 
 {@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_and_transfer}
 
 </details>
+
 <details>
+
 <summary>
+
   `coin::burn<T>`
+
 </summary>
 
 {@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=burn}

@@ -220,9 +220,15 @@ This approach is a work in progress and there are certain formatting situations 
 :::
 
 You can include specific sections of Move code using the following constructs appended to the end of the code directory. You can uses a comma delimited list for functions, structs, and variables to include each in the same codeblock:
+- Module: #module=MODULE::NAME
 - Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION
 - Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT
-- Variables: #var=variableName, anotherVariable
+- Trait: #trait=TRAIT_NAME,ANOTHER_TRAIT
+- Variables: #var=variableName,anotherVariable
+- Move import: #use=LIBRARY::NAME
+- React component: #component=ComponentName
+- Type declaration: #type=TypeName
+- Enum declaration: #enum=EnumName
 
 For example, `{@inject: examples/move/example.source#fun=buy_sword}`
 
@@ -351,28 +357,6 @@ You can include a space-limited list of options after the @inject call. The foll
 - `highlight`: Highlight a single line out of the injected code. Use a word (such as a variable name) in the line you want highlighted. 
 
 For example, `{@inject: examples/move/example.source#module=example::example noComments noTests noTitle singleSpace}`
-
-## Embedding external code 
-
-For code located outside of the Sui repo, you can reference it via its public GitHub URL.
-
-### When to use 
-
-Whenever code located outside the Sui monorepo is to be embedded as a code block in the Sui documentation.
-
-### How to use 
-
-Use a code block, plus the syntax highlight type and 'reference' keyword, followed by the public GitHub URL:
-
-    ```move reference 
-    https://github.com/MystenLabs/deepbookv3/blob/master/packages/deepbook/sources/pool.move
-    ```
-
-To reference only specific lines in the code, add #LX-LX to the end of the URL, such as: 
-
-    ```move reference 
-    https://github.com/MystenLabs/deepbookv3/blob/master/packages/deepbook/sources/pool.move#L105-L134
-    ```
 
 ## Summary and details 
 

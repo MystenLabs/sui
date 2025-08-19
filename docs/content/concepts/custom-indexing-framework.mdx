@@ -2,6 +2,8 @@
 title: Custom Indexing Framework
 description: The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui. It provides customizable, production-ready components for data ingestion, processing, and storage.
 keywords: [ indexer, framework, indexer framework, dex, events, framework architecture ]
+mdx:
+    format: md
 ---
 
 Sui generates rich, complex data, including transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing for workflows such as tracking specific events, aggregating analytics, building dashboards, or creating specialized databases.
@@ -64,10 +66,15 @@ The framework then exposes specific interfaces that you implement to define your
 Sequential and concurrent pipeline types and their trade-offs are detailed in [Pipeline Architecture](./custom-indexer/pipeline-architecture.mdx).
 
 <details>
+
 <summary>
+
 `CheckpointData` struct
+
 </summary>
-{@inject: crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
+
+{@inject: ../../../crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
+
 </details>
 
 ### Storage layer

@@ -53,6 +53,7 @@ Use the following function from the `sui::tx_context` module to access the times
 The preceding function returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a `u64`. This value changes roughly **once every 24 hours**, when the epoch changes.
 
 Tests based on `sui::test_scenario` can use `later_epoch` (following code), to exercise time-sensitive code that uses `epoch_timestamp_ms` (previous code):
+
 {@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move#fun=later_epoch noComments}
 
 `later_epoch` behaves like `sui::test_scenario::next_epoch` (finishes the current transaction and epoch in the test scenario), but also increments the timestamp by `delta_ms` milliseconds to simulate the progress of time.
