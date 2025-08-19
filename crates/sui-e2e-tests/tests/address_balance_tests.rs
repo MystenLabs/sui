@@ -69,7 +69,6 @@ async fn test_deposits() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
-    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 fn verify_accumulator_exists(
@@ -174,7 +173,6 @@ async fn test_deposit_and_withdraw() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
-    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 #[sim_test]
@@ -207,7 +205,6 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
-    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 #[sim_test]
@@ -238,7 +235,6 @@ async fn test_withdraw_non_existent_balance() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
-    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 #[sim_test]
@@ -275,7 +271,6 @@ async fn test_withdraw_underflow() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
-    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 fn withdraw_from_balance_tx(
