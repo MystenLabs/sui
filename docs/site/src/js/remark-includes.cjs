@@ -1,24 +1,4 @@
 // remark-includes.cjs
-// Replaces the @docusaurus-plugin-includes feature (Docusaurus 3.x compatible)
-// Adds {@include: path} and {@inject: path[#selector] [options...]} handling
-//
-// - {@include: ...} injects raw markdown (parsed with MDX+GFM+Directives).
-// - {@inject: ...} injects formatted fenced code blocks using the SAME logic as injectLoader.js,
-//   plus robust docs-tag extraction using lines like:
-//       // docs::#tag
-//       ...snippet...
-//       // docs::/#tag
-//
-// Title link behavior:
-//   The code fence title is a clickable link that ALWAYS points to:
-//     https://github.com/MystenLabs/sui/blob/main/<path>
-//   The displayed label strips any leading "./" or "../".
-//   EXCEPTION: if the filename/path includes "deepbook-ref", the title is hidden entirely.
-//
-// Nested directives:
-//   Only {@include} appearing *inside* included markdown is expanded **before** MDX parsing.
-//   {@inject} inside included content is intentionally NOT supported.
-//
 // SPDX-License-Identifier: Apache-2.0
 
 const fs = require("fs");
@@ -35,42 +15,41 @@ const { gfmFromMarkdown } = require("mdast-util-gfm");
 const { directive } = require("micromark-extension-directive");
 const { directiveFromMarkdown } = require("mdast-util-directive");
 
-// ---------- Shared helpers ----------
+// ---------- Config ----------
 
 const GITHUB_RAW = "https://raw.githubusercontent.com";
 const GITHUB_BRANCH = "main";
 
-// Redirect-aware HTTPS fetch that concatenates chunks
-function fetchHttps(url) {
-  const maxRedirects = 5;
-  return new Promise((resolve, reject) => {
-    const go = (target, redirects = 0) => {
-      https
-        .get(target, (res) => {
-          if (
-            [301, 302, 303, 307, 308].includes(res.statusCode || 0) &&
-            res.headers.location
-          ) {
-            if (redirects >= maxRedirects) {
-              return reject(new Error("Too many redirects: " + target));
-            }
-            return go(res.headers.location, redirects + 1);
-          }
-          if (res.statusCode !== 200) {
-            console.error(`[remark-includes] Failed to fetch ${target}: ${res.statusCode}`);
-            return resolve(`Error loading content`);
-          }
-          res.setEncoding("utf8");
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => resolve(data));
-        })
-        .on("error", (err) => reject(err));
-    };
-    go(url);
-  });
+// Directories with heavy HTML that must render as plain text
+function heavyHtmlDirs(docsDir) {
+  return [
+    path.resolve(docsDir, "references", "framework"),
+    path.resolve(docsDir, "content", "references", "framework"),
+  ];
 }
 
+// ---------- Helpers ----------
+
+function isInsideDir(filePathAbs, dirAbs) {
+  const rel = path.relative(dirAbs, filePathAbs);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Create a *raw HTML* mdast node. This avoids MDX/rehype work on huge documents.
+function preCodeHtmlNode(raw, language = "html") {
+  // We escape the text ourselves and inject a single html node.
+  const escaped = escapeHtml(raw);
+  return {
+    type: "html",
+    value: `<pre><code class="language-${language}">${escaped}</code></pre>`,
+  };
+}
+
+// Minimal parser for *non-heavy* content
 function parseMarkdownToNodes(markdownText) {
   const tree = fromMarkdown(markdownText, {
     extensions: [mdxjs(), gfm(), directive()],
@@ -79,16 +58,14 @@ function parseMarkdownToNodes(markdownText) {
   return tree.children || [];
 }
 
-// Choose container/index to replace a whole block when directive is the only child of a paragraph
+// Only used to decide if we should replace a whole paragraph with our directive content
 function pickBlockContainer(node, ancestors) {
   const parent = ancestors[ancestors.length - 1];
   const grand = ancestors[ancestors.length - 2];
 
-  // Default: replace the node itself inside its parent
   let container = parent?.children || [];
   let index = container.indexOf(node);
 
-  // If the directive is the only child of a paragraph, replace the entire paragraph
   if (
     parent &&
     parent.type === "paragraph" &&
@@ -103,43 +80,24 @@ function pickBlockContainer(node, ancestors) {
   return { container, index };
 }
 
-// ---------- Path / language helpers (aligned with injectLoader.js) ----------
-
 function languageFromExt(file) {
   const ext = (file.split(".").pop() || "").toLowerCase();
   switch (ext) {
-    case "lock":
-      return "toml";
-    case "sh":
-      return "shell";
-    case "mdx":
-      return "markdown";
-    case "tsx":
-      return "ts";
-    case "rs":
-      return "rust";
-    case "move":
-      return "move";
-    case "prisma":
-      return "ts";
-    default:
-      return ext || "text";
+    case "lock": return "toml";
+    case "sh": return "shell";
+    case "mdx": return "markdown";
+    case "tsx": return "ts";
+    case "rs": return "rust";
+    case "move": return "move";
+    case "prisma": return "ts";
+    default: return ext || "text";
   }
 }
 
-// Helper function to check if a path should be excluded
 function isExcludedPath(absPath, excludePaths = []) {
   if (!excludePaths || excludePaths.length === 0) return false;
-
-  const normalizedPath = path.normalize(absPath);
-
-  return excludePaths.some((excludePath) => {
-    const normalizedExclude = path.resolve(excludePath);
-    return (
-      normalizedPath.includes(normalizedExclude) ||
-      normalizedPath.includes(path.normalize(excludePath))
-    );
-  });
+  const pAbs = path.resolve(absPath);
+  return excludePaths.some((ex) => isInsideDir(pAbs, path.resolve(ex)));
 }
 
 function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
@@ -162,13 +120,12 @@ function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
     absPath = path.resolve(docsDir, specPath);
   }
 
-  // Check exclusion paths
   if (isExcludedPath(absPath, excludePaths)) {
     console.warn(`[remark-includes] Skipping excluded path: ${absPath}`);
     return null;
   }
 
-  // Legacy hardcoded exclusion (keeping for backwards compatibility)
+  // Back-compat: keep skipping legacy framework path if encountered
   if (absPath.includes(path.join("references", "framework"))) {
     console.warn(`[remark-includes] Skipping excluded framework path: ${absPath}`);
     return null;
@@ -177,23 +134,34 @@ function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
   return absPath;
 }
 
-// Keep this around (used elsewhere previously); not harmful if unused.
-function buildTitleLink(specPath) {
-  const stripDotSegments = (p) => p.replace(/^(\.\/|\.\.\/)+/, "");
-  const label = stripDotSegments(specPath);
-  const cleanedSpec = specPath.replace(/^[.\/]+/, "");
-  const fullUrl = `https://github.com/MystenLabs/sui/blob/main/${cleanedSpec}`;
-  return `[${label}](${fullUrl})`;
+async function fetchHttps(url) {
+  const maxRedirects = 5;
+  return new Promise((resolve, reject) => {
+    const go = (target, redirects = 0) => {
+      https
+        .get(target, (res) => {
+          if ([301, 302, 303, 307, 308].includes(res.statusCode || 0) && res.headers.location) {
+            if (redirects >= maxRedirects) return reject(new Error("Too many redirects: " + target));
+            return go(res.headers.location, redirects + 1);
+          }
+          if (res.statusCode !== 200) {
+            console.error(`[remark-includes] Failed to fetch ${target}: ${res.statusCode}`);
+            return resolve(`Error loading content`);
+          }
+          res.setEncoding("utf8");
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => resolve(data));
+        })
+        .on("error", (err) => reject(err));
+    };
+    go(url);
+  });
 }
 
 async function readSpec(fullPath) {
-  if (!fullPath) {
-    return `<!-- Content excluded from processing -->`;
-  }
-
-  if (/^https?:\/\//.test(fullPath)) {
-    return await fetchHttps(fullPath);
-  }
+  if (!fullPath) return `<!-- Content excluded from processing -->`;
+  if (/^https?:\/\//.test(fullPath)) return await fetchHttps(fullPath);
   if (!fs.existsSync(fullPath)) {
     console.error(`[remark-includes] Missing file: ${fullPath}`);
     return `Error loading content (missing file): ${fullPath}`;
@@ -215,68 +183,37 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ---------- Robust docs-tag extraction ----------
-//
-// Matches blocks delimited by lines like:
-//   // docs::#tag
-//   ...content...
-//   // docs::/#tag
-//
-// Also supports pause/resume inside the block:
-//   // docs::#tag-pause[:replacement]
-//   ...skipped...
-//   // docs::#tag-resume
-//
+// ---------- Docs-tag extraction ----------
 
 function extractDocsTagBlock(fullText, markerWithHash) {
-  const tag = markerWithHash.trim(); // e.g. "#bound"
-
-  // allow trailing comment after the tag on the start line
-  const startRe = new RegExp(
-    `^\\s*//\\s*docs::\\s*${escapeRegex(tag)}(?:\\s+.*)?$`,
-    "m"
-  );
-
-  // allow ):; closers and optional trailing comment after end tag
+  const tag = markerWithHash.trim();
+  const startRe = new RegExp(`^\\s*//\\s*docs::\\s*${escapeRegex(tag)}(?:\\s+.*)?$`, "m");
   const endReWithClosers = new RegExp(
     `^\\s*//\\s*docs::/\\s*${escapeRegex(tag)}\\s*([)};:]*)\\s*(?:.*)?$`,
     "m"
   );
-
   const startMatch = startRe.exec(fullText);
-  if (!startMatch) {
-    return { ok: false, content: `// Section '${tag}' not found` };
-  }
+  if (!startMatch) return { ok: false, content: `// Section '${tag}' not found` };
   const afterStartIdx = startMatch.index + startMatch[0].length;
   const tail = fullText.slice(afterStartIdx);
-
   const endMatch = endReWithClosers.exec(tail);
-  if (!endMatch) {
-    return { ok: false, content: `// Section '${tag}' end not found` };
-  }
-
+  if (!endMatch) return { ok: false, content: `// Section '${tag}' end not found` };
   const block = tail.slice(0, endMatch.index);
   const closers = endMatch[1] || "";
   return { ok: true, content: block + closers };
 }
 
-// ---------- {@inject: ...} processor (ported & aligned with injectLoader.js) ----------
+// ---------- {@inject} ----------
 
 async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []) {
-  // spec: "path[#selector]"
   const { file: specFile, marker } = splitPathMarker(spec);
   const language = languageFromExt(specFile);
   const isMove = language === "move";
   const isTs = language === "ts" || language === "js";
   const isRust = language === "rust";
 
-  // Determine if title should be hidden for this spec
-  const hideTitle = specFile.includes("deepbook-ref");
-
-  // Build clickable title parts (unless hidden)
-  let titleLabel = "";
-  let cleanedSpec = "";
-  let titleUrl = "";
+  const hideTitle = /deepbook-ref|ts-sdk-ref/.test(specFile)
+  let titleLabel = "", cleanedSpec = "", titleUrl = "";
   if (!hideTitle) {
     titleLabel = specFile.replace(/^(\.\/|\.\.\/)+/, "");
     cleanedSpec = specFile.replace(/^[.\/]+/, "");
@@ -297,7 +234,6 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
     fileContent = fs.readFileSync(fetchPath, "utf8").replaceAll("\t", "  ");
   }
 
-  // If a marker/selector was provided, replicate loader logic
   if (marker) {
     const funKey = "#fun=";
     const structKey = "#struct=";
@@ -398,8 +334,7 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           let pre = utils.capturePrepend(mVar, fileContent);
           out.push(utils.removeLeadingSpaces(mVar[0], pre));
         } else {
-          fileContent =
-            "Variable not found. If code is formatted correctly, consider using code comments instead.";
+          fileContent = "Variable not found. If code is formatted correctly, consider using code comments instead.";
         }
       } else {
         for (let v of names) {
@@ -413,14 +348,13 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
             let pre = utils.capturePrepend(m, fileContent);
             out.push(utils.removeLeadingSpaces(m[0], pre));
           } else {
-            fileContent =
-              "Variable not found. If code is formatted correctly, consider using code comments instead.";
+            fileContent = "Variable not found. If code is formatted correctly, consider using code comments instead.";
           }
         }
       }
       fileContent = out.join("\n").trim();
-    } else if (useName) {
-      const uses = useName.split(",");
+    } else if (getMarkerName(marker, "#use=")) {
+      const uses = getMarkerName(marker, "#use=").split(",");
       let out = [];
       for (let u of uses) {
         const [base, last] = u.trim().split("::");
@@ -431,13 +365,12 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           let pre = utils.capturePrepend(m, fileContent);
           out.push(utils.removeLeadingSpaces(m[0], pre));
         } else {
-          fileContent =
-            "Use statement not found. If code is formatted correctly, consider using code comments instead.";
+          fileContent = "Use statement not found. If code is formatted correctly, consider using code comments instead.";
         }
       }
       fileContent = out.join("\n").trim();
-    } else if (componentName) {
-      const components = componentName.split(",");
+    } else if (getMarkerName(marker, "#component=")) {
+      const components = getMarkerName(marker, "#component=").split(",");
       let out = [];
       for (let comp of components) {
         let name = comp, element = "", ordinal = "";
@@ -461,11 +394,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
             keep.sort((a, b) => a - b);
             for (let x = 0; x < keep[keep.length - 1]; x++) {
               const elMatch = elRe.exec(m[0]);
-              if (keep.includes(x + 1) && elMatch) {
-                out.push(utils.removeLeadingSpaces(elMatch[0]));
-              } else if (x > 0 && out[out.length - 1]?.trim() !== "...") {
-                out.push("\n...");
-              }
+              if (keep.includes(x + 1) && elMatch) out.push(utils.removeLeadingSpaces(elMatch[0]));
+              else if (x > 0 && out[out.length - 1]?.trim() !== "...") out.push("\n...");
             }
           } else {
             let pre = utils.capturePrepend(m, fileContent);
@@ -474,7 +404,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
         }
       }
       fileContent = out.join("\n").trim();
-    } else if (moduleName) {
+    } else if (getMarkerName(marker, "#module=")) {
+      const moduleName = getMarkerName(marker, "#module=");
       const modStr = `^(\\s*)*module \\b${escapeRegex(moduleName)}\\b[\\s\\S]*?^\\}`;
       const re = new RegExp(modStr, "ms");
       const m = re.exec(fileContent);
@@ -482,11 +413,10 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
         const pre = utils.capturePrepend(m, fileContent);
         fileContent = utils.removeLeadingSpaces(m[0], pre);
       } else {
-        fileContent =
-          "Module not found. If code is formatted correctly, consider using code comments instead.";
+        fileContent = "Module not found. If code is formatted correctly, consider using code comments instead.";
       }
-    } else if (enumName) {
-      const enums = enumName.split(",");
+    } else if (getMarkerName(marker, "#enum=")) {
+      const enums = getMarkerName(marker, "#enum=").split(",");
       let out = [];
       for (let e of enums) {
         const re = new RegExp(`^( *)(export)? enum \\b${escapeRegex(e)}\\b\\s*\\{[\\s\\S]*?\\}`, "m");
@@ -494,8 +424,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
         if (m) out.push(utils.removeLeadingSpaces(m[0]));
       }
       fileContent = out.join("\n").trim();
-    } else if (typeName) {
-      const types = typeName.split(",");
+    } else if (getMarkerName(marker, "#type=")) {
+      const types = getMarkerName(marker, "#type=").split(",");
       let out = [];
       for (let t of types) {
         const startRe = new RegExp(`^( *)(export )?type \\b${escapeRegex(t)}\\b`, "m");
@@ -505,67 +435,59 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           const spaces = m[1] || "";
           const endRe = new RegExp(`^${spaces}\\};`, "m");
           const e = endRe.exec(sub);
-          if (e) {
-            sub = sub.slice(0, e.index + e[0].length);
-            out.push(utils.removeLeadingSpaces(sub));
-          } else {
-            out.push("Error capturing type declaration.");
-          }
+          if (e) out.push(utils.removeLeadingSpaces(sub.slice(0, e.index + e[0].length)));
+          else out.push("Error capturing type declaration.");
+        }
+      }
+      fileContent = out.join("\n").trim();
+    } else if (getMarkerName(marker, "#trait=")) {
+      const traits = getMarkerName(marker, "#trait=").split(",");
+      let out = [];
+      for (let t of traits) {
+        const traitStr = `^(\\s*)*?(pub(lic)? )?trait \\b${escapeRegex(t)}\\b[\\s\\S]*?^\\}`;
+        const re = new RegExp(traitStr, "ms");
+        const m = re.exec(fileContent);
+        if (m) {
+          let pre = utils.capturePrepend(m, fileContent);
+          out.push(utils.removeLeadingSpaces(m[0], pre));
+        } else {
+          fileContent = "Struct not found. If code is formatted correctly, consider using code comments instead.";
         }
       }
       fileContent = out.join("\n").trim();
     } else {
-      // Fallback: docs-tag block extraction (#tag)
       const { ok, content } = extractDocsTagBlock(fileContent, marker);
       if (!ok) return content;
       fileContent = content;
     }
   }
 
-  // Apply post options & formatting using utils (same as loader)
   const processed = utils.processOptions(fileContent, opts);
-
-  // Emit JSX CodeBlock. If hideTitle, omit the `title` prop entirely.
-  // Use JSON.stringify to avoid backticks inside MDX/Acorn parsing.
-  const titleProp = hideTitle
-    ? ""
-    : ` title={<a href="${titleUrl}" target="_blank" rel="noopener noreferrer">${titleLabel}</a>}`;
-
-  const jsx =
-    `<CodeBlock language="${language}"${titleProp}>` +
-    `{${JSON.stringify(processed)}}` +
-    `</CodeBlock>`;
-  return jsx;
+  const titleProp = hideTitle ? "" : ` title={<a href="${titleUrl}" target="_blank" rel="noopener noreferrer">${titleLabel}</a>}`;
+  return `<CodeBlock language="${language}"${titleProp}>{${JSON.stringify(processed)}}` + `</CodeBlock>`;
 }
 
-// ---------- Nested directive expansion inside included markdown ----------
+// ---------- Nested directive expansion (only for {@include} text) ----------
 
-// Strict (full-line) forms used when scanning the Markdown AST
 const RE_INCLUDE_TXT = /^\s*\{@include:\s*([^\s}]+)\s*\}\s*$/;
 const RE_INCLUDE_HTML = /^\s*<!--\s*\{@include:\s*([^\s}]+)\s*\}\s*-->\s*$/;
 const RE_INJECT_TXT = /^\s*\{@inject:\s*([^\s}]+)(?:\s+([^}]*?))?\s*\}\s*$/;
 const RE_INJECT_HTML = /^\s*<!--\s*\{@inject:\s*([^\s}]+)(?:\s+([^}]*?))?\s*\}\s*-->\s*$/;
 
-// Lenient, inline-capable patterns for raw text replacement inside includes (ONLY include)
 const RE_INCLUDE_INLINE = /{\s*@include:\s*([^\s}]+)\s*}/g;
 const RE_INCLUDE_INLINE_HTML = /<!--\s*{\s*@include:\s*([^\s}]+)\s*}\s*-->/g;
 
-// Remove MDX import lines from included snippets
 function stripImportStatements(text) {
-  // Drop lines that start with "import ..." (typical MDX/ESM import lines)
   return text.replace(/^[ \t]*import\s+.*$/gm, "").replace(/\n{3,}/g, "\n\n");
 }
 
-// Recursively expand {@include:...} found in raw text, BEFORE MDX parsing.
-// - baseAbsPath tracks the current file for resolving relative paths in nested includes.
 async function expandDirectivesInText(markdown, docsDir, baseAbsPath, excludePaths = [], depth = 0, seenStack = []) {
-  const MAX_PASSES = 6;
-  const MAX_DEPTH = 20;
+  const MAX_PASSES = 4; // keep small to avoid runaway recursion
+  const MAX_DEPTH = 10;
   if (depth > MAX_DEPTH) return markdown;
 
   let text = markdown;
 
-  // Helper: async global replace for inline patterns
   async function replaceAllAsyncInline(s, re, replacer) {
     let out = "";
     let lastIdx = 0;
@@ -581,48 +503,34 @@ async function expandDirectivesInText(markdown, docsDir, baseAbsPath, excludePat
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     let changed = false;
 
-    // Expand all {@include:...} (inline/comment) by recursively loading and expanding
     const expandIncludeSpec = async (specRaw) => {
       const spec = specRaw.trim();
       const fullPath = buildFetchPath(spec, docsDir, baseAbsPath, excludePaths);
-      // derive a new base path for nested relative resolution
       let newBase = baseAbsPath;
       let included = "";
       if (/^https?:\/\//.test(fullPath)) {
         included = await readSpec(fullPath);
-        // keep newBase as current baseAbsPath for URL includes
       } else if (!fullPath) {
         return `<!-- Include skipped (excluded path): ${spec} -->`;
       } else {
         included = await readSpec(fullPath);
-        newBase = fullPath; // now relative includes resolve to this file's dir
+        newBase = fullPath;
       }
 
-      // Prevent trivial cycles
       const key = `${depth}:${fullPath}`;
       if (seenStack.includes(key)) return included;
       const nextSeen = seenStack.concat(key);
 
-      // Recursively expand ONLY {@include} inside the included content
       const expanded = await expandDirectivesInText(included, docsDir, newBase, excludePaths, depth + 1, nextSeen);
-      // Strip MDX import lines from the expanded include
       return stripImportStatements(expanded);
     };
 
     const beforeInclude = text;
-    text = await replaceAllAsyncInline(text, RE_INCLUDE_INLINE, async (m) => {
-      const spec = (m[1] || "").trim();
-      return await expandIncludeSpec(spec);
-    });
-    text = await replaceAllAsyncInline(text, RE_INCLUDE_INLINE_HTML, async (m) => {
-      const spec = (m[1] || "").trim();
-      return await expandIncludeSpec(spec);
-    });
+    text = await replaceAllAsyncInline(text, RE_INCLUDE_INLINE, async (m) => expandIncludeSpec((m[1] || "").trim()));
+    text = await replaceAllAsyncInline(text, RE_INCLUDE_INLINE_HTML, async (m) => expandIncludeSpec((m[1] || "").trim()));
     if (text !== beforeInclude) changed = true;
-
     if (!changed) break;
   }
-
   return text;
 }
 
@@ -630,31 +538,30 @@ async function expandDirectivesInText(markdown, docsDir, baseAbsPath, excludePat
 
 module.exports = function remarkIncludes(options) {
   const docsDir = options?.docsDir || process.cwd();
-  const excludePaths = options?.excludePaths || [];
+
+  const heavyDirs = heavyHtmlDirs(docsDir);
+  const userExcludes = options?.excludePaths || [];
+  const excludeDirsAbs = [...userExcludes.map((p) => path.resolve(p))];
 
   return async (tree, file) => {
-    // Skip processing for files in excluded paths
     const filePath = file.history?.[0] || file.path || "";
-    const normalizedFilePath = path.normalize(filePath);
+    const normalizedFilePath = path.resolve(filePath);
 
-    // Check if current file should be excluded
-    const shouldSkip =
-      excludePaths.some((excludePath) => {
-        const normalizedExclude = path.resolve(excludePath);
-        return (
-          normalizedFilePath.includes(normalizedExclude) ||
-          normalizedFilePath.includes(path.normalize(excludePath))
-        );
-      }) ||
-      normalizedFilePath.startsWith(
-        path.resolve(docsDir, "references", "framework") + path.sep
-      );
-
-    if (shouldSkip) {
-      console.log(`[remark-includes] Skipping excluded file: ${filePath}`);
-      return; // Exit early, don't process this file at all
+    // If the current doc is a "heavy HTML" doc, replace the ENTIRE page with a single raw <pre><code>.
+    for (const dirAbs of heavyDirs) {
+      if (isInsideDir(normalizedFilePath, dirAbs)) {
+        let raw = String(file.value ?? "");
+        try { raw = fs.readFileSync(normalizedFilePath, "utf8"); } catch (_) {}
+        // Replace AST with a single raw HTML node (no MDX parsing, no prism).
+        tree.children = [preCodeHtmlNode(raw, "html")];
+        // Sentinel for downstream plugins to skip processing
+        file.data = file.data || {};
+        file.data.__renderedAsLiteral = true;
+        return;
+      }
     }
 
+    // Normal path: look for include/inject directives
     let needsCodeBlockImport = false;
     const replacements = [];
 
@@ -668,9 +575,7 @@ module.exports = function remarkIncludes(options) {
       if ((m = value.match(RE_INCLUDE_TXT)) || (m = value.match(RE_INCLUDE_HTML))) {
         const spec = m[1].trim();
         const { container, index } = pickBlockContainer(node, ancestors);
-        if (index >= 0) {
-          replacements.push({ container, index, kind: "include", spec });
-        }
+        if (index >= 0) replacements.push({ container, index, kind: "include", spec });
         return;
       }
 
@@ -678,49 +583,45 @@ module.exports = function remarkIncludes(options) {
         const spec = m[1].trim();
         const rest = (m[2] || "").trim();
         const { container, index } = pickBlockContainer(node, ancestors);
-        if (index >= 0) {
-          replacements.push({ container, index, kind: "inject", spec, rest });
-        }
+        if (index >= 0) replacements.push({ container, index, kind: "inject", spec, rest });
         return;
       }
     });
 
-    // Perform async replacements in reverse order to keep indices valid
+    // Do replacements in reverse to keep indices valid
     for (const r of replacements.reverse()) {
       const { container, index, kind, spec } = r;
 
       if (kind === "include") {
-        // Read include, expand ONLY nested {@include}, strip MDX imports, then parse.
-        const fullPath = buildFetchPath(spec, docsDir, file.history?.[0] || file.path, excludePaths);
-        let raw = await readSpec(fullPath);
-
-        // baseAbsPath for resolving relatives within this include
+        // Read include, expand ONLY nested {@include}, then decide rendering path.
+        const fullPath = buildFetchPath(spec, docsDir, file.history?.[0] || file.path, excludeDirsAbs);
+        const raw = await readSpec(fullPath);
         const baseAbsPath = /^https?:\/\//.test(fullPath) ? (file.history?.[0] || file.path) : fullPath;
+        const expanded = await expandDirectivesInText(raw, docsDir, baseAbsPath, excludeDirsAbs);
 
-        // Expand ONLY nested {@include} and strip MDX import lines
-        const expanded = stripImportStatements(
-          await expandDirectivesInText(raw, docsDir, baseAbsPath, excludePaths)
-        );
+        // If include comes from heavy dir, directly inject a raw HTML node with pre/code.
+        if (fullPath && !/^https?:\/\//.test(fullPath)) {
+          const abs = path.resolve(fullPath);
+          if (heavyDirs.some((d) => isInsideDir(abs, d))) {
+            container.splice(index, 1, preCodeHtmlNode(expanded, "html"));
+            continue;
+          }
+        }
 
-        const nodes = parseMarkdownToNodes(expanded);
+        // Otherwise parse normally
+        const nodes = parseMarkdownToNodes(stripImportStatements(expanded));
         container.splice(index, 1, ...nodes);
       } else {
-        // inject: produce JSX CodeBlock (clickable title)
+        // {@inject}: produce JSX CodeBlock (title suppressed if deepbook-ref)
         const opts = r.rest ? r.rest.split(/\s+/).filter(Boolean) : [];
-        const jsxBlock = await processInject(
-          spec,
-          opts,
-          docsDir,
-          file.history?.[0] || file.path,
-          excludePaths
-        );
-        const nodes = parseMarkdownToNodes(jsxBlock);
+        const jsx = await processInject(spec, opts, docsDir, file.history?.[0] || file.path, excludeDirsAbs);
+        const nodes = parseMarkdownToNodes(jsx);
         container.splice(index, 1, ...nodes);
-        needsCodeBlockImport = true; // we emitted <CodeBlock/>
+        needsCodeBlockImport = true;
       }
     }
 
-    // Prepend the import exactly once if we emitted any JSX CodeBlock.
+    // Import CodeBlock if we emitted it via {@inject}
     if (needsCodeBlockImport) {
       tree.children.unshift({
         type: "mdxjsEsm",

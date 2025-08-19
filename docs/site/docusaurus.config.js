@@ -9,7 +9,6 @@ const npm2yarn = require('@docusaurus/remark-plugin-npm2yarn');
 import rehypeRawFiles from './src/rehype/rehype-raw-only.mjs';
 import rehypeTabsMd from './src/rehype/rehype-tabs.mjs';
 
-
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
 
@@ -76,6 +75,8 @@ const config = {
   plugins: [
     // ....
     // path.resolve(__dirname, `./src/plugins/examples`),
+
+    './src/plugins/framework-raw',
     [
       "posthog-docusaurus",
       {
@@ -133,9 +134,9 @@ const config = {
   ],
   presets: [
     [
-      "classic",
+      '@docusaurus/preset-classic',
       /** @type {import('@docusaurus/preset-classic').Options} */
-      ({
+      {
         docs: {
           path: "../content",
           routeBasePath: "/",
@@ -154,18 +155,29 @@ const config = {
             "current",
             "1.0.0",
           ],*/
-          exclude: ['**/content/snippets/**', '**/references/framework/**',],
+          exclude: [
+            "**/content/snippets/**",
+            "**/references/framework/**",
+            "**/standards/deepbook-ref/**",
+            "**/submodules/**",
+            "**/app-examples/ts-sdk-ref/**",
+          ],
           admonitions: {
             keywords: ["checkpoint"],
             extendDefaults: true,
           },
           beforeDefaultRemarkPlugins: [
-                 [require('./src/js/remark-includes.cjs'), { 
-                docsDir: path.join(__dirname, 'content'),}],
+            [
+              require("./src/js/remark-includes.cjs"),
+              {
+                // Match docs.path ("../content") so path math & excludes are correct
+                docsDir: path.resolve(__dirname, "../content"),
+              },
+            ],
           ],
           remarkPlugins: [
             math,
-            [npm2yarn, { sync: true, converters: ['yarn', 'pnpm'] }],
+            [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
           ],
@@ -177,11 +189,12 @@ const config = {
             require.resolve("./src/css/custom.css"),
           ],
         },
-      }),
+      },
     ],
   ],
+
   scripts: [
-    {src: './src/js/tabs-md.js', defer: true},
+    { src: './src/js/tabs-md.js', defer: true },
     {
       src: "/js/clarity.js",
       async: true,
@@ -214,7 +227,7 @@ const config = {
           autoCollapseCategories: false,
         },
       },
-    
+
       navbar: {
         title: "Sui Documentation",
         logo: {
@@ -266,9 +279,9 @@ const config = {
         githubLinkLabel: 'View on GitHub',
       },
       prism: {
-      theme: lightCodeTheme,
-      darkTheme: darkCodeTheme,
-      additionalLanguages: ["rust", "typescript", "toml", "json"],
+        theme: lightCodeTheme,
+        darkTheme: darkCodeTheme,
+        additionalLanguages: ["rust", "typescript", "toml", "json"],
       },
     }),
 };
