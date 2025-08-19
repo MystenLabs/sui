@@ -58,4 +58,4 @@ const standards = [
 	'standards/display',
 	'standards/wallet-standard',
 ];
-module.exports = standards;
+export default standards;

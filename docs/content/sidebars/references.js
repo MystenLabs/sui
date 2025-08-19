@@ -157,4 +157,4 @@ const references = [
 	},
 ];
 
-module.exports = references;
+export default references;
