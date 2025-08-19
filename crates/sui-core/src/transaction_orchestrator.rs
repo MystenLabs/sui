@@ -124,6 +124,9 @@ where
             QuorumDriverHandlerBuilder::new(validators.clone(), metrics.clone())
                 .with_notifier(notifier.clone())
                 .with_reconfig_observer(reconfig_observer.clone())
+                .with_transaction_initial_target_stake_percentage(
+                    node_config.transaction_initial_target_stake_percentage,
+                )
                 .start(),
         );
 

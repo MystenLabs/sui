@@ -196,6 +196,12 @@ pub struct NodeConfig {
     #[serde(default = "bool_true")]
     pub enable_validator_tx_finalizer: bool,
 
+    /// Percentage of total stake to send transactions to on the initial attempt.
+    /// On retries, transactions are sent to 100% of validators for reliability.
+    /// Default is 95%, which reduces load by omitting ~5% of stake on first attempt.
+    #[serde(default = "default_transaction_initial_target_stake_percentage")]
+    pub transaction_initial_target_stake_percentage: u64,
+
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 
@@ -726,6 +732,10 @@ pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
 
 pub fn bool_true() -> bool {
     true
+}
+
+fn default_transaction_initial_target_stake_percentage() -> u64 {
+    95
 }
 
 fn is_true(value: &bool) -> bool {
