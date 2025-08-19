@@ -2,6 +2,8 @@
 
 TODO: Link to custom indexing guide.
 
+This is an extention of the [Custom Indexer guide](https://docs.sui.io/guides/developer/advanced/custom-indexer) to show how to index Walrus blobs and their associated `Metadata` dynamic fields.
+
 ## Quickstart
 
 Given a service that allows users to upload blog posts to Walrus and creates an associated `Metadata` dynamic field with `view_count`, `title`, and `publisher` (Sui address that created the Walrus blob), you can write a corresponding indexer that commits these attributes to a store of your choice to emulate a blog post platform. Then, users can:
