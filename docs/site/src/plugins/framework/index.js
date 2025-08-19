@@ -116,10 +116,6 @@ const frameworkPlugin = (context, options) => {
               /href=(["'])(\.\.\/)(bridge|sui|std|sui_system)\/([^"']*)\1/g,
               (_m, q, up, seg, tail) => `href=${q}${up}${CRATE_PREFIX_MAP[seg]}/${tail}${q}`,
             )
-            text = text.replace(
-            /href=(["'])\.\.\/sui_(bridge|sui|std|sui_system)\/"(?=[^"']*\1)/g,
-            'href=$1../sui_$2/'
-            )
             // also handle single quotes just in case
             .replace(
               /href='(\.\.\/)(bridge|sui|std|sui_system)\//g,
