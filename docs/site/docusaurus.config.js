@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { themes } from "prism-react-renderer";
+import { fileURLToPath } from "url";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
