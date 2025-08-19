@@ -113,8 +113,12 @@ const frameworkPlugin = (context, options) => {
             .replace(/<a name=/g, "<a style='scroll-margin-top:80px' id=")
             // *** NEW: rewrite crate-relative links to the prefixed dirs ***
             .replace(
-              /href="(\.\.\/)(bridge|sui|std|sui_system)\//g,
-              (m, up, seg) => `href="${up}${CRATE_PREFIX_MAP[seg]}/"`,
+              /href=(["'])(\.\.\/)(bridge|sui|std|sui_system)\/([^"']*)\1/g,
+              (_m, q, up, seg, tail) => `href=${q}${up}${CRATE_PREFIX_MAP[seg]}/${tail}${q}`,
+            )
+            text = text.replace(
+            /href=(["'])\.\.\/sui_(bridge|sui|std|sui_system)\/"(?=[^"']*\1)/g,
+            'href=$1../sui_$2/'
             )
             // also handle single quotes just in case
             .replace(
