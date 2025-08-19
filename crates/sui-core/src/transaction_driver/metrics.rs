@@ -25,6 +25,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) expiration_acks: IntCounter,
     pub(crate) effects_digest_mismatches: IntCounter,
     pub(crate) transaction_retries: HistogramVec,
+    pub(crate) transaction_fast_path_acked: IntCounterVec,
     pub(crate) certified_effects_ack_latency: HistogramVec,
     pub(crate) certified_effects_ack_attempts: IntCounterVec,
     pub(crate) certified_effects_ack_successes: IntCounterVec,
@@ -107,6 +108,13 @@ impl TransactionDriverMetrics {
                 "Number of retries per transaction attempt in drive_transaction",
                 &["result"],
                 SUBMIT_TRANSACTION_RETRIES_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            transaction_fast_path_acked: register_int_counter_vec_with_registry!(
+                "transaction_driver_transaction_fast_path_acked",
+                "Number of transactions that were executed using fast path",
+                &["validator", "tx_type"],
                 registry,
             )
             .unwrap(),
