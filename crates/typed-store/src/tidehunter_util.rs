@@ -81,6 +81,10 @@ fn thdb_config() -> Config {
     }
 }
 
+pub fn default_mutex_count() -> usize {
+    128
+}
+
 pub(crate) fn apply_range_bounds(
     iterator: &mut DbIterator,
     lower_bound: Option<Vec<u8>>,
