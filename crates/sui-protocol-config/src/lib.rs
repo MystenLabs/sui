@@ -1461,6 +1461,7 @@ pub struct ProtocolConfig {
     hash_sha3_256_legacy_min_input_len_cost: Option<u64>,
     type_name_get_base_cost: Option<u64>,
     type_name_get_per_byte_cost: Option<u64>,
+    type_name_id_base_cost: Option<u64>,
 
     string_check_utf8_base_cost: Option<u64>,
     string_check_utf8_per_byte_cost: Option<u64>,
@@ -2646,6 +2647,7 @@ impl ProtocolConfig {
             hash_sha3_256_legacy_min_input_len_cost: None,
             type_name_get_base_cost: None,
             type_name_get_per_byte_cost: None,
+            type_name_id_base_cost: None,
             string_check_utf8_base_cost: None,
             string_check_utf8_per_byte_cost: None,
             string_is_char_boundary_base_cost: None,
@@ -3933,6 +3935,7 @@ impl ProtocolConfig {
                 93 => {
                     cfg.feature_flags
                         .consensus_checkpoint_signature_key_includes_digest = true;
+                    cfg.type_name_id_base_cost = Some(52);
                 }
                 // Use this template when making changes:
                 //
