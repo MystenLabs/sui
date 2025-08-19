@@ -536,6 +536,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_committer_processes_sequential_checkpoints_with_initial_watermark() {
+        // Setup with initial watermark
+        let initial_watermark = Some(CommitterWatermark {
+            checkpoint_hi_inclusive: 5,
+            ..Default::default()
+        });
+
+        let config = SequentialConfig {
+            committer: CommitterConfig::default(),
+            checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
+        };
+        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+
+        // Send checkpoints in order
+        for i in 0..8 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify data was written in order
+        assert_eq!(setup.store.get_sequential_data(), vec![6, 7]);
+
+        // Verify watermark was updated
+        {
+            let watermark = setup.store.watermarks.lock().unwrap();
+            assert_eq!(watermark.checkpoint_hi_inclusive, 7);
+            assert_eq!(watermark.tx_hi, 7);
+        }
+
+        // Verify watermark was sent to ingestion
+        let watermark = setup.watermark_rx.recv().await.unwrap();
+        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
+        assert_eq!(watermark.1, 7, "Watermark should be at checkpoint 7");
+
+        // Clean up
+        drop(setup.checkpoint_tx);
+        let _ = setup.committer_handle.await;
+    }
+
+    #[tokio::test]
     async fn test_committer_processes_out_of_order_checkpoints() {
         // Setup with no initial watermark
         let initial_watermark = None;
