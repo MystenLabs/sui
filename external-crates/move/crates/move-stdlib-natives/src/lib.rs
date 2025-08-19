@@ -66,6 +66,7 @@ impl GasParameters {
                     base: 0.into(),
                     per_byte: 0.into(),
                 },
+                id: type_name::IdGasParameters { base: 0.into() },
             },
             signer: signer::GasParameters {
                 borrow_address: signer::BorrowAddressGasParameters { base: 0.into() },

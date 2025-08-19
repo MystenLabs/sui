@@ -130,3 +130,31 @@ fun test_get_address_aborts_with_primitive_generic() {
 fun test_get_module_aborts_with_primitive_generic() {
     with_defining_ids<vector<TestGenerics<std::ascii::String>>>().module_string();
 }
+
+#[test]
+fun test_defining_id() {
+    assert!(defining_id<std::ascii::String>() == @1);
+    assert!(defining_id<TestStruct>() == @0xa);
+    assert!(defining_id<TestEnum>() == @0xa);
+    assert!(defining_id<TestGenerics<std::string::String>>() == @0xa);
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_defining_id_aborts_with_primitive() {
+    defining_ids<u8>()
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_defining_idaborts_with_primitive() {
+    defining_ids<bool>()
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_defining_id_aborts_with_primitive_generic() {
+    defining_ids<vector<std::ascii::String>>()
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_defining_idaborts_with_primitive_generic() {
+    defining_ids<vector<TestGenerics<std::ascii::String>>>()
+}
