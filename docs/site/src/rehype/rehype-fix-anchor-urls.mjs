@@ -1,4 +1,6 @@
-// ./src/rehype/rehype-fix-anchor-urls.mjs
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { visit } from "unist-util-visit";
 
 // Treat only true local paths as "files". Everything else is ignored.

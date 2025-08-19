@@ -1,5 +1,6 @@
 // Copyright (c) PushFeedback
 // SPDX-License-Identifier: Apache-2.0
+
 // Enables the Push Feedback plugin at the footer of each docs page
 // https://app.pushfeedback.com/
 // Code from Push Feedback documentation: https://docs.pushfeedback.com/installation/docusaurus/#advanced-setup-like-and-dislike-buttons

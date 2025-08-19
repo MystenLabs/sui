@@ -1,4 +1,4 @@
-// remark-includes.cjs
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 const fs = require("fs");
@@ -28,6 +28,17 @@ function heavyHtmlDirs(docsDir) {
 }
 
 // ---------- Helpers ----------
+
+function fixAngleBracketAutolinksInHtml(html) {
+  // Turn <https://…> (and &lt;https://…&gt;) into clickable anchors.
+  // Preserve a trailing punctuation char if present.
+  return html
+    .replace(/<(https?:\/\/[^\s<>")]+)>([.,;:!?)]?)/g,
+             '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>$2')
+    .replace(/&lt;(https?:\/\/[^\s<>"\')]+)&gt;([.,;:!?)]?)/g,
+             '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>$2');
+}
+
 
 function containsAdmonition(md) {
   return /^:::(?:info|note|tip|warning|danger|caution)(?:\s|$)/m.test(md);
@@ -627,8 +638,10 @@ module.exports = function remarkIncludes(options) {
         let raw = String(file.value ?? "");
         try { raw = fs.readFileSync(normalizedFilePath, "utf8"); } catch (_) {}
 
+
         const normalized = normalizeFrameworkMarkdown(raw);
-        const html = markdownToHtml(normalized);
+        let html = markdownToHtml(normalized);
+        html = fixAngleBracketAutolinksInHtml(html);
         const safeHtml = fixAnchorOnlyUrlsInHtml(html);
 
         tree.children = [jsxDivWithInlineHtml(safeHtml)];
@@ -700,7 +713,8 @@ module.exports = function remarkIncludes(options) {
               }
 
               // Otherwise keep the fast heavy path (MD → HTML → inject)
-              const html = markdownToHtml(normalizeFrameworkMarkdown(expandedText));
+              let html = markdownToHtml(normalizeFrameworkMarkdown(expandedText));
+              html = fixAngleBracketAutolinksInHtml(html);
               const safeHtml = fixAnchorOnlyUrlsInHtml(html);
               container.splice(index, 1, jsxDivWithInlineHtml(safeHtml));
               continue;
