@@ -181,18 +181,18 @@ impl CheckpointStoreTables {
     pub fn new(path: &Path, metric_name: &'static str) -> Self {
         tracing::warn!("Checkpoint DB using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, KeySpaceConfig, KeyType, ThConfig,
+            default_cells_per_mutex, default_mutex_count, KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 4 * 1024;
+        let mutexes = default_mutex_count() * 4;
         let u64_sequence_key = KeyType::prefix_uniform(6, 0);
         let override_dirty_keys_config = KeySpaceConfig::new()
             .with_max_dirty_keys(64_000)
             .with_value_cache_size(1000);
         let config_u64 =
-            ThConfig::new_with_config(8, MUTEXES, u64_sequence_key, override_dirty_keys_config);
+            ThConfig::new_with_config(8, mutexes, u64_sequence_key, override_dirty_keys_config);
         let digest_config = ThConfig::new_with_rm_prefix(
             32,
-            MUTEXES,
+            mutexes,
             KeyType::uniform(default_cells_per_mutex()),
             KeySpaceConfig::default(),
             vec![0, 0, 0, 0, 0, 0, 0, 32],

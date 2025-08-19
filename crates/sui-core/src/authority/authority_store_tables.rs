@@ -205,10 +205,10 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType,
-            ThConfig,
+            default_cells_per_mutex, default_mutex_count, Bytes, IndexWalPosition, KeyIndexing,
+            KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 2 * 1024;
+        let mutexes = default_mutex_count() * 2;
         const VALUE_CACHE_SIZE: usize = 2_000;
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
@@ -236,7 +236,7 @@ impl AuthorityPerpetualTables {
                 "objects".to_string(),
                 ThConfig::new_with_config(
                     32 + 8,
-                    MUTEXES,
+                    mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
                 ),
@@ -245,7 +245,7 @@ impl AuthorityPerpetualTables {
                 "owned_object_transaction_locks".to_string(),
                 ThConfig::new_with_config(
                     32 + 8 + 32 + 8,
-                    MUTEXES,
+                    mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     bloom_config.clone(),
                 ),
@@ -254,7 +254,7 @@ impl AuthorityPerpetualTables {
                 "transactions".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
@@ -264,7 +264,7 @@ impl AuthorityPerpetualTables {
                 "effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
@@ -274,7 +274,7 @@ impl AuthorityPerpetualTables {
                 "executed_effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
@@ -284,7 +284,7 @@ impl AuthorityPerpetualTables {
                 "events".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32 + 8,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
@@ -294,7 +294,7 @@ impl AuthorityPerpetualTables {
                 "events_2".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
@@ -304,7 +304,7 @@ impl AuthorityPerpetualTables {
                 "executed_transactions_to_checkpoint".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
@@ -334,7 +334,7 @@ impl AuthorityPerpetualTables {
                 "object_per_epoch_marker_table".to_string(),
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::VariableLength,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
                 ),
@@ -343,7 +343,7 @@ impl AuthorityPerpetualTables {
                 "object_per_epoch_marker_table_v2".to_string(),
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::VariableLength,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
                 ),
