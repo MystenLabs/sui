@@ -345,6 +345,7 @@ where
         match &wait_for_effects_resp {
             WaitForEffectsResponse::Executed {
                 effects_digest: _,
+                fast_path: _,
                 details: Some(details),
             } => {
                 self.verify_executed_data((**details).clone())?;
