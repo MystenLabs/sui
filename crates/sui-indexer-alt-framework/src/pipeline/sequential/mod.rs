@@ -110,6 +110,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
+    first_checkpoint: Option<u64>,
 ) -> JoinHandle<()> {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
@@ -130,6 +131,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         task,
         metrics.clone(),
         cancel.clone(),
+        first_checkpoint,
     );
 
     tokio::spawn(async move {

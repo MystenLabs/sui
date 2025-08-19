@@ -47,6 +47,7 @@ pub(super) fn committer<H>(
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
+    first_checkpoint: Option<u64>,
 ) -> JoinHandle<()>
 where
     H: Handler + Send + Sync + 'static,
@@ -81,7 +82,12 @@ where
             let next = watermark.checkpoint_hi_inclusive + 1;
             (watermark, next)
         } else {
-            (CommitterWatermark::default(), 0)
+            // If no watermark exists and first_checkpoint is provided, start from there
+            // Otherwise, start from 0 as before
+            let start_checkpoint = first_checkpoint.unwrap_or(0);
+            let mut default_watermark = CommitterWatermark::default();
+            default_watermark.checkpoint_hi_inclusive = start_checkpoint.saturating_sub(1);
+            (default_watermark, start_checkpoint)
         };
 
         // The committer task will periodically output a log message at a higher log level to
@@ -477,6 +483,7 @@ mod tests {
             None,
             metrics,
             cancel,
+            None,
         );
 
         TestSetup {
