@@ -265,7 +265,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// Returns a vector containing:
     /// 1. The top `k` validators by score (shuffled)
     /// 2. The remaining validators ordered by score (not shuffled)
-    pub fn select_shuffled_preferred_validators(
+    pub fn select_shuffled_preferred_validators_consensus(
         &self,
         committee: &Committee,
         k: usize,
@@ -300,6 +300,53 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
             let selected = top_k
                 .choose_multiple_weighted(&mut rng, k, |(_, score)| *score as f64)
+                .expect("Failed to select weighted validators")
+                .map(|(validator, _)| *validator)
+                .collect::<Vec<_>>();
+
+            result.extend(selected);
+        }
+
+        // Add the remaining elements in score descending order
+        for (validator, _) in &validator_with_scores[k..] {
+            result.push(*validator);
+        }
+
+        result
+    }
+
+    pub fn select_shuffled_preferred_validators(
+        &self,
+        committee: &Committee,
+        k: usize,
+        // TODO: Pass in the operation type so that we can select validators based on the operation type.
+    ) -> Vec<AuthorityName> {
+        let mut rng = rand::thread_rng();
+
+        let Some(cached_scores) = self.cached_scores.read().clone() else {
+            let mut validators: Vec<_> = committee.names().cloned().collect();
+            validators.shuffle(&mut rng);
+            return validators;
+        };
+
+        // Since the cached scores are updated periodically, it is possible that it was ran on
+        // an out-of-date committee.
+        let mut validator_with_scores: Vec<_> = committee
+            .names()
+            .map(|v| (*v, cached_scores.get(v).copied().unwrap_or(0.0)))
+            .collect();
+        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        let k = k.min(validator_with_scores.len());
+
+        let mut result = Vec::with_capacity(validator_with_scores.len());
+
+        if k > 0 {
+            // For the top K elements, use weighted random selection
+            let top_k = &validator_with_scores[..k];
+
+            let selected = top_k
+                .choose_multiple_weighted(&mut rng, k, |(_, score)| *score)
                 .expect("Failed to select weighted validators")
                 .map(|(validator, _)| *validator)
                 .collect::<Vec<_>>();
