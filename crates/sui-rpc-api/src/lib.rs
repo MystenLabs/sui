@@ -3,7 +3,7 @@
 
 use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use subscription::SubscriptionServiceHandle;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
@@ -18,6 +18,7 @@ pub mod proto;
 mod reader;
 mod response;
 mod service;
+mod signal;
 pub mod subscription;
 
 pub use crate::grpc::v2beta::ledger_service;
@@ -30,6 +31,11 @@ pub use error::{
 pub use metrics::{RpcMetrics, RpcMetricsMakeCallbackHandler};
 pub use reader::TransactionNotFoundError;
 pub use service::protocol_config::config_to_proto;
+pub use signal::install_drain_signal_handler;
+
+/// Global atomic boolean to track if the service is draining (shutting down).
+/// This is set to true via SIGUSR1 signal to make the readiness check return 503.
+pub static DRAINING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone)]
 pub struct ServerVersion {
@@ -64,6 +70,9 @@ pub struct RpcService {
 
 impl RpcService {
     pub fn new(reader: Arc<dyn RpcStateReader>) -> Self {
+        // Install signal handler as early as possible
+        crate::signal::install_drain_signal_handler();
+        
         let chain_id = reader.get_chain_identifier().unwrap();
         Self {
             reader: StateReader::new(reader),
@@ -234,6 +243,9 @@ sui_rpc::proto::sui::rpc::v2beta2::subscription_service_server::SubscriptionServ
     }
 
     pub async fn start_service(self, socket_address: std::net::SocketAddr) {
+        // Install signal handler 
+        crate::signal::install_drain_signal_handler();
+        
         let listener = tokio::net::TcpListener::bind(socket_address).await.unwrap();
         axum::serve(listener, self.into_router().await)
             .await

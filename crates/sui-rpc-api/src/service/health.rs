@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::extract::{Query, State};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use crate::Result;
-use crate::RpcService;
+use crate::{Result, RpcService, DRAINING};
 
 impl RpcService {
     /// Perform a simple health check on the service.
@@ -17,6 +17,10 @@ impl RpcService {
     /// If not provided, the server will be considered healthy if it can simply fetch the latest
     /// checkpoint from its store.
     pub fn health_check(&self, threshold_seconds: Option<u32>) -> Result<()> {
+        // Check if the service is draining (shutting down)
+        if DRAINING.load(Ordering::Relaxed) {
+            return Err(anyhow::anyhow!("Service is draining").into());
+        }
         let summary = self.reader.inner().get_latest_checkpoint()?;
 
         // If we have a provided threshold, check that it's close to the current time
