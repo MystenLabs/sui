@@ -470,6 +470,9 @@ pub struct AuthorityAggregator<A: Clone> {
     pub committee_store: Arc<CommitteeStore>,
 }
 
+/// Type alias for authority clients map to improve readability
+type AuthorityClientsMap<A> = Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>;
+
 impl<A: Clone> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
@@ -810,6 +813,53 @@ where
         Ok(result.0)
     }
 
+    /// Select a subset of authority clients based on the target stake percentage.
+    /// Returns the selected clients and a debug message describing the selection.
+    fn select_authority_clients_for_stake_percentage(
+        &self,
+        tx_digest: &TransactionDigest,
+        target_stake_percentage: u64,
+    ) -> (AuthorityClientsMap<A>, String) {
+        if target_stake_percentage >= 100 {
+            // Use all validators
+            (
+                self.authority_clients.clone(),
+                format!(
+                    "Broadcasting transaction request to all {} authorities",
+                    self.authority_clients.len()
+                ),
+            )
+        } else {
+            // Use a subset of validators based on target stake percentage
+            let total_stake = self.committee.total_votes();
+            let target_stake = (total_stake * target_stake_percentage) / 100;
+
+            // Select a deterministic subset of validators based on tx digest
+            let selected_validators = self
+                .committee
+                .choose_random_validators_with_stake_by_tx_digest(tx_digest, target_stake);
+
+            // Build a new BTreeMap with only the selected validators
+            let mut filtered_clients = BTreeMap::new();
+            for validator in &selected_validators {
+                if let Some(client) = self.authority_clients.get(validator) {
+                    filtered_clients.insert(*validator, client.clone());
+                }
+            }
+
+            let client_count = filtered_clients.len();
+            (
+                Arc::new(filtered_clients),
+                format!(
+                    "Broadcasting transaction request to {} out of {} authorities ({}% stake)",
+                    client_count,
+                    self.authority_clients.len(),
+                    target_stake_percentage
+                ),
+            )
+        }
+    }
+
     /// Submits the transaction to a quorum of validators to make a certificate.
     #[instrument(level = "trace", skip_all)]
     pub async fn process_transaction(
@@ -817,17 +867,34 @@ where
         transaction: Transaction,
         client_addr: Option<SocketAddr>,
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
-        // Now broadcast the transaction to all authorities.
+        // Default to using all validators (100% of stake)
+        self.process_transaction_with_target_stake(transaction, client_addr, 100)
+            .await
+    }
+
+    /// Submits the transaction to a quorum of validators to make a certificate.
+    /// target_stake_percentage controls what percentage of total stake to send to.
+    /// Use 100 for all validators, or a lower value (e.g., 95) to reduce load.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn process_transaction_with_target_stake(
+        &self,
+        transaction: Transaction,
+        client_addr: Option<SocketAddr>,
+        target_stake_percentage: u64,
+    ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         let tx_digest = transaction.digest();
-        debug!(
-            tx_digest = ?tx_digest,
-            "Broadcasting transaction request to authorities"
-        );
+        let committee = self.committee.clone();
+
+        // Select which validators to send to based on target stake percentage
+        let (authority_clients_to_use, debug_msg) =
+            self.select_authority_clients_for_stake_percentage(tx_digest, target_stake_percentage);
+
+        debug!(tx_digest = ?tx_digest, "{}", debug_msg);
         trace!(
             "Transaction data: {:?}",
             transaction.data().intent_message().value
         );
-        let committee = self.committee.clone();
+
         let state = ProcessTransactionState {
             tx_signatures: StakeAggregator::new(committee.clone()),
             effects_map: MultiStakeAggregator::new(committee.clone()),
@@ -847,7 +914,7 @@ where
         let validator_display_names = self.validator_display_names.clone();
         let result = quorum_map_then_reduce_with_timeout(
                 committee.clone(),
-                self.authority_clients.clone(),
+                authority_clients_to_use,
                 state,
                 |name, client| {
                     Box::pin(

@@ -247,6 +247,35 @@ impl Committee {
         self.shuffle_by_stake_with_rng(None, None, &mut rng)
     }
 
+    /// Choose a random subset of validators deterministically based on transaction digest
+    /// that collectively hold at least the specified amount of stake.
+    pub fn choose_random_validators_with_stake_by_tx_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+        stake: StakeUnit,
+    ) -> Vec<AuthorityName> {
+        // Use the transaction digest as seed for deterministic randomness
+        let digest_bytes = tx_digest.into_inner();
+        let mut rng = StdRng::from_seed(digest_bytes);
+
+        // Shuffle validators deterministically
+        let shuffled = self.shuffle_by_stake_with_rng(None, None, &mut rng);
+
+        // Select validators until we reach the target stake
+        let mut selected_validators = Vec::new();
+        let mut accumulated_stake = 0;
+
+        for validator in shuffled {
+            if accumulated_stake >= stake {
+                break;
+            }
+            accumulated_stake += self.weight(&validator);
+            selected_validators.push(validator);
+        }
+
+        selected_validators
+    }
+
     // ===== Testing-only methods =====
     //
     pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
