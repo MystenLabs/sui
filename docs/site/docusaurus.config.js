@@ -168,7 +168,7 @@ const config = {
         docs: {
           path: "../content",
           routeBasePath: "/",
-          sidebarPath: require.resolve("./sidebars.js"),
+          sidebarPath: require.resolve("sidebars.js"),
           // the double docs below is a fix for having the path set to ../content
           editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
           /*disableVersioning: true,

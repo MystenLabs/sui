@@ -198,4 +198,4 @@ const concepts = [
 	},
 	'concepts/research-papers',
 ];
-export default concepts;
+export default guides;

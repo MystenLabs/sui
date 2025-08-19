@@ -225,4 +225,4 @@ const guides = [
 		],
 	}
 ];
-export default guides;
+module.exports = guides;
