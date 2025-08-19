@@ -1056,6 +1056,23 @@ type MutateConsensusStreamEnded {
 }
 
 """
+Mutations are used to write to the Sui network.
+"""
+type Mutation {
+	"""
+	Execute a transaction, committing its effects on chain.
+	
+	- `transaction` contains the transaction data in the desired format.
+	- `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
+	
+	Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
+	
+	There may be a delay between transaction finality and when GraphQL requests (including the request that issued the transaction) reflect its effects. As a result, queries that depend on indexing the state of the chain (e.g. contents of output objects, address-level balance information at the time of the transaction), must wait for indexing to catch up by polling for the transaction digest using `Query.transaction`.
+	"""
+	executeTransaction(transaction: TransactionExecutionInput!, signatures: [String!]!): String!
+}
+
+"""
 An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 
 Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
@@ -1945,6 +1962,18 @@ type TransactionEffects {
 	dependencies(first: Int, after: String, last: Int, before: String): TransactionConnection
 }
 
+"""
+Input for executing a transaction.
+"""
+input TransactionExecutionInput {
+	"""
+	BCS-encoded transaction bytes (Base64).
+	
+	This is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
+	"""
+	transactionDataBcs: String!
+}
+
 input TransactionFilter {
 	"""
 	Limit to transactions that occured strictly after the given checkpoint.
@@ -2197,4 +2226,5 @@ directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query
+	mutation: Mutation
 }

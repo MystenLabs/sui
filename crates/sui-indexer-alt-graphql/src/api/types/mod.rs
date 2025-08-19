@@ -22,6 +22,7 @@ pub(crate) mod storage_fund;
 pub(crate) mod system_parameters;
 pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
+pub(crate) mod transaction_execution_input;
 pub(crate) mod transaction_kind;
 mod type_origin;
 pub(crate) mod unchanged_consensus_object;
