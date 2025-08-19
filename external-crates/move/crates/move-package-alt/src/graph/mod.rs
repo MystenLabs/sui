@@ -224,38 +224,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
     }
 
-    /// Return the direct dependencies of the root package.
-    /// Returns an error if any direct dependency is unpublished.
-    pub fn direct_dependencies(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
-        let mut result = BTreeMap::new();
-        
-        // Iterate through edges from the root node
-        for edge in self.inner.edges(self.root_index) {
-            let target_node = edge.target();
-            let package = &self.inner[target_node];
-            
-            // Check if package is published
-            if let Some(original_id) = package.original_id() {
-                result.insert(
-                    original_id,
-                    PackageInfo {
-                        graph: self,
-                        node: target_node,
-                    },
-                );
-            } else {
-                // Error if we find an unpublished dependency
-                return Err(PackageError::Generic(format!(
-                    "Package '{}' has an unpublished direct dependency '{}'",
-                    self.root_package().name(),
-                    package.name()
-                )));
-            }
-        }
-        
-        Ok(result)
-    }
-
     /// Return the list of packages that are in the linkage table, as well as
     /// the unpublished ones in the package graph.
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
@@ -263,10 +231,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         let mut linkage = self.linkage()?;
 
         // Populate ALL the linkage elements
-        let mut result: Vec<PackageInfo<F>> = linkage
-            .values()
-            .cloned()
-            .collect();
+        let mut result: Vec<PackageInfo<F>> = linkage.values().cloned().collect();
 
         // Add all nodes that exist but are not in the linkage table.
         // This is done to support unpublished packages, as linkage only includes
