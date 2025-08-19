@@ -55,8 +55,6 @@ While not an exhaustive list, some specific scenarios where a sequential pipelin
 
 Beyond the decision of which pipeline to use, you also need to consider scaling. If you're indexing multiple kinds of data, then consider using multiple pipelines and watermarks.
 
-{/*- If relational databases don't fit your use case, then consider [Bring Your Own Store (BYOS)](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)*/}
-
 ## The watermark system {#watermark-system}
 
 For each pipeline, the indexer minimally tracks the highest checkpoint where all data up to that point is committed. Tracking is done through the `checkpoint_hi_inclusive` committer watermark. Both concurrent and sequential pipelines rely on `checkpoint_hi_inclusive` to understand where to resume processing on restarts.

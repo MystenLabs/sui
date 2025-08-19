@@ -18,7 +18,7 @@ To build a complete custom indexer, you use the `sui-indexer-alt-framework`. The
 
 :::tip
 
-While this example uses PostgreSQL with [Diesel](https://diesel.rs/guides/getting-started) (a popular Rust ORM and query builder) for minimalism and out-of-the-box support, the `sui-indexer-alt-framework` is designed for flexible storage. You can {/*[**Bring Your Own Store (BYOS)**](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)*/} use different databases (such as [MongoDB](https://www.mongodb.com/), [CouchDB](https://couchdb.apache.org/), or similar) or utilize other database clients if you prefer not to use Diesel. To achieve this, implement the framework's `Store` and `Connection` traits and define your database write logic directly within your `Handler::commit()` method.
+While this example uses PostgreSQL with [Diesel](https://diesel.rs/guides/getting-started) (a popular Rust ORM and query builder) for minimalism and out-of-the-box support, the `sui-indexer-alt-framework` is designed for flexible storage. You can use different databases (such as [MongoDB](https://www.mongodb.com/), [CouchDB](https://couchdb.apache.org/), or similar) or utilize other database clients if you prefer not to use Diesel. To achieve this, implement the framework's `Store` and `Connection` traits and define your database write logic directly within your `Handler::commit()` method.
 
 :::
 
@@ -436,17 +436,6 @@ To confirm your data is accurate, copy any transaction digest from your database
 You've built a working custom indexer 🎉 
 
 The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
-
-{/*## Next stepsFrom here you can:
-
-- **Customize data extraction**: Modify process() to extract different data (events, objects, balances)
-- **Optimize performance**: Dive deep into Fine-tuning Configurations ([**Fine-tuning Configurations**](https://www.notion.so/Fine-tuning-Configurations-2346d9dcb4e9808f9a52c2ea9d3548d5?pvs=21)) and learn the trade-offs between pipeline
-architectures ([Concurrent vs Sequential pipelines](https://www.notion.so/Concurrent-vs-Sequential-pipelines-2336d9dcb4e980f1a0a7c1e3c33071fa?pvs=21))
-- **Add custom metrics**: Integrate custom application-level Metrics to monitor
-your indexer's health ([Metrics](https://www.notion.so/Metrics-2336d9dcb4e980aa85e4fd060e7d79b9?pvs=21))
-- **Use a different database**: Learn how to connect to other storage backends by implementing your own connector with [**Bring Your Own Store (BYOS)**](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)
-- **Scale for performance**: If you need higher throughput and are willing to handle additional complexity, consider switching to concurrent pipelines ([Concurrent vs Sequential pipelines](https://www.notion.so/Concurrent-vs-Sequential-pipelines-2336d9dcb4e980f1a0a7c1e3c33071fa?pvs=21))
-*/}
 
 ## Related links
 
