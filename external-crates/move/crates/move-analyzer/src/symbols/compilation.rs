@@ -294,12 +294,8 @@ pub fn get_compiled_pkg(
                     }
                     _ => {
                         let mut analyzed_pkg_info = None;
-                        // we don't want to create pre-compiled libs in test mode
-                        // since we only need them to build the user program
-                        let compiler_flags = resolution_graph
-                            .build_options
-                            .compiler_flags()
-                            .set_test_mode(true);
+                        let compiler_flags =
+                            resolution_graph.build_options.compiler_flags().clone();
 
                         let pprog_and_comments_res = construct_pre_compiled_lib(
                             src_deps,

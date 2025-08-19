@@ -795,13 +795,6 @@ impl Flags {
         }
     }
 
-    pub fn set_test_mode(self, value: bool) -> Self {
-        Self {
-            test: value,
-            ..self
-        }
-    }
-
     pub fn set_ide_test_mode(self, value: bool) -> Self {
         Self {
             ide_test_mode: value,
