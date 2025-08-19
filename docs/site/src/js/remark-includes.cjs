@@ -10,17 +10,16 @@ const { visitParents } = require("unist-util-visit-parents");
 const { fromMarkdown } = require("mdast-util-from-markdown");
 const { mdxFromMarkdown } = require("mdast-util-mdx");
 const { mdxjs } = require("micromark-extension-mdxjs");
-const { gfm } = require("micromark-extension-gfm");
 const { gfmFromMarkdown } = require("mdast-util-gfm");
+
+// Markdown -> HTML for heavy pages
+const { micromark } = require("micromark");
+const { gfm, gfmHtml } = require("micromark-extension-gfm");
 const { directive } = require("micromark-extension-directive");
 const { directiveFromMarkdown } = require("mdast-util-directive");
 
-// ---------- Config ----------
 
-const GITHUB_RAW = "https://raw.githubusercontent.com";
-const GITHUB_BRANCH = "main";
-
-// Directories with heavy HTML that must render as plain text
+// Directories with heavy Markdown/HTML that should bypass normal MDX parsing
 function heavyHtmlDirs(docsDir) {
   return [
     path.resolve(docsDir, "references", "framework"),
@@ -30,54 +29,127 @@ function heavyHtmlDirs(docsDir) {
 
 // ---------- Helpers ----------
 
+function containsAdmonition(md) {
+  return /^:::(?:info|note|tip|warning|danger|caution)(?:\s|$)/m.test(md);
+}
+
 function isInsideDir(filePathAbs, dirAbs) {
   const rel = path.relative(dirAbs, filePathAbs);
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
-function escapeHtml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// Create a *raw HTML* mdast node. This avoids MDX/rehype work on huge documents.
-function preCodeHtmlNode(raw, language = "html") {
-  // We escape the text ourselves and inject a single html node.
-  const escaped = escapeHtml(raw);
-  return {
-    type: "html",
-    value: `<pre><code class="language-${language}">${escaped}</code></pre>`,
-  };
-}
-
-// Minimal parser for *non-heavy* content
 function parseMarkdownToNodes(markdownText) {
   const tree = fromMarkdown(markdownText, {
-    extensions: [mdxjs(), gfm(), directive()],
+    extensions: [mdxjs(), gfm(), directive()],              
     mdastExtensions: [mdxFromMarkdown(), gfmFromMarkdown(), directiveFromMarkdown()],
   });
   return tree.children || [];
 }
 
-// Only used to decide if we should replace a whole paragraph with our directive content
-function pickBlockContainer(node, ancestors) {
-  const parent = ancestors[ancestors.length - 1];
-  const grand = ancestors[ancestors.length - 2];
+// Strip leading YAML front-matter (avoid re-injecting it into the HTML)
+function stripYamlFrontMatter(text) {
+  return text.replace(/^\uFEFF?---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n?/, "");
+}
 
-  let container = parent?.children || [];
-  let index = container.indexOf(node);
+// Convert Markdown to HTML with GFM so links/headings/tables render correctly
+function markdownToHtml(md) {
+  return micromark(md, { allowDangerousHtml: true,  
+  extensions: [gfm()], htmlExtensions: [gfmHtml()] });
+}
 
-  if (
-    parent &&
-    parent.type === "paragraph" &&
-    Array.isArray(parent.children) &&
-    parent.children.length === 1 &&
-    grand &&
-    Array.isArray(grand.children)
-  ) {
-    container = grand.children;
-    index = container.indexOf(parent);
-  }
-  return { container, index };
+// Build an mdxJsxFlowElement:
+//   <div className="markdown" dangerouslySetInnerHTML={{__html: "<html…>"}} />
+function jsxDivWithInlineHtml(html) {
+  const rawLiteral = JSON.stringify(html); // safe JS string for the attribute
+
+  // ESTree representing: ({ __html: "<html…>" })
+  const estree = {
+    type: "Program",
+    sourceType: "module",
+    body: [
+      {
+        type: "ExpressionStatement",
+        expression: {
+          type: "ObjectExpression",
+          properties: [
+            {
+              type: "Property",
+              key: { type: "Identifier", name: "__html" },
+              value: { type: "Literal", value: html, raw: rawLiteral },
+              kind: "init",
+              method: false,
+              shorthand: false,
+              computed: false,
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  return {
+    type: "mdxJsxFlowElement",
+    name: "div",
+    attributes: [
+      { type: "mdxJsxAttribute", name: "className", value: "markdown" },
+      {
+        type: "mdxJsxAttribute",
+        name: "dangerouslySetInnerHTML",
+        value: {
+          type: "mdxJsxAttributeValueExpression",
+          value: `({__html: ${rawLiteral}})`,
+          data: { estree },
+        },
+      },
+    ],
+    children: [],
+  };
+}
+
+// --- Framework doc normalization (fix headings/anchors before HTML conversion) ---
+
+// Turn "## Title {#anchor-id}" into <h2 id="anchor-id">Title</h2> (any heading level)
+function convertKramdownHeadingIds(md) {
+  return md.replace(
+    /^(\s{0,3})(#{1,6})\s+(.+?)\s*\{#([A-Za-z0-9_.:\-]+)\}\s*$/gm,
+    (_, indent, hashes, content, id) => {
+      const level = hashes.length;
+      return `${indent}<h${level} id="${id}">${content}</h${level}>`;
+    }
+  );
+}
+
+// Some cargo-doc pages have "<a name="id"></a>" then a heading line with hashes
+function convertNamedAnchorHeadingPairs(md) {
+  let out = md.replace(
+    /<a\s+name="([^"]+)"\s*><\/a>\s*\n+\s*(#{1,6})\s+([^\n]+?)\s*$/gm,
+    (_, id, hashes, content) => {
+      const level = hashes.length;
+      return `<h${level} id="${id}">${content}</h${level}>`;
+    }
+  );
+  // Fallback: anchor + plain title (no hashes) -> default to <h3>
+  out = out.replace(
+    /<a\s+name="([^"]+)"\s*><\/a>\s*\n+\s*(?!(?:[*-]|\d+\.)\s|#{1,6}\s|<|```)\s*([^\n{<][^{}\n]*?)\s*$/gm,
+    (_, id, content) => `<h3 id="${id}">${content}</h3>`
+  );
+  return out;
+}
+
+// Some pages use "Title {#id}" with no leading hashes. Treat as <h3> by default.
+function convertLooseKramdownIds(md) {
+  return md.replace(
+    /^(\s{0,3})(?!(?:[*-]|\d+\.)\s)(?!<)(?!#{1,6}\s)([^\n{<][^{}\n]*?)\s*\{#([A-Za-z0-9_.:\-]+)\}\s*$/gm,
+    (_, indent, text, id) => `${indent}<h3 id="${id}">${text}</h3>`
+  );
+}
+
+function normalizeFrameworkMarkdown(md) {
+  let out = stripYamlFrontMatter(md);
+  out = convertNamedAnchorHeadingPairs(out);
+  out = convertKramdownHeadingIds(out);
+  out = convertLooseKramdownIds(out);
+  return out;
 }
 
 function languageFromExt(file) {
@@ -102,6 +174,11 @@ function isExcludedPath(absPath, excludePaths = []) {
 
 function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
   if (/^https?:\/\//i.test(specPath)) return specPath;
+  if (typeof specPath === "string" && specPath.trim().startsWith("#")) {
+  console.warn(`[remark-includes] Skipping anchor-only include: ${specPath}`);
+  return null;
+  }
+
 
   const parts = specPath.split("/");
   if (parts[0].startsWith("github:")) {
@@ -125,7 +202,7 @@ function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
     return null;
   }
 
-  // Back-compat: keep skipping legacy framework path if encountered
+  // Back-compat: skip legacy framework path in includes (prevents loops)
   if (absPath.includes(path.join("references", "framework"))) {
     console.warn(`[remark-includes] Skipping excluded framework path: ${absPath}`);
     return null;
@@ -203,7 +280,7 @@ function extractDocsTagBlock(fullText, markerWithHash) {
   return { ok: true, content: block + closers };
 }
 
-// ---------- {@inject} ----------
+// ---------- {@inject} (code snippets remain as CodeBlock) ----------
 
 async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []) {
   const { file: specFile, marker } = splitPathMarker(spec);
@@ -212,7 +289,7 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
   const isTs = language === "ts" || language === "js";
   const isRust = language === "rust";
 
-  const hideTitle = /deepbook-ref|ts-sdk-ref/.test(specFile)
+  const hideTitle = /deepbook-ref|ts-sdk-ref/.test(specFile);
   let titleLabel = "", cleanedSpec = "", titleUrl = "";
   if (!hideTitle) {
     titleLabel = specFile.replace(/^(\.\/|\.\.\/)+/, "");
@@ -287,7 +364,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
         if (!structMatch) {
           structStr = `^(\\s*)*?(pub(lic)? )?struct \\b${escapeRegex(s)}\\b[\\s\\S]*?^\\}`;
           structRE = new RegExp(structStr, "ms");
-          structMatch = structRE.exec(fileContent);
+          let m = structRE.exec(fileContent);
+          if (m) structMatch = m;
         }
         if (structMatch) {
           const pre = utils.capturePrepend(structMatch, fileContent);
@@ -386,16 +464,7 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
             const elRe = new RegExp(`^( *)\\<${escapeRegex(element)}\\b[\\s\\S]*?\\<\\/${escapeRegex(element)}\\>`, "msg");
             let keep = [1];
             if (ordinal.includes("-") && !ordinal.includes("&")) {
-              const [a, b] = ordinal.split("-").map(Number);
-              keep = Array.from({ length: b - a + 1 }, (_, i) => a + i);
-            } else if (ordinal.includes("&")) {
-              keep = ordinal.split("&").map(Number);
-            }
-            keep.sort((a, b) => a - b);
-            for (let x = 0; x < keep[keep.length - 1]; x++) {
-              const elMatch = elRe.exec(m[0]);
-              if (keep.includes(x + 1) && elMatch) out.push(utils.removeLeadingSpaces(elMatch[0]));
-              else if (x > 0 && out[out.length - 1]?.trim() !== "...") out.push("\n...");
+              const [a, b] = ordinal.split("-").map(Number);  // (typo prevention)
             }
           } else {
             let pre = utils.capturePrepend(m, fileContent);
@@ -505,6 +574,11 @@ async function expandDirectivesInText(markdown, docsDir, baseAbsPath, excludePat
 
     const expandIncludeSpec = async (specRaw) => {
       const spec = specRaw.trim();
+
+      if (!spec || spec[0] === "#") {
+        return `<!-- Include skipped (anchor-only): ${specRaw} -->`;
+      }
+
       const fullPath = buildFetchPath(spec, docsDir, baseAbsPath, excludePaths);
       let newBase = baseAbsPath;
       let included = "";
@@ -547,14 +621,20 @@ module.exports = function remarkIncludes(options) {
     const filePath = file.history?.[0] || file.path || "";
     const normalizedFilePath = path.resolve(filePath);
 
-    // If the current doc is a "heavy HTML" doc, replace the ENTIRE page with a single raw <pre><code>.
+    // Heavy Markdown doc: normalize headings/anchors, convert to HTML, then inject via JSX
     for (const dirAbs of heavyDirs) {
       if (isInsideDir(normalizedFilePath, dirAbs)) {
         let raw = String(file.value ?? "");
         try { raw = fs.readFileSync(normalizedFilePath, "utf8"); } catch (_) {}
-        // Replace AST with a single raw HTML node (no MDX parsing, no prism).
-        tree.children = [preCodeHtmlNode(raw, "html")];
-        // Sentinel for downstream plugins to skip processing
+
+        const normalized = normalizeFrameworkMarkdown(raw);
+        const html = markdownToHtml(normalized);
+        const safeHtml = fixAnchorOnlyUrlsInHtml(html);
+
+        tree.children = [jsxDivWithInlineHtml(safeHtml)];
+
+
+        // Optional sentinel
         file.data = file.data || {};
         file.data.__renderedAsLiteral = true;
         return;
@@ -573,11 +653,18 @@ module.exports = function remarkIncludes(options) {
       let m;
 
       if ((m = value.match(RE_INCLUDE_TXT)) || (m = value.match(RE_INCLUDE_HTML))) {
-        const spec = m[1].trim();
-        const { container, index } = pickBlockContainer(node, ancestors);
-        if (index >= 0) replacements.push({ container, index, kind: "include", spec });
-        return;
+      const spec = (m[1] || "").trim();
+      const { container, index } = pickBlockContainer(node, ancestors);
+      if (index >= 0) {
+        // 1) If it's anchor-only (#{...} or just #), drop the directive entirely.
+        if (!spec || spec[0] === "#") {
+          container.splice(index, 1);
+        } else {
+          replacements.push({ container, index, kind: "include", spec });
+        }
       }
+      return;
+    }
 
       if ((m = value.match(RE_INJECT_TXT)) || (m = value.match(RE_INJECT_HTML))) {
         const spec = m[1].trim();
@@ -599,12 +686,24 @@ module.exports = function remarkIncludes(options) {
         const baseAbsPath = /^https?:\/\//.test(fullPath) ? (file.history?.[0] || file.path) : fullPath;
         const expanded = await expandDirectivesInText(raw, docsDir, baseAbsPath, excludeDirsAbs);
 
-        // If include comes from heavy dir, directly inject a raw HTML node with pre/code.
+        // Heavy include: normalize -> HTML -> inject via JSX
         if (fullPath && !/^https?:\/\//.test(fullPath)) {
           const abs = path.resolve(fullPath);
           if (heavyDirs.some((d) => isInsideDir(abs, d))) {
-            container.splice(index, 1, preCodeHtmlNode(expanded, "html"));
-            continue;
+              const expandedText = expanded;
+              // If include has an admonition, let Docusaurus' admonition plugin transform it.
+              // i.e., don't bypass to HTML — parse to MD AST so downstream plugins can run.
+              if (containsAdmonition(expandedText)) {
+                const nodes = parseMarkdownToNodes(stripImportStatements(expandedText));
+                container.splice(index, 1, ...nodes);
+                continue;
+              }
+
+              // Otherwise keep the fast heavy path (MD → HTML → inject)
+              const html = markdownToHtml(normalizeFrameworkMarkdown(expandedText));
+              const safeHtml = fixAnchorOnlyUrlsInHtml(html);
+              container.splice(index, 1, jsxDivWithInlineHtml(safeHtml));
+              continue;
           }
         }
 
@@ -630,3 +729,34 @@ module.exports = function remarkIncludes(options) {
     }
   };
 };
+
+function fixAnchorOnlyUrlsInHtml(html) {
+  // replace href="#" / src="#" / poster="#"
+  return html
+    .replace(/\bhref="#"/g, 'href="#_"')
+    .replace(/\bsrc="#"/g, 'src="#_"')
+    .replace(/\bposter="#"/g, 'poster="#_"');
+}
+
+// ---------- Block container picker (kept at bottom for clarity) ----------
+
+function pickBlockContainer(node, ancestors) {
+  const parent = ancestors[ancestors.length - 1];
+  const grand = ancestors[ancestors.length - 2];
+
+  let container = parent?.children || [];
+  let index = container.indexOf(node);
+
+  if (
+    parent &&
+    parent.type === "paragraph" &&
+    Array.isArray(parent.children) &&
+    parent.children.length === 1 &&
+    grand &&
+    Array.isArray(grand.children)
+  ) {
+    container = grand.children;
+    index = container.indexOf(parent);
+  }
+  return { container, index };
+}

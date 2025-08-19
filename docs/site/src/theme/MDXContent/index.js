@@ -10,6 +10,8 @@ import EffortBox from "@site/src/components/EffortBox";
 import BetaTag from "@site/src/components/BetaTag";
 import CodeFromFile from '@site/src/components/CodeFromFile';
 import CodeBlock from '@theme/CodeBlock';
+import DocCardList from '@theme/DocCardList';
+
 
 export default function MDXContent({ children }) {
   const suiComponents = {
@@ -22,6 +24,7 @@ export default function MDXContent({ children }) {
     BetaTag,
     CodeFromFile,
     CodeBlock,
+    DocCardList,
   };
   return <MDXProvider components={suiComponents}>{children}</MDXProvider>;
 }

@@ -62,7 +62,7 @@ const references = [
 			'references/cli/ptb',
 			'references/cli/keytool',
 			'references/cli/move',
-      'references/cli/replay',
+      		'references/cli/replay',
 			'references/cli/validator',
 		],
 	},

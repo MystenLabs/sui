@@ -7,7 +7,7 @@ mdx:
   format: md
 ---
 
-{@include: ../../../../../snippets/app-examples-swap-source.mdx}
+{@include: ../../../snippets/app-examples-swap-source.mdx}
 
 This guide demonstrates how to make an app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 
@@ -37,7 +37,7 @@ Before getting started, make sure you have:
 - [Acquired Devnet or Testnet](../getting-started/get-coins.mdx) tokens for development purposes.
   :::tip
       
-  {@include: ../../../../../snippets/faucet-online.mdx}
+  {@include: ../../../snippets/faucet-online.mdx}
 
   :::
 - Read the basics of [shared versus owned objects](../sui-101/shared-owned.mdx).
@@ -470,7 +470,9 @@ You want your API to accept the query string in the URL as the parameters for da
 </summary>
 
 {@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#enum=WhereParamTypes}
+
 {@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#type=WhereParam noTitle}
+
 {@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#variable=parseWhereStatement noTitle}
 
 </details>
@@ -491,6 +493,7 @@ In this example, the `id` field of the model in the database as the cursor that 
 </summary>
 
 {@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#type=ApiPagination}
+
 {@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#variable=parsePaginationForQuery noTitle}
 
 </details>
@@ -534,7 +537,7 @@ Deployment instructions
 
 </summary>
 
-{@include: ../../../../../snippets/initialize-sui-client-cli.mdx}
+{@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
 Next, configure the Sui CLI to use `testnet` as the active environment. 
 
@@ -617,7 +620,7 @@ In this final part of the app example, you build a frontend (UI) that allows end
 
 ### Prerequisites
 
-{@include: ../../../../../snippets/app-examples-swap-source.mdx}
+{@include: ../../../snippets/app-examples-swap-source.mdx}
 
 Before getting started, make sure you have:
 
@@ -647,16 +650,23 @@ The UI design consists of three parts:
 The first step is to set up the client app. Run the following command to scaffold a new app from your `frontend` folder.
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm create @mysten/dapp --template react-client-dapp
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn create @mysten/dapp --template react-client-dapp
-    ```
-  </TabItem>
+
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm create @mysten/dapp --template react-client-dapp
+```
+
+</TabItem>
+
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn create @mysten/dapp --template react-client-dapp
+```
+
+</TabItem>
+
 </Tabs>
 
 When asked for a name for your dApp, provide one of your liking. The dApp scaffold gets created in a new directory with the name you provide. This is convenient to keep your working code separate from the example source code that might already populate this folder. The codeblocks that follow point to the code in the default example location. Be aware the path to your own code includes the dApp name you provide.
@@ -1204,13 +1214,13 @@ In the frontend, you might need to execute a transaction block in multiple place
 
 <details>
 
-  <summary>
+<summary>
 
-    Create `src/hooks/useTransactionExecution.ts`:
-  
+Create `src/hooks/useTransactionExecution.ts`:
+
 </summary>
 
-  {@inject:  ../../../../../examples/trading/frontend/src/hooks/useTransactionExecution.ts}
+{@inject:  ../../../../../examples/trading/frontend/src/hooks/useTransactionExecution.ts}
 
 </details>
 
@@ -1709,13 +1719,13 @@ Add `src/components/locked/ApiLockedList.tsx`:
 
 <details>
 
-  <summary>
+<summary>
 
-    `ApiLockedList.tsx`
-  
+`ApiLockedList.tsx`
+
 </summary>
 
-  {@inject:  ../../../../../examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
+{@inject:  ../../../../../examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
 
 </details>
 

@@ -87,9 +87,6 @@ importers:
       mdast-util-gfm:
         specifier: ^3.1.0
         version: 3.1.0
-      micromark-extension-gfm:
-        specifier: ^3.0.0
-        version: 3.0.0
       postcss:
         specifier: ^8.4.37
         version: 8.5.6
@@ -178,6 +175,12 @@ importers:
       '@tsconfig/docusaurus':
         specifier: ^1.0.5
         version: 1.0.7
+      micromark:
+        specifier: ^4.0.2
+        version: 4.0.2
+      micromark-extension-gfm:
+        specifier: ^3.0.0
+        version: 3.0.0
       rehype-raw:
         specifier: ^7.0.0
         version: 7.0.0

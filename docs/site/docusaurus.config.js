@@ -8,6 +8,9 @@ import katex from "rehype-katex";
 const npm2yarn = require('@docusaurus/remark-plugin-npm2yarn');
 import rehypeRawFiles from './src/rehype/rehype-raw-only.mjs';
 import rehypeTabsMd from './src/rehype/rehype-tabs.mjs';
+import rehypeFixAnchorUrls from './src/rehype/rehype-fix-anchor-urls.mjs';
+
+
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
@@ -97,6 +100,32 @@ const config = {
         },
       },
     ],
+    function stepHeadingLoader() {
+    return {
+      name: "step-heading-loader",
+      configureWebpack() {
+        return {
+          module: {
+            rules: [
+              {
+                test: /\.mdx?$/,         // run on .md and .mdx
+                enforce: "pre",          // make sure it runs BEFORE @docusaurus/mdx-loader
+                include: [
+                  // adjust these to match where your Markdown lives
+                  path.resolve(__dirname, "../content"),
+                ],
+                use: [
+                  {
+                    loader: path.resolve(__dirname, "./src/plugins/inject-code/stepLoader.js"),
+                  },
+                ],
+              },
+            ],
+            },
+            };
+          },
+        };
+      },
     [
       "@graphql-markdown/docusaurus",
       {
@@ -133,8 +162,8 @@ const config = {
   ],
   presets: [
     [
-      '@docusaurus/preset-classic',
       /** @type {import('@docusaurus/preset-classic').Options} */
+      'classic',
       {
         docs: {
           path: "../content",
@@ -155,8 +184,7 @@ const config = {
             "1.0.0",
           ],*/
           exclude: [
-            "**/content/snippets/**",
-            "**/references/framework/**",
+            "**/content/snippets/**", 
             "**/standards/deepbook-ref/**",
             "**/submodules/**",
             "**/app-examples/ts-sdk-ref/**",
@@ -180,7 +208,10 @@ const config = {
             effortRemarkPlugin,
             betaRemarkPlugin,
           ],
-          rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd],
+          beforeDefaultRehypePlugins: [
+            rehypeFixAnchorUrls,
+          ],
+          rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd ],
         },
         theme: {
           customCss: [
