@@ -188,7 +188,7 @@ const config = {
             "1.0.0",
           ],*/
           exclude: [
-            "**/content/snippets/**", 
+            "**/snippets/**",
             "**/standards/deepbook-ref/**",
             "**/submodules/**",
             "**/app-examples/ts-sdk-ref/**",
