@@ -15,6 +15,7 @@ use crate::{
 };
 
 use super::{
+    dynamic_field::DynamicField,
     move_object::MoveObject,
     move_package::MovePackage,
     object::{self, Object},
@@ -42,6 +43,7 @@ use super::{
 )]
 pub(crate) enum IAddressable {
     Address(Address),
+    DynamicField(DynamicField),
     MoveObject(MoveObject),
     MovePackage(MovePackage),
     Object(Object),

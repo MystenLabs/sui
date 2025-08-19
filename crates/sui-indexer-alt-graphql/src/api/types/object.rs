@@ -46,6 +46,7 @@ use crate::{
 
 use super::{
     address::{Address, AddressableImpl},
+    dynamic_field::DynamicField,
     move_object::MoveObject,
     move_package::MovePackage,
     object_filter::{ObjectFilter, Validator as OFValidator},
@@ -107,6 +108,7 @@ use super::{
     )
 )]
 pub(crate) enum IObject {
+    DynamicField(DynamicField),
     MoveObject(MoveObject),
     MovePackage(MovePackage),
     Object(Object),

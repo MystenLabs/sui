@@ -484,6 +484,96 @@ ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. No
 scalar DateTime
 
 """
+Dynamic fields are heterogenous fields that can be added or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
+
+There are two sub-types of dynamic fields:
+
+- Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
+- Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
+"""
+type DynamicField implements IAddressable & IObject & IMoveObject {
+	"""
+	The DynamicField's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	The dynamic field's name, as a Move value.
+	"""
+	name: MoveValue
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+	"""
+	The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
+	"""
+	value: DynamicFieldValue
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+}
+
+"""
+A description of a dynamic field's name.
+"""
+input DynamicFieldName {
+	"""
+	The Base64-encoded BCS serialization of the dynamic field's 'name'.
+	"""
+	bcs: Base64!
+	"""
+	The type of the dynamic field's name, like 'u64' or '0x2::kiosk::Listing'.
+	"""
+	type: String!
+}
+
+"""
+The value of a dynamic field (`MoveValue`) or dynamic object field (`MoveObject`).
+"""
+union DynamicFieldValue = MoveObject | MoveValue
+
+"""
 System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 """
 type EndOfEpochTransaction {
@@ -894,6 +984,14 @@ interface IMoveObject {
 	"""
 	contents: MoveValue
 	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
 	moveObjectBcs: Base64
@@ -1038,6 +1136,10 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	address: SuiAddress!
 	"""
+	Attempts to convert the object into a DynamicField.
+	"""
+	asDynamicField: DynamicField
+	"""
 	The structured representation of the object's contents.
 	"""
 	contents: MoveValue
@@ -1045,6 +1147,14 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""

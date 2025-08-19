@@ -4,6 +4,7 @@
 pub(crate) mod address;
 pub(crate) mod balance_change;
 pub(crate) mod checkpoint;
+pub(crate) mod dynamic_field;
 pub(crate) mod epoch;
 pub(crate) mod event;
 pub(crate) mod execution_error;
