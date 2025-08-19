@@ -154,17 +154,14 @@ const config = {
             "current",
             "1.0.0",
           ],*/
-          exclude: ['**/content/snippets/*', '**/references/framework/**',],
+          exclude: ['**/content/snippets/**', '**/references/framework/**',],
           admonitions: {
             keywords: ["checkpoint"],
             extendDefaults: true,
           },
           beforeDefaultRemarkPlugins: [
                  [require('./src/js/remark-includes.cjs'), { 
-                docsDir: path.join(__dirname, 'content'), 
-                excludePaths: [
-                  path.join(__dirname, 'content/references/framework')]},
-                ],
+                docsDir: path.join(__dirname, 'content'),}],
           ],
           remarkPlugins: [
             math,

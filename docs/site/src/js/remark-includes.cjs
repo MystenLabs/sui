@@ -13,6 +13,7 @@
 //   The code fence title is a clickable link that ALWAYS points to:
 //     https://github.com/MystenLabs/sui/blob/main/<path>
 //   The displayed label strips any leading "./" or "../".
+//   EXCEPTION: if the filename/path includes "deepbook-ref", the title is hidden entirely.
 //
 // Nested directives:
 //   Only {@include} appearing *inside* included markdown is expanded **before** MDX parsing.
@@ -129,13 +130,15 @@ function languageFromExt(file) {
 // Helper function to check if a path should be excluded
 function isExcludedPath(absPath, excludePaths = []) {
   if (!excludePaths || excludePaths.length === 0) return false;
-  
+
   const normalizedPath = path.normalize(absPath);
-  
-  return excludePaths.some(excludePath => {
+
+  return excludePaths.some((excludePath) => {
     const normalizedExclude = path.resolve(excludePath);
-    return normalizedPath.includes(normalizedExclude) || 
-           normalizedPath.includes(path.normalize(excludePath));
+    return (
+      normalizedPath.includes(normalizedExclude) ||
+      normalizedPath.includes(path.normalize(excludePath))
+    );
   });
 }
 
@@ -267,10 +270,18 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
   const isTs = language === "ts" || language === "js";
   const isRust = language === "rust";
 
-  // Build clickable title parts
-  const titleLabel = specFile.replace(/^(\.\/|\.\.\/)+/, "");
-  const cleanedSpec = specFile.replace(/^[.\/]+/, "");
-  const titleUrl = `https://github.com/MystenLabs/sui/blob/main/${cleanedSpec}`;
+  // Determine if title should be hidden for this spec
+  const hideTitle = specFile.includes("deepbook-ref");
+
+  // Build clickable title parts (unless hidden)
+  let titleLabel = "";
+  let cleanedSpec = "";
+  let titleUrl = "";
+  if (!hideTitle) {
+    titleLabel = specFile.replace(/^(\.\/|\.\.\/)+/, "");
+    cleanedSpec = specFile.replace(/^[.\/]+/, "");
+    titleUrl = `https://github.com/MystenLabs/sui/blob/main/${cleanedSpec}`;
+  }
 
   const fetchPath = buildFetchPath(specFile, docsDir, baseAbsPath, excludePaths);
 
@@ -514,11 +525,14 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
   // Apply post options & formatting using utils (same as loader)
   const processed = utils.processOptions(fileContent, opts);
 
-  // Emit JSX CodeBlock so the title can be a real <a> link.
+  // Emit JSX CodeBlock. If hideTitle, omit the `title` prop entirely.
   // Use JSON.stringify to avoid backticks inside MDX/Acorn parsing.
+  const titleProp = hideTitle
+    ? ""
+    : ` title={<a href="${titleUrl}" target="_blank" rel="noopener noreferrer">${titleLabel}</a>}`;
+
   const jsx =
-    `<CodeBlock language="${language}" ` +
-    `title={<a href="${titleUrl}" target="_blank" rel="noopener noreferrer">${titleLabel}</a>}>` +
+    `<CodeBlock language="${language}"${titleProp}>` +
     `{${JSON.stringify(processed)}}` +
     `</CodeBlock>`;
   return jsx;
@@ -622,13 +636,19 @@ module.exports = function remarkIncludes(options) {
     // Skip processing for files in excluded paths
     const filePath = file.history?.[0] || file.path || "";
     const normalizedFilePath = path.normalize(filePath);
-    
+
     // Check if current file should be excluded
-    const shouldSkip = excludePaths.some(excludePath => {
-      const normalizedExclude = path.resolve(excludePath);
-      return normalizedFilePath.includes(normalizedExclude) || 
-             normalizedFilePath.includes(path.normalize(excludePath));
-    }) || normalizedFilePath.includes(path.join("references", "framework"));
+    const shouldSkip =
+      excludePaths.some((excludePath) => {
+        const normalizedExclude = path.resolve(excludePath);
+        return (
+          normalizedFilePath.includes(normalizedExclude) ||
+          normalizedFilePath.includes(path.normalize(excludePath))
+        );
+      }) ||
+      normalizedFilePath.startsWith(
+        path.resolve(docsDir, "references", "framework") + path.sep
+      );
 
     if (shouldSkip) {
       console.log(`[remark-includes] Skipping excluded file: ${filePath}`);
