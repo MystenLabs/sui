@@ -143,7 +143,7 @@ const guides = [
 					'guides/developer/advanced/move-2024-migration',
 					{ 
 						type: 'category',
-						label: 'Custom Indexer',
+						label: 'Build Your First Custom Indexer',
 						link: {
 							type: 'doc',
 							id: 'guides/developer/advanced/custom-indexer'
