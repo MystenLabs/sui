@@ -1,7 +1,5 @@
 # Walrus Attributes Indexer
 
-TODO: Link to custom indexing guide.
-
 This is an extention of the [Custom Indexer guide](https://docs.sui.io/guides/developer/advanced/custom-indexer) to show how to index Walrus blobs and their associated `Metadata` dynamic fields.
 
 ## Quickstart
