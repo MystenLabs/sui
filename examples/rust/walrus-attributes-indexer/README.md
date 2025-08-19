@@ -95,7 +95,7 @@ This means that by default, the blog post pipeline will have a write concurrency
 The following uploads the `blog_post.rs` file to Walrus, and runs the indexer locally with `--last-checkpoint` to verify that the indexer is working correctly.
 
 ```
-walrus store blog_post.rs
+walrus store src/handlers/blog_post.rs
 
 # Blob ID: IPYp_WbBwnNRTqeiYtvA6VQ0XUkS6m3ActV-0PIQfjQ
 # Sui object ID: 0xcfb3d474c9a510fde93262d4b7de66cad62a2005a54f31a63e96f3033f465ed3
@@ -115,7 +115,7 @@ Attributes then modified again at 178908405 and 178908459
 
 You should ultimately see something like:
 ```
-                          dynamic_field_id                          | df_version |                             publisher                              |                   blob_id                   | view_count |      title
---------------------------------------------------------------------+------------+--------------------------------------------------------------------+---------------------------------------------+------------+------------------
- \x40b5ae12e780ae815d7b0956281291253c02f227657fe2b7a8ccf003a5f597f7 |  608253371 | \xfe9c7a465f63388e5b95c8fd2db857fad4356fc873f96900f4d8b6e7fc1e760e | IPYp_WbBwnNRTqeiYtvA6VQ0XUkS6m3ActV-0PIQfjQ |         10 | Blog Post Module
+                          dynamic_field_id                          | df_version |                             publisher                              |                            blob_obj_id                             | view_count |      title
+--------------------------------------------------------------------+------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------+------------------
+ \x40b5ae12e780ae815d7b0956281291253c02f227657fe2b7a8ccf003a5f597f7 |  608253371 | \xfe9c7a465f63388e5b95c8fd2db857fad4356fc873f96900f4d8b6e7fc1e760e | \xcfb3d474c9a510fde93262d4b7de66cad62a2005a54f31a63e96f3033f465ed3 |         10 | Blog Post Module
  ```
