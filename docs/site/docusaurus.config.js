@@ -76,7 +76,6 @@ const config = {
     // ....
     // path.resolve(__dirname, `./src/plugins/examples`),
 
-    './src/plugins/framework-raw',
     [
       "posthog-docusaurus",
       {
