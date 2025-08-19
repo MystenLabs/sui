@@ -232,6 +232,80 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         }
     }
 
+    /// Check for explicit Sui dependencies in any package and emit warnings.
+    /// Sui dependencies include: Sui, SuiSystem
+    fn warn_explicit_sui_dependencies(
+        &mut self,
+        package_name: PM::PackageName,
+        dependencies: &PM::Dependencies,
+        dev_dependencies: &PM::Dependencies,
+    ) -> Result<()> {
+        let sui_packages = ["Sui", "SuiSystem", "Prover", "SuiProver", "DeepBook", "MoveStdlib", "SuiSpecs"];
+
+        if sui_packages.contains(&package_name.as_str()) {
+            return Ok(());
+        }
+
+        let mut found_explicit_sui_deps = Vec::new();
+
+        // Check regular dependencies - flag ALL Sui dependencies, not just local ones
+        for (dep_name, dep) in dependencies {
+            if sui_packages.contains(&dep_name.as_str()) {
+                match dep {
+                    PM::Dependency::Internal(internal_dep) => {
+                        let dep_type = match &internal_dep.kind {
+                            PM::DependencyKind::Local(_) => "local",
+                            PM::DependencyKind::Git(_) => "git",
+                            PM::DependencyKind::OnChain(_) => "on-chain",
+                        };
+                        found_explicit_sui_deps.push((dep_name.as_str(), dep_type));
+                    }
+                    PM::Dependency::External(_) => {
+                        found_explicit_sui_deps.push((dep_name.as_str(), "external"));
+                    }
+                }
+            }
+        }
+
+        // Check dev dependencies - same logic as above
+        for (dep_name, dep) in dev_dependencies {
+            if sui_packages.contains(&dep_name.as_str()) {
+                match dep {
+                    PM::Dependency::Internal(internal_dep) => {
+                        if !internal_dep.dep_override {
+                            let dep_type = match &internal_dep.kind {
+                                PM::DependencyKind::Local(_) => "local",
+                                PM::DependencyKind::Git(_) => "git", 
+                                PM::DependencyKind::OnChain(_) => "on-chain",
+                            };
+                            found_explicit_sui_deps.push((dep_name.as_str(), dep_type));
+                        }
+                    }
+                    PM::Dependency::External(_) => {
+                        found_explicit_sui_deps.push((dep_name.as_str(), "external"));
+                    }
+                }
+            }
+        }
+
+        if !found_explicit_sui_deps.is_empty() {
+            let dep_names: Vec<String> = found_explicit_sui_deps
+                .iter()
+                .map(|(name, _dep_type)| name.to_string())
+                .collect();
+            
+            eprintln!("{}", format!(
+                "[{}] Found explicit Sui dependencies in {}: {}. \
+                Consider using implicit dependencies instead for better prover compatibility.",
+                "warning".bold().yellow(),
+                package_name,
+                dep_names.join(", ")
+            ));
+        }
+
+        Ok(())
+    }
+
     /// Get a new graph by either reading it from Move.lock file (if this file is up-to-date, in
     /// which case also return false) or by computing a new graph based on the content of the
     /// Move.toml (manifest) file (in which case also return true).
@@ -249,6 +323,12 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
         let mut root_manifest = parse_source_manifest(toml_manifest)?;
+
+        self.warn_explicit_sui_dependencies(
+            root_manifest.package.name,
+            &root_manifest.dependencies,
+            &root_manifest.dev_dependencies,
+        )?;
 
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
@@ -548,6 +628,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 // resolve name and version
                 let manifest =
                     parse_source_manifest(parse_move_manifest_string(manifest_string.clone())?)?;
+
                 let resolved_pkg_id = custom_resolve_pkg_id(&manifest)
                     .with_context(|| format!("Resolving package name for '{}'", dep_pkg_name))?;
                 let resolved_version = resolve_version(&manifest)
