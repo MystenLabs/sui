@@ -155,7 +155,7 @@ impl Store for RocksDBStore {
         let mut batch = self.blocks.batch();
         for block in write_batch.blocks {
             let block_ref = block.reference();
-            tracing::info!("Writing block {block_ref:?}");
+            tracing::info!("Writing block {block_ref:?}: {block:?}");
             batch
                 .insert_batch(
                     &self.blocks,
