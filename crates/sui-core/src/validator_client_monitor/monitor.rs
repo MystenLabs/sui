@@ -291,9 +291,28 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
         let k = k.min(validator_with_scores.len());
-        validator_with_scores[..k].shuffle(&mut rng);
 
-        validator_with_scores.into_iter().map(|(v, _)| v).collect()
+        let mut result = Vec::with_capacity(validator_with_scores.len());
+
+        if k > 0 {
+            // For the top K elements, use weighted random selection
+            let top_k = &validator_with_scores[..k];
+
+            let selected = top_k
+                .choose_multiple_weighted(&mut rng, k, |(_, score)| *score as f64)
+                .expect("Failed to select weighted validators")
+                .map(|(validator, _)| *validator)
+                .collect::<Vec<_>>();
+
+            result.extend(selected);
+        }
+
+        // Add the remaining elements in score descending order
+        for (validator, _) in &validator_with_scores[k..] {
+            result.push(*validator);
+        }
+
+        result
     }
 
     #[cfg(test)]
