@@ -1,34 +1,5 @@
 use std::collections::HashMap;
 use sui_bcs::Value;
-use thiserror::Error;
-
-/// Error type for BCS value conversion
-#[derive(Debug, Error)]
-pub enum BcsConversionError {
-    /// The value appears to be from a future version with unknown fields or variants
-    #[error("Future version detected: {0}")]
-    FutureVersion(String),
-
-    /// Required field is missing
-    #[error("Missing required field: {0}")]
-    MissingField(String),
-
-    /// Field has wrong type
-    #[error("Type mismatch for field {field}: expected {expected}, got {got}")]
-    TypeMismatch {
-        field: String,
-        expected: String,
-        got: String,
-    },
-
-    /// Unknown enum variant that exists in schema but not in current binary
-    #[error("Unknown enum variant: {variant}")]
-    UnknownVariant { variant: String },
-
-    /// Actual deserialization error (corrupted data, unexpected end, etc.)
-    #[error("Deserialization error: {0}")]
-    DeserializationError(String),
-}
 
 /// Helper trait for extracting fields from struct values
 pub trait StructFieldExtractor {
@@ -54,6 +25,7 @@ impl StructFieldExtractor for Vec<(String, Value)> {
     }
 }
 
+/*
 /// Helper for converting Value to primitive types
 pub trait ValueConverter: Sized {
     fn from_value(value: &Value, field_name: &str) -> Result<Self, BcsConversionError>;
@@ -180,10 +152,7 @@ where
     F: Fn(&Value) -> Result<T, BcsConversionError>,
 {
     match value {
-        Value::Seq(values) => values
-            .iter()
-            .map(converter)
-            .collect::<Result<Vec<_>, _>>(),
+        Value::Seq(values) => values.iter().map(converter).collect::<Result<Vec<_>, _>>(),
         _ => Err(BcsConversionError::TypeMismatch {
             field: field_name.to_string(),
             expected: "Seq".to_string(),
@@ -463,77 +432,7 @@ impl ValueConverter for crate::digests::CheckpointContentsDigest {
         }
     }
 }
-
-
-
-// Placeholder implementations for complex types
-impl TryFrom<Value> for crate::transaction::TransactionData {
-    type Error = BcsConversionError;
-
-    fn try_from(_value: Value) -> Result<Self, Self::Error> {
-        Err(BcsConversionError::TypeMismatch {
-            field: "TransactionData".to_string(),
-            expected: "TransactionData".to_string(),
-            got: "not_implemented".to_string(),
-        })
-    }
-}
-
-impl TryFrom<Value> for crate::effects::TransactionEffects {
-    type Error = BcsConversionError;
-
-    fn try_from(_value: Value) -> Result<Self, Self::Error> {
-        Err(BcsConversionError::TypeMismatch {
-            field: "TransactionEffects".to_string(),
-            expected: "TransactionEffects".to_string(),
-            got: "not_implemented".to_string(),
-        })
-    }
-}
-
-impl TryFrom<Value> for crate::messages_checkpoint::CheckpointSummary {
-    type Error = BcsConversionError;
-
-    fn try_from(_value: Value) -> Result<Self, Self::Error> {
-        Err(BcsConversionError::TypeMismatch {
-            field: "CheckpointSummary".to_string(),
-            expected: "CheckpointSummary".to_string(),
-            got: "not_implemented".to_string(),
-        })
-    }
-}
-
-impl TryFrom<Value> for crate::execution_status::ExecutionStatus {
-    type Error = BcsConversionError;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        use crate::execution_status::ExecutionStatus;
-
-        match value {
-            Value::Enum(variant_name, _variant_value) => {
-                match variant_name.as_str() {
-                    "Success" => Ok(ExecutionStatus::Success),
-                    "Failure" => {
-                        // For now, return a simple failure - proper implementation would parse the error details
-                        Err(BcsConversionError::TypeMismatch {
-                            field: "ExecutionStatus".to_string(),
-                            expected: "parseable Failure variant".to_string(),
-                            got: "complex Failure variant".to_string(),
-                        })
-                    }
-                    _ => Err(BcsConversionError::UnknownVariant {
-                        variant: variant_name,
-                    }),
-                }
-            }
-            _ => Err(BcsConversionError::TypeMismatch {
-                field: "ExecutionStatus".to_string(),
-                expected: "Enum".to_string(),
-                got: format!("{:?}", value),
-            }),
-        }
-    }
-}
+*/
 
 #[cfg(test)]
 #[path = "unit_tests/bcs_value_converter_tests.rs"]

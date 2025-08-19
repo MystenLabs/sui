@@ -1716,7 +1716,9 @@ pub struct GasData {
     pub budget: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, sui_macros::BcsValueTryFrom,
+)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
     None,
@@ -1726,14 +1728,18 @@ pub enum TransactionExpiration {
 }
 
 #[enum_dispatch(TransactionDataAPI)]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, sui_macros::BcsValueTryFrom,
+)]
 pub enum TransactionData {
     V1(TransactionDataV1),
     // When new variants are introduced, it is important that we check version support
     // in the validity_check function based on the protocol config.
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, sui_macros::BcsValueTryFrom,
+)]
 pub struct TransactionDataV1 {
     pub kind: TransactionKind,
     pub sender: SuiAddress,

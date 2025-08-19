@@ -708,7 +708,7 @@ fn generate_enum_impl(name: &syn::Ident, data_enum: &syn::DataEnum) -> proc_macr
             syn::Fields::Unit => {
                 quote! {
                     #variant_name_str => {
-                        match &**variant_value {
+                        match &*variant_value {
                             ::sui_bcs::Value::Unit => Ok(#name::#variant_name),
                             _ => Err(crate::bcs_value_converter::BcsConversionError::TypeMismatch {
                                 field: format!("{}::{}", stringify!(#name), #variant_name_str),
@@ -764,7 +764,7 @@ fn generate_enum_impl(name: &syn::Ident, data_enum: &syn::DataEnum) -> proc_macr
 
                 quote! {
                     #variant_name_str => {
-                        match &**variant_value {
+                        match &*variant_value {
                             ::sui_bcs::Value::Struct(fields) => {
                                 use crate::bcs_value_converter::StructFieldExtractor;
                                 #(#field_extractions)*
@@ -812,7 +812,7 @@ fn generate_enum_impl(name: &syn::Ident, data_enum: &syn::DataEnum) -> proc_macr
 
 fn is_primitive_type(ty: &syn::Type) -> bool {
     if let syn::Type::Path(type_path) = ty {
-        // Check for simple primitives
+        // Check for simple primitives and Vec<u8>
         if let Some(segment) = type_path.path.segments.last() {
             let ident_str = segment.ident.to_string();
             if matches!(
@@ -830,6 +830,19 @@ fn is_primitive_type(ty: &syn::Type) -> bool {
                     | "String"
             ) {
                 return true;
+            }
+
+            // Check for Vec<u8> (bytes)
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                    if let syn::Type::Path(inner_path) = inner_ty {
+                        if let Some(inner_segment) = inner_path.path.segments.last() {
+                            if inner_segment.ident == "u8" {
+                                return true;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -864,6 +877,7 @@ fn is_primitive_type(ty: &syn::Type) -> bool {
                 | "digests::CheckpointContentsDigest"
                 | "messages_checkpoint::CheckpointSequenceNumber"
                 | "committee::EpochId"
+                | "CommandIndex"
         )
     } else {
         false

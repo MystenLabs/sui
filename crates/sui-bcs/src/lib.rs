@@ -3,6 +3,35 @@ pub use bcs;
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
+
+/// Error type for BCS value conversion
+#[derive(Debug, Error)]
+pub enum BcsConversionError {
+    /// The value appears to be from a future version with unknown fields or variants
+    #[error("Future version detected: {0}")]
+    FutureVersion(String),
+
+    /// Required field is missing
+    #[error("Missing required field: {0}")]
+    MissingField(String),
+
+    /// Field has wrong type
+    #[error("Type mismatch for field {field}: expected {expected}, got {got}")]
+    TypeMismatch {
+        field: String,
+        expected: String,
+        got: String,
+    },
+
+    /// Unknown enum variant that exists in schema but not in current binary
+    #[error("Unknown enum variant: {variant}")]
+    UnknownVariant { variant: String },
+
+    /// Actual deserialization error (corrupted data, unexpected end, etc.)
+    #[error("Deserialization error: {0}")]
+    DeserializationError(String),
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -49,6 +78,110 @@ pub enum Value {
     Seq(Vec<Value>),
     Tuple(Vec<Value>),
     Array(Vec<Value>),
+}
+
+// TryFrom implementations for primitive types
+impl TryFrom<Value> for bool {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(b) => Ok(b),
+            _ => Err(anyhow::anyhow!("Expected bool, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for u8 {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::U8(n) => Ok(n),
+            _ => Err(anyhow::anyhow!("Expected u8, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for u16 {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::U16(n) => Ok(n),
+            _ => Err(anyhow::anyhow!("Expected u16, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for u32 {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::U32(n) => Ok(n),
+            _ => Err(anyhow::anyhow!("Expected u32, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for u64 {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::U64(n) => Ok(n),
+            _ => Err(anyhow::anyhow!("Expected u64, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for u128 {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::U128(n) => Ok(n),
+            _ => Err(anyhow::anyhow!("Expected u128, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for Vec<u8> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bytes(bytes) => Ok(bytes),
+            _ => Err(anyhow::anyhow!("Expected bytes, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for () {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Unit => Ok(()),
+            _ => Err(anyhow::anyhow!("Expected unit, got {:?}", value)),
+        }
+    }
+}
+
+impl TryFrom<Value> for Vec<Value> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Seq(values) => Ok(values),
+            Value::Array(values) => Ok(values),
+            _ => Err(anyhow::anyhow!(
+                "Expected sequence or array, got {:?}",
+                value
+            )),
+        }
+    }
 }
 
 pub struct Parser {
@@ -444,25 +577,25 @@ mod tests {
 
             for (name, value) in fields {
                 match name.as_str() {
-                    "computation_cost" => {
+                    "computation_cost" | "computationCost" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 1000);
                             found_computation = true;
                         }
                     }
-                    "storage_cost" => {
+                    "storage_cost" | "storageCost" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 2000);
                             found_storage = true;
                         }
                     }
-                    "storage_rebate" => {
+                    "storage_rebate" | "storageRebate" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 500);
                             found_rebate = true;
                         }
                     }
-                    "non_refundable_storage_fee" => {
+                    "non_refundable_storage_fee" | "nonRefundableStorageFee" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 100);
                             found_non_refundable = true;
@@ -737,7 +870,6 @@ mod tests {
         let encoded = bcs::to_bytes(&tx_data).unwrap();
         let parsed = parser.parse(&encoded, "TransactionData").unwrap();
         let converted_back = TransactionData::try_from(parsed).unwrap();
-
         assert_eq!(tx_data, converted_back);
     }
 
@@ -756,7 +888,6 @@ mod tests {
         let encoded = bcs::to_bytes(&effects).unwrap();
         let parsed = parser.parse(&encoded, "TransactionEffects").unwrap();
         let converted_back = TransactionEffects::try_from(parsed).unwrap();
-
         assert_eq!(effects, converted_back);
     }
 
@@ -792,7 +923,6 @@ mod tests {
         let encoded = bcs::to_bytes(&checkpoint).unwrap();
         let parsed = parser.parse(&encoded, "CheckpointSummary").unwrap();
         let converted_back = CheckpointSummary::try_from(parsed).unwrap();
-
         assert_eq!(checkpoint, converted_back);
     }
 
@@ -816,7 +946,137 @@ mod tests {
         let encoded = bcs::to_bytes(&gas_summary).unwrap();
         let parsed = parser.parse(&encoded, "GasCostSummary").unwrap();
         let converted_back = GasCostSummary::try_from(parsed).unwrap();
-
         assert_eq!(gas_summary, converted_back);
+    }
+
+    #[test]
+    fn test_try_from_primitive_types() {
+        use std::convert::TryFrom;
+
+        // Test bool
+        let bool_value = Value::Bool(true);
+        let bool_result: bool = bool_value.try_into().unwrap();
+        assert_eq!(bool_result, true);
+
+        // Test u8
+        let u8_value = Value::U8(42);
+        let u8_result: u8 = u8_value.try_into().unwrap();
+        assert_eq!(u8_result, 42);
+
+        // Test u16
+        let u16_value = Value::U16(12345);
+        let u16_result: u16 = u16_value.try_into().unwrap();
+        assert_eq!(u16_result, 12345);
+
+        // Test u32
+        let u32_value = Value::U32(123456789);
+        let u32_result: u32 = u32_value.try_into().unwrap();
+        assert_eq!(u32_result, 123456789);
+
+        // Test u64
+        let u64_value = Value::U64(1234567890123456789);
+        let u64_result: u64 = u64_value.try_into().unwrap();
+        assert_eq!(u64_result, 1234567890123456789);
+
+        // Test u128
+        let u128_value = Value::U128(123456789012345678901234567890123456789);
+        let u128_result: u128 = u128_value.try_into().unwrap();
+        assert_eq!(u128_result, 123456789012345678901234567890123456789);
+
+        // Test bytes
+        let bytes_value = Value::Bytes(vec![1, 2, 3, 4, 5]);
+        let bytes_result: Vec<u8> = bytes_value.try_into().unwrap();
+        assert_eq!(bytes_result, vec![1, 2, 3, 4, 5]);
+
+        // Test unit
+        let unit_value = Value::Unit;
+        let unit_result: () = unit_value.try_into().unwrap();
+
+        // Test sequence
+        let seq_value = Value::Seq(vec![Value::U32(1), Value::U32(2), Value::U32(3)]);
+        let seq_result: Vec<Value> = seq_value.try_into().unwrap();
+        assert_eq!(seq_result.len(), 3);
+
+        // Test array
+        let array_value = Value::Array(vec![Value::Bool(true), Value::Bool(false)]);
+        let array_result: Vec<Value> = array_value.try_into().unwrap();
+        assert_eq!(array_result.len(), 2);
+    }
+
+    #[test]
+    fn test_try_from_primitive_types_errors() {
+        use std::convert::TryFrom;
+
+        // Test type mismatches
+        let bool_value = Value::Bool(true);
+        let u8_result: Result<u8, _> = bool_value.try_into();
+        assert!(u8_result.is_err());
+
+        let u32_value = Value::U32(42);
+        let bool_result: Result<bool, _> = u32_value.try_into();
+        assert!(bool_result.is_err());
+
+        let bytes_value = Value::Bytes(vec![1, 2, 3]);
+        let u64_result: Result<u64, _> = bytes_value.try_into();
+        assert!(u64_result.is_err());
+
+        let struct_value = Value::Struct(vec![("field".to_string(), Value::U32(42))]);
+        let unit_result: Result<(), _> = struct_value.try_into();
+        assert!(unit_result.is_err());
+    }
+
+    #[test]
+    fn test_try_from_primitive_types_simple() {
+        use std::convert::TryFrom;
+
+        // Test bool
+        let bool_value = Value::Bool(true);
+        let bool_result: bool = bool_value.try_into().unwrap();
+        assert_eq!(bool_result, true);
+
+        // Test u8
+        let u8_value = Value::U8(42);
+        let u8_result: u8 = u8_value.try_into().unwrap();
+        assert_eq!(u8_result, 42);
+
+        // Test u16
+        let u16_value = Value::U16(12345);
+        let u16_result: u16 = u16_value.try_into().unwrap();
+        assert_eq!(u16_result, 12345);
+
+        // Test u32
+        let u32_value = Value::U32(123456789);
+        let u32_result: u32 = u32_value.try_into().unwrap();
+        assert_eq!(u32_result, 123456789);
+
+        // Test u64
+        let u64_value = Value::U64(1234567890123456789);
+        let u64_result: u64 = u64_value.try_into().unwrap();
+        assert_eq!(u64_result, 1234567890123456789);
+
+        // Test u128
+        let u128_value = Value::U128(123456789012345678901234567890123456789);
+        let u128_result: u128 = u128_value.try_into().unwrap();
+        assert_eq!(u128_result, 123456789012345678901234567890123456789);
+
+        // Test bytes
+        let bytes_value = Value::Bytes(vec![1, 2, 3, 4, 5]);
+        let bytes_result: Vec<u8> = bytes_value.try_into().unwrap();
+        assert_eq!(bytes_result, vec![1, 2, 3, 4, 5]);
+
+        // Test unit
+        let unit_value = Value::Unit;
+        let unit_result: () = unit_value.try_into().unwrap();
+        assert_eq!(unit_result, ());
+
+        // Test sequence
+        let seq_value = Value::Seq(vec![Value::U32(1), Value::U32(2), Value::U32(3)]);
+        let seq_result: Vec<Value> = seq_value.try_into().unwrap();
+        assert_eq!(seq_result.len(), 3);
+
+        // Test array
+        let array_value = Value::Array(vec![Value::Bool(true), Value::Bool(false)]);
+        let array_result: Vec<Value> = array_value.try_into().unwrap();
+        assert_eq!(array_result.len(), 2);
     }
 }

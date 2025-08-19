@@ -14,7 +14,7 @@ use thiserror::Error;
 #[path = "unit_tests/execution_status_tests.rs"]
 mod execution_status_tests;
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, sui_macros::BcsValueTryFrom)]
 pub enum ExecutionStatus {
     Success,
     /// Gas used in the failed case, and the error.
@@ -38,7 +38,17 @@ impl fmt::Display for CongestedObjects {
     }
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, EnumVariantOrder)]
+#[derive(
+    Eq,
+    PartialEq,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Error,
+    EnumVariantOrder,
+    sui_macros::BcsValueTryFrom,
+)]
 pub enum ExecutionFailureStatus {
     //
     // General transaction errors
