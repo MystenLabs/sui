@@ -1,5 +1,5 @@
-// Copyright (c) PushFeedback
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) Mysten Labs, Inc.
+// // SPDX-License-Identifier: Apache-2.0
 
 // Enables the Push Feedback plugin at the footer of each docs page
 // https://app.pushfeedback.com/
