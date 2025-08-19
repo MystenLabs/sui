@@ -165,6 +165,19 @@ where
     RpcError::ResourceExhausted(Arc::new(err))
 }
 
+/// Upcast an `RpcError` with no user error type into an `RpcError<E>`.
+pub(crate) fn upcast<E: std::error::Error>(err: RpcError) -> RpcError<E> {
+    match err {
+        RpcError::BadUserInput(e) => match *e.as_ref() {},
+        RpcError::Pagination(e) => RpcError::Pagination(e),
+        RpcError::GraphQlError(e) => RpcError::GraphQlError(e),
+        RpcError::InternalError(e) => RpcError::InternalError(e),
+        RpcError::FeatureUnavailable { what } => RpcError::FeatureUnavailable { what },
+        RpcError::RequestTimeout { kind, limit } => RpcError::RequestTimeout { kind, limit },
+        RpcError::ResourceExhausted(e) => RpcError::ResourceExhausted(e),
+    }
+}
+
 /// Add a code to the error, if one does not exist already in the error extensions.
 pub(crate) fn fill_error_code(ext: &mut Option<ErrorExtensionValues>, code: &str) {
     match ext {

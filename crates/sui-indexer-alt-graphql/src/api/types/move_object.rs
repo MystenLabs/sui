@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{connection::Connection, Context, Interface, Object};
-use sui_types::object::MoveObject as NativeMoveObject;
+use sui_types::{dynamic_field::DynamicFieldType, object::MoveObject as NativeMoveObject};
 use tokio::sync::OnceCell;
 
 use crate::{
@@ -15,6 +15,7 @@ use crate::{
 
 use super::{
     address::AddressableImpl,
+    dynamic_field::{DynamicField, DynamicFieldName},
     move_type::MoveType,
     move_value::MoveValue,
     object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
@@ -25,7 +26,7 @@ use super::{
 #[derive(Clone)]
 pub(crate) struct MoveObject {
     /// Representation of this Move Object as a generic Object.
-    super_: Object,
+    pub(crate) super_: Object,
 
     /// Move object specific data, lazily loaded from the super object.
     native: OnceCell<Option<Arc<NativeMoveObject>>>,
@@ -42,17 +43,27 @@ pub(crate) struct MoveObject {
         desc = "The structured representation of the object's contents."
     ),
     field(
+        name = "dynamic_field",
+        arg(name = "name", ty = "DynamicFieldName"),
+        ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
+        desc = "Access a dynamic field on an object using its type and BCS-encoded name.",
+    ),
+    field(
+        name = "dynamic_object_field",
+        arg(name = "name", ty = "DynamicFieldName"),
+        ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
+        desc = "Access a dynamic object field on an object using its type and BCS-encoded name.",
+    ),
+    field(
         name = "move_object_bcs",
         ty = "Result<Option<Base64>, RpcError<object::Error>>",
         desc = "The Base64-encoded BCS serialize of this object, as a `MoveObject`."
     )
 )]
 pub(crate) enum IMoveObject {
+    DynamicField(DynamicField),
     MoveObject(MoveObject),
 }
-
-/// Type to implement GraphQL fields that are shared by all MoveObjects.
-pub(crate) struct MoveObjectImpl<'o>(pub &'o MoveObject);
 
 /// A MoveObject is a kind of Object that reprsents data stored on-chain.
 #[Object]
@@ -72,12 +83,63 @@ impl MoveObject {
         ObjectImpl::from(&self.super_).digest()
     }
 
+    /// Attempts to convert the object into a DynamicField.
+    pub(crate) async fn as_dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+        DynamicField::from_move_object(self, ctx).await
+    }
+
     /// The structured representation of the object's contents.
     pub(crate) async fn contents(
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
-        MoveObjectImpl(self).contents(ctx).await
+        let Some(native) = self.native(ctx).await? else {
+            return Ok(None);
+        };
+
+        let type_ = MoveType::from_native(
+            native.type_().clone().into(),
+            self.super_.super_.scope.clone(),
+        );
+
+        Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
+    }
+
+    /// Access a dynamic field on an object using its type and BCS-encoded name.
+    pub(crate) async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+        let scope = &self.super_.super_.scope;
+        DynamicField::by_name(
+            ctx,
+            scope.clone(),
+            self.super_.super_.address.into(),
+            DynamicFieldType::DynamicField,
+            name,
+        )
+        .await
+    }
+
+    /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    pub(crate) async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+        let scope = &self.super_.super_.scope;
+        DynamicField::by_name(
+            ctx,
+            scope.clone(),
+            self.super_.super_.address.into(),
+            DynamicFieldType::DynamicObject,
+            name,
+        )
+        .await
     }
 
     /// The Base64-encoded BCS serialize of this object, as a `MoveObject`.
@@ -85,7 +147,12 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        MoveObjectImpl(self).move_object_bcs(ctx).await
+        let Some(native) = self.native(ctx).await? else {
+            return Ok(None);
+        };
+
+        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MoveObject")?;
+        Ok(Some(Base64(bytes)))
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -198,7 +265,7 @@ impl MoveObject {
     }
 
     /// Get the native MoveObject, loading it lazily if needed.
-    async fn native(
+    pub(crate) async fn native(
         &self,
         ctx: &Context<'_>,
     ) -> Result<&Option<Arc<NativeMoveObject>>, RpcError<object::Error>> {
@@ -216,35 +283,5 @@ impl MoveObject {
                 Ok(Some(Arc::new(native.clone())))
             })
             .await
-    }
-}
-
-impl MoveObjectImpl<'_> {
-    pub(crate) async fn contents(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
-        let Some(native) = self.0.native(ctx).await? else {
-            return Ok(None);
-        };
-
-        let type_ = MoveType::from_native(
-            native.type_().clone().into(),
-            self.0.super_.super_.scope.clone(),
-        );
-
-        Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
-    }
-
-    pub(crate) async fn move_object_bcs(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        let Some(native) = self.0.native(ctx).await? else {
-            return Ok(None);
-        };
-
-        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MoveObject")?;
-        Ok(Some(Base64(bytes)))
     }
 }
