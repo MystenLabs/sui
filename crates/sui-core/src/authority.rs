@@ -3739,8 +3739,7 @@ impl AuthorityState {
 
         // TODO: revert_uncommitted_epoch_transactions will soon be unnecessary -
         // clear_state_end_of_epoch() can simply drop all uncommitted transactions
-        self.revert_uncommitted_epoch_transactions(cur_epoch_store)
-            .await?;
+        self.revert_uncommitted_epoch_transactions(cur_epoch_store)?;
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
         self.check_system_consistency(cur_epoch_store, state_hasher, expensive_safety_check_config);
@@ -5821,7 +5820,7 @@ impl AuthorityState {
     /// This function is called at the very end of the epoch.
     /// This step is required before updating new epoch in the db and calling reopen_epoch_db.
     #[instrument(level = "error", skip_all)]
-    async fn revert_uncommitted_epoch_transactions(
+    fn revert_uncommitted_epoch_transactions(
         &self,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult {

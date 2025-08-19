@@ -367,7 +367,7 @@ pub struct AuthorityPerEpochStore {
     /// Used to notify all epoch specific tasks that user certs are closed.
     user_certs_closed_notify: NotifyOnce,
 
-    // Sent EndOfPublish message in this epoch
+    // Sent EndOfPublish message for this authority in this epoch.
     end_of_publish_sent: RwLock<bool>,
 
     /// This lock acts as a barrier for tasks that should not be executed in parallel with reconfiguration
@@ -2419,6 +2419,7 @@ impl AuthorityPerEpochStore {
                 // UserTransaction does not need to be resubmitted on recovery.
                 None
             } else {
+                debug!("Inserting pending consensus transaction: {:?}", tx.key());
                 Some((tx.key(), tx))
             }
         });
@@ -2451,6 +2452,7 @@ impl AuthorityPerEpochStore {
         &self,
         keys: &[ConsensusTransactionKey],
     ) -> SuiResult {
+        debug!("Removing pending consensus transactions: {:?}", keys);
         self.tables()?
             .pending_consensus_transactions
             .multi_remove(keys)?;
@@ -2593,7 +2595,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn has_sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
+    pub fn has_received_end_of_publish_from(&self, authority: &AuthorityName) -> SuiResult<bool> {
         Ok(self
             .end_of_publish
             .try_lock()
@@ -4459,7 +4461,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_user_transaction");
 
-        if self.has_sent_end_of_publish(block_author)?
+        if self.has_received_end_of_publish_from(block_author)?
             && !previously_deferred_tx_digests.contains_key(transaction.digest())
         {
             // This can not happen with valid authority
@@ -4577,24 +4579,22 @@ impl AuthorityPerEpochStore {
             return false;
         }
 
-        let should_send = self.pending_consensus_certificates_empty()
+        // EOP can only be sent after finalizing remaining transactions.
+        self.pending_consensus_certificates_empty()
             && self
                 .consensus_tx_status_cache
                 .as_ref()
-                .is_none_or(|c| c.get_num_fastpath_certified() == 0);
-        if !should_send {
-            // Cannot send EOP before finalizing remaining transactions.
-            return false;
-        }
+                .is_none_or(|c| c.get_num_fastpath_certified() == 0)
+    }
 
-        let mut end_of_publish_sent = self.end_of_publish_sent.write();
-        if *end_of_publish_sent {
-            // EndOfPublish message has been sent in this epoch.
-            return false;
-        }
-        // Send EOP message.
-        *end_of_publish_sent = true;
-        true
+    // Whether own EndOfPublish message has been sent in this epoch.
+    pub(crate) fn has_sent_own_end_of_publish(&self) -> bool {
+        *self.end_of_publish_sent.read()
+    }
+
+    // Sets whether own EndOfPublish message has been sent in this epoch. Used in recovery.
+    pub(crate) fn set_own_end_of_publish_sent(&self, sent: bool) {
+        *self.end_of_publish_sent.write() = sent;
     }
 
     pub(crate) fn write_pending_checkpoint(
