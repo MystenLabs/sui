@@ -120,6 +120,13 @@ impl MovePackage {
         ObjectImpl::from(&self.super_).digest()
     }
 
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let bytes = bcs::to_bytes(self.contents.serialized_module_map())?;
+        Ok(Some(bytes.into()))
+    }
+
     /// Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
     ///
     /// If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.

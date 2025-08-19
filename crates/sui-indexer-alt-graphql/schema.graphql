@@ -959,6 +959,11 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	digest: String!
 	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+	name, followed by module bytes), in alphabetic order by module name.
+	"""
+	moduleBcs: Base64
+	"""
 	Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
 	
 	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
