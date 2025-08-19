@@ -50,6 +50,7 @@ mod transaction_outputs;
 pub mod validator_client_monitor;
 pub mod validator_tx_finalizer;
 pub mod verify_indexes;
+pub mod mock_checkpoint_builder;
 
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]

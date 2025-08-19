@@ -4,6 +4,7 @@
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use mysten_common::fatal;
+use std::convert::TryInto;
 
 use crate::balance::Balance;
 use crate::base_types::ObjectID;
@@ -70,8 +71,8 @@ impl AccumulatorEvent {
         };
 
         match operation {
-            AccumulatorOperation::Merge => (0, *value),
-            AccumulatorOperation::Split => (*value, 0),
+            AccumulatorOperation::Merge => (0, (*value).try_into().unwrap()),
+            AccumulatorOperation::Split => ((*value).try_into().unwrap(), 0),
         }
     }
 }

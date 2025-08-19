@@ -1093,12 +1093,6 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
-blake2b256
-	public fun
-	0x2::hash
-keccak256
-	public fun
-	0x2::hash
 hash_to_input
 	public fun
 	0x2::vdf
@@ -2140,8 +2134,56 @@ destroy_empty
 drop
 	public fun
 	0x2::table
+blake2b256
+	public fun
+	0x2::hash
+keccak256
+	public fun
+	0x2::hash
+EventStreamHead
+	public struct
+	0x2::event
+EventStream
+	public struct
+	0x2::event
+EventStreamCap
+	public struct
+	0x2::event
 emit
 	public fun
+	0x2::event
+init_mmr
+	fun
+	0x2::event
+add_to_mmr
+	fun
+	0x2::event
+hash_two_to_one_via_bcs
+	fun
+	0x2::event
+update_head
+	entry fun
+	0x2::event
+new_event_stream
+	public fun
+	0x2::event
+destroy_stream
+	public fun
+	0x2::event
+new_cap
+	public fun
+	0x2::event
+destroy_cap
+	public fun
+	0x2::event
+emit_authenticated
+	public fun
+	0x2::event
+emit_authenticated_default
+	public fun
+	0x2::event
+emit_authenticated_impl
+	fun
 	0x2::event
 Wrapper
 	public struct
@@ -4874,6 +4916,12 @@ get
 	public fun
 	0x1::type_name
 get_with_original_ids
+	public fun
+	0x1::type_name
+package_id
+	public fun
+	0x1::type_name
+original_package_id
 	public fun
 	0x1::type_name
 is_primitive

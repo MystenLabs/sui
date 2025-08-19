@@ -17,6 +17,7 @@ use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
+pub const EMIT_AUTHENTICATED_IMPL_FUNCTION: &IdentStr = ident_str!("emit_authenticated_impl");
 pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_transfer"),
     ident_str!("public_freeze_object"),
@@ -141,6 +142,9 @@ fn verify_private_event_emit(
     type_arguments: &[SignatureToken],
 ) -> Result<(), String> {
     let fident = view.identifier_at(fhandle.name);
+    if fident == EMIT_AUTHENTICATED_IMPL_FUNCTION {
+        return Ok(());
+    }
     if fident != EVENT_FUNCTION {
         debug_assert!(false, "unknown transfer function {}", fident);
         return Err(format!("Calling unknown event function, {}", fident));
