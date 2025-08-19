@@ -464,20 +464,17 @@ impl ValueConverter for crate::digests::CheckpointContentsDigest {
     }
 }
 
-// EpochId is just a type alias for u64, so use the same impl as u64
-// (removed conflicting implementation)
 
-// Manual TryFrom implementations for complex types used in tests
+
+// Placeholder implementations for complex types
 impl TryFrom<Value> for crate::transaction::TransactionData {
     type Error = BcsConversionError;
 
     fn try_from(_value: Value) -> Result<Self, Self::Error> {
-        // For now, just return an error - this is a placeholder
-        // The actual implementation would need to handle the complex structure
         Err(BcsConversionError::TypeMismatch {
             field: "TransactionData".to_string(),
             expected: "TransactionData".to_string(),
-            got: "placeholder".to_string(),
+            got: "not_implemented".to_string(),
         })
     }
 }
@@ -486,12 +483,10 @@ impl TryFrom<Value> for crate::effects::TransactionEffects {
     type Error = BcsConversionError;
 
     fn try_from(_value: Value) -> Result<Self, Self::Error> {
-        // For now, just return an error - this is a placeholder
-        // The actual implementation would need to handle the complex structure
         Err(BcsConversionError::TypeMismatch {
             field: "TransactionEffects".to_string(),
             expected: "TransactionEffects".to_string(),
-            got: "placeholder".to_string(),
+            got: "not_implemented".to_string(),
         })
     }
 }
@@ -500,12 +495,10 @@ impl TryFrom<Value> for crate::messages_checkpoint::CheckpointSummary {
     type Error = BcsConversionError;
 
     fn try_from(_value: Value) -> Result<Self, Self::Error> {
-        // For now, just return an error - this is a placeholder
-        // The actual implementation would need to handle the complex structure
         Err(BcsConversionError::TypeMismatch {
             field: "CheckpointSummary".to_string(),
             expected: "CheckpointSummary".to_string(),
-            got: "placeholder".to_string(),
+            got: "not_implemented".to_string(),
         })
     }
 }

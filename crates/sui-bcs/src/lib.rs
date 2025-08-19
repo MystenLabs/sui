@@ -444,25 +444,25 @@ mod tests {
 
             for (name, value) in fields {
                 match name.as_str() {
-                    "computationCost" => {
+                    "computation_cost" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 1000);
                             found_computation = true;
                         }
                     }
-                    "storageCost" => {
+                    "storage_cost" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 2000);
                             found_storage = true;
                         }
                     }
-                    "storageRebate" => {
+                    "storage_rebate" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 500);
                             found_rebate = true;
                         }
                     }
-                    "nonRefundableStorageFee" => {
+                    "non_refundable_storage_fee" => {
                         if let Value::U64(v) = value {
                             assert_eq!(v, 100);
                             found_non_refundable = true;
@@ -694,11 +694,12 @@ mod tests {
     #[test]
     fn test_transaction_round_trip() {
         use sui_types::base_types::*;
-        use sui_types::transaction::GasData;
         use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+        use sui_types::transaction::GasData;
         use sui_types::transaction::*;
 
-        let parser = Parser::new().unwrap();
+        let yaml_content = include_str!("../../sui-core/tests/staged/sui.yaml");
+        let parser = Parser::from_yaml(yaml_content).unwrap();
 
         // Create a test transaction similar to the parsing test
         let mut ptb = ProgrammableTransactionBuilder::new();
@@ -742,12 +743,10 @@ mod tests {
 
     #[test]
     fn test_transaction_effects_round_trip() {
-        use sui_types::base_types::*;
         use sui_types::effects::*;
-        use sui_types::execution_status::ExecutionStatus;
-        use sui_types::gas::GasCostSummary;
 
-        let parser = Parser::new().unwrap();
+        let yaml_content = include_str!("../../sui-core/tests/staged/sui.yaml");
+        let parser = Parser::from_yaml(yaml_content).unwrap();
 
         // Create test TransactionEffectsV2
         let effects_v2 = TransactionEffectsV2::default();
@@ -763,12 +762,12 @@ mod tests {
 
     #[test]
     fn test_checkpoint_summary_round_trip() {
-        use sui_types::committee::EpochId;
         use sui_types::digests::*;
         use sui_types::gas::GasCostSummary;
         use sui_types::messages_checkpoint::*;
 
-        let parser = Parser::new().unwrap();
+        let yaml_content = include_str!("../../sui-core/tests/staged/sui.yaml");
+        let parser = Parser::from_yaml(yaml_content).unwrap();
 
         // Create test CheckpointSummary
         let checkpoint = CheckpointSummary {
@@ -779,7 +778,6 @@ mod tests {
             previous_digest: Some(CheckpointDigest::random()),
             epoch_rolling_gas_cost_summary: GasCostSummary {
                 computation_cost: 100,
-                computation_cost_burned: 10,
                 storage_cost: 50,
                 storage_rebate: 5,
                 non_refundable_storage_fee: 1,
@@ -800,15 +798,15 @@ mod tests {
 
     #[test]
     fn test_gas_cost_summary_round_trip() {
-        use sui_types::bcs_value_converter::ValueConverter;
+        use std::convert::TryFrom;
         use sui_types::gas::GasCostSummary;
 
-        let parser = Parser::new().unwrap();
+        let yaml_content = include_str!("../../sui-core/tests/staged/sui.yaml");
+        let parser = Parser::from_yaml(yaml_content).unwrap();
 
         // Create test GasCostSummary
         let gas_summary = GasCostSummary {
             computation_cost: 1000,
-            computation_cost_burned: 100,
             storage_cost: 500,
             storage_rebate: 50,
             non_refundable_storage_fee: 10,

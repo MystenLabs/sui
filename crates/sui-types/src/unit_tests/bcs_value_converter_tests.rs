@@ -108,10 +108,10 @@ fn test_gas_cost_summary_with_extra_fields() {
 
     // Simulate a GasCostSummary from a future version with extra fields
     let fields = vec![
-        ("computationCost".to_string(), Value::U64(1000)),
-        ("storageCost".to_string(), Value::U64(2000)),
-        ("storageRebate".to_string(), Value::U64(500)),
-        ("nonRefundableStorageFee".to_string(), Value::U64(100)),
+        ("computation_cost".to_string(), Value::U64(1000)),
+        ("storage_cost".to_string(), Value::U64(2000)),
+        ("storage_rebate".to_string(), Value::U64(500)),
+        ("non_refundable_storage_fee".to_string(), Value::U64(100)),
         // Extra field from future version - should be ignored
         ("futureField".to_string(), Value::U64(999)),
     ];
@@ -133,10 +133,10 @@ fn test_gas_cost_summary_missing_field() {
 
     // Missing required field
     let fields = vec![
-        ("computationCost".to_string(), Value::U64(1000)),
-        ("storageCost".to_string(), Value::U64(2000)),
-        // Missing storageRebate
-        ("nonRefundableStorageFee".to_string(), Value::U64(100)),
+        ("computation_cost".to_string(), Value::U64(1000)),
+        ("storage_cost".to_string(), Value::U64(2000)),
+        // Missing storage_rebate
+        ("non_refundable_storage_fee".to_string(), Value::U64(100)),
     ];
 
     let value = Value::Struct(fields);
@@ -146,7 +146,7 @@ fn test_gas_cost_summary_missing_field() {
     assert!(result.is_err());
 
     if let Err(BcsConversionError::MissingField(field)) = result {
-        assert_eq!(field, "storageRebate");
+        assert_eq!(field, "storage_rebate");
     } else {
         panic!("Expected MissingField error");
     }
@@ -158,10 +158,10 @@ fn test_gas_cost_summary_wrong_type() {
 
     // Wrong type for a field
     let fields = vec![
-        ("computationCost".to_string(), Value::U32(1000)), // Wrong: U32 instead of U64
-        ("storageCost".to_string(), Value::U64(2000)),
-        ("storageRebate".to_string(), Value::U64(500)),
-        ("nonRefundableStorageFee".to_string(), Value::U64(100)),
+        ("computation_cost".to_string(), Value::U32(1000)), // Wrong: U32 instead of U64
+        ("storage_cost".to_string(), Value::U64(2000)),
+        ("storage_rebate".to_string(), Value::U64(500)),
+        ("non_refundable_storage_fee".to_string(), Value::U64(100)),
     ];
 
     let value = Value::Struct(fields);
@@ -171,7 +171,7 @@ fn test_gas_cost_summary_wrong_type() {
     assert!(result.is_err());
 
     if let Err(BcsConversionError::TypeMismatch { field, .. }) = result {
-        assert_eq!(field, "computationCost");
+        assert_eq!(field, "computation_cost");
     } else {
         panic!("Expected TypeMismatch error");
     }

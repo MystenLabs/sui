@@ -724,7 +724,7 @@ fn generate_enum_impl(name: &syn::Ident, data_enum: &syn::DataEnum) -> proc_macr
                 let field_type = &fields.unnamed[0].ty;
                 quote! {
                     #variant_name_str => {
-                        let inner = <#field_type>::try_from((**variant_value).clone())?;
+                        let inner = <#field_type>::try_from((*variant_value).clone())?;
                         Ok(#name::#variant_name(inner))
                     }
                 }
@@ -849,16 +849,20 @@ fn is_primitive_type(ty: &syn::Type) -> bool {
                 | "SequenceNumber"
                 | "ObjectDigest"
                 | "TransactionDigest"
+                | "TransactionEventsDigest"
                 | "CheckpointDigest"
                 | "CheckpointContentsDigest"
+                | "CheckpointSequenceNumber"
                 | "EpochId"
                 | "base_types::ObjectID"
                 | "base_types::SuiAddress"
                 | "base_types::SequenceNumber"
                 | "digests::ObjectDigest"
                 | "digests::TransactionDigest"
+                | "digests::TransactionEventsDigest"
                 | "digests::CheckpointDigest"
                 | "digests::CheckpointContentsDigest"
+                | "messages_checkpoint::CheckpointSequenceNumber"
                 | "committee::EpochId"
         )
     } else {
