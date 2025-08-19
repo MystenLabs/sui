@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// This plugin does error checking to
+// prevent any URLs from blank anchors #
+// as these break the build 
+
 import { visit } from "unist-util-visit";
 
 // Treat only true local paths as "files". Everything else is ignored.

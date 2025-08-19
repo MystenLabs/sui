@@ -1,6 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// This code replaces the @docusaurus-plugin-include community plugin
+// it handles {@include: } and {@inject: } embeds 
+// For inject, it uses the same logic as the custom inject-code plugin
+// and supports #fun, #var, #struct selection.
+
+// This code also does some special formatting
+// so that pages with HTML content like the auto-gen pages
+// get rendered properly
+// and that any page with markdownX elements get rendered as such
+
+
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
