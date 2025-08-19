@@ -499,6 +499,7 @@ impl<T: TransactionalStore> Indexer<T> {
             watermark_tx,
             self.metrics.clone(),
             self.cancel.clone(),
+            self.first_checkpoint,
         ));
 
         Ok(())

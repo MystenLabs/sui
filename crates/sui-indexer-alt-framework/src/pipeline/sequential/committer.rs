@@ -47,6 +47,7 @@ pub(super) fn committer<H>(
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
+    first_checkpoint: Option<u64>,
 ) -> JoinHandle<()>
 where
     H: Handler + Send + Sync + 'static,
@@ -471,6 +472,7 @@ mod tests {
             None,
             metrics,
             cancel,
+            None,
         );
 
         TestSetup {
