@@ -126,7 +126,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         let root_linkage = linkages
             .remove(&root) // root package is first in topological order
             .expect("all linkages have been computed");
-        
+
         // Convert NodeIndex to PackageInfo
         Ok(root_linkage
             .into_iter()
