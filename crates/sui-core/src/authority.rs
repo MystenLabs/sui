@@ -2131,15 +2131,17 @@ impl AuthorityState {
             }
         }
 
-        // Fork a transaction during execution
+        // Fork a transaction during execution (user transactions only)
         if let None = self.config.fork_recovery {
-            let original_effects_digest = effects.digest().to_string();
-            effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
-            info!(
-                ?original_effects_digest,
-                new_effects_digest = ?effects.digest(),
-                "Captured forked effects digest for transaction"
-            );
+            if !certificate.data().intent_message().value.is_system_tx() {
+                let original_effects_digest = effects.digest().to_string();
+                effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                info!(
+                    ?original_effects_digest,
+                    new_effects_digest = ?effects.digest(),
+                    "Captured forked effects digest for transaction"
+                );
+            }
         }
 
         fail_point_arg!("simulate_fork_during_execution", |(
