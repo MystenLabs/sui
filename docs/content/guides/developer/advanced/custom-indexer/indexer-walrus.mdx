@@ -79,6 +79,16 @@ The `commit` function conducts final transformations to the processed data befor
 
 {@inject: examples/rust/walrus-attributes-indexer/src/main.rs#fun=main}
 
+To provide users with a list of posts written by a publisher, your service would first query the
+database on `publisher`, yielding a result like the below, then use the `blob_obj_id` to fetch the
+`Blob` NFT contents. From there, the actual Walrus content can be retrieved.
+
+```
+                          dynamic_field_id                          | df_version |                             publisher                              |                            blob_obj_id                             | view_count |      title
+--------------------------------------------------------------------+------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------+------------------
+ \x40b5ae12e780ae815d7b0956281291253c02f227657fe2b7a8ccf003a5f597f7 |  608253371 | \xfe9c7a465f63388e5b95c8fd2db857fad4356fc873f96900f4d8b6e7fc1e760e | \xcfb3d474c9a510fde93262d4b7de66cad62a2005a54f31a63e96f3033f465ed3 |         10 | Blog Post Module
+```
+
 ## Additional considerations
 
 Other details to keep in mind when indexing Walrus blobs.
