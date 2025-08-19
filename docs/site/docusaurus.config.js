@@ -10,13 +10,16 @@ import rehypeRawFiles from './src/rehype/rehype-raw-only.mjs';
 import rehypeTabsMd from './src/rehype/rehype-tabs.mjs';
 import rehypeFixAnchorUrls from './src/rehype/rehype-fix-anchor-urls.mjs';
 
-
-
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
 
 const lightCodeTheme = require("prism-react-renderer/themes/github");
 const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const SIDEBARS_PATH = fileURLToPath(new URL("./sidebars.js", import.meta.url));
 
 const mdxPass = [
   'mdxJsxFlowElement',
@@ -168,7 +171,7 @@ const config = {
         docs: {
           path: "../content",
           routeBasePath: "/",
-          sidebarPath: require.resolve("sidebars.js"),
+          sidebarPath: SIDEBARS_PATH,
           // the double docs below is a fix for having the path set to ../content
           editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
           /*disableVersioning: true,
