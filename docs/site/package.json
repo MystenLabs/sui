@@ -2,7 +2,6 @@
   "name": "sui-docs",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@10.14.0",
   "scripts": {
     "docusaurus": "docusaurus",
     "start": "node src/utils/grpc-download.js && docusaurus graphql-to-doc; rm '../content/references/sui-api/sui-graphql/reference/generated.md'; node src/utils/getopenrpcspecs.js; docusaurus start",
