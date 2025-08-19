@@ -13,7 +13,7 @@ use diesel_async::RunQueryDsl;
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_framework::pipeline::{sequential::Handler, Processor};
 use sui_indexer_alt_framework::postgres;
-use sui_indexer_alt_framework::types::base_types::{ObjectID, SequenceNumber};
+use sui_indexer_alt_framework::types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use sui_indexer_alt_framework::types::object::Object;
@@ -41,6 +41,10 @@ pub enum ProcessedWalrusMetadata {
         /// The version of the Metadata dynamic field.
         df_version: u64,
         blog_post_metadata: BlogPostMetadata,
+        /// ID of the Blob object on Sui, used during reads to fetch the actual blob content. If
+        /// this object has been wrapped or deleted, it will not be present on the live object set,
+        /// which means the corresponding content on Walrus is also not accessible.
+        blob_obj_id: SuiAddress,
     },
     /// Tracks the deletion of a Metadata dynamic field. When committing, this will delete the
     /// existing row.
@@ -73,7 +77,7 @@ impl Processor for BlogPostPipeline {
 
             // Check the checkpoint input state of the Metadata dynamic field to see if it's
             // relevant to our indexing.
-            let Some(_) = extract_content_from_metadata(&self.metadata_type, object)? else {
+            let Some((_, _)) = extract_content_from_metadata(&self.metadata_type, object)? else {
                 continue;
             };
 
@@ -83,7 +87,7 @@ impl Processor for BlogPostPipeline {
         }
 
         for (object_id, object) in &latest_live_output_objects {
-            let Some(blog_post_metadata) =
+            let Some((blog_post_metadata, blob_obj_id)) =
                 extract_content_from_metadata(&self.metadata_type, object)?
             else {
                 continue;
@@ -95,6 +99,7 @@ impl Processor for BlogPostPipeline {
                     df_version: object.version().into(),
                     dynamic_field_id: *object_id,
                     blog_post_metadata,
+                    blob_obj_id,
                 },
             );
         }
@@ -158,8 +163,8 @@ impl Handler for BlogPostPipeline {
                 .set((
                     blog_post::df_version.eq(excluded(blog_post::df_version)),
                     blog_post::title.eq(excluded(blog_post::title)),
-                    blog_post::blob_id.eq(excluded(blog_post::blob_id)),
                     blog_post::view_count.eq(excluded(blog_post::view_count)),
+                    blog_post::blob_obj_id.eq(excluded(blog_post::blob_obj_id)),
                 ))
                 .filter(blog_post::df_version.lt(excluded(blog_post::df_version)))
                 .execute(conn)
@@ -200,14 +205,15 @@ impl ProcessedWalrusMetadata {
                 dynamic_field_id,
                 df_version,
                 blog_post_metadata,
+                blob_obj_id,
             } => Ok(StoredBlogPost {
                 // This is meant to validate that the publisher address stored is a valid SuiAddress
                 publisher: blog_post_metadata.publisher.clone(),
-                blob_id: blog_post_metadata.blob_id.clone(),
                 dynamic_field_id: dynamic_field_id.to_vec(),
                 df_version: *df_version as i64,
                 view_count: blog_post_metadata.view_count as i64,
                 title: blog_post_metadata.title.clone(),
+                blob_obj_id: blob_obj_id.to_vec(),
             }),
             ProcessedWalrusMetadata::Delete(_) => {
                 bail!("Cannot convert Delete variant to StoredBlogPost")

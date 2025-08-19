@@ -23,11 +23,10 @@ pub struct StoredBlogPost {
     pub df_version: i64,
     /// Address that published the Walrus Blob.
     pub publisher: Vec<u8>,
-    /// The Blob ID to be used to fetch the Walrus blob. This can be selected in postgres with:
-    ///
-    /// SELECT replace(replace(rtrim(encode(blob_id, 'base64'), '='), '+', '-'), '/', '_') as
-    /// blob_id FROM walrus_blob;
-    pub blob_id: String,
+    /// ID of the Blob object on Sui, used during reads to fetch the actual blob content. If this
+    /// object has been wrapped or deleted, it will not be present on the live object set, which
+    /// means the corresponding content on Walrus is also not accessible.
+    pub blob_obj_id: Vec<u8>,
     /// Metadata content, the count of views.
     pub view_count: i64,
     /// Metadata content, the title of the blog post.

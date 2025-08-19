@@ -31,6 +31,8 @@ struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
+    // The `IndexerClusterBuilder` offers a convenient way to quickly set up an `IndexerCluster`,
+    // which consists of the base indexer, metrics service, and a cancellation token.
     let mut indexer = IndexerClusterBuilder::new()
         .with_database_url(args.database_url)
         .with_args(args.cluster_args)
@@ -40,6 +42,8 @@ async fn main() -> Result<()> {
 
     let blog_post_pipeline = BlogPostPipeline::new(METADATA_DYNAMIC_FIELD_TYPE).unwrap();
 
+    // Other pipelines can be easily added with `.sequential_pipeline()` or
+    // `.concurrent_pipeline()`.
     indexer
         .sequential_pipeline(blog_post_pipeline, SequentialConfig::default())
         .await?;

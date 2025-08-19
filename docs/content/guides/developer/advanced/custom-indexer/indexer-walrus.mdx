@@ -3,39 +3,28 @@ title: Using the Custom Indexer Framework to Index Walrus Metadata Attributes
 description: Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Integrating a custom Sui Indexer with Walrus can provide novel user experiences.
 ---
 
-This topic covers integration of the Sui Indexer with the Walrus protocol. Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs. Walrus is operated and controlled by the Walrus Foundation. For the most accurate and up-to-date inormation on Walrus, consult the official [Walrus Docs](https://docs.wal.app/).
+This topic covers how you can use the Custom Indexer Framework to provide additional functionality on top of the Walrus protocol. Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs. Walrus is operated and controlled by the Walrus Foundation. For the most accurate and up-to-date inormation on Walrus, consult the official [Walrus Docs](https://docs.wal.app/).
 
-Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Each blob file stored on Walrus is represented by a corresponding [`Blob` object on Sui](https://docs.wal.app/dev-guide/sui-struct.html#blob-and-storage-objects), and this associated object can optionally have a `Metadata` [dynamic field](../../../../concepts/dynamic-fields.mdx) (key-value extensions to on-chain objects to flexibly extend an object's data at runtime). If set, this dynamic field is [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes).
-
-This guide shows how to index and query this metadata through a simple blog platform example. Users can:
+Walrus is a content-addressable storage protocol, where data is identified and retrieved using a unique identifier derived from the content itself, rather than from a file path or location. This means that if different users upload the same content, Walrus will reuse an existing Blob rather than creating a new one. For uniqueness, each blob file uploaded to Walrus also creates a corresponding [`Blob` NFT object on Sui](https://docs.wal.app/dev-guide/sui-struct.html#blob-and-storage-objects) with a unique ID. Furthermore, the associated `Blob` object can optionally have a `Metadata` [dynamic field](../../../../concepts/dynamic-fields.mdx) (key-value extensions to on-chain objects to flexibly extend an object's data at runtime). If set, this dynamic field is [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes). As the ID of a dynamic field is derived from its type and its parent object's ID, each `Metadata` dynamic field ID will also be unique. You can leverage these uniqueness characteristics and the `Metadata` attribute pairs to build a blog platform that enables users to:
 - Upload blog posts with titles
 - View their own posts and metrics
 - Delete posts they created
 - Edit post titles
 - Browse posts by other publishers
 
-Assume an existing service that handles uploads to Walrus. When a Blob and its associated object is created on Walrus, the service will additionally create a Metadata dynamic field with key-value pairs for `publisher` - the Sui Address that uploaded the blob, `blob_id`, `view_count`, and `title`. The service restricts users from modifying the `publisher`, `blob_id`, and `view_count` pairs, but the `title` can be updated by the respective publisher.
+Assume an existing service that handles uploads to Walrus. When a Blob and its associated NFT object is created on Walrus, this service will additionally create a Metadata dynamic field with key-value pairs for `publisher` (the Sui Address that uploaded the blob), `view_count`, and `title`. The service restricts users from modifying the `publisher` and `view_count` pairs, but the `title` can be updated by the respective publisher.
 
-Then, to support the above features, you can use the Custom Indexer Framework to track these Metadata dynamic fields.
+On the read side, when a user views their own or another publisher's posts, the service will first retrieve the relevant blog post metadata from the indexed database, and then use the Owner field to fetch the Blob from fullnode. This means the liveness of the `Blob` object on Sui is used to represent whether a blog post is available. If the `Blob` object is wrapped or deleted, the blog post is not accessible through the service, even if the underlying content on Walrus still exists.
 
 ## Data modeling
 
-One way to model this is with a single table that maps publisher addresses to their blog posts. The table is keyed on `dynamic_field_id`, which uniquely identifies each Metadata dynamic field on Sui. For context, when a publisher uploads a blog post, Walrus will either create a new Blob, or reuse an existing one if the content already exists on-chain. As such, the Blob ID is not a reliable primary key. Fortunately, each upload also creates a unique Sui Blob object. When you add the Metadata attribute dynamic field to this Sui Blob object, the dynamic field's ID is derived from the parent object, and so you can guarantee primary key uniqueness, while using the ID that is closest to where your dapp data lies.
+One way to model this is with a single table that maps publisher addresses to `Metadata` dynamic fields. The table is keyed on `dynamic_field_id` because it both identifies your dapp data and uniquely represents each uploaded blob content.
 
 {@inject: examples/rust/walrus-attributes-indexer/migrations/2025-08-11-194316_blog-post/up.sql}
-
-You could technically fulfill the requirements with just the historical table, but this significantly complicates read operations. For example, to get the latest files for an `address_owner`, your queries would need to:
-
-1. Scan all historical records for the address.
-2. Use complex window functions or self-joins to find the latest version per `file_path`.
-3. Filter out deleted records manually.
-
-This essentially rebuilds a subset of the `walrus_blob` table any time you invoke the main functionality of getting a user’s files. Because the primary goal is to track the current state of files (with occasional version history lookups), maintaining a separate table for the latest state dramatically simplifies and accelerates common read operations.
 
 ### Reads
 
 The main query pattern is to load the blog posts of a publisher.
-
 
 ```sql
 SELECT *
@@ -47,7 +36,9 @@ LIMIT $2;
 
 ## Indexing implementation
 
-This guide uses the sequential pipeline (TODO: link to sequential pipeline architecture), which ... You can choose to scale up accordingly per the suggestions (TODO: link to scaling). This implementation will track the latest object state at checkpoint boundary.
+This guide uses the sequential pipeline, which guarantees that each checkpoint is committed exactly once, in order, atomically. While you don't strictly need this property, it is also easier to implement a sequential pipeline. You can choose to scale up accordingly with a concurrent pipeline per the suggestions in this doc on [pipeline architecture](../../../concepts/custom-indexer/pipeline-architecture.mdx).
+
+The following implementation will track the latest object state at checkpoint boundary.
 
 When the `Metadata` dynamic field is created, mutated, wrapped or deleted, or unwrapped, it will appear among the output objects in the object changes of a transaction, such as this [transaction](https://suivision.xyz/txblock/3Qcuo2FaTZL5wfdi7JzPELcmkuZm7hVfdNrkLrdkKioN?tab=Changes) that creates the field. These dynamic fields will have type `0x2::dynamic_field::Field<vector<u8>, 0xfdc88f7d7cf30afab2f82e8380d11ee8f70efb90e863d1de8616fae1bb09ea77::metadata::Metadata>`.
 
@@ -60,13 +51,13 @@ When the `Metadata` dynamic field is created, mutated, wrapped or deleted, or un
 
 ### Processor
 
-All pipelines implement the same `Processor` (TODO, link?) trait, which defines the logic to transform a checkpoint from the ingerstion task into an intermediate or final form to be committed to the store. Data flows into and out of the processor potentially out of order.
+All pipelines implement the same [`Processor` trait](../../../concepts/snippets/indexer-pipeline-processor.mdx), which defines the logic to transform a checkpoint from the ingestion task into an intermediate or final form to be committed to the store. Data flows into and out of the processor potentially out of order.
 
 #### process
 
 Here you will first compute the `checkpoint_input_objects` and `latest_live_output_objects` sets, as you only need to know the state of objects entering and exiting the checkpoint. `Metadata` dynamic fields that exist in `checkpoint_input_objects` but not `latest_live_output_objects` must have been wrapped or deleted. For these deletions, we only need to track the dynamic field id for the commit function to delete later. Otherwise, for creation, mutation, and unwrap operations, objects will exist in at least the `latest_live_output_objects` set.
 
-TODO: snippet of process function
+{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=process}
 
 ### Committer
 
@@ -76,15 +67,17 @@ The second and final part of the sequential pipeline is the committer. Data flow
 
 This function defines how to batch transformed data from other processed checkpoints. Here, you will maintain a mapping of `dynamic_field_id` to the processed Walrus Metadata. The batch function guarantees that the next checkpoint to batch must be the next contiguous checkpoint, so it's safe for you to overwrite the existing entry.
 
+{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=batch}
+
 #### commit
 
 The `commit` function conducts final transformations to the processed data before writing to the store. In your case, we partition the processed data into `to_delete` and `to_upsert`.
 
-TODO: snippet of commit function
+{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=commit}
 
 ## Putting it all together
 
-
+{@inject: examples/rust/walrus-attributes-indexer/src/main.rs#fun=main}
 
 ## Additional considerations
 

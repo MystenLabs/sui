@@ -10,7 +10,7 @@ use sui_indexer_alt_framework::types::base_types::SuiAddress;
 use sui_indexer_alt_framework::types::collection_types::VecMap;
 use sui_indexer_alt_framework::types::dynamic_field::Field;
 use sui_indexer_alt_framework::types::id::UID;
-use sui_indexer_alt_framework::types::object::Object;
+use sui_indexer_alt_framework::types::object::{Object, Owner};
 
 // ============================================================================
 // WALRUS BLOB DESERIALIZATION TYPES
@@ -56,7 +56,6 @@ pub struct BlobAttribute {
 #[derive(Debug, Clone)]
 pub struct BlogPostMetadata {
     pub publisher: Vec<u8>,
-    pub blob_id: String,
     pub title: String,
     pub view_count: u64,
 }
@@ -86,25 +85,27 @@ pub fn get_metadata(tag: &StructTag, object: &Object) -> anyhow::Result<Option<B
     Ok(Some(field.value))
 }
 
-/// Extract the title and view_count from the object if it is a walrus metadata dynamic field,
-/// otherwise return None.
+/// Attempt to extract content from Walrus metadata dynamic field and parent object id, otherwise
+/// return None.
 pub fn extract_content_from_metadata(
     tag: &StructTag,
     object: &Object,
-) -> anyhow::Result<Option<BlogPostMetadata>> {
+) -> anyhow::Result<Option<(BlogPostMetadata, SuiAddress)>> {
     let Some(metadata) = get_metadata(tag, object)? else {
         return Ok(None);
     };
 
-    let (Some(title), Some(view_count), Some(publisher), Some(blob_id)) = (
+    // Dynamic fields must have an ObjectOwner
+    let Owner::ObjectOwner(parent_id) = object.owner() else {
+        return Ok(None);
+    };
+
+    let (Some(title), Some(view_count), Some(publisher)) = (
         metadata.metadata.get(&"title".to_owned()),
         metadata.metadata.get(&"view_count".to_owned()),
         metadata.metadata.get(&"publisher".to_owned()),
-        metadata.metadata.get(&"blob_id".to_owned()),
     ) else {
-        return Err(anyhow::anyhow!(
-            "Missing title, view_count, publisher, or blob_id"
-        ));
+        return Err(anyhow::anyhow!("Missing title, view_count, or publisher"));
     };
 
     let view_count = view_count
@@ -116,11 +117,10 @@ pub fn extract_content_from_metadata(
         .to_vec();
 
     let blog_post_metadata = BlogPostMetadata {
-        publisher: publisher,
-        blob_id: blob_id.to_string(),
+        publisher,
         title: title.to_string(),
         view_count,
     };
 
-    Ok(Some(blog_post_metadata))
+    Ok(Some((blog_post_metadata, *parent_id)))
 }

@@ -5,7 +5,7 @@ diesel::table! {
         dynamic_field_id -> Bytea,
         df_version -> Int8,
         publisher -> Bytea,
-        blob_id -> Text,
+        blob_obj_id -> Bytea,
         view_count -> Int8,
         title -> Text,
     }
