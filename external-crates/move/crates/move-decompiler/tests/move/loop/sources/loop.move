@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module loop_addr::loop_mod;
+module addr::loop_mod;
 
 public fun do_0(_cond: &mut bool) {  }
 public fun do_1(_cond: &mut bool) {  }

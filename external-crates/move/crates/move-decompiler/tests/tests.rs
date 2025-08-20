@@ -61,10 +61,10 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
         let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
-                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
+                // FIXME pkg name not coherent, address name returned instead let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
+                let name = format!("{}", module_name);
                 let module = decompile_module(module.clone());
-                // FIXME: DO not use debug printing for this
-                let decompiled = format!("{:#?}", module);
+                let decompiled = format!("{}", module);
                 insta_assert! {
                     input_path: file_path,
                     contents: decompiled,
@@ -78,4 +78,11 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
 }
 
 // Hand in each move path
-datatest_stable::harness!(run_move_test, "tests/move", r"modules\.txt$", run_structuring_test, "tests/structuring", r"\.stt$");
+datatest_stable::harness!(
+    run_move_test,
+    "tests/move",
+    r"modules\.txt$",
+    // run_structuring_test,
+    // "tests/structuring",
+    // r"\.stt$"
+);

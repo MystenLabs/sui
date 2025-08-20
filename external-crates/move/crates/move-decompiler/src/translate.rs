@@ -6,13 +6,14 @@ use crate::{
     structuring::{
         ast::{self as D, Label},
         graph::Graph,
+        term_reconstruction,
     },
 };
 
-use crate::ast::{Exp, Term};
+use crate::ast::Exp;
 use move_stackless_bytecode_2::stackless::ast as S;
 use move_symbol_pool::Symbol;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 // -------------------------------------------------------------------------------------------------
 // Module
@@ -34,13 +35,13 @@ pub(crate) fn module(module: S::Module) -> Out::Module {
 // -------------------------------------------------------------------------------------------------
 
 fn function(fun: S::Function) -> Out::Function {
-    println!("{}", fun);
+    println!("Decompiling function {}", fun.name);
     let (name, terms, input, entry) = make_input(fun);
-    println!("Input: {input:#?}");
+    println!("Input: {input:?}");
     let structured = crate::structuring::structure(input, entry);
-    println!("{}", structured.to_test_string());
+    // println!("{}", structured.to_test_string());
     let code = generate_output(terms, structured);
-
+    // println!("Function {name}:\n{code}");
     Out::Function { name, code }
 }
 
@@ -63,18 +64,22 @@ fn make_input(
 
     let mut blocks_iter = basic_blocks.iter();
     let mut next_blocks_iter = basic_blocks.iter().skip(1);
+    let mut let_binds = HashSet::new();
 
     while let Some((lbl, block)) = blocks_iter.next() {
         let label = lbl;
-        assert!(*label == block.label, "Block label mismatch: {label} != {}", block.label);
+        assert!(
+            *label == block.label,
+            "Block label mismatch: {label} != {}",
+            block.label
+        );
         let next_block_label = if let Some((nxt_lbl, _)) = next_blocks_iter.next() {
             Some(*nxt_lbl)
         } else {
             None
         };
         // Extract terms and input for the block
-        // TODO extract terms to be impmlemented
-        let blk_terms = generate_term_block(block);
+        let blk_terms = generate_term_block(block, &mut let_binds);
         let blk_input = extract_input(&block, next_block_label);
 
         // Insert into the maps
@@ -85,8 +90,9 @@ fn make_input(
     (name, terms, input, (entry_label as u32).into())
 }
 
-fn generate_term_block(block: &S::BasicBlock) -> Out::Exp {
-    Out::Exp::Block(Term::Untranslated(block.clone()))
+fn generate_term_block(block: &S::BasicBlock, let_binds: &mut HashSet<S::RegId>) -> Out::Exp {
+    // remove the last jump / replace the conditional with just the "triv" in it
+    term_reconstruction::exp(block.clone(), let_binds)
 }
 
 fn extract_input(block: &S::BasicBlock, next_block_label: Option<S::Label>) -> D::Input {
@@ -147,38 +153,52 @@ fn extract_input(block: &S::BasicBlock, next_block_label: Option<S::Label>) -> D
     }
 }
 
-fn generate_output(
-    mut terms: BTreeMap<D::Label, Out::Exp>,
-    structured: D::Structured,
-) -> Exp {
+fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
     match structured {
         D::Structured::Break => Out::Exp::Break,
         D::Structured::Continue => Out::Exp::Continue,
-        D::Structured::Block((lbl, _invert)) => {
-            terms.remove(&(lbl as u32).into()).unwrap()
-        },
+        D::Structured::Block((lbl, _invert)) => terms.remove(&(lbl as u32).into()).unwrap(),
         D::Structured::Loop(body) => Out::Exp::Loop(Box::new(generate_output(terms, *body))),
         D::Structured::Seq(seq) => {
-            let seq = seq.into_iter().map(|s| generate_output(terms.clone(), s)).collect();
+            let seq = seq
+                .into_iter()
+                .map(|s| generate_output(terms.clone(), s))
+                .collect();
             Out::Exp::Seq(seq)
         }
         D::Structured::While((lbl, _invert), body) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
-            Out::Exp::While(Box::new(term), Box::new(generate_output(terms, *body)))
+            // TODO create helper function to extract last exp from term that works with whatever Exp, not just Seq
+            let Exp::Seq(mut seq) = term else { panic!("A seq espected")};
+            let (cond, mut body_) = (seq.pop().unwrap(), seq);
+            let while_body = generate_output(terms, *body);
+            body_.push(while_body);
+            Out::Exp::While(Box::new(cond), Box::new(Exp::Seq(body_)))
         }
         D::Structured::IfElse((lbl, _invert), conseq, alt) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
+            // TODO create helper function to extract last exp from term that works with whatever Exp, not just Seq
+            let Exp::Seq(mut seq) = term else { panic!("A seq espected")};
+            // When a cond block has list of exp before the jump, we need to pop the conditional statement and
+            let (cond, mut exps) = (seq.pop().unwrap(), seq);
             let alt_exp = alt.map(|a| generate_output(terms.clone(), a));
-            Out::Exp::IfElse(Box::new(term), Box::new(generate_output(terms.clone(), *conseq)), Box::new(alt_exp))
+            exps.push(Out::Exp::IfElse(
+                Box::new(cond),
+                Box::new(generate_output(terms.clone(), *conseq)),
+                Box::new(alt_exp),
+            ));
+            Out::Exp::Seq(exps)
         }
         D::Structured::Switch((lbl, _invert), cases) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
-            let cases = cases.into_iter().map(|c| generate_output(terms.clone(), c)).collect();
+            let cases = cases
+                .into_iter()
+                .map(|c| generate_output(terms.clone(), c))
+                .collect();
             Out::Exp::Switch(Box::new(term), cases)
         }
-        D::Structured::Jump(_) 
-        | D::Structured::JumpIf { .. } => unreachable!("Jump nodes should not be present in the final output")
-
+        D::Structured::Jump(_) | D::Structured::JumpIf { .. } => {
+            unreachable!("Jump nodes should not be present in the final output")
+        }
     }
 }
-
