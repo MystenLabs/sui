@@ -934,9 +934,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     async fn send_end_of_publish_if_needed(&self) {
-        if !self.epoch_store.should_send_end_of_publish()
-            || self.epoch_store.has_sent_own_end_of_publish()
-        {
+        if !self.epoch_store.should_send_end_of_publish() {
             return;
         }
 
@@ -950,7 +948,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 err
             );
         } else {
-            self.epoch_store.set_own_end_of_publish_sent(true);
             info!(epoch=?self.epoch_store.epoch(), "Sending EndOfPublish message to consensus");
         }
     }

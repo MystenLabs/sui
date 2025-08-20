@@ -341,8 +341,9 @@ impl ConsensusAdapter {
     }
 
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
-        // Transactions being sent to consensus may be lost on crash, before included in a proposed block.
-        // So they need to be resubmitted to consensus on restart.
+        // Transactions being sent to consensus can be dropped on crash, before included in a proposed block.
+        // System transactions do not have clients to retry them. They need to be resubmitted to consensus on restart.
+        // get_all_pending_consensus_transactions() can return both system and certified transactions though.
         //
         // todo - get_all_pending_consensus_transactions is called twice when
         // initializing AuthorityPerEpochStore and here, should not be a big deal but can be optimized
@@ -369,7 +370,6 @@ impl ConsensusAdapter {
         );
         for transaction in recovered {
             if transaction.is_end_of_publish() {
-                epoch_store.set_own_end_of_publish_sent(true);
                 info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
             }
             self.submit_unchecked(&[transaction], epoch_store, None);
@@ -932,10 +932,7 @@ impl ConsensusAdapter {
                 transactions[0].kind,
                 ConsensusTransactionKind::UserTransaction(_)
             );
-        if is_user_tx
-            && epoch_store.should_send_end_of_publish()
-            && !epoch_store.has_sent_own_end_of_publish()
-        {
+        if is_user_tx && epoch_store.should_send_end_of_publish() {
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
@@ -945,7 +942,6 @@ impl ConsensusAdapter {
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             } else {
-                epoch_store.set_own_end_of_publish_sent(true);
                 info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             }
         }
@@ -1182,7 +1178,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             }
             epoch_store.close_user_certs(reconfig_guard);
         }
-        if epoch_store.should_send_end_of_publish() && !epoch_store.has_sent_own_end_of_publish() {
+        if epoch_store.should_send_end_of_publish() {
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
@@ -1191,7 +1187,6 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             } else {
-                epoch_store.set_own_end_of_publish_sent(true);
                 info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             }
         }

@@ -367,9 +367,6 @@ pub struct AuthorityPerEpochStore {
     /// Used to notify all epoch specific tasks that user certs are closed.
     user_certs_closed_notify: NotifyOnce,
 
-    // Sent EndOfPublish message for this authority in this epoch.
-    end_of_publish_sent: RwLock<bool>,
-
     /// This lock acts as a barrier for tasks that should not be executed in parallel with reconfiguration
     /// See comments in AuthorityPerEpochStore::epoch_terminated() on how this is used
     /// Crash recovery note: we write next epoch in the database first, and then use this lock to
@@ -1147,7 +1144,6 @@ impl AuthorityPerEpochStore {
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_notify,
             user_certs_closed_notify: NotifyOnce::new(),
-            end_of_publish_sent: RwLock::new(false),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
             executed_transactions_to_checkpoint_notify_read: NotifyRead::new(),
@@ -4585,16 +4581,6 @@ impl AuthorityPerEpochStore {
                 .consensus_tx_status_cache
                 .as_ref()
                 .is_none_or(|c| c.get_num_fastpath_certified() == 0)
-    }
-
-    // Whether own EndOfPublish message has been sent in this epoch.
-    pub(crate) fn has_sent_own_end_of_publish(&self) -> bool {
-        *self.end_of_publish_sent.read()
-    }
-
-    // Sets whether own EndOfPublish message has been sent in this epoch. Used in recovery.
-    pub(crate) fn set_own_end_of_publish_sent(&self, sent: bool) {
-        *self.end_of_publish_sent.write() = sent;
     }
 
     pub(crate) fn write_pending_checkpoint(
