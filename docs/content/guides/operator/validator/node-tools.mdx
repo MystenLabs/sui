@@ -13,14 +13,20 @@ This tool only supports pending validators and active validators.
 
 :::
 
-<Tabs>
-<TabItem value="prereq" label="">
-
-## Prerequisites
+<Tabs className="tabsHeadingCentered">
+<TabItem value="prereq" label="Prerequisites">
 
 - [x] Complete all [Sui installation prerequisites](../../developer/getting-started/sui-install.mdx#prerequisites).
 
 - [x] Build the `sui` binary, which you need for the genesis ceremony. This can be done on any machine, it does not have to be done on the machine that will run the validator.
+
+<details className="nudge-details">
+
+<summary>
+
+View `sui` binary installation details.
+
+</summary>
 
     1. Clone the git repo:
 
@@ -38,7 +44,17 @@ This tool only supports pending validators and active validators.
 
            `$ export SUI_BINARY="$(pwd)/target/debug/sui"`
 
-- [x] Run the following command to set up your Sui account and CLI environment. 
+</details>
+
+- [x] Set up your Sui account and CLI environment. 
+
+<details>
+
+<summary>
+
+View Sui account and CLI environment instructions.
+
+</summary>
 
     - If this is the first time running this program, it will ask you to provide a Sui full node server URL and a meaningful environment alias. It will also generate a random key pair in `sui.keystore` and a config `client.yaml`. Swap in your validator account key if you already have one.
 
@@ -53,8 +69,9 @@ This tool only supports pending validators and active validators.
       - `active_address` is correct in `client.yaml`.
       - `sui.keystore` contains your account key pair.
 
+</details>
 
-- Test your network connection and configuration by displaying your validator info:
+- [x] Test your network connection and configuration by displaying your validator info:
 
 ```sh
 $ sui validator display-metadata
@@ -68,7 +85,7 @@ $ sui validator display-metadata
 ### Print help info
 
 ```sh
-$sui validator --help
+$ sui validator --help
 ```
 
 ### Become a validator / join committee
@@ -76,7 +93,7 @@ $sui validator --help
 To become a validator candidate, first run:
 
 ```sh
-sui validator make-validator-info <name> <description> <image-url> <project-url> <host-name> <gas_price>
+$ sui validator make-validator-info <name> <description> <image-url> <project-url> <host-name> <gas_price>
 ```
 
 This will generate a `validator.info` file and key pair files. The output of this command includes:
@@ -86,8 +103,8 @@ This will generate a `validator.info` file and key pair files. The output of thi
 
 Then run:
 
-``` sh
-sui validator become-candidate {path-to}validator.info
+```sh
+$ sui validator become-candidate {path-to}validator.info
 ```
 
 This submits an on-chain transaction for you to become a validator candidate. The parameter is the file path to the `validator.info` file generated in the previous step. **Make sure the transaction succeeds (printed in the output).**
@@ -186,7 +203,7 @@ Particularly, make sure the new address is not behind a firewall.
 
 Run the following to see how to update each metadata.
 
-``` bash
+```sh
 $ sui validator update-metadata --help
 ```
 
