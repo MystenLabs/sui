@@ -1,5 +1,5 @@
 ---
-title: Node Tools
+title: Validator Node Tools
 description: Use the Sui CLI to interact with a Full node's validator commands. 
 keywords: [ sui cli, full node, delegator, fullnode, operation cap, report validators, join a committee, leave a committee, report a validator, proof of possession, generate proof of possession ]
 ---
@@ -150,6 +150,31 @@ if the account is a delegatee.
 
 
 #### Become a validator / join committee
+
+
+call request_add_validator_candidate to become a candidate. this will create the onchain validator info and initialize a staking pool for delegators to contribute to
+acquire 30M SUI by staking to the validator staking pool created in step 1 via calling request_add_stake with the address of the validator (this is not the staking pool ID).
+Call request_add_validator to have their validator become a pending validator. the next epoch they will join the validator set
+before the next epoch they should stand up their validator so that when the epoch changes they'll be able to participate
+
+sui client call --package 0x3 --module sui_system --function request_add_stake --args 0x5 {sui_object_id} {validator_address}
+
+This creates a stake object (of type 0x3::staking_pool::StakedSui) which can be withdrawn with the following command:
+sui client call --package 0x3 --module sui_system --function request_withdraw_stake --args 0x5 {stake_object_id}
+
+
+
+To complete the POC, I tried to withdraw that stake by running 
+sui client call --package 0x3 --module sui_system --function request_withdraw_stake --args 0x5 0x7efc5f618ca0ee8cb2423717acd07dca748b84179993d067f7540884db9c4785
+
+(that is the object ID of my stake with my "validator"), and got the following error
+Error executing transaction '6wXjnsv9LSmvTRuhMjd3EdtzYYaVD48TKEa7XQqPwn13': MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000003, name: Identifier("staking_pool") }, function: 2, instruction: 17, function_name: Some("request_withdraw_stake") }))) in command 0
+
+That withdrawal command worked fine when withdrawing from "official" validators, both mainnet and testnet
+
+
+It might be that you cannot withdraw non-activated stake from an inactive validator. If that is the case, you should be able to withdraw this after epoch change when the stake becomes active. As above, while you wait for the small-amount to be withdraw-able, you can always try doing the whole process in a local environment to have some extra perspective.
+
 
 To become a validator candidate, first run
 
