@@ -569,20 +569,17 @@ impl Operations {
 
     /// Checks to see if transferObjects is used on GasCoin
     fn is_gascoin_transfer(tx: &SuiTransactionBlockKind) -> bool {
-        match tx {
-            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
-                let SuiProgrammableTransactionBlock {
-                    inputs: _,
-                    commands,
-                } = &pt;
-                return commands.iter().any(|command| match command {
-                    SuiCommand::TransferObjects(objs, _) => {
-                        objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
-                    }
-                    _ => false,
-                });
-            }
-            _ => {}
+        if let SuiTransactionBlockKind::ProgrammableTransaction(pt) = tx {
+            let SuiProgrammableTransactionBlock {
+                inputs: _,
+                commands,
+            } = &pt;
+            return commands.iter().any(|command| match command {
+                SuiCommand::TransferObjects(objs, _) => {
+                    objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
+                }
+                _ => false,
+            });
         }
         false
     }
@@ -590,20 +587,16 @@ impl Operations {
     /// Add balance-change with zero amount if the gas owner does not have an entry.
     /// An entry is required for gas owner because the balance would be adjusted.
     fn add_missing_gas_owner(operations: &mut Vec<Operation>, gas_owner: SuiAddress) {
-        if operations
-            .iter()
-            .find(|operation| {
-                if let Some(amount) = &operation.amount {
-                    if let Some(account) = &operation.account {
-                        if account.address == gas_owner && amount.currency == *SUI {
-                            return true;
-                        }
+        if !operations.iter().any(|operation| {
+            if let Some(amount) = &operation.amount {
+                if let Some(account) = &operation.account {
+                    if account.address == gas_owner && amount.currency == *SUI {
+                        return true;
                     }
                 }
-                false
-            })
-            .is_none()
-        {
+            }
+            false
+        }) {
             operations.push(Operation::balance_change(
                 Some(OperationStatus::Success),
                 gas_owner,
@@ -617,7 +610,7 @@ impl Operations {
     /// the balance-changes stay the same after updating the operations
     fn validate_operations(
         initial_balance_changes: &[(BalanceChange, Currency)],
-        new_operations: &Vec<Operation>,
+        new_operations: &[Operation],
     ) -> Result<(), anyhow::Error> {
         let balances: HashMap<(SuiAddress, Currency), i128> = HashMap::new();
         let mut initial_balances =
@@ -631,17 +624,17 @@ impl Operations {
                 });
 
         let mut new_balances = HashMap::new();
-        for op in new_operations.clone() {
+        for op in new_operations {
             if let Some(Amount {
                 currency, value, ..
-            }) = op.amount
+            }) = &op.amount
             {
-                if let Some(account) = op.account {
+                if let Some(account) = &op.account {
                     let balance_change = new_balances
                         .remove(&(account.address, currency.clone()))
                         .unwrap_or(0)
                         + value;
-                    new_balances.insert((account.address, currency), balance_change);
+                    new_balances.insert((account.address, currency.clone()), balance_change);
                 } else {
                     return Err(anyhow!("Missing account for a balance-change"));
                 }
@@ -716,7 +709,7 @@ impl Operations {
                     }
                 }
             }
-            Self::validate_operations(&initial_balance_changes, &operations)?;
+            Self::validate_operations(initial_balance_changes, &operations)?;
         }
         Ok(operations)
     }

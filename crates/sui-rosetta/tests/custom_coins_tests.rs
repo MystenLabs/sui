@@ -420,7 +420,9 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
         gas_price,
     );
 
-    let sig = keystore.sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
+        .await?;
 
     let mint_res = client
         .quorum_driver_api()

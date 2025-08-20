@@ -626,6 +626,7 @@ async fn test_transfer_single_gas_coin() {
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let response = client
@@ -944,7 +945,7 @@ async fn test_balance_from_obj_paid_eq_gas() {
             *v += value;
             return;
         };
-        balance_changes.insert(account.address.into(), value);
+        balance_changes.insert(account.address, value);
     });
 
     assert_eq!(
