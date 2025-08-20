@@ -83,7 +83,7 @@ public fun keys<K: copy + drop>(self: &VecSet<K>): &vector<K> {
     &self.contents
 }
 
-#[deprecated(note = b"Use `length` instead")]
+#[deprecated(note = b"Renamed to `length` for consistency.")]
 /// Return the number of entries in `self`
 public fun size<K: copy + drop>(self: &VecSet<K>): u64 {
     self.contents.length()

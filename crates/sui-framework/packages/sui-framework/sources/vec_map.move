@@ -212,7 +212,7 @@ public fun remove_entry_by_idx<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (
     (key, value)
 }
 
-#[deprecated(note = b"Use `length` instead")]
+#[deprecated(note = b"Renamed to `length` for consistency.")]
 /// Return the number of entries in `self`
 public fun size<K: copy, V>(self: &VecMap<K, V>): u64 {
     self.contents.length()
