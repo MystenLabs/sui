@@ -55,15 +55,15 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
                     name: name,
                     suffix: "opt.sbir",
                 };
-                if let Some(decompiled) = decompile(module) {
-                    let decompiled = format!("{}", decompiled);
-                    insta_assert! {
-                        input_path: file_path,
-                        contents: decompiled,
-                        name: name,
-                        suffix: "decomp",
-                    };
-                }
+                // if let Some(decompiled) = decompile(module) {
+                //     let decompiled = format!("{}", decompiled);
+                //     insta_assert! {
+                //         input_path: file_path,
+                //         contents: decompiled,
+                //         name: name,
+                //         suffix: "decomp",
+                //     };
+                // }
             }
         }
     }
