@@ -58,8 +58,8 @@ fun try_to_claim_id_twice() {
     let mut registry = Registry { id: object::new(&mut ctx) };
     let key = b"demo".to_string();
 
-    let _uid = derived_object::new(&mut registry.id, key);
-    let _another_uid = derived_object::new(&mut registry.id, key);
+    let _uid = registry.id.derive_object(key);
+    let _another_uid = registry.id.derive_object(key);
 
     abort
 }
