@@ -11,7 +11,8 @@ import BetaTag from "@site/src/components/BetaTag";
 import CodeFromFile from '@site/src/components/CodeFromFile';
 import CodeBlock from '@theme/CodeBlock';
 import DocCardList from '@theme/DocCardList';
-
+import ProtocolConfig from "@site/src/components/ProtocolConfig";
+import YTCarousel from "@site/src/components/YTCarousel"
 
 export default function MDXContent({ children }) {
   const suiComponents = {
@@ -25,6 +26,8 @@ export default function MDXContent({ children }) {
     CodeFromFile,
     CodeBlock,
     DocCardList,
+    ProtocolConfig,
+    YTCarousel,
   };
   return <MDXProvider components={suiComponents}>{children}</MDXProvider>;
 }
