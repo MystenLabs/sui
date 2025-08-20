@@ -15782,6 +15782,7 @@ dependencies = [
  "move-core-types",
  "mysten-metrics",
  "once_cell",
+ "prost-types",
  "quick-js",
  "rand 0.8.5",
  "reqwest 0.12.9",

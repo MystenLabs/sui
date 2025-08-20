@@ -6,7 +6,9 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use futures::{future::join_all, StreamExt};
 
-use sui_rpc::proto::sui::rpc::v2beta2::GetBalanceRequest;
+use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2beta2::{GetBalanceRequest, GetCheckpointRequest};
 use sui_sdk::rpc_types::StakeStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
@@ -19,7 +21,6 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
-use sui_sdk::error::SuiRpcResult;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
@@ -63,11 +64,26 @@ pub async fn balance(
     Err(Error::RetryExhausted(String::from("retry")))
 }
 
-async fn get_checkpoint(ctx: &OnlineServerContext) -> SuiRpcResult<CheckpointSequenceNumber> {
-    ctx.client
-        .read_api()
-        .get_latest_checkpoint_sequence_number()
-        .await
+async fn get_checkpoint(ctx: &OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
+    let request = GetCheckpointRequest {
+        checkpoint_id: None, // None means get latest checkpoint
+        read_mask: Some(FieldMask::from_paths(["sequence_number"])),
+    };
+
+    let response = ctx
+        .grpc_client
+        .raw_client()
+        .get_checkpoint(request)
+        .await?
+        .into_inner();
+
+    let checkpoint = response
+        .checkpoint
+        .ok_or_else(|| Error::DataError("No checkpoint in GetCheckpoint response".to_string()))?;
+
+    checkpoint
+        .sequence_number
+        .ok_or_else(|| Error::DataError("No sequence_number for checkpoint".to_string()))
 }
 
 async fn get_balances(

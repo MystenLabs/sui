@@ -41,6 +41,7 @@ mysten-metrics.workspace = true
 shared-crypto.workspace = true
 lru.workspace = true
 tonic.workspace = true
+prost-types.workspace = true
 
 move-core-types.workspace = true
 
