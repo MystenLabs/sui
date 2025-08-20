@@ -604,7 +604,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         // Watermark should only progress to 1 (can't progress past the gap)
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.get_watermark().unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Now send the missing checkpoint 2
@@ -880,7 +880,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // Verify that reader watermark was eventually updated despite failures
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.get_watermark().unwrap();
         assert_eq!(watermark.reader_lo, 3);
 
         setup.shutdown().await;

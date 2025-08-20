@@ -57,7 +57,7 @@ pub struct Failures {
 #[derive(Clone, Default)]
 pub struct MockStore {
     /// Tracks various watermark states (committer, reader, pruner)
-    pub watermarks: Arc<Mutex<MockWatermark>>,
+    pub watermarks: Arc<Mutex<Option<MockWatermark>>>,
     /// Stores the actual data, mapping checkpoint sequence numbers to transaction sequence numbers
     pub data: Arc<Mutex<HashMap<u64, Vec<u64>>>>,
     /// Tracks the order of checkpoint processing for testing sequential processing
@@ -88,12 +88,12 @@ impl Connection for MockConnection<'_> {
         &mut self,
         _pipeline: &'static str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let watermarks = self.0.watermarks.lock().unwrap();
-        Ok(Some(CommitterWatermark {
-            epoch_hi_inclusive: watermarks.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: watermarks.checkpoint_hi_inclusive,
-            tx_hi: watermarks.tx_hi,
-            timestamp_ms_hi_inclusive: watermarks.timestamp_ms_hi_inclusive,
+        let watermarks = self.0.get_watermark();
+        Ok(watermarks.map(|w| CommitterWatermark {
+            epoch_hi_inclusive: w.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            tx_hi: w.tx_hi,
+            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }))
     }
 
@@ -101,10 +101,10 @@ impl Connection for MockConnection<'_> {
         &mut self,
         _pipeline: &'static str,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let watermarks = self.0.watermarks.lock().unwrap();
-        Ok(Some(ReaderWatermark {
-            checkpoint_hi_inclusive: watermarks.checkpoint_hi_inclusive,
-            reader_lo: watermarks.reader_lo,
+        let watermarks = self.0.get_watermark();
+        Ok(watermarks.map(|w| ReaderWatermark {
+            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            reader_lo: w.reader_lo,
         }))
     }
 
@@ -113,17 +113,19 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let watermarks = self.0.watermarks.lock().unwrap();
-        let elapsed_ms = watermarks.pruner_timestamp as i64
-            - SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64;
-        let wait_for_ms = delay.as_millis() as i64 + elapsed_ms;
-        Ok(Some(PrunerWatermark {
-            pruner_hi: watermarks.pruner_hi,
-            reader_lo: watermarks.reader_lo,
-            wait_for_ms,
+        let watermarks = self.0.get_watermark();
+        Ok(watermarks.map(|w| {
+            let elapsed_ms = w.pruner_timestamp as i64
+                - SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as i64;
+            let wait_for_ms = delay.as_millis() as i64 + elapsed_ms;
+            PrunerWatermark {
+                pruner_hi: w.pruner_hi,
+                reader_lo: w.reader_lo,
+                wait_for_ms,
+            }
         }))
     }
 
@@ -133,10 +135,15 @@ impl Connection for MockConnection<'_> {
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         let mut watermarks = self.0.watermarks.lock().unwrap();
-        watermarks.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
-        watermarks.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
-        watermarks.tx_hi = watermark.tx_hi;
-        watermarks.timestamp_ms_hi_inclusive = watermark.timestamp_ms_hi_inclusive;
+        *watermarks = Some(MockWatermark {
+            epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+            tx_hi: watermark.tx_hi,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+            reader_lo: watermarks.as_ref().map(|w| w.reader_lo).unwrap_or(0),
+            pruner_timestamp: watermarks.as_ref().map(|w| w.pruner_timestamp).unwrap_or(0),
+            pruner_hi: watermarks.as_ref().map(|w| w.pruner_hi).unwrap_or(0),
+        });
         Ok(true)
     }
 
@@ -161,11 +168,14 @@ impl Connection for MockConnection<'_> {
         }
 
         let mut watermarks = self.0.watermarks.lock().unwrap();
-        watermarks.reader_lo = reader_lo;
-        watermarks.pruner_timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        *watermarks = Some(MockWatermark {
+            reader_lo,
+            pruner_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+            ..watermarks.as_ref().unwrap().clone()
+        });
         Ok(true)
     }
 
@@ -175,7 +185,10 @@ impl Connection for MockConnection<'_> {
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         let mut watermarks = self.0.watermarks.lock().unwrap();
-        watermarks.pruner_hi = pruner_hi;
+        *watermarks = Some(MockWatermark {
+            pruner_hi,
+            ..watermarks.as_ref().unwrap().clone()
+        });
         Ok(true)
     }
 }
@@ -351,7 +364,7 @@ impl MockStore {
     }
 
     /// Helper to get the current watermark state for testing
-    pub fn get_watermark(&self) -> MockWatermark {
+    pub fn get_watermark(&self) -> Option<MockWatermark> {
         self.watermarks.lock().unwrap().clone()
     }
 
@@ -440,9 +453,10 @@ impl MockStore {
     ) -> MockWatermark {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
-            let watermark = self.get_watermark();
-            if watermark.checkpoint_hi_inclusive >= checkpoint {
-                return watermark;
+            if let Some(watermark) = self.get_watermark() {
+                if watermark.checkpoint_hi_inclusive >= checkpoint {
+                    return watermark;
+                }
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
