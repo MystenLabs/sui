@@ -6,8 +6,8 @@ use std::{any::Any, net::SocketAddr, sync::Arc};
 use anyhow::{self, Context};
 use api::types::{address::IAddressable, object::IObject};
 use async_graphql::{
-    extensions::ExtensionFactory, http::GraphiQLSource, EmptyMutation, EmptySubscription,
-    ObjectType, Schema, SchemaBuilder, SubscriptionType,
+    extensions::ExtensionFactory, http::GraphiQLSource, EmptySubscription, ObjectType, Schema,
+    SchemaBuilder, SubscriptionType,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
@@ -30,6 +30,7 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
+    full_node_client::{FullNodeArgs, FullNodeClient},
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
@@ -45,7 +46,7 @@ use tower_http::cors;
 use tracing::{error, info};
 use url::Url;
 
-use crate::api::query::Query;
+use crate::api::{mutation::Mutation, query::Query};
 use crate::extensions::logging::{Logging, Session};
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
@@ -241,8 +242,8 @@ impl Default for RpcArgs {
 }
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
-pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
-    Schema::build(Query::default(), EmptyMutation, EmptySubscription)
+pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
+    Schema::build(Query::default(), Mutation, EmptySubscription)
         .register_output_type::<IAddressable>()
         .register_output_type::<IObject>()
 }
@@ -265,6 +266,7 @@ pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
 pub async fn start_rpc(
     database_url: Option<Url>,
     bigtable_instance: Option<String>,
+    full_node_args: FullNodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
     args: RpcArgs,
@@ -277,6 +279,9 @@ pub async fn start_rpc(
 ) -> anyhow::Result<JoinHandle<()>> {
     let rpc = RpcService::new(args, version, schema(), registry, cancel.child_token());
     let metrics = rpc.metrics();
+
+    // Create gRPC full node client wrapper
+    let grpc_client = FullNodeClient::new(full_node_args, cancel.child_token()).await?;
 
     let pg_reader = PgReader::new(
         Some("graphql_db"),
@@ -354,7 +359,8 @@ pub async fn start_rpc(
         .data(pg_reader)
         .data(pg_loader)
         .data(kv_loader)
-        .data(package_resolver);
+        .data(package_resolver)
+        .data(grpc_client);
 
     let h_rpc = rpc.run().await?;
     let h_system_package_task = system_package_task.run();
@@ -371,7 +377,7 @@ pub async fn start_rpc(
 /// Handler for RPC requests (POST requests making GraphQL queries).
 async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(schema): Extension<Schema<Query, EmptyMutation, EmptySubscription>>,
+    Extension(schema): Extension<Schema<Query, Mutation, EmptySubscription>>,
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod make_move_vec;
 mod merge_coins;
 mod move_call;
 mod publish;
@@ -14,6 +15,7 @@ use sui_types::transaction::Command as NativeCommand;
 
 use crate::api::scalars::{base64::Base64, sui_address::SuiAddress};
 
+pub use make_move_vec::MakeMoveVecCommand;
 pub use merge_coins::MergeCoinsCommand;
 pub use move_call::MoveCallCommand;
 pub use publish::PublishCommand;
@@ -27,6 +29,7 @@ use crate::scope::Scope;
 /// A single command in the programmable transaction.
 #[derive(Union, Clone)]
 pub enum Command {
+    MakeMoveVec(MakeMoveVecCommand),
     MergeCoins(MergeCoinsCommand),
     MoveCall(MoveCallCommand),
     Publish(PublishCommand),
@@ -47,6 +50,16 @@ pub struct OtherCommand {
 impl Command {
     pub fn from(_scope: Scope, command: NativeCommand) -> Self {
         match command {
+            NativeCommand::MakeMoveVec(_type_opt, elements) => {
+                Command::MakeMoveVec(MakeMoveVecCommand {
+                    elements: Some(
+                        elements
+                            .into_iter()
+                            .map(TransactionArgument::from)
+                            .collect(),
+                    ),
+                })
+            }
             NativeCommand::MoveCall(call) => Command::MoveCall(MoveCallCommand { native: *call }),
             NativeCommand::SplitCoins(coin, amounts) => Command::SplitCoins(SplitCoinsCommand {
                 coin: Some(TransactionArgument::from(coin)),
@@ -74,7 +87,6 @@ impl Command {
                     upgrade_ticket: Some(TransactionArgument::from(upgrade_ticket)),
                 })
             }
-            _ => Command::Other(OtherCommand { dummy: None }),
         }
     }
 }

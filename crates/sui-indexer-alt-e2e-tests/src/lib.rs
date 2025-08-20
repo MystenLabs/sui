@@ -31,7 +31,8 @@ use sui_indexer_alt_jsonrpc::{
     RpcArgs as JsonRpcArgs,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, system_package_task::SystemPackageTaskArgs,
+    bigtable_reader::BigtableArgs, full_node_client::FullNodeArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
@@ -400,6 +401,7 @@ impl OffchainCluster {
         let graphql = start_graphql(
             Some(database_url.clone()),
             None,
+            FullNodeArgs::default(),
             DbArgs::default(),
             BigtableArgs::default(),
             graphql_args,

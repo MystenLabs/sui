@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::full_node_client::FullNodeArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use url::Url;
@@ -33,6 +34,9 @@ pub enum Command {
         /// requests will be made to the database.
         #[clap(long)]
         bigtable_instance: Option<String>,
+
+        #[command(flatten)]
+        full_node: FullNodeArgs,
 
         #[command(flatten)]
         db_args: DbArgs,

@@ -8,6 +8,7 @@ pub mod cp_sequence_numbers;
 pub mod displays;
 pub mod epochs;
 pub mod error;
+pub mod full_node_client;
 pub mod kv_loader;
 pub(crate) mod metrics;
 pub mod object_versions;
