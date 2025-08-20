@@ -502,3 +502,20 @@ details > div > div {
 .text-gray {
   color: var(--sui-gray);
 }
+
+/* apply to every Tabs on the site */
+.theme-doc-markdown .tabs-container {
+  border: 2px solid var(--ifm-toc-border-color);
+  border-radius: var(--ifm-global-radius);
+  background: var(--ifm-background-surface-color);
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06));
+  padding: var(--ifm-spacing-md) var(--ifm-spacing-md);
+}
+
+/* Extra padding for every Tabs panel on the site */
+.theme-doc-markdown .tabs-container [role="tabpanel"] {
+  padding: clamp(0.75rem, 1.2vw, 1rem);
+}
+
+.theme-doc-markdown .tabs-container [role="tabpanel"] > :first-child { margin-top: 0; }
+.theme-doc-markdown .tabs-container [role="tabpanel"] > :last-child { margin-bottom: 0; }
