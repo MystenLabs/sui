@@ -273,17 +273,12 @@ impl<F: MoveFlavor> Package<F> {
         &self.metadata
     }
 
-    /// Return the implicit deps depending on the implicit dep mode.
+    /// Return system dependencies depending on the manifest setup.
     fn system_dependencies(
         env: &Environment,
         system_dependencies: Option<Vec<String>>,
     ) -> PackageResult<BTreeMap<PackageName, ReplacementDependency>> {
         if let Some(system_dependencies) = system_dependencies {
-            // The case were we do not want any system dependencies.
-            if system_dependencies.is_empty() {
-                return Ok(BTreeMap::new());
-            }
-
             // Only include the specified system dependencies.
             let all_flavor_deps = F::system_dependencies(env.id().to_string());
 
@@ -295,8 +290,13 @@ impl<F: MoveFlavor> Package<F> {
                     result.insert(name, dep.clone());
                 } else {
                     return Err(PackageError::Generic(format!(
-                        "The system dependency `{}` does not exist in the implicit deps list.",
-                        dep
+                        "Invalid system dependency `{}`; the allowed system dependencies are: [{}]",
+                        dep,
+                        all_flavor_deps
+                            .keys()
+                            .map(|k| k.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )));
                 }
             }
@@ -346,6 +346,8 @@ impl<F: MoveFlavor> Package<F> {
 
 #[cfg(test)]
 mod tests {
+    use move_command_line_common::testing::insta::assert_snapshot;
+
     use super::*;
 
     #[derive(Debug)]
@@ -456,7 +458,10 @@ mod tests {
         let env = test_environment();
         let implicit_deps = Some(vec!["ignore".to_string(), "foo".to_string()]);
 
-        assert!(Package::<TestFlavor>::system_dependencies(&env, implicit_deps).is_err());
+        assert_snapshot!(
+            Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap_err(),
+            @"Invalid system dependency `ignore`; the allowed system dependencies are: [bar, baz, foo]"
+        );
     }
 
     #[test]

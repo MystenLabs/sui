@@ -404,9 +404,9 @@ mod tests {
         )
         .unwrap();
 
-        assert!(
-            manifest.package.system_dependencies
-                == Some(vec!["foo".to_string(), "bar".to_string()])
+        assert_eq!(
+            manifest.package.system_dependencies,
+            Some(vec!["foo".to_string(), "bar".to_string()])
         );
     }
 
