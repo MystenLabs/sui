@@ -30,6 +30,9 @@ pub(crate) struct Event {
     pub(crate) timestamp_ms: u64,
 }
 
+mod filter;
+mod lookups;
+
 // TODO(DVX-1200): Support sendingModule - MoveModule
 #[Object]
 impl Event {
