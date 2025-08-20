@@ -8,7 +8,9 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
-use sui_kvstore::{BigTableClient, Checkpoint, KeyValueStoreReader, TransactionData};
+use sui_kvstore::{
+    BigTableClient, Checkpoint, KeyValueStoreReader, TransactionData, TransactionEventsData,
+};
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::object::Object;
@@ -105,6 +107,19 @@ impl BigtableReader {
     /// Multi-get objects by object ID and version.
     pub(crate) async fn objects(&self, keys: &[ObjectKey]) -> Result<Vec<Object>, Error> {
         measure("objects", &keys, self.0.clone().get_objects(keys)).await
+    }
+
+    // Multi-get events from transactions.
+    pub(crate) async fn transactions_events(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> Result<Vec<TransactionEventsData>, Error> {
+        measure(
+            "events",
+            &keys,
+            self.0.clone().get_events_for_transactions(keys),
+        )
+        .await
     }
 }
 

@@ -9,7 +9,6 @@ use async_graphql::{
     dataloader::DataLoader,
     Context, Object,
 };
-use diesel::{prelude::QueryableByName, sql_types::BigInt};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
@@ -55,14 +54,6 @@ pub(crate) struct Transaction {
 pub(crate) struct TransactionContents {
     pub(crate) scope: Scope,
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
-}
-
-#[derive(QueryableByName)]
-struct TxBounds {
-    #[diesel(sql_type = BigInt, column_name = "tx_lo")]
-    tx_lo: i64,
-    #[diesel(sql_type = BigInt, column_name = "tx_hi")]
-    tx_hi: i64,
 }
 
 pub(crate) type CTransaction = JsonCursor<u64>;
