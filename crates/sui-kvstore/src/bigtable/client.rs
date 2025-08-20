@@ -17,11 +17,13 @@ use prometheus::Registry;
 use sui_types::{
     base_types::{EpochId, ObjectID, TransactionDigest},
     digests::CheckpointDigest,
+    effects::TransactionEvents,
     full_checkpoint_content::CheckpointData,
     messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary},
     messages_consensus::TimestampMs,
     object::Object,
     storage::{EpochInfo, ObjectKey},
+    transaction::Transaction,
 };
 use tonic::{
     body::BoxBody,
@@ -42,7 +44,9 @@ use crate::bigtable::proto::bigtable::v2::{
     request_stats::StatsView, row_range::EndKey, MutateRowsRequest, MutateRowsResponse, Mutation,
     ReadRowsRequest, RequestStats, RowRange, RowSet,
 };
-use crate::{Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData};
+use crate::{
+    Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData, TransactionEventsData,
+};
 
 const OBJECTS_TABLE: &str = "objects";
 const TRANSACTIONS_TABLE: &str = "transactions";
@@ -363,6 +367,56 @@ impl KeyValueStoreReader for BigTableClient {
                 None => None,
             },
         )
+    }
+
+    // Multi-get transactions, selecting columns relevant to events.
+    async fn get_events_for_transactions(
+        &mut self,
+        transaction_digests: &[TransactionDigest],
+    ) -> Result<Vec<TransactionEventsData>> {
+        // Fetch just the events for the transaction.
+        let response = self
+            .multi_get(
+                TRANSACTIONS_TABLE,
+                transaction_digests
+                    .iter()
+                    .map(|tx| tx.inner().to_vec())
+                    .collect(),
+                Some(RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(
+                        EVENTS_COLUMN_QUALIFIER.into(),
+                    )),
+                }),
+            )
+            .await?;
+
+        let mut results = vec![];
+        for row in response {
+            let mut tx: Option<Transaction> = None;
+            let mut transaction_events: Option<TransactionEvents> = None;
+            let mut timestamp_ms = 0;
+            for (column, value) in row {
+                match std::str::from_utf8(&column)? {
+                    TRANSACTION_COLUMN_QUALIFIER => tx = Some(bcs::from_bytes(&value)?),
+                    EVENTS_COLUMN_QUALIFIER => transaction_events = Some(bcs::from_bytes(&value)?),
+                    TIMESTAMP_COLUMN_QUALIFIER => timestamp_ms = bcs::from_bytes(&value)?,
+                    _ => error!("unexpected column {:?} in transactions table", column),
+                }
+            }
+            let digest = *tx
+                .ok_or_else(|| anyhow!("digest field is missing"))?
+                .digest();
+            let events = transaction_events
+                .ok_or_else(|| anyhow!("events field is missing"))?
+                .data;
+            results.push(TransactionEventsData {
+                digest,
+                events,
+                timestamp_ms,
+            });
+        }
+
+        Ok(results)
     }
 }
 
