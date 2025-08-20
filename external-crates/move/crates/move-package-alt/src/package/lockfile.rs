@@ -16,7 +16,7 @@ use super::{EnvironmentName, paths::PackagePath};
 
 #[derive(Debug)]
 pub struct Lockfiles<F: MoveFlavor> {
-    main: ParsedLockfile<F>,
+    main: ParsedLockfile,
     file: FileHandle,
     ephemeral: BTreeMap<EnvironmentName, Publication<F>>,
     // TODO: probably should have separate file handles for ephemerals?
@@ -37,7 +37,7 @@ impl<F: MoveFlavor> Lockfiles<F> {
         };
 
         let file_id = FileHandle::new(lockfile_name)?;
-        let main: ParsedLockfile<F> = toml_edit::de::from_str(file_id.source())?;
+        let main: ParsedLockfile = toml_edit::de::from_str(file_id.source())?;
 
         // Parse all `.Move.<env>.lock`
         debug!("reading ephemeral lockfiles");

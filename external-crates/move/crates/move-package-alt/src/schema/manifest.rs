@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
 use super::{
@@ -36,7 +36,7 @@ pub struct ParsedManifest {
 }
 
 /// The `[package]` section of a manifest
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
@@ -50,7 +50,7 @@ pub struct PackageMetadata {
 }
 
 /// An entry in the `[dependencies]` section of a manifest
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct DefaultDependency {
     #[serde(flatten)]
@@ -64,7 +64,7 @@ pub struct DefaultDependency {
 }
 
 /// An entry in the `[dep-replacements]` section of a manifest
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
 pub struct ReplacementDependency {
@@ -83,7 +83,7 @@ pub struct ReplacementDependency {
 ///
 /// There are additional general fields in the manifest format (like `override` or `rename-from`);
 /// these are in the [ManifestDependency] or [ManifestDependencyReplacement] types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ManifestDependencyInfo {
     Git(ManifestGitDependency),
     External(ExternalDependency),
@@ -93,7 +93,7 @@ pub enum ManifestDependencyInfo {
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
 /// dependencies are resolved by external resolvers.
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
@@ -104,7 +104,7 @@ pub struct ExternalDependency {
 }
 
 /// A `{git = "..."}` dependency in a manifest
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ManifestGitDependency {
     /// The repository containing the dependency
     #[serde(rename = "git")]
@@ -120,7 +120,7 @@ pub struct ManifestGitDependency {
 }
 
 /// Convenience type for serializing/deserializing external deps
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
 }
@@ -179,6 +179,14 @@ impl TryFrom<RField> for ExternalDependency {
             .expect("iterator of length 1 structure is nonempty");
 
         Ok(Self { resolver, data })
+    }
+}
+
+impl From<ExternalDependency> for RField {
+    fn from(value: ExternalDependency) -> Self {
+        Self {
+            r: BTreeMap::from([(value.resolver, value.data)]),
+        }
     }
 }
 
@@ -275,6 +283,9 @@ mod tests {
             [environments]
             mainnet = "35834a8a"
             testnet = "4c78adac"
+
+            [local-environments]
+            localnet = "mainnet"
 
             [dependencies]
             foo = { git = "https://example.com/foo.git", rev = "releases/v1", rename-from = "Foo", override = true}

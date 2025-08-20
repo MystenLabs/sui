@@ -68,10 +68,6 @@ impl Test<'_> {
     /// Return the value to be snapshotted, based on `self.kind`, as described in [run_test]
     fn output(&self) -> anyhow::Result<String> {
         Ok(match self.kind {
-            "graph_to_lockfile" => match run_graph_to_lockfile_test_wrapper(self.toml_path) {
-                Ok(s) => s,
-                Err(e) => e.to_string(),
-            },
             "locked" => {
                 // TODO: this needs to deal with ephemeral environments
 
@@ -94,23 +90,6 @@ impl Test<'_> {
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
     }
-}
-
-// TODO: it's not clear what this test is intended to be testing
-async fn run_graph_to_lockfile_test(
-    input_path: &Path,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let env = vanilla::default_environment();
-
-    let root = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env).await?;
-
-    Ok(root.lockfile_for_testing().render_as_toml())
-}
-
-fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let rt = tokio::runtime::Runtime::new()?;
-    let data = rt.block_on(run_graph_to_lockfile_test(path))?;
-    Ok(data)
 }
 
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {

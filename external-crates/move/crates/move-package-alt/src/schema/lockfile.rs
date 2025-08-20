@@ -1,12 +1,8 @@
-use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
-use crate::flavor::MoveFlavor;
-
 use super::{
-    EnvironmentID, EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, PackageName,
-    PublishAddresses,
+    EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses,
     toml_format::{expand_toml, flatten_toml},
 };
 
@@ -71,6 +67,7 @@ pub struct RootDepInfo {
 }
 
 /// A serialized lockfile dependency of the form `{git = "...", rev = "...", subdir = "..."}`
+/// Note in particular that `rev` must exist and must be a `GitSha`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct LockfileGitDepInfo {
     /// The repository containing the dependency
@@ -108,18 +105,39 @@ impl ParsedLockfile {
     }
 }
 
-// TODO
 #[cfg(test)]
 mod tests {
     use test_log::test;
 
-    #[test]
-    fn parse() {
-        todo!();
-    }
+    use crate::schema::ParsedLockfile;
 
+    /// Round-trip parsing and then printing a lockfile yields what we started with
     #[test]
-    fn print() {
-        todo!();
+    fn basic() {
+        let lockfile_text = r#"
+            [pinned._test_env.example]
+            source = { root = true }
+            use_environment = "_test_env"
+            manifest_digest = "root_digest"
+            deps = {}
+
+            [pinned.mainnet.bar]
+            source = { local = "../bar" }
+            manifest_digest = "digest_2"
+            deps = {}
+
+            [pinned.mainnet.baz]
+            source = { git = "git_uri.git", rev = "0000000000000000000000000000000000000000", path = "" }
+            manifest_digest = "digest_3"
+            deps = { bar = "bar" }
+
+            [pinned.mainnet.example]
+            source = { root = true }
+            manifest_digest = "root_digest"
+            deps = { baz = "baz" }
+            "#;
+
+        let parsed: ParsedLockfile = toml_edit::de::from_str(lockfile_text).unwrap();
+        assert_eq!(parsed.render_as_toml(), lockfile_text);
     }
 }

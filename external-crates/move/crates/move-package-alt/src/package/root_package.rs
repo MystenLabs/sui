@@ -183,11 +183,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Set the publish information, coming in from the compiler & result of `Publish` command.
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
         // Write the publish data.
+        todo!()
+        /*
         self.lockfile
             .published
             .insert(self.environment.name().clone(), publish_data);
 
         self.save_to_disk()
+        */
     }
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
@@ -198,15 +201,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         debug!("loading lockfile {:?}", path);
 
         if !path.exists() {
-            return Ok(ParsedLockfile::<F>::default());
+            return Ok(ParsedLockfile::default());
         }
 
         let file = FileHandle::new(path)?;
         Ok(toml_edit::de::from_str(file.source())?)
-    }
-
-    pub fn lockfile_for_testing(&self) -> &ParsedLockfile {
-        &self.lockfile
     }
 
     /// Return the package graph for `env`
@@ -215,12 +214,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.graph
     }
 
-    pub fn lockfile(&self) -> &ParsedLockfile<F> {
+    pub fn lockfile(&self) -> &ParsedLockfile {
         &self.lockfile
     }
 
     /// Return the publication information for this environment.
     pub fn publication(&self, env: EnvironmentName) -> PackageResult<Publication<F>> {
+        todo!()
+        /*
         self.lockfile
             .published
             .get(&env)
@@ -232,6 +233,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 ))
             })
             .cloned()
+        */
     }
 
     // *** PATHS RELATED FUNCTIONS ***

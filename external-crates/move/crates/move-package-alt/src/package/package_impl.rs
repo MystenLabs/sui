@@ -7,11 +7,14 @@ use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
 
 use super::compute_digest;
-use super::manifest::{Manifest, ManifestError, ManifestErrorKind};
+use super::package_files::{Manifest, PackageFiles};
 use super::paths::PackagePath;
+use crate::compatibility::legacy::LegacyEnvironment;
+use crate::compatibility::legacy_parser::ParsedLegacyPackage;
 use crate::dependency::FetchedDependency;
-use crate::errors::{FileHandle, Location};
-use crate::schema::ReplacementDependency;
+use crate::errors::{FileHandle, Location, LockfileError};
+use crate::package::package_files::Lockfile;
+use crate::schema::{ParsedLockfile, ParsedManifest, PublicationFile, ReplacementDependency};
 use crate::{
     compatibility::{
         legacy::LegacyData,
@@ -46,7 +49,7 @@ pub struct Package<F: MoveFlavor> {
     digest: Digest,
     /// The metadata of the package.
     metadata: PackageMetadata,
-    /// A [`PackagePath`] representing the canonical path to the package directory.
+    /// A [`PackagePath`] representing the cleaned path to the package directory.
     path: PackagePath,
     /// (Optional) Publish information for the loaded environment (original-id, published-at and more).
     publish_data: Option<Publication<F>>,
@@ -94,7 +97,7 @@ impl<F: MoveFlavor> Package<F> {
     async fn load_internal(
         path: PackagePath,
         source: PinnedDependencyInfo,
-        env: &Environment,
+        env: Environment,
     ) -> PackageResult<Self> {
         let manifest = Manifest::read_from_file(path.manifest_path());
         let dummy_addr = {
@@ -144,7 +147,7 @@ impl<F: MoveFlavor> Package<F> {
                 digest: manifest.digest().to_string(),
                 metadata: manifest.metadata(),
                 path,
-                publish_data: publish_data.get(env.name()).cloned(),
+                publish_data,
                 dep_for_self: source,
                 legacy_data: None,
                 deps,
@@ -482,4 +485,64 @@ mod tests {
     fn new_package_name(name: &str) -> PackageName {
         PackageName::new(name.to_string()).unwrap()
     }
+
+    /// Loading a package with a modern manifest and lock file
+    #[test]
+    #[ignore] // TODO
+    fn load_modern() {
+        todo!()
+    }
+}
+
+/// Tests for loading packages with legacy manifests. There's a bunch of situations that can occur,
+/// both because there's a variety of legacy styles and because the modern system will never output
+/// legacy lock files, so you can have a legacy manifest with a modern lock file / pub file.
+///
+/// The testing matrix has the following variables:
+///  - manifest has `published-at`?
+///  - manifest has `0x0` address?
+///  - address is in legacy lockfile?
+///  - address is in modern pubfile?
+///
+///  - lockfile: legacy, modern, none
+///  - pubfile: contains address or missing
+#[cfg(test)]
+mod legacy_tests {
+    /// Loading a legacy package
+    #[test]
+    #[ignore] // TODO
+    fn load_legacy_manifest_and_lock() {
+        todo!()
+    }
+
+    /// Loading a package with a legacy manifest file but a modern lock file (this situation will
+    /// occur if we build a legacy package without migrating it)
+    #[test]
+    #[ignore] // TODO
+    fn load_legacy_manifest_modern_lock() {
+        todo!()
+    }
+
+    /// Loading a legacy package with published addresses
+    #[test]
+    #[ignore] // TODO
+    fn load_legacy_with_addresses_in_manifest() {
+        todo!()
+    }
+
+    /// Loading a legacy package with
+    #[test]
+    #[ignore] // TODO
+    fn load_legacy_with_addresses_in_lockfile() {
+        todo!()
+    }
+
+    /// Loading a legacy package with addresses in the lockfile and the manifest
+    #[test]
+    #[ignore] // TODO
+    fn load_legacy_with_addresses_in_lockfile_and_manifest() {
+        todo!()
+    }
+
+    /// Loading a legacy package with
 }

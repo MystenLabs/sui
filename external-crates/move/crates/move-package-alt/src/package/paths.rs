@@ -71,7 +71,7 @@ impl PackagePath {
 
     /// The path to the local publications file
     pub fn publications_local_path(&self) -> PathBuf {
-        self.0.join("Move.published.local")
+        self.0.join("Move.pub.local")
     }
 }
 
