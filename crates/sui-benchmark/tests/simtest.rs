@@ -539,7 +539,7 @@ mod test {
             max_deferral_rounds = if rng.gen_bool(0.5) {
                 rng.gen_range(0..20) // Short deferral round (testing cancellation)
             } else {
-                rng.gen_range(1000..10000) // Large deferral round (testing liveness)
+                rng.gen_range(500..1000) // Large deferral round (testing liveness)
             };
             if rng.gen_bool(0.5) {
                 allow_overage_factor = rng.gen_range(1..100);

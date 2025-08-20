@@ -295,16 +295,50 @@ type Checkpoint {
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 }
 
+type CheckpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+}
+
 """
-Filter for paginating packages published within a range of checkpoints.
+An edge in a connection.
 """
+type CheckpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 input CheckpointFilter {
 	"""
-	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	Limit query results to checkpoints at this epoch.
+	"""
+	atEpoch: UInt53
+	"""
+	Limit query results to checkpoints that occured strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
 	"""
-	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	Limit query results to checkpoints that occured at the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit query results to checkpoints that occured strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
 }
@@ -322,7 +356,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
+union Command = MakeMoveVecCommand | MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -503,6 +537,10 @@ type Epoch {
 	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
 	"""
 	epochId: UInt53!
+	"""
+	The epoch's corresponding checkpoints.
+	"""
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
 	"""
 	State of the Coin DenyList object (0x403) at the start of this epoch.
 	
@@ -848,6 +886,34 @@ type Input {
 
 
 """
+Information used by a package to link to a specific version of its dependency.
+"""
+type Linkage {
+	"""
+	The ID on-chain of the first version of the dependency.
+	"""
+	originalId: SuiAddress
+	"""
+	The ID on-chain of the version of the dependency that this package depends on.
+	"""
+	upgradedId: SuiAddress
+	"""
+	The version of the dependency that this package depends on.
+	"""
+	version: UInt53
+}
+
+"""
+Create a vector (can be empty).
+"""
+type MakeMoveVecCommand {
+	"""
+	The values to pack into the vector, all of the same type.
+	"""
+	elements: [TransactionArgument!]
+}
+
+"""
 Merges `coins` into the first `coin` (produces no results).
 """
 type MergeCoinsCommand {
@@ -897,6 +963,11 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	digest: String!
 	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+	name, followed by module bytes), in alphabetic order by module name.
+	"""
+	moduleBcs: Base64
+	"""
 	Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
 	
 	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
@@ -936,6 +1007,10 @@ type MovePackage implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transitive dependencies of this package.
+	"""
+	linkage: [Linkage!]
 	"""
 	A table identifying which versions of a package introduced each of its types.
 	"""
@@ -983,6 +1058,23 @@ type MutateConsensusStreamEnded {
 	The sequence number associated with the consensus stream ending.
 	"""
 	sequenceNumber: UInt53
+}
+
+"""
+Mutations are used to write to the Sui network.
+"""
+type Mutation {
+	"""
+	Execute a transaction, committing its effects on chain.
+	
+	- `transaction` contains the transaction data in the desired format.
+	- `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
+	
+	Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
+	
+	There may be a delay between transaction finality and when GraphQL requests (including the request that issued the transaction) reflect its effects. As a result, queries that depend on indexing the state of the chain (e.g. contents of output objects, address-level balance information at the time of the transaction), must wait for indexing to catch up by polling for the transaction digest using `Query.transaction`.
+	"""
+	executeTransaction(transaction: TransactionExecutionInput!, signatures: [String!]!): String!
 }
 
 """
@@ -1162,6 +1254,20 @@ type OwnedOrImmutable {
 }
 
 """
+Filter for paginating packages published within a range of checkpoints.
+"""
+input PackageCheckpointFilter {
+	"""
+	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
+}
+
+"""
 Identifies a specific version of a package.
 
 The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
@@ -1302,6 +1408,10 @@ type Query {
 	"""
 	checkpoint(sequenceNumber: UInt53): Checkpoint
 	"""
+	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
+	"""
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection!
+	"""
 	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
 	
 	Returns `null` if the epoch does not exist yet, or was pruned.
@@ -1384,7 +1494,7 @@ type Query {
 	"""
 	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
 	"""
-	packages(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): MovePackageConnection
+	packages(first: Int, after: String, last: Int, before: String, filter: PackageCheckpointFilter): MovePackageConnection
 	"""
 	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	
@@ -1857,6 +1967,18 @@ type TransactionEffects {
 	dependencies(first: Int, after: String, last: Int, before: String): TransactionConnection
 }
 
+"""
+Input for executing a transaction.
+"""
+input TransactionExecutionInput {
+	"""
+	BCS-encoded transaction bytes (Base64).
+	
+	This is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
+	"""
+	transactionDataBcs: String!
+}
+
 input TransactionFilter {
 	"""
 	Limit to transactions that occured strictly after the given checkpoint.
@@ -2109,4 +2231,5 @@ directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query
+	mutation: Mutation
 }

@@ -2981,10 +2981,10 @@ immediate_dependencies:
     name: ascii
 attributes: []
 functions:
-  get:
+  with_defining_ids:
     source_index: 0
     index: 0
-    doc: " Return a value representation of the type `T`.  Package IDs\n that appear in fully qualified type names in the output from\n this function are defining IDs (the ID of the package in\n storage that first introduced the type)."
+    doc: " Return a value representation of the type `T`. Package IDs that appear in fully qualified type\n names in the output from this function are defining IDs (the ID of the package in storage that\n first introduced the type)."
     attributes: []
     visibility: Public
     entry: false
@@ -2999,10 +2999,10 @@ functions:
             name: type_name
           name: TypeName
           type_arguments: []
-  get_with_original_ids:
+  with_original_ids:
     source_index: 1
     index: 1
-    doc: " Return a value representation of the type `T`.  Package IDs\n that appear in fully qualified type names in the output from\n this function are original IDs (the ID of the first version of\n the package, even if the type in question was introduced in a\n later upgrade)."
+    doc: " Return a value representation of the type `T`. Package IDs that appear in fully qualified type\n names in the output from this function are original IDs (the ID of the first version of\n the package, even if the type in question was introduced in a later upgrade)."
     attributes: []
     visibility: Public
     entry: false
@@ -3038,7 +3038,7 @@ functions:
                 type_arguments: []
     return_:
       - bool
-  borrow_string:
+  as_string:
     source_index: 3
     index: 3
     doc: " Get the String representation of `self`"
@@ -3066,7 +3066,7 @@ functions:
                 name: ascii
               name: String
               type_arguments: []
-  get_address:
+  address_string:
     source_index: 4
     index: 4
     doc: " Get Address string (Base16 encoded), first part of the TypeName.\n Aborts if given a primitive type."
@@ -3092,7 +3092,7 @@ functions:
             name: ascii
           name: String
           type_arguments: []
-  get_module:
+  module_string:
     source_index: 5
     index: 5
     doc: " Get name of the module.\n Aborts if given a primitive type."
@@ -3135,6 +3135,147 @@ functions:
               name: type_name
             name: TypeName
             type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  get:
+    source_index: 7
+    index: 7
+    doc: ~
+    attributes:
+      - Parameterized:
+          - deprecated
+          - - Assigned:
+                - note
+                - "Renamed to `with_defining_ids` for clarity."
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: type_name
+          name: TypeName
+          type_arguments: []
+  get_with_original_ids:
+    source_index: 8
+    index: 8
+    doc: ~
+    attributes:
+      - Parameterized:
+          - deprecated
+          - - Assigned:
+                - note
+                - "Renamed to `with_original_ids` for clarity."
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: type_name
+          name: TypeName
+          type_arguments: []
+  borrow_string:
+    source_index: 9
+    index: 9
+    doc: ~
+    attributes:
+      - Parameterized:
+          - deprecated
+          - - Assigned:
+                - note
+                - "Renamed to `as_string` for consistency."
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: type_name
+                name: TypeName
+                type_arguments: []
+    return_:
+      - Reference:
+          - false
+          - Datatype:
+              module:
+                address: std
+                name: ascii
+              name: String
+              type_arguments: []
+  get_address:
+    source_index: 10
+    index: 10
+    doc: ~
+    attributes:
+      - Parameterized:
+          - deprecated
+          - - Assigned:
+                - note
+                - "Renamed to `address_string` for consistency."
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: type_name
+                name: TypeName
+                type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  get_module:
+    source_index: 11
+    index: 11
+    doc: ~
+    attributes:
+      - Parameterized:
+          - deprecated
+          - - Assigned:
+                - note
+                - "Renamed to `module_string` for consistency."
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: type_name
+                name: TypeName
+                type_arguments: []
     return_:
       - Datatype:
           module:
