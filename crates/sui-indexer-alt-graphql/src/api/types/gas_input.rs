@@ -73,8 +73,7 @@ impl GasInput {
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
             let (id, version, digest) = self.native.payment[*edge.cursor];
-            let address = Address::with_address(self.scope.clone(), id.into());
-            let object = Object::with_ref(address, version, digest);
+            let object = Object::with_ref(&self.scope, id.into(), version, digest);
 
             conn.edges
                 .push(Edge::new(edge.cursor.encode_cursor(), object));
