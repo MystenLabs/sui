@@ -6,6 +6,7 @@ module sui::object;
 
 use std::bcs;
 use sui::address;
+use sui::derived_object;
 
 /// Allows calling `.to_address` on an `ID` to get an `address`.
 public use fun id_to_address as ID.to_address;
@@ -24,6 +25,9 @@ public use fun uid_to_address as UID.to_address;
 
 /// Allows calling `.to_bytes` on a `UID` to get a `vector<u8>`.
 public use fun uid_to_bytes as UID.to_bytes;
+
+/// Allows calling `derived_object::new` on a `UID` to get a derived `UID`.
+public use fun derived_object::new as UID.derive_object;
 
 /// The hardcoded ID for the singleton Sui System State Object.
 const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;

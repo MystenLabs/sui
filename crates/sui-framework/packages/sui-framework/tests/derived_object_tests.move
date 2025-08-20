@@ -18,8 +18,8 @@ fun create_derived_id() {
     let derived_id = derived_object::derive_address(registry.id.to_inner(), key);
     let another_derived_id = derived_object::derive_address(registry.id.to_inner(), another_key);
 
-    let derived_uid = derived_object::new(&mut registry.id, key);
-    let another_derived_uid = derived_object::new(&mut registry.id, another_key);
+    let derived_uid = registry.id.derive_object(key);
+    let another_derived_uid = registry.id.derive_object(another_key);
 
     assert!(derived_object::exists(&registry.id, key));
     assert!(derived_object::exists(&registry.id, another_key));
@@ -40,8 +40,8 @@ fun multiple_registries_uniqueness() {
 
     let key = b"demo".to_string();
 
-    let derived_uid = derived_object::new(&mut registry.id, key);
-    let another_derived_uid = derived_object::new(&mut another_registry.id, key);
+    let derived_uid = registry.id.derive_object(key);
+    let another_derived_uid = another_registry.id.derive_object(key);
 
     assert!(derived_uid.to_address() != another_derived_uid.to_address());
 
