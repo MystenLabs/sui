@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use scoped_futures::ScopedBoxFuture;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 /// Represents a database connection that can be used by the indexer framework to manage watermark
 /// operations, agnostic of the underlying store implementation.
@@ -37,6 +37,18 @@ pub trait Connection: Send {
         pipeline: &'static str,
         task: Option<&str>,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
+
+    // /// Given a pipeline, return the reader watermark for all tasks of that pipeline. This is used
+    // /// by the indexer solely for concurrent pipelines to:
+    // /// - Determine the
+    // ///
+    // ///  hold back the pruner until all tasks
+    // /// record a committer hi watermark larger than the main pipeline's `[pruner_hi, reader_lo)`.
+    // async fn reader_watermarks(
+    //     &mut self,
+    //     pipeline: &'static str,
+    //     task: Option<&str>,
+    // ) -> anyhow::Result<Option<HashMap<String, ReaderWatermark>>>;
 
     /// For some pipeline and optional indexer task, get the bounds for the region that the pruner
     /// is allowed to prune, and the time in milliseconds the pruner must wait before it can begin
