@@ -435,6 +435,94 @@ pub mod testing;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pipeline::concurrent::ConcurrentConfig;
+    use crate::store::CommitterWatermark;
+    use crate::testing::mock_store::MockStore;
+    use crate::FieldCount;
+    use std::sync::Arc;
+    use tokio_util::sync::CancellationToken;
+
+    impl Processor for MockHandler {
+        const NAME: &'static str = "test_processor";
+        type Value = MockValue;
+        fn process(
+            &self,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![MockValue(1)])
+        }
+    }
+
+    #[allow(dead_code)]
+    #[derive(Clone, FieldCount)]
+    struct MockValue(u64);
+
+    struct MockHandler;
+
+    #[async_trait::async_trait]
+    impl crate::pipeline::concurrent::Handler for MockHandler {
+        type Store = MockStore;
+
+        async fn commit<'a>(
+            _values: &[Self::Value],
+            _conn: &mut <Self::Store as Store>::Connection<'a>,
+        ) -> anyhow::Result<usize> {
+            Ok(1)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_first_checkpoint_from_watermark() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+
+        let store = MockStore::default();
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: 100,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(50),
+            last_checkpoint: None,
+            pipeline: vec![],
+            skip_watermark: false,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        indexer
+            .concurrent_pipeline::<MockHandler>(MockHandler, ConcurrentConfig::default())
+            .await
+            .unwrap();
+
+        assert_eq!(indexer.first_checkpoint_from_watermark, 101);
+    }
 
     #[test]
     fn test_initial_watermark_from_first_checkpoint() {
