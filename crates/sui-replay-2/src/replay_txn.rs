@@ -169,8 +169,7 @@ impl ReplayTransaction {
         let protocol_config = epoch_store
             .protocol_config(epoch)
             .unwrap_or_else(|e| panic!("Failed to get protocol config: {:?}", e));
-        let executor =
-            ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
+        let executor = ReplayExecutor::new(protocol_config).unwrap_or_else(|e| panic!("{:?}", e));
 
         debug!("End load transaction");
 

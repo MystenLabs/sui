@@ -18,7 +18,6 @@ bcs.workspace = true
 
 move-core-types.workspace = true
 move-binary-format.workspace = true
-move-vm-profiler.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

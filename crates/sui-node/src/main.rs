@@ -50,7 +50,7 @@ static JEMALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 fn main() {
     antithesis_sdk::antithesis_init();
 
-    move_vm_profiler::ensure_move_vm_profiler_disabled();
+    move_vm_config::ensure_move_vm_profiler_disabled();
 
     // Ensure that a validator never calls get_for_min_version/get_for_max_version_UNSAFE.
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.

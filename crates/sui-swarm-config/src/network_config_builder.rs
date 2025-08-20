@@ -623,7 +623,7 @@ mod test {
         let genesis_digest = *genesis_transaction.digest();
 
         let silent = true;
-        let executor = sui_execution::executor(&protocol_config, silent, None)
+        let executor = sui_execution::executor(&protocol_config, silent)
             .expect("Creating an executor should not fail here");
 
         // Use a throwaway metrics registry for genesis transaction execution.
