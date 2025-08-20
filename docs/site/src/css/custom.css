@@ -520,16 +520,29 @@ details > div > div {
   padding: 0 !important;
   border-bottom: var(--ifm-tabs-border-bottom-size, 2px) solid var(--ifm-color-emphasis-200);
 }
-
-/* Make all tabs equal height (from earlier fix) */
+/* Make all tabs equal height & align bottoms */
 [data-md-tabs] .tabs__item {
   display: inline-flex;
   align-items: center;
   box-sizing: border-box;
   padding: var(--ifm-tabs-padding-vertical, .5rem) var(--ifm-tabs-padding-horizontal, .75rem);
-  line-height: 1.2;
-  border-bottom: var(--ifm-tabs-border-bottom-size, 2px) solid transparent; /* reserve space */
+  line-height: 1;                          /* tighter, predictable box */
+  border-bottom: var(--ifm-tabs-border-bottom-size, 2px) solid transparent;
+  vertical-align: bottom;                   /* <-- key: avoid baseline wobble */
+  white-space: nowrap;                      /* avoid wrapping changing heights */
+  margin: 0;                                /* normalize */
 }
+
+/* Ensure the active tab doesn't change the box height */
+[data-md-tabs] .tabs__item--active {
+  border-bottom-width: var(--ifm-tabs-border-bottom-size, 2px) !important;
+}
+
+/* (Optional) hard stop: guarantee a consistent min-height */
+[data-md-tabs] .tabs__item {
+  min-height: calc(1em + 2*var(--ifm-tabs-padding-vertical, .5rem) + var(--ifm-tabs-border-bottom-size, 2px));
+}
+
 
 [data-md-tabs] .tabs__item.tabs__item--active {
   border-bottom-color: var(--ifm-tabs-color, var(--ifm-color-primary));
