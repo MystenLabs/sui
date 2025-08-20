@@ -79,6 +79,9 @@ const config = {
     format: "detect",
     mermaid: true,
   },
+  clientModules: [
+    require.resolve('./src/client/pushfeedback-toc.js'),
+  ],
   plugins: [
     // ....
     // path.resolve(__dirname, `./src/plugins/examples`),
