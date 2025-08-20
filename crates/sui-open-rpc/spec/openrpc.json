@@ -1988,6 +1988,7 @@
                 "tx_context_sponsor_cost_base": null,
                 "type_name_get_base_cost": null,
                 "type_name_get_per_byte_cost": null,
+                "type_name_id_base_cost": null,
                 "types_is_one_time_witness_cost_base": {
                   "u64": "52"
                 },
