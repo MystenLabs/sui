@@ -81,8 +81,6 @@ where
             (CommitterWatermark::default(), 0)
         };
 
-        println!("watermark: {:?}", watermark);
-
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
         let mut logger = WatermarkLogger::new("sequential_committer", &watermark);
