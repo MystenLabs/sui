@@ -58,7 +58,9 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -123,7 +125,9 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -232,7 +236,9 @@ async fn test_limit_many_small_coins() -> Result<()> {
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -297,7 +303,9 @@ async fn test_limit_many_small_coins() -> Result<()> {
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -401,7 +409,9 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -467,7 +477,9 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -582,7 +594,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -626,7 +640,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
         )
         .await?;
 
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -691,7 +707,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -789,7 +807,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -833,7 +853,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         )
         .await?;
 
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -898,7 +920,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -1003,7 +1027,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -1047,7 +1073,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         )
         .await?;
 
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -1112,7 +1140,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(

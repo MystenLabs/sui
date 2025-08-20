@@ -63,7 +63,9 @@ pub async fn split_coins(
     // Sign transaction
     let tx_data =
         TransactionData::new_programmable(sender, vec![gas], builder, budget, reference_gas_price);
-    let sig = keystore.sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
+        .await?;
 
     let res = client
         .quorum_driver_api()

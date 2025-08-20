@@ -57,7 +57,9 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -123,7 +125,9 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -239,7 +243,9 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
                 recipient,
             )
             .await?;
-        let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+            .await?;
         let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
@@ -305,7 +311,9 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
             recipient,
         )
         .await?;
-    let sig = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(

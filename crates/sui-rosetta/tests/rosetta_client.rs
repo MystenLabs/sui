@@ -206,7 +206,7 @@ impl RosettaClient {
         let signer = signing_payload.account_identifier.address;
         let signature = keystore.sign_hashed(&signer, &bytes).await.unwrap();
         let public_key = keystore.export(&signer).unwrap().public();
-        let combine: ConstructionCombineResponse = self
+        let combine: Result<ConstructionCombineResponse, RosettaError> = self
             .call(
                 RosettaEndpoint::Combine,
                 &ConstructionCombineRequest {
