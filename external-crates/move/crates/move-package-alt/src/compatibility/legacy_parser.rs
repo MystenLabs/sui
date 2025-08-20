@@ -27,6 +27,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use toml::Value as TV;
+use tracing::debug;
 
 const EMPTY_ADDR_STR: &str = "_";
 
@@ -769,6 +770,7 @@ fn derive_modern_name(
     addresses: &BTreeMap<Identifier, Option<AccountAddress>>,
     path: &PackagePath,
 ) -> Result<PackageName> {
+    debug!("Address to derve modern name from: {:?}", addresses);
     // Find all the addresses with 0x0.
     let zero_addresses = addresses
         .iter()
