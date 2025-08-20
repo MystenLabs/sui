@@ -138,7 +138,7 @@ impl RosettaServerCommand {
                 data_path,
             } => {
                 info!(
-                    "Starting Rosetta Online Server with remove Sui full node [{full_node_url}]."
+                    "Starting Rosetta Online Server with remote Sui full node [{full_node_url}]."
                 );
                 let sui_client = wait_for_sui_client(full_node_url).await;
                 let rosetta_path = data_path.join("rosetta_db");

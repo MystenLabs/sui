@@ -10,7 +10,8 @@ use serde_json::json;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+    ObjectChange, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
@@ -20,10 +21,63 @@ use sui_rosetta::types::{
 use sui_rosetta::types::{Currencies, OperationType};
 use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
+use sui_types::object::Owner;
 use test_cluster::TestClusterBuilder;
-use test_coin_utils::{init_package, mint};
+use test_coin_utils::{init_package, mint, TEST_COIN_DECIMALS};
 
 use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
+
+#[tokio::test]
+async fn test_mint() {
+    const COIN1_BALANCE: u64 = 100_000_000;
+    const COIN2_BALANCE: u64 = 200_000_000;
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let sender = test_cluster.get_address_0();
+    let init_ret = init_package(
+        &client,
+        keystore,
+        sender,
+        Path::new("tests/custom_coins/test_coin"),
+    )
+    .await
+    .unwrap();
+
+    let address1 = test_cluster.get_address_1();
+    let address2 = test_cluster.get_address_2();
+    let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
+
+    let mint_res = mint(&client, keystore, init_ret, balances_to)
+        .await
+        .unwrap();
+    let coins = mint_res
+        .object_changes
+        .unwrap()
+        .into_iter()
+        .filter_map(|change| {
+            if let ObjectChange::Created {
+                object_type, owner, ..
+            } = change
+            {
+                Some((object_type, owner))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    let coin1 = coins
+        .iter()
+        .find(|coin| coin.1 == Owner::AddressOwner(address1))
+        .unwrap();
+    let coin2 = coins
+        .iter()
+        .find(|coin| coin.1 == Owner::AddressOwner(address2))
+        .unwrap();
+    assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
+    assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
+}
 
 #[tokio::test]
 async fn test_custom_coin_balance() {
@@ -65,7 +119,7 @@ async fn test_custom_coin_balance() {
     let sui_currency = SUI.clone();
     let test_coin_currency = Currency {
         symbol: "TEST_COIN".to_string(),
-        decimals: 6,
+        decimals: TEST_COIN_DECIMALS,
         metadata: CurrencyMetadata {
             coin_type: coin_type.clone(),
         },
@@ -88,7 +142,8 @@ async fn test_custom_coin_balance() {
     );
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
-        .await;
+        .await
+        .unwrap();
     println!(
         "response: {}",
         serde_json::to_string_pretty(&response).unwrap()
@@ -129,33 +184,14 @@ async fn test_default_balance() {
     .unwrap();
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
-        .await;
+        .await
+        .unwrap();
     println!(
         "response: {}",
         serde_json::to_string_pretty(&response).unwrap()
     );
     assert_eq!(response.balances.len(), 1);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
-
-    // Keep server running for testing with bash/curl
-    // To test with curl,
-    // 1. Uncomment the following lines
-    // 2. use `cargo test -- --nocapture` to print the server <port> and <address0>
-    // 3. run curl 'localhost:<port>/account/balance' --header 'Content-Type: application/json' \
-    // --data-raw '{
-    //     "network_identifier": {
-    //         "blockchain": "sui",
-    //         "network": "localnet"
-    //     },
-    //     "account_identifier": {
-    //         "address": "<address0 above>"
-    //     }
-    // }'
-    // println!("port: {}", rosetta_client.online_port());
-    // println!("address0: {}", test_cluster.get_address_0());
-    // for handle in _handles.into_iter() {
-    //     handle.await.unwrap();
-    // }
 }
 
 #[tokio::test]
@@ -193,7 +229,7 @@ async fn test_custom_coin_transfer() {
                 "value": "30000000",
                 "currency": {
                     "symbol": "TEST_COIN",
-                    "decimals": 6,
+                    "decimals": TEST_COIN_DECIMALS,
                     "metadata": {
                         "coin_type": coin_type.clone(),
                     }
@@ -208,7 +244,7 @@ async fn test_custom_coin_transfer() {
                 "value": "-30000000",
                 "currency": {
                     "symbol": "TEST_COIN",
-                    "decimals": 6,
+                    "decimals": TEST_COIN_DECIMALS,
                     "metadata": {
                         "coin_type": coin_type.clone(),
                     }
@@ -218,7 +254,12 @@ async fn test_custom_coin_transfer() {
     ))
     .unwrap();
 
-    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+    let response = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
 
     let tx = client
         .read_api()
