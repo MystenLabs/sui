@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 93;
+const MAX_PROTOCOL_VERSION: u64 = 94;
 
 // Record history of protocol version allocations here:
 //
@@ -255,7 +255,9 @@ const MAX_PROTOCOL_VERSION: u64 = 93;
 //             Enable `debug_fatal` on Move invariant violations.
 //             Enable passkey and passkey inside multisig for mainnet.
 // Version 91: Minor changes in Sui Framework. Include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
-// Version 92: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
+// Version 92: Disable checking shared object transfer restrictions per command = false
+// Version 93: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
+// Version 94: Decrease stored observations limit by 10% to stay within system object size limit.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3933,6 +3935,22 @@ impl ProtocolConfig {
                 93 => {
                     cfg.feature_flags
                         .consensus_checkpoint_signature_key_includes_digest = true;
+                }
+                94 => {
+                    // Decrease stored observations limit 20->18 to stay within system object size limit.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 18,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                            },
+                        );
                 }
                 // Use this template when making changes:
                 //
