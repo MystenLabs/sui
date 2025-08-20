@@ -80,12 +80,6 @@ pub struct IndexerArgs {
     /// configuration file will be run.
     #[arg(long, action = clap::ArgAction::Append)]
     pub pipeline: Vec<String>,
-
-    /// Don't write to the watermark tables for concurrent pipelines. When used with
-    /// `first_checkpoint`, allows the pipeline to write data without updating watermarks, as long
-    /// as the checkpoints being handled are not before the reader's lower bound.
-    #[arg(long)]
-    pub skip_watermark: bool,
 }
 
 pub struct Indexer<S: Store> {
@@ -131,11 +125,6 @@ pub struct Indexer<S: Store> {
 
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
-
-    /// Don't write to the watermark tables for concurrent pipelines. When used with
-    /// `first_checkpoint`, allows the pipeline to write data without updating watermarks, as long
-    /// as the checkpoints being handled are not before the reader's lower bound.
-    skip_watermark: bool,
 
     /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
     /// run. Any pipelines that are present in this filter but not added to the indexer will yield
@@ -188,7 +177,6 @@ impl<S: Store> Indexer<S> {
             first_checkpoint,
             last_checkpoint,
             pipeline,
-            skip_watermark,
             task,
         } = indexer_args;
 
@@ -208,7 +196,6 @@ impl<S: Store> Indexer<S> {
             ingestion_service,
             first_checkpoint,
             last_checkpoint,
-            skip_watermark,
             enabled_pipelines: if pipeline.is_empty() {
                 None
             } else {
@@ -263,10 +250,8 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
-        // watermark consistency. first_checkpoint can be anything since we don't update watermark,
-        // and writes should be idempotent.
-        if !self.skip_watermark {
+        // TODO (wlmyng) might need to adjust logic here
+        if self.first_checkpoint.is_some() {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
@@ -277,7 +262,7 @@ impl<S: Store> Indexer<S> {
             handler,
             initial_watermark,
             config,
-            self.skip_watermark,
+            false, // TODO (wlmyng) do we want to rip out skip_watermark everywhere? probably
             self.store.clone(),
             self.task.clone(),
             self.ingestion_service.subscribe().0,
@@ -449,13 +434,6 @@ impl<T: TransactionalStore> Indexer<T> {
             bail!("Sequential pipelines do not support pipeline tasks. These pipelines guarantee that each checkpoint is committed exactly once and in order. Running the same pipeline under a different task would violate these guarantees.");
         }
 
-        if self.skip_watermark {
-            warn!(
-                pipeline = H::NAME,
-                "--skip-watermarks enabled and ignored for sequential pipeline"
-            );
-        }
-
         // For sequential pipelines, if watermark already exists, ignore first_checkpoint
         if let Some(first_checkpoint) = self.first_checkpoint {
             if let Some(existing_watermark) = &watermark {
@@ -587,7 +565,6 @@ mod tests {
             first_checkpoint: Some(50),
             last_checkpoint: None,
             pipeline: vec![],
-            skip_watermark: false,
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
