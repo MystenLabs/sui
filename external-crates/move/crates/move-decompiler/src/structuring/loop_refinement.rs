@@ -1,32 +1,83 @@
 use crate::structuring::ast::{Code, Structured};
 
-// pub fn refine_loop(structured: Structured) -> Structured {
-//   let structured = refine_while(structured);
-//   // TODO
-//   // let structured = refine_do_while(structured);
-//   structured
-// }
+pub fn refine_loop(loop_head: Structured) -> Structured {
+    let loop_head = refine_while(loop_head);
+    // TODO
+    // let structured = refine_do_while(structured);
+    loop_head
+}
 
-// fn refine_while(structured: Structured) -> Structured {
-//   use Structured as S;
+fn refine_while(loop_head: Structured) -> Structured {
+    use Structured as S;
 
-//   let S::Loop(body) = structured else { return structured };
-//   let S::Seq(mut seq) = *body else { return S::Loop(body) };
-//   let Some(S::IfElse(cond, conseq, alt_opt)) = seq.first() else { return S::Loop(Box::new(S::Seq(seq))) };
-//   match (**conseq, **alt_opt) {
-//     (S::Break, _) => {
-//         let strctrd = seq.remove(0);
-//         let seq = if let Some(strcrd) = **alt_opt { seq.insert(0, strcrd); seq } else { seq };
-//         S::While(*cond, Box::new(S::Seq(seq)))
-//     }
-//     (_, Some(S::Break)) => {
-//       /* alt case */
-//       Structured::While(*cond, Box::new(**conseq))
-//     }
-//     _ => S::Loop(Box::new(S::Seq(seq))),
-//   }
-// }
+    println!("Loop head: {loop_head:#?}");
+    let S::Loop(loop_) = loop_head else {
+        return loop_head;
+    };
+    let S::Seq(mut loop_seq) = *loop_ else {
+        return S::Loop(loop_);
+    };
+    // FIXME fix what to do when loop guard has more than one condition?
+    // which means that the inner sequence has more than 1 element: seq[seq[..], seq[..]]
+    if loop_seq.len() > 1 {
+        return S::Loop(Box::new(S::Seq(loop_seq)));
+    }
+    
+    let S::Seq(mut loop_seq) = loop_seq.pop().unwrap() else {
+        return S::Loop(Box::new(S::Seq(loop_seq)));
+    };
+    let Some(S::IfElse(cond, conseq, alt_opt)) = loop_seq.first().cloned() else {
+        return S::Loop(Box::new(S::Seq(loop_seq)));
+    };
+    match (*conseq, *alt_opt) {
+        (S::Break, _) => {
+            let S::IfElse(_, _, alt) = loop_seq.remove(0) else {
+                unreachable!("Expected an IfElse condition");
+            };
+            let loop_seq = if let Some(alt) = *alt {
+                loop_seq.insert(0, alt);
+                loop_seq
+            } else {
+                loop_seq
+            };
+            S::While(cond, Box::new(S::Seq(loop_seq)))
+        }
+        (_, Some(S::Break)) => {
+            /* alt case */
+            let S::IfElse(_, conseq, _) = loop_seq.remove(0) else {
+                unreachable!("Expected an IfElse condition");
+            };
+            loop_seq.insert(0, *conseq);
+            Structured::While(cond, Box::new(Structured::Seq(loop_seq)))
+        }
+        _ => S::Loop(Box::new(S::Seq(loop_seq))),
+    }
+}
 
+fn refine_do_while(structured: Structured) -> Structured {
+    use Structured as S;
+
+    let S::Loop(body) = structured else {
+        return structured;
+    };
+    let S::Seq(seq) = *body else {
+        return S::Loop(body);
+    };
+    let Some(S::IfElse(_, conseq, alt_opt)) = seq.last().cloned() else {
+        return S::Loop(Box::new(S::Seq(seq)));
+    };
+    match (*conseq, *alt_opt) {
+        (S::Break, _) | (_, Some(S::Break)) => {
+            println!("This could be a Do-while loop");
+        }
+        _ => {}
+    }
+    S::Loop(Box::new(S::Seq(seq)))
+}
+
+fn refine_non_loop(structured: Structured) -> Structured {
+    todo!()
+}
 
 pub fn loop_type(loop_head: Structured) -> Structured {
     match loop_head {
@@ -43,7 +94,6 @@ pub fn loop_type(loop_head: Structured) -> Structured {
                         let condition = seq.remove(0);
                         match condition {
                             Structured::IfElse(cond, conseq, alt) => {
-                                
                                 if matches!(*conseq, Structured::Break) {
                                     Structured::While(cond, Box::new(alt.unwrap()))
                                 } else {
