@@ -95,12 +95,6 @@ pub struct IndexerArgs {
     /// configuration file will be run.
     #[arg(long, action = clap::ArgAction::Append)]
     pub pipeline: Vec<String>,
-
-    /// Don't write to the watermark tables for concurrent pipelines. When used with
-    /// `first_checkpoint`, allows the pipeline to write data without updating watermarks, as long
-    /// as the checkpoints being handled are not before the reader's lower bound.
-    #[arg(long)]
-    pub skip_watermark: bool,
 }
 
 pub struct Indexer<S: Store> {
@@ -146,11 +140,6 @@ pub struct Indexer<S: Store> {
 
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
-
-    /// Don't write to the watermark tables for concurrent pipelines. When used with
-    /// `first_checkpoint`, allows the pipeline to write data without updating watermarks, as long
-    /// as the checkpoints being handled are not before the reader's lower bound.
-    skip_watermark: bool,
 
     /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
     /// run. Any pipelines that are present in this filter but not added to the indexer will yield
@@ -203,7 +192,6 @@ impl<S: Store> Indexer<S> {
             first_checkpoint,
             last_checkpoint,
             pipeline,
-            skip_watermark,
             task,
         } = indexer_args;
 
@@ -223,7 +211,6 @@ impl<S: Store> Indexer<S> {
             ingestion_service,
             first_checkpoint,
             last_checkpoint,
-            skip_watermark,
             enabled_pipelines: if pipeline.is_empty() {
                 None
             } else {
@@ -306,7 +293,7 @@ impl<S: Store> Indexer<S> {
             handler,
             next_checkpoint,
             config,
-            self.skip_watermark,
+            false, // TODO (wlmyng) do we want to rip out skip_watermark everywhere? probably
             self.store.clone(),
             self.task.clone(),
             self.ingestion_service.subscribe().0,
@@ -592,7 +579,6 @@ mod tests {
             first_checkpoint: Some(50),
             last_checkpoint: None,
             pipeline: vec![],
-            skip_watermark: false,
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
