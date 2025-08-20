@@ -11,7 +11,7 @@ public struct Claimed(ID) has copy, drop, store;
 /// An internal key to protect from generating the same UID twice (e.g. collide with DFs)
 public struct DerivedObjectKey<K: copy + drop + store>(K) has copy, drop, store;
 
-/// Claim a derived UID, using the parent's UID & any key
+/// Claim a derived UID, using the parent's UID & any key.
 public fun new<K: copy + drop + store>(parent: &mut UID, key: K): UID {
     let addr = derive_address(parent.to_inner(), key);
     let id = addr.to_id();
@@ -30,6 +30,7 @@ public fun exists<K: copy + drop + store>(parent: &UID, key: K): bool {
     df::exists_(parent, Claimed(addr.to_id()))
 }
 
+/// Given an ID and a Key, it calculates the derived address.
 public fun derive_address<K: copy + drop + store>(parent: ID, key: K): address {
     df::hash_type_and_key(parent.to_address(), DerivedObjectKey(key))
 }

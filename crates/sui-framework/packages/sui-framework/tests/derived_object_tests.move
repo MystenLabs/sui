@@ -8,7 +8,7 @@ use fun object::new as TxContext.new;
 public struct Registry has key { id: UID }
 
 #[test]
-fun test_create_predefined_account() {
+fun create_derived_id() {
     let mut ctx = tx_context::dummy();
     let mut registry = Registry { id: ctx.new() };
 
@@ -32,8 +32,27 @@ fun test_create_predefined_account() {
     destroy(another_derived_uid);
 }
 
+#[test]
+fun multiple_registries_uniqueness() {
+    let mut ctx = tx_context::dummy();
+    let mut registry = Registry { id: ctx.new() };
+    let mut another_registry = Registry { id: ctx.new() };
+
+    let key = b"demo".to_string();
+
+    let derived_uid = derived_object::new(&mut registry.id, key);
+    let another_derived_uid = derived_object::new(&mut another_registry.id, key);
+
+    assert!(derived_uid.to_address() != another_derived_uid.to_address());
+
+    destroy(registry);
+    destroy(another_registry);
+    destroy(derived_uid);
+    destroy(another_derived_uid);
+}
+
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
-fun try_to_claim_same_account_twice() {
+fun try_to_claim_id_twice() {
     let mut ctx = tx_context::dummy();
 
     let mut registry = Registry { id: object::new(&mut ctx) };
