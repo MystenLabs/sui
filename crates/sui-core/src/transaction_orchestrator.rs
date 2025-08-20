@@ -286,8 +286,10 @@ where
         client_addr: Option<SocketAddr>,
     ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
-        let transaction = request.transaction.clone();
-        let tx_digest = *transaction.digest();
+        let verified_transaction = epoch_store
+            .verify_transaction(request.transaction.clone())
+            .map_err(QuorumDriverError::InvalidUserSignature)?;
+        let tx_digest = *verified_transaction.digest();
 
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
@@ -308,9 +310,10 @@ where
         // Wait for either execution result or local effects to become available
         let mut local_effects_future = effects_await.boxed();
         let mut execution_future = self
-            .execute_transaction_impl_with_td_tracking(
+            .execute_transaction_impl(
                 &epoch_store,
                 request,
+                verified_transaction,
                 client_addr,
                 using_td.clone(),
             )
@@ -324,6 +327,7 @@ where
             .unwrap_or(WAIT_FOR_FINALITY_TIMEOUT);
 
         let mut timeout_future = tokio::time::sleep(finality_timeout).boxed();
+
         loop {
             tokio::select! {
                 // Execution result returned
@@ -350,6 +354,7 @@ where
                         }
                     }
                 }
+
                 // Local effects might be available
                 local_effects_result = &mut local_effects_future => {
                     match local_effects_result {
@@ -403,6 +408,7 @@ where
                     // Prevent this branch from being selected again
                     local_effects_future = futures::future::pending().boxed();
                 }
+
                 // A timeout has occurred while waiting for finality
                 _ = &mut timeout_future => {
                     debug!(?tx_digest, "Timeout waiting for transaction finality.");
@@ -426,39 +432,20 @@ where
         }
     }
 
-    pub async fn execute_transaction_impl(
+    async fn execute_transaction_impl(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         request: ExecuteTransactionRequestV3,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
-        // Call the tracking version with a dummy AtomicBool since this public method
-        // doesn't need to track TD usage
-        self.execute_transaction_impl_with_td_tracking(
-            epoch_store,
-            request,
-            client_addr,
-            Arc::new(AtomicBool::new(false)),
-        )
-        .await
-    }
-
-    async fn execute_transaction_impl_with_td_tracking(
-        &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        request: ExecuteTransactionRequestV3,
+        verified_transaction: VerifiedTransaction,
         client_addr: Option<SocketAddr>,
         using_td: Arc<AtomicBool>,
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
-        let verified_transaction = epoch_store
-            .verify_transaction(request.transaction.clone())
-            .map_err(QuorumDriverError::InvalidUserSignature)?;
         let (_in_flight_metrics_guards, good_response_metrics) =
             self.update_metrics(&request.transaction);
         let tx_digest = *verified_transaction.digest();
         debug!(?tx_digest, "TO Received transaction execution request.");
 
-        let (_e2e_latency_timer, _txn_finality_timer) = if request.transaction.is_consensus_tx() {
+        let (_e2e_latency_timer, _txn_finality_timer) = if verified_transaction.is_consensus_tx() {
             (
                 self.metrics.request_latency_shared_obj.start_timer(),
                 self.metrics
@@ -495,14 +482,11 @@ where
                         client_addr,
                         &verified_transaction,
                         good_response_metrics,
-                        tx_digest,
                     )
                     .await;
 
                 add_server_timing("[TransactionDriver] wait_for_finality");
 
-                drop(_txn_finality_timer);
-                drop(_wait_for_finality_gauge);
                 self.metrics.wait_for_finality_finished.inc();
 
                 return td_response;
@@ -559,8 +543,8 @@ where
         client_addr: Option<SocketAddr>,
         verified_transaction: &VerifiedTransaction,
         good_response_metrics: &GenericCounter<AtomicU64>,
-        tx_digest: TransactionDigest,
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
+        let tx_digest = *verified_transaction.digest();
         debug!("Using TransactionDriver for transaction {:?}", tx_digest);
         // Add transaction to WAL log for TransactionDriver path
         let is_new_transaction = self
