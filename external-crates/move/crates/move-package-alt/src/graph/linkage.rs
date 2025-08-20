@@ -94,7 +94,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
             // compute the linkage for `node` by iterating all transitive deps and looking for
             // duplicates
-            let mut linkage = BTreeMap::new();
+            let mut linkage: BTreeMap<OriginalID, NodeIndex> = BTreeMap::new();
             let overrides = self.override_nodes(*node)?;
 
             // TODO: `select_dep(node, ...)` produces an error if there's a missing override in `node`,
