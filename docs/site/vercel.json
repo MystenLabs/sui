@@ -125,7 +125,7 @@
       { "source": "/guides/operator/validator-committee", "destination": "/guides/operator/validator/validator-committee"},
       { "source": "/guides/operator/node-tools", "destination": "/guides/operator/validator/node-tools"},
       { "source": "/guides/operator/validator-config", "destination": "/guides/operator/validator/validator-config"},
-      { "source": "/guides/operator/validator-tasks", "destination": "/guides/operator/validator/validator-tasks"}
+      { "source": "/guides/operator/validator-tasks", "destination": "/guides/operator/validator/validator-tasks"},
       { "source": "/standards/deepbookv2/:path*", "destination": "/standards/deepbook"}
     ]
   }
