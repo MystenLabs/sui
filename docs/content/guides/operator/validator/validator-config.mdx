@@ -50,19 +50,19 @@ You can deploy Sui node in a number of ways.
 2. Use pre-built `linux/amd64` binaries available in S3 that you can fetch using one of the following methods:
 
 ```sh
-wget https://releases.sui.io/$SUI_SHA/sui-node
+$ wget https://releases.sui.io/$SUI_SHA/sui-node
 ```
 
 ```sh
-curl https://releases.sui.io/$SUI_SHA/sui-node -o sui-node
+$ curl https://releases.sui.io/$SUI_SHA/sui-node -o sui-node
 ```
 
 Or, to build directly from source:
 
 ```sh
-git clone https://github.com/MystenLabs/sui.git && cd sui
-git checkout [SHA|BRANCH|TAG]
-cargo build --release --bin sui-node
+$ git clone https://github.com/MystenLabs/sui.git && cd sui
+$ git checkout [SHA|BRANCH|TAG]
+$ cargo build --release --bin sui-node
 ```
 
 For more information on deploying a validator, refer to the [Sui for Node Operators](https://github.com/MystenLabs/sui/blob/main/nre/sui_for_node_operators.md) guide.
@@ -78,7 +78,7 @@ Configuration guides are available for the following deployment options:
 `sui-node` runs with a single configuration file provided as an argument, for example:
 
 ```sh 
-./sui-node --config-path /opt/sui/config/validator.yaml
+$ ./sui-node --config-path /opt/sui/config/validator.yaml
 ```
 
 For more information on configuring a validator, refer to the [Sui for Node Operators](https://github.com/MystenLabs/sui/blob/main/nre/sui_for_node_operators.md) guide.
@@ -111,7 +111,7 @@ These settings can be added to a new `sysctl` file specifically for `sui-node` o
 Create a new `sysctl` file for the `sui-node`:
 
 ```sh
-sudo nano /etc/sysctl.d/100-sui-node.conf
+$ sudo nano /etc/sysctl.d/100-sui-node.conf
 ```
 
 Add these lines to the file, overwriting existing settings if necessary:
@@ -126,7 +126,7 @@ net.ipv4.tcp_wmem = 8192 262144 104857600
 Apply the settings immediately, before the next restart:
 
 ```sh
-sudo sysctl --system
+$ sudo sysctl --system
 ```
 
 ### Option 2: With `sysctl` command
@@ -134,10 +134,10 @@ sudo sysctl --system
 These modifications do not persist across system restarts. Therefore, the commands should be run each time the host restarts.
 
 ```sh
-sudo sysctl -w net.core.wmem_max=104857600
-sudo sysctl -w net.core.rmem_max=104857600
-sudo sysctl -w net.ipv4.tcp_rmem="8192 262144 104857600"
-sudo sysctl -w net.ipv4.tcp_wmem="8192 262144 104857600"
+$ sudo sysctl -w net.core.wmem_max=104857600
+$ sudo sysctl -w net.core.rmem_max=104857600
+$ sudo sysctl -w net.ipv4.tcp_rmem="8192 262144 104857600"
+$ sudo sysctl -w net.ipv4.tcp_wmem="8192 262144 104857600"
 ```
 
 ### Verification
@@ -145,5 +145,5 @@ sudo sysctl -w net.ipv4.tcp_wmem="8192 262144 104857600"
 To verify that the system settings have successfully been updated, check the output of the following command:
 
 ```sh
-sudo sysctl -a | egrep [rw]mem
+$ sudo sysctl -a | egrep [rw]mem
 ```

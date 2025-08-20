@@ -24,19 +24,19 @@ This tool only supports pending validators and active validators.
 
     1. Clone the git repo:
 
-           `git clone git@github.com:MystenLabs/sui.git && cd sui`
+           `$ git clone git@github.com:MystenLabs/sui.git && cd sui`
 
     2. Check out the commit to use for the testnet:
 
-           `git checkout testnet`
+           `$ git checkout testnet`
 
     3. Build sui binary
 
-           `cargo build --bin sui`
+           `$ cargo build --bin sui`
 
     4. Remember the path to your binary:
 
-           `export SUI_BINARY="$(pwd)/target/debug/sui"`
+           `$ export SUI_BINARY="$(pwd)/target/debug/sui"`
 
 - [x] Run the following command to set up your Sui account and CLI environment. 
 
@@ -44,8 +44,8 @@ This tool only supports pending validators and active validators.
 
        If you cannot find where `client.yaml` or `sui.keystore` is, or have other questions, read the [Sui client CLI tutorial](/references/cli/client.mdx).
 
-       ``` bash
-       sui client
+       ```sh
+       $ sui client
        ```
 
     - If you already set it up, simply make sure:
@@ -56,8 +56,8 @@ This tool only supports pending validators and active validators.
 
 - Test your network connection and configuration by displaying your validator info:
 
-``` bash
-sui validator display-metadata
+```sh
+$ sui validator display-metadata
 ```
 
 </TabItem>
@@ -67,8 +67,8 @@ sui validator display-metadata
 
 ### Print help info
 
-``` bash
-sui validator --help
+```sh
+$sui validator --help
 ```
 
 ### Become a validator / join committee
@@ -99,13 +99,13 @@ At this point, you are validator candidate and can start to accept self-staking 
 Then, you must acquire 30M SUI and stake it to the validator staking pool. You can add Sui to the validator staking pool with the command:
 
 ```sh
-sui client call --package 0x3 --module sui_system --function request_add_stake --args 0x5 {sui_object_id} {validator_address}
+$ sui client call --package 0x3 --module sui_system --function request_add_stake --args 0x5 {sui_object_id} {validator_address}
 ```
 
 This creates a stake object (of type `0x3::staking_pool::StakedSui`). This object can be withdrawn with the following command:
 
 ```sh
-sui client call --package 0x3 --module sui_system --function request_withdraw_stake --args 0x5 {stake_object_id}
+$ sui client call --package 0x3 --module sui_system --function request_withdraw_stake --args 0x5 {stake_object_id}
 ```
 
 :::tip 
@@ -115,7 +115,7 @@ You cannot withdraw non-activated stake from an inactive validator. If that is t
 Once you have staked enough, run:
 
 ```sh
-sui validator join-committee
+$ sui validator join-committee
 ```
 
 Joining the committee will make you a pending validator. A pending validator will become active and join the committee starting from next epoch.
@@ -126,7 +126,7 @@ Joining the committee will make you a pending validator. A pending validator wil
 To leave the committee, run:
 
 ```sh
-sui validator leave-committee
+$ sui validator leave-committee
 ```
 
 You are removed from the committee starting from the next epoch.
@@ -136,7 +136,7 @@ You are removed from the committee starting from the next epoch.
 Serialize the payload that is used to generate proof of possession. This allows the signer to take the payload offline for an authority protocol BLS key pair to sign.
 
 ```sh
-sui validator serialize-payload-pop --account-address $ACCOUNT_ADDRESS --protocol-public-key $BLS_PUBKEY
+$ sui validator serialize-payload-pop --account-address $ACCOUNT_ADDRESS --protocol-public-key $BLS_PUBKEY
 ```
 
 ```sh
@@ -148,13 +148,13 @@ Serialized payload: $PAYLOAD_TO_SIGN
 Display metadata about your local validator:
 
 ```sh
-sui validator display-metadata
+$ sui validator display-metadata
 ```
 
 Display metadata about another validator via validator address
 
 ```sh
-sui validator display-metadata <validator-address>
+$ sui validator display-metadata <validator-address>
 ```
 
 ### Update validator metadata
@@ -162,7 +162,7 @@ sui validator display-metadata <validator-address>
 Run the following to see how to update validator metadata. Read description carefully about when the change will take effect.
 
 ```sh
-sui validator update-metadata --help
+$ sui validator update-metadata --help
 ```
 
 You can update the following on-chain metadata:
@@ -187,7 +187,7 @@ Particularly, make sure the new address is not behind a firewall.
 Run the following to see how to update each metadata.
 
 ``` bash
-sui validator update-metadata --help
+$ sui validator update-metadata --help
 ```
 
 ### Operation Cap
@@ -201,13 +201,13 @@ The Operation Cap holder (either the validator itself or the delegatee) updates 
 If the account itself is a validator and holds the Operation Cap, update the gas price with:
 
 ```sh
-sui validator update-gas-price <gas-price>
+$ sui validator update-gas-price <gas-price>
 ```
 
 If the account is a delegatee:
 
 ```sh
-sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
+$ sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
 ```
 
 ### Report validators
@@ -215,7 +215,7 @@ sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
 If the account itself is a validator and holds the Operation Cap, report validators peers with:
 
 ```sh
-sui validator report-validator <reportee-address>
+$ sui validator report-validator <reportee-address>
 ```
 
 Add `--undo-report false` if it intends to undo an existing report.
@@ -225,5 +225,5 @@ Similarly, if the account is a delegatee, add `--operation-cap-id <operation-cap
 If the account is a delegatee, run:
 
 ```sh
-sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
+$ sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
 ```
