@@ -16,7 +16,7 @@ use sui_types::effects::{
     TransactionEffects, TransactionEffectsAPI,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg, TransactionKind};
+use sui_types::transaction::{Argument, CallArg, ObjectArg, TransactionKey, TransactionKind};
 use sui_types::{
     TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -247,8 +247,12 @@ impl AccumulatorSettlementTxBuilder {
     pub fn build_tx(
         self,
         epoch_store: &AuthorityPerEpochStore,
-        checkpoint_height: u64,
+        settlement_root: TransactionKey,
     ) -> Vec<TransactionKind> {
+        let TransactionKey::AccumulatorSettlement(epoch, round, idx) = settlement_root else {
+            panic!("settlement_root must be an accumulator settlement root");
+        };
+
         let epoch = epoch_store.epoch();
         let accumulator_root_obj_initial_shared_version = epoch_store
             .epoch_start_config()
@@ -265,16 +269,17 @@ impl AccumulatorSettlementTxBuilder {
             }))
             .unwrap();
 
-        let epoch_arg = builder.pure(epoch).unwrap();
-        let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
-        let idx_arg = builder.pure(0u64).unwrap();
+        let epoch_arg = builder.pure(epoch as u64).unwrap();
+        let round_arg = builder.pure(round as u64).unwrap();
+        let idx_arg = builder.pure(idx as u64).unwrap();
+        let sub_idx_arg = builder.pure(0u64).unwrap();
 
         builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             ACCUMULATOR_SETTLEMENT_MODULE.into(),
             ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
             vec![],
-            vec![epoch_arg, checkpoint_height_arg, idx_arg],
+            vec![epoch_arg, round_arg, idx_arg, sub_idx_arg],
         );
 
         for (accumulator_obj, update) in self.updates {

@@ -16,7 +16,7 @@ use fun sui::accumulator_metadata::create_accumulator_metadata as AccumulatorRoo
 /// Called by settlement transactions to ensure that the settlement transaction has a unique
 /// digest.
 #[allow(unused_function)]
-fun settlement_prologue(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &TxContext) {
+fun settlement_prologue(_epoch: u64, _round: u64, _idx: u64, _sub_idx: u64, ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 }
 

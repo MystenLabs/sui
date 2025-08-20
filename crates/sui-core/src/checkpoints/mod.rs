@@ -43,7 +43,7 @@ use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::future::Future;
 use std::io::Write;
@@ -53,7 +53,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
@@ -94,7 +94,7 @@ pub struct EpochStats {
     pub total_gas_reward: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
     pub last_of_epoch: bool,
@@ -103,10 +103,29 @@ pub struct PendingCheckpointInfo {
     pub checkpoint_height: CheckpointHeight,
 }
 
-#[derive(Clone, Debug)]
-pub struct PendingCheckpoint {
-    pub roots: Vec<TransactionKey>,
+#[derive(Debug, Default)]
+pub(crate) struct CheckpointRoots {
+    /// All regular transactions (including user + system txns)
+    pub tx_roots: Vec<TransactionKey>,
+    /// A single settlement transaction for all accumulator updates from tx_roots
+    /// (None if accumulator updates are disabled, or this is the final checkpoint)
+    pub settlement_root: Option<TransactionKey>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PendingCheckpoint {
+    pub roots: Vec<CheckpointRoots>,
     pub details: PendingCheckpointInfo,
+}
+
+impl PendingCheckpoint {
+    pub(crate) fn iter_tx_roots(&self) -> impl Iterator<Item = TransactionKey> + '_ {
+        self.roots.iter().flat_map(|r| r.tx_roots.iter().copied())
+    }
+
+    pub(crate) fn num_roots(&self) -> usize {
+        self.roots.iter().map(|r| r.tx_roots.len()).sum()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1082,6 +1101,141 @@ impl CheckpointStateHasher {
     }
 }
 
+pub(crate) struct CheckpointQueue {
+    next_checkpoint_height: CheckpointHeight,
+    last_built_timestamp: CheckpointTimestamp,
+    pending_roots: VecDeque<CheckpointRoots>,
+}
+
+impl CheckpointQueue {
+    pub(crate) fn new() -> Self {
+        Self {
+            next_checkpoint_height: 0,
+            last_built_timestamp: 0,
+            pending_roots: VecDeque::new(),
+        }
+    }
+
+    pub(crate) fn push_checkpoint_roots(&mut self, roots: CheckpointRoots) {
+        self.pending_roots.push_back(roots);
+    }
+
+    pub(crate) fn flush_checkpoint_roots(
+        &mut self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: u64,
+    ) -> Vec<PendingCheckpoint> {
+        self.flush_checkpoint_roots_impl(protocol_config, current_timestamp, false)
+    }
+
+    pub(crate) fn write_final_checkpoint(
+        &mut self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: u64,
+    ) -> Vec<PendingCheckpoint> {
+        let mut pending_checkpoints =
+            self.flush_checkpoint_roots_impl(protocol_config, current_timestamp, true);
+
+        pending_checkpoints.push(PendingCheckpoint {
+            roots: CheckpointRoots::default(),
+            details: PendingCheckpointInfo {
+                timestamp_ms: current_timestamp,
+                last_of_epoch: true,
+                checkpoint_height: self.next_checkpoint_height(),
+            },
+        });
+
+        pending_checkpoints
+    }
+
+    fn next_checkpoint_height(&mut self) -> CheckpointHeight {
+        let height = self.next_checkpoint_height;
+        self.next_checkpoint_height += 1;
+        height
+    }
+
+    fn should_build_checkpoint(
+        &self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: u64,
+        final_checkpoint: bool,
+    ) -> bool {
+        if self.pending_roots.is_empty() {
+            return false;
+        }
+
+        if final_checkpoint {
+            return true;
+        }
+
+        let min_checkpoint_interval_ms = protocol_config
+            .min_checkpoint_interval_ms_as_option()
+            .unwrap_or_default();
+        let max_transactions_per_checkpoint =
+            protocol_config.max_transactions_per_checkpoint() as usize;
+
+        if current_timestamp >= self.last_built_timestamp + min_checkpoint_interval_ms {
+            return true;
+        }
+
+        // if the first two entries in the queue have >= max_transactions_per_checkpoint,
+        // then the first entry should be built immediately, since we can't merge them.
+        let pending_roots_in_first_two_entries = self
+            .pending_roots
+            .iter()
+            .take(2)
+            .map(|CheckpointRoots { tx_roots, .. }| tx_roots.len())
+            .sum::<usize>();
+        if pending_roots_in_first_two_entries >= max_transactions_per_checkpoint {
+            return true;
+        }
+
+        false
+    }
+
+    fn flush_checkpoint_roots_impl(
+        &mut self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: u64,
+        final_checkpoint: bool,
+    ) -> Vec<PendingCheckpoint> {
+        let max_transactions_per_checkpoint =
+            protocol_config.max_transactions_per_checkpoint() as usize;
+        let mut pending_checkpoints = Vec::new();
+
+        let mut cur: Option<(Vec<TransactionKey>, Vec<TransactionKey>)> = None;
+        // First take all the queue entries that are ready to be built.
+        while self.should_build_checkpoint(protocol_config, current_timestamp, final_checkpoint) {
+            let next = self.pending_roots.pop_front().unwrap();
+
+            if let Some(cur) = &mut cur {
+                if cur.0.len() + next.0.len() <= max_transactions_per_checkpoint {
+                    // merge the next entry into the current entry
+                    cur.0.extend(next.0);
+                    cur.1.extend(next.1);
+                    continue;
+                } else {
+                    // create a new checkpoint, no merging possible.
+                    pending_checkpoints.push(PendingCheckpoint {
+                        roots: std::mem::take(&mut cur.0),
+                        settlement_roots: std::mem::take(&mut cur.1),
+                        details: PendingCheckpointInfo {
+                            timestamp_ms: current_timestamp,
+                            last_of_epoch: false,
+                            checkpoint_height: self.next_checkpoint_height(),
+                        },
+                    });
+                }
+            }
+
+            cur = Some((next.0, next.1.into_iter().collect()));
+        }
+
+        self.last_built_timestamp = current_timestamp;
+        pending_checkpoints
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum CheckpointBuilderError {
     ChangeEpochTxAlreadyExecuted,
@@ -1303,7 +1457,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(
         &mut self,
-        pendings: Vec<PendingCheckpoint>,
+        pendings: PendingCheckpoint,
     ) -> CheckpointBuilderResult<CheckpointSequenceNumber> {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
         let last_details = pendings.last().unwrap().details().clone();
@@ -1341,13 +1495,10 @@ impl CheckpointBuilder {
     async fn construct_and_execute_settlement_transactions(
         &self,
         sorted_tx_effects_included_in_checkpoint: &[TransactionEffects],
-        checkpoint_height: CheckpointHeight,
+        settlement_key: TransactionKey,
     ) -> (TransactionKey, Vec<TransactionEffects>) {
         let _scope =
             monitored_scope("CheckpointBuilder::construct_and_execute_settlement_transactions");
-
-        let tx_key =
-            TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
 
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.effects_store.as_ref()),
@@ -1356,7 +1507,7 @@ impl CheckpointBuilder {
 
         let settlements = builder.get_balance_settlements();
         let num_updates = builder.num_updates();
-        let settlement_txns = builder.build_tx(&self.epoch_store, checkpoint_height);
+        let settlement_txns = builder.build_tx(&self.epoch_store, settlement_key);
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
@@ -1372,12 +1523,12 @@ impl CheckpointBuilder {
 
         debug!(
             ?settlement_digests,
-            ?tx_key,
+            ?settlement_key,
             "created settlement transactions with {num_updates} updates"
         );
 
         self.epoch_store
-            .notify_settlement_transactions_ready(tx_key, settlement_txns);
+            .notify_settlement_transactions_ready(settlement_key, settlement_txns);
 
         let settlement_effects = loop {
             match tokio::time::timeout(Duration::from_secs(5), async {
@@ -1394,7 +1545,7 @@ impl CheckpointBuilder {
                 Err(_) => {
                     debug_fatal!(
                         "Timeout waiting for settlement transactions to be executed {:?}, retrying...",
-                        tx_key
+                        settlement_key
                     );
                 }
             }
@@ -1413,7 +1564,7 @@ impl CheckpointBuilder {
             .execution_scheduler()
             .settle_balances(settlements);
 
-        (tx_key, settlement_effects)
+        (settlement_key, settlement_effects)
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -1437,134 +1588,143 @@ impl CheckpointBuilder {
         let mut tx_roots = HashSet::new();
 
         for pending_checkpoint in pending_checkpoints.into_iter() {
-            let mut pending = pending_checkpoint;
-            debug!(
-                checkpoint_commit_height = pending.details.checkpoint_height,
-                "Resolving checkpoint transactions for pending checkpoint.",
-            );
-
-            trace!(
-                "roots for pending checkpoint {:?}: {:?}",
-                pending.details.checkpoint_height,
-                pending.roots,
-            );
-
-            let settlement_root = if self.epoch_store.accumulators_enabled() {
-                let Some(settlement_root @ TransactionKey::AccumulatorSettlement(..)) =
-                    pending.roots.pop()
-                else {
-                    fatal!("No settlement root found");
-                };
-                Some(settlement_root)
-            } else {
-                None
-            };
-
-            let roots = &pending.roots;
-
-            self.metrics
-                .checkpoint_roots_count
-                .inc_by(roots.len() as u64);
-
-            let root_digests = self
-                .epoch_store
-                .notify_read_tx_key_to_digest(roots)
-                .in_monitored_scope("CheckpointNotifyDigests")
-                .await?;
-            let root_effects = self
-                .effects_store
-                .notify_read_executed_effects(
-                    CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME,
-                    &root_digests,
+            let (sorted, root_digests) = self
+                .resolve_checkpoint_transactions_single(
+                    pending_checkpoint,
+                    &mut effects_in_current_checkpoint,
                 )
-                .in_monitored_scope("CheckpointNotifyRead")
-                .await;
-
-            let consensus_commit_prologue = if self
-                .epoch_store
-                .protocol_config()
-                .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
-            {
-                // If the roots contains consensus commit prologue transaction, we want to extract it,
-                // and put it to the front of the checkpoint.
-
-                let consensus_commit_prologue =
-                    self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
-
-                // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
-                // other dependencies that haven't been included in any previous checkpoints.
-                if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
-                    let unsorted_ccp = self.complete_checkpoint_effects(
-                        vec![ccp_effects.clone()],
-                        &mut effects_in_current_checkpoint,
-                    )?;
-
-                    // No other dependencies of this consensus commit prologue that haven't been included
-                    // in any previous checkpoint.
-                    if unsorted_ccp.len() != 1 {
-                        fatal!(
-                            "Expected 1 consensus commit prologue, got {:?}",
-                            unsorted_ccp
-                                .iter()
-                                .map(|e| e.transaction_digest())
-                                .collect::<Vec<_>>()
-                        );
-                    }
-                    assert_eq!(unsorted_ccp.len(), 1);
-                    assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
-                }
-                consensus_commit_prologue
-            } else {
-                None
-            };
-
-            let unsorted =
-                self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
-
-            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
-            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
-            if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
-                if cfg!(debug_assertions) {
-                    // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
-                    for tx in unsorted.iter() {
-                        assert!(tx.transaction_digest() != &ccp_digest);
-                    }
-                }
-                sorted.push(ccp_effects);
-            }
-            sorted.extend(CausalOrder::causal_sort(unsorted));
-
-            if let Some(settlement_root) = settlement_root {
-                let (tx_key, settlement_effects) = self
-                    .construct_and_execute_settlement_transactions(
-                        &sorted,
-                        pending.details.checkpoint_height,
-                    )
-                    .await;
-                debug!(?tx_key, "executed settlement transactions");
-
-                assert_eq!(settlement_root, tx_key);
-
-                // Note: we do not need to add the settlement digests to `tx_roots` - `tx_roots`
-                // should only include the digests of transactions that were originally roots in
-                // the pending checkpoint. It is later used to identify transactions which were
-                // added as dependencies, so that those transactions can be waited on using
-                // `consensus_messages_processed_notify()`. System transactions (such as
-                // settlements) are exempt from this already.
-                sorted.extend(settlement_effects);
-            }
-
-            #[cfg(msim)]
-            {
-                // Check consensus commit prologue invariants in sim test.
-                self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
-            }
-
+                .await?;
             tx_effects.extend(sorted);
             tx_roots.extend(root_digests);
         }
 
         Ok((tx_effects, tx_roots))
+    }
+
+    async fn resolve_checkpoint_transactions_single(
+        &self,
+        mut pending: PendingCheckpoint,
+        effects_in_current_checkpoint: &mut BTreeSet<TransactionDigest>,
+    ) -> SuiResult<(Vec<TransactionEffects>, HashSet<TransactionDigest>)> {
+        let _scope = monitored_scope("CheckpointBuilder::resolve_checkpoint_transactions_single");
+
+        debug!(
+            checkpoint_commit_height = pending.details.checkpoint_height,
+            "Resolving checkpoint transactions for pending checkpoint.",
+        );
+
+        trace!(
+            "roots for pending checkpoint {:?}: {:?}",
+            pending.details.checkpoint_height,
+            pending.roots,
+        );
+
+        let settlement_root = if self.epoch_store.accumulators_enabled() {
+            let Some(settlement_root @ TransactionKey::AccumulatorSettlement(..)) =
+                pending.roots.pop()
+            else {
+                fatal!("No settlement root found");
+            };
+            Some(settlement_root)
+        } else {
+            None
+        };
+
+        let roots = &pending.roots;
+
+        self.metrics
+            .checkpoint_roots_count
+            .inc_by(pending.num_roots() as u64);
+
+        let root_digests = self
+            .epoch_store
+            .notify_read_tx_key_to_digest(pending.iter_tx_roots())
+            .in_monitored_scope("CheckpointNotifyDigests")
+            .await?;
+        let root_effects = self
+            .effects_store
+            .notify_read_executed_effects(CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, &root_digests)
+            .in_monitored_scope("CheckpointNotifyRead")
+            .await;
+
+        let consensus_commit_prologue = if self
+            .epoch_store
+            .protocol_config()
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+        {
+            // If the roots contains consensus commit prologue transaction, we want to extract it,
+            // and put it to the front of the checkpoint.
+
+            let consensus_commit_prologue =
+                self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
+
+            // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
+            // other dependencies that haven't been included in any previous checkpoints.
+            if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
+                let unsorted_ccp = self.complete_checkpoint_effects(
+                    vec![ccp_effects.clone()],
+                    &mut effects_in_current_checkpoint,
+                )?;
+
+                // No other dependencies of this consensus commit prologue that haven't been included
+                // in any previous checkpoint.
+                if unsorted_ccp.len() != 1 {
+                    fatal!(
+                        "Expected 1 consensus commit prologue, got {:?}",
+                        unsorted_ccp
+                            .iter()
+                            .map(|e| e.transaction_digest())
+                            .collect::<Vec<_>>()
+                    );
+                }
+                assert_eq!(unsorted_ccp.len(), 1);
+                assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
+            }
+            consensus_commit_prologue
+        } else {
+            None
+        };
+
+        let unsorted =
+            self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
+
+        let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+        let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+        if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
+            if cfg!(debug_assertions) {
+                // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
+                for tx in unsorted.iter() {
+                    assert!(tx.transaction_digest() != &ccp_digest);
+                }
+            }
+            sorted.push(ccp_effects);
+        }
+        sorted.extend(CausalOrder::causal_sort(unsorted));
+
+        if let Some(settlement_root) = settlement_root {
+            let (tx_key, settlement_effects) = self
+                .construct_and_execute_settlement_transactions(&sorted, pending.settlement_roots)
+                .await;
+            debug!(?tx_key, "executed settlement transactions");
+
+            assert_eq!(settlement_root, tx_key);
+
+            // Note: we do not need to add the settlement digests to `tx_roots` - `tx_roots`
+            // should only include the digests of transactions that were originally roots in
+            // the pending checkpoint. It is later used to identify transactions which were
+            // added as dependencies, so that those transactions can be waited on using
+            // `consensus_messages_processed_notify()`. System transactions (such as
+            // settlements) are exempt from this already.
+            sorted.extend(settlement_effects);
+        }
+
+        #[cfg(msim)]
+        {
+            // Check consensus commit prologue invariants in sim test.
+            self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
+        }
+
+        Ok((sorted, root_digests))
     }
 
     // This function is used to extract the consensus commit prologue digest and effects from the root
@@ -1741,49 +1901,12 @@ impl CheckpointBuilder {
         signatures: Vec<Vec<GenericSignature>>,
     ) -> CheckpointBuilderResult<Vec<Vec<(TransactionEffects, Vec<GenericSignature>)>>> {
         let _guard = monitored_scope("CheckpointBuilder::split_checkpoint_chunks");
-        let mut chunks = Vec::new();
-        let mut chunk = Vec::new();
-        let mut chunk_size: usize = 0;
-        for ((effects, transaction_size), signatures) in effects_and_transaction_sizes
+
+        Ok(vec![effects_and_transaction_sizes
             .into_iter()
             .zip(signatures.into_iter())
-        {
-            // Roll over to a new chunk after either max count or max size is reached.
-            // The size calculation here is intended to estimate the size of the
-            // FullCheckpointContents struct. If this code is modified, that struct
-            // should also be updated accordingly.
-            let size = transaction_size
-                + bcs::serialized_size(&effects)?
-                + bcs::serialized_size(&signatures)?;
-            if chunk.len() == self.max_transactions_per_checkpoint
-                || (chunk_size + size) > self.max_checkpoint_size_bytes
-            {
-                if chunk.is_empty() {
-                    // Always allow at least one tx in a checkpoint.
-                    warn!("Size of single transaction ({size}) exceeds max checkpoint size ({}); allowing excessively large checkpoint to go through.", self.max_checkpoint_size_bytes);
-                } else {
-                    chunks.push(chunk);
-                    chunk = Vec::new();
-                    chunk_size = 0;
-                }
-            }
-
-            chunk.push((effects, signatures));
-            chunk_size += size;
-        }
-
-        if !chunk.is_empty() || chunks.is_empty() {
-            // We intentionally create an empty checkpoint if there is no content provided
-            // to make a 'heartbeat' checkpoint.
-            // Important: if some conditions are added here later, we need to make sure we always
-            // have at least one chunk if last_pending_of_epoch is set
-            chunks.push(chunk);
-            // Note: empty checkpoints are ok - they shouldn't happen at all on a network with even
-            // modest load. Even if they do happen, it is still useful as it allows fullnodes to
-            // distinguish between "no transactions have happened" and "i am not receiving new
-            // checkpoints".
-        }
-        Ok(chunks)
+            .map(|((e, _), s)| (e, s))
+            .collect()])
     }
 
     fn load_last_built_checkpoint_summary(
@@ -3030,7 +3153,7 @@ impl CheckpointService {
         use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
 
         let mut output = ConsensusCommitOutput::new(0);
-        epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
+        epoch_store.write_pending_checkpoint(&mut output, checkpoint)?;
         output.set_default_commit_stats_for_testing();
         epoch_store.push_consensus_output_for_tests(output);
         self.notify_checkpoint()?;

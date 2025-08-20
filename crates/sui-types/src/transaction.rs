@@ -3770,7 +3770,11 @@ impl Display for CertifiedTransaction {
 pub enum TransactionKey {
     Digest(TransactionDigest),
     RandomnessRound(EpochId, RandomnessRound),
-    AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
+    AccumulatorSettlement(
+        EpochId,
+        u64, /* consensus round */
+        u32, /* index within round */
+    ),
 }
 
 impl TransactionKey {
