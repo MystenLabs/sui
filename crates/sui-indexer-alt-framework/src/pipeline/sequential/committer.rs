@@ -520,7 +520,7 @@ mod tests {
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.watermarks.lock().unwrap();
+            let watermark = setup.store.get_watermark().unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 2);
             assert_eq!(watermark.tx_hi, 2);
         }
@@ -535,6 +535,8 @@ mod tests {
         let _ = setup.committer_handle.await;
     }
 
+    /// Configure the MockStore with no watermark, and emulate `first_checkpoint` by passing the
+    /// `initial_watermark` into the setup.
     #[tokio::test]
     async fn test_committer_processes_sequential_checkpoints_with_initial_watermark() {
         // Setup with initial watermark
@@ -549,20 +551,35 @@ mod tests {
         };
         let mut setup = setup_test(initial_watermark, config, MockStore::default());
 
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.get_watermark();
+        assert!(watermark.is_none());
+
         // Send checkpoints in order
-        for i in 0..8 {
+        for i in 0..5 {
             send_checkpoint(&mut setup, i).await;
         }
 
         // Wait for processing
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.get_watermark();
+        assert!(watermark.is_none());
+
+        for i in 5..8 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Verify data was written in order
         assert_eq!(setup.store.get_sequential_data(), vec![6, 7]);
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.watermarks.lock().unwrap();
+            let watermark = setup.store.get_watermark().unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 7);
             assert_eq!(watermark.tx_hi, 7);
         }
@@ -600,7 +617,7 @@ mod tests {
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.watermarks.lock().unwrap();
+            let watermark = setup.store.get_watermark().unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 2);
             assert_eq!(watermark.tx_hi, 2);
         }
