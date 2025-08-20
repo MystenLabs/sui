@@ -5,10 +5,13 @@ pub(crate) mod ast;
 pub(crate) mod dom_tree;
 pub(crate) mod graph;
 pub(crate) mod loop_refinement;
+pub(crate) mod term_reconstruction;
 
-use crate::structuring::{ast as D, graph::Graph, loop_refinement::loop_type};
-
-use move_stackless_bytecode_2::stackless::ast as S;
+use crate::structuring::{
+    ast as D,
+    graph::Graph,
+    loop_refinement::{loop_type, refine_loop},
+};
 use petgraph::{graph::NodeIndex, visit::DfsPostOrder};
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
@@ -48,6 +51,7 @@ fn structure_loop(
     loop_head: NodeIndex,
     input: &mut BTreeMap<D::Label, D::Input>,
 ) {
+    println!("Structuring loop at node {loop_head:#?}");
     structure_acyclic(graph, structured_blocks, loop_head, input);
     let (loop_nodes, succ_nodes) = graph.find_loop_nodes(loop_head);
 
@@ -65,16 +69,11 @@ fn structure_loop(
         loop_body.push(result);
     }
 
-    // FIXME when loop_body is a vec of single structured node, we should pop it?
-    let mut loop_body = loop_body.into_iter().rev().collect::<Vec<_>>();
-    let seq = if loop_body.len() == 1 {
-        loop_body.pop().unwrap()
-    } else {
-        D::Structured::Seq(loop_body)
-    };
+    let loop_body = loop_body.into_iter().rev().collect::<Vec<_>>();
+    let seq = D::Structured::Seq(loop_body);
     graph.update_loop_info(loop_head);
-    let result = D::Structured::Loop(Box::new(seq));
-    let mut result = loop_type(result);
+    let mut result = D::Structured::Loop(Box::new(seq));
+    let mut result = refine_loop(result);
     if let Some(succ_node) = succ_node {
         if graph
             .dom_tree
@@ -278,8 +277,8 @@ fn structure_acyclic_region(
 
     println!("Structuring Node: {start:#?}");
     println!("Blocks: {structured_blocks:#?}");
-    println!("Post dominator: {post_dominator:#?}");
-    println!("Immediate children: {ichildren:#?}");
+    // println!("Post dominator: {post_dominator:#?}");
+    // println!("Immediate children: {ichildren:#?}");
     if post_dominator != graph.return_ {
         assert!(
             structured_blocks.contains_key(&post_dominator)
@@ -295,7 +294,6 @@ fn structure_acyclic_region(
         D::Input::Condition(_lbl, code, conseq, alt) => {
             assert!(ichildren.contains(&conseq));
 
-            
             let conseq_arm = if conseq != post_dominator {
                 structured_blocks.remove(&conseq).unwrap()
             } else {
@@ -360,11 +358,11 @@ fn structure_acyclic_region(
         && !graph.back_edges.contains_key(&start)
         && start_dominates_post_dom;
 
-    println!("Start dominates post-dominator: {start_dominates_post_dom}");
-    println!("Emit post dominator in sequence: {emit_post_dom_in_seq}");
+    // println!("Start dominates post-dominator: {start_dominates_post_dom}");
+    // println!("Emit post dominator in sequence: {emit_post_dom_in_seq}");
 
     if post_dominator != graph.return_ && emit_post_dom_in_seq {
-        println!("Emitting post-dominator");
+        // println!("Emitting post-dominator");
         exp.push(structured_blocks.remove(&post_dominator).unwrap());
     }
     flatten_sequence(D::Structured::Seq(exp))

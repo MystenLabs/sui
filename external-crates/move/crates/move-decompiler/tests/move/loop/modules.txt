@@ -1,3 +1,4 @@
-loop
 infinite_loop
-loops
+loop_cases
+loop_mod
+while_cases
