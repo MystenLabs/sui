@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use anyhow::{ensure, Context};
+use anyhow::{bail, ensure, Context};
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
@@ -445,6 +445,10 @@ impl<T: TransactionalStore> Indexer<T> {
             return Ok(());
         };
 
+        if self.task.is_some() {
+            bail!("Sequential pipelines do not support pipeline tasks. These pipelines guarantee that each checkpoint is committed exactly once and in order. Running the same pipeline under a different task would violate these guarantees.");
+        }
+
         if self.skip_watermark {
             warn!(
                 pipeline = H::NAME,
@@ -567,6 +571,7 @@ mod tests {
         let mut conn = store.connect().await.unwrap();
         conn.set_committer_watermark(
             "test_processor",
+            None,
             CommitterWatermark {
                 epoch_hi_inclusive: 1,
                 checkpoint_hi_inclusive: 100,
@@ -578,6 +583,7 @@ mod tests {
         .unwrap();
 
         let indexer_args = IndexerArgs {
+            task: None,
             first_checkpoint: Some(50),
             last_checkpoint: None,
             pipeline: vec![],
