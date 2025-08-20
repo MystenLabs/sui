@@ -14,10 +14,7 @@ use crate::{
     scope::Scope,
 };
 
-use super::{
-    address::Address,
-    object::{self, Object},
-};
+use super::object::{self, Object};
 
 /// Reason why a transaction that attempted to access a consensus-managed object was cancelled.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -100,8 +97,12 @@ impl PerEpochConfig {
 impl ConsensusObjectRead {
     /// The version of the consensus-managed object that was read by this transaction.
     async fn object(&self) -> Option<Object> {
-        let address = Address::with_address(self.scope.clone(), self.object_id.into());
-        Some(Object::with_ref(address, self.version, self.digest))
+        Some(Object::with_ref(
+            &self.scope,
+            self.object_id.into(),
+            self.version,
+            self.digest,
+        ))
     }
 }
 

@@ -93,6 +93,9 @@ pub(crate) struct PackageCursor {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
+    #[error("Checkpoint {0} in the future")]
+    Future(u64),
+
     #[error(
         "At most one of a version, or a checkpoint bound can be specified when fetching a package"
     )]
@@ -335,6 +338,7 @@ impl MovePackage {
     /// is not a package. This is more efficient when you already have the native object.
     pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
         let package = native.data.try_as_package()?.clone();
+        let scope = scope.with_root_version(package.version().value());
         let super_ = Object::from_contents(scope, Arc::new(native));
         Some(Self {
             super_,
@@ -412,6 +416,7 @@ impl MovePackage {
             return Ok(None);
         };
 
+        let scope = scope.with_root_version(stored_package.package_version as u64);
         Self::from_stored(scope, stored_package)
     }
 
@@ -423,6 +428,10 @@ impl MovePackage {
         address: SuiAddress,
         at_checkpoint: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
+        let scope = scope
+            .with_checkpoint_viewed_at(at_checkpoint.into())
+            .ok_or_else(|| bad_user_input(Error::Future(at_checkpoint.into())))?;
+
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(stored_original) = pg_loader
@@ -559,7 +568,8 @@ impl MovePackage {
         conn.has_next_page = next;
 
         for (cursor, stored) in results {
-            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
+            let scope = scope.with_root_version(stored.package_version as u64);
+            if let Some(object) = Self::from_stored(scope, stored)? {
                 conn.edges.push(Edge::new(cursor.encode_cursor(), object));
             }
         }
