@@ -40,6 +40,7 @@ function heavyHtmlDirs(docsDir) {
 
 // ---------- Helpers ----------
 
+
 function fixAngleBracketAutolinksInHtml(html) {
   // Turn <https://…> (and &lt;https://…&gt;) into clickable anchors.
   // Preserve a trailing punctuation char if present.
