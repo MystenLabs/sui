@@ -31,7 +31,7 @@ function buildLI() {
   li.className = "table-of-contents__item toc-feedback";
   li.innerHTML = `
     <div class="toc-feedback__wrap">
-      <div class="toc-feedback__title">Was this helpful?</div>
+      <div class="toc-feedback__title">Was this page helpful?</div>
       <div class="toc-feedback__row">
         <feedback-button
           style="${styleVars()}"
