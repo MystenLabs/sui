@@ -436,15 +436,6 @@ impl ConsensusOutputCache {
             executed_in_epoch.remove(tx_digest);
         }
     }
-
-    /// At reconfig time, all checkpointed transactions must have been removed from self.executed_in_epoch
-    pub fn get_uncheckpointed_transactions(&self) -> Vec<TransactionDigest> {
-        self.executed_in_epoch
-            .write() // exclusive lock to ensure consistent view
-            .iter()
-            .map(|e| *e.key())
-            .collect()
-    }
 }
 
 /// ConsensusOutputQuarantine holds outputs of consensus processing in memory until the checkpoints
