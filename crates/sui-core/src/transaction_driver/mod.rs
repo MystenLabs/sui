@@ -14,6 +14,7 @@ pub use metrics::*;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
@@ -40,12 +41,17 @@ use crate::{
 use sui_config::NodeConfig;
 
 /// Options for submitting a transaction.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct SubmitTransactionOptions {
     /// When forwarding transactions on behalf of a client, this is the client's address
     /// specified for ddos protection.
     pub forwarded_client_addr: Option<SocketAddr>,
+
+    /// Timeout for finalizing the transaction.
+    pub timeout: Duration,
 }
+
+
 
 pub struct TransactionDriver<A: Clone> {
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
@@ -95,6 +101,9 @@ where
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        // TODO: Make this configurable via NodeConfig or parameter
+        const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(60);
+
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
         let raw_request = request.into_raw().unwrap();
@@ -102,19 +111,74 @@ where
 
         self.metrics.total_transactions_submitted.inc();
 
+        // Run the retry loop with timeout
+        match tokio::time::timeout(
+            TRANSACTION_TIMEOUT,
+            self.drive_transaction_with_retry(
+                *tx_digest,
+                raw_request,
+                options,
+                is_single_writer_tx,
+                timer,
+            ),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_elapsed) => {
+                // Timeout occurred - get the last error from state if available
+                let state = self.state.lock();
+                let last_error = state.last_transaction_error.get(tx_digest).cloned();
+                let attempts = state
+                    .last_attempt_count
+                    .get(tx_digest)
+                    .copied()
+                    .unwrap_or(0);
+                drop(state);
+
+                self.metrics
+                    .transaction_retries
+                    .with_label_values(&["timeout"])
+                    .observe(attempts as f64);
+
+                Err(TransactionDriverError::Timeout {
+                    elapsed: timer.elapsed(),
+                    last_error: last_error.map(Box::new),
+                    attempts,
+                })
+            }
+        }
+    }
+
+    async fn drive_transaction_with_retry(
+        &self,
+        tx_digest: TransactionDigest,
+        raw_request: RawSubmitTxRequest,
+        options: SubmitTransactionOptions,
+        is_single_writer_tx: bool,
+        timer: Instant,
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
         // Exponential backoff with jitter to prevent thundering herd on retries
         let mut backoff = ExponentialBackoff::from_millis(100)
             .max_delay(MAX_RETRY_DELAY)
             .map(jitter);
         let mut attempts = 0;
+
         loop {
             // TODO(fastpath): Check local state before submitting transaction
             match self
-                .drive_transaction_once(tx_digest, raw_request.clone(), &options)
+                .drive_transaction_once(&tx_digest, raw_request.clone(), &options)
                 .await
             {
                 Ok(resp) => {
+                    // Clear any stored error on success
+                    {
+                        let mut state = self.state.lock();
+                        state.last_transaction_error.remove(&tx_digest);
+                        state.last_attempt_count.remove(&tx_digest);
+                    }
+
                     let settlement_finality_latency = timer.elapsed().as_secs_f64();
                     self.metrics
                         .settlement_finality_latency
@@ -132,6 +196,13 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
+                    // Store the last error for timeout reporting
+                    {
+                        let mut state = self.state.lock();
+                        state.last_transaction_error.insert(tx_digest, e.clone());
+                        state.last_attempt_count.insert(tx_digest, attempts);
+                    }
+
                     if !e.is_retriable() {
                         // Record the number of retries for failed transaction
                         self.metrics
@@ -250,12 +321,16 @@ pub fn choose_transaction_driver_percentage() -> u8 {
 // Inner state of TransactionDriver.
 struct State {
     tasks: JoinSet<()>,
+    last_transaction_error: HashMap<TransactionDigest, TransactionDriverError>,
+    last_attempt_count: HashMap<TransactionDigest, u32>,
 }
 
 impl State {
     fn new() -> Self {
         Self {
             tasks: JoinSet::new(),
+            last_transaction_error: HashMap::new(),
+            last_attempt_count: HashMap::new(),
         }
     }
 }

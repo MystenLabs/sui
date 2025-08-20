@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use itertools::Itertools as _;
 use sui_types::{
@@ -79,6 +80,13 @@ pub enum TransactionDriverError {
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
     },
+    /// Transaction timed out after retrying.
+    /// Non-retriable.
+    Timeout {
+        elapsed: Duration,
+        last_error: Option<Box<TransactionDriverError>>,
+        attempts: u32,
+    },
 }
 
 impl TransactionDriverError {
@@ -87,6 +95,7 @@ impl TransactionDriverError {
             TransactionDriverError::Aborted { .. } => true,
             TransactionDriverError::InvalidTransaction { .. } => false,
             TransactionDriverError::ForkedExecution { .. } => false,
+            TransactionDriverError::Timeout { .. } => false,
         }
     }
 
@@ -166,6 +175,27 @@ impl TransactionDriverError {
         }
         write!(f, "{}", msgs.join(" "))
     }
+
+    fn display_timeout(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TransactionDriverError::Timeout {
+            elapsed,
+            last_error,
+            attempts,
+        } = self
+        else {
+            return Ok(());
+        };
+        write!(
+            f,
+            "Transaction timed out after {:.2}s and {} attempts",
+            elapsed.as_secs_f64(),
+            attempts
+        )?;
+        if let Some(last_error) = last_error {
+            write!(f, ". Last error: {}", last_error)?;
+        }
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for TransactionDriverError {
@@ -176,6 +206,7 @@ impl std::fmt::Display for TransactionDriverError {
                 self.display_invalid_transaction(f)
             }
             TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
+            TransactionDriverError::Timeout { .. } => self.display_timeout(f),
         }
     }
 }
