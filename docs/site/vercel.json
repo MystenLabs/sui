@@ -122,5 +122,6 @@
       { "source": "/references/framework/move-stdlib/:path*", "destination": "/references/framework/std/:path*", "permanent": true },
       { "source": "/references/framework/sui-system/:path*", "destination": "/references/framework/sui_system/:path*", "permanent": true },
       { "source": "/references/sui-api/sui-graphql/reference/:path*", "destination": "/references/sui-api/sui-graphql/beta/reference/:path*"}
+      { "source": "/standards/deepbook", "destination": "/standards/deepbookv3"}
     ]
   }
