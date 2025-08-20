@@ -10,6 +10,7 @@ use sui_json_rpc_types::{
 };
 use sui_rosetta::operations::Operations;
 use sui_rosetta::CoinMetadataCache;
+use sui_rpc_api::client::Client as GrpcClient;
 use test_cluster::TestClusterBuilder;
 
 use super::rosetta_client::{start_rosetta_test_server, RosettaError};
@@ -50,7 +51,8 @@ async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {
         .unwrap();
 
     // Test rosetta can handle using many "small" coins for payment
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let ops: Operations = serde_json::from_value(json!(
         [{
@@ -148,7 +150,8 @@ async fn test_pay_custom_coin_no_balance() -> anyhow::Result<()> {
 
     let total_balance = 1_000_000_i128;
     // Test rosetta can handle using many "small" coins for payment
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let ops: Operations = serde_json::from_value(json!(
         [{
@@ -271,7 +274,8 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
     );
 
     // Test rosetta can handle using many "small" coins for payment
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let ops: Operations = serde_json::from_value(json!(
         [{

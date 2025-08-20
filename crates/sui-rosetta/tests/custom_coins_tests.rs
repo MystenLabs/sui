@@ -38,6 +38,7 @@ use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint, TEST_COIN_DECIMALS};
 
 use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
+use sui_rpc_api::client::Client as GrpcClient;
 
 #[tokio::test]
 async fn test_mint() {
@@ -101,7 +102,8 @@ async fn test_custom_coin_balance() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let sender = test_cluster.get_address_0();
     let init_ret = init_package(
@@ -180,7 +182,8 @@ async fn test_default_balance() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let client = test_cluster.wallet.get_client().await.unwrap();
 
-    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let request: AccountBalanceRequest = serde_json::from_value(json!(
         {
@@ -230,7 +233,8 @@ async fn test_custom_coin_transfer() {
         .await
         .unwrap();
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let ops = serde_json::from_value(json!(
         [{

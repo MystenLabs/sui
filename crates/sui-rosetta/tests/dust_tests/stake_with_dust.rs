@@ -11,6 +11,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::{operations::Operations, CoinMetadataCache};
+use sui_rpc_api::client::Client as GrpcClient;
 use sui_types::{quorum_driver_types::ExecuteTransactionRequestType, transaction::Transaction};
 use test_cluster::TestClusterBuilder;
 
@@ -144,7 +145,8 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
     );
 
     // Test rosetta can handle using many "small" coins for payment
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let validator = client
         .governance_api()
@@ -330,7 +332,9 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
     );
 
     // Test rosetta can handle using many "small" coins for payment
-    let (rosetta_client, mut _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, mut _handle) =
+        start_rosetta_test_server(client.clone(), grpc_client).await;
 
     let validator = client
         .governance_api()
