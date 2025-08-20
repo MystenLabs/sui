@@ -26,7 +26,7 @@ const standards = [
 		label: 'DeepBookV3',
 		link: {
 			type: 'doc',
-			id: 'standards/deepbookv3',
+			id: 'standards/deepbook',
 		},
 		items: [
 			'standards/deepbookv3/design',

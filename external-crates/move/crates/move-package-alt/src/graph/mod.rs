@@ -231,11 +231,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         let mut linkage = self.linkage()?;
 
         // Populate ALL the linkage elements
-        let mut result: Vec<PackageInfo<F>> = linkage
-            .values()
-            .cloned()
-            .map(|node| PackageInfo { graph: self, node })
-            .collect();
+        let mut result: Vec<PackageInfo<F>> = linkage.values().cloned().collect();
 
         // Add all nodes that exist but are not in the linkage table.
         // This is done to support unpublished packages, as linkage only includes
