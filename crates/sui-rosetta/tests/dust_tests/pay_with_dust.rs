@@ -15,7 +15,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::PreprocessMetadata;
 use sui_rosetta::CoinMetadataCache;
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::Transaction;
@@ -991,7 +991,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         e,
         RosettaError {
             code: 16,
-            message: "Sui rpc error".to_string(),
+            message: "Sui json rpc error".to_string(),
             description: None,
             retriable: false,
             details,

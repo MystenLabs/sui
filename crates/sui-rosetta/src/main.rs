@@ -18,7 +18,7 @@ use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KE
 use sui_node::SuiNode;
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, SuiKeyPair, ToFromBytes};

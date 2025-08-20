@@ -11,7 +11,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::{operations::Operations, CoinMetadataCache};
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 use sui_types::{quorum_driver_types::ExecuteTransactionRequestType, transaction::Transaction};
 use test_cluster::TestClusterBuilder;
 

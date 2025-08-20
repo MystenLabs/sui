@@ -14,7 +14,7 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 
 use crate::errors::Error;

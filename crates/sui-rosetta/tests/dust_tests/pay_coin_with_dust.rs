@@ -10,7 +10,7 @@ use sui_json_rpc_types::{
 };
 use sui_rosetta::operations::Operations;
 use sui_rosetta::CoinMetadataCache;
-use sui_rpc_api::client::Client as GrpcClient;
+use sui_rpc::client::Client as GrpcClient;
 use test_cluster::TestClusterBuilder;
 
 use super::rosetta_client::{start_rosetta_test_server, RosettaError};
@@ -201,7 +201,7 @@ async fn test_pay_custom_coin_no_balance() -> anyhow::Result<()> {
         e,
         RosettaError {
             code: 16,
-            message: "Sui rpc error".to_string(),
+            message: "Sui json rpc error".to_string(),
             description: None,
             retriable: false,
             details,
