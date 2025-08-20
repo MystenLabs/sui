@@ -79,6 +79,12 @@ pub enum TransactionDriverError {
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
     },
+    /// Transaction timed out but we return last retriable error if it exists.
+    /// Non-retriable.
+    TimeOutWithLastRetriableError {
+        latest_error: Option<Box<TransactionDriverError>>,
+        attempts: u32,
+    },
 }
 
 impl TransactionDriverError {
@@ -87,6 +93,7 @@ impl TransactionDriverError {
             TransactionDriverError::Aborted { .. } => true,
             TransactionDriverError::InvalidTransaction { .. } => false,
             TransactionDriverError::ForkedExecution { .. } => false,
+            TransactionDriverError::TimeOutWithLastRetriableError { .. } => false,
         }
     }
 
@@ -176,6 +183,20 @@ impl std::fmt::Display for TransactionDriverError {
                 self.display_invalid_transaction(f)
             }
             TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
+            TransactionDriverError::TimeOutWithLastRetriableError {
+                latest_error,
+                attempts,
+            } => {
+                write!(
+                    f,
+                    "Transaction timed out after {} attempts. Last error: {}",
+                    attempts,
+                    latest_error
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_default()
+                )
+            }
         }
     }
 }
@@ -188,7 +209,7 @@ impl std::fmt::Debug for TransactionDriverError {
 
 impl std::error::Error for TransactionDriverError {}
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Default)]
 pub struct AggregatedRequestErrors {
     pub errors: Vec<(String, Vec<AuthorityName>, StakeUnit)>,
     pub total_stake: StakeUnit,
@@ -251,7 +272,7 @@ pub(crate) fn aggregate_request_errors(
     }
 }
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Default)]
 pub struct AggregatedEffectsDigests {
     pub digests: Vec<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>,
 }

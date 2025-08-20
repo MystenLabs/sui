@@ -481,6 +481,12 @@ where
             in_flight.dec();
         });
 
+        let finality_timeout = std::env::var("WAIT_FOR_FINALITY_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .map(Duration::from_secs)
+            .unwrap_or(WAIT_FOR_FINALITY_TIMEOUT);
+
         // Check if TransactionDriver should be used for submission
         if let Some(td) = &self.transaction_driver {
             let random_value = rand::thread_rng().gen_range(1..=100);
@@ -496,6 +502,7 @@ where
                         &verified_transaction,
                         good_response_metrics,
                         tx_digest,
+                        Some(finality_timeout),
                     )
                     .await;
 
@@ -560,6 +567,7 @@ where
         verified_transaction: &VerifiedTransaction,
         good_response_metrics: &GenericCounter<AtomicU64>,
         tx_digest: TransactionDigest,
+        timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
         debug!("Using TransactionDriver for transaction {:?}", tx_digest);
         // Add transaction to WAL log for TransactionDriver path
@@ -587,18 +595,29 @@ where
         );
 
         let td_response = td
-            .drive_transaction(
+            .drive_transaction_with_timeout(
                 SubmitTxRequest {
                     transaction: request.transaction.clone(),
                 },
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
                 },
+                timeout_duration,
             )
             .await
-            .map_err(|e| QuorumDriverError::TransactionFailed {
-                retriable: e.is_retriable(),
-                details: e.to_string(),
+            .map_err(|e| {
+                match e {
+                    crate::transaction_driver::TransactionDriverError::TimeOutWithLastRetriableError {
+                        latest_error,
+                        attempts,
+                    } => QuorumDriverError::TimeoutBeforeFinalityWithErrors {
+                        last_error: format!("After {} attempts: {}", attempts, latest_error.map(|e| e.to_string()).unwrap_or_default()),
+                    },
+                    other => QuorumDriverError::TransactionFailed {
+                        retriable: other.is_retriable(),
+                        details: other.to_string(),
+                    },
+                }
             });
 
         // Broadcast TD effects to the channel

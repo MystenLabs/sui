@@ -43,6 +43,8 @@ pub enum QuorumDriverError {
     },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,
+    #[error("Transaction timed out before reaching finality. Last recorded retriable error: {last_error}")]
+    TimeoutBeforeFinalityWithErrors { last_error: String },
     #[error("Transaction failed to reach finality with transient error after {total_attempts} attempts.")]
     FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u32 },
     #[error("{NON_RECOVERABLE_ERROR_MSG}: {errors:?}.")]
