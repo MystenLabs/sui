@@ -4,10 +4,7 @@
 use async_graphql::SimpleObject;
 use sui_types::effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI};
 
-use crate::{
-    api::types::{address::Address, gas::GasCostSummary},
-    scope::Scope,
-};
+use crate::{api::types::gas::GasCostSummary, scope::Scope};
 
 use super::object::Object;
 
@@ -23,8 +20,7 @@ pub(crate) struct GasEffects {
 impl GasEffects {
     pub(crate) fn from_effects(scope: Scope, effects: &NativeTransactionEffects) -> Self {
         let ((id, version, digest), _owner) = effects.gas_object();
-        let address = Address::with_address(scope, id.into());
-        let gas_object = Some(Object::with_ref(address, version, digest));
+        let gas_object = Some(Object::with_ref(&scope, id.into(), version, digest));
         let gas_summary = Some(effects.gas_cost_summary().clone().into());
 
         Self {

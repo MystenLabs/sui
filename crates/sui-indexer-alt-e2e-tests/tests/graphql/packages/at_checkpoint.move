@@ -71,12 +71,6 @@ module P3::M {
     address
     version
   }
-
-  # Checkpoint 3 does not exist, so the package is unchanged at this version.
-  c3: package(address: "@{obj_1_0}", atCheckpoint: 3) {
-    address
-    version
-  }
 }
 
 //# run-graphql
@@ -98,11 +92,6 @@ module P3::M {
   }
 
   c2: package(address: "@{obj_3_0}", atCheckpoint: 2) {
-    address
-    version
-  }
-
-  c3: package(address: "@{obj_3_0}", atCheckpoint: 3) {
     address
     version
   }
@@ -129,6 +118,11 @@ module P3::M {
     address
     version
   }
+}
+
+//# run-graphql
+{ # Error - Querying a checkpoint in the future.
+  future: package(address: "@{obj_3_0}", atCheckpoint: 3) { version }
 }
 
 //# run-graphql

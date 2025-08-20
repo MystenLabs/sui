@@ -9,7 +9,7 @@ use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use crate::{
     api::scalars::{owner_kind::OwnerKind, sui_address::SuiAddress},
-    error::RpcError,
+    error::{bad_user_input, RpcError},
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
@@ -100,6 +100,10 @@ impl AddressableImpl<'_> {
         before: Option<object::CLive>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+        if self.0.scope.root_version().is_some() {
+            return Err(bad_user_input(object::Error::RootVersionOwnership));
+        }
+
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IAddressable", "objects");
         let page = Page::from_params(limits, first, after, last, before)?;
