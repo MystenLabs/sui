@@ -1400,6 +1400,7 @@ impl SuiNode {
             state.clone(),
             checkpoint_service.clone(),
             epoch_store.clone(),
+            consensus_adapter.clone(),
             low_scoring_authorities,
             throughput_calculator,
             backpressure_manager,
