@@ -15,14 +15,18 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use sui_sdk::{SuiClient, SUI_COIN_TYPE};
+use sui_rpc::client::v2::Client;
+use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
+use sui_sdk::SUI_COIN_TYPE;
 
 use crate::errors::Error;
 use crate::errors::Error::MissingMetadata;
+
+pub use crate::errors::Error as RosettaError;
 use crate::state::{CheckpointBlockProvider, OnlineServerContext};
 use crate::types::{Currency, CurrencyMetadata, SuiEnv};
 
-/// This lib implements the Rosetta online and offline server defined by the [Rosetta API Spec](https://www.rosetta-api.org/docs/Reference.html)
+/// This lib implements the Mesh online and offline server defined by the [Mesh API Spec](https://docs.cdp.coinbase.com/mesh/mesh-api-spec/api-reference)
 mod account;
 mod block;
 mod construction;
@@ -48,7 +52,7 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, client: SuiClient) -> Self {
+    pub fn new(env: SuiEnv, client: Client) -> Self {
         let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1000).unwrap());
         let blocks = Arc::new(CheckpointBlockProvider::new(
             client.clone(),
@@ -118,12 +122,12 @@ impl RosettaOfflineServer {
 
 #[derive(Clone)]
 pub struct CoinMetadataCache {
-    client: SuiClient,
+    client: Client,
     metadata: Arc<Mutex<LruCache<TypeTag, Currency>>>,
 }
 
 impl CoinMetadataCache {
-    pub fn new(client: SuiClient, size: NonZeroUsize) -> Self {
+    pub fn new(client: Client, size: NonZeroUsize) -> Self {
         Self {
             client,
             metadata: Arc::new(Mutex::new(LruCache::new(size))),
@@ -133,16 +137,23 @@ impl CoinMetadataCache {
     pub async fn get_currency(&self, type_tag: &TypeTag) -> Result<Currency, Error> {
         let mut cache = self.metadata.lock().await;
         if !cache.contains(type_tag) {
-            let metadata = self
-                .client
-                .coin_read_api()
-                .get_coin_metadata(type_tag.to_string())
+            let mut client = self.client.clone();
+            let request = GetCoinInfoRequest::default().with_coin_type(type_tag.to_string());
+
+            let response = client
+                .state_client()
+                .get_coin_info(request)
                 .await?
+                .into_inner();
+
+            let (symbol, decimals) = response
+                .metadata
+                .and_then(|m| Some((m.symbol?, m.decimals?)))
                 .ok_or(MissingMetadata)?;
 
             let ccy = Currency {
-                symbol: metadata.symbol,
-                decimals: metadata.decimals as u64,
+                symbol,
+                decimals: decimals as u64,
                 metadata: CurrencyMetadata {
                     coin_type: type_tag.clone().to_canonical_string(true),
                 },

@@ -25,11 +25,11 @@ use sui_rosetta::types::{
     TransactionIdentifierResponse,
 };
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
-use sui_sdk::SuiClient;
+use sui_rpc::client::v2::Client as GrpcClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;
 
-pub async fn start_rosetta_test_server(client: SuiClient) -> (RosettaClient, Vec<JoinHandle<()>>) {
+pub async fn start_rosetta_test_server(client: GrpcClient) -> (RosettaClient, Vec<JoinHandle<()>>) {
     let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client);
     let offline_server = RosettaOfflineServer::new(SuiEnv::LocalNet);
     let local_ip = local_ip_utils::localhost_for_testing();
@@ -138,7 +138,7 @@ impl RosettaClient {
         }
     }
 
-    /// rosetta construction e2e flow, see https://www.rosetta-api.org/docs/flow.html#construction-api
+    /// mesh construction e2e flow, see https://docs.cdp.coinbase.com/mesh/product-overview/flow-of-operations
     pub async fn rosetta_flow(
         &self,
         operations: &Operations,

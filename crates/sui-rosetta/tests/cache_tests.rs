@@ -1,35 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod test_utils;
+
 use anyhow::anyhow;
-use rand::prelude::IteratorRandom;
-use rand::rngs::OsRng;
 use shared_crypto::intent::Intent;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use sui_json_rpc_types::{
-    ObjectChange, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponseOptions,
-};
+use std::str::FromStr;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::BuildConfig;
 use sui_rosetta::CoinMetadataCache;
-use sui_sdk::SuiClient;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_rpc::client::v2::Client as GrpcClient;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
     InputObjectKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
     TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
 };
 use test_cluster::TestClusterBuilder;
+use test_utils::{execute_transaction_grpc, get_random_sui};
 
 #[tokio::test]
 async fn test_cache() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
     // Test publish
     let addresses = network.get_addresses();
@@ -58,7 +55,8 @@ async fn test_cache() {
             }
         })
         .collect::<Vec<_>>();
-    let gas = vec![get_random_sui(&client, sender, input_objects).await];
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let gas = vec![get_random_sui(&mut client, sender, input_objects).await];
     let data = TransactionData::new_with_gas_coins(
         TransactionKind::programmable(pt.clone()),
         sender,
@@ -71,80 +69,50 @@ async fn test_cache() {
         .sign_secure(&data.sender(), &data, Intent::sui_transaction())
         .await
         .unwrap();
-    let response = client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            Transaction::from_data(data.clone(), vec![signature]),
-            SuiTransactionBlockResponseOptions::full_content(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
+    let signed_tx = Transaction::from_data(data.clone(), vec![signature]);
+    let response = execute_transaction_grpc(&mut client, &signed_tx)
         .await
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
-    let object_changes = response.object_changes.unwrap();
-    let my_coin_type = object_changes
-        .into_iter()
-        .find_map(|change| {
-            if let ObjectChange::Created { object_type, .. } = change {
-                let type_str = object_type.to_string();
-                if type_str.contains("2::coin::TreasuryCap")
-                    && type_str.contains("::my_coin::MY_COIN>")
-                {
-                    let coin_tag = object_type.type_params.into_iter().next().unwrap();
-                    return Some(coin_tag);
-                }
-            }
-            None
+
+    // Extract specifically the MY_COIN type (not MY_COIN_NEW or others)
+    // MY_COIN uses the old coin::create_currency API which always creates metadata
+    let my_coin_type = response
+        .objects_opt()
+        .and_then(|object_set| {
+            object_set.objects.iter().find_map(|obj| {
+                obj.object_type_opt().and_then(|otype| {
+                    // Look specifically for MY_COIN, not MY_COIN_NEW or other variants
+                    if otype.contains("::coin::TreasuryCap<")
+                        && otype.contains("::my_coin::MY_COIN>")
+                    {
+                        // Extract the type parameter between < and >
+                        let start = otype.find('<')?;
+                        let end = otype.rfind('>')?;
+                        let type_str = &otype[start + 1..end];
+                        Some(sui_types::TypeTag::from_str(type_str).unwrap())
+                    } else {
+                        None
+                    }
+                })
+            })
         })
         .expect("MY_COIN treasury cap not found");
 
-    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1).unwrap());
+    let client = GrpcClient::new(network.rpc_url()).unwrap();
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(1).unwrap());
 
     assert_eq!(0, coin_cache.len().await);
 
     let _ = coin_cache.get_currency(&GAS::type_tag()).await;
 
     assert_eq!(1, coin_cache.len().await);
-    assert!(coin_cache.get_currency(&GAS::type_tag()).await.is_ok());
+    assert!(coin_cache.contains(&GAS::type_tag()).await);
     assert!(!coin_cache.contains(&my_coin_type).await);
 
     let _ = coin_cache.get_currency(&my_coin_type).await;
 
     assert_eq!(1, coin_cache.len().await);
-    assert!(coin_cache.get_currency(&my_coin_type).await.is_ok());
+    assert!(coin_cache.contains(&my_coin_type).await);
     assert!(!coin_cache.contains(&GAS::type_tag()).await);
-}
-
-async fn get_random_sui(
-    client: &SuiClient,
-    sender: SuiAddress,
-    except: Vec<ObjectID>,
-) -> ObjectRef {
-    let coins = client
-        .read_api()
-        .get_owned_objects(
-            sender,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
-            )),
-            /* cursor */ None,
-            /* limit */ None,
-        )
-        .await
-        .unwrap()
-        .data;
-    let coin_resp = coins
-        .iter()
-        .filter(|object| {
-            let obj = object.object().unwrap();
-            obj.is_gas_coin() && !except.contains(&obj.object_id)
-        })
-        .choose(&mut OsRng)
-        .unwrap();
-
-    let coin = coin_resp.object().unwrap();
-    (coin.object_id, coin.version, coin.digest)
 }

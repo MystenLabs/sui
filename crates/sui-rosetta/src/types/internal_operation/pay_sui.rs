@@ -4,9 +4,10 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use sui_sdk::SuiClient;
+use sui_rpc::client::v2::Client;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
 
 use crate::errors::Error;
@@ -27,7 +28,7 @@ pub struct PaySui {
 impl TryConstructTransaction for PaySui {
     async fn try_fetch_needed_objects(
         self,
-        client: &SuiClient,
+        client: &mut Client,
         gas_price: Option<u64>,
         budget: Option<u64>,
     ) -> Result<TransactionObjectData, Error> {
@@ -41,15 +42,25 @@ impl TryConstructTransaction for PaySui {
         if let Some(budget) = budget {
             // We have a constant budget, so no need to dry-run
             let all_coins = client
-                .coin_read_api()
-                .select_coins(sender, None, (total_amount + budget) as u128, vec![])
-                .await?;
+                .select_coins(
+                    &sender.to_string(),
+                    sui_rpc::client::v2::SUI_COIN_TYPE,
+                    (total_amount + budget) as u128,
+                    &[],
+                )
+                .await
+                .map_err(Error::from)?;
 
-            let total_sui_balance = all_coins.iter().map(|c| c.balance).sum::<u64>() as i128;
+            let total_sui_balance = all_coins.iter().map(|o| o.balance()).sum::<u64>() as i128;
 
-            let mut iter = all_coins.into_iter().map(|c| c.object_ref());
-            let gas_coins: Vec<_> = iter.by_ref().take(MAX_GAS_COINS).collect();
-            let extra_gas_coins: Vec<_> = iter.collect();
+            let mut iter = all_coins
+                .into_iter()
+                .map(|obj| obj.object_reference().try_to_object_ref());
+            let gas_coins = iter
+                .by_ref()
+                .take(MAX_GAS_COINS)
+                .collect::<Result<Vec<_>, _>>()?;
+            let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
 
             return Ok(TransactionObjectData {
                 gas_coins,

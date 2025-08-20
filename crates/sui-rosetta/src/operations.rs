@@ -8,25 +8,25 @@ use std::vec;
 
 use anyhow::anyhow;
 use move_core_types::ident_str;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::ModuleResolver;
+use move_core_types::language_storage::StructTag;
+use prost_types::value::Kind;
 use serde::Deserialize;
 use serde::Serialize;
 
-use sui_json_rpc_types::SuiProgrammableMoveCall;
-use sui_json_rpc_types::SuiProgrammableTransactionBlock;
-use sui_json_rpc_types::{BalanceChange, SuiArgument};
-use sui_json_rpc_types::{SuiCallArg, SuiCommand};
-use sui_sdk::rpc_types::{
-    SuiTransactionBlockData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockKind, SuiTransactionBlockResponse,
-};
+use sui_rpc::proto::sui::rpc::v2::BalanceChange;
+use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
-use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::Argument;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::Command;
+use sui_types::transaction::ProgrammableMoveCall;
+use sui_types::transaction::ProgrammableTransaction;
+use sui_types::transaction::TransactionKind;
+use sui_types::transaction::{TransactionData, TransactionDataAPI};
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
@@ -247,12 +247,12 @@ impl Operations {
     }
 
     fn from_transaction(
-        tx: SuiTransactionBlockKind,
+        tx: TransactionKind,
         sender: SuiAddress,
         status: Option<OperationStatus>,
     ) -> Result<Vec<Operation>, Error> {
         Ok(match tx {
-            SuiTransactionBlockKind::ProgrammableTransaction(pt)
+            TransactionKind::ProgrammableTransaction(pt)
                 if status != Some(OperationStatus::Failure) =>
             {
                 Self::parse_programmable_transaction(sender, status, pt)?
@@ -264,7 +264,7 @@ impl Operations {
     fn parse_programmable_transaction(
         sender: SuiAddress,
         status: Option<OperationStatus>,
-        pt: SuiProgrammableTransactionBlock,
+        pt: ProgrammableTransaction,
     ) -> Result<Vec<Operation>, Error> {
         #[derive(Debug)]
         enum KnownValue {
@@ -280,33 +280,33 @@ impl Operations {
                 .and_then(|inner| inner.get(j as usize))
         }
         fn split_coins(
-            inputs: &[SuiCallArg],
+            inputs: &[CallArg],
             known_results: &[Vec<KnownValue>],
-            coin: SuiArgument,
-            amounts: &[SuiArgument],
+            coin: Argument,
+            amounts: &[Argument],
         ) -> Option<Vec<KnownValue>> {
             match coin {
-                SuiArgument::Result(i) => {
+                Argument::Result(i) => {
                     let KnownValue::GasCoin(_) = resolve_result(known_results, i, 0)?;
                 }
-                SuiArgument::NestedResult(i, j) => {
+                Argument::NestedResult(i, j) => {
                     let KnownValue::GasCoin(_) = resolve_result(known_results, i, j)?;
                 }
-                SuiArgument::GasCoin => (),
+                Argument::GasCoin => (),
                 // Might not be a SUI coin
-                SuiArgument::Input(_) => (),
+                Argument::Input(_) => (),
             };
             let amounts = amounts
                 .iter()
                 .map(|amount| {
                     let value: u64 = match *amount {
-                        SuiArgument::Input(i) => {
-                            u64::from_str(inputs.get(i as usize)?.pure()?.to_json_value().as_str()?)
-                                .ok()?
+                        Argument::Input(i) => match inputs.get(i as usize)? {
+                            CallArg::Pure(bytes) => bcs::from_bytes(bytes).ok()?,
+                            _ => return None,
+                        },
+                        Argument::GasCoin | Argument::Result(_) | Argument::NestedResult(_, _) => {
+                            return None
                         }
-                        SuiArgument::GasCoin
-                        | SuiArgument::Result(_)
-                        | SuiArgument::NestedResult(_, _) => return None,
                     };
                     Some(KnownValue::GasCoin(value))
                 })
@@ -315,28 +315,31 @@ impl Operations {
         }
         fn transfer_object(
             aggregated_recipients: &mut HashMap<SuiAddress, u64>,
-            inputs: &[SuiCallArg],
+            inputs: &[CallArg],
             known_results: &[Vec<KnownValue>],
-            objs: &[SuiArgument],
-            recipient: SuiArgument,
+            objs: &[Argument],
+            recipient: Argument,
         ) -> Option<Vec<KnownValue>> {
             let addr = match recipient {
-                SuiArgument::Input(i) => inputs.get(i as usize)?.pure()?.to_sui_address().ok()?,
-                SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
+                Argument::Input(i) => match inputs.get(i as usize)? {
+                    CallArg::Pure(bytes) => bcs::from_bytes::<SuiAddress>(bytes).ok()?,
+                    _ => return None,
+                },
+                Argument::GasCoin | Argument::Result(_) | Argument::NestedResult(_, _) => {
                     return None
                 }
             };
             for obj in objs {
                 let value = match *obj {
-                    SuiArgument::Result(i) => {
+                    Argument::Result(i) => {
                         let KnownValue::GasCoin(value) = resolve_result(known_results, i, 0)?;
                         value
                     }
-                    SuiArgument::NestedResult(i, j) => {
+                    Argument::NestedResult(i, j) => {
                         let KnownValue::GasCoin(value) = resolve_result(known_results, i, j)?;
                         value
                     }
-                    SuiArgument::GasCoin | SuiArgument::Input(_) => return None,
+                    Argument::GasCoin | Argument::Input(_) => return None,
                 };
                 let aggregate = aggregated_recipients.entry(addr).or_default();
                 *aggregate += value;
@@ -344,45 +347,58 @@ impl Operations {
             Some(vec![])
         }
         fn stake_call(
-            inputs: &[SuiCallArg],
+            inputs: &[CallArg],
             known_results: &[Vec<KnownValue>],
-            call: &SuiProgrammableMoveCall,
+            call: &ProgrammableMoveCall,
         ) -> Result<Option<(Option<u64>, SuiAddress)>, Error> {
-            let SuiProgrammableMoveCall { arguments, .. } = call;
+            let ProgrammableMoveCall { arguments, .. } = call;
             let (amount, validator) = match &arguments[..] {
                 [_, coin, validator] => {
                     let amount = match coin {
-                        SuiArgument::Result(i) =>{
+                        Argument::Result(i) =>{
                             let KnownValue::GasCoin(value) = resolve_result(known_results, *i, 0).ok_or_else(||anyhow!("Cannot resolve Gas coin value at Result({i})"))?;
                             value
                         },
                         _ => return Ok(None),
                     };
-                    let (some_amount, validator) = match validator {
+                    let (some_amount, validator)  = match validator {
                         // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
                         // We use the position of the validator arg as a indicator of if the rosetta stake
                         // transaction is staking the whole wallet or not, if staking whole wallet,
                         // we have to omit the amount value in the final operation output.
-                        SuiArgument::Input(i) => (*i==1, inputs.get(*i as usize).and_then(|input| input.pure()).map(|v|v.to_sui_address()).transpose()),
+                        Argument::Input(i) => {
+                            let validator_addr = match inputs.get(*i as usize) {
+                                Some(CallArg::Pure(bytes)) => {
+                                    bcs::from_bytes::<SuiAddress>(bytes).map(Some)
+                                }
+                                _ => Ok(None),
+                            }?;
+                            (*i==1, Ok(validator_addr))
+                        },
                         _=> return Ok(None),
                     };
                     (some_amount.then_some(*amount), validator)
                 },
                 _ => Err(anyhow!("Error encountered when extracting arguments from move call, expecting 3 elements, got {}", arguments.len()))?,
             };
-            Ok(validator.map(|v| v.map(|v| (amount, v)))?)
+            validator.map(|v| v.map(|v| (amount, v)))
         }
 
         fn unstake_call(
-            inputs: &[SuiCallArg],
-            call: &SuiProgrammableMoveCall,
+            inputs: &[CallArg],
+            call: &ProgrammableMoveCall,
         ) -> Result<Option<ObjectID>, Error> {
-            let SuiProgrammableMoveCall { arguments, .. } = call;
+            let ProgrammableMoveCall { arguments, .. } = call;
             let id = match &arguments[..] {
                 [_, stake_id] => {
                     match stake_id {
-                        SuiArgument::Input(i) => {
-                            let id = inputs.get(*i as usize).and_then(|input| input.object()).ok_or_else(|| anyhow!("Cannot find stake id from input args."))?;
+                        Argument::Input(i) => {
+                            let id = match inputs.get(*i as usize) {
+                                Some(CallArg::Object(obj_arg)) => {
+                                    Some(obj_arg.id())
+                                }
+                                _ => None,
+                            }.ok_or_else(|| anyhow!("Cannot find stake id from input args."))?;
                             // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for a selected stake or None (all stakes).
                             // this hack is similar to the one in stake_call.
                             let some_id = i % 2 == 1;
@@ -393,9 +409,9 @@ impl Operations {
                 },
                 _ => Err(anyhow!("Error encountered when extracting arguments from move call, expecting 3 elements, got {}", arguments.len()))?,
             };
-            Ok(id.cloned())
+            Ok(id)
         }
-        let SuiProgrammableTransactionBlock { inputs, commands } = &pt;
+        let ProgrammableTransaction { inputs, commands } = &pt;
         let mut known_results: Vec<Vec<KnownValue>> = vec![];
         let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
         let mut needs_generic = false;
@@ -405,17 +421,17 @@ impl Operations {
 
         for command in commands {
             let result = match command {
-                SuiCommand::SplitCoins(coin, amounts) => {
+                Command::SplitCoins(coin, amounts) => {
                     split_coins(inputs, &known_results, *coin, amounts)
                 }
-                SuiCommand::TransferObjects(objs, addr) => transfer_object(
+                Command::TransferObjects(objs, addr) => transfer_object(
                     &mut aggregated_recipients,
                     inputs,
                     &known_results,
                     objs,
                     *addr,
                 ),
-                SuiCommand::MoveCall(m) if Self::is_stake_call(m) => {
+                Command::MoveCall(m) if Self::is_stake_call(m) => {
                     stake_call(inputs, &known_results, m)?.map(|(amount, validator)| {
                         let amount = amount.map(|amount| Amount::new(-(amount as i128), None));
                         operations.push(Operation {
@@ -430,12 +446,12 @@ impl Operations {
                         vec![]
                     })
                 }
-                SuiCommand::MoveCall(m) if Self::is_unstake_call(m) => {
+                Command::MoveCall(m) if Self::is_unstake_call(m) => {
                     let stake_id = unstake_call(inputs, m)?;
                     stake_ids.push(stake_id);
                     Some(vec![])
                 }
-                SuiCommand::MergeCoins(_merge_into, _merges) => {
+                Command::MergeCoins(_merge_into, _merges) => {
                     // We don't care about merge-coins, we can just skip it.
                     Some(vec![])
                 }
@@ -456,18 +472,10 @@ impl Operations {
                     .into_iter()
                     .map(|(recipient, amount)| {
                         currency = inputs.iter().last().and_then(|arg| {
-                            if let SuiCallArg::Pure(value) = arg {
-                                let bytes = value
-                                    .value()
-                                    .to_json_value()
-                                    .as_array()?
-                                    .clone()
-                                    .into_iter()
-                                    .map(|v| v.as_u64().map(|n| n as u8))
-                                    .collect::<Option<Vec<u8>>>()?;
-                                bcs::from_bytes::<String>(&bytes)
-                                    .ok()
-                                    .and_then(|bcs_str| serde_json::from_str(&bcs_str).ok())
+                            if let CallArg::Pure(bytes) = arg {
+                                bcs::from_bytes::<String>(bytes).ok().and_then(|json_str| {
+                                    serde_json::from_str::<Currency>(&json_str).ok()
+                                })
                             } else {
                                 None
                             }
@@ -511,22 +519,22 @@ impl Operations {
             operations.push(Operation::generic_op(
                 status,
                 sender,
-                SuiTransactionBlockKind::ProgrammableTransaction(pt),
+                TransactionKind::ProgrammableTransaction(pt.clone()),
             ))
         }
         Ok(operations)
     }
 
-    fn is_stake_call(tx: &SuiProgrammableMoveCall) -> bool {
+    fn is_stake_call(tx: &ProgrammableMoveCall) -> bool {
         tx.package == SUI_SYSTEM_PACKAGE_ID
-            && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
-            && tx.function == ADD_STAKE_FUN_NAME.as_str()
+            && tx.module.as_str() == SUI_SYSTEM_MODULE_NAME.as_str()
+            && tx.function.as_str() == ADD_STAKE_FUN_NAME.as_str()
     }
 
-    fn is_unstake_call(tx: &SuiProgrammableMoveCall) -> bool {
+    fn is_unstake_call(tx: &ProgrammableMoveCall) -> bool {
         tx.package == SUI_SYSTEM_PACKAGE_ID
-            && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
-            && tx.function == WITHDRAW_STAKE_FUN_NAME.as_str()
+            && tx.module.as_str() == SUI_SYSTEM_MODULE_NAME.as_str()
+            && tx.function.as_str() == WITHDRAW_STAKE_FUN_NAME.as_str()
     }
 
     fn process_balance_change(
@@ -540,9 +548,14 @@ impl Operations {
             balance_changes
                 .iter()
                 .fold(balances, |mut balances, (balance_change, ccy)| {
-                    // Rosetta only care about address owner
-                    if let Owner::AddressOwner(owner) = balance_change.owner {
-                        *balances.entry((owner, ccy.clone())).or_default() += balance_change.amount;
+                    if let (Some(addr_str), Some(amount_str)) =
+                        (&balance_change.address, &balance_change.amount)
+                    {
+                        if let (Ok(owner), Ok(amount)) =
+                            (SuiAddress::from_str(addr_str), i128::from_str(amount_str))
+                        {
+                            *balances.entry((owner, ccy.clone())).or_default() += amount;
+                        }
                     }
                     balances
                 });
@@ -565,15 +578,15 @@ impl Operations {
     }
 
     /// Checks to see if transferObjects is used on GasCoin
-    fn is_gascoin_transfer(tx: &SuiTransactionBlockKind) -> bool {
-        if let SuiTransactionBlockKind::ProgrammableTransaction(pt) = tx {
-            let SuiProgrammableTransactionBlock {
+    fn is_gascoin_transfer(tx: &TransactionKind) -> bool {
+        if let TransactionKind::ProgrammableTransaction(pt) = tx {
+            let ProgrammableTransaction {
                 inputs: _,
                 commands,
             } = &pt;
             return commands.iter().any(|command| match command {
-                SuiCommand::TransferObjects(objs, _) => {
-                    objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
+                Command::TransferObjects(objs, _) => {
+                    objs.iter().any(|&obj| obj == Argument::GasCoin)
                 }
                 _ => false,
             });
@@ -614,8 +627,15 @@ impl Operations {
             initial_balance_changes
                 .iter()
                 .fold(balances, |mut balances, (balance_change, ccy)| {
-                    if let Owner::AddressOwner(owner) = balance_change.owner {
-                        *balances.entry((owner, ccy.clone())).or_default() += balance_change.amount;
+                    // Parse the address and amount from the proto balance change
+                    if let (Some(addr_str), Some(amount_str)) =
+                        (&balance_change.address, &balance_change.amount)
+                    {
+                        if let (Ok(owner), Ok(amount)) =
+                            (SuiAddress::from_str(addr_str), i128::from_str(amount_str))
+                        {
+                            *balances.entry((owner, ccy.clone())).or_default() += amount;
+                        }
                     }
                     balances
                 });
@@ -663,12 +683,12 @@ impl Operations {
     /// 2) balances of previous and new gas owners need to be adjusted for the gas
     fn process_gascoin_transfer(
         coin_change_operations: &mut impl Iterator<Item = Operation>,
-        data: SuiTransactionBlockData,
+        data: TransactionData,
         new_gas_owner: SuiAddress,
         gas_used: i128,
         initial_balance_changes: &[(BalanceChange, Currency)],
     ) -> Result<Vec<Operation>, anyhow::Error> {
-        let tx = data.transaction();
+        let tx = data.kind();
         let prev_gas_owner = data.gas_data().owner;
         let mut operations = vec![];
         if Self::is_gascoin_transfer(tx) && prev_gas_owner != new_gas_owner {
@@ -714,37 +734,44 @@ impl Operations {
 
 impl Operations {
     fn try_from_data(
-        data: SuiTransactionBlockData,
+        data: TransactionData,
         status: Option<OperationStatus>,
     ) -> Result<Self, anyhow::Error> {
-        let sender = *data.sender();
+        let sender = data.sender();
         Ok(Self::new(Self::from_transaction(
-            data.transaction().clone(),
+            data.into_kind(),
             sender,
             status,
         )?))
     }
 }
 impl Operations {
-    pub async fn try_from_response(
-        response: SuiTransactionBlockResponse,
+    pub async fn try_from_executed_transaction(
+        executed_tx: &ExecutedTransaction,
         cache: &CoinMetadataCache,
     ) -> Result<Self, Error> {
-        let tx = response
-            .transaction
-            .ok_or_else(|| anyhow!("Response input should not be empty"))?;
-        let sender = *tx.data.sender();
-        let effect = response
-            .effects
-            .ok_or_else(|| anyhow!("Response effects should not be empty"))?;
-        let gas_owner = effect.gas_object().owner.get_owner_address()?;
+        let tx_data: sui_types::transaction::TransactionData = executed_tx
+            .transaction()
+            .bcs()
+            .deserialize()
+            .map_err(|e| anyhow!("Failed to deserialize transaction: {}", e))?;
+
+        let sender = tx_data.sender();
+
+        let effect: sui_types::effects::TransactionEffects = executed_tx
+            .effects()
+            .bcs()
+            .deserialize()
+            .map_err(|e| anyhow!("Failed to deserialize effects: {}", e))?;
+        let gas_owner = effect.gas_object().1.get_owner_address()?;
         let gas_summary = effect.gas_cost_summary();
         let gas_used = gas_summary.storage_rebate as i128
             - gas_summary.storage_cost as i128
             - gas_summary.computation_cost as i128;
 
-        let status = Some(effect.into_status().into());
-        let ops = Operations::try_from_data(tx.data.clone(), status)?;
+        let sui_exec_status: sui_json_rpc_types::SuiExecutionStatus = effect.into_status().into();
+        let status = Some(sui_exec_status.into());
+        let ops = Operations::try_from_data(tx_data.clone(), status)?;
         let ops = ops.into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -765,26 +792,30 @@ impl Operations {
 
         let mut principal_amounts = 0;
         let mut reward_amounts = 0;
-        // Extract balance change from unstake events
 
-        if let Some(events) = response.events {
-            for event in events.data {
-                if is_unstake_event(&event.type_) {
-                    let principal_amount = event
-                        .parsed_json
-                        .pointer("/principal_amount")
-                        .and_then(|v| v.as_str())
-                        .and_then(|v| i128::from_str(v).ok());
-                    let reward_amount = event
-                        .parsed_json
-                        .pointer("/reward_amount")
-                        .and_then(|v| v.as_str())
-                        .and_then(|v| i128::from_str(v).ok());
-                    if let (Some(principal_amount), Some(reward_amount)) =
-                        (principal_amount, reward_amount)
-                    {
-                        principal_amounts += principal_amount;
-                        reward_amounts += reward_amount;
+        // Extract balance change from unstake events
+        for event in executed_tx.events().events() {
+            let event_type = event.event_type();
+            if let Ok(type_tag) = StructTag::from_str(event_type) {
+                if is_unstake_event(&type_tag) {
+                    if let Some(json) = &event.json {
+                        if let Some(Kind::StructValue(struct_val)) = &json.kind {
+                            if let Some(principal_field) = struct_val.fields.get("principal_amount")
+                            {
+                                if let Some(Kind::StringValue(s)) = &principal_field.kind {
+                                    if let Ok(amount) = i128::from_str(s) {
+                                        principal_amounts += amount;
+                                    }
+                                }
+                            }
+                            if let Some(reward_field) = struct_val.fields.get("reward_amount") {
+                                if let Some(Kind::StringValue(s)) = &reward_field.kind {
+                                    if let Ok(amount) = i128::from_str(s) {
+                                        reward_amounts += amount;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -802,11 +833,12 @@ impl Operations {
 
         let mut balance_changes = vec![];
 
-        for balance_change in &response
-            .balance_changes
-            .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?
-        {
-            if let Ok(currency) = cache.get_currency(&balance_change.coin_type).await {
+        for balance_change in &executed_tx.balance_changes {
+            let coin_type = balance_change.coin_type();
+            let type_tag = sui_types::TypeTag::from_str(coin_type)
+                .map_err(|e| anyhow!("Invalid coin type: {}", e))?;
+
+            if let Ok(currency) = cache.get_currency(&type_tag).await {
                 if !currency.symbol.is_empty() {
                     balance_changes.push((balance_change.clone(), currency));
                 }
@@ -826,7 +858,7 @@ impl Operations {
         // and convert BalanceChange to PaySui when GasCoin is transferred
         let gascoin_transfer_operations = Self::process_gascoin_transfer(
             &mut coin_change_operations,
-            tx.data,
+            tx_data,
             gas_owner,
             gas_used,
             &balance_changes,
@@ -892,18 +924,7 @@ fn is_unstake_event(tag: &StructTag) -> bool {
 impl TryFrom<TransactionData> for Operations {
     type Error = Error;
     fn try_from(data: TransactionData) -> Result<Self, Self::Error> {
-        struct NoOpsModuleResolver;
-        impl ModuleResolver for NoOpsModuleResolver {
-            type Error = Error;
-            fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-                Ok(None)
-            }
-        }
-        // Rosetta don't need the call args to be parsed into readable format
-        Ok(Operations::try_from_data(
-            SuiTransactionBlockData::try_from_with_module_cache(data, &&mut NoOpsModuleResolver)?,
-            None,
-        )?)
+        Ok(Operations::try_from_data(data, None)?)
     }
 }
 
@@ -937,7 +958,7 @@ impl PartialEq for Operation {
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq)]
 pub enum OperationMetadata {
-    GenericTransaction(SuiTransactionBlockKind),
+    GenericTransaction(TransactionKind),
     Stake { validator: SuiAddress },
     WithdrawStake { stake_ids: Vec<ObjectID> },
 }
@@ -946,7 +967,7 @@ impl Operation {
     fn generic_op(
         status: Option<OperationStatus>,
         sender: SuiAddress,
-        tx: SuiTransactionBlockKind,
+        tx: TransactionKind,
     ) -> Self {
         Operation {
             operation_identifier: Default::default(),
@@ -1062,7 +1083,7 @@ impl Operation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ConstructionMetadata, OperationType};
+    use crate::types::ConstructionMetadata;
     use crate::SUI;
     use move_core_types::annotated_value::MoveTypeLayout;
     use sui_json_rpc_types::SuiCallArg;

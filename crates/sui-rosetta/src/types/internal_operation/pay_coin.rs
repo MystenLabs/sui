@@ -5,10 +5,11 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use sui_sdk::SuiClient;
+use sui_rpc::client::v2::Client;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
 
 use crate::types::internal_operation::MAX_GAS_COINS;
@@ -30,7 +31,7 @@ pub struct PayCoin {
 impl TryConstructTransaction for PayCoin {
     async fn try_fetch_needed_objects(
         self,
-        client: &SuiClient,
+        client: &mut Client,
         gas_price: Option<u64>,
         budget: Option<u64>,
     ) -> Result<TransactionObjectData, Error> {
@@ -43,17 +44,21 @@ impl TryConstructTransaction for PayCoin {
 
         let amount = amounts.iter().sum::<u64>();
         let coin_objs: Vec<ObjectRef> = client
-            .coin_read_api()
             .select_coins(
-                sender,
-                Some(currency.metadata.coin_type.clone()),
+                &sender.to_string(),
+                &currency.metadata.coin_type,
                 amount.into(),
-                vec![],
+                &[],
             )
-            .await?
+            .await
+            .map_err(Error::from)?
             .iter()
-            .map(|coin| coin.object_ref())
-            .collect();
+            .map(|obj| {
+                obj.object_reference()
+                    .try_to_object_ref()
+                    .map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         let budget = match budget {
             Some(budget) => budget,
@@ -63,11 +68,16 @@ impl TryConstructTransaction for PayCoin {
             }
         };
 
-        let gas_coins = client
-            .coin_read_api()
-            .select_coins(sender, None, budget as u128, vec![])
-            .await?;
-        if gas_coins.len() > MAX_GAS_COINS {
+        let gas_objects = client
+            .select_coins(
+                &sender.to_string(),
+                sui_rpc::client::v2::SUI_COIN_TYPE,
+                budget as u128,
+                &[],
+            )
+            .await
+            .map_err(Error::from)?;
+        if gas_objects.len() > MAX_GAS_COINS {
             return Err(SuiError::UserInputError {
                 error: UserInputError::SizeLimitExceeded {
                     limit: "maximum number of gas payment objects".to_string(),
@@ -77,9 +87,15 @@ impl TryConstructTransaction for PayCoin {
             .into());
         }
 
-        let gas_coins_iter = gas_coins.into_iter();
-        let total_sui_balance = gas_coins_iter.clone().map(|c| c.balance).sum::<u64>() as i128;
-        let gas_coins = gas_coins_iter.map(|c| c.object_ref()).collect();
+        let total_sui_balance = gas_objects.iter().map(|o| o.balance()).sum::<u64>() as i128;
+        let gas_coins = gas_objects
+            .iter()
+            .map(|obj| {
+                obj.object_reference()
+                    .try_to_object_ref()
+                    .map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TransactionObjectData {
             gas_coins,

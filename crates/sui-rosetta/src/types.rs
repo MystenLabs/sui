@@ -14,11 +14,13 @@ use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
-use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockKind};
+use sui_json_rpc_types::SuiExecutionStatus;
+use sui_sdk_types::Address;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_types::transaction::TransactionKind;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
@@ -187,8 +189,8 @@ pub struct AmountMetadata {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct SubBalance {
-    pub stake_id: ObjectID,
-    pub validator: SuiAddress,
+    pub stake_id: Address,
+    pub validator: Address,
     #[serde(with = "str_format")]
     pub value: i128,
 }
@@ -254,24 +256,6 @@ impl IntoResponse for AccountCoinsResponse {
 pub struct Coin {
     pub coin_identifier: CoinIdentifier,
     pub amount: Amount,
-}
-
-impl From<sui_sdk::rpc_types::Coin> for Coin {
-    fn from(coin: sui_sdk::rpc_types::Coin) -> Self {
-        Self {
-            coin_identifier: CoinIdentifier {
-                identifier: CoinID {
-                    id: coin.coin_object_id,
-                    version: coin.version,
-                },
-            },
-            amount: Amount {
-                value: coin.balance as i128,
-                currency: SUI.clone(),
-                metadata: None,
-            },
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -465,30 +449,22 @@ pub enum OperationType {
     ProgrammableSystemTransaction,
 }
 
-impl From<&SuiTransactionBlockKind> for OperationType {
-    fn from(tx: &SuiTransactionBlockKind) -> Self {
+impl From<&TransactionKind> for OperationType {
+    fn from(tx: &TransactionKind) -> Self {
         match tx {
-            SuiTransactionBlockKind::ChangeEpoch(_) => OperationType::EpochChange,
-            SuiTransactionBlockKind::Genesis(_) => OperationType::Genesis,
-            SuiTransactionBlockKind::ConsensusCommitPrologue(_)
-            | SuiTransactionBlockKind::ConsensusCommitPrologueV2(_)
-            | SuiTransactionBlockKind::ConsensusCommitPrologueV3(_)
-            | SuiTransactionBlockKind::ConsensusCommitPrologueV4(_) => {
+            TransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
+            TransactionKind::Genesis(_) => OperationType::Genesis,
+            TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::ConsensusCommitPrologueV3(_)
+            | TransactionKind::ConsensusCommitPrologueV4(_) => {
                 OperationType::ConsensusCommitPrologue
             }
-            SuiTransactionBlockKind::ProgrammableTransaction(_) => {
-                OperationType::ProgrammableTransaction
-            }
-            SuiTransactionBlockKind::AuthenticatorStateUpdate(_) => {
-                OperationType::AuthenticatorStateUpdate
-            }
-            SuiTransactionBlockKind::RandomnessStateUpdate(_) => {
-                OperationType::RandomnessStateUpdate
-            }
-            SuiTransactionBlockKind::EndOfEpochTransaction(_) => {
-                OperationType::EndOfEpochTransaction
-            }
-            SuiTransactionBlockKind::ProgrammableSystemTransaction(_) => {
+            TransactionKind::ProgrammableTransaction(_) => OperationType::ProgrammableTransaction,
+            TransactionKind::AuthenticatorStateUpdate(_) => OperationType::AuthenticatorStateUpdate,
+            TransactionKind::RandomnessStateUpdate(_) => OperationType::RandomnessStateUpdate,
+            TransactionKind::EndOfEpochTransaction(_) => OperationType::EndOfEpochTransaction,
+            TransactionKind::ProgrammableSystemTransaction(_) => {
                 OperationType::ProgrammableSystemTransaction
             }
         }
@@ -919,7 +895,6 @@ mod tests {
     use super::*;
     use quick_js::Context;
     use serde_json::json;
-    use sui_types::base_types::ObjectRef;
 
     #[tokio::test]
     async fn test_currency_defaults() {

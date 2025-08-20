@@ -8,12 +8,18 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
+use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::Bcs;
+use sui_rpc::proto::sui::rpc::v2::{
+    simulate_transaction_request::TransactionChecks, ExecuteTransactionRequest,
+    SimulateTransactionRequest, Transaction as ProtoTransaction, UserSignature,
+};
 
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
-use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
+use sui_types::digests::TransactionDigest;
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
@@ -33,11 +39,11 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 
-// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
+// This module implements the [Mesh Construction API](https://docs.cdp.coinbase.com/mesh/mesh-api-spec/api-reference#construction)
 
 /// Derive returns the AccountIdentifier associated with a public key.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionderive)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/derive-accountidentifier-from-publickey)
 pub async fn derive(
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionDeriveRequest>, Error>,
@@ -53,7 +59,7 @@ pub async fn derive(
 /// It returns an unsigned transaction blob and a collection of payloads that must be signed by
 /// particular AccountIdentifiers using a certain SignatureType.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionpayloads)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/generate-unsigned-transaction-and-signing-payloads)
 pub async fn payloads(
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionPayloadsRequest>, Error>,
@@ -86,7 +92,7 @@ pub async fn payloads(
 /// Combine creates a network-specific transaction from an unsigned transaction
 /// and an array of provided signatures.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructioncombine)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/create-network-transaction-from-signatures)
 pub async fn combine(
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionCombineRequest>, Error>,
@@ -130,7 +136,7 @@ pub async fn combine(
 
 /// Submit a pre-signed transaction to the node.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionsubmit)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/submit-signed-transaction)
 pub async fn submit(
     State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
@@ -143,40 +149,74 @@ pub async fn submit(
     // through a dry_run with a possibly invalid budget (metadata endpoint), but the requirements
     // are that it should pass from there and fail here.
     let tx_data = signed_tx.data().transaction_data().clone();
-    let dry_run = context
-        .client
-        .read_api()
-        .dry_run_transaction_block(tx_data)
-        .await?;
-    if let SuiExecutionStatus::Failure { error } = dry_run.effects.status() {
-        return Err(Error::TransactionDryRunError(error.clone()));
-    };
+
+    let tx_bytes = bcs::to_bytes(&tx_data)
+        .map_err(|e| Error::InvalidInput(format!("Failed to serialize transaction: {}", e)))?;
+
+    let bcs = Bcs::default().with_value(tx_bytes);
+    let proto_transaction = ProtoTransaction::default().with_bcs(bcs);
+
+    let request = SimulateTransactionRequest::new(proto_transaction)
+        .with_read_mask(FieldMask::from_paths(["transaction.effects.status"]))
+        .with_checks(TransactionChecks::Enabled)
+        .with_do_gas_selection(false);
 
     let response = context
         .client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            signed_tx,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes(),
-            None,
-        )
-        .await?;
+        .clone()
+        .execution_client()
+        .simulate_transaction(request)
+        .await?
+        .into_inner();
 
-    if let SuiExecutionStatus::Failure { error } = response
-        .effects
-        .expect("Execute transaction should return effects")
-        .status()
-    {
-        return Err(Error::TransactionExecutionError(error.to_string()));
+    let effects = response.transaction().effects();
+
+    if !effects.status().success() {
+        return Err(Error::TransactionDryRunError(
+            effects.status().error().clone(),
+        ));
+    };
+
+    let mut client = context.client.clone();
+    let mut execution_client = client.execution_client();
+
+    let bcs = Bcs::default().with_value(bcs::to_bytes(signed_tx.transaction_data())?);
+    let proto_transaction = ProtoTransaction::default().with_bcs(bcs);
+
+    let signatures = signed_tx
+        .tx_signatures()
+        .iter()
+        .map(|s| {
+            let bcs = Bcs::default().with_value(s.as_ref().to_owned());
+            UserSignature::default().with_bcs(bcs)
+        })
+        .collect();
+
+    let exec_request = ExecuteTransactionRequest::default()
+        .with_transaction(proto_transaction)
+        .with_signatures(signatures)
+        .with_read_mask(FieldMask::from_paths(["transaction"]));
+
+    let grpc_response = execution_client
+        .execute_transaction(exec_request)
+        .await?
+        .into_inner();
+
+    let transaction = grpc_response.transaction();
+    let effects = transaction.effects();
+    if !effects.status().success() {
+        return Err(Error::TransactionExecutionError(
+            effects.status().error().clone(),
+        ));
     }
 
+    let digest = transaction
+        .digest()
+        .parse::<TransactionDigest>()
+        .map_err(|e| Error::DataError(format!("Invalid transaction digest: {}", e)))?;
+
     Ok(TransactionIdentifierResponse {
-        transaction_identifier: TransactionIdentifier {
-            hash: response.digest,
-        },
+        transaction_identifier: TransactionIdentifier { hash: digest },
         metadata: None,
     })
 }
@@ -184,7 +224,7 @@ pub async fn submit(
 /// Preprocess is called prior to /construction/payloads to construct a request for any metadata
 /// that is needed for transaction construction given (i.e. account nonce).
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionpreprocess)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/create-request-to-fetch-metadata)
 pub async fn preprocess(
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionPreprocessRequest>, Error>,
@@ -205,7 +245,7 @@ pub async fn preprocess(
 
 /// TransactionHash returns the network-specific transaction hash for a signed transaction.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionhash)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/get-hash-of-signed-transaction)
 pub async fn hash(
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionHashRequest>, Error>,
@@ -224,9 +264,9 @@ pub async fn hash(
 /// For Sui, we are returning the latest object refs for all the input objects,
 /// which will be used in transaction construction.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionmetadata)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/get-metadata-for-transaction-construction)
 pub async fn metadata(
-    State(context): State<OnlineServerContext>,
+    State(mut context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionMetadataRequest>, Error>,
 ) -> Result<ConstructionMetadataResponse, Error> {
@@ -239,11 +279,7 @@ pub async fn metadata(
         _ => None,
     };
 
-    let mut gas_price = context
-        .client
-        .governance_api()
-        .get_reference_gas_price()
-        .await?;
+    let mut gas_price = context.client.get_reference_gas_price().await?;
     // make sure it works over epoch changes
     gas_price += 100;
 
@@ -255,7 +291,7 @@ pub async fn metadata(
         budget,
     } = option
         .internal_operation
-        .try_fetch_needed_objects(&context.client, Some(gas_price), budget)
+        .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
         .await?;
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
@@ -275,7 +311,7 @@ pub async fn metadata(
 ///  This is run as a sanity check before signing (after /construction/payloads)
 /// and before broadcast (after /construction/combine).
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionparse)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/construction/parse-transaction)
 pub async fn parse(
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionParseRequest>, Error>,

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use fastcrypto::encoding::{Encoding, Hex};
 use serde::Deserialize;
 use serde_json::json;
@@ -17,6 +15,7 @@ use sui_rosetta::types::{
     NetworkIdentifier, PreprocessMetadata, Signature, SignatureType, SuiEnv,
     TransactionIdentifierResponse,
 };
+use sui_rpc::client::v2::Client as GrpcClient;
 use sui_types::crypto::SuiSignature;
 use test_cluster::TestClusterBuilder;
 
@@ -51,12 +50,10 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let recipient = test_cluster.get_address_1();
-    let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
 
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
@@ -193,7 +190,8 @@ async fn test_pay_with_gas_budget_fail() {
                     description: None,
                     retriable: false,
                     details: RosettaSubmitGasErrorDetails {
-                        error: "InsufficientGas".to_string()
+                        error: "ExecutionError: Kind: InsufficientGas, Description: No description"
+                            .to_string()
                     }
                 }
             )
