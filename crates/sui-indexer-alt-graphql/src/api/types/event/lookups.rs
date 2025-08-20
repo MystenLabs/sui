@@ -64,13 +64,17 @@ impl EventLookup {
         scope: &Scope,
         tx_sequence_numbers: &[u64],
     ) -> Result<Vec<Event>, RpcError> {
-        let events: Vec<Event> = tx_sequence_numbers
+        let mut events: Vec<Event> = tx_sequence_numbers
             .iter()
             .map(|tx_seq_num| self.events_from_tx_sequence_number(scope, *tx_seq_num))
             .collect::<Result<Vec<_>, RpcError>>()?
             .into_iter()
             .flatten()
             .collect();
+        events.sort_by(|a, b| {
+            (a.tx_sequence_number, a.sequence_number)
+                .cmp(&(b.tx_sequence_number, b.sequence_number))
+        });
         Ok(events)
     }
 
@@ -106,6 +110,7 @@ impl EventLookup {
                     transaction_digest: contents.digest()?,
                     sequence_number: idx as u64,
                     timestamp_ms: contents.timestamp_ms(),
+                    tx_sequence_number,
                 })
             })
             .collect()
