@@ -29,4 +29,4 @@ move-clippy = [
 ]
 
 [build]
-rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "-A", "mismatched_lifetime_syntaxes"]
+rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "-A", "unknown_lints", "-A", "mismatched_lifetime_syntaxes"]

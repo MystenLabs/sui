@@ -14,7 +14,7 @@ use thiserror::Error;
 
 use crate::{flavor::MoveFlavor, schema::OriginalID};
 
-use super::PackageGraph;
+use super::{PackageGraph, PackageInfo};
 
 #[derive(Debug, Error)]
 pub enum LinkageError {
@@ -61,8 +61,8 @@ pub enum LinkageError {
 
 pub type LinkageResult<T> = Result<T, LinkageError>;
 
-/// Mapping from original ID to the package node to use for that address
-type LinkageTable = BTreeMap<OriginalID, NodeIndex>;
+/// Mapping from original ID to the package info to use for that address
+pub type LinkageTable<'a, F> = BTreeMap<OriginalID, PackageInfo<'a, F>>;
 
 impl<F: MoveFlavor> PackageGraph<F> {
     /// Construct and return a linkage table for the root package of `self`. Only published
@@ -75,12 +75,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
     ///
     /// This method checks that the entire graph has consistent linkage, but only returns the
     /// linkage for the root node.
-    pub fn linkage(&self) -> LinkageResult<LinkageTable> {
+    pub fn linkage(&self) -> LinkageResult<LinkageTable<F>> {
         // we compute the linkage in reverse topological order, so that the linkage for a package's
         // dependencies have been computed before we compute its linkage
         let sorted = toposort(&self.inner, None).map_err(LinkageError::CyclicDependencies)?;
 
-        let mut linkages: BTreeMap<NodeIndex, LinkageTable> = BTreeMap::new();
+        let mut linkages: BTreeMap<NodeIndex, BTreeMap<OriginalID, NodeIndex>> = BTreeMap::new();
         for node in sorted.iter().rev() {
             let package_node = &self.inner[*node];
 
@@ -94,7 +94,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
             // compute the linkage for `node` by iterating all transitive deps and looking for
             // duplicates
-            let mut linkage = LinkageTable::new();
+            let mut linkage: BTreeMap<OriginalID, NodeIndex> = BTreeMap::new();
             let overrides = self.override_nodes(*node)?;
 
             // TODO: `select_dep(node, ...)` produces an error if there's a missing override in `node`,
@@ -123,9 +123,15 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
 
         let root = sorted[0];
-        Ok(linkages
-            .remove(&sorted[0]) // root package is first in topological order
-            .expect("all linkages have been computed"))
+        let root_linkage = linkages
+            .remove(&root) // root package is first in topological order
+            .expect("all linkages have been computed");
+
+        // Convert NodeIndex to PackageInfo
+        Ok(root_linkage
+            .into_iter()
+            .map(|(oid, node)| (oid, PackageInfo { graph: self, node }))
+            .collect())
     }
 
     /// Returns the the packages that are overridden in `node`, keyed by their original IDs (only
