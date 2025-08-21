@@ -39,7 +39,7 @@ impl<A: Clone> RequestRetrier<A> {
         let preferred_num = std::env::var("PREFERRED_NUM")
             .ok()
             .and_then(|s: String| s.parse::<usize>().ok())
-            .unwrap_or(auth_agg.committee.num_members() / 4);
+            .unwrap_or(auth_agg.committee.num_members() / 3);
 
         debug!("Using preferred num: {}", preferred_num);
 
