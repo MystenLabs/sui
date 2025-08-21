@@ -27,6 +27,7 @@ impl EventLookup {
     /// Loads transaction events by:
     /// 1. Fetching transaction digests from PostgreSQL using tx_sequence_numbers
     /// 2. Retrieves corresponding events from kv store using digests in batches
+    ///
     /// Resulting EventLookup is a helper used to retrieve events for transactions.
     pub(crate) async fn from_sequence_numbers(
         ctx: &Context<'_>,
