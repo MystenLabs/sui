@@ -373,7 +373,7 @@ pub fn get_compiled_pkg(
                     d.dep_hashes.iter().for_each(|h| {
                         hasher.update(h.0);
                     });
-                    let deps_hash = format!("{:X}", hasher.finalize());
+                    let deps_hash = hasher_to_hash_string(hasher);
                     if manifest_hash.is_some()
                         && manifest_hash == d.manifest_hash
                         && mapped_files_data.deps_hash == deps_hash
@@ -767,10 +767,16 @@ fn compute_mapped_files(resolved_graph: &ResolvedGraph, overlay_fs: VfsPath) -> 
     }
     MappedFilesData::new(
         mapped_files,
-        format!("{:X}", hasher.finalize()),
+        hasher_to_hash_string(hasher),
         dep_hashes,
         dep_pkg_paths,
     )
+}
+
+/// Helper function to convert a hasher to a hash string
+/// consistently across different functions.
+fn hasher_to_hash_string(hasher: Sha256) -> String {
+    format!("{:X}", hasher.finalize())
 }
 
 /// Merges a cached compiled program with newly computed compiled program
