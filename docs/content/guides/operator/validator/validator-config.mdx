@@ -93,11 +93,11 @@ See [Validator](https://github.com/MystenLabs/sui/blob/main/nre/config/validator
 
 | protocol/port | reachability     | purpose                           |
 | ------------- | ---------------- | --------------------------------- |
-| TCP/8080      | inbound          | validator/transaction interface   |
-| TCP/8081      | inbound/outbound | consensus interface               |
-| UDP/8084      | inbound/outbound | peer to peer state sync interface |
-| TCP/8443      | outbound         | metrics pushing                   |
-| TCP/9184      | localhost        | metrics scraping                  |
+| TCP/8080      | Inbound          | Validator/transaction interface   |
+| TCP/8081      | Inbound/outbound | Consensus interface               |
+| UDP/8084      | Inbound/outbound | Peer-to-peer state sync interface |
+| TCP/8443      | Outbound         | Metrics pushing                   |
+| TCP/9184      | Localhost        | Metrics scraping                  |
 
 To run a validator successfully, it is critical that ports 8080-8084 are open as outlined, including the specific protocol (TCP/UDP).
 
