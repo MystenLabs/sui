@@ -141,15 +141,8 @@ const guides = [
 						items: ['guides/developer/advanced/min-gas-fees'],
 					},*/
 					'guides/developer/advanced/move-2024-migration',
-					{ 
-						type: 'category',
-						label: 'Build Your First Custom Indexer',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/advanced/custom-indexer'
-						},
-						items: ['guides/developer/advanced/custom-indexer/indexer-walrus']
-					},
+					'guides/developer/advanced/custom-indexer',
+					'guides/developer/advanced/custom-indexer/indexer-walrus',
 					'guides/developer/advanced/randomness-onchain',
 					'guides/developer/getting-started/graphql-rpc',
 					'guides/developer/advanced/graphql-migration',
