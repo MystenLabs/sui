@@ -49,6 +49,14 @@ async fn test_install_dir_creates_directory() {
         ..Default::default()
     };
 
+    let cmd = std::process::Command::new("ls")
+        .arg(&package_path)
+        .output()
+        .expect("Failed to execute ls command");
+    println!(
+        "Package directory contents before build: {}",
+        String::from_utf8_lossy(&cmd.stdout)
+    );
     let env = default_environment();
 
     let result =
@@ -97,7 +105,11 @@ async fn test_install_dir_relative_path() {
     let result =
         compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output).await;
 
-    assert!(result.is_ok(), "Compilation should succeed");
+    assert!(
+        result.is_ok(),
+        "Compilation should succeed, {:?}",
+        result.unwrap_err()
+    );
 
     let expected_install_path = package_path.join("../install_output");
     assert!(

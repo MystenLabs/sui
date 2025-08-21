@@ -166,7 +166,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
     pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
-        todo!()
+        Ok(self.graph.linkage()?)
     }
 
     /// Output an updated lockfile containg the dependency graph represented by `self`. Note that
