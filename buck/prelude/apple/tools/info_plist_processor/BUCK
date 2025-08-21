@@ -1,0 +1,35 @@
+load("@prelude//apple/tools/defs.bzl", "meta_python_test")
+
+native.python_library(
+    name = "preprocess",
+    srcs = ["preprocess.py"],
+)
+
+meta_python_test(
+    name = "preprocess_test",
+    srcs = ["preprocess_test.py"],
+    deps = [":preprocess"],
+)
+
+native.python_library(
+    name = "process",
+    srcs = ["process.py"],
+    deps = ["prelude//apple/tools:plistlib_utils"],
+    visibility = ["PUBLIC"],
+)
+
+meta_python_test(
+    name = "process_test",
+    srcs = ["process_test.py"],
+    deps = [":process"],
+)
+
+native.python_binary(
+    name = "tool",
+    main = "main.py",
+    deps = [
+        ":preprocess",
+        ":process",
+    ],
+    visibility = ["PUBLIC"],
+)
