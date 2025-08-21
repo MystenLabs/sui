@@ -11,7 +11,9 @@ The total voting power on Sui is always 10,000, regardless of the amount staked.
 
 ## User staking and rewards
 
-When users stake SUI tokens, these SUI objects are wrapped into `StakedSUI` objects. The calculation to determine each user's relative ownership of the staking pool is done directly with the timestamp of the `StakedSUI` object, which determines the moment at which the deposit took place, and the change in the exchange rates between the deposit epoch and the withdrawal epoch. Each staking pool's data structure contains a time series with that pool's exchange rates. These exchange rates can be used to determine the withdrawals of any of the pool's stakers.
+When users stake SUI tokens, the tokens are wrapped into `StakedSUI` objects. A user’s share of the staking pool is calculated using the timestamp of their `StakedSUI` object, which records when the deposit occurred, along with the change in exchange rates between the deposit epoch and the withdrawal epoch.  
+
+Each staking pool maintains a time series of its exchange rates. This data allows the system to determine the correct withdrawal amount for any staker in the pool.
 
 ### Find the exchange rate 
 
