@@ -377,6 +377,7 @@ impl CertifierState {
             }
         }
 
+        /*
         for target_ancestor in voted_block.ancestors() {
             // Votes are limited to 1 round before the proposed block.
             if target_ancestor.round + 1 != voted_block.round() {
@@ -415,7 +416,7 @@ impl CertifierState {
                     .observe(latency.as_secs_f64());
                 certified_blocks.push(certified_block);
             }
-        }
+        }*/
 
         certified_blocks
     }
