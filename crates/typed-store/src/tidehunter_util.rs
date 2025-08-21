@@ -85,6 +85,10 @@ pub fn default_mutex_count() -> usize {
     1024
 }
 
+pub fn default_value_cache_size() -> usize {
+    1000
+}
+
 pub(crate) fn apply_range_bounds(
     iterator: &mut DbIterator,
     lower_bound: Option<Vec<u8>>,

@@ -612,19 +612,19 @@ impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         tracing::warn!("AuthorityEpochTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, default_mutex_count, KeyIndexing, KeySpaceConfig, KeyType,
-            ThConfig,
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size, KeyIndexing,
+            KeySpaceConfig, KeyType, ThConfig,
         };
         let mutexes = default_mutex_count() * 2;
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
-        const VALUE_CACHE_SIZE: usize = 5000;
+        let value_cache_size = default_value_cache_size() * 2;
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
-        let lru_bloom_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
-        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
+        let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
+        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
         let pending_checkpoint_signatures_config = KeySpaceConfig::new()
             .disable_unload()
-            .with_value_cache_size(1000);
+            .with_value_cache_size(default_value_cache_size());
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let object_ref_indexing = KeyIndexing::Hash;
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);

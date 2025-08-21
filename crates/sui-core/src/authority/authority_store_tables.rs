@@ -205,11 +205,11 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, default_mutex_count, Bytes, IndexWalPosition, KeyIndexing,
-            KeySpaceConfig, KeyType, ThConfig,
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size, Bytes,
+            IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
         };
         let mutexes = default_mutex_count() * 2;
-        const VALUE_CACHE_SIZE: usize = 2_000;
+        let value_cache_size = default_value_cache_size();
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
@@ -256,7 +256,7 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     mutexes,
                     uniform_key,
-                    KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE),
+                    KeySpaceConfig::new().with_value_cache_size(value_cache_size),
                     digest_prefix.clone(),
                 ),
             ),
@@ -266,7 +266,7 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     mutexes,
                     uniform_key,
-                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
+                    bloom_config.clone().with_value_cache_size(value_cache_size),
                     digest_prefix.clone(),
                 ),
             ),
@@ -276,7 +276,7 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     mutexes,
                     uniform_key,
-                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
+                    bloom_config.clone().with_value_cache_size(value_cache_size),
                     digest_prefix.clone(),
                 ),
             ),
