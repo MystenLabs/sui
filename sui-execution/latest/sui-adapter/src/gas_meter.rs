@@ -192,11 +192,15 @@ impl GasMeter for SuiGasMeter<'_> {
     }
 
     fn charge_move_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        // Charge for the move of the local on to the stack. Note that we charge here since we
-        // aren't tracking the local size (at least not yet). If we were, this should be a net-zero
-        // operation in terms of memory usage.
-        self.0
-            .charge(1, 1, 0, abstract_memory_size(self.0, val).into(), 0)
+        if reweight_move_loc(self.0.gas_model_version) {
+            self.0.charge(1, 1, 0, REFERENCE_SIZE.into(), 0)
+        } else {
+            // Charge for the move of the local on to the stack. Note that we charge here since we
+            // aren't tracking the local size (at least not yet). If we were, this should be a net-zero
+            // operation in terms of memory usage.
+            self.0
+                .charge(1, 1, 0, abstract_memory_size(self.0, val).into(), 0)
+        }
     }
 
     fn charge_store_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
@@ -385,6 +389,11 @@ fn abstract_memory_size_with_traversal(
 
 fn enable_traverse_refs(gas_model_version: u64) -> bool {
     gas_model_version > 9
+}
+
+fn reweight_move_loc(gas_model_version: u64) -> bool {
+    // Reweighting `MoveLoc` is only done in gas model versions 10 and above.
+    gas_model_version > 10
 }
 
 fn size_config_for_gas_model_version(
