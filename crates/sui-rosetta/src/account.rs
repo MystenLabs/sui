@@ -9,10 +9,10 @@ use futures::future::join_all;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::{
-    GetBalanceRequest, GetCheckpointRequest, ListOwnedObjectsRequest,
+    GetBalanceRequest, GetCheckpointRequest, GetEpochRequest, ListOwnedObjectsRequest,
 };
-use sui_sdk::rpc_types::StakeStatus;
-use sui_sdk::{SuiClient, SUI_COIN_TYPE};
+use sui_sdk::SUI_COIN_TYPE;
+use sui_sdk_types::Address;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
 
@@ -89,6 +89,27 @@ async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSeque
         .ok_or_else(|| Error::DataError("No sequence_number for checkpoint".to_string()))
 }
 
+async fn get_current_epoch(grpc_client: &mut sui_rpc::client::Client) -> Result<u64, Error> {
+    let request = GetEpochRequest {
+        epoch: None, // None means get current epoch
+        read_mask: Some(FieldMask::from_paths(["epoch"])),
+    };
+
+    let response = grpc_client
+        .ledger_client()
+        .get_epoch(request)
+        .await?
+        .into_inner();
+
+    let epoch_info = response
+        .epoch
+        .ok_or_else(|| Error::DataError("No epoch in GetEpoch response".to_string()))?;
+
+    epoch_info
+        .epoch
+        .ok_or_else(|| Error::DataError("No epoch number in epoch response".to_string()))
+}
+
 async fn get_balances(
     ctx: &mut OnlineServerContext,
     request: &AccountBalanceRequest,
@@ -97,7 +118,7 @@ async fn get_balances(
 ) -> Result<Vec<Amount>, Error> {
     if let Some(sub_account) = &request.account_identifier.sub_account {
         let account_type = sub_account.account_type.clone();
-        get_sub_account_balances(account_type, &ctx.client, address).await
+        get_sub_account_balances(account_type, &mut ctx.grpc_client, address).await
     } else if !currencies.0.is_empty() {
         let balance_futures = currencies.0.iter().map(|currency| {
             let coin_type = currency.metadata.clone().coin_type.clone();
@@ -153,56 +174,42 @@ async fn get_account_balances(
 
 async fn get_sub_account_balances(
     account_type: SubAccountType,
-    client: &SuiClient,
+    grpc_client: &mut sui_rpc::client::Client,
     address: SuiAddress,
 ) -> Result<Vec<Amount>, Error> {
-    let amounts = match account_type {
-        SubAccountType::Stake => {
-            let delegations = client.governance_api().get_stakes(address).await?;
-            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
-                for stake in &stakes.stakes {
-                    if let StakeStatus::Active { .. } = stake.status {
-                        amounts.push(SubBalance {
-                            stake_id: stake.staked_sui_id,
-                            validator: stakes.validator_address,
-                            value: stake.principal as i128,
-                        });
-                    }
-                }
-                amounts
-            })
-        }
-        SubAccountType::PendingStake => {
-            let delegations = client.governance_api().get_stakes(address).await?;
-            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
-                for stake in &stakes.stakes {
-                    if let StakeStatus::Pending = stake.status {
-                        amounts.push(SubBalance {
-                            stake_id: stake.staked_sui_id,
-                            validator: stakes.validator_address,
-                            value: stake.principal as i128,
-                        });
-                    }
-                }
-                amounts
-            })
-        }
+    let current_epoch = get_current_epoch(grpc_client).await?;
+    let address = Address::from(address);
+    let delegated_stakes = grpc_client.list_delegated_stake(&address).await?;
 
-        SubAccountType::EstimatedReward => {
-            let delegations = client.governance_api().get_stakes(address).await?;
-            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
-                for stake in &stakes.stakes {
-                    if let StakeStatus::Active { estimated_reward } = stake.status {
-                        amounts.push(SubBalance {
-                            stake_id: stake.staked_sui_id,
-                            validator: stakes.validator_address,
-                            value: estimated_reward as i128,
-                        });
-                    }
-                }
-                amounts
+    let amounts: Vec<SubBalance> = match account_type {
+        SubAccountType::Stake => delegated_stakes
+            .into_iter()
+            .filter(|stake| current_epoch >= stake.activation_epoch)
+            .map(|stake| SubBalance {
+                stake_id: sui_types::base_types::ObjectID::from(stake.staked_sui_id),
+                validator: sui_types::base_types::SuiAddress::from(stake.validator_address),
+                value: stake.principal as i128,
             })
-        }
+            .collect(),
+        SubAccountType::PendingStake => delegated_stakes
+            .into_iter()
+            .filter(|stake| current_epoch < stake.activation_epoch)
+            .map(|stake| SubBalance {
+                stake_id: sui_types::base_types::ObjectID::from(stake.staked_sui_id),
+                validator: sui_types::base_types::SuiAddress::from(stake.validator_address),
+                value: stake.principal as i128,
+            })
+            .collect(),
+
+        SubAccountType::EstimatedReward => delegated_stakes
+            .into_iter()
+            .filter(|stake| current_epoch >= stake.activation_epoch)
+            .map(|stake| SubBalance {
+                stake_id: sui_types::base_types::ObjectID::from(stake.staked_sui_id),
+                validator: sui_types::base_types::SuiAddress::from(stake.validator_address),
+                value: stake.rewards as i128,
+            })
+            .collect(),
     };
 
     // Make sure there are always one amount returned

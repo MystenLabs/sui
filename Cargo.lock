@@ -15800,6 +15800,7 @@ dependencies = [
  "sui-rpc",
  "sui-rpc-api",
  "sui-sdk",
+ "sui-sdk-types",
  "sui-swarm-config",
  "sui-types",
  "telemetry-subscribers",
