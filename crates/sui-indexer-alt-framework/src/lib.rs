@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use anyhow::{ensure, Context};
+use anyhow::{bail, ensure, Context};
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
@@ -38,9 +38,39 @@ pub mod task;
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]
 pub struct IndexerArgs {
-    /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
-    /// ingestion will start just after the lowest checkpoint watermark across all active
-    /// pipelines.
+    /// An optional task name configured on the indexer to support running one-off or temporary
+    /// tasks, like backfills. By default there is no task name, and if left empty, watermark rows
+    /// will be keyed by only the `pipeline`. If one is provided, the indexer will propagate the
+    /// task name to each pipeline such that watermark rows will record both the pipeline and task
+    /// values. The indexer without a task name is considered the main indexer, and its pipelines
+    /// are considered the main pipelines.
+    ///
+    /// TODO (wlmyng)
+    /// Task pipelines should not enable pruning... hold back main pipeline pruner. If used with
+    /// `first_checkpoint`, task pipelines must be configured to start between `[reader_lo,
+    /// checkpoint_hi_inclusive]` This means that watermark rows keyed by just the pipeline are
+    /// considered the main pipelines ... other tasks with the same pipeline name must respect the
+    /// main pipeline's watermark row by operating within the `[reader_lo, committer_hi]` range.
+    ///
+    /// Example: An indexer with task "backfill-2024-01" running pipelines "events" and "objects"
+    /// will create watermark entries for (pipeline="events", task="backfill-2024-01") and
+    /// (pipeline="objects", task="backfill-2024-01").
+    #[arg(long)]
+    pub task: Option<String>,
+
+    /// Override for the checkpoint to start ingestion from. Whether a concurrent or sequential
+    /// pipeline also starts processing and committing from this checkpoint depends on the following
+    /// conditions:
+    /// - Concurrent and sequential pipelines alike will respect and start processing at
+    ///   `first_checkpoint` if a watermark row does not exist. Otherwise, the following behavior is
+    ///   only applicable to concurrent pipelines. Sequential pipelines will otherwise start
+    ///   processing from its committer watermark, with no exceptions.
+    /// - For main pipelines (pipelines without a task name) and pipelines with a task name, this
+    ///   value is ignored if a watermark row already exists. The pipeline will start processing
+    ///   checkpoints from ingestion once it has caught up to the pipeline's committer watermark.
+    /// - Additionally for pipelines with a task name, even if the watermark row does not exist,
+    ///   these pipelines cannot start from an arbitrary checkpoint. If `first_checkpoint` is
+    ///   configured, it must be within the main pipeline's `[reader_lo, checkpoint_hi_inclusive]`.
     #[arg(long)]
     pub first_checkpoint: Option<u64>,
 
@@ -53,10 +83,6 @@ pub struct IndexerArgs {
     /// configuration file will be run.
     #[arg(long, action = clap::ArgAction::Append)]
     pub pipeline: Vec<String>,
-
-    /// Don't write to the watermark tables for concurrent pipelines.
-    #[arg(long)]
-    pub skip_watermark: bool,
 }
 
 pub struct Indexer<S: Store> {
@@ -71,14 +97,37 @@ pub struct Indexer<S: Store> {
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
 
-    /// Optional override of the checkpoint lowerbound.
+    /// An optional task name configured on the indexer to support running one-off or temporary
+    /// tasks, like backfills. By default there is no task name, and if left empty, watermark rows
+    /// will be keyed by only the `pipeline`. If one is provided, the indexer will propagate the
+    /// task name to each pipeline such that watermark rows will record both the pipeline and task
+    /// values.
+    ///
+    /// Example: An indexer with task "backfill-2024-01" running pipelines "events" and "objects"
+    /// will create watermark entries for (pipeline="events", task="backfill-2024-01") and
+    /// (pipeline="objects", task="backfill-2024-01").
+    task: Option<String>,
+
+    /// Override for the checkpoint to start ingestion from. The exact behavior is dependent on a
+    /// few factors:
+    ///
+    /// - If the pipeline and optional task combination has not been run before, the watermark will
+    ///   be set up to expect this checkpoint as the next one, and the reader's lower bound will be
+    ///   set to this checkpoint.
+    /// - If the pipeline + task has already been run and there is an existing watermark entry, this
+    ///   value will be ignored (with a warning) and ingestion will resume from the existing
+    ///   committer_hi watermark, unless `--skip-watermark` is also supplied.
+    /// - If `--skip-watermark` is supplied, the pipeline will write data without updating
+    ///   watermarks, but only if `first_checkpoint` is greater than or equal to the current
+    ///   `reader_lo`. If `first_checkpoint < reader_lo`, the operation will fail to prevent writing
+    ///   data that the pruner has already cleaned up.
+    ///
+    /// By default (when not specified), ingestion will start just after the lowest checkpoint
+    /// watermark across all active pipelines.
     first_checkpoint: Option<u64>,
 
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
-
-    /// Don't write to the watermark tables for concurrent pipelines.
-    skip_watermark: bool,
 
     /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
     /// run. Any pipelines that are present in this filter but not added to the indexer will yield
@@ -113,6 +162,11 @@ impl<S: Store> Indexer<S> {
     ///
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
+    ///
+    /// Optionally, a task name can be provided to the indexer to support running one-off or
+    /// temporary tasks, like backfills. By default, there is no task name. In this scenario, the
+    /// indexer will write watermark rows for pipeline = `pipeline`. If one is provided, the indexer
+    /// will write watermark rows for pipeline = `pipeline` and task = `task`.
     pub async fn new(
         store: S,
         indexer_args: IndexerArgs,
@@ -126,7 +180,7 @@ impl<S: Store> Indexer<S> {
             first_checkpoint,
             last_checkpoint,
             pipeline,
-            skip_watermark,
+            task,
         } = indexer_args;
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
@@ -139,12 +193,12 @@ impl<S: Store> Indexer<S> {
         )?;
 
         Ok(Self {
+            task,
             store,
             metrics,
             ingestion_service,
             first_checkpoint,
             last_checkpoint,
-            skip_watermark,
             enabled_pipelines: if pipeline.is_empty() {
                 None
             } else {
@@ -187,6 +241,13 @@ impl<S: Store> Indexer<S> {
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
     /// exists for, for their pipeline.
+    ///
+    /// If `first-checkpoint` is set, this value is obeyed only if the pipeline does not already
+    /// have a watermark row. Otherwise, the concurrent pipeline will ignore the configured value
+    /// and instead resume from the existing committer watermark.
+    ///
+    /// Additionally, pipelines with a task name must respect the main pipeline's watermark row by
+    /// operating within the main pipeline's `[reader_lo, committer_hi]` range.
     pub async fn concurrent_pipeline<H>(
         &mut self,
         handler: H,
@@ -199,22 +260,25 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
-        // watermark consistency. first_checkpoint can be anything since we don't update watermark,
-        // and writes should be idempotent.
-        if !self.skip_watermark {
-            self.check_first_checkpoint_consistency::<H>(&watermark)?;
-        }
+        let computed_watermark = self
+            .compute_concurrent_pipeline_watermark::<H>(watermark)
+            .await?;
 
-        let initial_watermark =
-            initial_watermark_from_first_checkpoint(watermark, self.first_checkpoint);
+        // we should also set reader_lo of the task pipeline
+
+        self.first_checkpoint = computed_watermark
+            .as_ref()
+            .map(|w| w.checkpoint_hi_inclusive);
+
+        // check that task pipelines don't enable pruning
 
         self.handles.push(concurrent::pipeline::<H>(
             handler,
-            initial_watermark,
+            computed_watermark,
             config,
-            self.skip_watermark,
+            false, // TODO (wlmyng) do we want to rip out skip_watermark everywhere? probably
             self.store.clone(),
+            self.task.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
@@ -223,26 +287,78 @@ impl<S: Store> Indexer<S> {
         Ok(())
     }
 
-    /// Checks that the first checkpoint override is consistent with the watermark for the pipeline.
-    /// If the watermark does not exist, the override can be anything. If the watermark exists, the
-    /// override must not leave any gap in the data: it can be in the past, or at the tip of the
-    /// network, but not in the future.
-    fn check_first_checkpoint_consistency<P: Processor>(
+    async fn compute_concurrent_pipeline_watermark<H>(
         &self,
-        watermark: &Option<CommitterWatermark>,
-    ) -> Result<()> {
-        if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
-            ensure!(
-                first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
-                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
-                 This could create gaps in the data.",
-                P::NAME,
-                first_checkpoint,
-                watermark.checkpoint_hi_inclusive,
-            );
+        watermark: Option<CommitterWatermark>,
+    ) -> Result<Option<CommitterWatermark>>
+    where
+        H: concurrent::Handler<Store = S> + Send + Sync + 'static,
+    {
+        // Emit a warning and always obey committer hi if the watermark row exists
+        if let Some(existing_watermark) = watermark {
+            if let Some(first_checkpoint) = self.first_checkpoint {
+                warn!(
+                    "Pipeline {} has an existing watermark row, ignoring --first-checkpoint {} and resuming from committer_hi {}",
+                    H::NAME, first_checkpoint, existing_watermark.checkpoint_hi_inclusive
+                );
+            }
+            return Ok(Some(existing_watermark));
         }
 
-        Ok(())
+        // Main pipelines can start from any arbitrary checkpoint
+        if self.task.is_none() {
+            return Ok(initial_watermark_from_first_checkpoint(
+                None,
+                self.first_checkpoint,
+            ));
+        }
+
+        // Task pipelines must respect main pipeline's watermark
+        let mut conn = self
+            .store
+            .connect()
+            .await
+            .context("Failed to establish connection to store")?;
+
+        // If the main pipeline does not exist, task pipelines can also start from any arbitrary
+        // checkpoint
+        let Some(main_committer_watermark) = conn
+            .committer_watermark(H::NAME, None)
+            .await
+            .context("Failed to get main pipeline watermark")?
+        else {
+            return Ok(initial_watermark_from_first_checkpoint(
+                None,
+                self.first_checkpoint,
+            ));
+        };
+
+        let main_reader_watermark = conn
+            .reader_watermark(H::NAME, None)
+            .await
+            .context("Failed to get main pipeline reader watermark")?;
+
+        // The valid starting checkpoint is the main pipeline's `reader_lo`, or 0 if it does not
+        // exist.
+        let mut valid_first_checkpoint = main_reader_watermark
+            .as_ref()
+            .map(|w| w.reader_lo)
+            .unwrap_or_default();
+
+        if let Some(first_checkpoint) = self.first_checkpoint {
+            if first_checkpoint < valid_first_checkpoint
+                || first_checkpoint > main_committer_watermark.checkpoint_hi_inclusive
+            {
+                warn!("First checkpoint {} is outside the valid range of the main pipeline {}, setting to valid starting checkpoint {}", first_checkpoint, H::NAME, valid_first_checkpoint);
+            } else {
+                valid_first_checkpoint = first_checkpoint;
+            }
+        }
+
+        Ok(initial_watermark_from_first_checkpoint(
+            None,
+            Some(valid_first_checkpoint),
+        ))
     }
 
     /// Start ingesting checkpoints. Ingestion either starts from the
@@ -321,9 +437,26 @@ impl<S: Store> Indexer<S> {
             .context("Failed to establish connection to store")?;
 
         let watermark = conn
-            .committer_watermark(P::NAME)
+            .committer_watermark(P::NAME, self.task.as_deref())
             .await
-            .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
+            .with_context(|| {
+                if let Some(task) = self.task.as_deref() {
+                    format!(
+                        "Failed to get watermark for pipeline {} of task {}",
+                        P::NAME,
+                        task
+                    )
+                } else {
+                    format!("Failed to get watermark for pipeline {}", P::NAME)
+                }
+            })?;
+
+        // I think the main logic goes here basiaclly
+        // check that if main pipeline, start >= reader_lo
+        // check if task pipeline, task_start >= main_reader_lo
+        // now how do we reconcile with a race condition? i.e reader_lo correct at time, but by the time the pipelines run ...
+        // pruner has caught up?
+        // update pruner logic to check on all tasks of the same pipeline?
 
         let expected_first_checkpoint = watermark
             .as_ref()
@@ -341,13 +474,21 @@ impl<T: TransactionalStore> Indexer<T> {
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///
-    /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may
-    /// be required to handle pipelines that modify data in-place (where each update is not an
-    /// insert, but could be a modification of an existing row, where ordering between updates is
+    /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may be
+    /// required to handle pipelines that modify data in-place (where each update is not an insert,
+    /// but could be a modification of an existing row, where ordering between updates is
     /// important).
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
+    ///
+    /// If `first-checkpoint` is set, this value is obeyed only if the pipeline does not already
+    /// have a watermark row. Otherwise, the sequential pipeline will ignore the configured value
+    /// and instead resume from the existing committer watermark.
+    ///
+    /// Sequential pipelines do not support pipeline tasks. These pipelines guarantee that each
+    /// checkpoint is committed exactly once and in order. Running the same pipeline under a
+    /// different task would violate these guarantees.
     pub async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
@@ -360,14 +501,12 @@ impl<T: TransactionalStore> Indexer<T> {
             return Ok(());
         };
 
-        if self.skip_watermark {
-            warn!(
-                pipeline = H::NAME,
-                "--skip-watermarks enabled and ignored for sequential pipeline"
-            );
+        if self.task.is_some() {
+            bail!("Sequential pipelines do not support pipeline tasks. These pipelines guarantee that each checkpoint is committed exactly once and in order. Running the same pipeline under a different task would violate these guarantees.");
         }
 
-        // For sequential pipelines, if watermark already exists, ignore first_checkpoint
+        // For sequential pipelines, if watermark already exists, ignore first_checkpoint and resume
+        // from the committer watermark.
         if let Some(first_checkpoint) = self.first_checkpoint {
             if let Some(existing_watermark) = &watermark {
                 warn!(
@@ -380,10 +519,6 @@ impl<T: TransactionalStore> Indexer<T> {
             }
         }
 
-        // For a sequential pipeline, data must be written in the order of checkpoints.
-        // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
-        self.check_first_checkpoint_consistency::<H>(&watermark)?;
-
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
         self.handles.push(sequential::pipeline::<H>(
@@ -391,6 +526,7 @@ impl<T: TransactionalStore> Indexer<T> {
             watermark,
             config,
             self.store.clone(),
+            self.task.clone(),
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),
@@ -480,6 +616,7 @@ mod tests {
         let mut conn = store.connect().await.unwrap();
         conn.set_committer_watermark(
             "test_processor",
+            None,
             CommitterWatermark {
                 epoch_hi_inclusive: 1,
                 checkpoint_hi_inclusive: 100,
@@ -491,10 +628,10 @@ mod tests {
         .unwrap();
 
         let indexer_args = IndexerArgs {
+            task: None,
             first_checkpoint: Some(50),
             last_checkpoint: None,
             pipeline: vec![],
-            skip_watermark: false,
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {

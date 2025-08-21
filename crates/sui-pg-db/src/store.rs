@@ -25,6 +25,7 @@ impl store::Connection for Connection<'_> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&str>,
     ) -> anyhow::Result<Option<store::CommitterWatermark>> {
         let watermark: Option<(i64, i64, i64, i64)> = watermarks::table
             .select((
@@ -33,7 +34,7 @@ impl store::Connection for Connection<'_> {
                 watermarks::tx_hi,
                 watermarks::timestamp_ms_hi_inclusive,
             ))
-            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
             .first(self)
             .await
             .optional()?;
@@ -53,10 +54,11 @@ impl store::Connection for Connection<'_> {
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&str>,
     ) -> anyhow::Result<Option<store::ReaderWatermark>> {
         let watermark: Option<(i64, i64)> = watermarks::table
             .select((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
-            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
             .first(self)
             .await
             .optional()?;
@@ -74,6 +76,7 @@ impl store::Connection for Connection<'_> {
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&str>,
         delay: Duration,
     ) -> anyhow::Result<Option<store::PrunerWatermark>> {
         //     |---------- + delay ---------------------|
@@ -88,7 +91,7 @@ impl store::Connection for Connection<'_> {
 
         let watermark: Option<(i64, i64, i64)> = watermarks::table
             .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
-            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
             .first(self)
             .await
             .optional()?;
@@ -107,11 +110,12 @@ impl store::Connection for Connection<'_> {
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&str>,
         watermark: store::CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Create a StoredWatermark directly from CommitterWatermark
         let stored_watermark = StoredWatermark {
-            pipeline: pipeline.to_string(),
+            pipeline: watermark_key(pipeline, task),
             epoch_hi_inclusive: watermark.epoch_hi_inclusive as i64,
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as i64,
             tx_hi: watermark.tx_hi as i64,
@@ -145,6 +149,7 @@ impl store::Connection for Connection<'_> {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&str>,
         reader_lo: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)
@@ -152,7 +157,7 @@ impl store::Connection for Connection<'_> {
                 watermarks::reader_lo.eq(reader_lo as i64),
                 watermarks::pruner_timestamp.eq(diesel::dsl::now),
             ))
-            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
             .filter(watermarks::reader_lo.lt(reader_lo as i64))
             .execute(self)
             .await?
@@ -162,11 +167,12 @@ impl store::Connection for Connection<'_> {
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&str>,
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)
             .set(watermarks::pruner_hi.eq(pruner_hi as i64))
-            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
             .execute(self)
             .await?
             > 0)
@@ -194,5 +200,13 @@ impl store::TransactionalStore for Db {
     {
         let mut conn = self.connect().await?;
         AsyncConnection::transaction(&mut conn, |conn| f(conn)).await
+    }
+}
+
+fn watermark_key(pipeline: &str, task: Option<&str>) -> String {
+    if let Some(task) = task {
+        format!("{}@{}", pipeline, task)
+    } else {
+        pipeline.to_string()
     }
 }
