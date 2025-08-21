@@ -53,6 +53,7 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
 use futures::{future::BoxFuture, FutureExt};
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
@@ -80,7 +81,7 @@ use sui_types::storage::{
     FullObjectKey, InputKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::transaction::{TransactionDataAPI, VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -1278,6 +1279,18 @@ impl WritebackCache {
         // as all transaction execution is paused.
         for r in self.dirty.pending_transaction_writes.iter() {
             let outputs = r.value();
+            if !outputs
+                .transaction
+                .transaction_data()
+                .shared_input_objects()
+                .is_empty()
+            {
+                debug_fatal!("transaction must be single writer");
+            }
+            info!(
+                "clearing state for transaction {:?}",
+                outputs.transaction.digest()
+            );
             for (object_id, object) in outputs.written.iter() {
                 if object.is_package() {
                     info!("removing non-finalized package from cache: {:?}", object_id);
