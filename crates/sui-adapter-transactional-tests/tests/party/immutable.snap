@@ -1,0 +1,57 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-18:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5472000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-20:
+//# programmable --sender A
+//> ex::m::create_party()
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 22-24:
+//# view-object 2,0
+Owner: ConsensusAddressOwner( 2, A )
+Version: 2
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, lines 25-26:
+//# programmable --sender A --inputs object(2,0)
+//> sui::transfer::public_freeze_object<ex::m::A>(Input(0))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 5, lines 28-30:
+//# view-object 2,0
+Owner: Immutable
+Version: 3
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 6, lines 31-33:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: sui::party::single_owner(Input(1));
+//> sui::transfer::public_party_transfer<ex::m::A>(Input(0), Result(0))
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(1) } }
