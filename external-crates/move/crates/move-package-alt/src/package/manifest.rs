@@ -12,9 +12,11 @@ use codespan_reporting::diagnostic::{Diagnostic, Label};
 use thiserror::Error;
 
 use crate::{
+    compatibility::legacy::LegacyData,
     errors::{FileHandle, Location},
     schema::{
-        DefaultDependency, PackageMetadata, PackageName, ParsedManifest, ReplacementDependency,
+        DefaultDependency, EnvironmentName, PackageMetadata, PackageName, ParsedManifest,
+        ReplacementDependency,
     },
 };
 
@@ -30,6 +32,7 @@ pub struct Manifest {
     inner: ParsedManifest,
     digest: Digest,
     file_handle: FileHandle,
+    legacy_data: Option<LegacyData>,
 }
 
 #[derive(Error, Debug)]
@@ -53,9 +56,7 @@ pub enum ManifestErrorKind {
     InvalidEdition { edition: String, valid: String },
     #[error("externally resolved dependencies must have exactly one resolver field")]
     BadExternalDependency,
-    #[error(
-        "dep-replacements.mainnet is invalid because mainnet is not in the [environments] table"
-    )]
+    #[error("dep-replacements.{env} is invalid because {env} is not in the [environments] table")]
     MissingEnvironment { env: EnvironmentName },
     #[error(
         // TODO: add a suggested environment (needs to be part of the flavor)

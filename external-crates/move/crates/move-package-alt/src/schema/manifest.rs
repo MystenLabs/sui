@@ -3,6 +3,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
+use crate::compatibility::legacy::LegacyData;
+
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
     toml_format::RenderToml,

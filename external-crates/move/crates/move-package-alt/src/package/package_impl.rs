@@ -7,14 +7,12 @@ use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
 
 use super::compute_digest;
-use super::package_files::{Manifest, PackageFiles};
+use super::manifest::Manifest;
 use super::paths::PackagePath;
-use crate::compatibility::legacy::LegacyEnvironment;
-use crate::compatibility::legacy_parser::ParsedLegacyPackage;
 use crate::dependency::FetchedDependency;
-use crate::errors::{FileHandle, Location, LockfileError};
-use crate::package::package_files::Lockfile;
-use crate::schema::{ParsedLockfile, ParsedManifest, PublicationFile, ReplacementDependency};
+use crate::errors::{FileHandle, Location};
+use crate::package::manifest::{ManifestError, ManifestErrorKind};
+use crate::schema::{EnvironmentName, ReplacementDependency};
 use crate::{
     compatibility::{
         legacy::LegacyData,
@@ -35,22 +33,20 @@ use std::sync::{LazyLock, Mutex};
 // TODO: is this the right way to handle this?
 static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
 
-pub type EnvironmentName = String;
-pub type EnvironmentID = String;
-
-// pub type PackageName = Identifier;
-pub type AddressInfo = String;
-
 #[derive(Debug)]
 pub struct Package<F: MoveFlavor> {
     /// The environment of the loaded package.
-    env: EnvironmentName,
+    env: Environment,
+
     /// The digest of the package.
     digest: Digest,
+
     /// The metadata of the package.
     metadata: PackageMetadata,
+
     /// A [`PackagePath`] representing the cleaned path to the package directory.
     path: PackagePath,
+
     /// (Optional) Publish information for the loaded environment (original-id, published-at and more).
     publish_data: Option<Publication<F>>,
 
@@ -60,11 +56,9 @@ pub struct Package<F: MoveFlavor> {
     dep_for_self: PinnedDependencyInfo,
 
     /// Optional legacy information for a supplied package.
-    /// TODO(manos): Make `LegacyData` single environment too, or use multiple types for this.
     pub legacy_data: Option<LegacyData>,
 
     /// The pinned direct dependencies for this package
-    /// Note: for legacy packages, this information will be stored in `legacy_data`.
     deps: BTreeMap<PackageName, PinnedDependencyInfo>,
 
     /// Dummy address that is set during package graph initialization for unpublished addresses
@@ -80,9 +74,9 @@ impl<F: MoveFlavor> Package<F> {
     pub async fn load_root(path: impl AsRef<Path>, env: &Environment) -> PackageResult<Self> {
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
         let root_manifest = FileHandle::new(path.manifest_path())?;
-        let source = PinnedDependencyInfo::root_dependency(root_manifest, env.name().clone());
+        let source = PinnedDependencyInfo::root_dependency(root_manifest, env.name.clone());
 
-        Self::load_internal(path, source, env).await
+        Self::load_internal(path, source, env.clone()).await
     }
 
     /// Fetch [dep] and load a package from the fetched source
@@ -90,15 +84,28 @@ impl<F: MoveFlavor> Package<F> {
     pub async fn load(dep: PinnedDependencyInfo, env: &Environment) -> PackageResult<Self> {
         let path = FetchedDependency::fetch(&dep).await?.into();
 
-        Self::load_internal(path, dep, env).await
+        Self::load_internal(path, dep, env.clone()).await
     }
 
-    /// Loads a package internally, doing a "best" effort to translate an old-style package into the new one.
+    /// Loads a package from `path`, doing a "best" effort to translate an old-style package into the new one.
     async fn load_internal(
         path: PackagePath,
         source: PinnedDependencyInfo,
         env: Environment,
     ) -> PackageResult<Self> {
+        // try to load a legacy manifest (with an `[addresses]` section)
+        //   - if it fails, load a modern manifest (and return the errors)
+        //
+        // try to load the address from the pubfile
+        //   - if it fails, look in the legacy data
+        //   - if that fails, use a dummy address
+        //
+        // try to gather dependencies from the modern lockfile
+        //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
+        //     (adding system deps)
+        //
+        // compute the digest
+        /*
         let manifest = Manifest::read_from_file(path.manifest_path());
         let dummy_addr = {
             let lock = DUMMY_ADDRESSES.lock();
@@ -121,7 +128,7 @@ impl<F: MoveFlavor> Package<F> {
 
             debug!("adding system dependencies");
             let system_dependencies = Self::system_dependencies(
-                env,
+                &env,
                 manifest.parsed().package.system_dependencies.clone(),
             )?;
 
@@ -129,7 +136,7 @@ impl<F: MoveFlavor> Package<F> {
             debug!("combining [dependencies] with [dep-replacements] for {env:?}");
             let combined_deps = CombinedDependency::combine_deps(
                 manifest.file_handle(),
-                env,
+                &env,
                 manifest
                     .dep_replacements()
                     .get(env.name())
@@ -164,11 +171,11 @@ impl<F: MoveFlavor> Package<F> {
         let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
 
         let system_dependencies =
-            Self::system_dependencies(env, legacy_manifest.metadata.system_dependencies.clone())?;
+            Self::system_dependencies(&env, legacy_manifest.metadata.system_dependencies.clone())?;
 
         let combined_deps = CombinedDependency::combine_deps(
             &legacy_manifest.file_handle,
-            env,
+            &env,
             &BTreeMap::new(),
             &legacy_manifest.deps,
             &system_dependencies,
@@ -187,6 +194,22 @@ impl<F: MoveFlavor> Package<F> {
             deps,
             dummy_addr: OriginalID(AccountAddress::from_suffix(dummy_addr)),
         })
+        */
+        Ok(Self {
+            env,
+            path,
+            digest: todo!(),
+            metadata: todo!(),
+            publish_data: todo!(),
+            dep_for_self: source,
+            legacy_data: todo!(),
+            deps: todo!(),
+            dummy_addr: todo!(),
+        })
+    }
+
+    async fn load_manifest(path: &PackagePath) -> PackageResult<()> {
+        if is_legacy_like(path) {}
     }
 
     /// Try to load a lockfile and extract the published information for each environment from it
@@ -350,6 +373,8 @@ impl<F: MoveFlavor> Package<F> {
 #[cfg(test)]
 mod tests {
     use move_command_line_common::testing::insta::assert_snapshot;
+
+    use crate::schema::EnvironmentID;
 
     use super::*;
 
@@ -543,6 +568,4 @@ mod legacy_tests {
     fn load_legacy_with_addresses_in_lockfile_and_manifest() {
         todo!()
     }
-
-    /// Loading a legacy package with
 }

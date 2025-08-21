@@ -17,8 +17,8 @@ pub type PackageName = Identifier;
 // schema data structures of being a plain old object)
 #[derive(Debug, Clone)]
 pub struct Environment {
-    name: EnvironmentName,
-    id: EnvironmentID,
+    pub name: EnvironmentName,
+    pub id: EnvironmentID,
 }
 
 impl Environment {

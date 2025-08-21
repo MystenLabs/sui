@@ -6,15 +6,16 @@ use std::{collections::BTreeMap, fmt, path::Path};
 
 use tracing::debug;
 
+use super::manifest::Manifest;
 use super::paths::PackagePath;
-use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
-use crate::schema::{Environment, OriginalID, PackageName, Publication};
+use crate::schema::{
+    Environment, EnvironmentID, EnvironmentName, OriginalID, PackageName, Publication,
+};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
-    package::EnvironmentName,
     schema::ParsedLockfile,
 };
 
@@ -125,7 +126,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
 
         // check that there is a consistent linkage
-        let _linkage = graph.linkage()?;
+        let _linkage = PackageGraph::<F>::linkage(&graph)?;
         graph.check_rename_from()?;
 
         let deps_published_ids = _linkage.into_keys().collect();

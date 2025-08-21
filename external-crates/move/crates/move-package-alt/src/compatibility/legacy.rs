@@ -11,34 +11,20 @@ pub struct LegacyEnvironment {
     pub version: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LegacyData {
     /// The deprecated incompatible name of this package.
     /// Can be used to fix graph edges (lookup for `hash(incompatible_name) -> new_name`)
     /// This is optional, in case the old `name` was not matching the `addresses` declaration.
     pub incompatible_name: Option<String>,
 
-    /// These addresses should store all addresses that were part of the package.
+    /// These addresses should store all addresses that were part of the package
     pub addresses: BTreeMap<Identifier, AccountAddress>,
 
-    /// The address information that originates from the manifest file.
-    /// This is optional and is the first way of doing package version management,
-    /// where `published-at="<latest_id>"`, and `[addresses] <xx> = "<original_id>"`
-    ///
-    /// When we're doing `try_get_published_at()` or `try_get_original_id` on `Package`, we fallback to these.
-    pub manifest_address_info: Option<PublishAddresses>,
-
-    /// The legacy environments that were part of the package (goes from env name -> )
-    pub legacy_environments: BTreeMap<String, LegacyEnvironment>,
-}
-
-impl LegacyData {
-    /// Return the published addresses of this package. It will first check the manifest address
-    /// info, and then use legacy environments if the manifest info is not available.
-    pub fn publication(&self, env: &EnvironmentName) -> Option<&PublishAddresses> {
-        self.legacy_environments
-            .get(env)
-            .map(|env| &env.addresses)
-            .or(self.manifest_address_info.as_ref())
-    }
+    /// The address information that originates from a legacy manifest or lockfile. There are a few
+    /// places these addresses could come from:
+    ///  - they could come from a legacy lockfile
+    ///  - they could come from the `published-at` field and the `addresses` table
+    ///  - they could both be taken from the `addresses` field
+    pub publication: Option<PublishAddresses>,
 }

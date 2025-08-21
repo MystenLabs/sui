@@ -54,18 +54,43 @@ const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 const LEGACY_SYSTEM_DEPS_NAMES: [&str; 5] =
     ["Sui", "MoveStdlib", "Bridge", "DeepBook", "SuiSystem"];
 
+#[derive(Debug)]
 pub struct ParsedLegacyPackage {
     pub deps: BTreeMap<PackageName, DefaultDependency>,
+
+    // Note: the name in the metadata is the variable name from the `addresses` section, not the
+    // package name from the `package` section
+    //
+    // The `name` field of the manifest is stored in [LegacyData::incompatible_name]
     pub metadata: PackageMetadata,
     pub legacy_data: LegacyData,
     pub file_handle: FileHandle,
 }
 
-pub struct LegacyPackageMetadata {
+struct LegacyPackageMetadata {
     pub legacy_name: String,
     pub edition: String,
     pub published_at: Option<String>,
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
+}
+
+/// Returns `Some(p)` if the manifest at `path` is a valid legacy manifest, or `None` if it is
+/// invalid
+///
+/// We only consider a manifest to be a legacy manifest if it contains either `[addresses]`,
+/// `[dev-addresses]`, or `[dev-dependencies]`; although it is possible for legacy packages not to
+/// have these, those packages are also valid modern packages so we want to use the modern
+/// infrastructure to process them.
+pub fn try_parse_legacy_package(path: &PackagePath) -> Option<ParsedLegacyPackage> {
+    if !is_legacy_like(path) {
+        return None;
+    }
+
+    if let Ok(package) = parse_legacy_manifest_from_file(path) {
+        return Some(package);
+    }
+
+    return None;
 }
 
 /// We try to see if a package is `legacy`-like. That means that we can parse it,

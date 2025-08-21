@@ -17,4 +17,5 @@ pub mod git;
 pub mod graph;
 pub mod package;
 pub mod schema;
+#[cfg(test)]
 pub mod test_utils;
