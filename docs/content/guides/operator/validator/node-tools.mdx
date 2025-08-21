@@ -10,7 +10,7 @@ This guide focuses on using the Sui CLI `validator` commands.
 
 :::info
 
-This tool only supports pending validators and active validators.
+This tool supports only pending validators and active validators.
 
 :::
 
@@ -19,7 +19,7 @@ This tool only supports pending validators and active validators.
 
 - [x] Complete all [Sui installation prerequisites](../../developer/getting-started/sui-install.mdx#prerequisites).
 
-- [x] Build the `sui` binary, which you need for the genesis ceremony. This can be done on any machine, it does not have to be done on the machine that will run the validator.
+- [x] Build the `sui` binary, which you need for the genesis ceremony. You can do this on any computer.
 
 <details className="nudge-details">
 
@@ -33,11 +33,11 @@ View `sui` binary installation details.
 
            `$ git clone git@github.com:MystenLabs/sui.git && cd sui`
 
-    2. Check out the commit to use for the testnet:
+    2. Check out the commit to use for Testnet:
 
            `$ git checkout testnet`
 
-    3. Build sui binary
+    3. Build `sui` binary
 
            `$ cargo build --bin sui`
 
@@ -57,15 +57,15 @@ View Sui account and CLI environment instructions.
 
 </summary>
 
-    - If this is the first time running this program, it will ask you to provide a Sui full node server URL and a meaningful environment alias. It will also generate a random key pair in `sui.keystore` and a config `client.yaml`. Swap in your validator account key if you already have one.
+    - If this is the first time running this program, it asks you to provide a Sui full node server URL and a meaningful environment alias. It also generates a random key pair in `sui.keystore` and a config `client.yaml`. Swap in your validator account key if you already have one.
 
-       If you cannot find where `client.yaml` or `sui.keystore` is, or have other questions, read the [Sui client CLI tutorial](/references/cli/client.mdx).
+       By default, the `client.yaml` and `sui.keystore` files are located in `~/.sui/sui_config`. For more information, refer to the [Sui client CLI tutorial](/references/cli/client.mdx).
 
        ```sh
        $ sui client
        ```
 
-    - If you already set it up, simply make sure:
+    - If you already set it up, just make sure:
       - `rpc` is correct in `client.yaml`. 
       - `active_address` is correct in `client.yaml`.
       - `sui.keystore` contains your account key pair.
@@ -82,14 +82,14 @@ $ sui validator display-metadata
 </Tabs>
 
 ## Using Sui CLI 
-
+Use the Sui CLI to perform validator tasks.
 ### Print help info
 
 ```sh
 $ sui validator --help
 ```
 
-### Become a validator / join committee
+### Become a validator or join committee
 
 To become a validator candidate, first run:
 
@@ -97,22 +97,22 @@ To become a validator candidate, first run:
 $ sui validator make-validator-info <name> <description> <image-url> <project-url> <host-name> <gas_price>
 ```
 
-This will generate a `validator.info` file and key pair files. The output of this command includes:
-  1. Four [key pair files](./validator-tasks.mdx#key-management). **Set their permissions with the minimal visibility (`chmod 600`, for example) and store them securely**. They are needed when running the validator node as covered below.
+This generates a `validator.info` file and key pair files. The output of this command includes:
+  1. Four [key pair files](./validator-tasks.mdx#key-management). **Set their permissions with the minimal visibility (`chmod 600`, for example) and store them securely**. They are needed when running the validator node.
     a. If you follow this guide thoroughly, this key pair is actually copied from your `sui.keystore` file.
-  2. `validator.info` file that contains your validator info. **Double check all information is correct**.
+  2. `validator.info` file that contains your validator information. Double check all information is correct.
 
 Then run:
 
 ```sh
-$ sui validator become-candidate {path-to}validator.info
+$ sui validator become-candidate path/to/validator.info
 ```
 
 This submits an on-chain transaction for you to become a validator candidate. The parameter is the file path to the `validator.info` file generated in the previous step. **Make sure the transaction succeeds (printed in the output).**
 
 At this point, you are validator candidate and can start to accept self-staking and delegated staking. 
 
-**If you haven't, start a full node now to catch up with the network. When you officially join the committee but are not fully up-to-date, you cannot make meaningful contributions to the network and may be subject to peer reporting. This imposes the risk of reduced staking rewards for you and your delegator.**
+If you haven't already, start a full node now to catch up with the network. When you officially join the committee but are not fully up-to-date, you cannot make meaningful contributions to the network and might be subject to peer reporting. This imposes the risk of reduced staking rewards for you and your delegator.
 
 Then, you must acquire 30M SUI and stake it to the validator staking pool. You can add Sui to the validator staking pool with the command:
 
@@ -127,16 +127,18 @@ $ sui client call --package 0x3 --module sui_system --function request_withdraw_
 ```
 
 :::tip 
+
 You cannot withdraw non-activated stake from an inactive validator. If that is the case, you should be able to withdraw after the next epoch change when the stake becomes active. 
+
 :::
 
-Once you have staked enough, run:
+After you have staked enough, run:
 
 ```sh
 $ sui validator join-committee
 ```
 
-Joining the committee will make you a pending validator. A pending validator will become active and join the committee starting from next epoch.
+Joining the committee makes you a pending validator. A pending validator becomes active and joins the committee starting from the next epoch.
 
 
 ### Leave committee
@@ -177,7 +179,7 @@ $ sui validator display-metadata <validator-address>
 
 ### Update validator metadata
 
-Run the following to see how to update validator metadata. Read description carefully about when the change will take effect.
+Run the following to see how to update validator metadata. Read description carefully about when the change takes effect.
 
 ```sh
 $ sui validator update-metadata --help
@@ -197,7 +199,7 @@ You can update the following on-chain metadata:
 1. Worker public key
 
 :::info 
-Only the first 4 metadata listed above take effect immediately. Others will be changed only after the next epoch. For those, you'll want to restart the validator program immediately after the next epoch, with the new key files and/or updated `validator.yaml` config. 
+Only the first 4 metadata listed above take effect immediately. Others are changed only after the next epoch. For those, restart the validator program immediately after the next epoch, with the new key files and updated `validator.yaml` config. 
 
 Particularly, make sure the new address is not behind a firewall.
 :::
@@ -236,9 +238,9 @@ If the account itself is a validator and holds the Operation Cap, report validat
 $ sui validator report-validator <reportee-address>
 ```
 
-Add `--undo-report false` if it intends to undo an existing report.
+Add the `--undo-report false` argument if it intends to undo an existing report.
 
-Similarly, if the account is a delegatee, add `--operation-cap-id <operation-cap-id>` option to the command.
+Similarly, if the account is a delegatee, add the `--operation-cap-id <operation-cap-id>` option to the command.
 
 If the account is a delegatee, run:
 

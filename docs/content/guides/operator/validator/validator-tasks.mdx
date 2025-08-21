@@ -52,7 +52,7 @@ These are configured in the [`sui-node` configuration file](./validator-config.m
 
 ### Metrics
 
-`sui-node` exposes metrics via a local HTTP interface. These can be scraped for use in a central monitoring system as well as viewed directly from the node.
+`sui-node` exposes metrics via a local HTTP interface. These can be scraped for use in a central monitoring system, as well as viewed directly from the node.
 
 - View all metrics:
 
@@ -116,7 +116,7 @@ Public dashboard for network-wide visibility:
 
 ## Software updates
 
-When an update is required to the `sui-node` software, the following process can be used. Follow the relevant Systemd or Docker Compose run book depending on your deployment type. It is highly unlikely that you will want to restart with a clean database.
+When an update is required to the `sui-node` software, the following process can be used. Follow the relevant Systemd or Docker Compose run book depending on your deployment type. It is highly unlikely that you want to restart with a clean database.
 
 - [Systemd](https://github.com/MystenLabs/sui/blob/main/nre/systemd/README.md#updates)
 - [Docker Compose](https://github.com/MystenLabs/sui/blob/main/nre/docker/README.md#updates)
@@ -127,9 +127,9 @@ Checkpoints in Sui contain the permanent history of the network. They are compar
 
 These checkpoints are synchronized between validators and full nodes via a dedicated peer-to-peer state sync interface.
 
-Inter-validator state sync is always permitted however there are controls available to limit what Full nodes are allowed to sync from a specific validator.
+Inter-validator state sync is always permitted, however there are controls available to limit what full nodes are allowed to sync from a specific validator.
 
-The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but will restrict all full nodes from syncing. The [`sui-node` configuration](./validator-config.mdx) can be modified to allow a known Full node to sync from a validator:
+The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but restricts all full nodes from syncing. The [`sui-node` configuration](./validator-config.mdx) can be modified to allow a known full node to sync from a validator:
 
 ```sh
 p2p-config:
@@ -193,7 +193,7 @@ See the [full list of metadata update functions](https://github.com/MystenLabs/s
 
 To avoid touching account keys too often and allowing them to be stored off-line, validators can delegate the operation ability to another address. This address can then update the reference gas price and tallying rule on behalf of the validator.
 
-Upon creating a validator, an `UnverifiedValidatorOperationCap` is created and transferred to the validator address. The holder of this `Cap` object (short for "Capability") therefore could perform operational actions for this validator. To authorize another address to conduct these operations, a validator transfers the object to another address that they control. 
+Upon creating a validator, a `UnverifiedValidatorOperationCap` is created and transferred to the validator address. The holder of this `Cap` object (short for "Capability") therefore could perform operational actions for this validator. To authorize another address to conduct these operations, a validator transfers the object to another address that they control. 
 
 The transfer can be done by using Sui Client CLI: `sui client transfer`.
 
@@ -229,17 +229,17 @@ To do so, call `sui_system::report_validator/undo_report_validator`:
 $ sui client call --package 0x3 --module sui_system --function report_validator/undo_report_validator --args 0x5 {cap_object_id} {reportee_address} --gas-budget 10000
 ```
 
-After a validator is reported by `2f + 1` other validators by voting power, their staking rewards will be slashed.
+After a validator is reported by `2f + 1` other validators by voting power, their staking rewards are slashed.
 
 ### Joining the validator set
 
-In order for a Sui address to join the validator set, they need to first sign up as a validator candidate by calling `sui_system::request_add_validator_candidate` with their metadata and initial configs:
+For a Sui address to join the validator set, they need to first sign up as a validator candidate by calling `sui_system::request_add_validator_candidate` with their metadata and initial configs:
 
 ```sh
 $ sui client call --package 0x3 --module sui_system --function request_add_validator_candidate --args 0x5 {protocol_pubkey_bytes} {network_pubkey_bytes} {worker_pubkey_bytes} {proof_of_possession} {name} {description} {image_url} {project_url} {net_address} {p2p_address} {primary_address} {worker_address} {gas_price} {commission_rate} --gas-budget 10000
 ```
 
-After an address becomes a validator candidate, any address (including the candidate address itself) can start staking with the candidate's staking pool. Once a candidate's staking pool has accumulated at least `sui_system::MIN_VALIDATOR_JOINING_STAKE` amount of stake, the candidate can call `sui_system::request_add_validator` to officially add themselves to next epoch's active validator set:
+After an address becomes a validator candidate, any address (including the candidate address itself) can start staking with the candidate's staking pool. After a candidate's staking pool has accumulated at least `sui_system::MIN_VALIDATOR_JOINING_STAKE` amount of stake, the candidate can call `sui_system::request_add_validator` to officially add themselves to next epoch's active validator set:
 
 ```sh
 $ sui client call --package 0x3 --module sui_system --function request_add_validator --args 0x5 --gas-budget 10000000
@@ -253,11 +253,11 @@ To leave the validator set starting next epoch, the sender needs to be an active
 $ sui client call --package 0x3 --module sui_system --function request_remove_validator --args 0x5 --gas-budget 10000
 ```
 
-After the validator is removed at the next epoch change, the staking pool will become inactive and stakes can only be withdrawn from an inactive pool.
+After the validator is removed at the next epoch change, the staking pool becomes inactive and stakes can only be withdrawn from an inactive pool.
 
 ## Private security fixes
 
-There might be instances where urgent security fixes need to be rolled out before publicly announcing it's presence (issues affecting liveliness, invariants such as SUI supply, governance, and so on). To not be actively exploited, Mysten Labs will release signed security binaries incorporating such fixes with a delay in publishing the source code until a large percentage of our validators have patched the vulnerability.
+There might be instances where urgent security fixes need to be rolled out before publicly announcing its presence (issues affecting liveliness, invariants such as SUI supply, governance, and so on). To not be actively exploited, Mysten Labs releases signed security binaries incorporating such fixes with a delay in publishing the source code until a large percentage of our validators have patched the vulnerability.
 
 This release process is different and you should expect that announcements of the directory for such binaries are out of band.
 [View the public key used to verify these binaries](https://sui-private.s3.us-west-2.amazonaws.com/sui_security_release.pem)
@@ -266,6 +266,6 @@ There is also a script available that downloads all the necessary signed binarie
 
 - Usage: `./download_private.sh <directory-name>`
 
-You can also download and verify specific binaries that may not be included by the above script using the `download_and_verify_private_binary.sh` script.
+You can also download and verify specific binaries that might not be included by the above script using the `download_and_verify_private_binary.sh` script.
 
 - Usage: `./download_and_verify_private_binary.sh <directory-name> <binary-name>`

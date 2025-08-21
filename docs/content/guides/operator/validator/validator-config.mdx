@@ -37,9 +37,9 @@ To set up staking on your validator node:
 
 1. Call `request_add_validator_candidate` to become a candidate. This creates the on-chain validator info and initializes a staking pool for delegators to contribute to.
 
-2. Acquire 30M SUI by staking to the validator staking pool created in step 1. Call the `request_add_stake` with the address of the validator (this is not the same as the staking pool ID).
+2. Acquire 30M SUI by staking to the validator staking pool created in the previous step. Call the `request_add_stake` with the address of the validator (this is not the same as the staking pool ID).
 
-3. Call `request_add_validator` to have the validator become a pending validator. At the next epoch, it will join the validator set. Before the next epoch, you should stand up the validator so that when the epoch changes, it can participate.
+3. Call `request_add_validator` to have the validator become a pending validator. At the next epoch, it joins the validator set. Before the next epoch, you should stand up the validator so that when the epoch changes, it can participate.
 
 [Learn more about validator staking rewards](./validator-rewards.mdx).
 
@@ -103,12 +103,12 @@ To run a validator successfully, it is critical that ports 8080-8084 are open as
 
 ## Network buffer
 
-From load testing Sui validator networks, it has been determined that the default Linux network buffer sizes are too small.
+Load testing Sui validator networks suggests that the default Linux network buffer sizes are too small.
 It is recommend to increase them using one of the following two methods:
 
 ### Option 1: With `/etc/sysctl.d/`
 
-These settings can be added to a new `sysctl` file specifically for `sui-node` or appended to an existing file. Modifications made in this way will persist across system restarts.
+Add these settings to a new `sysctl` file specifically for `sui-node` or append to an existing file. Modifications made in this way persist across system restarts.
 
 Create a new `sysctl` file for the `sui-node`:
 
@@ -133,7 +133,7 @@ $ sudo sysctl --system
 
 ### Option 2: With `sysctl` command
 
-These modifications do not persist across system restarts. Therefore, the commands should be run each time the host restarts.
+These modifications do not persist across system restarts. Therefore, run the commands each time the host restarts.
 
 ```sh
 $ sudo sysctl -w net.core.wmem_max=104857600
