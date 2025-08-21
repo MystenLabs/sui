@@ -292,7 +292,7 @@ pub fn borrow_child_object(
         dynamic_field_borrow_child_object_cost_params
             .dynamic_field_borrow_child_object_type_cost_per_byte
     );
-    let global_value = match global_value_result {
+    let (_cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
             return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
         }
@@ -365,7 +365,7 @@ pub fn remove_child_object(
         dynamic_field_remove_child_object_cost_params
             .dynamic_field_remove_child_object_type_cost_per_byte
     );
-    let global_value = match global_value_result {
+    let (_cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
             return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
         }
@@ -495,7 +495,7 @@ pub fn has_child_object_with_ty(
     );
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    let has_child = object_runtime.child_object_exists_and_has_type(
+    let (_cache_info, has_child) = object_runtime.child_object_exists_and_has_type(
         parent,
         child_id,
         &MoveObjectType::from(tag),

@@ -77,7 +77,7 @@ pub fn receive_object_internal(
     };
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    let child = match object_runtime.receive_object(
+    let (_cache_info, child) = match object_runtime.receive_object(
         parent,
         child_id,
         child_receiver_sequence_number,
