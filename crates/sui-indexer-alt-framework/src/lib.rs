@@ -332,6 +332,17 @@ impl<S: Store> Indexer<S> {
         //     // if no checkpoint provided ... leave None for main
         //     // but task pipelines should be anchored to main's reader_lo
         // }
+        // let computed_watermark = self
+        // .compute_concurrent_pipeline_watermark::<H>(watermark)
+        // .await?;
+        //
+        // we should also set reader_lo of the task pipeline
+
+        // self.first_checkpoint = computed_watermark
+        // .as_ref()
+        // .map(|w| w.checkpoint_hi_inclusive);
+
+        // check that task pipelines don't enable pruning
 
         self.handles.push(concurrent::pipeline::<H>(
             handler,
