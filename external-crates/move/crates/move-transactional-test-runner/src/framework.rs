@@ -456,7 +456,7 @@ impl CompiledState {
 
         if let Some(pre_compiled_deps) = pre_compiled_deps {
             for (_, module_info) in pre_compiled_deps.iter() {
-                let unit = module_info.compiled_unit.clone();
+                let unit = module_info.compiled_unit.clone().unwrap();
                 let (named_addr_opt, _id) = unit.module_id();
                 state.add_precompiled(
                     named_addr_opt.map(|n| n.value),

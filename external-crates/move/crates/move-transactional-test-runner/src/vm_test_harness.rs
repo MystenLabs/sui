@@ -303,6 +303,8 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| 
             named_address_map: move_stdlib::named_addresses(),
         }],
         None,
+        None,
+        false,
         move_compiler::Flags::empty(),
         None,
     )

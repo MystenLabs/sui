@@ -162,25 +162,43 @@ pub fn get_symbols(
     cursor_info: Option<(&PathBuf, Position)>,
     implicit_deps: Dependencies,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
-    let compilation_start = Instant::now();
-    let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
-        packages_info.clone(),
-        ide_files_root,
-        pkg_path,
-        modified_files,
-        lint,
-        implicit_deps,
-    )?;
-    eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
-    let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
-        return Ok((None, ide_diagnostics));
+    // helper function to avoid holding the lock for too long
+    let has_pkg_entry = || {
+        packages_info
+            .lock()
+            .unwrap()
+            .pkg_info
+            .contains_key(pkg_path)
     };
-    let analysis_start = Instant::now();
-    let symbols = compute_symbols(packages_info, compiled_pkg_info, cursor_info);
-    eprintln!("analysis complete in {:?}", analysis_start.elapsed());
-    eprintln!("get_symbols load complete");
 
-    Ok((Some(symbols), ide_diagnostics))
+    // Retry once if cache entry doesn't exist
+    let mut should_retry = !has_pkg_entry();
+
+    loop {
+        let compilation_start = Instant::now();
+        let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
+            packages_info.clone(),
+            ide_files_root.clone(),
+            pkg_path,
+            modified_files.clone(),
+            lint,
+            implicit_deps.clone(),
+        )?;
+        eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
+        let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
+            return Ok((None, ide_diagnostics));
+        };
+        let analysis_start = Instant::now();
+        let symbols = compute_symbols(packages_info.clone(), compiled_pkg_info, cursor_info);
+        eprintln!("analysis complete in {:?}", analysis_start.elapsed());
+        eprintln!("get_symbols load complete");
+
+        if !should_retry {
+            return Ok((Some(symbols), ide_diagnostics));
+        }
+        should_retry = false;
+        eprintln!("Retrying compilation for {:?}", pkg_path);
+    }
 }
 
 /// Compute symbols for a given package from the parsed and typed ASTs,
@@ -193,7 +211,7 @@ pub fn compute_symbols(
     let pkg_path = compiled_pkg_info.path.clone();
     let manifest_hash = compiled_pkg_info.manifest_hash;
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
-    let deps_hash = compiled_pkg_info.deps_hash.clone();
+    let dep_hashes = compiled_pkg_info.dep_hashes.clone();
     let edition = compiled_pkg_info.edition;
     let compiler_info = compiled_pkg_info.compiler_info.clone();
     let lsp_diags = compiled_pkg_info.lsp_diags.clone();
@@ -235,21 +253,27 @@ pub fn compute_symbols(
             // dependencies may have changed or not, but we still need to update the cache
             // with new file hashes and user program info
             pkg_deps.pkg_info.insert(
-                pkg_path,
-                CachedPkgInfo {
+                pkg_path.clone(),
+                Some(CachedPkgInfo {
                     manifest_hash,
-                    deps_hash,
+                    dep_hashes,
                     deps: cached_deps.program_deps.clone(),
+                    dep_names: cached_deps.dep_names.clone(),
                     deps_symbols_data,
                     program: Arc::new(program),
                     file_paths: Arc::new(file_paths),
-                    dep_hashes: cached_deps.dep_hashes,
                     edition,
                     compiler_info,
                     lsp_diags,
-                },
+                }),
             );
         }
+    }
+    // record attempt at caching as some actions are taken
+    // on the first attempt to symbolicate and we need to
+    // know once this attempt is complete
+    if !pkg_deps.pkg_info.contains_key(&pkg_path) {
+        pkg_deps.pkg_info.insert(pkg_path, None);
     }
     symbols
 }

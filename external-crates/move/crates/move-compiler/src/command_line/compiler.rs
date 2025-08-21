@@ -35,7 +35,6 @@ use move_command_line_common::files::{
     find_filenames_and_keep_specified,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
-use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
@@ -117,7 +116,7 @@ pub struct PreCompiledModuleInfo {
     /// various information needed throughout the compilation process
     pub info: ModuleInfo,
     /// for transactional test runner in move-transactional-test-runner/src/framework.rs
-    pub compiled_unit: AnnotatedCompiledUnit,
+    pub compiled_unit: Option<AnnotatedCompiledUnit>,
 }
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
@@ -691,11 +690,17 @@ impl IntoIterator for PreCompiledProgramInfo {
     }
 }
 
-/// Given a set of dependencies, precompile them and save all data needed to compile
-/// against these dependencies without having to recompile them again.
+/// Given a set of dependencies, pre-compile them and save all data needed to compile
+/// against these dependencies without having to recompile them again. You can pass
+/// already pre-compiled transitive dependencies to avoid re-compiling them
+/// (`pre_compiled_program_opt` parameter). You can also obtain pre-compile a set of
+/// dependencies without the actual compiled modules in cases where these are not needed
+/// (`interface_only` parameter).
 pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
+    pre_compiled_program_opt: Option<Arc<PreCompiledProgramInfo>>,
+    interface_only: bool,
     flags: Flags,
     vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<PreCompiledProgramInfo, (MappedFiles, Diagnostics)>> {
@@ -704,6 +709,11 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         SaveFlag::ModuleNameAddresses,
         SaveFlag::MacroDefinitions,
     ]);
+    let files_to_compile = if interface_only {
+        Some(BTreeSet::new())
+    } else {
+        None
+    };
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
         vfs_root,
         targets,
@@ -711,6 +721,8 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     )?
     .set_interface_files_dir_opt(interface_files_dir_opt)
     .set_flags(flags)
+    .set_pre_compiled_program_opt(pre_compiled_program_opt.clone())
+    .set_files_to_compile(files_to_compile)
     .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;
 
@@ -722,7 +734,12 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     let (empty_compiler, ast) = stepped.into_ast();
     let compilation_env = empty_compiler.compilation_env;
     let start = PassResult::Parser(ast);
-    match run(&compilation_env, None, start, PASS_COMPILATION) {
+    match run(
+        &compilation_env,
+        pre_compiled_program_opt.clone(),
+        start,
+        PASS_COMPILATION,
+    ) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, _)) => {
             let program_info = hook.take_typing_info();
@@ -733,11 +750,29 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                 .map(|unit| (unit.module_ident(), unit))
                 .collect::<BTreeMap<_, _>>();
 
+            // compute a set of already pre-compiled module identifiers (for modules
+            // passed in `pre_compiled_program_opt` parameter) for efficient lookup
+            let already_precompile_mod_ids: BTreeSet<E::ModuleIdent> = pre_compiled_program_opt
+                .as_ref()
+                .map(|pre_compiled_program| {
+                    pre_compiled_program
+                        .iter()
+                        .map(|(mod_ident, _)| *mod_ident)
+                        .collect()
+                })
+                .unwrap_or_default();
+
             let precompiled_modules: BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>> = program_info
                  .modules
-                 .iter()
-                 .map(|(loc, mod_ident_key, typing_module_info)| -> anyhow::Result<(E::ModuleIdent, Arc<PreCompiledModuleInfo>)> {
-                     let mod_ident = sp(loc, *mod_ident_key);
+                 .key_cloned_iter()
+                 .filter_map(|(mod_ident, typing_module_info)| {
+                     // skip modules that are already present in pre_compiled_program_opt
+                     if already_precompile_mod_ids.contains(&mod_ident) {
+                         return None;
+                     }
+                     Some((mod_ident, typing_module_info))
+                 })
+                 .map(|(mod_ident, typing_module_info)| -> anyhow::Result<(E::ModuleIdent, Arc<PreCompiledModuleInfo>)> {
 
                      let Some((file_name, file_content)) = files.get(&typing_module_info.defined_loc.file_hash()) else {
                         return Err(anyhow::anyhow!("file name not found for module: {:?}", mod_ident));
@@ -745,9 +780,13 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
 
                      let macro_definitions = macro_definitions.remove(&mod_ident);
 
-                     let compiled_unit = compiled_units_by_module
+                     let compiled_unit = if interface_only {
+                        None
+                     } else {
+                        Some(compiled_units_by_module
                         .remove(&mod_ident)
-                        .ok_or_else(|| anyhow::anyhow!("compiled unit not found for module: {:?}", mod_ident))?;
+                        .ok_or_else(|| anyhow::anyhow!("compiled unit not found for module: {:?}", mod_ident))?)
+                     };
 
                      Ok((
                          mod_ident,

@@ -2339,6 +2339,8 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,
+        None,
+        false,
         Flags::empty(),
         None,
     )
