@@ -377,6 +377,48 @@ impl CertifierState {
             }
         }
 
+        for target_ancestor in voted_block.ancestors() {
+            // Votes are limited to 1 round before the proposed block.
+            if target_ancestor.round + 1 != voted_block.round() {
+                continue;
+            }
+            let Some(target_vote_info) = self.votes.get_mut(target_ancestor) else {
+                tracing::debug!(
+                    "Voted block {}: voting info not found for ancestor {}",
+                    voted_block.reference(),
+                    target_ancestor
+                );
+                continue;
+            };
+
+            target_vote_info
+                    .accept_block_votes
+                    .add_unique(voted_block.author(), &self.context.committee);
+
+            let now = self.context.clock.timestamp_utc_ms();
+
+            // Check if the target block is now certified after including the accept votes.
+            if let Some(certified_block) = target_vote_info.take_certified_output(&self.context)
+            {
+                let authority_name = self
+                    .context
+                    .committee
+                    .authority(certified_block.block.author())
+                    .hostname
+                    .clone();
+                let latency = Duration::from_millis(
+                    now.saturating_sub(certified_block.block.timestamp_ms()),
+                );
+                self.context
+                    .metrics
+                    .node_metrics
+                    .certifier_block_latency
+                    .with_label_values(&[&authority_name])
+                    .observe(latency.as_secs_f64());
+                certified_blocks.push(certified_block);
+            }
+        }
+
         certified_blocks
     }
 
