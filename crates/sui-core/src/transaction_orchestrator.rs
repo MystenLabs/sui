@@ -608,10 +608,13 @@ where
             .map_err(|e| {
                 match e {
                     crate::transaction_driver::TransactionDriverError::TimeOutWithLastRetriableError {
-                        latest_error,
+                        last_error,
                         attempts,
+                        timeout,
                     } => QuorumDriverError::TimeoutBeforeFinalityWithErrors {
-                        last_error: format!("After {} attempts: {}", attempts, latest_error.map(|e| e.to_string()).unwrap_or_default()),
+                        last_error: last_error.map(|e| e.to_string()).unwrap_or_default(),
+                        attempts,
+                        timeout,
                     },
                     other => QuorumDriverError::TransactionFailed {
                         retriable: other.is_retriable(),

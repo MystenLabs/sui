@@ -145,11 +145,11 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     "timed-out before finality could be reached",
                 )
             }
-            TimeoutBeforeFinalityWithErrors { last_error } => {
+            TimeoutBeforeFinalityWithErrors { last_error, attempts, timeout } => {
                 // TODO add a Retry-After header
                 RpcError::new(
                     Code::Unavailable,
-                    format!("Transaction timed out before finality could be reached. Last error: {}", last_error),
+                    format!("Transaction timed out before finality could be reached. Attempts: {attempts} & timeout: {timeout:?}. Last error: {last_error}"),
                 )
             }
             NonRecoverableTransactionError { errors } => {

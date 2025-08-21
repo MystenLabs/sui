@@ -176,8 +176,9 @@ where
                     Err(_) => {
                         // Timeout occurred, return with latest retriable error if available
                         Err(TransactionDriverError::TimeOutWithLastRetriableError {
-                            latest_error: latest_retriable_error.map(Box::new),
+                            last_error: latest_retriable_error.map(Box::new),
                             attempts,
+                            timeout: duration,
                         })
                     }
                 }

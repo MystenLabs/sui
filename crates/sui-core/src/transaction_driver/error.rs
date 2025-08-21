@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use itertools::Itertools as _;
 use sui_types::{
@@ -82,8 +83,9 @@ pub enum TransactionDriverError {
     /// Transaction timed out but we return last retriable error if it exists.
     /// Non-retriable.
     TimeOutWithLastRetriableError {
-        latest_error: Option<Box<TransactionDriverError>>,
+        last_error: Option<Box<TransactionDriverError>>,
         attempts: u32,
+        timeout: Duration,
     },
 }
 
@@ -184,14 +186,16 @@ impl std::fmt::Display for TransactionDriverError {
             }
             TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
             TransactionDriverError::TimeOutWithLastRetriableError {
-                latest_error,
+                last_error,
                 attempts,
+                timeout,
             } => {
                 write!(
                     f,
-                    "Transaction timed out after {} attempts. Last error: {}",
+                    "Transaction timed out after {} attempts. Timeout: {:?}. Last error: {}",
                     attempts,
-                    latest_error
+                    timeout,
+                    last_error
                         .as_ref()
                         .map(|e| e.to_string())
                         .unwrap_or_default()
@@ -209,7 +213,7 @@ impl std::fmt::Debug for TransactionDriverError {
 
 impl std::error::Error for TransactionDriverError {}
 
-#[derive(Eq, PartialEq, Clone, Debug, Default)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct AggregatedRequestErrors {
     pub errors: Vec<(String, Vec<AuthorityName>, StakeUnit)>,
     pub total_stake: StakeUnit,
@@ -272,7 +276,7 @@ pub(crate) fn aggregate_request_errors(
     }
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Default)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct AggregatedEffectsDigests {
     pub digests: Vec<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>,
 }
