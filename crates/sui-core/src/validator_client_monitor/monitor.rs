@@ -13,7 +13,7 @@ use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
-use sui_types::committee::{Committee, StakeUnit};
+use sui_types::committee::Committee;
 use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
 use tokio::{
     task::JoinSet,
