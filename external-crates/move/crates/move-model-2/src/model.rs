@@ -64,7 +64,7 @@ Extra functionality is provided in the case that the `Model` had source informat
 (`WithSource`) or did not (`WithoutSource`). If you need to \"forget\" which case you are in,
 `to_any` and `as_any` return a common type that can let values with different source information
 to be in tandem, e.g. as different arms in an `if-else`.
-Conversely, if you need to \"remember\" which case you are in, you can use `kind` to to case on
+Conversely, if you need to \"remember\" which case you are in, you can use `kind` to case on
 the presence source information. This can let you access the extra functionality provided by
 the `source_model` or `compiled_model`.
 "

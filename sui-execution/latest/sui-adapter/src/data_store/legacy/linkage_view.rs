@@ -62,7 +62,7 @@ impl<'state> LinkageView<'state> {
 
     pub fn reset_linkage(&self) -> Result<(), ExecutionError> {
         let Ok(mut linkage_info) = self.linkage_info.try_borrow_mut() else {
-            invariant_violation!("Unable to to reset linkage")
+            invariant_violation!("Unable to reset linkage")
         };
         *linkage_info = None;
         Ok(())
@@ -91,7 +91,7 @@ impl<'state> LinkageView<'state> {
         };
 
         let Ok(mut linkage_info) = self.linkage_info.try_borrow_mut() else {
-            invariant_violation!("Unable to to borrow linkage while restoring")
+            invariant_violation!("Unable to borrow linkage while restoring")
         };
         if let Some(existing) = &*linkage_info {
             invariant_violation!(
@@ -111,7 +111,7 @@ impl<'state> LinkageView<'state> {
     /// package on success.
     pub fn set_linkage(&self, context: &MovePackage) -> Result<AccountAddress, ExecutionError> {
         let Ok(mut linkage_info) = self.linkage_info.try_borrow_mut() else {
-            invariant_violation!("Unable to to borrow linkage to set")
+            invariant_violation!("Unable to borrow linkage to set")
         };
         if let Some(existing) = &*linkage_info {
             invariant_violation!(

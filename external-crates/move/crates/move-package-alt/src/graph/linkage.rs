@@ -134,7 +134,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .collect())
     }
 
-    /// Returns the the packages that are overridden in `node`, keyed by their original IDs (only
+    /// Returns the packages that are overridden in `node`, keyed by their original IDs (only
     /// published packages are returned).
     fn override_nodes(&self, node_id: NodeIndex) -> LinkageResult<BTreeMap<OriginalID, NodeIndex>> {
         let mut result: BTreeMap<OriginalID, NodeIndex> = BTreeMap::new();
