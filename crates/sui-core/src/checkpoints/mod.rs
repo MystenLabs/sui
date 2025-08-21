@@ -251,10 +251,32 @@ pub struct CheckpointStore {
 impl CheckpointStore {
     pub fn new(path: &Path) -> Arc<Self> {
         let tables = CheckpointStoreTables::new(path, "checkpoint");
+        let synced_checkpoint_notify_read = NotifyRead::new();
+        let executed_checkpoint_notify_read = NotifyRead::new();
+
+        // After restart, notify about the highest synced checkpoint if it exists
+        // This ensures checkpoint executor can continue from where it left off
+        if let Ok(Some((seq, _digest))) = tables.watermarks.get(&CheckpointWatermark::HighestSynced)
+        {
+            if let Ok(Some(checkpoint)) = tables.certified_checkpoints.get(&seq) {
+                let checkpoint: VerifiedCheckpoint = checkpoint.into();
+                synced_checkpoint_notify_read.notify(&seq, &checkpoint);
+            }
+        }
+
+        if let Ok(Some((seq, _digest))) =
+            tables.watermarks.get(&CheckpointWatermark::HighestExecuted)
+        {
+            if let Ok(Some(checkpoint)) = tables.certified_checkpoints.get(&seq) {
+                let checkpoint: VerifiedCheckpoint = checkpoint.into();
+                executed_checkpoint_notify_read.notify(&seq, &checkpoint);
+            }
+        }
+
         Arc::new(Self {
             tables,
-            synced_checkpoint_notify_read: NotifyRead::new(),
-            executed_checkpoint_notify_read: NotifyRead::new(),
+            synced_checkpoint_notify_read,
+            executed_checkpoint_notify_read,
         })
     }
 
@@ -265,10 +287,32 @@ impl CheckpointStore {
 
     pub fn new_for_db_checkpoint_handler(path: &Path) -> Arc<Self> {
         let tables = CheckpointStoreTables::new(path, "db_checkpoint");
+        let synced_checkpoint_notify_read = NotifyRead::new();
+        let executed_checkpoint_notify_read = NotifyRead::new();
+
+        // After restart, notify about the highest synced checkpoint if it exists
+        // This ensures checkpoint executor can continue from where it left off
+        if let Ok(Some((seq, _digest))) = tables.watermarks.get(&CheckpointWatermark::HighestSynced)
+        {
+            if let Ok(Some(checkpoint)) = tables.certified_checkpoints.get(&seq) {
+                let checkpoint: VerifiedCheckpoint = checkpoint.into();
+                synced_checkpoint_notify_read.notify(&seq, &checkpoint);
+            }
+        }
+
+        if let Ok(Some((seq, _digest))) =
+            tables.watermarks.get(&CheckpointWatermark::HighestExecuted)
+        {
+            if let Ok(Some(checkpoint)) = tables.certified_checkpoints.get(&seq) {
+                let checkpoint: VerifiedCheckpoint = checkpoint.into();
+                executed_checkpoint_notify_read.notify(&seq, &checkpoint);
+            }
+        }
+
         Arc::new(Self {
             tables,
-            synced_checkpoint_notify_read: NotifyRead::new(),
-            executed_checkpoint_notify_read: NotifyRead::new(),
+            synced_checkpoint_notify_read,
+            executed_checkpoint_notify_read,
         })
     }
 

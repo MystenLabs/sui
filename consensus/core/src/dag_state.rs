@@ -116,11 +116,17 @@ impl DagState {
             .map(|block| (block.reference(), block))
             .collect();
 
-        let threshold_clock = ThresholdClock::new(1, context.clone());
-
         let last_commit = store
             .read_last_commit()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+
+        // Initialize threshold clock with the proper round based on last commit
+        // This ensures consensus can continue after restart
+        let initial_round = last_commit
+            .as_ref()
+            .map(|c| c.leader().round + 1)
+            .unwrap_or(1);
+        let threshold_clock = ThresholdClock::new(initial_round, context.clone());
 
         let commit_info = store
             .read_last_commit_info()
@@ -183,6 +189,9 @@ impl DagState {
             evicted_rounds: vec![0; num_authorities],
         };
 
+        // Track the highest round seen during recovery
+        let mut highest_recovered_round = 0;
+
         for (authority_index, _) in context.committee.authorities() {
             let (blocks, eviction_round) = {
                 // Find the latest block for the authority to calculate the eviction round. Then we want to scan and load the blocks from the eviction round and onwards only.
@@ -211,6 +220,7 @@ impl DagState {
             // Update the block metadata for the authority.
             for block in &blocks {
                 state.update_block_metadata(block);
+                highest_recovered_round = highest_recovered_round.max(block.round());
             }
 
             debug!(
@@ -221,6 +231,17 @@ impl DagState {
                     .map(|b| b.reference())
                     .collect::<Vec<BlockRef>>()
             );
+        }
+
+        // After recovery, ensure the threshold clock is at least at the highest recovered round + 1
+        // This ensures consensus can make progress after restart
+        if state.threshold_clock.get_round() <= highest_recovered_round {
+            info!(
+                "Adjusting threshold clock from {} to {} after recovery",
+                state.threshold_clock.get_round(),
+                highest_recovered_round + 1
+            );
+            state.threshold_clock.set_round(highest_recovered_round + 1);
         }
 
         if let Some(last_commit) = last_commit {

@@ -28,6 +28,20 @@ impl CommitVoteMonitor {
         }
     }
 
+    /// Creates a new CommitVoteMonitor and restores state from recent blocks.
+    /// This is needed after restart to properly track the quorum commit index.
+    pub(crate) fn new_with_restored_state(
+        context: Arc<Context>,
+        recent_blocks: impl Iterator<Item = crate::block::VerifiedBlock>,
+    ) -> Self {
+        let monitor = Self::new(context);
+        // Restore commit votes from recent blocks
+        for block in recent_blocks {
+            monitor.observe_block(&block);
+        }
+        monitor
+    }
+
     /// Keeps track of the highest commit voted by each authority.
     pub(crate) fn observe_block(&self, block: &VerifiedBlock) {
         let mut highest_voted_commits = self.highest_voted_commits.lock();

@@ -34,7 +34,7 @@ use crate::{
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::PeerRoundTracker,
-    storage::rocksdb_store::RocksDBStore,
+    storage::{rocksdb_store::RocksDBStore, Store},
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
@@ -316,7 +316,8 @@ where
             // For streaming RPC, Core will be notified when consumer is available.
             // For non-streaming RPC, there is no way to know so default to true.
             // When there is only one (this) authority, assume subscriber exists.
-            !N::Client::SUPPORT_STREAMING || context.committee.size() == 1,
+            // After restart (boot_counter > 0), allow proposals initially to ensure liveness.
+            !N::Client::SUPPORT_STREAMING || context.committee.size() == 1 || boot_counter > 0,
             commit_observer,
             core_signals,
             protocol_keypair,
@@ -331,7 +332,26 @@ where
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        // Restore CommitVoteMonitor state from recent blocks to properly track quorum commit index after restart
+        let commit_vote_monitor = {
+            let last_commit_round = dag_state.read().last_commit_round();
+            // Get recent blocks from the last few rounds to restore commit votes
+            // We need enough rounds to ensure we capture votes from all authorities
+            let rounds_to_scan = 10u64; // Should be enough to get votes from all authorities
+            let start_round = last_commit_round.saturating_sub(rounds_to_scan as u32) + 1;
+
+            let mut recent_blocks = Vec::new();
+            for (authority_index, _) in context.committee.authorities() {
+                if let Ok(blocks) = store.scan_blocks_by_author(authority_index, start_round) {
+                    recent_blocks.extend(blocks);
+                }
+            }
+
+            Arc::new(CommitVoteMonitor::new_with_restored_state(
+                context.clone(),
+                recent_blocks.into_iter(),
+            ))
+        };
 
         let synchronizer = Synchronizer::start(
             network_client.clone(),

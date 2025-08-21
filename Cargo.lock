@@ -360,7 +360,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "201eba73b76341631014baf9c0018e703af204a1e0f15d7664d8a0947f6be74d"
 dependencies = [
  "libc",
- "libloading 0.8.6",
+ "libloading",
  "linkme",
  "once_cell",
  "rand 0.8.5",
@@ -2635,7 +2635,6 @@ checksum = "fa2e27ae6ab525c3d369ded447057bca5438d86dc3a68f6faafb8269ba82ebf3"
 dependencies = [
  "glob",
  "libc",
- "libloading 0.7.4",
 ]
 
 [[package]]
@@ -7137,16 +7136,6 @@ checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
 name = "libloading"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
-dependencies = [
- "cfg-if",
- "winapi",
-]
-
-[[package]]
-name = "libloading"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
@@ -7184,18 +7173,15 @@ dependencies = [
 
 [[package]]
 name = "librocksdb-sys"
-version = "0.16.0+8.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce3d60bc059831dc1c83903fb45c103f75db65c5a7bf22272764d9cc683e348c"
+version = "0.17.2+9.10.0"
+source = "git+https://github.com/tustvold/rust-rocksdb?branch=fix-gcc-15#7d3889271a6de0afd51fbcfa95184958c9fa9761"
 dependencies = [
  "bindgen",
  "bzip2-sys",
  "cc",
- "glob",
  "libc",
  "libz-sys",
  "lz4-sys",
- "tikv-jemalloc-sys",
  "zstd-sys",
 ]
 
@@ -11331,9 +11317,8 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bd13e55d6d7b8cd0ea569161127567cd587676c99f4472f779a0279aa60a7a7"
+version = "0.23.0"
+source = "git+https://github.com/tustvold/rust-rocksdb?branch=fix-gcc-15#7d3889271a6de0afd51fbcfa95184958c9fa9761"
 dependencies = [
  "libc",
  "librocksdb-sys",

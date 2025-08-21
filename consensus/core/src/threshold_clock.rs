@@ -83,6 +83,13 @@ impl ThresholdClock {
         self.round
     }
 
+    /// Sets the round to a specific value. Used during recovery to ensure
+    /// the threshold clock is at the correct round after restart.
+    pub(crate) fn set_round(&mut self, round: Round) {
+        self.round = round;
+        self.aggregator.clear();
+    }
+
     pub(crate) fn get_quorum_ts(&self) -> Instant {
         self.quorum_ts
     }
