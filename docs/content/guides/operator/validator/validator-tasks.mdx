@@ -14,6 +14,9 @@ All `sui-node` related data is stored by default under `/opt/sui/db/`. This is s
 
 ```sh
 $ cat /opt/sui/config/validator.yaml | grep db-path
+```
+
+```
   db-path: /opt/sui/db/authorities_db
   db-path: /opt/sui/db/consensus_db
 ```
@@ -48,9 +51,7 @@ The following keys are used by `sui-node`:
 
 These are configured in the [`sui-node` configuration file](./validator-config.mdx).
 
-## Monitoring
-
-### Metrics
+## Metrics
 
 `sui-node` exposes metrics via a local HTTP interface. These can be scraped for use in a central monitoring system, as well as viewed directly from the node.
 
@@ -68,7 +69,7 @@ $ curl http://localhost:9184/metrics | grep <METRIC>
 
 `sui-node` also pushes metrics to a central Sui metrics proxy.
 
-### Logs
+## Logs
 
 Logs are controlled using the `RUST_LOG` environment variable.
 
@@ -108,7 +109,7 @@ To change the currently configured logging values:
 $ curl localhost:1337/logging -d "info"
 ```
 
-### Dashboards
+## Dashboards
 
 Public dashboard for network-wide visibility:
 
