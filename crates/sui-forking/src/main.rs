@@ -10,11 +10,12 @@ use clap::{Parser, Subcommand};
 use simulacrum::{AdvanceEpochConfig, Simulacrum};
 use std::{
     net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
-use sui_types::{
-    transaction::Transaction,
-};
+use sui_types::transaction::Transaction;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
@@ -44,29 +45,29 @@ enum Commands {
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {
-        #[clap(long)]
+        #[clap(long, default_value = "http://localhost:8123")]
         server_url: String,
     },
     /// Advance clock by specified duration in seconds
     AdvanceClock {
-        #[clap(long)]
+        #[clap(long, default_value = "http://localhost:8123")]
         server_url: String,
         #[clap(long, default_value = "1")]
         seconds: u64,
     },
     /// Advance to next epoch
     AdvanceEpoch {
-        #[clap(long)]
+        #[clap(long, default_value = "http://localhost:8123")]
         server_url: String,
     },
     /// Get current status
     Status {
-        #[clap(long)]
+        #[clap(long, default_value = "http://localhost:8123")]
         server_url: String,
     },
     /// Execute a transaction
     ExecuteTx {
-        #[clap(long)]
+        #[clap(long, default_value = "http://localhost:8123")]
         server_url: String,
         /// Base64 encoded transaction bytes
         #[clap(long)]
@@ -117,6 +118,7 @@ struct ForkingStatus {
 
 struct AppState {
     simulacrum: Arc<RwLock<Simulacrum>>,
+    transaction_count: Arc<AtomicUsize>,
 }
 
 impl AppState {
@@ -124,6 +126,7 @@ impl AppState {
         let simulacrum = Simulacrum::new();
         Self {
             simulacrum: Arc::new(RwLock::new(simulacrum)),
+            transaction_count: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -150,7 +153,7 @@ async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let status = ForkingStatus {
         checkpoint,
         epoch,
-        transaction_count: 0, // TODO: get actual transaction count
+        transaction_count: state.transaction_count.load(Ordering::SeqCst),
     };
 
     Json(ApiResponse {
@@ -165,6 +168,7 @@ async fn advance_checkpoint(State(state): State<Arc<AppState>>) -> impl IntoResp
 
     // create_checkpoint returns a VerifiedCheckpoint, not a Result
     let checkpoint = sim.create_checkpoint();
+    state.transaction_count.fetch_add(1, Ordering::SeqCst);
     info!("Advanced to checkpoint {}", checkpoint.sequence_number);
 
     Json(ApiResponse::<String> {
@@ -185,6 +189,7 @@ async fn advance_clock(
 
     let duration = std::time::Duration::from_secs(request.seconds);
     sim.advance_clock(duration);
+    state.transaction_count.fetch_add(1, Ordering::SeqCst);
     info!("Advanced clock by {} seconds", request.seconds);
 
     Json(ApiResponse::<String> {
@@ -200,6 +205,7 @@ async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse 
     // Use default configuration for advancing epoch
     let config = AdvanceEpochConfig::default();
     sim.advance_epoch(config);
+    state.transaction_count.fetch_add(1, Ordering::SeqCst);
     info!("Advanced to next epoch");
 
     Json(ApiResponse::<String> {
@@ -216,7 +222,7 @@ async fn execute_tx(
     // Decode the base64 transaction bytes
     let tx_bytes = match base64::Engine::decode(
         &base64::engine::general_purpose::STANDARD,
-        &request.tx_bytes
+        &request.tx_bytes,
     ) {
         Ok(bytes) => bytes,
         Err(e) => {
@@ -245,15 +251,14 @@ async fn execute_tx(
     match sim.execute_transaction(transaction) {
         Ok((effects, execution_error)) => {
             let effects_bytes = bcs::to_bytes(&effects).unwrap();
-            let effects_base64 = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &effects_bytes
-            );
-            
+            let effects_base64 =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &effects_bytes);
+
             let error_str = execution_error.map(|e| format!("{:?}", e));
-            
+
+            state.transaction_count.fetch_add(1, Ordering::SeqCst);
             info!("Executed transaction successfully");
-            
+
             Json(ApiResponse {
                 success: true,
                 data: Some(ExecuteTxResponse {
@@ -263,13 +268,11 @@ async fn execute_tx(
                 error: None,
             })
         }
-        Err(e) => {
-            Json(ApiResponse::<ExecuteTxResponse> {
-                success: false,
-                data: None,
-                error: Some(format!("Failed to execute transaction: {}", e)),
-            })
-        }
+        Err(e) => Json(ApiResponse::<ExecuteTxResponse> {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to execute transaction: {}", e)),
+        }),
     }
 }
 
