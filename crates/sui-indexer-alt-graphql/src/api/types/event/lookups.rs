@@ -19,13 +19,16 @@ use crate::scope::Scope;
 
 /// Helper struct to manage event lookups by transaction sequence numbers
 pub(crate) struct EventLookup {
-    tx_digests_map: HashMap<TxDigestKey, StoredTxDigest>,
-    transaction_events: HashMap<TransactionDigest, TransactionEventsContents>,
+    sequence_to_digest: HashMap<TxDigestKey, StoredTxDigest>,
+    digest_to_events: HashMap<TransactionDigest, TransactionEventsContents>,
 }
 
 impl EventLookup {
-    /// Create a new EventLookup from transaction sequence numbers
-    pub async fn from_sequence_numbers(
+    /// Loads transaction events by:
+    /// 1. Fetching transaction digests from PostgreSQL using tx_sequence_numbers
+    /// 2. Retrieves corresponding events from kv store using digests in batches
+    /// Resulting EventLookup is a helper used to retrieve events for transactions.
+    pub(crate) async fn from_sequence_numbers(
         ctx: &Context<'_>,
         tx_sequence_numbers: &[u64],
     ) -> Result<Self, RpcError> {
@@ -37,29 +40,28 @@ impl EventLookup {
             .map(|r| TxDigestKey(*r))
             .collect();
 
-        let tx_digests_map = pg_loader
+        let sequence_to_digest = pg_loader
             .load_many(tx_digest_keys)
             .await
             .context("Failed to load transaction digests")?;
 
-        let transaction_digests: Vec<TransactionDigest> = tx_digests_map
+        let transaction_digests: Vec<TransactionDigest> = sequence_to_digest
             .values()
             .map(|stored| TransactionDigest::try_from(stored.tx_digest.clone()))
             .collect::<Result<_, _>>()
             .context("Failed to deserialize transaction digests")?;
 
-        let transaction_events = kv_loader
+        let digest_to_events = kv_loader
             .load_many_transaction_events(transaction_digests)
             .await
             .context("Failed to load transaction events")?;
         Ok(Self {
-            tx_digests_map,
-            transaction_events,
+            sequence_to_digest,
+            digest_to_events,
         })
     }
 
-    /// Get events for multiple transaction sequence numbers
-    pub fn events_from_tx_sequence_numbers(
+    pub(crate) fn events_from_tx_sequence_numbers(
         &self,
         scope: &Scope,
         tx_sequence_numbers: &[u64],
@@ -71,6 +73,7 @@ impl EventLookup {
             .into_iter()
             .flatten()
             .collect();
+        // Ensure events are sorted by transaction sequence number and then sequence number.
         events.sort_by(|a, b| {
             (a.tx_sequence_number, a.sequence_number)
                 .cmp(&(b.tx_sequence_number, b.sequence_number))
@@ -78,7 +81,6 @@ impl EventLookup {
         Ok(events)
     }
 
-    /// Get events for a single transaction sequence number
     fn events_from_tx_sequence_number(
         &self,
         scope: &Scope,
@@ -86,7 +88,7 @@ impl EventLookup {
     ) -> Result<Vec<Event>, RpcError> {
         let key = TxDigestKey(tx_sequence_number);
         let stored_tx_digest = self
-            .tx_digests_map
+            .sequence_to_digest
             .get(&key)
             .context("Failed to get transaction digest")?;
 
@@ -94,7 +96,7 @@ impl EventLookup {
             .context("Failed to deserialize transaction digest")?;
 
         let contents = self
-            .transaction_events
+            .digest_to_events
             .get(&tx_digest)
             .context("Failed to get events")?;
 
