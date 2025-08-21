@@ -2,18 +2,19 @@ use anyhow::Result;
 use axum::{
     Json, Router,
     extract::State,
-    http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
 };
 use clap::{Parser, Subcommand};
 // use rand::rngs::OsRng;
-use simulacrum::{AdvanceEpochConfig, InMemoryStore, Simulacrum};
+use simulacrum::{AdvanceEpochConfig, Simulacrum};
 use std::{
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
-use sui_swarm_config::{genesis_config::AccountConfig, network_config_builder::ConfigBuilder};
+use sui_types::{
+    transaction::Transaction,
+};
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
@@ -43,26 +44,33 @@ enum Commands {
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {
-        #[clap(long, default_value = "http://127.0.0.1:8123")]
+        #[clap(long)]
         server_url: String,
     },
     /// Advance clock by specified duration in seconds
     AdvanceClock {
-        #[clap(long, default_value = "http://127.0.0.1:8123")]
+        #[clap(long)]
         server_url: String,
-
         #[clap(long, default_value = "1")]
         seconds: u64,
     },
     /// Advance to next epoch
     AdvanceEpoch {
-        #[clap(long, default_value = "http://127.0.0.1:8123")]
+        #[clap(long)]
         server_url: String,
     },
     /// Get current status
     Status {
-        #[clap(long, default_value = "http://127.0.0.1:8123")]
+        #[clap(long)]
         server_url: String,
+    },
+    /// Execute a transaction
+    ExecuteTx {
+        #[clap(long)]
+        server_url: String,
+        /// Base64 encoded transaction bytes
+        #[clap(long)]
+        tx_bytes: String,
     },
 }
 
@@ -76,6 +84,20 @@ struct AdvanceClockRequest {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct AdvanceEpochRequest;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct ExecuteTxRequest {
+    /// Base64 encoded transaction bytes
+    tx_bytes: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct ExecuteTxResponse {
+    /// Base64 encoded transaction effects
+    effects: String,
+    /// Execution error if any
+    error: Option<String>,
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct ApiResponse<T> {
@@ -99,18 +121,7 @@ struct AppState {
 
 impl AppState {
     fn new() -> Self {
-        // Create a network config with a temporary directory
         let simulacrum = Simulacrum::new();
-        // let mut rng = OsRng;
-        // let config = ConfigBuilder::new_with_temp_dir()
-        //     .rng(&mut rng)
-        //     .with_chain_start_timestamp_ms(1)
-        //     .deterministic_committee_size(std::num::NonZeroUsize::new(1).unwrap())
-        //     .build();
-        //
-        // let store = InMemoryStore::default();
-        // let simulacrum = Simulacrum::new_with_network_config_store(&config, OsRng, store);
-        //
         Self {
             simulacrum: Arc::new(RwLock::new(simulacrum)),
         }
@@ -198,6 +209,70 @@ async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse 
     })
 }
 
+async fn execute_tx(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ExecuteTxRequest>,
+) -> impl IntoResponse {
+    // Decode the base64 transaction bytes
+    let tx_bytes = match base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        &request.tx_bytes
+    ) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return Json(ApiResponse::<ExecuteTxResponse> {
+                success: false,
+                data: None,
+                error: Some(format!("Failed to decode base64: {}", e)),
+            });
+        }
+    };
+
+    // Deserialize the transaction
+    let transaction: Transaction = match bcs::from_bytes(&tx_bytes) {
+        Ok(tx) => tx,
+        Err(e) => {
+            return Json(ApiResponse::<ExecuteTxResponse> {
+                success: false,
+                data: None,
+                error: Some(format!("Failed to deserialize transaction: {}", e)),
+            });
+        }
+    };
+
+    // Execute the transaction
+    let mut sim = state.simulacrum.write().unwrap();
+    match sim.execute_transaction(transaction) {
+        Ok((effects, execution_error)) => {
+            let effects_bytes = bcs::to_bytes(&effects).unwrap();
+            let effects_base64 = base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                &effects_bytes
+            );
+            
+            let error_str = execution_error.map(|e| format!("{:?}", e));
+            
+            info!("Executed transaction successfully");
+            
+            Json(ApiResponse {
+                success: true,
+                data: Some(ExecuteTxResponse {
+                    effects: effects_base64,
+                    error: error_str,
+                }),
+                error: None,
+            })
+        }
+        Err(e) => {
+            Json(ApiResponse::<ExecuteTxResponse> {
+                success: false,
+                data: None,
+                error: Some(format!("Failed to execute transaction: {}", e)),
+            })
+        }
+    }
+}
+
 async fn start_server(host: String, port: u16) -> Result<()> {
     let state = Arc::new(AppState::new());
 
@@ -207,6 +282,7 @@ async fn start_server(host: String, port: u16) -> Result<()> {
         .route("/advance-checkpoint", post(advance_checkpoint))
         .route("/advance-clock", post(advance_clock))
         .route("/advance-epoch", post(advance_epoch))
+        .route("/execute-tx", post(execute_tx))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -252,8 +328,8 @@ async fn main() -> Result<()> {
     match args.command {
         Commands::Start {
             host,
-            port,
             checkpoint,
+            port,
             network,
         } => {
             info!(
@@ -291,6 +367,13 @@ async fn main() -> Result<()> {
             } else {
                 println!("Server error: {}", response.status());
             }
+        }
+        Commands::ExecuteTx {
+            server_url,
+            tx_bytes,
+        } => {
+            let body = serde_json::json!(ExecuteTxRequest { tx_bytes });
+            send_command(&server_url, "execute-tx", Some(body)).await?
         }
     }
 
