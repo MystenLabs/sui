@@ -557,3 +557,9 @@ details > div > div {
 .theme-doc-markdown .nudge-details details {
   margin-left: 30px !important;
 }
+
+h5 {
+  font-size: 1.2rem;         /* smaller than h3 (usually ~1.3rem) */
+  margin-top: 1.2em;       /* spacing for readability */
+  margin-bottom: 0.6em;
+}
