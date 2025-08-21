@@ -341,18 +341,17 @@ impl ConsensusAdapter {
     }
 
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
-        // Currently narwhal worker might lose transactions on restart, so we need to resend them
+        // Transactions being sent to consensus can be dropped on crash, before included in a proposed block.
+        // System transactions do not have clients to retry them. They need to be resubmitted to consensus on restart.
+        // get_all_pending_consensus_transactions() can return both system and certified transactions though.
+        //
         // todo - get_all_pending_consensus_transactions is called twice when
         // initializing AuthorityPerEpochStore and here, should not be a big deal but can be optimized
         let mut recovered = epoch_store.get_all_pending_consensus_transactions();
 
         #[allow(clippy::collapsible_if)] // This if can be collapsed but it will be ugly
-        if epoch_store
-            .get_reconfig_state_read_lock_guard()
-            .is_reject_user_certs()
-            && epoch_store.pending_consensus_certificates_empty()
-        {
-            if recovered
+        if epoch_store.should_send_end_of_publish() {
+            if !recovered
                 .iter()
                 .any(ConsensusTransaction::is_end_of_publish)
             {
@@ -907,7 +906,19 @@ impl ConsensusAdapter {
         }
         debug!("{transaction_keys:?} processed by consensus");
 
-        let consensus_keys: Vec<_> = transactions.iter().map(|t| t.key()).collect();
+        let consensus_keys: Vec<_> = transactions
+            .iter()
+            .filter_map(|t| {
+                if t.is_user_transaction() {
+                    // UserTransaction is not inserted into the pending consensus transactions table.
+                    // Also UserTransaction shares the same key as CertifiedTransaction, so removing
+                    // the key here can have unexpected effects.
+                    None
+                } else {
+                    Some(t.key())
+                }
+            })
+            .collect();
         epoch_store
             .remove_pending_consensus_transactions(&consensus_keys)
             .expect("Storage error when removing consensus transaction");
@@ -921,30 +932,8 @@ impl ConsensusAdapter {
                 transactions[0].kind,
                 ConsensusTransactionKind::UserTransaction(_)
             );
-        let send_end_of_publish = if is_user_tx {
-            // If we are in RejectUserCerts state and we just drained the list we need to
-            // send EndOfPublish to signal other validators that we are not submitting more certificates to the epoch.
-            // Note that there could be a race condition here where we enter this check in RejectAllCerts state.
-            // In that case we don't need to send EndOfPublish because condition to enter
-            // RejectAllCerts is when 2f+1 other validators already sequenced their EndOfPublish message.
-            // Also note that we could sent multiple EndOfPublish due to that multiple tasks can enter here with
-            // pending_count == 0. This doesn't affect correctness.
-            if epoch_store
-                .get_reconfig_state_read_lock_guard()
-                .is_reject_user_certs()
-            {
-                let pending_count = epoch_store.pending_consensus_certificates_count();
-                debug!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
-                pending_count == 0 // send end of epoch if empty
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-        if send_end_of_publish {
+        if is_user_tx && epoch_store.should_send_end_of_publish() {
             // sending message outside of any locks scope
-            info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
@@ -952,6 +941,8 @@ impl ConsensusAdapter {
                 None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
+            } else {
+                info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             }
         }
         self.metrics
@@ -1176,24 +1167,18 @@ impl ConsensusOverloadChecker for NoopConsensusOverloadChecker {
 
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
-    /// It transition reconfig state to reject new certificates from user
+    /// It sets reconfig state to reject new certificates from user.
     /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained.
     fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
-        let send_end_of_publish = {
+        {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
             if !reconfig_guard.should_accept_user_certs() {
                 // Allow caller to call this method multiple times
                 return;
             }
-            let pending_count = epoch_store.pending_consensus_certificates_count();
-            debug!(epoch=?epoch_store.epoch(), ?pending_count, "Trying to close epoch");
-            let send_end_of_publish = pending_count == 0;
             epoch_store.close_user_certs(reconfig_guard);
-            send_end_of_publish
-            // reconfig_guard lock is dropped here.
-        };
-        if send_end_of_publish {
-            info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
+        }
+        if epoch_store.should_send_end_of_publish() {
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
@@ -1201,6 +1186,8 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
+            } else {
+                info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             }
         }
     }
