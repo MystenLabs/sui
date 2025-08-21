@@ -10,7 +10,7 @@ use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
-    views::{TypeView, ValueView},
+    views::{SizeConfig, TypeView, ValueView},
 };
 use sui_types::gas_model::{
     gas_predicates::{native_function_threshold_exceeded, use_legacy_abstract_size},
@@ -381,9 +381,15 @@ impl GasMeter for SuiGasMeter<'_> {
 
 fn abstract_memory_size(status: &GasStatus, val: impl ValueView) -> AbstractMemorySize {
     if use_legacy_abstract_size(status.gas_model_version) {
-        val.legacy_abstract_memory_size()
+        val.abstract_memory_size(&SizeConfig {
+            traverse_references: false,
+            wide_vector_size: false,
+        })
     } else {
-        val.abstract_memory_size(false)
+        val.abstract_memory_size(&SizeConfig {
+            traverse_references: false,
+            wide_vector_size: true,
+        })
     }
 }
 
@@ -392,9 +398,15 @@ fn abstract_memory_size_with_traversal(
     val: impl ValueView,
 ) -> AbstractMemorySize {
     if use_legacy_abstract_size(status.gas_model_version) {
-        val.legacy_abstract_memory_size()
+        val.abstract_memory_size(&SizeConfig {
+            traverse_references: false,
+            wide_vector_size: false,
+        })
     } else {
-        val.abstract_memory_size(traverse_refs(status.gas_model_version))
+        val.abstract_memory_size(&SizeConfig {
+            traverse_references: traverse_refs(status.gas_model_version),
+            wide_vector_size: true,
+        })
     }
 }
 

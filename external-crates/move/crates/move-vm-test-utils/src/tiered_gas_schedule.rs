@@ -21,7 +21,7 @@ use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
-    views::{TypeView, ValueView},
+    views::{SizeConfig, TypeView, ValueView},
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -792,11 +792,17 @@ pub fn initial_cost_schedule() -> CostTable {
 }
 
 fn abstract_memory_size(v: impl ValueView) -> AbstractMemorySize {
-    v.abstract_memory_size(false)
+    v.abstract_memory_size(&SizeConfig {
+        traverse_references: false,
+        wide_vector_size: true,
+    })
 }
 
 fn abstract_memory_size_with_traversal(v: impl ValueView) -> AbstractMemorySize {
-    v.abstract_memory_size(true)
+    v.abstract_memory_size(&SizeConfig {
+        wide_vector_size: true,
+        traverse_references: true,
+    })
 }
 
 static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
