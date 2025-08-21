@@ -51,10 +51,18 @@ async fn main() -> Result<()> {
                 "Starting forking server for {} at checkpoint {:?} at address {}:{}",
                 network, checkpoint, host, port
             );
-            println!(
-                "Starting forking server for {} at checkpoint {:?} at address {}:{}",
-                network, checkpoint, host, port
-            );
+            let info = if let Some(c) = checkpoint {
+                format!(
+                    "Starting forking server for {} at checkpoint {c} at address {}:{}",
+                    network, host, port
+                )
+            } else {
+                format!(
+                    "Starting forking server for {} at latest checkpoint at address {}:{}",
+                    network, host, port
+                )
+            };
+            println!("{info}");
             start_server(host, port).await?
         }
         Commands::AdvanceCheckpoint { server_url } => {
@@ -98,4 +106,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-
