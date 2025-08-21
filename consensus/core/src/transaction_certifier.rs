@@ -392,23 +392,21 @@ impl CertifierState {
             };
 
             target_vote_info
-                    .accept_block_votes
-                    .add_unique(voted_block.author(), &self.context.committee);
+                .accept_block_votes
+                .add_unique(voted_block.author(), &self.context.committee);
 
             let now = self.context.clock.timestamp_utc_ms();
 
             // Check if the target block is now certified after including the accept votes.
-            if let Some(certified_block) = target_vote_info.take_certified_output(&self.context)
-            {
+            if let Some(certified_block) = target_vote_info.take_certified_output(&self.context) {
                 let authority_name = self
                     .context
                     .committee
                     .authority(certified_block.block.author())
                     .hostname
                     .clone();
-                let latency = Duration::from_millis(
-                    now.saturating_sub(certified_block.block.timestamp_ms()),
-                );
+                let latency =
+                    Duration::from_millis(now.saturating_sub(certified_block.block.timestamp_ms()));
                 self.context
                     .metrics
                     .node_metrics

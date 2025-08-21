@@ -268,7 +268,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     pub fn select_shuffled_preferred_validators_consensus(
         &self,
         committee: &Committee,
-        k_stake: StakeUnit,
+        k: usize,
         // TODO: Pass in the operation type so that we can select validators based on the operation type.
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
@@ -281,43 +281,19 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
         let cached_scores = cached_scores.1.clone();
 
-        // Sort the validators by score
+        // Since the cached scores are updated periodically, it is possible that it was ran on
+        // an out-of-date committee.
         let mut validator_with_scores: Vec<_> = committee
-            .voting_rights
-            .iter()
+            .names()
             .zip(cached_scores.iter())
-            .map(|((v, stake), score)| (*v, *stake, *score))
+            .map(|(v, score)| (*v, *score))
             .collect();
-        validator_with_scores.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        let stake_threshold = (committee.total_votes() * k_stake) / 100;
+        let k = k.min(validator_with_scores.len());
+        validator_with_scores[..k].shuffle(&mut rng);
 
-        // Identify the top k validators by stake and with the best scores
-        let mut k_stake_accumulated = 0;
-        let mut top_k_validators = Vec::new();
-        let mut rest_validators = Vec::new();
-        for (validator, score, stake) in validator_with_scores.iter() {
-            k_stake_accumulated += *stake;
-            if k_stake_accumulated <= stake_threshold {
-                top_k_validators.push((*validator, *score, *stake));
-            } else {
-                rest_validators.push((*validator, *score, *stake));
-            }
-        }
-        top_k_validators.shuffle(&mut rng);
-
-        let mut result = Vec::with_capacity(validator_with_scores.len());
-
-        // For the top K elements, use weighted random selection using as weight the stake of the validator.
-        let selected = top_k_validators
-            .into_iter()
-            .map(|(v, _, _)| v)
-            .collect::<Vec<_>>();
-
-        result.extend(selected);
-        result.extend(rest_validators.into_iter().map(|(v, _, _)| v));
-
-        result
+        validator_with_scores.into_iter().map(|(v, _)| v).collect()
     }
 
     pub fn select_shuffled_preferred_validators(
