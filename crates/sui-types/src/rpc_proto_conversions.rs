@@ -233,7 +233,7 @@ impl From<crate::messages_checkpoint::CheckpointCommitment> for CheckpointCommit
                 CheckpointCommitmentKind::EcmhLiveObjectSet
             }
             crate::messages_checkpoint::CheckpointCommitment::CheckpointArtifactsDigest(digest) => {
-                message.digest = Some(digest.digest.to_string());
+                message.digest = Some(digest.to_string());
                 CheckpointCommitmentKind::CheckpointArtifactsDigest
             }
         };

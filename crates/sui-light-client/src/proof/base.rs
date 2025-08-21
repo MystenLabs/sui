@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
     committee::Committee,
-    digests::ObjectDigest,
     event::{Event, EventID},
     full_checkpoint_content::CheckpointData,
     messages_checkpoint::{CertifiedCheckpointSummary, VerifiedCheckpoint},
@@ -17,7 +16,7 @@ use crate::proof::{
     error::{ProofError, ProofResult},
     events::EventsTarget,
     objects::ObjectsTarget,
-    ocs::{OCSProof, OCSTarget, OCSTargetType},
+    ocs::{OCSProof, OCSTarget},
     transaction_proof::TransactionProof,
 };
 
@@ -54,16 +53,12 @@ impl ProofTarget {
         ProofTarget::Committee(CommitteeTarget { committee })
     }
 
-    pub fn new_object_checkpoint_state(
-        id: ObjectID,
-        digest: Option<ObjectDigest>,
-        target_type: OCSTargetType,
-    ) -> ProofResult<Self> {
-        Ok(ProofTarget::ObjectCheckpointState(OCSTarget::new(
-            id,
-            digest,
-            target_type,
-        )?))
+    pub fn new_ocs_inclusion(object_ref: ObjectRef) -> Self {
+        ProofTarget::ObjectCheckpointState(OCSTarget::new_inclusion_target(object_ref))
+    }
+
+    pub fn new_ocs_non_inclusion(object_id: ObjectID) -> Self {
+        ProofTarget::ObjectCheckpointState(OCSTarget::new_non_inclusion_target(object_id))
     }
 }
 

@@ -227,6 +227,24 @@ impl Epoch {
         Ok(None)
     }
 
+    /// A commitment by the committee on the artifacts of the checkpoint.
+    /// e.g., object checkpoint states
+    async fn artifacts_digest(&self) -> Result<Option<String>> {
+        let Some(commitments) = self.stored.epoch_commitments.as_ref() else {
+            return Ok(None);
+        };
+        let commitments: Vec<EpochCommitment> = bcs::from_bytes(commitments).map_err(|e| {
+            Error::Internal(format!("Error deserializing commitments: {e}")).extend()
+        })?;
+
+        for commitment in commitments {
+            if let EpochCommitment::CheckpointArtifactsDigest(digest) = commitment {
+                return Ok(Some(digest.base58_encode()));
+            }
+        }
+        Ok(None)
+    }
+
     /// The epoch's corresponding checkpoints.
     async fn checkpoints(
         &self,

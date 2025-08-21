@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ObjectID;
 use crate::base_types::{
     random_object_ref, ExecutionData, ExecutionDigests, FullObjectRef, VerifiedExecutionData,
 };
+use crate::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
-use crate::digests::{Digest, ObjectDigest};
+use crate::digests::{CheckpointArtifactsDigest, Digest, ObjectDigest};
 use crate::effects::{TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::full_checkpoint_content::CheckpointData;
@@ -124,52 +124,18 @@ impl Default for ECMHLiveObjectSetDigest {
     }
 }
 
-// TODO: Does this need versioning?
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectCheckpointState {
-    pub id: ObjectID,
-    /// This could be None if the object was deleted or wrapped in the transaction.
-    pub digest: Option<ObjectDigest>,
-}
-
-impl ObjectCheckpointState {
-    pub fn new(id: ObjectID, digest: Option<ObjectDigest>) -> Self {
-        Self { id, digest }
-    }
-}
-
-impl PartialEq for ObjectCheckpointState {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for ObjectCheckpointState {}
-
-impl PartialOrd for ObjectCheckpointState {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ObjectCheckpointState {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id.cmp(&other.id)
-    }
-}
-
 /// A sorted list of object checkpoint states (by object ID).
 #[derive(Debug)]
 pub struct ObjectCheckpointStates {
-    pub contents: Vec<ObjectCheckpointState>,
+    pub contents: Vec<ObjectRef>,
 }
 
 impl ObjectCheckpointStates {
-    fn new(contents: BTreeMap<ObjectID, Option<ObjectDigest>>) -> Self {
+    fn new(contents: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>) -> Self {
         Self {
             contents: contents
                 .into_iter()
-                .map(|(id, digest)| ObjectCheckpointState::new(id, digest))
+                .map(|(id, (seq, digest))| (id, seq, digest))
                 .collect::<Vec<_>>(),
         }
     }
@@ -220,8 +186,9 @@ impl From<&[&TransactionEffects]> for CheckpointArtifacts {
     fn from(effects: &[&TransactionEffects]) -> Self {
         let mut latest_object_states = BTreeMap::new();
         for e in effects {
-            for object_change in e.object_changes() {
-                latest_object_states.insert(object_change.id, object_change.output_digest);
+            // TODO: Update after Mark's PR is merged.
+            for ((id, seq, digest), _) in e.mutated() {
+                latest_object_states.insert(id, (seq, digest));
             }
         }
 
@@ -247,19 +214,6 @@ impl From<&CheckpointData> for CheckpointArtifacts {
             .collect::<Vec<_>>();
 
         Self::from(effects.as_slice())
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
-pub struct CheckpointArtifactsDigest {
-    pub digest: Digest,
-}
-
-impl From<[u8; 32]> for CheckpointArtifactsDigest {
-    fn from(digest: [u8; 32]) -> Self {
-        Self {
-            digest: Digest::new(digest),
-        }
     }
 }
 

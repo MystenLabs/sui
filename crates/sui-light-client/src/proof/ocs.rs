@@ -5,10 +5,9 @@ use fastcrypto::hash::Blake2b256;
 use fastcrypto::merkle::{MerkleNonInclusionProof, MerkleProof, MerkleTree, Node};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use sui_types::digests::ObjectDigest;
-use sui_types::messages_checkpoint::{
-    CheckpointArtifacts, CheckpointArtifactsDigest, ObjectCheckpointState,
-};
+use sui_types::base_types::{ObjectRef, SequenceNumber};
+use sui_types::digests::{CheckpointArtifactsDigest, ObjectDigest};
+use sui_types::messages_checkpoint::CheckpointArtifacts;
 use sui_types::{
     base_types::ObjectID, full_checkpoint_content::CheckpointData,
     messages_checkpoint::VerifiedCheckpoint,
@@ -19,12 +18,19 @@ use crate::proof::{
     error::{ProofError, ProofResult},
 };
 
+// To be used for non-inclusion proofs.
+// Note that any sequence number, digest will do.
+fn get_dummy_object_ref(id: ObjectID) -> ObjectRef {
+    (id, SequenceNumber::from_u64(0), ObjectDigest::MIN)
+}
+
 /// A target for a proof about the state of an object w.r.t a checkpoint.
-/// OCS stands for ObjectCheckpointState
+/// OCS stands for ObjectCheckpointState (state of object at end of a checkpoint).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OCSTarget {
-    pub id: ObjectID,
-    pub digest: Option<ObjectDigest>,
+    // For inclusion proofs, the object ref is the object ref of the object at the end of the checkpoint.
+    // For non-inclusion proofs, the object ref is a dummy object ref.
+    pub object_ref: ObjectRef,
     pub target_type: OCSTargetType,
 }
 
@@ -37,36 +43,16 @@ pub enum OCSTargetType {
 }
 
 impl OCSTarget {
-    pub fn new(
-        id: ObjectID,
-        digest: Option<ObjectDigest>,
-        proof_type: OCSTargetType,
-    ) -> ProofResult<Self> {
-        // If the proof type is non-inclusion, the digest must be none.
-        // Note that if the proof type is inclusion, the digest can be either
-        // some or none (if the object got deleted in the checkpoint).
-        if proof_type == OCSTargetType::NonInclusion && digest.is_some() {
-            return Err(ProofError::MismatchedTargetAndProofType);
-        }
-        Ok(Self {
-            id,
-            digest,
-            target_type: proof_type,
-        })
-    }
-
     pub fn new_non_inclusion_target(id: ObjectID) -> Self {
         Self {
-            id,
-            digest: None,
+            object_ref: get_dummy_object_ref(id),
             target_type: OCSTargetType::NonInclusion,
         }
     }
 
-    pub fn new_inclusion_target(object_state: &ObjectCheckpointState) -> Self {
+    pub fn new_inclusion_target(object_ref: ObjectRef) -> Self {
         Self {
-            id: object_state.id,
-            digest: object_state.digest,
+            object_ref,
             target_type: OCSTargetType::Inclusion,
         }
     }
@@ -74,52 +60,64 @@ impl OCSTarget {
 
 /// The tree of all objects updated in the checkpoint along with their latest state.
 pub struct ModifiedObjectTree {
-    pub contents: Vec<ObjectCheckpointState>,
+    pub contents: Vec<ObjectRef>,
     pub tree: MerkleTree<Blake2b256>,
-    pub object_map: HashMap<ObjectID, usize>,
+    // Map from object ID to the position of the object in the contents vector.
+    pub object_pos_map: HashMap<ObjectID, usize>,
 }
 
 impl ModifiedObjectTree {
     pub fn new(artifacts: &CheckpointArtifacts) -> Self {
-        let mut object_map = HashMap::new();
-        let mut prev_obj_id = ObjectID::from_hex_literal("0x0").unwrap();
-        for (i, object_state) in artifacts.latest_object_states.contents.iter().enumerate() {
-            // A sanity check to ensure the object IDs are in increasing order.
-            if object_state.id <= prev_obj_id {
+        let mut object_pos_map = HashMap::new();
+        let object_ref_vec = &artifacts.latest_object_states.contents;
+
+        // A sanity check to ensure the object IDs are in increasing order.
+        object_ref_vec.windows(2).for_each(|window| {
+            let (id1, id2) = (window[0].0, window[1].0);
+            if id1 >= id2 {
                 panic!(
                     "Object ID {} is not greater than previous object ID {}",
-                    object_state.id, prev_obj_id
+                    id2, id1
                 );
-            } else {
-                prev_obj_id = object_state.id;
             }
+        });
 
-            let ret = object_map.insert(object_state.id, i);
+        for (i, id) in object_ref_vec.iter().map(|(id, _, _)| id).enumerate() {
+            let ret = object_pos_map.insert(*id, i);
             if ret.is_some() {
-                panic!("Object ID {} appears more than once", object_state.id);
+                panic!("Object ID {} appears more than once", id);
             }
         }
-        let contents = artifacts.latest_object_states.contents.clone();
-        let tree = MerkleTree::<Blake2b256>::build_from_unserialized(contents.iter())
+        let tree = MerkleTree::<Blake2b256>::build_from_unserialized(object_ref_vec.iter())
             .expect("Failed to build Merkle tree");
         ModifiedObjectTree {
-            contents,
-            object_map,
+            contents: object_ref_vec.clone(),
+            object_pos_map,
             tree,
         }
     }
 
-    pub fn get_object_state(&self, id: ObjectID) -> Option<&ObjectCheckpointState> {
-        self.object_map.get(&id).map(|i| &self.contents[*i])
+    pub fn get_object_state(&self, id: ObjectID) -> Option<&ObjectRef> {
+        self.object_pos_map.get(&id).map(|i| &self.contents[*i])
     }
 
     pub fn is_object_in_checkpoint(&self, id: ObjectID) -> bool {
-        self.object_map.contains_key(&id)
+        self.object_pos_map.contains_key(&id)
     }
 
-    pub fn get_inclusion_proof(&self, id: ObjectID) -> ProofResult<OCSInclusionProof> {
+    pub fn get_inclusion_proof(&self, object_ref: ObjectRef) -> ProofResult<OCSInclusionProof> {
+        // Sanity check: Match ObjectRef with object state in object_map.
+        let id = object_ref.0;
+        let local_ref = self.get_object_state(id);
+        if local_ref.is_none() || local_ref.unwrap() != &object_ref {
+            return Err(ProofError::GeneralError(format!(
+                "Input object ref {:?} does not match the actual ref {:?}",
+                object_ref, local_ref
+            )));
+        }
+
         let index = self
-            .object_map
+            .object_pos_map
             .get(&id)
             .ok_or(ProofError::GeneralError(format!(
                 "Object ID {} not found",
@@ -135,17 +133,21 @@ impl ModifiedObjectTree {
         })
     }
 
-    pub fn get_non_inclusion_proof(&self, id: ObjectID) -> ProofResult<OCSNonInclusionProof> {
-        if self.is_object_in_checkpoint(id) {
+    pub fn get_non_inclusion_proof(
+        &self,
+        object_ref: ObjectRef,
+    ) -> ProofResult<OCSNonInclusionProof> {
+        // Sanity check: Object should not be in checkpoint.
+        if self.is_object_in_checkpoint(object_ref.0) {
             return Err(ProofError::GeneralError(format!(
                 "Object ID {} is in checkpoint",
-                id
+                object_ref.0
             )));
         }
-        let target_object_state = ObjectCheckpointState::new(id, None);
+
         let non_inclusion_proof = self
             .tree
-            .compute_non_inclusion_proof(&self.contents, &target_object_state)
+            .compute_non_inclusion_proof(&self.contents, &object_ref)
             .map_err(|e| ProofError::GeneralError(e.to_string()))?;
         Ok(OCSNonInclusionProof {
             non_inclusion_proof,
@@ -164,12 +166,11 @@ impl OCSInclusionProof {
         if target.target_type != OCSTargetType::Inclusion {
             return Err(ProofError::MismatchedTargetAndProofType);
         }
-        let object_state = ObjectCheckpointState::new(target.id, target.digest);
 
         self.merkle_proof
             .verify_proof_with_unserialized_leaf(
-                &Node::from(root.digest.into_inner()),
-                &object_state,
+                &Node::from(root.into_inner()),
+                &target.object_ref,
                 self.leaf_index,
             )
             .map_err(|_| ProofError::InvalidProof)
@@ -178,7 +179,7 @@ impl OCSInclusionProof {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OCSNonInclusionProof {
-    pub non_inclusion_proof: MerkleNonInclusionProof<ObjectCheckpointState, Blake2b256>,
+    pub non_inclusion_proof: MerkleNonInclusionProof<ObjectRef, Blake2b256>,
 }
 
 impl OCSNonInclusionProof {
@@ -186,17 +187,9 @@ impl OCSNonInclusionProof {
         if target.target_type != OCSTargetType::NonInclusion {
             return Err(ProofError::MismatchedTargetAndProofType);
         }
-        if target.digest.is_some() {
-            return Err(ProofError::GeneralError(
-                "Target digest is not none for non-inclusion proof".to_string(),
-            ));
-        }
 
         self.non_inclusion_proof
-            .verify_proof(
-                &Node::from(root.digest.into_inner()),
-                &ObjectCheckpointState::new(target.id, None),
-            )
+            .verify_proof(&Node::from(root.into_inner()), &target.object_ref)
             .map_err(|_| ProofError::InvalidProof)
     }
 }
@@ -234,7 +227,7 @@ impl ProofBuilder for OCSTarget {
         let modified_object_tree = ModifiedObjectTree::new(&artifacts);
         match self.target_type {
             OCSTargetType::Inclusion => {
-                let proof = modified_object_tree.get_inclusion_proof(self.id)?;
+                let proof = modified_object_tree.get_inclusion_proof(self.object_ref)?;
                 Ok(Proof {
                     targets: ProofTarget::ObjectCheckpointState(self.clone()),
                     checkpoint_summary: checkpoint.checkpoint_summary.clone(),
@@ -244,7 +237,7 @@ impl ProofBuilder for OCSTarget {
                 })
             }
             OCSTargetType::NonInclusion => {
-                let proof = modified_object_tree.get_non_inclusion_proof(self.id)?;
+                let proof = modified_object_tree.get_non_inclusion_proof(self.object_ref)?;
                 Ok(Proof {
                     targets: ProofTarget::ObjectCheckpointState(self.clone()),
                     checkpoint_summary: checkpoint.checkpoint_summary.clone(),

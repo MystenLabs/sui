@@ -6,10 +6,10 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use sui_light_client::{
-    base::{Proof, ProofContentsVerifier},
+    base::{Proof, ProofContentsVerifier, ProofTarget},
     proof::{
         base::{ProofBuilder, ProofContents},
-        ocs::{ModifiedObjectTree, OCSTarget, OCSTargetType},
+        ocs::ModifiedObjectTree,
     },
 };
 
@@ -65,9 +65,9 @@ fn test_get_object_inclusion_proof() {
     let all_objects = get_all_modified_objects(&checkpoint);
 
     let object_id = ObjectID::from_hex_literal("0x7").unwrap();
-    let object_state = all_objects.get_object_state(object_id).unwrap();
+    let object_ref = all_objects.get_object_state(object_id).unwrap();
 
-    let target = OCSTarget::new_inclusion_target(object_state);
+    let target = ProofTarget::new_ocs_inclusion(*object_ref);
     let proof = target.construct(&checkpoint).unwrap();
 
     // Extract the OCSProof from the proof contents (we only test the inner OCSProof)
@@ -94,7 +94,7 @@ fn test_get_object_non_inclusion_proof() {
     .map(|id| ObjectID::from_hex_literal(id).unwrap());
 
     for key in obj_test_cases.iter() {
-        let target = OCSTarget::new_non_inclusion_target(*key);
+        let target = ProofTarget::new_ocs_non_inclusion(*key);
         let proof = target.construct(&checkpoint);
         if all_objects.is_object_in_checkpoint(*key) {
             // Should fail to get non-inclusion proof for objects that are in the checkpoint
@@ -115,54 +115,22 @@ fn test_get_object_non_inclusion_proof() {
 }
 
 #[test]
-fn test_ocs_target_validation() {
-    let object_id = ObjectID::from_hex_literal("0x123").unwrap();
-
-    // Should succeed for inclusion with digest
-    let target = OCSTarget::new(
-        object_id,
-        Some(sui_types::digests::ObjectDigest::random()),
-        OCSTargetType::Inclusion,
-    );
-    assert!(target.is_ok());
-
-    // Should succeed for inclusion without digest
-    let target = OCSTarget::new(object_id, None, OCSTargetType::Inclusion);
-    assert!(target.is_ok());
-
-    // Should succeed for non-inclusion without digest
-    let target = OCSTarget::new(object_id, None, OCSTargetType::NonInclusion);
-    assert!(target.is_ok());
-
-    // Should fail for non-inclusion with digest
-    let target = OCSTarget::new(
-        object_id,
-        Some(sui_types::digests::ObjectDigest::random()),
-        OCSTargetType::NonInclusion,
-    );
-    assert!(target.is_err());
-}
-
-#[test]
 fn test_modified_object_tree_properties() {
     let checkpoint = load_checkpoint(CHECKPOINT_FILE);
     let artifacts = CheckpointArtifacts::from(&checkpoint);
     let object_tree = ModifiedObjectTree::new(&artifacts);
 
     // Test that object_map and contents have consistent sizes
-    assert_eq!(object_tree.object_map.len(), object_tree.contents.len());
+    assert_eq!(object_tree.object_pos_map.len(), object_tree.contents.len());
 
     // Test that all objects in contents are also in object_map
-    for (i, object_state) in object_tree.contents.iter().enumerate() {
-        assert_eq!(object_tree.object_map.get(&object_state.id), Some(&i));
+    for (i, object_ref) in object_tree.contents.iter().enumerate() {
+        assert_eq!(object_tree.object_pos_map.get(&object_ref.0), Some(&i));
     }
 
     // Test that objects are sorted (as required by non-inclusion proofs)
     for window in object_tree.contents.windows(2) {
-        assert!(
-            window[0].id < window[1].id,
-            "Objects should be sorted by ID"
-        );
+        assert!(window[0].0 < window[1].0, "Objects should be sorted by ID");
     }
 
     println!("Object tree has {} objects", object_tree.contents.len());
@@ -175,8 +143,8 @@ fn test_serialization_roundtrip() {
     let all_objects = get_all_modified_objects(&checkpoint);
 
     // Test inclusion proof serialization
-    if let Some(object_state) = all_objects.contents.first() {
-        let target = OCSTarget::new_inclusion_target(object_state);
+    if let Some(object_ref) = all_objects.contents.first() {
+        let target = ProofTarget::new_ocs_inclusion(*object_ref);
         let proof = target.construct(&checkpoint).unwrap();
 
         // Test JSON serialization
@@ -185,7 +153,7 @@ fn test_serialization_roundtrip() {
 
         println!(
             "Inclusion proof JSON serialization successful for object {}",
-            object_state.id
+            object_ref.0
         );
 
         // Test BCS serialization
@@ -195,7 +163,7 @@ fn test_serialization_roundtrip() {
 
         println!(
             "Inclusion proof BCS serialization successful for object {}",
-            object_state.id
+            object_ref.0
         );
     } else {
         panic!("No object state found in the checkpoint");
@@ -204,7 +172,7 @@ fn test_serialization_roundtrip() {
     // Test non-inclusion proof serialization
     let non_existent_id = ObjectID::from_hex_literal("0x999999").unwrap();
     if !all_objects.is_object_in_checkpoint(non_existent_id) {
-        let target = OCSTarget::new_non_inclusion_target(non_existent_id);
+        let target = ProofTarget::new_ocs_non_inclusion(non_existent_id);
         let proof = target
             .construct(&checkpoint)
             .expect("Should be able to get non-inclusion proof");
