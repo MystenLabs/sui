@@ -801,6 +801,10 @@ struct FeatureFlags {
     // Enable coin registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_registry: bool,
+
+    // Use abstract size in the object runtime instead the legacy value size.
+    #[serde(skip_serializing_if = "is_false")]
+    abstract_size_in_object_runtime: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2220,6 +2224,10 @@ impl ProtocolConfig {
 
     pub fn cancel_for_failed_dkg_early(&self) -> bool {
         self.feature_flags.cancel_for_failed_dkg_early
+    }
+
+    pub fn abstract_size_in_object_runtime(&self) -> bool {
+        self.feature_flags.abstract_size_in_object_runtime
     }
 }
 
