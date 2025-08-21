@@ -304,16 +304,14 @@ impl<A: Clone> ValidatorClientMonitor<A> {
                 rest_validators.push((*validator, *score, *stake));
             }
         }
+        top_k_validators.shuffle(&mut rng);
 
         let mut result = Vec::with_capacity(validator_with_scores.len());
 
         // For the top K elements, use weighted random selection using as weight the stake of the validator.
         let selected = top_k_validators
-            .choose_multiple_weighted(&mut rng, top_k_validators.len(), |(_, _, score)| {
-                *score as f64
-            })
-            .expect("Failed to select weighted validators")
-            .map(|(validator, _, _)| *validator)
+            .into_iter()
+            .map(|(v, _, _)| v)
             .collect::<Vec<_>>();
 
         result.extend(selected);
