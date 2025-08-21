@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    get_nested_struct_field, get_object_id,
+    abstract_size, get_nested_struct_field, get_object_id,
     object_runtime::{object_store::ObjectResult, ObjectRuntime},
     NativesCostTable,
 };
@@ -104,7 +104,10 @@ pub fn hash_type_and_key(
 
     // Get size info for costing for derivations, serializations, etc
     let k_ty_size = u64::from(k_ty.size());
-    let k_value_size = u64::from(k.legacy_size());
+    let k_value_size = u64::from(abstract_size(
+        context.extensions().get::<ObjectRuntime>()?.protocol_config,
+        &k,
+    ));
     native_charge_gas_early_exit!(
         context,
         dynamic_field_hash_type_and_key_cost_params
@@ -183,7 +186,10 @@ pub fn add_child_object(
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
 
-    let child_value_size = u64::from(child.legacy_size());
+    let child_value_size = u64::from(abstract_size(
+        context.extensions().get::<ObjectRuntime>()?.protocol_config,
+        &child,
+    ));
     // ID extraction step
     native_charge_gas_early_exit!(
         context,
@@ -299,11 +305,16 @@ pub fn borrow_child_object(
         assert!(err.major_status() != StatusCode::MISSING_DATA);
     })?;
 
+    let child_ref_size = abstract_size(
+        context.extensions().get::<ObjectRuntime>()?.protocol_config,
+        &child_ref,
+    );
+
     native_charge_gas_early_exit!(
         context,
         dynamic_field_borrow_child_object_cost_params
             .dynamic_field_borrow_child_object_child_ref_cost_per_byte
-            * u64::from(child_ref.legacy_size()).into()
+            * u64::from(child_ref_size).into()
     );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child_ref]))
@@ -367,11 +378,16 @@ pub fn remove_child_object(
         assert!(err.major_status() != StatusCode::MISSING_DATA);
     })?;
 
+    let child_size = abstract_size(
+        context.extensions().get::<ObjectRuntime>()?.protocol_config,
+        &child,
+    );
+
     native_charge_gas_early_exit!(
         context,
         dynamic_field_remove_child_object_cost_params
             .dynamic_field_remove_child_object_child_cost_per_byte
-            * u64::from(child.legacy_size()).into()
+            * u64::from(child_size).into()
     );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))

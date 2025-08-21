@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{abstract_size, object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
@@ -97,9 +97,11 @@ pub fn read_setting_impl(
         current_epoch,
     )?;
 
+    let size = abstract_size(object_runtime.protocol_config, &read_value_opt);
+
     native_charge_gas_early_exit!(
         context,
-        config_read_setting_impl_cost_per_byte * u64::from(read_value_opt.legacy_size()).into()
+        config_read_setting_impl_cost_per_byte * u64::from(size).into()
     );
 
     Ok(NativeResult::ok(
