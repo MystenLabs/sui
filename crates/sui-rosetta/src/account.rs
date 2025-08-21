@@ -189,8 +189,8 @@ async fn get_sub_account_balances(
             .into_iter()
             .filter(|stake| current_epoch >= stake.activation_epoch)
             .map(|stake| SubBalance {
-                stake_id: sui_types::base_types::ObjectID::from(stake.staked_sui_id),
-                validator: sui_types::base_types::SuiAddress::from(stake.validator_address),
+                stake_id: stake.staked_sui_id,
+                validator: stake.validator_address,
                 value: stake.principal as i128,
             })
             .collect(),
@@ -198,8 +198,8 @@ async fn get_sub_account_balances(
             .into_iter()
             .filter(|stake| current_epoch < stake.activation_epoch)
             .map(|stake| SubBalance {
-                stake_id: sui_types::base_types::ObjectID::from(stake.staked_sui_id),
-                validator: sui_types::base_types::SuiAddress::from(stake.validator_address),
+                stake_id: stake.staked_sui_id,
+                validator: stake.validator_address,
                 value: stake.principal as i128,
             })
             .collect(),
@@ -208,8 +208,8 @@ async fn get_sub_account_balances(
             .into_iter()
             .filter(|stake| current_epoch >= stake.activation_epoch)
             .map(|stake| SubBalance {
-                stake_id: sui_types::base_types::ObjectID::from(stake.staked_sui_id),
-                validator: sui_types::base_types::SuiAddress::from(stake.validator_address),
+                stake_id: stake.staked_sui_id,
+                validator: stake.validator_address,
                 value: stake.rewards as i128,
             })
             .collect(),
