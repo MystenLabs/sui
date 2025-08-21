@@ -202,4 +202,3 @@ pub async fn start_server(host: String, port: u16) -> Result<()> {
 
     Ok(())
 }
-
