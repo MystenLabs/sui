@@ -162,76 +162,86 @@ body {
   font-family: var(--primaryFont);
   tab-size: 2;
 }
-
+/* --- H1 --- */
 h1 {
-  font-size: 3.375rem;
-  line-height: 3.5rem;
+  font-size: 3.5rem;          /* slightly larger */
+  line-height: 3.75rem;
   font-family: var(--primaryFont);
-  font-weight: 500;
+  font-weight: 600;           /* stronger weight for clarity */
   letter-spacing: -0.04em;
 }
 
 .h1 {
-  letter-spacing: -2.88px;
-  margin-top: 0;
-  margin-bottom: 0;
   font-family: var(--headerFont);
-  font-size: 4.5rem;
+  font-size: 4.75rem;         /* larger than h1 for display */
   font-weight: 400;
   line-height: 1.1;
+  letter-spacing: -0.04em;
+  margin-top: 0;
+  margin-bottom: 0.5em;
 }
 
+/* --- H2 --- */
 h2 {
   font-family: var(--primaryFont);
-  font-size: 2rem;
-  font-weight: 500;
-  line-height: 2.125rem;
-  letter-spacing: -0.04em;
+  font-size: 2.5rem;          /* larger to distinguish from h3 */
+  font-weight: 600;
+  line-height: 2.75rem;
+  letter-spacing: -0.03em;
 }
 
 .h2 {
-  letter-spacing: -1.62px;
-  margin-top: 0;
-  margin-bottom: 0;
   font-family: var(--headerFont);
-  font-size: 3.375rem;
+  font-size: 3.5rem;
   font-weight: 400;
-  line-height: 1.1;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-top: 0;
+  margin-bottom: 0.5em;
 }
 
+/* --- H3 --- */
 h3 {
   font-family: var(--primaryFont);
-  font-size: 1.5rem;
-  font-style: normal;
+  font-size: 1.75rem;        /* distinct from h2 */
   font-weight: 500;
-  line-height: 1.625rem;
-  letter-spacing: -0.04em;
+  line-height: 2rem;
+  letter-spacing: -0.02em;
 }
 
 .h3 {
   font-family: var(--headerFont);
-  font-size: 1.375rem;
-  font-style: normal;
+  font-size: 1.5rem;
   font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
+/* --- H4 --- */
 h4 {
-  font-family: var(--headerFont);
-  font-size: 1.5rem;
-  font-style: normal;
-  font-weight: 400;
+  font-family: var(--primaryFont);
+  font-size: 1.375rem;       /* larger than h5, smaller than h3 */
+  font-weight: 500;
+  line-height: 1.75rem;
 }
 
 .h4 {
   font-family: var(--headerFont);
-  font-size: 1.5rem;
-  font-style: normal;
+  font-size: 1.25rem;
   font-weight: 400;
-  line-height: 1.75rem;
-  letter-spacing: -2%;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
 }
+
+/* --- H5 --- */
+h5 {
+  font-family: var(--primaryFont);
+  font-size: 1rem;
+  font-weight: 600;          
+  line-height: 1.5rem;
+  letter-spacing: 0.01em;    
+}
+
 
 @media screen and (max-width: 767px) {
   h1 , .h1{
