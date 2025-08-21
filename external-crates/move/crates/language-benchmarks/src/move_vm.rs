@@ -101,7 +101,7 @@ fn find_bench_functions(modules: &[CompiledModule]) -> Vec<(Identifier, ModuleId
                 let fn_name = module.identifier_at(handle.name);
                 if fn_name.as_str().starts_with(BENCH_FUNCTION_PREFIX) {
                     Some((
-                        Identifier::new(module.identifier_at(handle.name).as_str()).unwrap(),
+                        module.identifier_at(handle.name).to_owned(),
                         module.self_id(),
                     ))
                 } else {
