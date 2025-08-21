@@ -22,6 +22,13 @@
     background-position: 0 0, 10px 10px;
     border-right: 1px solid rgb(var(--sui-blue-dark));
   }
+  .mask-arrow {
+    transition: transform 0.2s ease;
+    background: currentColor;
+    /* a small right-pointing chevron, recolored via currentColor */
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8.12 4.12a1 1 0 0 1 1.41 0l6.35 6.35a1 1 0 0 1 0 1.41l-6.35 6.35a1 1 0 1 1-1.41-1.41L13.59 12 8.12 6.53a1 1 0 0 1 0-1.41z'/></svg>") no-repeat center / contain;
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8.12 4.12a1 1 0 0 1 1.41 0l6.35 6.35a1 1 0 0 1 0 1.41l-6.35 6.35a1 1 0 1 1-1.41-1.41L13.59 12 8.12 6.53a1 1 0 0 1 0-1.41z'/></svg>") no-repeat center / contain;
+  }
 }
 
 /* You can override the default Infima variables here. */
@@ -472,26 +479,6 @@ a code:not(:is(.table-of-contents a code)) {
   color: var(--sui-white);
   text-decoration: none;
 }
-/*
-details {
-  @apply !bg-sui-gray-45 !border-sui-gray-65 relative before:content-["Click\20to\20toggle"] before:absolute before:-top-3 before:-left-1 before:text-xs before:bg-white before:px-2 before:py-0.5 before:rounded before:border before:border-sui-gray-65 before:border-solid before:opacity-0 hover:before:opacity-100 before:duration-300 before:transition-opacity;
-}
-[data-theme='dark'] details {
-  @apply !bg-sui-gray-90 !border-sui-gray-65;
-}
-*/
-summary::before {
-  @apply !border-l-sui-gray-65;
-}
-
-details > div > div {
-  @apply !border-t-sui-gray-65;
-}
-@media (max-width: 1050px) {
-  .navbar .button-cta {
-    display: none;
-  }
-}
 
 /** colors **/
 
@@ -502,6 +489,7 @@ details > div > div {
 .text-gray {
   color: var(--sui-gray);
 }
+
 
 /* Box + outline + padding around the whole tabs component */
 [data-md-tabs].tabs-container {

@@ -2,70 +2,38 @@
    wrapper look like the built-in Docusaurus Details component. */
 .theme-doc-markdown details,
 .markdown details {
-  margin: var(--ifm-spacing-vertical) 0;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: var(--ifm-global-radius);
-  background: var(--ifm-background-surface-color);
+  @apply p-6 border border-solid border-sui-gray-65 rounded-lg bg-sui-gray-45 dark:bg-sui-gray-90;
 }
 
 /* Summary row */
 .theme-doc-markdown details > summary,
 .markdown details > summary {
-  cursor: pointer;
-  font-weight: var(--ifm-font-weight-semibold);
-  list-style: none;             /* hide default marker */
-  margin: 0;
-  padding: var(--ifm-spacing-vertical) var(--ifm-spacing-horizontal);
+  @apply relative cursor-pointer m-0 list-none pl-4;
 }
 
 /* Remove default webkit marker so we can supply the chevron */
 .theme-doc-markdown details > summary::-webkit-details-marker,
 .markdown details > summary::-webkit-details-marker {
-  display: none;
+  @apply hidden;
 }
 
 /* Chevron icon (matches Docusaurus’ simple chevron behavior) */
 .theme-doc-markdown details > summary::before,
 .markdown details > summary::before {
-  content: "";
-  display: inline-block;
-  width: 0.75rem;
-  height: 0.75rem;
-  margin-right: 0.5rem;
-  vertical-align: -1px;
-  transition: transform 0.2s ease;
-  background: currentColor;
-  /* a small right-pointing chevron, recolored via currentColor */
-  -webkit-mask: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>\
-<path d='M8.12 4.12a1 1 0 0 1 1.41 0l6.35 6.35a1 1 0 0 1 0 1.41l-6.35 6.35a1 1 0 1 1-1.41-1.41L13.59 12 8.12 6.53a1 1 0 0 1 0-1.41z'/>\
-</svg>") no-repeat center / contain;
-          mask: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>\
-<path d='M8.12 4.12a1 1 0 0 1 1.41 0l6.35 6.35a1 1 0 0 1 0 1.41l-6.35 6.35a1 1 0 1 1-1.41-1.41L13.59 12 8.12 6.53a1 1 0 0 1 0-1.41z'/>\
-</svg>") no-repeat center / contain;
+  @apply absolute content-[""] inline-block w-3 h-3 mr-4 top-0 -left-2 mask-arrow border-[.38rem] border-solid origin-[calc(.38rem/2)_50%];
 }
 
 .theme-doc-markdown details[open] > summary::before,
 .markdown details[open] > summary::before {
-  transform: rotate(90deg);
+  @apply rotate-90 -top-2 left-0 transition-all duration-300 ease-in-out;
 }
 
-/* Divider under the summary when open (same feel as default) */
-.theme-doc-markdown details[open] > summary,
-.markdown details[open] > summary {
-  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+details > div > div {
+  @apply !border-t-sui-gray-65;
 }
 
-/* Inner content spacing matches theme defaults */
-.theme-doc-markdown details > :not(summary),
-.markdown details > :not(summary) {
-  padding: 0 var(--ifm-spacing-horizontal) var(--ifm-spacing-vertical);
-  margin: 0;  /* avoid double margins with p/ul/pre elements */
+@media (max-width: 1050px) {
+  .navbar .button-cta {
+    display: none;
+  }
 }
-
-/* Tidy common elements inside details */
-.theme-doc-markdown details p:first-child,
-.markdown details p:first-child { margin-top: 0.5rem; }
-.theme-doc-markdown details pre,
-.markdown details pre { margin: 0.5rem 0 0; }
