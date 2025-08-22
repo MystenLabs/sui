@@ -30,8 +30,17 @@ pub struct GetGasParameters {
 }
 
 #[derive(Debug, Clone)]
-pub struct IdGasParameters {
+pub struct IdGasParameters(Option<IdGasParameters_>);
+
+#[derive(Debug, Clone)]
+pub struct IdGasParameters_ {
     pub base: InternalGas,
+}
+
+impl IdGasParameters {
+    pub fn new(base: Option<impl Into<InternalGas>>) -> Self {
+        Self(base.map(|base| IdGasParameters_ { base: base.into() }))
+    }
 }
 
 fn native_get(
@@ -81,6 +90,7 @@ fn native_id(
     ty_args: Vec<Type>,
     arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
+    let gas_params = super::inner_gas_params!(gas_params)?;
     debug_assert_eq!(ty_args.len(), 1);
     debug_assert!(arguments.is_empty());
 
