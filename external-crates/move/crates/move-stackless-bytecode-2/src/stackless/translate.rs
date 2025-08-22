@@ -169,10 +169,11 @@ pub(crate) fn bytecode<K: SourceKind>(
     }
 
     macro_rules! primitive_op {
+        // Require at least one arg, allow a trailing comma
         ($op:expr, $($rval:expr),+ $(,)?) => {
             RValue::Primitive {
                 op: $op,
-                args: vec![$($rval),+],
+                args: vec![$($rval),*],
             }
         };
     }
@@ -810,11 +811,12 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::VariantSwitch(jt) => {
             let JumpTableInner::Full(offsets) = &jt.jump_table;
             Instruction::VariantSwitch {
-                cases: offsets
+                condition: Register(pop!()),
+                variants: jt.enum_.variants.keys().cloned().collect(),
+                labels: offsets
                     .iter()
                     .map(|offset| *offset as usize)
                     .collect::<Vec<_>>(),
-                subject: Register(pop!()),
             }
         }
 
