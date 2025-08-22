@@ -154,14 +154,14 @@ fun test_init_committee() {
     let voting_powers = system_state.validator_voting_powers_for_testing();
     committee.try_create_next_committee(voting_powers, 6000, ctx);
 
-    assert_eq(2, committee.members().size());
+    assert_eq(2, committee.members().length());
     let (_, member0) = committee.members().get_entry_by_idx(0);
     let (_, member1) = committee.members().get_entry_by_idx(1);
     assert_eq(5000, member0.voting_power());
     assert_eq(5000, member1.voting_power());
 
     let members = committee.members();
-    assert!(members.size() == 2); // must succeed
+    assert!(members.length() == 2); // must succeed
 
     test_utils::destroy(committee);
     test_scenario::return_shared(system_state);
@@ -194,7 +194,7 @@ fun test_update_node_url() {
     committee.try_create_next_committee(voting_powers, 6000, ctx);
 
     let members = committee.members();
-    assert!(members.size() == 1);
+    assert!(members.length() == 1);
     let (_, member) = members.get_entry_by_idx(0);
     assert_eq(member.http_rest_url(), b"test url 1");
 
@@ -331,7 +331,7 @@ fun test_init_committee_validator_become_inactive() {
     committee.register(&mut system_state, hex::decode(VALIDATOR3_PUBKEY), b"", &tx(@0xD, 0));
 
     // Verify validator registration
-    assert_eq(3, committee.member_registrations().size());
+    assert_eq(3, committee.member_registrations().length());
 
     // Validator 0xA become inactive, total voting power become 50%
     sui_system::request_remove_validator(&mut system_state, &mut tx(@0xA, 0));
@@ -372,7 +372,7 @@ fun test_update_committee_registration() {
     committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
 
     // Verify registration info
-    assert_eq(1, committee.member_registrations().size());
+    assert_eq(1, committee.member_registrations().length());
     let (address, registration) = committee.member_registrations().get_entry_by_idx(0);
     assert_eq(@0xA, *address);
     assert!(&hex::decode(VALIDATOR1_PUBKEY) == registration.bridge_pubkey_bytes(), 0);
@@ -381,7 +381,7 @@ fun test_update_committee_registration() {
     committee.register(&mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xA, 0));
 
     // Verify registration info, registration count should still be 1
-    assert_eq(1, committee.member_registrations().size());
+    assert_eq(1, committee.member_registrations().length());
     let (address, registration) = committee.member_registrations().get_entry_by_idx(0);
     assert_eq(@0xA, *address);
     assert!(&hex::decode(VALIDATOR2_PUBKEY) == registration.bridge_pubkey_bytes(), 0);
@@ -449,7 +449,7 @@ fun test_register_already_initialized() {
     try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
 
     test_scenario::next_tx(&mut scenario, @0x0);
-    assert!(committee.members().size() == 2); // must succeed
+    assert!(committee.members().length() == 2); // must succeed
     // this fails because committee is already initiated
     committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
 

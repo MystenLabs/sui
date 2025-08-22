@@ -311,7 +311,7 @@ p.members.insert(<b>address</b>, permissions);
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_single_owner">is_single_owner</a>(p: &<a href="../sui/party.md#sui_party_Party">Party</a>): bool {
     p.default.0 == <a href="../sui/party.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a> &&
-    p.members.size() == 1 &&
+    p.members.length() == 1 &&
     { <b>let</b> (_, m) = p.members.get_entry_by_idx(0); m.0 == <a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a> }
 }
 </code></pre>
