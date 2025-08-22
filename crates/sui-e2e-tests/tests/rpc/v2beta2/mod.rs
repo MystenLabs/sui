@@ -4,6 +4,8 @@
 use std::time::Duration;
 
 use prost_types::FieldMask;
+use std::path::PathBuf;
+use sui_move_build::BuildConfig;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     ledger_service_client::LedgerServiceClient,
@@ -11,6 +13,9 @@ use sui_rpc::proto::sui::rpc::v2beta2::{
     ExecuteTransactionRequest, ExecuteTransactionResponse, ExecutedTransaction,
     GetTransactionRequest, Transaction, UserSignature,
 };
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{TransactionData, TransactionKind};
 
 mod ledger_service;
 mod live_data_service;
@@ -89,15 +94,77 @@ async fn wait_for_transaction(
             if let Ok(poll_response) = client
                 .get_transaction(GetTransactionRequest {
                     digest: Some(digest.to_owned()),
-                    read_mask: None,
+                    read_mask: Some(FieldMask::from_paths(["checkpoint"])),
                 })
                 .await
             {
-                break poll_response;
+                // Only break if the transaction has been included in a checkpoint
+                if let Some(ref transaction) = poll_response.get_ref().transaction {
+                    if transaction.checkpoint.is_some() {
+                        break poll_response;
+                    }
+                }
             }
         }
     })
     .await
     .unwrap()
     .map(|response| response.transaction.unwrap())
+}
+
+async fn publish_package(
+    test_cluster: &test_cluster::TestCluster,
+    address: SuiAddress,
+    path: PathBuf,
+) -> (ObjectID, ExecutedTransaction) {
+    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
+    let compiled_modules_bytes = compiled_package.get_package_bytes(false);
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
+
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+    let gas_object = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(address)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.publish_immutable(compiled_modules_bytes, dependencies);
+    let ptb = builder.finish();
+    let gas_data = sui_types::transaction::GasData {
+        payment: vec![(gas_object.0, gas_object.1, gas_object.2)],
+        owner: address,
+        price: gas_price,
+        budget: 100_000_000,
+    };
+
+    let kind = TransactionKind::ProgrammableTransaction(ptb);
+    let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
+    let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
+
+    let mut channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+    let transaction = execute_transaction(&mut channel, &txn).await;
+
+    let package_id = transaction
+        .effects
+        .as_ref()
+        .unwrap()
+        .changed_objects
+        .iter()
+        .find_map(|o| {
+            use sui_rpc::proto::sui::rpc::v2beta2::changed_object::OutputObjectState;
+            if o.output_state == Some(OutputObjectState::PackageWrite as i32) {
+                o.object_id.as_ref().map(|id| id.parse().unwrap())
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    (package_id, transaction)
 }
