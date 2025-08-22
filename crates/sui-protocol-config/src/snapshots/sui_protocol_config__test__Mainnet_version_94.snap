@@ -358,6 +358,7 @@ hash_sha3_256_per_byte_cost: 2
 hash_sha3_256_legacy_min_input_len_cost: 1
 type_name_get_base_cost: 52
 type_name_get_per_byte_cost: 2
+type_name_id_base_cost: 52
 string_check_utf8_base_cost: 52
 string_check_utf8_per_byte_cost: 2
 string_is_char_boundary_base_cost: 52

@@ -3938,7 +3938,6 @@ impl ProtocolConfig {
                 93 => {
                     cfg.feature_flags
                         .consensus_checkpoint_signature_key_includes_digest = true;
-                    cfg.type_name_id_base_cost = Some(52);
                 }
                 94 => {
                     // Decrease stored observations limit 20->18 to stay within system object size limit.
@@ -3958,6 +3957,7 @@ impl ProtocolConfig {
 
                     // Enable party transfer on mainnet.
                     cfg.feature_flags.enable_party_transfer = true;
+                    cfg.type_name_id_base_cost = Some(52);
                 }
                 // Use this template when making changes:
                 //
