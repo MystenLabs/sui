@@ -82,6 +82,18 @@ type Address implements IAddressable {
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
 	Objects owned by this address, optionally filtered by type.
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
@@ -520,6 +532,18 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
 	moveObjectBcs: Base64
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
 	"""
 	The dynamic field's name, as a Move value.
 	"""
@@ -999,6 +1023,18 @@ interface IMoveObject {
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
 	moveObjectBcs: Base64
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
 }
 
 """
@@ -1163,6 +1199,18 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
 	moveObjectBcs: Base64
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	

@@ -5,6 +5,7 @@ use async_graphql::{
     connection::{Connection, Edge},
     Context, Interface, Object,
 };
+use futures::future::try_join_all;
 use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::DynamicFieldType};
 
 use crate::{
@@ -93,6 +94,46 @@ impl Address {
             DynamicFieldType::DynamicObject,
             name,
         )
+        .await
+    }
+
+    /// Access dynamic fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+        try_join_all(keys.into_iter().map(|key| {
+            DynamicField::by_name(
+                ctx,
+                self.scope.clone(),
+                self.address.into(),
+                DynamicFieldType::DynamicField,
+                key,
+            )
+        }))
+        .await
+    }
+
+    /// Access dynamic object fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_object_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+        try_join_all(keys.into_iter().map(|key| {
+            DynamicField::by_name(
+                ctx,
+                self.scope.clone(),
+                self.address.into(),
+                DynamicFieldType::DynamicObject,
+                key,
+            )
+        }))
         .await
     }
 
