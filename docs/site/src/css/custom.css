@@ -136,7 +136,10 @@
 
 /** navbar overrides */
 .navbar-sidebar .menu__link {
-  color: var(--ifm-navbar-sidebar-link-color);
+  @apply text-[var(--ifm-navbar-sidebar-link-color)];
+}
+[data-theme='dark'] .theme-doc-sidebar-container .menu__link {
+  @apply text-sui-white;
 }
 
 .navbar-sidebar .menu__link--active, .navbar-sidebar .menu__link--active:hover, [data-theme='dark'] .navbar-sidebar .menu__link--active, [data-theme='dark'] .navbar-sidebar .menu__link--active:hover {
