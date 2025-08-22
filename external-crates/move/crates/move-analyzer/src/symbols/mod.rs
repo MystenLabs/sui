@@ -171,7 +171,15 @@ pub fn get_symbols(
             .contains_key(pkg_path)
     };
 
-    // Retry once if cache entry doesn't exist
+    // If no attempt was yet made to cache symbols for this package,
+    // it means that we are symboliciating it for the first time.
+    // In this case, we should symbolicate twice - once to do full
+    // compilation and symbolication to get all the code and symbols
+    // that can be cached, and second time to actually use the cached
+    // values and drop the artifacts of full compilation/symbolication
+    // (or at least try to). If we don't do that, then after the first
+    // symbolication we will hold on to all the full compilation/symbolication
+    // artifacts which will keep memory footpring pretty high.
     let mut should_retry = !has_pkg_entry();
 
     loop {
