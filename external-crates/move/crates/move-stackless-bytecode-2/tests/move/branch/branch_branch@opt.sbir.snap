@@ -7,18 +7,18 @@ source: crates/move-stackless-bytecode-2/tests/tests.rs
         lcl_2 = Immediate(U64(10))
         reg_1 = Move(lcl_0)
         reg_3 = Modulo(reg_1, Immediate(U64(2)))
-        reg_5 = Equal(Immediate(U64(0)), reg_3)
+        reg_5 = Equal(reg_3, Immediate(U64(0)))
         JumpIf(reg_5, LBL_8, LBL_13)
 
       Label LBL_8:
         reg_6 = Move(lcl_2)
-        reg_8 = Add(Immediate(U64(20)), reg_6)
+        reg_8 = Add(reg_6, Immediate(U64(20)))
         lcl_1 = reg_8
         Jump(LBL_17)
 
       Label LBL_13:
         reg_9 = Move(lcl_2)
-        reg_11 = Add(Immediate(U64(30)), reg_9)
+        reg_11 = Add(reg_9, Immediate(U64(30)))
         lcl_1 = reg_11
 
       Label LBL_17:

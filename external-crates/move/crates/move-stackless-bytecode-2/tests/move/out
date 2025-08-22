@@ -1,0 +1,54 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+test run_test::vector/modules.txt     ... [0m[32mok[0m
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+Unpack variant ref lhs: []
+Unpack variant lhs: []
+test run_test::binary_ops/modules.txt ... [0m[32mok[0m
+test run_test::counter/modules.txt    ... [0m[32mok[0m
+test run_test::structs/modules.txt    ... [0m[32mok[0m
+test run_test::constants/modules.txt  ... [0m[32mok[0m
+test run_test::branch/modules.txt     ... [0m[32mok[0m
+test run_test::enums/modules.txt      ... [0m[32mok[0m
+
+test result: [0m[32mok[0m. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
