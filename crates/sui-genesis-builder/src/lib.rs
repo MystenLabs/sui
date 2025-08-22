@@ -8,7 +8,7 @@ use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
