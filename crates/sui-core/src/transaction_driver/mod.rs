@@ -9,6 +9,7 @@ mod request_retrier;
 mod transaction_submitter;
 
 /// Exports
+pub use error::TransactionDriverError;
 pub use message_types::*;
 pub use metrics::*;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -21,7 +22,6 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
-use error::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use sui_types::{
@@ -95,6 +95,17 @@ where
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        self.drive_transaction_with_timeout(request, options, None)
+            .await
+    }
+
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
+    pub async fn drive_transaction_with_timeout(
+        &self,
+        request: SubmitTxRequest,
+        options: SubmitTransactionOptions,
+        timeout_duration: Option<Duration>,
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
         let raw_request = request.into_raw().unwrap();
@@ -108,48 +119,70 @@ where
             .max_delay(MAX_RETRY_DELAY)
             .map(jitter);
         let mut attempts = 0;
-        loop {
-            // TODO(fastpath): Check local state before submitting transaction
-            match self
-                .drive_transaction_once(tx_digest, raw_request.clone(), &options)
-                .await
-            {
-                Ok(resp) => {
-                    let settlement_finality_latency = timer.elapsed().as_secs_f64();
-                    self.metrics
-                        .settlement_finality_latency
-                        .with_label_values(&[if is_single_writer_tx {
-                            TX_TYPE_SINGLE_WRITER_TX
-                        } else {
-                            TX_TYPE_SHARED_OBJ_TX
-                        }])
-                        .observe(settlement_finality_latency);
-                    // Record the number of retries for successful transaction
-                    self.metrics
-                        .transaction_retries
-                        .with_label_values(&["success"])
-                        .observe(attempts as f64);
-                    return Ok(resp);
-                }
-                Err(e) => {
-                    if !e.is_retriable() {
-                        // Record the number of retries for failed transaction
+        let mut latest_retriable_error = None;
+
+        let retry_loop = async {
+            loop {
+                // TODO(fastpath): Check local state before submitting transaction
+                match self
+                    .drive_transaction_once(tx_digest, raw_request.clone(), &options)
+                    .await
+                {
+                    Ok(resp) => {
+                        let settlement_finality_latency = timer.elapsed().as_secs_f64();
+                        self.metrics
+                            .settlement_finality_latency
+                            .with_label_values(&[if is_single_writer_tx {
+                                TX_TYPE_SINGLE_WRITER_TX
+                            } else {
+                                TX_TYPE_SHARED_OBJ_TX
+                            }])
+                            .observe(settlement_finality_latency);
+                        // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
-                            .with_label_values(&["failure"])
+                            .with_label_values(&["success"])
                             .observe(attempts as f64);
-                        return Err(e);
+                        return Ok(resp);
                     }
-                    tracing::info!(
-                        "Failed to finalize transaction (attempt {}): {}. Retrying ...",
-                        attempts,
-                        e
-                    );
+                    Err(e) => {
+                        if !e.is_retriable() {
+                            // Record the number of retries for failed transaction
+                            self.metrics
+                                .transaction_retries
+                                .with_label_values(&["failure"])
+                                .observe(attempts as f64);
+                            return Err(e);
+                        }
+                        tracing::info!(
+                            "Failed to finalize transaction (attempt {}): {}. Retrying ...",
+                            attempts,
+                            e
+                        );
+                        // Buffer the latest retriable error to be returned in case of timeout
+                        latest_retriable_error = Some(e);
+                    }
                 }
-            }
 
-            sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
-            attempts += 1;
+                sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+                attempts += 1;
+            }
+        };
+
+        match timeout_duration {
+            Some(duration) => {
+                tokio::time::timeout(duration, retry_loop)
+                    .await
+                    .unwrap_or_else(|_| {
+                        // Timeout occurred, return with latest retriable error if available
+                        Err(TransactionDriverError::TimeOutWithLastRetriableError {
+                            last_error: latest_retriable_error.map(Box::new),
+                            attempts,
+                            timeout: duration,
+                        })
+                    })
+            }
+            None => retry_loop.await,
         }
     }
 
