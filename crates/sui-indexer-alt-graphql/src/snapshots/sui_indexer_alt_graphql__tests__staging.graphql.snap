@@ -14,6 +14,18 @@ type AccumulatorRootCreateTransaction {
 
 type ActiveJwk {
 	"""
+	The JWK algorithm parameter, (RFC 7517, Section 4.4).
+	"""
+	alg: String
+	"""
+	The JWK RSA public exponent, (RFC 7517, Section 9.3).
+	"""
+	e: String
+	"""
+	The most recent epoch in which the JWK was validated.
+	"""
+	epoch: Epoch
+	"""
 	The string (Issuing Authority) that identifies the OIDC provider.
 	"""
 	iss: String
@@ -26,28 +38,12 @@ type ActiveJwk {
 	"""
 	kty: String
 	"""
-	The JWK RSA public exponent, (RFC 7517, Section 9.3).
-	"""
-	e: String
-	"""
 	The JWK RSA modulus, (RFC 7517, Section 9.3).
 	"""
 	n: String
-	"""
-	The JWK algorithm parameter, (RFC 7517, Section 4.4).
-	"""
-	alg: String
-	"""
-	The most recent epoch in which the JWK was validated.
-	"""
-	epoch: Epoch
 }
 
 type ActiveJwkConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -56,6 +52,10 @@ type ActiveJwkConnection {
 	A list of nodes.
 	"""
 	nodes: [ActiveJwk!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -63,13 +63,13 @@ An edge in a connection.
 """
 type ActiveJwkEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: ActiveJwk!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: ActiveJwk!
 }
 
 type Address implements IAddressable {
@@ -98,32 +98,32 @@ System transaction that is executed at the end of an epoch to expire JSON Web Ke
 """
 type AuthenticatorStateExpireTransaction {
 	"""
-	Expire JWKs that have a lower epoch than this.
-	"""
-	minEpoch: Epoch
-	"""
 	The initial version that the AuthenticatorStateUpdate was shared at.
 	"""
 	authenticatorObjInitialSharedVersion: UInt53
+	"""
+	Expire JWKs that have a lower epoch than this.
+	"""
+	minEpoch: Epoch
 }
 
 type AuthenticatorStateUpdateTransaction {
+	"""
+	The initial version of the authenticator object that it was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
 	"""
 	Epoch of the authenticator state update transaction.
 	"""
 	epoch: Epoch
 	"""
-	Consensus round of the authenticator state update.
-	"""
-	round: UInt53
-	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
 	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
 	"""
-	The initial version of the authenticator object that it was shared at.
+	Consensus round of the authenticator state update.
 	"""
-	authenticatorObjInitialSharedVersion: UInt53
+	round: UInt53
 }
 
 """
@@ -131,24 +131,20 @@ Effects to the balance (sum of coin values per coin type) of addresses and objec
 """
 type BalanceChange {
 	"""
-	The address or object whose balance has changed.
+	The signed balance change.
 	"""
-	owner: Address
+	amount: BigInt
 	"""
 	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
 	"""
 	coinType: MoveType
 	"""
-	The signed balance change.
+	The address or object whose balance has changed.
 	"""
-	amount: BigInt
+	owner: Address
 }
 
 type BalanceChangeConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -157,6 +153,10 @@ type BalanceChangeConnection {
 	A list of nodes.
 	"""
 	nodes: [BalanceChange!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -164,13 +164,13 @@ An edge in a connection.
 """
 type BalanceChangeEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: BalanceChange!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: BalanceChange!
 }
 
 """
@@ -211,9 +211,21 @@ This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
 """
 type ChangeEpochTransaction {
 	"""
+	The total amount of gas charged for computation during the epoch.
+	"""
+	computationCharge: UInt53
+	"""
 	The next (to become) epoch.
 	"""
 	epoch: Epoch
+	"""
+	Unix timestamp when epoch started.
+	"""
+	epochStartTimestamp: DateTime
+	"""
+	The non-refundable storage fee.
+	"""
+	nonRefundableStorageFee: UInt53
 	"""
 	The epoch's corresponding protocol configuration.
 	"""
@@ -223,21 +235,9 @@ type ChangeEpochTransaction {
 	"""
 	storageCharge: UInt53
 	"""
-	The total amount of gas charged for computation during the epoch.
-	"""
-	computationCharge: UInt53
-	"""
 	The amount of storage rebate refunded to the transaction senders.
 	"""
 	storageRebate: UInt53
-	"""
-	The non-refundable storage fee.
-	"""
-	nonRefundableStorageFee: UInt53
-	"""
-	Unix timestamp when epoch started.
-	"""
-	epochStartTimestamp: DateTime
 	"""
 	System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
 	"""
@@ -249,21 +249,17 @@ Checkpoints contain finalized transactions and are used for node synchronization
 """
 type Checkpoint {
 	"""
-	The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	The Base64 serialized BCS bytes of this checkpoint's contents.
 	"""
-	sequenceNumber: UInt53!
-	"""
-	Query the RPC as if this checkpoint were the latest checkpoint.
-	"""
-	query: Query
-	"""
-	A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
-	"""
-	digest: String
+	contentBcs: Base64
 	"""
 	A 32-byte hash that uniquely identifies the checkpoint's content, encoded in Base58.
 	"""
 	contentDigest: String
+	"""
+	A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
+	"""
+	digest: String
 	"""
 	The epoch that this checkpoint is part of.
 	"""
@@ -277,33 +273,33 @@ type Checkpoint {
 	"""
 	previousCheckpointDigest: String
 	"""
+	Query the RPC as if this checkpoint were the latest checkpoint.
+	"""
+	query: Query
+	"""
 	The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
 	"""
 	rollingGasSummary: GasCostSummary
+	"""
+	The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	"""
+	sequenceNumber: UInt53!
 	"""
 	The Base64 serialized BCS bytes of this checkpoint's summary.
 	"""
 	summaryBcs: Base64
 	"""
-	The Base64 serialized BCS bytes of this checkpoint's contents.
-	"""
-	contentBcs: Base64
-	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The aggregation of signatures from a quorum of validators for the checkpoint proposal.
 	"""
 	validatorSignatures: ValidatorAggregatedSignature
-	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 }
 
 type CheckpointConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -312,6 +308,10 @@ type CheckpointConnection {
 	A list of nodes.
 	"""
 	nodes: [Checkpoint!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -319,20 +319,16 @@ An edge in a connection.
 """
 type CheckpointEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Checkpoint!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
 }
 
 input CheckpointFilter {
-	"""
-	Limit query results to checkpoints at this epoch.
-	"""
-	atEpoch: UInt53
 	"""
 	Limit query results to checkpoints that occured strictly after the given checkpoint.
 	"""
@@ -341,6 +337,10 @@ input CheckpointFilter {
 	Limit query results to checkpoints that occured at the given checkpoint.
 	"""
 	atCheckpoint: UInt53
+	"""
+	Limit query results to checkpoints at this epoch.
+	"""
+	atEpoch: UInt53
 	"""
 	Limit query results to checkpoints that occured strictly before the given checkpoint.
 	"""
@@ -364,10 +364,6 @@ union Command = MakeMoveVecCommand | MergeCoinsCommand | MoveCallCommand | Publi
 
 type CommandConnection {
 	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
 	A list of edges.
 	"""
 	edges: [CommandEdge!]!
@@ -375,6 +371,10 @@ type CommandConnection {
 	A list of nodes.
 	"""
 	nodes: [Command!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -382,13 +382,13 @@ An edge in a connection.
 """
 type CommandEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Command!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Command!
 }
 
 """
@@ -396,17 +396,12 @@ System transaction that runs at the beginning of a checkpoint, and is responsibl
 """
 type ConsensusCommitPrologueTransaction {
 	"""
-	Epoch of the commit prologue transaction.
+	Digest of any additional state computed by the consensus handler.
+	Used to detect forking bugs as early as possible.
 	
-	Present in V1, V2, V3, V4.
+	Present in V4.
 	"""
-	epoch: Epoch
-	"""
-	Consensus round of the commit.
-	
-	Present in V1, V2, V3, V4.
-	"""
-	round: UInt53
+	additionalStateDigest: String
 	"""
 	Unix timestamp from consensus.
 	
@@ -420,19 +415,24 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	consensusCommitDigest: String
 	"""
+	Epoch of the commit prologue transaction.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	epoch: Epoch
+	"""
+	Consensus round of the commit.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	round: UInt53
+	"""
 	The sub DAG index of the consensus commit. This field is populated if there
 	are multiple consensus commits per round.
 	
 	Present in V3, V4.
 	"""
 	subDagIndex: UInt53
-	"""
-	Digest of any additional state computed by the consensus handler.
-	Used to detect forking bugs as early as possible.
-	
-	Present in V4.
-	"""
-	additionalStateDigest: String
 }
 
 """
@@ -497,10 +497,6 @@ union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCre
 
 type EndOfEpochTransactionKindConnection {
 	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
 	A list of edges.
 	"""
 	edges: [EndOfEpochTransactionKindEdge!]!
@@ -508,6 +504,10 @@ type EndOfEpochTransactionKindConnection {
 	A list of nodes.
 	"""
 	nodes: [EndOfEpochTransactionKind!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -515,13 +515,13 @@ An edge in a connection.
 """
 type EndOfEpochTransactionKindEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: EndOfEpochTransactionKind!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: EndOfEpochTransactionKind!
 }
 
 """
@@ -538,10 +538,6 @@ During a particular epoch the following data is fixed:
 """
 type Epoch {
 	"""
-	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
-	"""
-	epochId: UInt53!
-	"""
 	The epoch's corresponding checkpoints.
 	"""
 	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
@@ -552,6 +548,36 @@ type Epoch {
 	"""
 	coinDenyList: Object
 	"""
+	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
+	"""
+	endTimestamp: DateTime
+	"""
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
+	"""
+	epochId: UInt53!
+	"""
+	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+	"""
+	fundOutflow: BigInt
+	"""
+	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+	This fund is used to redistribute storage fees from past transactions to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
+	"""
+	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	netInflow: BigInt
+	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
 	"""
 	protocolConfigs: ProtocolConfigs
@@ -560,33 +586,39 @@ type Epoch {
 	"""
 	referenceGasPrice: BigInt
 	"""
+	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+	"""
+	safeMode: SafeMode
+	"""
 	The timestamp associated with the first checkpoint in the epoch.
 	"""
 	startTimestamp: DateTime
 	"""
-	The transactions in this epoch, optionally filtered by transaction filters.
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	This is also used for storage rebates.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	storageFund: StorageFund
 	"""
 	The system packages used by all transactions in this epoch.
 	"""
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
 	"""
-	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
+	Details of the system that are decided during genesis.
 	"""
-	endTimestamp: DateTime
+	systemParameters: SystemParameters
 	"""
-	Validator-related properties, including the active validators.
+	Parameters related to the subsidy that supplements staking rewards
 	"""
-	validatorSet: ValidatorSet
+	systemStakeSubsidy: StakeSubsidy
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+	"""
+	systemStateVersion: UInt53
 	"""
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: UInt53
-	"""
-	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
-	"""
-	totalTransactions: UInt53
 	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
 	"""
@@ -600,49 +632,17 @@ type Epoch {
 	"""
 	totalStakeSubsidies: BigInt
 	"""
-	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
-	This fund is used to redistribute storage fees from past transactions to future validators.
+	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
 	"""
-	fundSize: BigInt
+	totalTransactions: UInt53
 	"""
-	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	The transactions in this epoch, optionally filtered by transaction filters.
 	"""
-	netInflow: BigInt
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
-	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	Validator-related properties, including the active validators.
 	"""
-	fundInflow: BigInt
-	"""
-	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
-	"""
-	fundOutflow: BigInt
-	"""
-	SUI set aside to account for objects stored on-chain, at the start of the epoch.
-	This is also used for storage rebates.
-	"""
-	storageFund: StorageFund
-	"""
-	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
-	"""
-	safeMode: SafeMode
-	"""
-	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
-	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
-	"""
-	systemStateVersion: UInt53
-	"""
-	Details of the system that are decided during genesis.
-	"""
-	systemParameters: SystemParameters
-	"""
-	Parameters related to the subsidy that supplements staking rewards
-	"""
-	systemStakeSubsidy: StakeSubsidy
-	"""
-	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
-	This can be used to verify state snapshots.
-	"""
-	liveObjectSetDigest: String
+	validatorSet: ValidatorSet
 }
 
 type Event {
@@ -676,10 +676,6 @@ type Event {
 
 type EventConnection {
 	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
 	A list of edges.
 	"""
 	edges: [EventEdge!]!
@@ -687,6 +683,10 @@ type EventConnection {
 	A list of nodes.
 	"""
 	nodes: [Event!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -694,13 +694,13 @@ An edge in a connection.
 """
 type EventEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Event!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
 }
 
 """
@@ -714,23 +714,23 @@ type ExecutionError {
 	"""
 	abortCode: BigInt
 	"""
-	The source line number for the abort. Only populated for clever errors.
-	"""
-	sourceLineNumber: Int
-	"""
-	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
-	"""
-	instructionOffset: Int
-	"""
-	The error's name. Only populated for clever errors.
-	"""
-	identifier: String
-	"""
 	An associated constant for the error. Only populated for clever errors.
 	
 	Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
 	"""
 	constant: String
+	"""
+	The error's name. Only populated for clever errors.
+	"""
+	identifier: String
+	"""
+	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+	"""
+	instructionOffset: Int
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
 }
 
 """
@@ -785,6 +785,10 @@ type GasCostSummary {
 	"""
 	computationCost: UInt53
 	"""
+	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
+	"""
+	nonRefundableStorageFee: UInt53
+	"""
 	Cost for storage at the time the transaction is executed, calculated as the size of the objects being mutated in bytes multiplied by a storage cost per byte (part of the protocol).
 	"""
 	storageCost: UInt53
@@ -792,10 +796,6 @@ type GasCostSummary {
 	Amount the user gets back from the storage cost of the previous versions of objects being mutated or deleted.
 	"""
 	storageRebate: UInt53
-	"""
-	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
-	"""
-	nonRefundableStorageFee: UInt53
 }
 
 """
@@ -814,14 +814,6 @@ type GasEffects {
 
 type GasInput {
 	"""
-	Address of the owner of the gas object(s) used.
-	"""
-	gasSponsor: Address
-	"""
-	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay (in MIST).
-	"""
-	gasPrice: BigInt
-	"""
 	The maximum SUI that can be expended by executing this transaction
 	"""
 	gasBudget: BigInt
@@ -829,6 +821,14 @@ type GasInput {
 	Objects used to pay for a transaction's execution and storage
 	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+	"""
+	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay (in MIST).
+	"""
+	gasPrice: BigInt
+	"""
+	Address of the owner of the gas object(s) used.
+	"""
+	gasSponsor: Address
 }
 
 """
@@ -874,10 +874,6 @@ Interface implemented by versioned on-chain values that are addressable by an ID
 """
 interface IObject {
 	"""
-	The version of this object that this content comes from.
-	"""
-	version: UInt53!
-	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
@@ -901,6 +897,10 @@ interface IObject {
 	The transaction that created this version of the object
 	"""
 	previousTransaction: Transaction
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
 }
 
 type Input {
@@ -982,21 +982,21 @@ enum MoveAbility {
 
 type MoveCallCommand {
 	"""
-	The storage ID of the package the function being called is defined in.
+	The actual function parameters passed in for this move call.
 	"""
-	package: SuiAddress
-	"""
-	The name of the module the function being called is defined in.
-	"""
-	module: String
+	arguments: [TransactionArgument!]!
 	"""
 	The name of the function being called.
 	"""
 	functionName: String
 	"""
-	The actual function parameters passed in for this move call.
+	The name of the module the function being called is defined in.
 	"""
-	arguments: [TransactionArgument!]!
+	module: String
+	"""
+	The storage ID of the package the function being called is defined in.
+	"""
+	package: SuiAddress
 }
 
 """
@@ -1008,17 +1008,13 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	address: SuiAddress!
 	"""
-	The version of this object that this content comes from.
+	The structured representation of the object's contents.
 	"""
-	version: UInt53!
+	contents: MoveValue
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
-	"""
-	The structured representation of the object's contents.
-	"""
-	contents: MoveValue
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
@@ -1049,13 +1045,13 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
 }
 
 type MoveObjectConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -1064,6 +1060,10 @@ type MoveObjectConnection {
 	A list of nodes.
 	"""
 	nodes: [MoveObject!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -1071,13 +1071,13 @@ An edge in a connection.
 """
 type MoveObjectEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: MoveObject!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveObject!
 }
 
 """
@@ -1089,17 +1089,13 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	address: SuiAddress!
 	"""
-	Objects owned by this package, optionally filtered by type.
-	"""
-	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
-	"""
-	The version of this package that this content comes from.
-	"""
-	version: UInt53!
-	"""
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	The transitive dependencies of this package.
+	"""
+	linkage: [Linkage!]
 	"""
 	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
 	name, followed by module bytes), in alphabetic order by module name.
@@ -1124,6 +1120,10 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
 	"""
+	Objects owned by this package, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
 	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
 	
 	If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
@@ -1146,20 +1146,16 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	previousTransaction: Transaction
 	"""
-	The transitive dependencies of this package.
-	"""
-	linkage: [Linkage!]
-	"""
 	A table identifying which versions of a package introduced each of its types.
 	"""
 	typeOrigins: [TypeOrigin!]
+	"""
+	The version of this package that this content comes from.
+	"""
+	version: UInt53!
 }
 
 type MovePackageConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -1168,6 +1164,10 @@ type MovePackageConnection {
 	A list of nodes.
 	"""
 	nodes: [MovePackage!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -1175,19 +1175,28 @@ An edge in a connection.
 """
 type MovePackageEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: MovePackage!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MovePackage!
 }
 
 """
 Represents concrete types (no type parameters, no references).
 """
 type MoveType {
+	"""
+	The abilities this concrete type has. Returns no abilities if the type is invalid.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	Structured representation of the "shape" of values that match this type. May return no
+	layout if the type is invalid.
+	"""
+	layout: MoveTypeLayout
 	"""
 	Flat representation of the type signature, as a displayable string.
 	"""
@@ -1196,15 +1205,6 @@ type MoveType {
 	Structured representation of the type signature.
 	"""
 	signature: MoveTypeSignature!
-	"""
-	Structured representation of the "shape" of values that match this type. May return no
-	layout if the type is invalid.
-	"""
-	layout: MoveTypeLayout
-	"""
-	The abilities this concrete type has. Returns no abilities if the type is invalid.
-	"""
-	abilities: [MoveAbility!]
 }
 
 """
@@ -1318,14 +1318,6 @@ type Object implements IAddressable & IObject {
 	"""
 	address: SuiAddress!
 	"""
-	The version of this object that this content comes from.
-	"""
-	version: UInt53!
-	"""
-	32-byte hash that identifies the object's contents, encoded in Base58.
-	"""
-	digest: String!
-	"""
 	Attempts to convert the object into a MoveObject.
 	"""
 	asMoveObject: MoveObject
@@ -1333,6 +1325,10 @@ type Object implements IAddressable & IObject {
 	Attempts to convert the object into a MovePackage.
 	"""
 	asMovePackage: MovePackage
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	
@@ -1359,6 +1355,10 @@ type Object implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
 }
 
 type ObjectChange {
@@ -1367,14 +1367,6 @@ type ObjectChange {
 	"""
 	address: SuiAddress!
 	"""
-	The contents of the object immediately before the transaction.
-	"""
-	inputState: Object
-	"""
-	The contents of the object immediately after the transaction.
-	"""
-	outputState: Object
-	"""
 	Whether the ID was created in this transaction.
 	"""
 	idCreated: Boolean
@@ -1382,13 +1374,17 @@ type ObjectChange {
 	Whether the ID was deleted in this transaction.
 	"""
 	idDeleted: Boolean
+	"""
+	The contents of the object immediately before the transaction.
+	"""
+	inputState: Object
+	"""
+	The contents of the object immediately after the transaction.
+	"""
+	outputState: Object
 }
 
 type ObjectChangeConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -1397,6 +1393,10 @@ type ObjectChangeConnection {
 	A list of nodes.
 	"""
 	nodes: [ObjectChange!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -1404,20 +1404,16 @@ An edge in a connection.
 """
 type ObjectChangeEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: ObjectChange!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: ObjectChange!
 }
 
 type ObjectConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -1426,6 +1422,10 @@ type ObjectConnection {
 	A list of nodes.
 	"""
 	nodes: [Object!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -1433,13 +1433,13 @@ An edge in a connection.
 """
 type ObjectEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Object!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
 }
 
 """
@@ -1451,18 +1451,18 @@ A filter over the live object set, the filter can be one of:
 """
 input ObjectFilter {
 	"""
+	Specifies the address of the owning address or object.
+	
+	This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
+	"""
+	owner: SuiAddress
+	"""
 	Filter on whether the object is address-owned, object-owned, shared, or immutable.
 	
 	- If this field is set to "ADDRESS" or "OBJECT", then an owner filter must also be provided.
 	- If this field is set to "SHARED" or "IMMUTABLE", then a type filter must also be provided.
 	"""
 	ownerKind: OwnerKind
-	"""
-	Specifies the address of the owning address or object.
-	
-	This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
-	"""
-	owner: SuiAddress
 	"""
 	Filter on the object's type. The filter can be one of:
 	
@@ -1487,9 +1487,9 @@ input ObjectKey {
 	"""
 	address: SuiAddress!
 	"""
-	If specified, tries to fetch the object at this exact version.
+	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
 	"""
-	version: UInt53
+	atCheckpoint: UInt53
 	"""
 	If specified, tries to fetch the latest version of the object at or before this version.
 	
@@ -1501,9 +1501,9 @@ input ObjectKey {
 	"""
 	rootVersion: UInt53
 	"""
-	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
+	If specified, tries to fetch the object at this exact version.
 	"""
-	atCheckpoint: UInt53
+	version: UInt53
 }
 
 """
@@ -1572,13 +1572,13 @@ input PackageKey {
 	"""
 	address: SuiAddress!
 	"""
-	If specified, tries to fetch the package at this exact version.
-	"""
-	version: UInt53
-	"""
 	If specified, tries to fetch the latest version as of this checkpoint.
 	"""
 	atCheckpoint: UInt53
+	"""
+	If specified, tries to fetch the package at this exact version.
+	"""
+	version: UInt53
 }
 
 """
@@ -1586,21 +1586,21 @@ Information about pagination in a connection
 """
 type PageInfo {
 	"""
-	When paginating backwards, are there more items?
+	When paginating forwards, the cursor to continue.
 	"""
-	hasPreviousPage: Boolean!
+	endCursor: String
 	"""
 	When paginating forwards, are there more items?
 	"""
 	hasNextPage: Boolean!
 	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
 	When paginating backwards, the cursor to continue.
 	"""
 	startCursor: String
-	"""
-	When paginating forwards, the cursor to continue.
-	"""
-	endCursor: String
 }
 
 type PerEpochConfig {
@@ -1612,13 +1612,13 @@ type PerEpochConfig {
 
 type ProgrammableTransaction {
 	"""
-	Input objects or primitive values.
-	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
-	"""
 	The transaction commands, executed sequentially.
 	"""
 	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
 }
 
 """
@@ -1641,7 +1641,6 @@ Constants that control how the chain operates.
 These can only change during protocol upgrades which happen on epoch boundaries. Configuration is split into feature flags (which are just booleans), and configs which can take any value (including no value at all), and will be represented by a string.
 """
 type ProtocolConfigs {
-	protocolVersion: UInt53!
 	"""
 	Query for the value of the configuration with name `key`.
 	"""
@@ -1658,6 +1657,7 @@ type ProtocolConfigs {
 	List all available feature flags and their values.
 	"""
 	featureFlags: [FeatureFlag!]!
+	protocolVersion: UInt53!
 }
 
 """
@@ -1665,13 +1665,13 @@ Publishes a Move Package.
 """
 type PublishCommand {
 	"""
-	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
-	"""
-	modules: [Base64!]
-	"""
 	IDs of the transitive dependencies of the package to be published.
 	"""
 	dependencies: [SuiAddress!]
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]
 }
 
 """
@@ -1734,17 +1734,17 @@ type Query {
 	"""
 	multiGetPackages(keys: [PackageKey!]!): [MovePackage]!
 	"""
-	Fetch transactions by their digests.
-	
-	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
-	"""
-	multiGetTransactions(keys: [String!]!): [Transaction]!
-	"""
 	Fetch transaction effects by their transactions' digests.
 	
 	Returns a list of transaction effects that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction effects never existed, or because it was pruned.
 	"""
 	multiGetTransactionEffects(keys: [String!]!): [TransactionEffects]!
+	"""
+	Fetch transactions by their digests.
+	
+	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
+	"""
+	multiGetTransactions(keys: [String!]!): [Transaction]!
 	"""
 	Fetch types by their string representations.
 	
@@ -1774,6 +1774,10 @@ type Query {
 	"""
 	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
 	"""
+	Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
+	"""
+	objectVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): ObjectConnection
+	"""
 	Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
 	
 	- A filter on type (all live objects whose type matches that filter).
@@ -1781,10 +1785,6 @@ type Query {
 	- Fetching all shared or immutable objects, filtered by type.
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter!): ObjectConnection
-	"""
-	Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
-	"""
-	objectVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): ObjectConnection
 	"""
 	Fetch a package by its address.
 	
@@ -1800,15 +1800,15 @@ type Query {
 	"""
 	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
 	"""
-	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
-	"""
-	packages(first: Int, after: String, last: Int, before: String, filter: PackageCheckpointFilter): MovePackageConnection
-	"""
 	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	
 	Different versions of a package will have different object IDs, unless they are system packages, but will share the same original ID.
 	"""
 	packageVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): MovePackageConnection
+	"""
+	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
+	"""
+	packages(first: Int, after: String, last: Int, before: String, filter: PackageCheckpointFilter): MovePackageConnection
 	"""
 	Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
 	"""
@@ -1862,10 +1862,6 @@ type RandomnessStateUpdateTransaction {
 	"""
 	epoch: Int
 	"""
-	Randomness round of the update.
-	"""
-	randomnessRound: Int
-	"""
 	Updated random bytes, Base64 encoded.
 	"""
 	randomBytes: Base64
@@ -1873,6 +1869,10 @@ type RandomnessStateUpdateTransaction {
 	The initial version of the randomness object that it was shared at.
 	"""
 	randomnessObjInitialSharedVersion: Int
+	"""
+	Randomness round of the update.
+	"""
+	randomnessRound: Int
 }
 
 """
@@ -1910,21 +1910,23 @@ type SafeMode {
 
 type ServiceConfig {
 	"""
-	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
+	Number of elements a paginated connection will return if a page size is not supplied.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
-	mutationTimeoutMs: Int
+	defaultPageSize(type: String!, field: String!): Int
 	"""
-	Maximum time in milliseconds that will be spent to serve one query request.
+	Maximum budget in bytes to spend when outputting a structured `MoveValue`.
 	"""
-	queryTimeoutMs: Int
+	maxMoveValueBound: Int
 	"""
-	Maximum depth of a GraphQL query that can be accepted by this service.
+	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
 	"""
-	maxQueryDepth: Int
+	maxMoveValueDepth: Int
 	"""
-	The maximum number of nodes (field names) the service will accept in a single query.
+	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
 	"""
-	maxQueryNodes: Int
+	maxMultiGetSize: Int
 	"""
 	Maximum number of estimated output nodes in a GraphQL response.
 	
@@ -1966,31 +1968,29 @@ type ServiceConfig {
 	"""
 	maxOutputNodes: Int
 	"""
-	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
-	
-	This is cumulative across all matching fields in a single GraphQL request.
-	"""
-	maxTransactionPayloadSize: Int
-	"""
-	Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
-	"""
-	maxQueryPayloadSize: Int
-	"""
-	Number of elements a paginated connection will return if a page size is not supplied.
-	
-	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
-	"""
-	defaultPageSize(type: String!, field: String!): Int
-	"""
 	Maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
 	
 	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its max page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
 	maxPageSize(type: String!, field: String!): Int
 	"""
-	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
+	Maximum depth of a GraphQL query that can be accepted by this service.
 	"""
-	maxMultiGetSize: Int
+	maxQueryDepth: Int
+	"""
+	The maximum number of nodes (field names) the service will accept in a single query.
+	"""
+	maxQueryNodes: Int
+	"""
+	Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
+	"""
+	maxQueryPayloadSize: Int
+	"""
+	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
+	
+	This is cumulative across all matching fields in a single GraphQL request.
+	"""
+	maxTransactionPayloadSize: Int
 	"""
 	Maximum amount of nesting among type arguments (type arguments nest when a type argument is itself generic and has arguments).
 	"""
@@ -2004,13 +2004,13 @@ type ServiceConfig {
 	"""
 	maxTypeNodes: Int
 	"""
-	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
 	"""
-	maxMoveValueDepth: Int
+	mutationTimeoutMs: Int
 	"""
-	Maximum budget in bytes to spend when outputting a structured `MoveValue`.
+	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
-	maxMoveValueBound: Int
+	queryTimeoutMs: Int
 }
 
 """
@@ -2038,13 +2038,13 @@ Splits off coins with denominations in `amounts` from `coin`, returning multiple
 """
 type SplitCoinsCommand {
 	"""
-	The coin to split.
-	"""
-	coin: TransactionArgument
-	"""
 	The denominations to split off from the coin.
 	"""
 	amounts: [TransactionArgument!]!
+	"""
+	The coin to split.
+	"""
+	coin: TransactionArgument
 }
 
 """
@@ -2056,22 +2056,22 @@ type StakeSubsidy {
 	"""
 	balance: BigInt
 	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
+	currentDistributionAmount: BigInt
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
+	"""
+	decreaseRate: Int
+	"""
 	Number of times stake subsidies have been distributed.
 	Subsidies are distributed with other staking rewards, at the end of the epoch.
 	"""
 	distributionCounter: Int
 	"""
-	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
-	"""
-	currentDistributionAmount: BigInt
-	"""
 	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
 	"""
 	periodLength: Int
-	"""
-	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
-	"""
-	decreaseRate: Int
 }
 
 """
@@ -2079,14 +2079,14 @@ SUI set aside to account for objects stored on-chain.
 """
 type StorageFund {
 	"""
-	Sum of storage rebates of live objects on chain.
-	"""
-	totalObjectStorageRebates: BigInt
-	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
 	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
+	"""
+	Sum of storage rebates of live objects on chain.
+	"""
+	totalObjectStorageRebates: BigInt
 }
 
 """
@@ -2114,21 +2114,25 @@ type SystemParameters {
 	"""
 	durationMs: BigInt
 	"""
-	The epoch at which stake subsidies start being paid out.
+	The maximum number of active validators that the system supports.
 	"""
-	stakeSubsidyStartEpoch: UInt53
+	maxValidatorCount: Int
 	"""
 	The minimum number of active validators that the system supports.
 	"""
 	minValidatorCount: Int
 	"""
-	The maximum number of active validators that the system supports.
-	"""
-	maxValidatorCount: Int
-	"""
 	Minimum stake needed to become a new validator.
 	"""
 	minValidatorJoiningStake: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
+	stakeSubsidyStartEpoch: UInt53
+	"""
+	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
+	"""
+	validatorLowStakeGracePeriod: BigInt
 	"""
 	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
 	"""
@@ -2137,10 +2141,6 @@ type SystemParameters {
 	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
 	"""
 	validatorVeryLowStakeThreshold: BigInt
-	"""
-	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
-	"""
-	validatorLowStakeGracePeriod: BigInt
 }
 
 """
@@ -2156,10 +2156,6 @@ type Transaction {
 	"""
 	effects: TransactionEffects
 	"""
-	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
-	"""
-	kind: TransactionKind
-	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
 	"""
 	expiration: Epoch
@@ -2168,17 +2164,21 @@ type Transaction {
 	"""
 	gasInput: GasInput
 	"""
+	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
+	"""
+	kind: TransactionKind
+	"""
 	The address corresponding to the public key that signed this transaction. System transactions do not have senders.
 	"""
 	sender: Address
 	"""
-	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
-	"""
-	transactionBcs: Base64
-	"""
 	User signatures for this transaction.
 	"""
 	signatures: [UserSignature!]!
+	"""
+	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
+	"""
+	transactionBcs: Base64
 }
 
 """
@@ -2188,10 +2188,6 @@ union TransactionArgument = GasCoin | Input | TxResult
 
 type TransactionConnection {
 	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
 	A list of edges.
 	"""
 	edges: [TransactionEdge!]!
@@ -2199,6 +2195,10 @@ type TransactionConnection {
 	A list of nodes.
 	"""
 	nodes: [Transaction!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -2206,13 +2206,13 @@ An edge in a connection.
 """
 type TransactionEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Transaction!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Transaction!
 }
 
 """
@@ -2220,47 +2220,23 @@ The results of executing a transaction.
 """
 type TransactionEffects {
 	"""
-	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
-	
-	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
+	The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
 	"""
-	digest: String!
-	"""
-	The transaction that ran to produce these effects.
-	"""
-	transaction: Transaction
+	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
 	"""
 	The checkpoint this transaction was finalized in.
 	"""
 	checkpoint: Checkpoint
 	"""
-	Whether the transaction executed successfully or not.
+	Transactions whose outputs this transaction depends upon.
 	"""
-	status: ExecutionStatus
+	dependencies(first: Int, after: String, last: Int, before: String): TransactionConnection
 	"""
-	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	
+	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
 	"""
-	lamportVersion: UInt53
-	"""
-	Rich execution error information for failed transactions.
-	"""
-	executionError: ExecutionError
-	"""
-	Timestamp corresponding to the checkpoint this transaction was finalized in.
-	"""
-	timestamp: DateTime
-	"""
-	The epoch this transaction was finalized in.
-	"""
-	epoch: Epoch
-	"""
-	Events emitted by this transaction.
-	"""
-	events(first: Int, after: String, last: Int, before: String): EventConnection
-	"""
-	The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
-	"""
-	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
+	digest: String!
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
@@ -2270,21 +2246,45 @@ type TransactionEffects {
 	"""
 	effectsDigest: String
 	"""
-	The before and after state of objects that were modified by this transaction.
+	The epoch this transaction was finalized in.
 	"""
-	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+	epoch: Epoch
+	"""
+	Events emitted by this transaction.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection
+	"""
+	Rich execution error information for failed transactions.
+	"""
+	executionError: ExecutionError
 	"""
 	Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
 	"""
 	gasEffects: GasEffects
 	"""
+	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+	"""
+	lamportVersion: UInt53
+	"""
+	The before and after state of objects that were modified by this transaction.
+	"""
+	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+	"""
+	Whether the transaction executed successfully or not.
+	"""
+	status: ExecutionStatus
+	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	"""
+	timestamp: DateTime
+	"""
+	The transaction that ran to produce these effects.
+	"""
+	transaction: Transaction
+	"""
 	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
 	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
-	"""
-	Transactions whose outputs this transaction depends upon.
-	"""
-	dependencies(first: Int, after: String, last: Int, before: String): TransactionConnection
 }
 
 """
@@ -2321,10 +2321,6 @@ union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving
 
 type TransactionInputConnection {
 	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
 	A list of edges.
 	"""
 	edges: [TransactionInputEdge!]!
@@ -2332,6 +2328,10 @@ type TransactionInputConnection {
 	A list of nodes.
 	"""
 	nodes: [TransactionInput!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -2339,13 +2339,13 @@ An edge in a connection.
 """
 type TransactionInputEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: TransactionInput!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionInput!
 }
 
 """
@@ -2358,13 +2358,13 @@ Transfers `inputs` to `address`. All inputs must have the `store` ability (allow
 """
 type TransferObjectsCommand {
 	"""
-	The objects to transfer.
-	"""
-	inputs: [TransactionArgument!]!
-	"""
 	The address to transfer to.
 	"""
 	address: TransactionArgument
+	"""
+	The objects to transfer.
+	"""
+	inputs: [TransactionArgument!]!
 }
 
 """
@@ -2386,6 +2386,10 @@ Information about which previous versions of a package introduced its types.
 """
 type TypeOrigin {
 	"""
+	The storage ID of the package that first defined this type.
+	"""
+	definingId: SuiAddress
+	"""
 	Module defining the type.
 	"""
 	module: String
@@ -2393,10 +2397,6 @@ type TypeOrigin {
 	Name of the struct.
 	"""
 	struct: String
-	"""
-	The storage ID of the package that first defined this type.
-	"""
-	definingId: SuiAddress
 }
 
 """
@@ -2411,10 +2411,6 @@ union UnchangedConsensusObject = ConsensusObjectRead | MutateConsensusStreamEnde
 
 type UnchangedConsensusObjectConnection {
 	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
 	A list of edges.
 	"""
 	edges: [UnchangedConsensusObjectEdge!]!
@@ -2422,6 +2418,10 @@ type UnchangedConsensusObjectConnection {
 	A list of nodes.
 	"""
 	nodes: [UnchangedConsensusObject!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -2429,13 +2429,13 @@ An edge in a connection.
 """
 type UnchangedConsensusObjectEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: UnchangedConsensusObject!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: UnchangedConsensusObject!
 }
 
 """
@@ -2443,17 +2443,17 @@ Upgrades a Move Package.
 """
 type UpgradeCommand {
 	"""
-	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	ID of the package being upgraded.
 	"""
-	modules: [Base64!]
+	currentPackage: SuiAddress
 	"""
 	IDs of the transitive dependencies of the package to be published.
 	"""
 	dependencies: [SuiAddress!]
 	"""
-	ID of the package being upgraded.
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
 	"""
-	currentPackage: SuiAddress
+	modules: [Base64!]
 	"""
 	The `UpgradeTicket` authorizing the upgrade.
 	"""
@@ -2489,14 +2489,13 @@ Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
 	"""
-	Total amount of stake for all active validators at the beginning of the epoch.
+	Object ID of the `Table` storing the inactive staking pools.
 	"""
-	totalStake: BigInt
+	inactivePoolsId: SuiAddress
 	"""
-	Validators that are pending removal from the active validator set, expressed as indices in
-	to `activeValidators`.
+	Size of the inactive pools `Table`.
 	"""
-	pendingRemovals: [Int!]
+	inactivePoolsSize: Int
 	"""
 	Object ID of the wrapped object `TableVec` storing the pending active validators.
 	"""
@@ -2505,6 +2504,11 @@ type ValidatorSet {
 	Size of the pending active validators table.
 	"""
 	pendingActiveValidatorsSize: Int
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
+	pendingRemovals: [Int!]
 	"""
 	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
 	of the corresponding validators. This is needed because a validator's address
@@ -2516,13 +2520,9 @@ type ValidatorSet {
 	"""
 	stakingPoolMappingsSize: Int
 	"""
-	Object ID of the `Table` storing the inactive staking pools.
+	Total amount of stake for all active validators at the beginning of the epoch.
 	"""
-	inactivePoolsId: SuiAddress
-	"""
-	Size of the inactive pools `Table`.
-	"""
-	inactivePoolsSize: Int
+	totalStake: BigInt
 	"""
 	Object ID of the `Table` storing the validator candidates.
 	"""

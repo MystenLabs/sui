@@ -413,17 +413,18 @@ async fn graphiql(path: MatchedPath) -> Html<String> {
 
 #[cfg(test)]
 mod tests {
+    use async_graphql::SDLExportOptions;
+    use insta::assert_snapshot;
     use std::fs;
     use std::path::PathBuf;
-
-    use insta::assert_snapshot;
 
     use super::*;
 
     /// Check that the exported schema is up-to-date.
     #[test]
     fn test_schema_sdl_export() {
-        let sdl = schema().finish().sdl();
+        let options = SDLExportOptions::new().sorted_fields();
+        let sdl = schema().finish().sdl_with_options(options);
 
         let file = if cfg!(feature = "staging") {
             "staging.graphql"
