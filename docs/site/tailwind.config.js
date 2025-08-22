@@ -98,5 +98,18 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function ({ addUtilities }) {
+      const arrowMask = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8.12 4.12a1 1 0 0 1 1.41 0l6.35 6.35a1 1 0 0 1 0 1.41l-6.35 6.35a1 1 0 1 1-1.41-1.41L13.59 12 8.12 6.53a1 1 0 0 1 0-1.41z'/></svg>") no-repeat center / contain`;
+
+      addUtilities({
+        ".mask-arrow": {
+          transition: "transform 0.2s ease",
+          background: "currentColor",
+          WebkitMask: arrowMask,
+          mask: arrowMask,
+        },
+      });
+    },
+  ],
 };

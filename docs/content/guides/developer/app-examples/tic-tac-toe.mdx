@@ -3,6 +3,8 @@ title: Tic-Tac-Toe
 effort: small
 description: This example demonstrates how to create three variations of a tic-tac-toe app on Sui.
 keywords: [ multisig public key, multisig example, game example, game app, owned objects, shared objects, dynamic object fields, multisig accounts ]
+mdx:
+  format: md
 ---
 
 :::info
@@ -42,10 +44,15 @@ In this folder, create the following subfolders:
   - `sources` to hold the Move source files.
 
 <details>
-  <summary>
-    Add `Move.toml` to `tic-tac-toe/move/`
-  </summary>
-  {@inject: examples/tic-tac-toe/move/Move.toml}
+
+<summary>
+
+Add `Move.toml` to `tic-tac-toe/move/`
+
+</summary>
+
+{@inject: ../../../../../examples/tic-tac-toe/move/Move.toml}
+
 </details>
 
 :::checkpoint
@@ -62,13 +69,13 @@ Create a new file in `tic-tac-toe/move/sources` titled `owned.move`. Later, you 
 
 In this first example of tic-tac-toe, the `Game` object, including the game board, is controlled by a game admin.
 
-{@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
 
 Ignore the `admin` field for now, as it is only relevant for the multisig approach.
 
 Games are created with the `new` function:
 
-{@inject: examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
+{@inject:  ../../../../../examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
 
 Some things to note: 
 - `MARK__` is a constant that represents an empty cell on the game board. `MARK_X` and `MARK_O` represent the two players' markers.
@@ -77,21 +84,28 @@ Some things to note:
 
 Because the players don’t own the game board object, they cannot directly mutate it. Instead, they indicate their move by creating a `Mark` object with their intended placement and send it to the game object using transfer to object:
 
-{@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Mark noComments}
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/owned.move#struct=Mark noComments}
 
 When playing the game, the admin operates a service that keeps track of marks using events. When a request is received (`send_mark`), the admin tries to place the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin. This setup relies on the admin's service to keep the game moving.
 
-{@inject: examples/tic-tac-toe/move/sources/owned.move#fun=send_mark,place_mark noComments}
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/owned.move#fun=send_mark noComments}
+
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/owned.move#fun=place_mark noComments}
 
 When a player sends a mark, a `Mark` object is created and is sent to the `Game` object. The admin then receives the mark and places it on the board. This is a use of dynamic object fields, where an object, `Game`, can hold other objects, `Mark`.
 
 To view the entire source code, see the [owned.move source file](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the game board after the game concludes there.
 
 <details>
+
 <summary>
+
 `owned.move`
+
 </summary>
-{@inject: examples/tic-tac-toe/move/sources/owned.move}
+
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/owned.move}
+
 </details>
 
 An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
@@ -102,21 +116,26 @@ In the previous version, the admin owned the game object, preventing players fro
 
 As the following code demonstrates, the `Game` object in this example is almost identical to the one before it. The only differences are that it does not include an `admin` field, which is only relevant for the multisig version of the game, and it does not have `store`, because it only ever exists as a shared object (so it cannot be transferred or wrapped).
 
-{@inject: examples/tic-tac-toe/move/sources/shared.move#struct=Game noComments}
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/shared.move#struct=Game noComments}
 
 Take a look at the `new` function:
 
-{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
 
 Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint a `TurnCap` because the only two addresses that can play this game are `x` and `o`, and this is checked in the next function, `place_mark`:
 
-{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
 
 <details>
+
 <summary>
+
 `shared.move`
+
 </summary>
-{@inject: examples/tic-tac-toe/move/sources/shared.move}
+
+{@inject: ../../../../../examples/tic-tac-toe/move/sources/shared.move}
+
 </details>
 
 ## Multisig  {#multisig}
@@ -146,10 +165,15 @@ export function multiSigPublicKey(keys: PublicKey[]): MultiSigPublicKey {
 ```
 
 <details>
+
 <summary>
+
 `MultiSig.ts`
+
 </summary>
-{@inject: examples/tic-tac-toe/ui/src/MultiSig.ts}
+
+{@inject: ../../../../../examples/tic-tac-toe/ui/src/MultiSig.ts}
+
 </details>
 
 Note that an address on Sui can be derived from a public key (this fact is used in the previous example to deduplicate public keys based on their accompanying address), but the opposite is not true. This means that to start a game of multisig tic-tac-toe, players must exchange public keys, instead of addresses.
@@ -181,10 +205,15 @@ newMultiSigGame(player: PublicKey, opponent: PublicKey): Transaction {
 `useTransactions.ts` also contains functions to place, send, and receive marks, end the game, and burn completed games. These functions all return a `Transaction` object, which is used in the React frontend to execute the transaction with the appropriate signer.
 
 <details>
+
 <summary>
+
 `useTransactions.ts`
+
 </summary>
-{@inject: examples/tic-tac-toe/ui/src/hooks/useTransactions.ts}
+
+{@inject: ../../../../../examples/tic-tac-toe/ui/src/hooks/useTransactions.ts}
+
 </details>
 
 ### Placing a mark
@@ -257,10 +286,15 @@ function OwnedGame({
 ```
 
 <details>
+
 <summary>
+
 `Game.tsx`
+
 </summary>
-{@inject: examples/tic-tac-toe/ui/src/pages/Game.tsx}
+
+{@inject: ../../../../../examples/tic-tac-toe/ui/src/pages/Game.tsx}
+
 </details>
 
 The first step is to get the multisig public key, which was written to `Game.admin` earlier. Then two executor hooks are created: The first is to sign and execute as the current player, and the second is to sign and execute as the multisig/admin account. After the wallet has serialized and signed the transaction the second executor creates a multisig from the wallet signature and executes the transaction with two signatures: Authorizing on behalf of the multisig and the wallet.

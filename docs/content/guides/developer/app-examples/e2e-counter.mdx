@@ -3,6 +3,8 @@ title: Distributed Counter
 description: An app that allows users to create counters that anyone can increment, but only the owner can reset.
 effort: small
 keywords: [ distributed counter, example dapp, example app, react app, react dapp, increment counter, shared objects, programmable transaction blocks ptbs ]
+mdx:
+  format: md
 ---
 
 This example walks you through building a basic distributed counter app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. The app allows users to create counters that anyone can increment, but only the owner can reset. 
@@ -62,7 +64,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 :::
 
-{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/Move.toml}
+{@inject: ./ts-sdk-ref/move/counter/Move.toml}
 
 ### `Counter` struct
 
@@ -76,23 +78,23 @@ module counter::counter {
 
 Add the `Counter` struct and elements described in the following sections to the module. 
 
-{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#struct=Counter noComments}
+{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#struct=Counter noComments}
 
 - The `Counter` type stores the address of its `owner`, its current `value`, and its own `id`.
 
 ### Creating `Counter`
 
-{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=create noComments}
+{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#fun=create noComments}
 
 In the `create` function, a new `Counter` object is created and [shared](../../../concepts/object-ownership/shared.mdx). 
 
 ### Incrementing and resetting `Counter`
 
-{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=increment noComments}
+{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#fun=increment noComments}
 
 The `increment` function accepts a mutable reference to any shared `Counter` object and increments its `value` field.
 
-{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move#fun=set_value noComments}
+{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#fun=set_value noComments}
 
 The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. The `Counter` `owner` is the only one that can run this function.
 
@@ -106,7 +108,7 @@ Learn more about taking [object references as input](https://move-book.com/move-
 
 The final module should look like this
 
-{@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move noComments}
+{@inject: ./ts-sdk-ref/move/counter/sources/counter.move noComments}
 
 :::checkpoint
 
@@ -194,16 +196,21 @@ In this final part of the app example, you build a frontend (UI) that allows end
 To skip building the frontend and test out your newly deployed package, create this example using the following template and follow the instructions in the template's `README.md` file: 
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm create @mysten/dapp --template react-e2e-counter
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn create @mysten/dapp --template react-e2e-counter
-    ```
-  </TabItem>
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm create @mysten/dapp --template react-e2e-counter
+```
+
+</TabItem>
+
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn create @mysten/dapp --template react-e2e-counter
+```
+
+</TabItem>
 </Tabs>
 
 :::
@@ -236,16 +243,20 @@ The UI design consists of two parts:
 The first step is to set up the client app. Run the following command to scaffold a new app.
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm create @mysten/dapp --template react-client-dapp
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn create @mysten/dapp --template react-client-dapp
-    ```
-  </TabItem>
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm create @mysten/dapp --template react-client-dapp
+```
+
+</TabItem>
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn create @mysten/dapp --template react-client-dapp
+```
+
+</TabItem>
 </Tabs>
 
 ### Install new dependencies
@@ -253,36 +264,48 @@ The first step is to set up the client app. Run the following command to scaffol
 This app uses the `react-spinners` package for icons. Install it by running the following command:
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm add react-spinners
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn add react-spinners
-    ```
-  </TabItem>
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm add react-spinners
+```
+
+</TabItem>
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn add react-spinners
+```
+
+</TabItem>
 </Tabs>
 
 ### Connecting your deployed package {#connecting-your-package}
 
 <details>
-  <summary>
-    Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
-  </summary>
-  ```ts
-    export const DEVNET_COUNTER_PACKAGE_ID = "0xTODO";
-    export const TESTNET_COUNTER_PACKAGE_ID = "0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa";
-    export const MAINNET_COUNTER_PACKAGE_ID = "0xTODO";
-  ```
+<summary>
+
+Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
+
+</summary>
+
+```ts
+export const DEVNET_COUNTER_PACKAGE_ID = "0xTODO";
+export const TESTNET_COUNTER_PACKAGE_ID = "0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa";
+export const MAINNET_COUNTER_PACKAGE_ID = "0xTODO";
+```
+
 </details>
 
 <details>
-  <summary>
-    Update the `src/networkConfig.ts` file to include the `packageID` constants.
-  </summary>
-  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/networkConfig.ts noComments}
+<summary>
+
+Update the `src/networkConfig.ts` file to include the `packageID` constants.
+
+</summary>
+
+{@inject: ./ts-sdk-ref/src/networkConfig.ts noComments}
+
 </details>
 
 ### Creating `Counter`
@@ -290,49 +313,57 @@ This app uses the `react-spinners` package for icons. Install it by running the 
 You need a way to create a new `Counter` object. 
 
 <details>
-  <summary>
-    Create `src/CreateCounter.tsx` and add the following code:
-  </summary>
-  ```tsx
-    import { Button, Container } from "@radix-ui/themes";
-    import { useState } from "react";
-    import ClipLoader from "react-spinners/ClipLoader";
+<summary>
 
-    export function CreateCounter({
-      onCreated,
-    }: {
-      onCreated: (id: string) => void;
-    }) {
-      const [waitingForTxn, setWaitingForTxn] = useState(false);
+Create `src/CreateCounter.tsx` and add the following code:
 
-      function create() {
-        // TODO
-      }
+</summary>
 
-      return (
-        <Container>
-          <Button
-            size="3"
-            onClick={() => {
-              create();
-            }}
-            disabled={waitingForTxn}
-          >
-            {waitingForTxn ? <ClipLoader size={20} /> : "Create Counter"}
-          </Button>
-        </Container>
-      );
+```tsx
+  import { Button, Container } from "@radix-ui/themes";
+  import { useState } from "react";
+  import ClipLoader from "react-spinners/ClipLoader";
+
+  export function CreateCounter({
+    onCreated,
+  }: {
+    onCreated: (id: string) => void;
+  }) {
+    const [waitingForTxn, setWaitingForTxn] = useState(false);
+
+    function create() {
+      // TODO
     }
-  ```
+
+    return (
+      <Container>
+        <Button
+          size="3"
+          onClick={() => {
+            create();
+          }}
+          disabled={waitingForTxn}
+        >
+          {waitingForTxn ? <ClipLoader size={20} /> : "Create Counter"}
+        </Button>
+      </Container>
+    );
+  }
+```
+
 </details>
 
 This component renders a button that enables the user to create a counter. Now, update your `create` function so that it calls the `create` function from your Move module.
 
 <details>
-  <summary>
-    Update the `create` function in the `src/CreateCounter.tsx` file:
-  </summary>
-  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/CreateCounter.tsx noComments}
+<summary>
+
+Update the `create` function in the `src/CreateCounter.tsx` file:
+
+</summary>
+
+{@inject: ./ts-sdk-ref/src/CreateCounter.tsx noComments}
+
 </details>
 
 The `create` function now creates a new Sui `Transaction` and calls the `create` function from your Move module. The PTB is then signed and executed via the `useSignAndExecuteTransaction` hook. The `onCreated` callback is called with the new counter's ID when the transaction is successful.
@@ -342,71 +373,75 @@ The `create` function now creates a new Sui `Transaction` and calls the `create`
 Now that your users can create counters, you need a way to route to them. Routing in a React app can be complex, but this example keeps it basic. 
 
 <details>
-  <summary>
-    Set up your `src/App.tsx` file so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
-  </summary>
-  ```tsx
-    import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
-    import { isValidSuiObjectId } from "@mysten/sui/utils";
-    import { Box, Container, Flex, Heading } from "@radix-ui/themes";
-    import { useState } from "react";
-    import { CreateCounter } from "./CreateCounter";
+<summary>
 
-    function App() {
-      const currentAccount = useCurrentAccount();
-      const [counterId, setCounter] = useState(() => {
-        const hash = window.location.hash.slice(1);
-        return isValidSuiObjectId(hash) ? hash : null;
-      });
+Set up your `src/App.tsx` file so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
 
-      return (
-        <>
-          <Flex
-            position="sticky"
+</summary>
+
+```tsx
+  import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
+  import { isValidSuiObjectId } from "@mysten/sui/utils";
+  import { Box, Container, Flex, Heading } from "@radix-ui/themes";
+  import { useState } from "react";
+  import { CreateCounter } from "./CreateCounter";
+
+  function App() {
+    const currentAccount = useCurrentAccount();
+    const [counterId, setCounter] = useState(() => {
+      const hash = window.location.hash.slice(1);
+      return isValidSuiObjectId(hash) ? hash : null;
+    });
+
+    return (
+      <>
+        <Flex
+          position="sticky"
+          px="4"
+          py="2"
+          justify="between"
+          style={{
+            borderBottom: "1px solid var(--gray-a2)",
+          }}
+        >
+          <Box>
+            <Heading>dApp Starter Template</Heading>
+          </Box>
+
+          <Box>
+            <ConnectButton />
+          </Box>
+        </Flex>
+        <Container>
+          <Container
+            mt="5"
+            pt="2"
             px="4"
-            py="2"
-            justify="between"
-            style={{
-              borderBottom: "1px solid var(--gray-a2)",
-            }}
+            style={{ background: "var(--gray-a2)", minHeight: 500 }}
           >
-            <Box>
-              <Heading>dApp Starter Template</Heading>
-            </Box>
-
-            <Box>
-              <ConnectButton />
-            </Box>
-          </Flex>
-          <Container>
-            <Container
-              mt="5"
-              pt="2"
-              px="4"
-              style={{ background: "var(--gray-a2)", minHeight: 500 }}
-            >
-              {currentAccount ? (
-                counterId ? (
-                  null
-                ) : (
-                  <CreateCounter
-                    onCreated={(id) => {
-                      window.location.hash = id;
-                      setCounter(id);
-                    }}
-                  />
-                )
+            {currentAccount ? (
+              counterId ? (
+                null
               ) : (
-                <Heading>Please connect your wallet</Heading>
-              )}
-            </Container>
+                <CreateCounter
+                  onCreated={(id) => {
+                    window.location.hash = id;
+                    setCounter(id);
+                  }}
+                />
+              )
+            ) : (
+              <Heading>Please connect your wallet</Heading>
+            )}
           </Container>
-        </>
-      );
-    }
+        </Container>
+      </>
+    );
+  }
 
-    export default App;
-  ```
+  export default App;
+```
+
 </details>
 
 This sets up your app to read the hash from the URL, and get the counter's ID if the hash is a valid object ID. Then, if you have a counter ID, it renders a `Counter` (which you define in the next step). If you don't have a counter ID, then it renders the `CreateCounter` button from the previous step. When a counter is created, you update the URL, and set the counter ID.
@@ -437,9 +472,12 @@ For your counter, you want to display three elements:
 - A reset button, which calls the `set_value` Move function with `0`. This is only shown if the current user owns the counter.
 
 <details>
-  <summary>
-    Add the following code to your `src/Counter.tsx` file:
-  </summary>
+<summary>
+
+Add the following code to your `src/Counter.tsx` file:
+
+</summary>
+
   ```tsx
     import {
       useCurrentAccount,
@@ -518,6 +556,7 @@ For your counter, you want to display three elements:
       return data.content.fields as { value: number; owner: string };
     }
   ```
+
 </details>
 
 This snippet has a few new concepts to examine. It uses the `useSuiClientQuery` hook to make the `getObject` RPC call. This returns a data object representing your counter. dApp Kit doesn't know which fields your counter object has, so define a `getCounterFields` helper that gets the counter fields, and adds a type-cast so that you can access the expected `value` and `owner` fields in your component.
@@ -525,10 +564,15 @@ This snippet has a few new concepts to examine. It uses the `useSuiClientQuery` 
 The code also adds an `executeMoveCall` function that still needs implementing. This works just like the `create` function you used to create the counter. Instead of using a callback prop like you did for `CreateCounter`, you can use the refetch provided by `useSuiClientQuery` to reload your `Counter` object after you've executed your PTB.
 
 <details>
-  <summary>
-    Update the `executeMoveCall` function in the `src/Counter.tsx` file:
-  </summary>
-  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/Counter.tsx noComments}
+
+<summary>
+
+Update the `executeMoveCall` function in the `src/Counter.tsx` file:
+
+</summary>
+
+{@inject: ./ts-sdk-ref/src/Counter.tsx noComments}
+
 </details>
 
 ### Updating the routing
@@ -536,10 +580,15 @@ The code also adds an `executeMoveCall` function that still needs implementing. 
 Now that you have a `Counter` component, you need to update your `App` component to render it when you have a counter ID.
 
 <details>
-  <summary>
-    Update the `src/App.tsx` file to render the `Counter` component when you have a counter ID:
-  </summary>
-  {@inject: github:MystenLabs/ts-sdks/packages/create-dapp/templates/react-e2e-counter/src/App.tsx noComments}
+
+<summary>
+
+Update the `src/App.tsx` file to render the `Counter` component when you have a counter ID:
+
+</summary>
+
+{@inject: ./ts-sdk-ref/src/App.tsx noComments}
+
 </details>
 
 :::checkpoint

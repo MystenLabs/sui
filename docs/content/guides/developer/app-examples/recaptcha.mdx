@@ -2,6 +2,8 @@
 title: Prevent Bots
 description: Write and deploy a smart contract in Move that uses reCAPTCHA to verify users are human (and not bots) before they interact with the contract.
 draft: true
+mdx:
+  format: md
 ---
 
 This guide shows you how to write and deploy a smart contract in Move that uses reCAPTCHA to verify users are human (and not bots) before they interact with the contract. CAPTCHA is a method of bot mitigation that requires you to pass a challenge test to prove that you are human. CAPTCHA tests are effective in preventing bots from performing tasks, but the tests can become annoying or frustrating for legitimate users if they are too difficult or frequent. reCAPTCHA is a form of CAPTCHA testing.
@@ -94,7 +96,7 @@ fun init(ctx: &mut TxContext) {
 
 - The `Interaction` struct is used to define the data that is emitted as an event when a user successfully interacts with the smart contract. The `Interaction` event has two fields: the sender's address and the timestamp in milliseconds. The sender's address is the account that initiated the interaction, and the timestamp is the current time when the event is triggered.
 - The `Registry` struct stores the mapping of the user’s address to the expiration time of the eligibility to interact with the smart contract. It also has a `window` field that specifies the length of the time window in milliseconds. The time window is the period of time that the user is eligible to interact with the smart contract after passing the reCAPTCHA test.
-- The [`init` function](concepts/sui-move-concepts/init.mdx) creates a [shared object](concepts/object-ownership/shared.mdx) for the `Registry`. The function is called when the smart contract is deployed to the blockchain. The function creates a new registry object with a unique id and sets the time window to the constant value.
+- The [`init` function](../../../concepts/sui-move-concepts.mdx) creates a [shared object](concepts/object-ownership/shared.mdx) for the `Registry`. The function is called when the smart contract is deployed to the blockchain. The function creates a new registry object with a unique id and sets the time window to the constant value.
 
 So far, you've set up the data structures within the module.
 Now, create a function that verifies the message
