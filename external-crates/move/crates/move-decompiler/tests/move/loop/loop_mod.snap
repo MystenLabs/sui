@@ -23,7 +23,7 @@ module loop_mod {
     }
 
     public fun loop_0 () {
-        while(*l0) {
+        while(        *l0) {
             do_0(l0)
             continue;
         }
@@ -33,7 +33,7 @@ module loop_mod {
 
     public fun loop_1 () {
         do_0(l0)
-        while(*l0) {
+        while(        *l0) {
             do_1(l0)
             continue;
         }
