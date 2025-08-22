@@ -124,6 +124,28 @@ impl DynamicField {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
+    /// Access dynamic fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+        self.super_.multi_get_dynamic_fields(ctx, keys).await
+    }
+
+    /// Access dynamic object fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_object_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+        self.super_.multi_get_dynamic_object_fields(ctx, keys).await
+    }
+
     /// The Base64-encoded BCS serialize of this object, as a `MoveObject`.
     pub(crate) async fn move_object_bcs(
         &self,
