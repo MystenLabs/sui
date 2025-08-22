@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // This code replaces the @docusaurus-plugin-include community plugin
-// it handles {@include: } and {@inject: } embeds 
+// it handles {@include: } and {@inject: } embeds
 // For inject, it uses the same logic as the custom inject-code plugin
 // and supports #fun, #var, #struct selection.
 
@@ -10,7 +10,6 @@
 // so that pages with HTML content like the auto-gen pages
 // get rendered properly
 // and that any page with markdownX elements get rendered as such
-
 
 const fs = require("fs");
 const path = require("path");
@@ -29,7 +28,6 @@ const { gfm, gfmHtml } = require("micromark-extension-gfm");
 const { directive } = require("micromark-extension-directive");
 const { directiveFromMarkdown } = require("mdast-util-directive");
 
-
 // Directories with heavy Markdown/HTML that should bypass normal MDX parsing
 function heavyHtmlDirs(docsDir) {
   return [
@@ -40,17 +38,19 @@ function heavyHtmlDirs(docsDir) {
 
 // ---------- Helpers ----------
 
-
 function fixAngleBracketAutolinksInHtml(html) {
   // Turn <https://…> (and &lt;https://…&gt;) into clickable anchors.
   // Preserve a trailing punctuation char if present.
   return html
-    .replace(/<(https?:\/\/[^\s<>")]+)>([.,;:!?)]?)/g,
-             '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>$2')
-    .replace(/&lt;(https?:\/\/[^\s<>"\')]+)&gt;([.,;:!?)]?)/g,
-             '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>$2');
+    .replace(
+      /<(https?:\/\/[^\s<>")]+)>([.,;:!?)]?)/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>$2',
+    )
+    .replace(
+      /&lt;(https?:\/\/[^\s<>"\')]+)&gt;([.,;:!?)]?)/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>$2',
+    );
 }
-
 
 function containsAdmonition(md) {
   return /^:::(?:info|note|tip|warning|danger|caution)(?:\s|$)/m.test(md);
@@ -63,8 +63,12 @@ function isInsideDir(filePathAbs, dirAbs) {
 
 function parseMarkdownToNodes(markdownText) {
   const tree = fromMarkdown(markdownText, {
-    extensions: [mdxjs(), gfm(), directive()],              
-    mdastExtensions: [mdxFromMarkdown(), gfmFromMarkdown(), directiveFromMarkdown()],
+    extensions: [mdxjs(), gfm(), directive()],
+    mdastExtensions: [
+      mdxFromMarkdown(),
+      gfmFromMarkdown(),
+      directiveFromMarkdown(),
+    ],
   });
   return tree.children || [];
 }
@@ -76,8 +80,11 @@ function stripYamlFrontMatter(text) {
 
 // Convert Markdown to HTML with GFM so links/headings/tables render correctly
 function markdownToHtml(md) {
-  return micromark(md, { allowDangerousHtml: true,  
-  extensions: [gfm()], htmlExtensions: [gfmHtml()] });
+  return micromark(md, {
+    allowDangerousHtml: true,
+    extensions: [gfm()],
+    htmlExtensions: [gfmHtml()],
+  });
 }
 
 // Build an mdxJsxFlowElement:
@@ -138,7 +145,7 @@ function convertKramdownHeadingIds(md) {
     (_, indent, hashes, content, id) => {
       const level = hashes.length;
       return `${indent}<h${level} id="${id}">${content}</h${level}>`;
-    }
+    },
   );
 }
 
@@ -149,12 +156,12 @@ function convertNamedAnchorHeadingPairs(md) {
     (_, id, hashes, content) => {
       const level = hashes.length;
       return `<h${level} id="${id}">${content}</h${level}>`;
-    }
+    },
   );
   // Fallback: anchor + plain title (no hashes) -> default to <h3>
   out = out.replace(
     /<a\s+name="([^"]+)"\s*><\/a>\s*\n+\s*(?!(?:[*-]|\d+\.)\s|#{1,6}\s|<|```)\s*([^\n{<][^{}\n]*?)\s*$/gm,
-    (_, id, content) => `<h3 id="${id}">${content}</h3>`
+    (_, id, content) => `<h3 id="${id}">${content}</h3>`,
   );
   return out;
 }
@@ -163,7 +170,7 @@ function convertNamedAnchorHeadingPairs(md) {
 function convertLooseKramdownIds(md) {
   return md.replace(
     /^(\s{0,3})(?!(?:[*-]|\d+\.)\s)(?!<)(?!#{1,6}\s)([^\n{<][^{}\n]*?)\s*\{#([A-Za-z0-9_.:\-]+)\}\s*$/gm,
-    (_, indent, text, id) => `${indent}<h3 id="${id}">${text}</h3>`
+    (_, indent, text, id) => `${indent}<h3 id="${id}">${text}</h3>`,
   );
 }
 
@@ -178,14 +185,22 @@ function normalizeFrameworkMarkdown(md) {
 function languageFromExt(file) {
   const ext = (file.split(".").pop() || "").toLowerCase();
   switch (ext) {
-    case "lock": return "toml";
-    case "sh": return "shell";
-    case "mdx": return "markdown";
-    case "tsx": return "ts";
-    case "rs": return "rust";
-    case "move": return "move";
-    case "prisma": return "ts";
-    default: return ext || "text";
+    case "lock":
+      return "toml";
+    case "sh":
+      return "shell";
+    case "mdx":
+      return "markdown";
+    case "tsx":
+      return "ts";
+    case "rs":
+      return "rust";
+    case "move":
+      return "move";
+    case "prisma":
+      return "ts";
+    default:
+      return ext || "text";
   }
 }
 
@@ -198,10 +213,9 @@ function isExcludedPath(absPath, excludePaths = []) {
 function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
   if (/^https?:\/\//i.test(specPath)) return specPath;
   if (typeof specPath === "string" && specPath.trim().startsWith("#")) {
-  console.warn(`[remark-includes] Skipping anchor-only include: ${specPath}`);
-  return null;
+    console.warn(`[remark-includes] Skipping anchor-only include: ${specPath}`);
+    return null;
   }
-
 
   const parts = specPath.split("/");
   if (parts[0].startsWith("github:")) {
@@ -227,7 +241,9 @@ function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
 
   // Back-compat: skip legacy framework path in includes (prevents loops)
   if (absPath.includes(path.join("references", "framework"))) {
-    console.warn(`[remark-includes] Skipping excluded framework path: ${absPath}`);
+    console.warn(
+      `[remark-includes] Skipping excluded framework path: ${absPath}`,
+    );
     return null;
   }
 
@@ -240,12 +256,18 @@ async function fetchHttps(url) {
     const go = (target, redirects = 0) => {
       https
         .get(target, (res) => {
-          if ([301, 302, 303, 307, 308].includes(res.statusCode || 0) && res.headers.location) {
-            if (redirects >= maxRedirects) return reject(new Error("Too many redirects: " + target));
+          if (
+            [301, 302, 303, 307, 308].includes(res.statusCode || 0) &&
+            res.headers.location
+          ) {
+            if (redirects >= maxRedirects)
+              return reject(new Error("Too many redirects: " + target));
             return go(res.headers.location, redirects + 1);
           }
           if (res.statusCode !== 200) {
-            console.error(`[remark-includes] Failed to fetch ${target}: ${res.statusCode}`);
+            console.error(
+              `[remark-includes] Failed to fetch ${target}: ${res.statusCode}`,
+            );
             return resolve(`Error loading content`);
           }
           res.setEncoding("utf8");
@@ -276,7 +298,9 @@ function splitPathMarker(spec) {
 }
 
 function getMarkerName(mark, key) {
-  return mark && mark.includes(key) ? mark.substring(mark.indexOf(key) + key.length).trim() : null;
+  return mark && mark.includes(key)
+    ? mark.substring(mark.indexOf(key) + key.length).trim()
+    : null;
 }
 
 function escapeRegex(s) {
@@ -287,25 +311,73 @@ function escapeRegex(s) {
 
 function extractDocsTagBlock(fullText, markerWithHash) {
   const tag = markerWithHash.trim();
-  const startRe = new RegExp(`^\\s*//\\s*docs::\\s*${escapeRegex(tag)}(?:\\s+.*)?$`, "m");
-  const endReWithClosers = new RegExp(
-    `^\\s*//\\s*docs::/\\s*${escapeRegex(tag)}\\s*([)};:]*)\\s*(?:.*)?$`,
-    "m"
+  // Capture the content between closing and opening docs tags.
+  // Account for any )}; characters that might be added to the closing tag.
+  // These characters are used to add closing syntax - useful when
+  // you want to capture only first part of a code snippet.
+  // Intentionally forcing the closing docs tag.
+  const docTagRe = new RegExp(
+    `\\/\\/\\s?docs::${escapeRegex(tag)}\\b[^\\n]*\\n([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?${escapeRegex(tag)}\\b(?<closers>[)};]*)`,
+    "m",
   );
-  const startMatch = startRe.exec(fullText);
-  if (!startMatch) return { ok: false, content: `// Section '${tag}' not found` };
-  const afterStartIdx = startMatch.index + startMatch[0].length;
-  const tail = fullText.slice(afterStartIdx);
-  const endMatch = endReWithClosers.exec(tail);
-  if (!endMatch) return { ok: false, content: `// Section '${tag}' end not found` };
-  const block = tail.slice(0, endMatch.index);
-  const closers = endMatch[1] || "";
-  return { ok: true, content: block + closers };
+  const matchTaggedContent = docTagRe.exec(fullText);
+  if (!matchTaggedContent) {
+    return {
+      ok: false,
+      content: `// Section '${tag}' not found or is not closed properly`,
+    };
+  }
+  let taggedContent = matchTaggedContent[1];
+
+  const pauseTagRe = new RegExp(
+    `^[\\t ]*\\/\\/[\\t ]*docs::${escapeRegex(tag)}-pause[\\t ]*$[\\s\\S]*?^[\\t ]*\\/\\/[\\t ]*docs::${escapeRegex(tag)}-resume[\\t ]*\\n?`,
+    "gm",
+  );
+
+  taggedContent = taggedContent.replace(pauseTagRe, "");
+
+  const closers =
+    (matchTaggedContent.groups && matchTaggedContent.groups.closers) ||
+    matchTaggedContent[2] ||
+    "";
+  var closing = "";
+  // Add the optional closing characters with proper spacing.
+  if (/[)};]+/.test(closers)) {
+    const closingTotal = closers.length;
+    let closingArray = [];
+    for (let i = 0; i < closingTotal; i++) {
+      const currentChar = closers[i];
+      const nextChar = closers[i + 1];
+
+      if (nextChar === ";") {
+        closingArray.push(currentChar + nextChar);
+        i++;
+      } else {
+        closingArray.push(currentChar);
+      }
+    }
+    const totClosings = closingArray.length;
+
+    // Process any closing elements added in the closing comment of source code
+    for (let j = 0; j < totClosings; j++) {
+      let space = "  ".repeat(totClosings - 1 - j);
+      closing += `\n${space}${closingArray[j]}`;
+    }
+  }
+  taggedContent = utils.removeLeadingSpaces(taggedContent + closing);
+
+  return { ok: true, content: taggedContent };
 }
 
 // ---------- {@inject} (code snippets remain as CodeBlock) ----------
 
-async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []) {
+async function processInject(
+  spec,
+  opts,
+  docsDir,
+  baseAbsPath,
+  excludePaths = [],
+) {
   const { file: specFile, marker } = splitPathMarker(spec);
   const language = languageFromExt(specFile);
   const isMove = language === "move";
@@ -313,14 +385,21 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
   const isRust = language === "rust";
 
   const hideTitle = /deepbook-ref|ts-sdk-ref/.test(specFile);
-  let titleLabel = "", cleanedSpec = "", titleUrl = "";
+  let titleLabel = "",
+    cleanedSpec = "",
+    titleUrl = "";
   if (!hideTitle) {
     titleLabel = specFile.replace(/^(\.\/|\.\.\/)+/, "");
     cleanedSpec = specFile.replace(/^[.\/]+/, "");
     titleUrl = `https://github.com/MystenLabs/sui/blob/main/${cleanedSpec}`;
   }
 
-  const fetchPath = buildFetchPath(specFile, docsDir, baseAbsPath, excludePaths);
+  const fetchPath = buildFetchPath(
+    specFile,
+    docsDir,
+    baseAbsPath,
+    excludePaths,
+  );
 
   let fileContent;
   if (/^https?:\/\//.test(fetchPath)) {
@@ -375,7 +454,10 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           funContent.push(utils.removeLeadingSpaces(funMatch[0], pre));
         }
       }
-      fileContent = funContent.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+      fileContent = funContent
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
     } else if (structName) {
       const structs = structName.split(",");
       let structContent = [];
@@ -394,7 +476,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           const pre = utils.capturePrepend(structMatch, fileContent);
           structContent.push(utils.removeLeadingSpaces(structMatch[0], pre));
         } else {
-          fileContent = "Struct not found. If code is formatted correctly, consider using code comments instead.";
+          fileContent =
+            "Struct not found. If code is formatted correctly, consider using code comments instead.";
         }
       }
       fileContent = structContent.join("\n").trim();
@@ -410,7 +493,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           let pre = utils.capturePrepend(traitMatch, fileContent);
           traitContent.push(utils.removeLeadingSpaces(traitMatch[0], pre));
         } else {
-          fileContent = "Struct not found. If code is formatted correctly, consider using code comments instead.";
+          fileContent =
+            "Struct not found. If code is formatted correctly, consider using code comments instead.";
         }
       }
       fileContent = traitContent.join("\n").trim();
@@ -430,18 +514,30 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           const endRE = new RegExp(endText, "m");
           const endMatch = endRE.exec(start);
           let pre = utils.capturePrepend(mFun, fileContent);
-          out.push(utils.removeLeadingSpaces(start.slice(0, endMatch.index + endMatch[0].length), pre));
+          out.push(
+            utils.removeLeadingSpaces(
+              start.slice(0, endMatch.index + endMatch[0].length),
+              pre,
+            ),
+          );
         } else if (mVar) {
           let pre = utils.capturePrepend(mVar, fileContent);
           out.push(utils.removeLeadingSpaces(mVar[0], pre));
         } else {
-          fileContent = "Variable not found. If code is formatted correctly, consider using code comments instead.";
+          fileContent =
+            "Variable not found. If code is formatted correctly, consider using code comments instead.";
         }
       } else {
         for (let v of names) {
           v = v.trim();
-          const shortRe = new RegExp(`^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}\\b.*?\\)?\\s?=.*;`, "m");
-          const longRe = new RegExp(`^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}\\b.*?\\)?\\s?= \\{[^}]*\\};\\s*$`, "m");
+          const shortRe = new RegExp(
+            `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}\\b.*?\\)?\\s?=.*;`,
+            "m",
+          );
+          const longRe = new RegExp(
+            `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}\\b.*?\\)?\\s?= \\{[^}]*\\};\\s*$`,
+            "m",
+          );
           const mShort = shortRe.exec(fileContent);
           const mLong = longRe.exec(fileContent);
           const m = mShort || mLong;
@@ -449,7 +545,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
             let pre = utils.capturePrepend(m, fileContent);
             out.push(utils.removeLeadingSpaces(m[0], pre));
           } else {
-            fileContent = "Variable not found. If code is formatted correctly, consider using code comments instead.";
+            fileContent =
+              "Variable not found. If code is formatted correctly, consider using code comments instead.";
           }
         }
       }
@@ -466,7 +563,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           let pre = utils.capturePrepend(m, fileContent);
           out.push(utils.removeLeadingSpaces(m[0], pre));
         } else {
-          fileContent = "Use statement not found. If code is formatted correctly, consider using code comments instead.";
+          fileContent =
+            "Use statement not found. If code is formatted correctly, consider using code comments instead.";
         }
       }
       fileContent = out.join("\n").trim();
@@ -474,20 +572,27 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
       const components = getMarkerName(marker, "#component=").split(",");
       let out = [];
       for (let comp of components) {
-        let name = comp, element = "", ordinal = "";
+        let name = comp,
+          element = "",
+          ordinal = "";
         if (comp.includes(":")) {
           const parts = comp.split(":");
-          name = parts[0]; element = parts[1]; ordinal = parts[2] || "";
+          name = parts[0];
+          element = parts[1];
+          ordinal = parts[2] || "";
         }
         const compStr = `^( *)(export (default )?)?function \\b${escapeRegex(name)}\\b[\\s\\S]*?\\n\\1\\}`;
         const re = new RegExp(compStr, "ms");
         const m = re.exec(fileContent);
         if (m) {
           if (element) {
-            const elRe = new RegExp(`^( *)\\<${escapeRegex(element)}\\b[\\s\\S]*?\\<\\/${escapeRegex(element)}\\>`, "msg");
+            const elRe = new RegExp(
+              `^( *)\\<${escapeRegex(element)}\\b[\\s\\S]*?\\<\\/${escapeRegex(element)}\\>`,
+              "msg",
+            );
             let keep = [1];
             if (ordinal.includes("-") && !ordinal.includes("&")) {
-              const [a, b] = ordinal.split("-").map(Number);  // (typo prevention)
+              const [a, b] = ordinal.split("-").map(Number); // (typo prevention)
             }
           } else {
             let pre = utils.capturePrepend(m, fileContent);
@@ -505,13 +610,17 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
         const pre = utils.capturePrepend(m, fileContent);
         fileContent = utils.removeLeadingSpaces(m[0], pre);
       } else {
-        fileContent = "Module not found. If code is formatted correctly, consider using code comments instead.";
+        fileContent =
+          "Module not found. If code is formatted correctly, consider using code comments instead.";
       }
     } else if (getMarkerName(marker, "#enum=")) {
       const enums = getMarkerName(marker, "#enum=").split(",");
       let out = [];
       for (let e of enums) {
-        const re = new RegExp(`^( *)(export)? enum \\b${escapeRegex(e)}\\b\\s*\\{[\\s\\S]*?\\}`, "m");
+        const re = new RegExp(
+          `^( *)(export)? enum \\b${escapeRegex(e)}\\b\\s*\\{[\\s\\S]*?\\}`,
+          "m",
+        );
         const m = re.exec(fileContent);
         if (m) out.push(utils.removeLeadingSpaces(m[0]));
       }
@@ -520,14 +629,20 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
       const types = getMarkerName(marker, "#type=").split(",");
       let out = [];
       for (let t of types) {
-        const startRe = new RegExp(`^( *)(export )?type \\b${escapeRegex(t)}\\b`, "m");
+        const startRe = new RegExp(
+          `^( *)(export )?type \\b${escapeRegex(t)}\\b`,
+          "m",
+        );
         const m = startRe.exec(fileContent);
         if (m) {
           let sub = fileContent.slice(m.index);
           const spaces = m[1] || "";
           const endRe = new RegExp(`^${spaces}\\};`, "m");
           const e = endRe.exec(sub);
-          if (e) out.push(utils.removeLeadingSpaces(sub.slice(0, e.index + e[0].length)));
+          if (e)
+            out.push(
+              utils.removeLeadingSpaces(sub.slice(0, e.index + e[0].length)),
+            );
           else out.push("Error capturing type declaration.");
         }
       }
@@ -543,7 +658,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
           let pre = utils.capturePrepend(m, fileContent);
           out.push(utils.removeLeadingSpaces(m[0], pre));
         } else {
-          fileContent = "Struct not found. If code is formatted correctly, consider using code comments instead.";
+          fileContent =
+            "Struct not found. If code is formatted correctly, consider using code comments instead.";
         }
       }
       fileContent = out.join("\n").trim();
@@ -555,8 +671,13 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
   }
 
   const processed = utils.processOptions(fileContent, opts);
-  const titleProp = hideTitle ? "" : ` title={<a href="${titleUrl}" target="_blank" rel="noopener noreferrer">${titleLabel}</a>}`;
-  return `<CodeBlock language="${language}"${titleProp}>{${JSON.stringify(processed)}}` + `</CodeBlock>`;
+  const titleProp = hideTitle
+    ? ""
+    : ` title={<a href="${titleUrl}" target="_blank" rel="noopener noreferrer">${titleLabel}</a>}`;
+  return (
+    `<CodeBlock language="${language}"${titleProp}>{${JSON.stringify(processed)}}` +
+    `</CodeBlock>`
+  );
 }
 
 // ---------- Nested directive expansion (only for {@include} text) ----------
@@ -564,7 +685,8 @@ async function processInject(spec, opts, docsDir, baseAbsPath, excludePaths = []
 const RE_INCLUDE_TXT = /^\s*\{@include:\s*([^\s}]+)\s*\}\s*$/;
 const RE_INCLUDE_HTML = /^\s*<!--\s*\{@include:\s*([^\s}]+)\s*\}\s*-->\s*$/;
 const RE_INJECT_TXT = /^\s*\{@inject:\s*([^\s}]+)(?:\s+([^}]*?))?\s*\}\s*$/;
-const RE_INJECT_HTML = /^\s*<!--\s*\{@inject:\s*([^\s}]+)(?:\s+([^}]*?))?\s*\}\s*-->\s*$/;
+const RE_INJECT_HTML =
+  /^\s*<!--\s*\{@inject:\s*([^\s}]+)(?:\s+([^}]*?))?\s*\}\s*-->\s*$/;
 
 const RE_INCLUDE_INLINE = /{\s*@include:\s*([^\s}]+)\s*}/g;
 const RE_INCLUDE_INLINE_HTML = /<!--\s*{\s*@include:\s*([^\s}]+)\s*}\s*-->/g;
@@ -573,7 +695,14 @@ function stripImportStatements(text) {
   return text.replace(/^[ \t]*import\s+.*$/gm, "").replace(/\n{3,}/g, "\n\n");
 }
 
-async function expandDirectivesInText(markdown, docsDir, baseAbsPath, excludePaths = [], depth = 0, seenStack = []) {
+async function expandDirectivesInText(
+  markdown,
+  docsDir,
+  baseAbsPath,
+  excludePaths = [],
+  depth = 0,
+  seenStack = [],
+) {
   const MAX_PASSES = 4; // keep small to avoid runaway recursion
   const MAX_DEPTH = 10;
   if (depth > MAX_DEPTH) return markdown;
@@ -618,13 +747,26 @@ async function expandDirectivesInText(markdown, docsDir, baseAbsPath, excludePat
       if (seenStack.includes(key)) return included;
       const nextSeen = seenStack.concat(key);
 
-      const expanded = await expandDirectivesInText(included, docsDir, newBase, excludePaths, depth + 1, nextSeen);
+      const expanded = await expandDirectivesInText(
+        included,
+        docsDir,
+        newBase,
+        excludePaths,
+        depth + 1,
+        nextSeen,
+      );
       return stripImportStatements(expanded);
     };
 
     const beforeInclude = text;
-    text = await replaceAllAsyncInline(text, RE_INCLUDE_INLINE, async (m) => expandIncludeSpec((m[1] || "").trim()));
-    text = await replaceAllAsyncInline(text, RE_INCLUDE_INLINE_HTML, async (m) => expandIncludeSpec((m[1] || "").trim()));
+    text = await replaceAllAsyncInline(text, RE_INCLUDE_INLINE, async (m) =>
+      expandIncludeSpec((m[1] || "").trim()),
+    );
+    text = await replaceAllAsyncInline(
+      text,
+      RE_INCLUDE_INLINE_HTML,
+      async (m) => expandIncludeSpec((m[1] || "").trim()),
+    );
     if (text !== beforeInclude) changed = true;
     if (!changed) break;
   }
@@ -648,8 +790,9 @@ module.exports = function remarkIncludes(options) {
     for (const dirAbs of heavyDirs) {
       if (isInsideDir(normalizedFilePath, dirAbs)) {
         let raw = String(file.value ?? "");
-        try { raw = fs.readFileSync(normalizedFilePath, "utf8"); } catch (_) {}
-
+        try {
+          raw = fs.readFileSync(normalizedFilePath, "utf8");
+        } catch (_) {}
 
         const normalized = normalizeFrameworkMarkdown(raw);
         let html = markdownToHtml(normalized);
@@ -657,7 +800,6 @@ module.exports = function remarkIncludes(options) {
         const safeHtml = fixAnchorOnlyUrlsInHtml(html);
 
         tree.children = [jsxDivWithInlineHtml(safeHtml)];
-
 
         // Optional sentinel
         file.data = file.data || {};
@@ -677,25 +819,32 @@ module.exports = function remarkIncludes(options) {
       const value = node.value || "";
       let m;
 
-      if ((m = value.match(RE_INCLUDE_TXT)) || (m = value.match(RE_INCLUDE_HTML))) {
-      const spec = (m[1] || "").trim();
-      const { container, index } = pickBlockContainer(node, ancestors);
-      if (index >= 0) {
-        // 1) If it's anchor-only (#{...} or just #), drop the directive entirely.
-        if (!spec || spec[0] === "#") {
-          container.splice(index, 1);
-        } else {
-          replacements.push({ container, index, kind: "include", spec });
+      if (
+        (m = value.match(RE_INCLUDE_TXT)) ||
+        (m = value.match(RE_INCLUDE_HTML))
+      ) {
+        const spec = (m[1] || "").trim();
+        const { container, index } = pickBlockContainer(node, ancestors);
+        if (index >= 0) {
+          // 1) If it's anchor-only (#{...} or just #), drop the directive entirely.
+          if (!spec || spec[0] === "#") {
+            container.splice(index, 1);
+          } else {
+            replacements.push({ container, index, kind: "include", spec });
+          }
         }
+        return;
       }
-      return;
-    }
 
-      if ((m = value.match(RE_INJECT_TXT)) || (m = value.match(RE_INJECT_HTML))) {
+      if (
+        (m = value.match(RE_INJECT_TXT)) ||
+        (m = value.match(RE_INJECT_HTML))
+      ) {
         const spec = m[1].trim();
         const rest = (m[2] || "").trim();
         const { container, index } = pickBlockContainer(node, ancestors);
-        if (index >= 0) replacements.push({ container, index, kind: "inject", spec, rest });
+        if (index >= 0)
+          replacements.push({ container, index, kind: "inject", spec, rest });
         return;
       }
     });
@@ -706,30 +855,44 @@ module.exports = function remarkIncludes(options) {
 
       if (kind === "include") {
         // Read include, expand ONLY nested {@include}, then decide rendering path.
-        const fullPath = buildFetchPath(spec, docsDir, file.history?.[0] || file.path, excludeDirsAbs);
+        const fullPath = buildFetchPath(
+          spec,
+          docsDir,
+          file.history?.[0] || file.path,
+          excludeDirsAbs,
+        );
         const raw = await readSpec(fullPath);
-        const baseAbsPath = /^https?:\/\//.test(fullPath) ? (file.history?.[0] || file.path) : fullPath;
-        const expanded = await expandDirectivesInText(raw, docsDir, baseAbsPath, excludeDirsAbs);
+        const baseAbsPath = /^https?:\/\//.test(fullPath)
+          ? file.history?.[0] || file.path
+          : fullPath;
+        const expanded = await expandDirectivesInText(
+          raw,
+          docsDir,
+          baseAbsPath,
+          excludeDirsAbs,
+        );
 
         // Heavy include: normalize -> HTML -> inject via JSX
         if (fullPath && !/^https?:\/\//.test(fullPath)) {
           const abs = path.resolve(fullPath);
           if (heavyDirs.some((d) => isInsideDir(abs, d))) {
-              const expandedText = expanded;
-              // If include has an admonition, let Docusaurus' admonition plugin transform it.
-              // i.e., don't bypass to HTML — parse to MD AST so downstream plugins can run.
-              if (containsAdmonition(expandedText)) {
-                const nodes = parseMarkdownToNodes(stripImportStatements(expandedText));
-                container.splice(index, 1, ...nodes);
-                continue;
-              }
-
-              // Otherwise keep the fast heavy path (MD → HTML → inject)
-              let html = markdownToHtml(normalizeFrameworkMarkdown(expandedText));
-              html = fixAngleBracketAutolinksInHtml(html);
-              const safeHtml = fixAnchorOnlyUrlsInHtml(html);
-              container.splice(index, 1, jsxDivWithInlineHtml(safeHtml));
+            const expandedText = expanded;
+            // If include has an admonition, let Docusaurus' admonition plugin transform it.
+            // i.e., don't bypass to HTML — parse to MD AST so downstream plugins can run.
+            if (containsAdmonition(expandedText)) {
+              const nodes = parseMarkdownToNodes(
+                stripImportStatements(expandedText),
+              );
+              container.splice(index, 1, ...nodes);
               continue;
+            }
+
+            // Otherwise keep the fast heavy path (MD → HTML → inject)
+            let html = markdownToHtml(normalizeFrameworkMarkdown(expandedText));
+            html = fixAngleBracketAutolinksInHtml(html);
+            const safeHtml = fixAnchorOnlyUrlsInHtml(html);
+            container.splice(index, 1, jsxDivWithInlineHtml(safeHtml));
+            continue;
           }
         }
 
@@ -739,7 +902,13 @@ module.exports = function remarkIncludes(options) {
       } else {
         // {@inject}: produce JSX CodeBlock (title suppressed if deepbook-ref)
         const opts = r.rest ? r.rest.split(/\s+/).filter(Boolean) : [];
-        const jsx = await processInject(spec, opts, docsDir, file.history?.[0] || file.path, excludeDirsAbs);
+        const jsx = await processInject(
+          spec,
+          opts,
+          docsDir,
+          file.history?.[0] || file.path,
+          excludeDirsAbs,
+        );
         const nodes = parseMarkdownToNodes(jsx);
         container.splice(index, 1, ...nodes);
         needsCodeBlockImport = true;

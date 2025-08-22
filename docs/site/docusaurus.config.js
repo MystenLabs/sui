@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { themes } from "prism-react-renderer";
 import { fileURLToPath } from "url";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
-const npm2yarn = require('@docusaurus/remark-plugin-npm2yarn');
-import rehypeRawFiles from './src/rehype/rehype-raw-only.mjs';
-import rehypeTabsMd from './src/rehype/rehype-tabs.mjs';
-import rehypeFixAnchorUrls from './src/rehype/rehype-fix-anchor-urls.mjs';
+import rehypeRawFiles from "./src/rehype/rehype-raw-only.mjs";
+import rehypeTabsMd from "./src/rehype/rehype-tabs.mjs";
+import rehypeFixAnchorUrls from "./src/rehype/rehype-fix-anchor-urls.mjs";
+const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
@@ -23,11 +22,11 @@ const __dirname = path.dirname(__filename);
 const SIDEBARS_PATH = fileURLToPath(new URL("./sidebars.js", import.meta.url));
 
 const mdxPass = [
-  'mdxJsxFlowElement',
-  'mdxJsxTextElement',
-  'mdxFlowExpression',
-  'mdxTextExpression',
-  'mdxjsEsm',
+  "mdxJsxFlowElement",
+  "mdxJsxTextElement",
+  "mdxFlowExpression",
+  "mdxTextExpression",
+  "mdxjsEsm",
 ];
 
 require("dotenv").config();
@@ -59,33 +58,12 @@ const config = {
   onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
 
-  // Even if you don't use internationalization, you can use this field to set
-  // useful metadata like html lang. For example, if your site is Chinese, you
-  // may want to replace "en" with "zh-Hans".
-  /*  i18n: {
-    defaultLocale: "en",
-    locales: [
-      "en",
-      "el",
-      "fr",
-      "ko",
-      "tr",
-      "vi",
-      "zh-CN",
-      "zh-TW",
-    ],
-  },*/
   markdown: {
     format: "detect",
     mermaid: true,
   },
-  clientModules: [
-    require.resolve('./src/client/pushfeedback-toc.js'),
-  ],
+  clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
-    // ....
-    // path.resolve(__dirname, `./src/plugins/examples`),
-
     [
       "posthog-docusaurus",
       {
@@ -94,7 +72,6 @@ const config = {
         enableInDevelopment: false, // optional
       },
     ],
-    [path.resolve(__dirname, "src/plugins/inject-code"), {}],
     [
       "@graphql-markdown/docusaurus",
       {
@@ -108,31 +85,34 @@ const config = {
       },
     ],
     function stepHeadingLoader() {
-    return {
-      name: "step-heading-loader",
-      configureWebpack() {
-        return {
-          module: {
-            rules: [
-              {
-                test: /\.mdx?$/,         // run on .md and .mdx
-                enforce: "pre",          // make sure it runs BEFORE @docusaurus/mdx-loader
-                include: [
-                  // adjust these to match where your Markdown lives
-                  path.resolve(__dirname, "../content"),
-                ],
-                use: [
-                  {
-                    loader: path.resolve(__dirname, "./src/plugins/inject-code/stepLoader.js"),
-                  },
-                ],
-              },
-            ],
+      return {
+        name: "step-heading-loader",
+        configureWebpack() {
+          return {
+            module: {
+              rules: [
+                {
+                  test: /\.mdx?$/, // run on .md and .mdx
+                  enforce: "pre", // make sure it runs BEFORE @docusaurus/mdx-loader
+                  include: [
+                    // adjust these to match where your Markdown lives
+                    path.resolve(__dirname, "../content"),
+                  ],
+                  use: [
+                    {
+                      loader: path.resolve(
+                        __dirname,
+                        "./src/plugins/inject-code/stepLoader.js",
+                      ),
+                    },
+                  ],
+                },
+              ],
             },
-            };
-          },
-        };
-      },
+          };
+        },
+      };
+    },
     [
       "@graphql-markdown/docusaurus",
       {
@@ -150,7 +130,7 @@ const config = {
         },
       },
     ],
-    require.resolve('./src/plugins/tabs-md-client/index.mjs'),
+    require.resolve("./src/plugins/tabs-md-client/index.mjs"),
     async function myPlugin(context, options) {
       return {
         name: "docusaurus-tailwindcss",
@@ -170,7 +150,7 @@ const config = {
   presets: [
     [
       /** @type {import('@docusaurus/preset-classic').Options} */
-      'classic',
+      "classic",
       {
         docs: {
           path: "../content",
@@ -178,18 +158,6 @@ const config = {
           sidebarPath: SIDEBARS_PATH,
           // the double docs below is a fix for having the path set to ../content
           editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
-          /*disableVersioning: true,
-          lastVersion: "current",
-          versions: {
-            current: {
-              label: "Latest",
-              path: "/",
-            },
-          },
-          onlyIncludeVersions: [
-            "current",
-            "1.0.0",
-          ],*/
           exclude: [
             "**/snippets/**",
             "**/standards/deepbook-ref/**",
@@ -215,10 +183,8 @@ const config = {
             effortRemarkPlugin,
             betaRemarkPlugin,
           ],
-          beforeDefaultRehypePlugins: [
-            rehypeFixAnchorUrls,
-          ],
-          rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd ],
+          beforeDefaultRehypePlugins: [rehypeFixAnchorUrls],
+          rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd],
         },
         theme: {
           customCss: [
@@ -232,7 +198,7 @@ const config = {
   ],
 
   scripts: [
-    { src: './src/js/tabs-md.js', defer: true },
+    { src: "./src/js/tabs-md.js", defer: true },
     {
       src: "/js/clarity.js",
       async: true,
@@ -289,18 +255,6 @@ const config = {
             label: "References",
             to: "references",
           },
-
-          /*
-          {
-            type: "docsVersionDropdown",
-            position: "right",
-            dropdownActiveClassDisabled: true,
-          },
-          {
-            type: "localeDropdown",
-            position: "right",
-          },
-          */
         ],
       },
       footer: {
@@ -314,7 +268,7 @@ const config = {
       },
       codeblock: {
         showGithubLink: true,
-        githubLinkLabel: 'View on GitHub',
+        githubLinkLabel: "View on GitHub",
       },
       prism: {
         theme: lightCodeTheme,
