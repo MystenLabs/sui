@@ -96,7 +96,7 @@ $ cd simple-sui-indexer
 ##step Configure dependencies
 
 Replace your `Cargo.toml` code with the following configuration and save.
- 
+
 {@inject: examples/rust/basic-sui-indexer/Cargo.toml}
 
 The manifest now includes the following dependencies:
@@ -106,7 +106,7 @@ The manifest now includes the following dependencies:
 - `tokio`: Async runtime required by the framework.
 - `clap`: Command-line argument parsing for configuration.
 - `anyhow`: Error handling and async-trait for trait implementations.
-- `dotenvy`: Ingest `.env` file that stores your PostgreSQL URL. 
+- `dotenvy`: Ingest `.env` file that stores your PostgreSQL URL.
 
 ##step Create database
 
@@ -132,7 +132,7 @@ You can now set a variable to your database URL as it's used in following comman
 
 ```sh
 $ PSQL_URL=postgres://username@localhost:5432/sui_indexer
-``` 
+```
 
 You can now test your connection with the following command:
 
@@ -190,7 +190,7 @@ Use the `diesel migration` command at the root of your project to then generate 
 $ diesel migration generate transaction_digests
 ```
 
-You should now have a `migrations` folder in your project. There should be a subdirectory in this folder with the name format `YYYY-MM-DD-HHMMSS_transaction_digests`. This folder should contain the `up.sql` and `down.sql` files. 
+You should now have a `migrations` folder in your project. There should be a subdirectory in this folder with the name format `YYYY-MM-DD-HHMMSS_transaction_digests`. This folder should contain the `up.sql` and `down.sql` files.
 
 Open `up.sql` and replace its contents with the following code (using the actual folder name):
 
@@ -250,7 +250,7 @@ Key annotations:
 
 ##step Define the Handler struct in handler.rs
 
-Create a `handlers.rs` file in your `src` directory. 
+Create a `handlers.rs` file in your `src` directory.
 
 ```sh
 $ touch ./src/handlers.rs
@@ -384,7 +384,7 @@ Allow incoming network requests if your operating system requests it for the `ba
 
 :::
 
-If successful, your console informs you that the indexer is running. 
+If successful, your console informs you that the indexer is running.
 
 ##step Verify results
 
@@ -410,7 +410,7 @@ $ SELECT * FROM transaction_digests LIMIT 5;
 
 To confirm your data is accurate, copy any transaction digest from your database and verify it on SuiScan: [https://suiscan.xyz/testnet/home](https://suiscan.xyz/testnet/home)
 
-You've built a working custom indexer 🎉 
+You've built a working custom indexer 🎉
 
 The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
 
