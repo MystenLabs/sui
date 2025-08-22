@@ -1,1 +1,2 @@
-enums
+colors
+directions

@@ -1,0 +1,16 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+  Module: structs
+    Function: unpack (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = Unpack(reg_0)
+        Return(reg_1)
+
+
+    Function: unpack_bar (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1, reg_2 = Unpack(reg_0)
+        Return(reg_2, reg_1)
