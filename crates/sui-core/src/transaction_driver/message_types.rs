@@ -45,6 +45,8 @@ pub enum SubmitTxResponse {
         // Response should always include details for executed transactions.
         // TODO(fastpath): validate this field is always present and return an error during deserialization.
         details: Option<Box<ExecutedData>>,
+        // Whether the transaction was executed using fast path.
+        fast_path: bool,
     },
 }
 
@@ -55,9 +57,14 @@ impl fmt::Debug for SubmitTxResponse {
                 .debug_struct("Submitted")
                 .field("consensus_position", consensus_position)
                 .finish(),
-            Self::Executed { effects_digest, .. } => f
+            Self::Executed {
+                effects_digest,
+                fast_path,
+                ..
+            } => f
                 .debug_struct("Executed")
                 .field("effects_digest", &format_args!("{}", effects_digest))
+                .field("fast_path", fast_path)
                 .finish(),
         }
     }
@@ -81,10 +88,11 @@ impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
                 consensus_position: consensus_position.as_ref().try_into()?,
             }),
             Some(RawValidatorSubmitStatus::Executed(executed)) => {
-                let (effects_digest, details) = try_from_raw_executed_status(executed)?;
+                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
                 Ok(Self::Executed {
                     effects_digest,
                     details,
+                    fast_path,
                 })
             }
             None => Err(SuiError::GrpcMessageDeserializeError {
@@ -107,8 +115,9 @@ impl TryFrom<SubmitTxResponse> for RawSubmitTxResponse {
             SubmitTxResponse::Executed {
                 effects_digest,
                 details,
+                fast_path,
             } => {
-                let raw_executed = try_from_response_executed(effects_digest, details)?;
+                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
                 RawValidatorSubmitStatus::Executed(raw_executed)
             }
         };
@@ -156,6 +165,7 @@ pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
+        fast_path: bool,
     },
     // The transaction was rejected by consensus.
     Rejected {
@@ -174,9 +184,14 @@ pub enum WaitForEffectsResponse {
 impl fmt::Debug for WaitForEffectsResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Executed { effects_digest, .. } => f
+            Self::Executed {
+                effects_digest,
+                fast_path,
+                ..
+            } => f
                 .debug_struct("Executed")
                 .field("effects_digest", effects_digest)
+                .field("fast_path", fast_path)
                 .finish(),
             Self::Rejected { error } => f.debug_struct("Rejected").field("error", error).finish(),
             Self::Expired { epoch, round } => f
@@ -216,10 +231,11 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
     fn try_from(value: RawWaitForEffectsResponse) -> Result<Self, Self::Error> {
         match value.inner {
             Some(RawValidatorTransactionStatus::Executed(executed)) => {
-                let (effects_digest, details) = try_from_raw_executed_status(executed)?;
+                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
                 Ok(Self::Executed {
                     effects_digest,
                     details,
+                    fast_path,
                 })
             }
             Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
@@ -240,7 +256,7 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
 
 fn try_from_raw_executed_status(
     executed: RawExecutedStatus,
-) -> Result<(TransactionEffectsDigest, Option<Box<ExecutedData>>), SuiError> {
+) -> Result<(TransactionEffectsDigest, Option<Box<ExecutedData>>, bool), SuiError> {
     let effects_digest = bcs::from_bytes(&executed.effects_digest).map_err(|err| {
         SuiError::GrpcMessageDeserializeError {
             type_info: "RawWaitForEffectsResponse.effects_digest".to_string(),
@@ -291,7 +307,7 @@ fn try_from_raw_executed_status(
     } else {
         None
     };
-    Ok((effects_digest, details))
+    Ok((effects_digest, details, executed.fast_path))
 }
 
 fn try_from_raw_rejected_status(rejected: RawRejectedStatus) -> Result<Option<SuiError>, SuiError> {
@@ -354,8 +370,9 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
+                fast_path,
             } => {
-                let raw_executed = try_from_response_executed(effects_digest, details)?;
+                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
                 RawValidatorTransactionStatus::Executed(raw_executed)
             }
             WaitForEffectsResponse::Rejected { error } => {
@@ -373,6 +390,7 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
 fn try_from_response_executed(
     effects_digest: TransactionEffectsDigest,
     details: Option<Box<ExecutedData>>,
+    fast_path: bool,
 ) -> Result<RawExecutedStatus, SuiError> {
     let effects_digest = bcs::to_bytes(&effects_digest)
         .map_err(|err| SuiError::GrpcMessageSerializeError {
@@ -433,5 +451,6 @@ fn try_from_response_executed(
     Ok(RawExecutedStatus {
         effects_digest,
         details,
+        fast_path,
     })
 }

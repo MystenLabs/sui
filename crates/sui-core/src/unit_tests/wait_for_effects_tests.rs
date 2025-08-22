@@ -346,6 +346,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            fast_path: _,
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -374,6 +375,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            fast_path: _,
         } => {
             assert!(details.is_some());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -447,6 +449,7 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            fast_path: _,
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -513,6 +516,7 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            fast_path: _,
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -541,6 +545,7 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            fast_path: _,
         } => {
             let details = details.unwrap();
             assert_eq!(effects_digest, exec_effects.digest());
