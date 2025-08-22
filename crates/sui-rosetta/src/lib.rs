@@ -14,6 +14,7 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use tracing::info;
 
+use sui_rpc::client::Client as GrpcClient;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 
 use crate::errors::Error;
@@ -49,7 +50,7 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, client: SuiClient) -> Self {
+    pub fn new(env: SuiEnv, client: SuiClient, grpc_client: GrpcClient) -> Self {
         let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1000).unwrap());
         let blocks = Arc::new(CheckpointBlockProvider::new(
             client.clone(),
@@ -57,7 +58,7 @@ impl RosettaOnlineServer {
         ));
         Self {
             env,
-            context: OnlineServerContext::new(client, blocks, coin_cache),
+            context: OnlineServerContext::new(client, grpc_client, blocks, coin_cache),
         }
     }
 
