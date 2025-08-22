@@ -4,7 +4,10 @@ use move_stackless_bytecode_2::stackless::ast::{DataOp, RValue, RegId, Trivial};
 
 use crate::ast as Out;
 
-pub fn exp(block: move_stackless_bytecode_2::stackless::ast::BasicBlock, let_binds: &mut HashSet<RegId>) -> Out::Exp {
+pub fn exp(
+    block: move_stackless_bytecode_2::stackless::ast::BasicBlock,
+    let_binds: &mut HashSet<RegId>,
+) -> Out::Exp {
     use move_stackless_bytecode_2::stackless::ast::Instruction as SI;
     let mut map: BTreeMap<RegId, Out::Exp> = BTreeMap::new();
     let mut seq = Vec::new();
@@ -21,7 +24,7 @@ pub fn exp(block: move_stackless_bytecode_2::stackless::ast::BasicBlock, let_bin
                 rhs: RValue::Call { function, args },
             } => {
                 // Assign when right value is Call
-                if lhs.len() == 0 {
+                if lhs.is_empty() {
                     seq.push(Out::Exp::Call(
                         function.to_string(),
                         trivials(&mut map, args),
@@ -48,7 +51,7 @@ pub fn exp(block: move_stackless_bytecode_2::stackless::ast::BasicBlock, let_bin
                 }
             }
             SI::AssignReg {
-                lhs,
+                lhs: _,
                 rhs:
                     RValue::Data {
                         op:
@@ -56,15 +59,28 @@ pub fn exp(block: move_stackless_bytecode_2::stackless::ast::BasicBlock, let_bin
                             | DataOp::UnpackVariant
                             | DataOp::UnpackVariantImmRef
                             | DataOp::UnpackVariantMutRef,
-                        args,
+                        args: _,
                     },
             } => {
-                // Assign when right value is Data Op
-                //TODO
                 todo!()
             }
+            SI::AssignReg {
+                lhs: _,
+                rhs:
+                    RValue::Data {
+                        op: DataOp::WriteRef,
+                        args,
+                    },
+            } => seq.push(Out::Exp::Data {
+                op: DataOp::WriteRef,
+                args: trivials(&mut map, args),
+            }),
             SI::AssignReg { lhs, rhs } => {
-                assert!(lhs.len() == 1);
+                if lhs.is_empty() {
+                    panic!("Assign reg with empty lhs {:?}", rhs);
+                } else if lhs.len() > 1 {
+                    panic!("Assign reg with multiple lhs {:?} and rhs {:?}", lhs, rhs);
+                }
                 let rvalue = rvalue(&mut map, rhs);
                 let res = map.insert(lhs[0], rvalue);
                 assert!(res.is_none());
@@ -82,7 +98,7 @@ pub fn exp(block: move_stackless_bytecode_2::stackless::ast::BasicBlock, let_bin
 
             SI::Jump(_) => continue,
             SI::JumpIf { condition, .. } => seq.push(trivial(&mut map, condition)),
-            SI::VariantSwitch { cases } => todo!(),
+            SI::VariantSwitch { condition, .. } => seq.push(trivial(&mut map, condition)),
             SI::Nop | SI::Drop(_) | SI::NotImplemented(_) => continue,
         }
     }
@@ -93,7 +109,7 @@ pub fn exp(block: move_stackless_bytecode_2::stackless::ast::BasicBlock, let_bin
 fn rvalue(map: &mut BTreeMap<RegId, Out::Exp>, rvalue: RValue) -> Out::Exp {
     use move_stackless_bytecode_2::stackless::ast as S;
     match rvalue {
-        RValue::Call { function, args } => unreachable!(),
+        RValue::Call { .. } => unreachable!(),
         RValue::Primitive { op, args } => Out::Exp::Primitive {
             op,
             args: trivials(map, args),
@@ -128,7 +144,7 @@ fn trivial(map: &mut BTreeMap<RegId, Out::Exp>, triv: Trivial) -> Out::Exp {
     match triv {
         Trivial::Register(reg_id) => map
             .remove(&reg_id)
-            .expect(&format!("Register {reg_id} not found")),
+            .unwrap_or_else(|| panic!("Register {reg_id} not found")),
         Trivial::Immediate(value) => Out::Exp::Value(value),
     }
 }

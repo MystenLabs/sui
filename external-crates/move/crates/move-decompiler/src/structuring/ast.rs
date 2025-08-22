@@ -15,11 +15,6 @@ pub type Label = NodeIndex;
 pub type Code = (u64, bool);
 
 #[derive(Debug, Clone)]
-pub struct Block {
-    pub body: Vec<crate::ast::Exp>,
-}
-
-#[derive(Debug, Clone)]
 pub enum Input {
     Condition(Label, Code, Label, Label),
     Variants(Label, Code, Vec<Label>),
