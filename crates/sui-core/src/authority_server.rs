@@ -1177,8 +1177,7 @@ impl ValidatorService {
         ))
     }
 
-    // TODO(fastpath): Add metrics.
-    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, err, fields(consensus_position = ?request.consensus_position))]
+    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, err, fields(consensus_position = ?request.consensus_position, fast_path_effects = tracing::field::Empty))]
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
@@ -1214,6 +1213,7 @@ impl ValidatorService {
                     "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
                     &tx_digests,
                 ) => {
+                tracing::Span::current().record("fast_path_effects", false);
                 let effects = effects.pop().unwrap();
                 let details = if request.include_details {
                     Some(self.complete_executed_data(effects.clone(), None).await?)
@@ -1228,6 +1228,7 @@ impl ValidatorService {
             }
 
             fastpath_response = fastpath_effects_future => {
+                tracing::Span::current().record("fast_path_effects", true);
                 fastpath_response
             }
         }
