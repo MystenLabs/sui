@@ -29,9 +29,9 @@ impl ConsistentService for State {
         &self,
         request: tonic::Request<AvailableRangeRequest>,
     ) -> Result<tonic::Response<AvailableRangeResponse>, tonic::Status> {
-        available_range(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let checkpoint = self.checkpoint(&request)?;
+        let response = available_range(self, checkpoint, request.into_inner())?;
+        Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn batch_get_balances(

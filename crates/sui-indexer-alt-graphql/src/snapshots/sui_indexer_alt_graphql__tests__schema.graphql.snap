@@ -77,6 +77,10 @@ type Address implements IAddressable {
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
 	address: SuiAddress!
+	"""
+	Objects owned by this address, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 }
 
 """
@@ -133,7 +137,7 @@ type BalanceChange {
 	"""
 	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
 	"""
-	coinType: String
+	coinType: MoveType
 	"""
 	The signed balance change.
 	"""
@@ -643,6 +647,10 @@ type Epoch {
 
 type Event {
 	"""
+	The Move value emitted for this event.
+	"""
+	contents: MoveValue
+	"""
 	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
 	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
 	"""
@@ -840,8 +848,26 @@ An address uniquely represents either the public key of an account, or an object
 """
 interface IAddressable {
 	address: SuiAddress!
+	"""
+	Objects owned by this address, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 }
 
+
+"""
+Interface implemented by types that represent a Move object on-chain (A Move value whose type has `key`).
+"""
+interface IMoveObject {
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+}
 
 """
 Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
@@ -886,6 +912,11 @@ type Input {
 
 
 """
+Arbitrary JSON data.
+"""
+scalar JSON
+
+"""
 Information used by a package to link to a specific version of its dependency.
 """
 type Linkage {
@@ -927,6 +958,28 @@ type MergeCoinsCommand {
 	coins: [TransactionArgument!]!
 }
 
+"""
+Abilities are keywords in Sui Move that define how types behave at the compiler level.
+"""
+enum MoveAbility {
+	"""
+	Enables values to be copied.
+	"""
+	COPY
+	"""
+	Enables values to be popped/dropped.
+	"""
+	DROP
+	"""
+	Enables values to be held directly in global storage.
+	"""
+	KEY
+	"""
+	Enables values to be held inside a struct in global storage.
+	"""
+	STORE
+}
+
 type MoveCallCommand {
 	"""
 	The storage ID of the package the function being called is defined in.
@@ -947,6 +1000,87 @@ type MoveCallCommand {
 }
 
 """
+A MoveObject is a kind of Object that reprsents data stored on-chain.
+"""
+type MoveObject implements IAddressable & IObject & IMoveObject {
+	"""
+	The MoveObject's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+}
+
+type MoveObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 """
 type MovePackage implements IAddressable & IObject {
@@ -954,6 +1088,10 @@ type MovePackage implements IAddressable & IObject {
 	The MovePackage's ID.
 	"""
 	address: SuiAddress!
+	"""
+	Objects owned by this package, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 	"""
 	The version of this package that this content comes from.
 	"""
@@ -1047,6 +1185,98 @@ type MovePackageEdge {
 }
 
 """
+Represents concrete types (no type parameters, no references).
+"""
+type MoveType {
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
+	repr: String!
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: MoveTypeSignature!
+	"""
+	Structured representation of the "shape" of values that match this type. May return no
+	layout if the type is invalid.
+	"""
+	layout: MoveTypeLayout
+	"""
+	The abilities this concrete type has. Returns no abilities if the type is invalid.
+	"""
+	abilities: [MoveAbility!]
+}
+
+"""
+The shape of a concrete Move Type (a type with all its type parameters instantiated with concrete types), corresponding to the following recursive type:
+
+type MoveTypeLayout =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeLayout }
+  | {
+      struct: {
+        type: string,
+        fields: [{ name: string, layout: MoveTypeLayout }],
+      }
+    }
+  | { enum: [{
+          type: string,
+          variants: [{
+              name: string,
+              fields: [{ name: string, layout: MoveTypeLayout }],
+          }]
+      }]
+  }
+"""
+scalar MoveTypeLayout
+
+"""
+The signature of a concrete Move Type (a type with all its type parameters instantiated with concrete types, that contains no references), corresponding to the following recursive type:
+
+type MoveTypeSignature =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeSignature }
+  | {
+      datatype: {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [MoveTypeSignature],
+      }
+    }
+"""
+scalar MoveTypeSignature
+
+type MoveValue {
+	"""
+	The BCS representation of this value, Base64-encoded.
+	"""
+	bcs: Base64
+	"""
+	Representation of a Move value in JSON, where:
+	
+	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Balances, Strings, and Urls are represented as JSON strings.
+	- Vectors of bytes are represented as Base64 blobs, and other vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Enums are represented by JSON objects, with a field named `@variant` containing the variant name.
+	- Empty optional values are represented by `null`.
+	"""
+	json: JSON
+	"""
+	The value's type.
+	"""
+	type: MoveType
+}
+
+"""
 A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
 """
 type MutateConsensusStreamEnded {
@@ -1096,6 +1326,10 @@ type Object implements IAddressable & IObject {
 	"""
 	digest: String!
 	"""
+	Attempts to convert the object into a MoveObject.
+	"""
+	asMoveObject: MoveObject
+	"""
 	Attempts to convert the object into a MovePackage.
 	"""
 	asMovePackage: MovePackage
@@ -1117,6 +1351,10 @@ type Object implements IAddressable & IObject {
 	Paginate all versions of this object before this one.
 	"""
 	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 	"""
 	The transaction that created this version of the object.
 	"""
@@ -1205,6 +1443,38 @@ type ObjectEdge {
 }
 
 """
+A filter over the live object set, the filter can be one of:
+
+- A filter on type (all live objects whose type matches that filter).
+- Fetching all objects owned by an address or object, optionally filtered by type.
+- Fetching all shared or immutable objects, filtered by type.
+"""
+input ObjectFilter {
+	"""
+	Filter on whether the object is address-owned, object-owned, shared, or immutable.
+	
+	- If this field is set to "ADDRESS" or "OBJECT", then an owner filter must also be provided.
+	- If this field is set to "SHARED" or "IMMUTABLE", then a type filter must also be provided.
+	"""
+	ownerKind: OwnerKind
+	"""
+	Specifies the address of the owning address or object.
+	
+	This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
+	"""
+	owner: SuiAddress
+	"""
+	Filter on the object's type. The filter can be one of:
+	
+	- A package address: `0x2`,
+	- A module: `0x2::coin`,
+	- A fully-qualified name: `0x2::coin::Coin`,
+	- A type instantiation: `0x2::coin::Coin<0x2::sui::SUI>`.
+	"""
+	type: String
+}
+
+"""
 Identifies a specific version of an object.
 
 The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
@@ -1251,6 +1521,28 @@ A Move object, either immutable, or owned mutable.
 """
 type OwnedOrImmutable {
 	object: Object
+}
+
+"""
+Filter on who owns an object.
+"""
+enum OwnerKind {
+	"""
+	Object is owned by an address.
+	"""
+	ADDRESS
+	"""
+	Object is a child of another object (e.g. a dynamic field or dynamic object field).
+	"""
+	OBJECT
+	"""
+	Object is shared among multiple owners.
+	"""
+	SHARED
+	"""
+	Object is frozen.
+	"""
+	IMMUTABLE
 }
 
 """
@@ -1454,6 +1746,14 @@ type Query {
 	"""
 	multiGetTransactionEffects(keys: [String!]!): [TransactionEffects]!
 	"""
+	Fetch types by their string representations.
+	
+	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+	
+	Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
+	"""
+	multiGetTypes(keys: [String!]!): [MoveType]!
+	"""
 	Fetch an object by its address.
 	
 	If `version` is specified, the object will be fetched at that exact version.
@@ -1473,6 +1773,14 @@ type Query {
 	Returns `null` if an object cannot be found that meets this criteria.
 	"""
 	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
+	"""
+	Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
+	
+	- A filter on type (all live objects whose type matches that filter).
+	- Fetching all objects owned by an address or object, optionally filtered by type.
+	- Fetching all shared or immutable objects, filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter!): ObjectConnection
 	"""
 	Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	"""
@@ -1525,6 +1833,14 @@ type Query {
 	The transactions that exist in the network, optionally filtered by transaction filters.
 	"""
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+	"""
+	Fetch a structured representation of a concrete type, including its layout information.
+	
+	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+	
+	Fails if the type is malformed, returns `null` if a type mentioned does not exist.
+	"""
+	type(type: String!): MoveType
 }
 
 """
@@ -1691,6 +2007,10 @@ type ServiceConfig {
 	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
 	"""
 	maxMoveValueDepth: Int
+	"""
+	Maximum budget in bytes to spend when outputting a structured `MoveValue`.
+	"""
+	maxMoveValueBound: Int
 }
 
 """

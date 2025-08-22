@@ -98,6 +98,7 @@ feature_flags:
   enforce_checkpoint_timestamp_monotonicity: true
   max_ptb_value_size_v2: true
   resolve_type_input_ids_to_defining_id: true
+  enable_party_transfer: true
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
   better_adapter_type_resolution_errors: true

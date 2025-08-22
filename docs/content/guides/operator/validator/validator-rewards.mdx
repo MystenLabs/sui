@@ -1,58 +1,43 @@
 ---
-title: Sui Validator Node Configuration
-description: Learn how to set up, configure, and manage a Sui Validator node, including staking, reference gas price, and tallying rules.
-keywords: [ sui validator node, validator nodes, validator node configuration, configure validator node, set up validator node, manage validator, manage staking, manage gas price reference, tally rules, validator tally rules, validator staking, validator consensus, validator voting power, user staking and rewards, slashing, tallying ]
+title: Validator Node Rewards
+description: Learn how validator user and staker rewards are calculated and distributed. 
+keywords: [ manage staking, manage gas price reference, tally rules, validator tally rules, validator staking, validator consensus, validator voting power, user staking and rewards, slashing, tallying ]
+sidebar_position: 3
+sidebar_label: Rewards
+
 ---
-
-Validators on the Sui network run special nodes and have additional tasks and responsibilities beyond those of Full node operators.
-
-## Requirements to run a validator on Sui 
-
-To run a Sui validator, you must set up and configure a Sui Validator node. After you have a running node, you must have a minimum of 30 million SUI in your staking pool to join the validator set on the Sui network.
-
-To learn how to set up and configure a Sui Validator node, see [Sui for Node Operators](https://github.com/MystenLabs/sui/blob/main/nre/sui_for_node_operators.md) on GitHub. The guide includes all of the information you need to configure your Validator node. It also provides guidance on the tasks you must perform after you join the validator set.
-
-Specific steps you must take include:
-
-- Install and configure Sui
-- Configure port and protocol settings
-- Key management
-- Storage configuration
-- Software updates
-- On-chain commands
-- Update the gas price survey
-- Reporting other validators
-
-{@include: ../../snippets/staking-pool-reqs.mdx}
-
-## Hardware requirements to run a Validator node
-
-Suggested minimum hardware specifications to run a Sui Validator node:
-
-- CPU: 24 physical cores (or 48 virtual cores)
-- Memory: 128 GB
-- Storage: 4 TB NVME
-- Network: 1 Gbps
-
-## Validator consensus and voting power 
 
 The total voting power on Sui is always 10,000, regardless of the amount staked. Therefore, the quorum threshold is 6,667. There is no limit to the amount of SUI users can stake with a validator. Each validator has consensus voting power proportional to SUI in its staking pool, with one exception: the voting power of an individual validator is capped at 1,000 (10% of the total). If a validator accumulates more than 10% of total stake, the validator's voting power remains fixed at 10%, and the remaining voting power is spread across the rest of the validator set.
 
-### User staking and withdrawals
+## User staking and rewards
 
-When users stake SUI tokens, these SUI objects are wrapped into StakedSUI objects. The calculation to determine each user's relative ownership of the staking pool is done directly with the timestamp of the StakedSUI object (which determines the moment at which the deposit took place) and the change in the exchange rates between the deposit epoch and the withdrawal epoch. Each staking pool's data structure contains a time series with that pool's exchange rates. These exchange rates can be used to determine the withdrawals of any of the pool's stakers.
+When users stake SUI tokens, the tokens are wrapped into `StakedSUI` objects. A user’s share of the staking pool is calculated using the timestamp of their `StakedSUI` object, which records when the deposit occurred, along with the change in exchange rates between the deposit epoch and the withdrawal epoch.  
 
-Stake withdrawals are processed immediately with the exchange rate prevailing at the previous epoch's exchange rate. Withdrawals do not have to wait for the current epoch to close. Withdrawals include both the original stake the user deposited and all the stake rewards accumulated up to the previous epoch. Stakers do not earn the rewards accruing to their stake during the epoch at which they withdraw. Since there is no way to know how many stake rewards will be accumulated during the current epoch until the epoch closes, these cannot be included in the withdrawal. Hence, any user can withdraw their stake immediately and receive:
-
-SUI withdrawn at E' = ( SUI deposited at E ) * ( Exchange Rate at E'-1 / Exchange Rate at E )
+Each staking pool maintains a time series of its exchange rates. This data allows the system to determine the correct withdrawal amount for any staker in the pool.
 
 ### Find the exchange rate 
 
 Each epoch change emits a `0x2::validator_set::ValidatorEpochInfo` event per validator with the exchange rate information. You can use the Events API to query events.
 
-## Staking rewards 
+### Rewards 
 
-Within a given validator staking pool, all stakers receive the same proportion of rewards through the pool's exchange rate appreciation. In addition, since validators earn commissions over the stake they manage, validators receive additional `StakedSUI` objects at the end of each epoch in proportion to the amount of commissions their staking pool earns.
+A stake deposit request goes into a pending state immediately in the staking pool as soon as it is made. Sui Wallet reflects any pending stake deposit requests for the user's account. However, pending stake deposit requests do not take effect until the end of the epoch during which the request is made.
+
+A withdrawal (un-stake) request is processed immediately as soon as it is received. The staker obtains the originally deposited SUI together with all accrued stake rewards up to the previous epoch boundary, meaning they do not include stake rewards for the current epoch.
+
+Users can't withdraw a portion of their active stake. They must withdraw all staked SUI at the same time. Users can, however, stake using multiple `StakedSui` objects by splitting their SUI into multiple coins. They can then perform a partial withdrawal from a validator by un-staking only some of the `StakedSUI` objects.
+
+### Withdrawals 
+
+Stake withdrawals are processed immediately with the exchange rate prevailing at the previous epoch's exchange rate. Withdrawals do not have to wait for the current epoch to close. Withdrawals include both the original stake the user deposited and all the stake rewards accumulated up to the previous epoch. Stakers do not earn the rewards accruing to their stake during the epoch at which they withdraw. Since there is no way to know how many stake rewards will be accumulated during the current epoch until the epoch closes, these cannot be included in the withdrawal. Hence, any user can withdraw their stake immediately and receive:
+
+$$
+SUI withdrawn at E' = ( SUI deposited at E ) * ( Exchange Rate at E'-1 / Exchange Rate at E )
+$$
+
+## Staker rewards 
+
+Within a given validator staking pool, all stakers receive the same proportion of rewards through the pool's exchange rate appreciation. Because validators earn commissions over the stake they manage, they receive additional `StakedSUI` objects at the end of each epoch in proportion to the amount of commissions their staking pool earns.
 
 Staking rewards are funded by transaction gas fees collected during the current epoch and by stake subsidies released at the end of the epoch.
 
@@ -73,14 +58,6 @@ $$
 
 The total amount of gas fees collected corresponds to the sum of gas fees across all transactions processed in the epoch. During regular market conditions, the vast majority of transactions should have a `GasPrice` equal to the `ReferenceGasPrice`.
 
-### User staking and rewards 
-
-A stake deposit request goes into a pending state immediately in the staking pool as soon as it is made. Sui Wallet reflects any pending stake deposit requests for the user's account. However, pending stake deposit requests do not take effect until the end of the epoch during which the request is made.
-
-A withdrawal (un-stake) request is processed immediately as soon as it is received. The staker obtains the originally deposited SUI together with all accrued stake rewards up to the previous epoch boundary – in other words, they do not include stake rewards for the current epoch.
-
-Users can't withdraw a portion of their active stake. They must withdraw all staked SUI at the same time. Users can, however, stake using multiple `StakedSui` objects by splitting their SUI into multiple coins. They can then perform a partial withdrawal from a validator by un-staking only some of the `StakedSUI` objects.
-
 ## Reference gas price 
 
 Sui is designed such that end-users can expect the gas price to be stable and predictable during regular network operations. This is achieved by having validators set the network's reference gas price at the beginning of each epoch.
@@ -96,7 +73,7 @@ In practice, the process for submitting a gas price quote for the Gas Price Surv
 
 For example, to set the price quote for the next epoch to 42, run:
 
-{@include: ../../snippets/info-gas-budget.mdx}
+{@include: ../../../snippets/info-gas-budget.mdx}
 
 ```sh
 $ sui client call --package <PACKAGE-ID> --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget <GAS-AMOUNT>

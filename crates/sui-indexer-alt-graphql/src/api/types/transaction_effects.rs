@@ -127,7 +127,7 @@ impl EffectsContents {
     }
 
     /// Rich execution error information for failed transactions.
-    async fn execution_error(&self, ctx: &Context<'_>) -> Result<Option<ExecutionError>, RpcError> {
+    async fn execution_error(&self) -> Result<Option<ExecutionError>, RpcError> {
         let Some(content) = &self.contents else {
             return Ok(None);
         };
@@ -144,7 +144,7 @@ impl EffectsContents {
                 _ => None,
             });
 
-        ExecutionError::from_execution_status(ctx, status, programmable_tx.as_ref()).await
+        ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref()).await
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.

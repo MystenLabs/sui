@@ -117,13 +117,13 @@ module P::M {
   "params": ["@{obj_2_0}", null, 2]
 }
 
-//# run-jsonrpc --cursors bcs(@{obj_10_0},4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
 {
   "method": "suix_getDynamicFields",
   "params": ["@{obj_2_0}", "@{cursor_0}", 2]
 }
 
-//# run-jsonrpc --cursors bcs(@{obj_10_0},4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
 {
   "method": "suix_getDynamicFields",
   "params": ["@{obj_2_0}", "@{cursor_0}"]
