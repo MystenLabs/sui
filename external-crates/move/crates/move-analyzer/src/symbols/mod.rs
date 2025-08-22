@@ -280,9 +280,7 @@ pub fn compute_symbols(
     // record attempt at caching as some actions are taken
     // on the first attempt to symbolicate and we need to
     // know once this attempt is complete
-    if !pkg_deps.pkg_info.contains_key(&pkg_path) {
-        pkg_deps.pkg_info.insert(pkg_path, None);
-    }
+    pkg_deps.pkg_info.entry(pkg_path).or_insert(None);
     symbols
 }
 
