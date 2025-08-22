@@ -1,0 +1,186 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 10-12:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 14-16:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 18:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 20-22:
+//# programmable --sender A --inputs object(1,0) 1u64 object(2,0) 2u64 object(3,0)
+//> 0: sui::bag::add<u64, sui::bag::Bag>(Input(2), Input(3), Input(4));
+//> 1: sui::bag::add<u64, sui::bag::Bag>(Input(0), Input(1), Input(2));
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(1,0)
+wrapped: object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 6330800,  storage_rebate: 4837932, non_refundable_storage_fee: 48868
+
+task 6, line 24:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 26-38:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetObjects": [
+      {
+        "version": 5,
+        "asMoveObject": {
+          "contents": {
+            "json": {
+              "id": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+              "size": "1"
+            }
+          }
+        }
+      },
+      null,
+      null
+    ]
+  }
+}
+
+task 8, lines 40-56:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": {
+        "multiGetObjects": [
+          {
+            "version": 2,
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+                  "size": "0"
+                }
+              }
+            }
+          },
+          {
+            "version": 3,
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+                  "size": "0"
+                }
+              }
+            }
+          },
+          {
+            "version": 4,
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0x2d258a843438e1572a5d174eb7ce3ab8a83cfdd7114bee0aa1196f23eb71a0fe",
+                  "size": "0"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 9, lines 58-73:
+//# run-graphql --cursors bcs(1u64)
+Response: {
+  "data": {
+    "address": {
+      "dynamicField": {
+        "value": {
+          "json": {
+            "id": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+            "size": "1"
+          }
+        }
+      }
+    },
+    "object": {
+      "asMoveObject": {
+        "dynamicField": {
+          "value": {
+            "json": {
+              "id": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+              "size": "1"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 10, lines 75-83:
+//# run-graphql --cursors bcs(2u64)
+Response: {
+  "data": {
+    "address": {
+      "dynamicField": {
+        "value": {
+          "json": {
+            "id": "0x2d258a843438e1572a5d174eb7ce3ab8a83cfdd7114bee0aa1196f23eb71a0fe",
+            "size": "0"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 11, lines 85-90:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

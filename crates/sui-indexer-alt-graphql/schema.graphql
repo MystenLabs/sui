@@ -74,6 +74,14 @@ type Address implements IAddressable {
 	"""
 	address: SuiAddress!
 	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
 	Objects owned by this address, optionally filtered by type.
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
@@ -1615,6 +1623,8 @@ Identifies a specific version of an object.
 
 The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
 
+Specifying a `version` or a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+
 See `Query.object` for more details.
 """
 input ObjectKey {
@@ -1627,7 +1637,7 @@ input ObjectKey {
 	"""
 	atCheckpoint: UInt53
 	"""
-	If specified, tries to fetch the latest version of the object at or before this version.
+	If specified, tries to fetch the latest version of the object at or before this version. Nested dynamic field accesses will also be subject to this bound.
 	
 	This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
 	
@@ -1837,8 +1847,16 @@ type Pure {
 type Query {
 	"""
 	Look-up an account by its SuiAddress.
+	
+	If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	
+	- The root object of the object it is wrapped in, if it is wrapped.
+	- The root object of its owner, if it is owned by another object.
+	- The object itself, if it is not object-owned or wrapped.
+	
+	Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
 	"""
-	address(address: SuiAddress!): Address!
+	address(address: SuiAddress!, rootVersion: UInt53): Address!
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
 	"""
@@ -1912,11 +1930,13 @@ type Query {
 	
 	If `version` is specified, the object will be fetched at that exact version.
 	
-	If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. Nested dynamic field accesses will also be subject to this bound. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
 	
 	- The root object of the object it is wrapped in, if it is wrapped.
 	- The root object of its owner, if it is owned by another object.
 	- The object itself, if it is not object-owned or wrapped.
+	
+	Specifying a `version` or a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
 	
 	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
 	
