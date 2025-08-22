@@ -15,7 +15,7 @@ use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigOb
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::transaction_driver::{
     choose_transaction_driver_percentage, QuorumTransactionResponse, SubmitTransactionOptions,
-    SubmitTxRequest, TransactionDriver, TransactionDriverMetrics,
+    SubmitTxRequest, TransactionDriver, TransactionDriverError, TransactionDriverMetrics,
 };
 use futures::future::{select, Either, Future};
 use futures::FutureExt;
@@ -585,22 +585,20 @@ where
                 timeout_duration,
             )
             .await
-            .map_err(|e| {
-                match e {
-                    crate::transaction_driver::TransactionDriverError::TimeOutWithLastRetriableError {
-                        last_error,
-                        attempts,
-                        timeout,
-                    } => QuorumDriverError::TimeoutBeforeFinalityWithErrors {
-                        last_error: last_error.map(|e| e.to_string()).unwrap_or_default(),
-                        attempts,
-                        timeout,
-                    },
-                    other => QuorumDriverError::TransactionFailed {
-                        retriable: other.is_retriable(),
-                        details: other.to_string(),
-                    },
-                }
+            .map_err(|e| match e {
+                TransactionDriverError::TimeOutWithLastRetriableError {
+                    last_error,
+                    attempts,
+                    timeout,
+                } => QuorumDriverError::TimeoutBeforeFinalityWithErrors {
+                    last_error: last_error.map(|e| e.to_string()).unwrap_or_default(),
+                    attempts,
+                    timeout,
+                },
+                other => QuorumDriverError::TransactionFailed {
+                    retriable: other.is_retriable(),
+                    details: other.to_string(),
+                },
             });
 
         // Broadcast TD effects to the channel

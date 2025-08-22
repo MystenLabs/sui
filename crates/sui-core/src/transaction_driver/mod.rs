@@ -171,17 +171,16 @@ where
 
         match timeout_duration {
             Some(duration) => {
-                match tokio::time::timeout(duration, retry_loop).await {
-                    Ok(result) => result,
-                    Err(_) => {
+                tokio::time::timeout(duration, retry_loop)
+                    .await
+                    .unwrap_or_else(|_| {
                         // Timeout occurred, return with latest retriable error if available
                         Err(TransactionDriverError::TimeOutWithLastRetriableError {
                             last_error: latest_retriable_error.map(Box::new),
                             attempts,
                             timeout: duration,
                         })
-                    }
-                }
+                    })
             }
             None => retry_loop.await,
         }
