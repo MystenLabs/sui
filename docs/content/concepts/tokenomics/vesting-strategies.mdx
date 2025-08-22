@@ -2,6 +2,8 @@
 title: Token Vesting Strategies
 description: If you plan to launch a token on Sui, then you might consider implementing a vesting strategy to strengthen the long-term outlook of your token.
 keywords: [ vesting strategies, token vesting strategies, designing a token launch, designing token vesting, how to design token vesting, vesting options, token vest strategies, how to vest tokens, how to design token vest ]
+mdx:
+  format: md
 ---
 
 If you plan to launch a token on Sui, then you might consider implementing a vesting strategy to strengthen the long-term outlook of your token. A vesting strategy typically releases your tokens to team members, investors, or other early stakeholders over time, rather than releasing them all at once.
@@ -33,10 +35,15 @@ The following smart contract implements a cliff vesting schedule for token relea
 Considering the example scenario, you would call `new_wallet` ten times so that a separate wallet existed for each employee. You would include 1,000 tokens in each call to load the wallet with the necessary funds. Subsequent calls to `claim` using the relevant wallet would compare the cliff time (`cliff_time` in the `Wallet` object) against the current time, returning tokens from the wallet if the cliff time is later than the current time. 
 
 <details>
+
 <summary> 
+
 `cliff.move`
+
 </summary>
-{@inject: examples/vesting/sources/cliff.move}
+
+{@inject: ../../../../examples/vesting/sources/cliff.move}
+
 </details>
 
 ### Graded vesting
@@ -64,10 +71,15 @@ Hybrid vesting combines different vesting models, such as cliff and graded vesti
 The following smart contract creates a hybrid vesting model. Like the cliff vesting smart contract, the hybrid model defines a `Wallet` struct to hold all the tokens for each stakeholder. This wallet, however, actually contains two different wallets that each follow a different set of vesting rules. When you call the `new_wallet` method for this contract, you provide the cliff cutoff timestamp, the timestamp for when the linear schedule begins, and a timestamp for when the linear vesting should end. Calls to `claim` then return the sum of tokens that fall within those parameters.
 
 <details>
+
 <summary>
+
 `hybrid.move`
+
 </summary>
-{@inject: examples/vesting/sources/hybrid.move}
+
+{@inject: ../../../../examples/vesting/sources/hybrid.move}
+
 </details>
 
 ### Backloaded vesting
@@ -87,10 +99,15 @@ The smart contract for backloaded vesting creates two `Wallet` objects inside a 
 For the example scenario, you could pass the start timestamp for the frontload and the start timestamp for the backload (three years after the frontload start). You would also pass the duration of four years (`126230400000`) and `90` for the `back_percentage` value. 
 
 <details>
+
 <summary>
+
 `backloaded.move`
+
 </summary>
-{@inject: examples/vesting/sources/backloaded.move}
+
+{@inject: ../../../../examples/vesting/sources/backloaded.move}
+
 </details>
 
 ### Milestone- or performance-based vesting {#milestone}
@@ -116,10 +133,15 @@ Like the other examples, the following smart contract creates a wallet to hold t
 The milestone update authority can call `update_milestone_percentage` to update the percentage-to-complete value. The owner of the vested token wallet can call `claim` to retrieve the tokens that are unlocked based on the current percentage-to-complete value. Considering the first example scenario, you could update the milestone value by ten percent for every million MAUs the project achieves. You could use the same contract for the second scenario, updating the percentage one time to 100 only after mainnet launches.
 
 <details>
+
 <summary>
+
 `milestone.move` 
+
 </summary>
-{@inject: examples/vesting/sources/milestone.move}
+
+{@inject: ../../../../examples/vesting/sources/milestone.move}
+
 </details>
 
 ### Linear vesting
@@ -137,10 +159,15 @@ The linear vesting smart contract creates a `Wallet` object with `start` and `du
 For the example scenario, you create the wallet (call `new_wallet`) with 1,000 tokens, the timestamp for the employee start date, and one year (`31557600000`) as the duration.
 
 <details>
+
 <summary>
+
 `linear.move`
+
 </summary>
-{@inject: examples/vesting/sources/linear.move}
+
+{@inject: ../../../../examples/vesting/sources/linear.move}
+
 </details>
 
 ### Immediate vesting
@@ -162,8 +189,13 @@ With immediate investing, you could always just transfer tokens to an address. O
 The following test leverages the [linear vesting](#linear-vesting) smart contract example to demonstrate how to use one of the other vesting strategy smart contracts to support immediate vesting. The test uses the `Wallet` object and `new_wallet` function from `vesting::linear` to perform (or test) an immediate vest scenario. The test accomplishes this by setting the `duration` value to 0.
 
 <details>
+
 <summary>
+
 `immediate_tests.move`
+
 </summary>
-{@inject: examples/vesting/tests/immediate_tests.move}
+
+{@inject: ../../../../examples/vesting/tests/immediate_tests.move}
+
 </details>

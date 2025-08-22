@@ -1,29 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import React from "react";
-import clsx from "clsx";
-import {
-  useCurrentSidebarCategory,
-  filterDocCardListItems,
-} from "@docusaurus/theme-common";
-import DocCard from "@theme/DocCard";
-function DocCardListForCurrentSidebarCategory({ className }) {
-  const category = useCurrentSidebarCategory();
-  return <DocCardList items={category.items} className={className} />;
-}
-export default function DocCardList(props) {
-  const { items, className } = props;
-  if (!items) {
-    return <DocCardListForCurrentSidebarCategory {...props} />;
+
+import React from 'react';
+import DocCardList from '@theme/DocCardList';
+import { useCurrentSidebarCategory } from '@docusaurus/theme-common';
+
+// Renders the current sidebar category *if* we're inside DocsSidebarProvider,
+// otherwise falls back to a plain DocCardList using passed props (items/hideDescriptions/etc).
+export default function DocCardListForCurrentSidebarCategory(props) {
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const category = useCurrentSidebarCategory(); // throws outside provider
+    return <DocCardList items={category.items} />;
+  } catch {
+    // Outside docs provider (e.g., homepage or custom MDX): use explicit props
+    // Example MDX usage: <DocCardList items={[{type:'link', label:'Intro', href:'/docs/intro'}]} />
+    return <DocCardList {...props} />;
   }
-  const filteredItems = filterDocCardListItems(items);
-  return (
-    <section className={clsx("row", className)}>
-      {filteredItems.map((item, index) => (
-        <article key={index} className="col col--4 margin-bottom--sm">
-          <DocCard item={item} />
-        </article>
-      ))}
-    </section>
-  );
 }
+
+

@@ -1,13 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { themes } from "prism-react-renderer";
+import { fileURLToPath } from "url";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
+import rehypeRawFiles from "./src/rehype/rehype-raw-only.mjs";
+import rehypeTabsMd from "./src/rehype/rehype-tabs.mjs";
+import rehypeFixAnchorUrls from "./src/rehype/rehype-fix-anchor-urls.mjs";
+const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
+
+const lightCodeTheme = require("prism-react-renderer/themes/github");
+const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const SIDEBARS_PATH = fileURLToPath(new URL("./sidebars.js", import.meta.url));
+
+const mdxPass = [
+  "mdxJsxFlowElement",
+  "mdxJsxTextElement",
+  "mdxFlowExpression",
+  "mdxTextExpression",
+  "mdxjsEsm",
+];
 
 require("dotenv").config();
 
@@ -38,29 +58,12 @@ const config = {
   onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
 
-  // Even if you don't use internationalization, you can use this field to set
-  // useful metadata like html lang. For example, if your site is Chinese, you
-  // may want to replace "en" with "zh-Hans".
-  /*  i18n: {
-    defaultLocale: "en",
-    locales: [
-      "en",
-      "el",
-      "fr",
-      "ko",
-      "tr",
-      "vi",
-      "zh-CN",
-      "zh-TW",
-    ],
-  },*/
   markdown: {
     format: "detect",
     mermaid: true,
   },
+  clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
-    // ....
-    // path.resolve(__dirname, `./src/plugins/examples`),
     [
       "posthog-docusaurus",
       {
@@ -69,7 +72,6 @@ const config = {
         enableInDevelopment: false, // optional
       },
     ],
-    [path.resolve(__dirname, "src/plugins/inject-code"), {}],
     [
       "@graphql-markdown/docusaurus",
       {
@@ -82,6 +84,35 @@ const config = {
         },
       },
     ],
+    function stepHeadingLoader() {
+      return {
+        name: "step-heading-loader",
+        configureWebpack() {
+          return {
+            module: {
+              rules: [
+                {
+                  test: /\.mdx?$/, // run on .md and .mdx
+                  enforce: "pre", // make sure it runs BEFORE @docusaurus/mdx-loader
+                  include: [
+                    // adjust these to match where your Markdown lives
+                    path.resolve(__dirname, "../content"),
+                  ],
+                  use: [
+                    {
+                      loader: path.resolve(
+                        __dirname,
+                        "./src/plugins/inject-code/stepLoader.js",
+                      ),
+                    },
+                  ],
+                },
+              ],
+            },
+          };
+        },
+      };
+    },
     [
       "@graphql-markdown/docusaurus",
       {
@@ -99,12 +130,7 @@ const config = {
         },
       },
     ],
-    [
-      "docusaurus-plugin-includes",
-      {
-        postBuildDeletedFolders: ["../snippets"],
-      },
-    ],
+    require.resolve("./src/plugins/tabs-md-client/index.mjs"),
     async function myPlugin(context, options) {
       return {
         name: "docusaurus-tailwindcss",
@@ -123,52 +149,56 @@ const config = {
   ],
   presets: [
     [
-      "classic",
       /** @type {import('@docusaurus/preset-classic').Options} */
-      ({
+      "classic",
+      {
         docs: {
           path: "../content",
           routeBasePath: "/",
-          sidebarPath: require.resolve("./sidebars.js"),
+          sidebarPath: SIDEBARS_PATH,
           // the double docs below is a fix for having the path set to ../content
           editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
-          /*disableVersioning: true,
-          lastVersion: "current",
-          versions: {
-            current: {
-              label: "Latest",
-              path: "/",
-            },
-          },
-          onlyIncludeVersions: [
-            "current",
-            "1.0.0",
-          ],*/
+          exclude: [
+            "**/snippets/**",
+            "**/standards/deepbook-ref/**",
+            "**/submodules/**",
+            "**/app-examples/ts-sdk-ref/**",
+          ],
           admonitions: {
             keywords: ["checkpoint"],
             extendDefaults: true,
           },
+          beforeDefaultRemarkPlugins: [
+            [
+              require("./src/js/remark-includes.cjs"),
+              {
+                // Match docs.path ("../content") so path math & excludes are correct
+                docsDir: path.resolve(__dirname, "../content"),
+              },
+            ],
+          ],
           remarkPlugins: [
             math,
-            [
-              require("@docusaurus/remark-plugin-npm2yarn"),
-              { sync: true, converters: ["yarn", "pnpm"] },
-            ],
+            [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
           ],
-          rehypePlugins: [katex],
+          beforeDefaultRehypePlugins: [rehypeFixAnchorUrls],
+          rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd],
         },
         theme: {
           customCss: [
             require.resolve("./src/css/fonts.css"),
             require.resolve("./src/css/custom.css"),
+            require.resolve("./src/css/details.css"),
           ],
         },
-      }),
+      },
     ],
   ],
+
   scripts: [
+    { src: "./src/js/tabs-md.js", defer: true },
     {
       src: "/js/clarity.js",
       async: true,
@@ -191,7 +221,7 @@ const config = {
       type: "text/css",
     },
   ],
-  themes: ["@docusaurus/theme-mermaid", "docusaurus-theme-frontmatter"],
+  themes: ["@docusaurus/theme-mermaid", "docusaurus-theme-github-codeblock"],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
@@ -201,6 +231,7 @@ const config = {
           autoCollapseCategories: false,
         },
       },
+
       navbar: {
         title: "Sui Documentation",
         logo: {
@@ -224,18 +255,6 @@ const config = {
             label: "References",
             to: "references",
           },
-
-          /*
-          {
-            type: "docsVersionDropdown",
-            position: "right",
-            dropdownActiveClassDisabled: true,
-          },
-          {
-            type: "localeDropdown",
-            position: "right",
-          },
-          */
         ],
       },
       footer: {
@@ -247,9 +266,13 @@ const config = {
         style: "dark",
         copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/MystenLabs/sui/blob/main/docs/site/LICENSE">CC BY 4.0</a>`,
       },
+      codeblock: {
+        showGithubLink: true,
+        githubLinkLabel: "View on GitHub",
+      },
       prism: {
-        theme: themes.github,
-        darkTheme: themes.nightOwl,
+        theme: lightCodeTheme,
+        darkTheme: darkCodeTheme,
         additionalLanguages: ["rust", "typescript", "toml", "json"],
       },
     }),

@@ -2,6 +2,8 @@
 title: In-Game Currency
 description: Use the Sui Closed-Loop Token standard to create tokens that you can use as currency within a game application.
 keywords: [ closed-loop tokens, closed-loop, closed loop, in-game tokens, in-game currency, game currency, token example, create a token, how to create token, sui token standards ]
+mdx:
+  format: md
 ---
 
 Using the Sui [Closed-Loop Token](../../../standards/closed-loop-token.mdx) standard, you can create in-game currency (such as gems or diamonds in mobile games) that you can grant to players for their actions or make available to purchase. You mint the tokens on Sui, but players can only use the tokens within the economy of the game itself. These types of tokens are usually not transferrable and you would typically mint them in predefined amounts to maintain scarcity and game balance.
@@ -16,7 +18,7 @@ The Sui repo hosts a basic example of creating in-game currency. The Move module
 
 The `examples::sword` module creates one of the objects, a `sword`, that has in-game value. The module assigns a value in GEMs (the other valuable in-game item) to the sword. The module also provides the logic for trading GEMs to receive a sword. 
 
-{@inject: examples/move/token/sources/gems.move#module=examples::sword noComments}
+{@inject: ../../../../../examples/move/token/sources/gems.move#module=examples::sword noComments}
 
 ### Module examples::gem
 
@@ -24,20 +26,23 @@ The `examples::gem` module creates the in-game currency, GEMs. Users spend SUI t
 
 The module's `init` function uses `coin::create_currency` to create the GEM. The `init` function, which runs only the one time when the module publishes, also sets the policies for the in-game currency, freezes the metadata for the coin, and transfers the policy capability to the publisher of the package. 
 
-{@inject: examples/move/token/sources/gems.move#fun=init noComments}
+{@inject: ../../../../../examples/move/token/sources/gems.move#fun=init noComments}
 
 The module handles the purchase of GEMs with the `buy_gems` function. 
 
-{@inject: examples/move/token/sources/gems.move#fun=buy_gems noComments}
+{@inject: ../../../../../examples/move/token/sources/gems.move#fun=buy_gems noComments}
 
 Use the following toggle to control the display of the complete module. 
 
 <details>
+
 <summary>
+
 `examples::gem` module in `gems.move`
+
 </summary>
 
-{@inject: examples/move/token/sources/gems.move#module=examples::gem noComments}
+{@inject: ../../../../../examples/move/token/sources/gems.move#module=examples::gem noComments}
 
 </details>
 
@@ -46,11 +51,14 @@ Use the following toggle to control the display of the complete module.
 Toggle display of the complete source for this example, including comments, or use the link in the [Related links](#related-links) section to view the project source on GitHub.
 
 <details>
+
 <summary>
+
 `gems.move`
+
 </summary>
 
-{@inject: examples/move/token/sources/gems.move}
+{@inject: ../../../../../examples/move/token/sources/gems.move}
 
 </details>
 

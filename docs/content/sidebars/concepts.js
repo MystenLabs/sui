@@ -198,4 +198,4 @@ const concepts = [
 	},
 	'concepts/research-papers',
 ];
-module.exports = concepts;
+export default concepts;

@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// **********************************
+//
+// This file is deprecated.
+//
+// See src/js/remark-includes
+//
+// **********************************
+
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
@@ -160,7 +168,7 @@ const addCodeInject = async function (source) {
                   } else if (isTs) {
                     funStr = `^(\\s*)(async )?(export (default )?)?function \\b${fn}\\b.*?\\n\\1}\\n`;
                   } else if (isRust) {
-                    funStr = `^(\\s*)(pub\\s+)?(async\\s+)?(const\\s+)?(unsafe\\s+)?(extern\\s+("[^"]+"\\s*)?)?fn\\s+${fn}\\s*(<[^>]*>)?\\s*\\([^)]*\\)\\s*(->\\s*[^;{]+)?\\s*[;{]`;
+                    funStr = `^(\\s*)(?:pub\\s+)?(?:async\\s+)?(?:const\\s+)?(?:unsafe\\s+)?(?:extern\\s+(?:"[^"]+"\\s*)?)?fn\\s+${fn}\\s*(?:<[^>]*>)?\\s*\\([^)]*\\)\\s*(?:->\\s*[^;{]+)?\\s*(\\{[\\s\\S]*?^\\1\\})`;
                   }
                   const funRE = new RegExp(funStr, "msi");
                   const funMatch = funRE.exec(injectFileContent);

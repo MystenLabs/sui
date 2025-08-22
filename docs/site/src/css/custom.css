@@ -136,8 +136,16 @@
 
 /** navbar overrides */
 .navbar-sidebar .menu__link {
-  color: var(--ifm-navbar-sidebar-link-color);
+  @apply text-[var(--ifm-navbar-sidebar-link-color)];
 }
+
+[data-theme='dark'] .theme-doc-sidebar-container .menu__link {
+  @apply text-sui-white;
+}
+
+[data-theme='dark'] .theme-doc-sidebar-container .menu__link--active {
+  @apply bg-[var(--ifm-menu-color-background-hover)]
+} 
 
 .navbar-sidebar .menu__link--active, .navbar-sidebar .menu__link--active:hover, [data-theme='dark'] .navbar-sidebar .menu__link--active, [data-theme='dark'] .navbar-sidebar .menu__link--active:hover {
   @apply !bg-sui-blue-primary text-sui-gray-100
@@ -482,26 +490,6 @@ a code:not(:is(.table-of-contents a code)) {
   color: var(--sui-white);
   text-decoration: none;
 }
-/*
-details {
-  @apply !bg-sui-gray-45 !border-sui-gray-65 relative before:content-["Click\20to\20toggle"] before:absolute before:-top-3 before:-left-1 before:text-xs before:bg-white before:px-2 before:py-0.5 before:rounded before:border before:border-sui-gray-65 before:border-solid before:opacity-0 hover:before:opacity-100 before:duration-300 before:transition-opacity;
-}
-[data-theme='dark'] details {
-  @apply !bg-sui-gray-90 !border-sui-gray-65;
-}
-*/
-summary::before {
-  @apply !border-l-sui-gray-65;
-}
-
-details > div > div {
-  @apply !border-t-sui-gray-65;
-}
-@media (max-width: 1050px) {
-  .navbar .button-cta {
-    display: none;
-  }
-}
 
 /** colors **/
 
@@ -513,6 +501,198 @@ details > div > div {
   color: var(--sui-gray);
 }
 
+
+/* Box + outline + padding around the whole tabs component */
+[data-md-tabs].tabs-container {
+  box-sizing: border-box;
+  background: var(--ifm-background-surface-color);
+  border-radius: var(--ifm-global-radius, 8px);
+  padding: var(--ifm-spacing-vertical, 0.75rem) var(--ifm-spacing-horizontal, 1rem);
+  outline: 2px solid var(--ifm-color-emphasis-200);
+  outline-offset: 4px; /* space between box and outline */
+  box-shadow: var(--ifm-global-shadow-lw);
+}
+
+/* Keep the tablist tidy inside the padded box */
+[data-md-tabs] .tabs {
+  margin: 0 !important;
+  padding: 0 !important;
+  border-bottom: var(--ifm-tabs-border-bottom-size, 2px) solid var(--ifm-color-emphasis-200);
+}
+/* Make all tabs equal height & align bottoms */
+[data-md-tabs] .tabs__item {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: var(--ifm-tabs-padding-vertical, .5rem) var(--ifm-tabs-padding-horizontal, .75rem);
+  line-height: 1;                          /* tighter, predictable box */
+  border-bottom: var(--ifm-tabs-border-bottom-size, 2px) solid transparent;
+  vertical-align: bottom;                   /* <-- key: avoid baseline wobble */
+  white-space: nowrap;                      /* avoid wrapping changing heights */
+  margin: 0;                                /* normalize */
+}
+
+/* Ensure the active tab doesn't change the box height */
+[data-md-tabs] .tabs__item--active {
+  border-bottom-width: var(--ifm-tabs-border-bottom-size, 2px) !important;
+}
+
+/* (Optional) hard stop: guarantee a consistent min-height */
+[data-md-tabs] .tabs__item {
+  min-height: calc(1em + 2*var(--ifm-tabs-padding-vertical, .5rem) + var(--ifm-tabs-border-bottom-size, 2px));
+}
+
+
+[data-md-tabs] .tabs__item.tabs__item--active {
+  border-bottom-color: var(--ifm-tabs-color, var(--ifm-color-primary));
+}
+
+/* Extra breathing room for the panel area inside the box */
+[data-md-tabs] .margin-top--md {
+  margin-top: var(--ifm-spacing-vertical, .75rem) !important;
+  padding-top: .25rem; /* small extra separation from the tab bar */
+}
+
+/* Optional: tighten outline in dark mode */
+html[data-theme='dark'] [data-md-tabs].tabs-container {
+  outline-color: var(--ifm-color-emphasis-300);
+  box-shadow: none;
+}
+
+/* Space BELOW the whole tabs component */
+[data-md-tabs].tabs-container {
+  margin-bottom: var(--md-tabs-bottom-gap, 1.5rem);
+}
+
+/* (Optional) a little extra cushion inside the bottom of the box */
+[data-md-tabs].tabs-container .margin-top--md {
+  padding-bottom: .5rem;
+}
+
+/* Make the TOC item look native and not crowd the list */
+.toc-feedback {
+  list-style: none; /* TOC uses custom bullets; this keeps ours clean */
+  margin-top: var(--ifm-spacing-vertical);
+  padding-top: var(--ifm-spacing-vertical);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+.toc-feedback__title {
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.toc-feedback__row {
+  display: flex;
+  gap: 0.5rem;
+}
+.toc-feedback .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ---------------------------
+   PushFeedback modal: variables
+   --------------------------- */
+:root {
+  /* Typography */
+  --feedback-font-family: var(--ifm-font-family-base, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial);
+
+  /* Modal surface */
+  --feedback-modal-content-bg-color: var(--ifm-background-surface-color, #ffffff);
+  --feedback-modal-content-text-color: var(--ifm-font-color-base, #1b1b1d);
+  --feedback-modal-header-text-color: var(--ifm-font-color-base, #1b1b1d);
+  --feedback-modal-content-border-radius: var(--ifm-global-radius, 12px);
+  --feedback-modal-border-color: var(--ifm-color-emphasis-200, #e3e3e3);
+  --feedback-modal-input-border-color: var(--sui-steel-dark);
+  --feedback-modal-content-max-width: 450px;
+  --feedback-modal-text-border-radius: 12px;
+  --feedback-modal-input-border-radius: var(--feedback-modal-button-border-radius, 8px);
+
+  /* Buttons */
+  --feedback-modal-button-font-size: var(--ifm-font-size-base, 14px);
+  --feedback-modal-button-border-radius: var(--ifm-button-border-radius, 8px);
+  --feedback-modal-button-text-color: var(--ifm-font-color-base, #1b1b1d);
+  --feedback-modal-button-border-color: var(--ifm-color-emphasis-300, #c8c8c8);
+  --feedback-modal-button-border-color-active: var(--ifm-color-primary, #0b93f6);
+  --feedback-modal-button-submit-bg-color: var(--ifm-color-primary, #0b93f6);
+  --feedback-modal-button-submit-text-color: #ffffff;
+  --feedback-modal-rating-button-color: var(--sui-black);
+  --feedback-modal-rating-button--selected: var(--sui-black);
+  --feedback-modal-rating-button-selected-color: var(--sui-black);
+  --feedback-modal-close-color: var(--sui-steel-dark);
+}
+
+html[data-theme='dark'] {
+  --feedback-modal-text-border-color: var(--feedback-modal-button-border-color);
+  --feedback-modal-email-border-color: var(--feedback-modal-button-border-color);
+  --feedback-modal-content-bg-color: var(--ifm-background-surface-color, #0f1115);
+  --feedback-modal-content-text-color: var(--ifm-font-color-base, #e3e3e3);
+  --feedback-modal-header-text-color: var(--ifm-font-color-base, #e3e3e3);
+  --feedback-modal-border-color: var(--ifm-color-emphasis-200, #2a2f3a);
+  --feedback-modal-rating-button-color: var(--sui-white);
+  --feedback-modal-rating-button--selected: var(--sui-white);
+  --feedback-modal-rating-button-selected-color: var(--sui-white);
+  --feedback-modal-button-text-color: var(--ifm-font-color-base, #e3e3e3);
+  --feedback-modal-button-border-color: var(--ifm-color-emphasis-200, #2a2f3a);
+  --feedback-modal-input-border-color: var(--sui-white);
+    --feedback-modal-close-color: var(--sui-white);
+}
+
+.feedback-modal-content {
+  background-color: var(--feedback-modal-content-bg-color) !important;
+  color: var(--feedback-modal-content-text-color) !important;
+  border: 1px solid var(--feedback-modal-border-color) !important; /* replaces "border-color: 1px solid …" */
+  border-radius: var(--feedback-modal-content-border-radius) !important;
+  font-family: var(--feedback-font-family) !important;
+
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+  backdrop-filter: none !important;
+}
+
+/* Header text color (title + close icon area) */
+.feedback-modal-header {
+  color: var(--feedback-modal-header-text-color) !important;
+}
+
+/* Base button styling uses the vars you listed */
+.feedback-modal-button {
+  background-color: transparent !important;
+  color: var(--feedback-modal-button-text-color) !important;
+  border: 1px solid var(--feedback-modal-button-border-color) !important;
+  border-radius: var(--feedback-modal-button-border-radius) !important;
+  font-size: var(--feedback-modal-button-font-size) !important;
+  font-family: var(--feedback-font-family) !important;
+}
+
+/* Submit button uses its dedicated vars */
+.feedback-modal-button--submit {
+  background-color: var(--feedback-modal-button-submit-bg-color) !important;
+  color: var(--feedback-modal-button-submit-text-color) !important;
+  border: 1px solid var(--feedback-modal-button-border-color-active) !important;
+}
+
+/* Optional: hover/focus states in line with Infima */
+.feedback-modal-button:hover,
+.feedback-modal-button:focus {
+  border-color: var(--feedback-modal-button-border-color-active) !important;
+}
+
+/* Keep it comfy on small screens */
+@media (max-width: 640px) {
+  .feedback-modal-content {
+    width: calc(100vw - 2rem) !important;
+    max-width: calc(100vw - 2rem) !important;
+    margin: 0 auto !important;
+  }
+}
+
+/* Optional: if the wrapper is flex/grid, ensure centering */
+.feedback-modal-overlay,
+.feedback-modal-backdrop {
+  display: grid !important;
+  place-items: center !important;
 /* apply to every Tabs on the site */
 .theme-doc-markdown .tabs-container {
   border: 2px solid var(--ifm-toc-border-color);
@@ -520,6 +700,7 @@ details > div > div {
   background: var(--ifm-background-surface-color);
   box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06));
   padding: var(--ifm-spacing-md) var(--ifm-spacing-md);
+}
 }
 
 /* Extra padding for every Tabs panel on the site */

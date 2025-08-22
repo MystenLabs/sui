@@ -2,6 +2,8 @@
 title: Using Events
 description: Use events to notify on-chain assets of activity your smart contracts initiate and query events from other packages to trigger logic based on emitted events.
 keywords: [ using events, notify events, notify assets, notify on-chain assets, activity events, events for activities, move events, events in move, query events, sui RPC, graphql, move, filter events, rust, typescript ]
+mdx:
+  format: md
 ---
 
 The Sui network stores countless objects on chain where Move code can perform actions using those objects. Tracking this activity is often desired, for example, to discover how many times a module mints an NFT or to tally the amount of SUI in transactions that a smart contract generates.
@@ -33,7 +35,7 @@ use sui::event;
 
 With the dependency added, you can use the `emit` function to trigger an event whenever the action you want to monitor fires. For example, the following code is part of an example application that enables the locking of objects. The `lock` function handles the locking of objects and emits an event whenever the function is called.
 
-{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
+{@inject: ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
 
 ### Query events with RPC
 
@@ -63,8 +65,11 @@ $ curl -X POST https://fullnode.mainnet.sui.io:443 \
 
 <details>
 <summary>
+
 A successful `curl` return
+
 </summary>
+
 ```json
 {
 	"jsonrpc": "2.0",
@@ -151,16 +156,19 @@ A successful `curl` return
 	"id": 1
 }
 ```
+
 </details>
 
 The TypeScript SDK provides a wrapper for the `suix_queryEvents` method: [`client.queryEvents`](https://sdk.mystenlabs.com/typedoc/classes/_mysten_sui.client.SuiClient.html#queryEvents).
 
 <details>
 <summary>
-    TypeScript SDK queryEvents example
+
+TypeScript SDK queryEvents example
+
 </summary>
 
-```
+```ts
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading } from "@radix-ui/themes";
@@ -221,8 +229,10 @@ export function Creategame({ onCreated }: { onCreated: (id: string) => void }) {
   );
 }
 ```
+
 The example displays the following JSON representation of the event. 
-```
+
+```json
 {
   "id": {
     "txDigest": "46vSzYS9PaTWZDju2N8ECebAGLrXBdrP9NmvvydtDW2c",
@@ -299,17 +309,27 @@ async fn main() -> Result<(), anyhow::Error> {
 You can use GraphQL to query events instead of JSON RPC. The following example queries are in the [`sui-graphql-rpc` crate](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/event_connection) in the Sui repo. 
 
 <details>
+
 <summary>
+
 Event connection
+
 </summary>
-{@inject: crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql}
+
+{@inject: ../../../../../crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql}
+
 </details>
 
 <details>
+
 <summary>
+
 Filter events by sender
+
 </summary>
-{@inject: crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql}
+
+{@inject: ../../../../../crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql}
+
 </details>
 
 The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.graphql.html) provides functionality to interact with the Sui GraphQL service.
@@ -327,19 +347,29 @@ Using a custom indexer provides a near-real time monitoring of events, so is mos
 To monitor events, you need a database to store checkpoint data. The [Trustless Swap](../app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
 
 <details>
+
 <summary>
+
 `event-indexer.ts` from Trustless Swap
+
 </summary>
-{@inject: examples/trading/api/indexer/event-indexer.ts noComments}
+
+{@inject: ../../../../../examples/trading/api/indexer/event-indexer.ts noComments}
+
 </details>
 
 Trustless Swap incorporates handlers to process each event type that triggers. For the `locked` event, the handler in `locked-handler.ts` fires and updates the Prisma database accordingly.
 
 <details>
+
 <summary>
+
 `locked-handler.ts` from Trustless Swap
+
 </summary>
-{@inject: examples/trading/api/indexer/locked-handler.ts}
+
+{@inject: ../../../../../examples/trading/api/indexer/locked-handler.ts}
+
 </details>
 
 ## Related links
