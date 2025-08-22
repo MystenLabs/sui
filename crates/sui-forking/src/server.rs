@@ -17,7 +17,7 @@ use sui_types::transaction::Transaction;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use crate::types::*;
+use crate::{rpc::start_rpc, types::*};
 
 pub struct AppState {
     pub simulacrum: Arc<RwLock<Simulacrum>>,
@@ -26,10 +26,13 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new() -> Self {
-        let simulacrum = Simulacrum::new();
+    pub async fn new() -> Self {
+        let simulacrum = Arc::new(RwLock::new(Simulacrum::new()));
+        let rpc = start_rpc(simulacrum.clone())
+            .await
+            .expect("Failed to start RPC server");
         Self {
-            simulacrum: Arc::new(RwLock::new(simulacrum)),
+            simulacrum,
             transaction_count: Arc::new(AtomicUsize::new(0)),
             forked_at_checkpoint: 0,
         }
@@ -183,7 +186,7 @@ async fn execute_tx(
 }
 
 pub async fn start_server(host: String, port: u16) -> Result<()> {
-    let state = Arc::new(AppState::new());
+    let state = Arc::new(AppState::new().await);
 
     let app = Router::new()
         .route("/health", get(health))

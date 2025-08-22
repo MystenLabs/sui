@@ -1,4 +1,5 @@
 mod commands;
+mod rpc;
 mod server;
 mod types;
 
