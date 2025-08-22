@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Fix the spurious whitespace when copying code
-// from the middle of source.
+// This component is used for embedding code files
+// into {@include: } snippets
+// It supports the same functionality as {@inject:}
+
 exports.removeLeadingSpaces = (codeText, prepend = "") => {
   codeText = codeText.replace(/^\n/, "");
   const numSpaces = codeText.match(/^\s*/)

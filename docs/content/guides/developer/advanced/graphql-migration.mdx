@@ -1,6 +1,8 @@
 ---
 title: Migrating to GraphQL (Alpha)
 beta: testnet, devnet, mainnet
+mdx:
+  format: md
 ---
 
 {@include: ../../../snippets/migrate-to-graphql.mdx}
@@ -19,9 +21,9 @@ For a comprehensive list of all available GraphQL features, consult the [referen
 
 The goal is to get the total number of transaction blocks in the network.
 
-<Tabs groupId="migrating-json-rpc">
+<Tabs groupId="json-graphql">
 
-<TabItem value="json-rpc1" label="JSON-RPC">
+<TabItem value="json-rpc" label="JSON-RPC">
 
 ```json
 {
@@ -33,7 +35,7 @@ The goal is to get the total number of transaction blocks in the network.
 ```
 
 </TabItem>
-<TabItem value="graphql1" label="GraphQL">
+<TabItem value="graphql" label="GraphQL">
 
 ```graphql
 query {
@@ -49,9 +51,9 @@ query {
 ### Example 2: Get a specific transaction block
 The goal is to get the transaction block by its digest.
 
-<Tabs groupId="migrating-json-rpc">
+<Tabs groupId="json-graphql">
 
-<TabItem value="json-rpc2" label="JSON-RPC">
+<TabItem value="json-rpc" label="JSON-RPC">
 
 ```json
 {
@@ -73,7 +75,7 @@ The goal is to get the transaction block by its digest.
 ```
 
 </TabItem>
-<TabItem value="graphql2" label="GraphQL">
+<TabItem value="graphql" label="GraphQL">
 
 ```graphql
 query {
@@ -106,9 +108,9 @@ query {
 
 The goal is to return all `Coin<0x2::sui::SUI>` objects an address owns.
 
-<Tabs groupId="migrating-json-rpc">
+<Tabs groupId="json-graphql">
 
-<TabItem value="json-rpc3" label="JSON-RPC">
+<TabItem value="json-rpc" label="JSON-RPC">
 
 ```json
 query {
@@ -125,7 +127,7 @@ query {
 ```
 
 </TabItem>
-<TabItem value="graphql3" label="GraphQL">
+<TabItem value="graphql" label="GraphQL">
 
 ```graphql
 query {
