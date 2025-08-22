@@ -129,6 +129,8 @@ pub(crate) struct ObjectImpl<'o>(&'o Object);
 ///
 /// The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
 ///
+/// Specifying a `version` or a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+///
 /// See `Query.object` for more details.
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ObjectKey {
@@ -138,7 +140,7 @@ pub(crate) struct ObjectKey {
     /// If specified, tries to fetch the object at this exact version.
     pub(crate) version: Option<UInt53>,
 
-    /// If specified, tries to fetch the latest version of the object at or before this version.
+    /// If specified, tries to fetch the latest version of the object at or before this version. Nested dynamic field accesses will also be subject to this bound.
     ///
     /// This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
     ///
