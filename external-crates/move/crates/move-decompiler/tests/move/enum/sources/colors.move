@@ -1,13 +1,4 @@
-/*
-/// Module: enums
-module enums::enums;
-*/
-
-// For Move coding conventions, see
-// https://docs.sui.io/concepts/sui-move-concepts/conventions
-
-
-module enums::enums;
+module enums::colors;
 
 public enum Color has copy, drop {
     Red,
