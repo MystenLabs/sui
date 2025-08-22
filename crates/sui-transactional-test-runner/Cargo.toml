@@ -14,6 +14,7 @@ workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 bimap.workspace = true
+bincode = { version = "2.0.1", features = ["serde"] }
 clap.workspace = true
 eyre.workspace = true
 http.workspace = true
@@ -28,6 +29,7 @@ serde_json.workspace = true
 futures.workspace = true
 criterion.workspace = true
 tracing.workspace = true
+winnow.workspace = true
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true

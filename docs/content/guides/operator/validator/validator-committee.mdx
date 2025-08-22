@@ -1,7 +1,10 @@
 ---
-title: Validator Committee
+title: Validator Node Committee
 description: Sui has a committee of validators to verify on-chain transactions. Epochs, quorums, transactions, certificates, and consensus are touch points for this committee.
 keywords: [ sui validator node, validator committee, epochs, quorums, write requests, transactions, certificates, consensus, verify on-chain, verify transactions on-chain, validator nodes ]
+sidebar_position: 2
+sidebar_label: Committee
+
 ---
 
 A set of independent validators participate on the Sui network, each running its own instance of the Sui software on a separate machine (or a sharded cluster of machines the same entity operates). Each validator handles read and write requests sent by clients, verifying transactions and updating on-chain information.
@@ -14,7 +17,7 @@ Sui uses Delegated Proof-of-Stake (DPoS) to determine which validators operate t
 
 ## Epochs 
 
-Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (~24-hour) epochs. During a particular epoch, the set of validators participating in the network and their voting power is fixed. At an epoch boundary, reconfiguration might occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](./genesis.mdx) and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as staking/un-staking, and distribution of staking rewards are also processed at epoch boundaries.
+Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (~24-hour) epochs. During a particular epoch, the set of validators participating in the network and their voting power is fixed. At an epoch boundary, reconfiguration might occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](../genesis.mdx) and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as staking/un-staking, and distribution of staking rewards are also processed at epoch boundaries.
 
 ## Quorums 
 

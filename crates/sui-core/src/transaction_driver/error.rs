@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use itertools::Itertools as _;
 use sui_types::{
@@ -79,6 +80,13 @@ pub enum TransactionDriverError {
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
     },
+    /// Transaction timed out but we return last retriable error if it exists.
+    /// Non-retriable.
+    TimeOutWithLastRetriableError {
+        last_error: Option<Box<TransactionDriverError>>,
+        attempts: u32,
+        timeout: Duration,
+    },
 }
 
 impl TransactionDriverError {
@@ -87,6 +95,7 @@ impl TransactionDriverError {
             TransactionDriverError::Aborted { .. } => true,
             TransactionDriverError::InvalidTransaction { .. } => false,
             TransactionDriverError::ForkedExecution { .. } => false,
+            TransactionDriverError::TimeOutWithLastRetriableError { .. } => false,
         }
     }
 
@@ -176,6 +185,22 @@ impl std::fmt::Display for TransactionDriverError {
                 self.display_invalid_transaction(f)
             }
             TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
+            TransactionDriverError::TimeOutWithLastRetriableError {
+                last_error,
+                attempts,
+                timeout,
+            } => {
+                write!(
+                    f,
+                    "Transaction timed out after {} attempts. Timeout: {:?}. Last error: {}",
+                    attempts,
+                    timeout,
+                    last_error
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_default()
+                )
+            }
         }
     }
 }

@@ -44,6 +44,12 @@
         address
         version
         objectBcs
+        asMoveObject {
+          contents {
+            type { repr }
+            json
+          }
+        }
       }
     }
   }

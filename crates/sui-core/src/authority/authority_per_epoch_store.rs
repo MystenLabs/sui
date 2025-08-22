@@ -1808,16 +1808,6 @@ impl AuthorityPerEpochStore {
         rx.await.unwrap()
     }
 
-    pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
-        self.consensus_output_cache
-            .remove_reverted_transaction(tx_digest);
-        let tables = self.tables()?;
-        let mut batch = tables.effects_signatures.batch();
-        batch.delete_batch(&tables.effects_signatures, [*tx_digest])?;
-        batch.write()?;
-        Ok(())
-    }
-
     pub fn insert_effects_digest_and_signature(
         &self,
         tx_digest: &TransactionDigest,
@@ -4868,25 +4858,6 @@ impl AuthorityPerEpochStore {
 
     pub fn clear_signature_cache(&self) {
         self.signature_verifier.clear_signature_cache();
-    }
-
-    pub(crate) fn check_all_executed_transactions_in_checkpoint(&self) {
-        let uncheckpointed_transactions = self
-            .consensus_output_cache
-            .get_uncheckpointed_transactions();
-
-        if uncheckpointed_transactions.is_empty() {
-            info!("Verified that all executed transactions are in a checkpoint");
-            return;
-        }
-
-        // TODO: should this be debug_fatal? Its potentially very serious in that it could
-        // indicate that we broke the checkpoint inclusion guarantee, but we won't be able to
-        // do anything about it if it happens.
-        fatal!(
-            "The following transactions were neither reverted nor checkpointed: {:?}",
-            uncheckpointed_transactions
-        );
     }
 
     pub(crate) fn set_consensus_tx_status(
