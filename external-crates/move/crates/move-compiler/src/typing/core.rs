@@ -801,6 +801,10 @@ impl<'env, 'outer> Context<'env, 'outer> {
         self.reporter.pop_warning_filter_scope()
     }
 
+    pub fn struct_field_access_allowed(&self) -> bool {
+        self.env().test_mode() || self.env().verify_mode()
+    }
+
     pub fn emit_warning_if_deprecated(
         &mut self,
         mident: &ModuleIdent,
