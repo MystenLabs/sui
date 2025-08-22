@@ -205,7 +205,7 @@ mod tests {
                 }
                 */
                 /// module aa::bb {
-                /// 
+                ///
                 /// }
                 module works::perfectly {}
             ",
@@ -248,7 +248,7 @@ mod tests {
             ),
             (
                 r"
-                module a::/* this is odd but 
+                module a::/* this is odd but
                 it works */b {} // module bb::aa {}
                 ",
                 set(vec!["a"]),

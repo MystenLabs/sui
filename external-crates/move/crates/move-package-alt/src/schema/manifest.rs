@@ -3,6 +3,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Deserializer, de};
 use serde_spanned::Spanned;
 
+use crate::compatibility::legacy::LegacyData;
+
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
 };
@@ -14,7 +16,7 @@ pub type EnvironmentID = String;
 // Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
 // user-editable files
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
@@ -29,6 +31,11 @@ pub struct ParsedManifest {
     #[serde(default)]
     pub dep_replacements:
         BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>>,
+
+    /// Additional information that we may need when we handle legacy packages. This data is only
+    /// populated by the legacy parser
+    #[serde(skip)]
+    pub legacy_data: Option<LegacyData>,
 }
 
 /// The `[package]` section of a manifest

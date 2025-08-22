@@ -128,6 +128,10 @@ impl Manifest {
         &self.file_handle
     }
 
+    pub fn into_parsed(self) -> ParsedManifest {
+        self.inner
+    }
+
     pub(crate) fn parsed(&self) -> &ParsedManifest {
         &self.inner
     }
