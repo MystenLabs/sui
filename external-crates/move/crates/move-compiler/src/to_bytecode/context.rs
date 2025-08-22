@@ -62,6 +62,10 @@ impl<'a> Context<'a> {
         self.current_module.map(|cur| cur == m).unwrap_or(false)
     }
 
+    fn struct_field_access_allowed(&self) -> bool {
+        self.env.test_mode() || self.env.verify_mode()
+    }
+
     //**********************************************************************************************
     // Dependency item building
     //**********************************************************************************************
@@ -264,7 +268,7 @@ impl<'a> Context<'a> {
 
     pub fn struct_definition_name(&self, m: &ModuleIdent, s: DatatypeName) -> IR::DatatypeName {
         assert!(
-            self.is_current_module(m),
+            self.is_current_module(m) || self.struct_field_access_allowed(),
             "ICE invalid struct definition lookup"
         );
         Self::translate_datatype_name(s)
