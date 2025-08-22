@@ -21,6 +21,7 @@ use async_graphql::{
     Context, Object,
 };
 use diesel::{prelude::QueryableByName, sql_types::BigInt};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
@@ -135,7 +136,7 @@ impl Event {
         let query = query!(
             r#"
             SELECT
-                DISTINCT tx_sequence_number
+                tx_sequence_number
             FROM
                 ev_struct_inst
             WHERE
@@ -166,6 +167,7 @@ impl Event {
             .context("Failed to execute query")?
             .into_iter()
             .map(|tx_seq: TxSequenceNumber| tx_seq.0 as u64)
+            .unique()
             .collect();
 
         let ev_lookup =
