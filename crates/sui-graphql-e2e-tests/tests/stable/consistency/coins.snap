@@ -242,7 +242,7 @@ Response: {
 }
 
 task 12, lines 137-163:
-//# run-graphql --cursors bcs(@{obj_1_1},2)
+//# run-graphql --cursors bcs(bcs(@{obj_1_1}),2)
 Response: {
   "data": {
     "availableRange": {
@@ -293,7 +293,7 @@ Response: {
 }
 
 task 13, lines 165-191:
-//# run-graphql --cursors bcs(@{obj_1_1},1)
+//# run-graphql --cursors bcs(bcs(@{obj_1_1}),1)
 Response: {
   "data": null,
   "errors": [
@@ -316,7 +316,7 @@ Response: {
 }
 
 task 14, lines 193-219:
-//# run-graphql --cursors bcs(@{obj_1_1},0)
+//# run-graphql --cursors bcs(bcs(@{obj_1_1}),0)
 Response: {
   "data": null,
   "errors": [

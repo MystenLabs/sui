@@ -188,7 +188,7 @@ public fun confirm_request<T>(
     let mut completed = receipts.into_keys();
     let mut total = completed.length();
 
-    assert!(total == self.rules.size(), EPolicyNotSatisfied);
+    assert!(total == self.rules.length(), EPolicyNotSatisfied);
 
     while (total > 0) {
         let rule_type = completed.pop_back();

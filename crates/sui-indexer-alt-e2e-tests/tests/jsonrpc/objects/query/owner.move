@@ -48,7 +48,7 @@
   "params": ["@{A}", { "options": { "showContent": true } }, null, 2]
 }
 
-//# run-jsonrpc --cursors bcs(@{obj_4_1},2)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_4_1}),2)
 {
   "method": "suix_getOwnedObjects",
   "params": ["@{A}", { "options": { "showContent": true } }, "@{cursor_0}", 2]

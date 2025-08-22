@@ -87,8 +87,9 @@ pub fn save_trace_output(
                     "Failed to disassemble module {:?} in package {}",
                     mod_name, &pkg_addr,
                 ))?;
-            // need version ID here (for potentially upgraded package) rather than original ID (for the original
-            // version of the package), otherwise we won't be able to distinguish map content based on their module IDs
+            // need version ID here (for potentially upgraded package) rather than original ID
+            // (for the original version of the package), otherwise we won't be able to
+            // distinguish map content based on their module IDs
             bcode_map.module_name.0 = pkg.id().into();
             let bcode_map_json = serialize_to_json_string(&bcode_map).context(format!(
                 "Failed to serialize bytecode source map for module {:?} in package {}",
