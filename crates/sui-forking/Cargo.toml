@@ -4,16 +4,17 @@ edition = "2024"
 version.workspace = true
 
 [dependencies]
-sui-swarm-config.workspace = true
-sui-types.workspace = true
-sui-replay-2.workspace = true
+base64.workspace = true
+bcs.workspace = true
 simulacrum.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 jsonrpsee.workspace = true
 axum.workspace = true
+fastcrypto.workspace = true
 hyper.workspace = true
+prometheus.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
@@ -21,15 +22,22 @@ tracing-subscriber.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 reqwest.workspace = true
-parking_lot.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
+async-trait.workspace = true
+
+mysten-metrics.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-core.workspace = true
+sui-indexer-alt-jsonrpc.workspace = true
 sui-config.workspace = true
-mysten-metrics.workspace = true
-base64.workspace = true
-bcs.workspace = true
+sui-open-rpc.workspace = true
+sui-open-rpc-macros.workspace = true
+sui-swarm-config.workspace = true
+sui-types.workspace = true
+sui-replay-2.workspace = true
 
 [lints]
 workspace = true

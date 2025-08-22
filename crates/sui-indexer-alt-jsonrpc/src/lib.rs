@@ -41,7 +41,7 @@ pub mod args;
 pub mod config;
 mod context;
 pub mod data;
-mod error;
+pub mod error;
 mod metrics;
 mod paginate;
 mod timeout;
