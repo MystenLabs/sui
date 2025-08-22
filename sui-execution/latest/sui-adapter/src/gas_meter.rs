@@ -280,7 +280,7 @@ impl GasMeter for SuiGasMeter<'_> {
     fn charge_neq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
         let size_reduction = abstract_memory_size_with_traversal(self.0, lhs)
             + abstract_memory_size_with_traversal(self.0, rhs);
-        let size_increase = if traverse_refs(self.0.gas_model_version) {
+        let size_increase = if enable_traverse_refs(self.0.gas_model_version) {
             Type::Bool.size() + size_reduction
         } else {
             Type::Bool.size()
@@ -371,36 +371,40 @@ impl GasMeter for SuiGasMeter<'_> {
 }
 
 fn abstract_memory_size(status: &GasStatus, val: impl ValueView) -> AbstractMemorySize {
-    if use_legacy_abstract_size(status.gas_model_version) {
-        val.abstract_memory_size(&SizeConfig {
-            traverse_references: false,
-            wide_vector_size: false,
-        })
-    } else {
-        val.abstract_memory_size(&SizeConfig {
-            traverse_references: false,
-            wide_vector_size: true,
-        })
-    }
+    let config = size_config_for_gas_model_version(status.gas_model_version, false);
+    val.abstract_memory_size(&config)
 }
 
 fn abstract_memory_size_with_traversal(
     status: &GasStatus,
     val: impl ValueView,
 ) -> AbstractMemorySize {
-    if use_legacy_abstract_size(status.gas_model_version) {
-        val.abstract_memory_size(&SizeConfig {
-            traverse_references: false,
-            wide_vector_size: false,
-        })
-    } else {
-        val.abstract_memory_size(&SizeConfig {
-            traverse_references: traverse_refs(status.gas_model_version),
-            wide_vector_size: true,
-        })
-    }
+    let config = size_config_for_gas_model_version(status.gas_model_version, true);
+    val.abstract_memory_size(&config)
 }
 
-fn traverse_refs(gas_model_version: u64) -> bool {
+fn enable_traverse_refs(gas_model_version: u64) -> bool {
     gas_model_version > 9
+}
+
+fn size_config_for_gas_model_version(
+    gas_model_version: u64,
+    should_traverse_refs: bool,
+) -> SizeConfig {
+    if use_legacy_abstract_size(gas_model_version) {
+        SizeConfig {
+            traverse_references: false,
+            include_vector_size: false,
+        }
+    } else if should_traverse_refs {
+        SizeConfig {
+            traverse_references: enable_traverse_refs(gas_model_version),
+            include_vector_size: true,
+        }
+    } else {
+        SizeConfig {
+            traverse_references: false,
+            include_vector_size: true,
+        }
+    }
 }

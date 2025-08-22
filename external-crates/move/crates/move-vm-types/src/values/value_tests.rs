@@ -6,9 +6,10 @@ use crate::{loaded_data::runtime_types::Type, values::*, views::*};
 use move_binary_format::errors::*;
 use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
 
+#[cfg(test)]
 const SIZE_CONFIG: SizeConfig = SizeConfig {
     traverse_references: false,
-    wide_vector_size: false,
+    include_vector_size: false,
 };
 
 #[test]

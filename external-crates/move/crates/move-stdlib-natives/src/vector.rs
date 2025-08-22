@@ -122,7 +122,7 @@ pub fn native_push_back(
             * std::cmp::max(
                 e.abstract_memory_size(&SizeConfig {
                     traverse_references: false,
-                    wide_vector_size: false,
+                    include_vector_size: false,
                 }),
                 1.into(),
             );
