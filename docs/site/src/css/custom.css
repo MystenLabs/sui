@@ -147,10 +147,6 @@
   @apply bg-[var(--ifm-menu-color-background-hover)]
 } 
 
-.menu__link--active:not(.menu__link--sublist) {
-  @apply bg-sui-gray-90;
-}
-
 .navbar-sidebar .menu__link--active, .navbar-sidebar .menu__link--active:hover, [data-theme='dark'] .navbar-sidebar .menu__link--active, [data-theme='dark'] .navbar-sidebar .menu__link--active:hover {
   @apply !bg-sui-blue-primary text-sui-gray-100
 }
