@@ -57,7 +57,7 @@ pub(crate) trait InternalContext<T, E: std::error::Error> {
 /// populate `E` with `anyhow::Error`, which would then cause `From` impls to overlap if we
 /// supported conversion from both `E` and `anyhow::Error`.
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum RpcError<E: std::error::Error = Infallible> {
+pub enum RpcError<E: std::error::Error = Infallible> {
     #[error("Invalid Params: {0}")]
     InvalidParams(E),
 
@@ -116,14 +116,12 @@ impl<E: std::error::Error> From<RpcError<E>> for ErrorObject<'static> {
 }
 
 /// Helper function to convert a user error into the `RpcError` type.
-pub(crate) fn invalid_params<E: std::error::Error>(err: E) -> RpcError<E> {
+pub fn invalid_params<E: std::error::Error>(err: E) -> RpcError<E> {
     RpcError::InvalidParams(err)
 }
 
 /// Helper function to convert a jsonrpc client error into an `ErrorObject`.
-pub(crate) fn client_error_to_error_object(
-    error: jsonrpsee::core::ClientError,
-) -> ErrorObject<'static> {
+pub fn client_error_to_error_object(error: jsonrpsee::core::ClientError) -> ErrorObject<'static> {
     match error {
         // `Call` is the only error type that actually conveys meaningful error
         // from a user calling the method. Other error variants are all more or less
