@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use std::sync::Arc;
 
 use anyhow::Context;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::CHECKPOINT_METADATA;
 use tonic::metadata::AsciiMetadataValue;
 
 use crate::config::{ConsistencyConfig, RpcConfig};
@@ -12,8 +12,6 @@ use crate::schema::Schema;
 use crate::store::Store;
 
 use super::error::{RpcError, StatusCode};
-
-pub(super) const CHECKPOINT_METADATA: &str = "x-sui-checkpoint";
 
 /// State exposed to RPC service implementations.
 #[derive(Clone)]
@@ -52,8 +50,13 @@ impl State {
     ) -> Result<u64, RpcError<Error>> {
         let Some(checkpoint) = request.metadata().get(CHECKPOINT_METADATA) else {
             // If a checkpoint hasn't been supplied default to the latest snapshot.
-            let range = self.store.db().snapshot_range().ok_or(Error::NoSnapshots)?;
-            return Ok(*range.end());
+            return Ok(self
+                .store
+                .db()
+                .snapshot_range(u64::MAX)
+                .ok_or(Error::NoSnapshots)?
+                .end()
+                .checkpoint_hi_inclusive);
         };
 
         Ok(checkpoint

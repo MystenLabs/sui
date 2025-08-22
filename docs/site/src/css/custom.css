@@ -502,3 +502,64 @@ details > div > div {
 .text-gray {
   color: var(--sui-gray);
 }
+
+/* apply to every Tabs on the site */
+.theme-doc-markdown .tabs-container {
+  border: 2px solid var(--ifm-toc-border-color);
+  border-radius: var(--ifm-global-radius);
+  background: var(--ifm-background-surface-color);
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06));
+  padding: var(--ifm-spacing-md) var(--ifm-spacing-md);
+}
+
+/* Extra padding for every Tabs panel on the site */
+.theme-doc-markdown .tabs-container [role="tabpanel"] {
+  padding: clamp(0.75rem, 1.2vw, 1rem);
+}
+
+.theme-doc-markdown .tabs-container [role="tabpanel"] > :first-child { margin-top: 0; }
+.theme-doc-markdown .tabs-container [role="tabpanel"] > :last-child { margin-bottom: 0; }
+
+/* Center the whole tab bar */
+.tabsHeadingCentered {
+  justify-content: left;
+}
+
+/* Style tab items like headings */
+.tabsHeadingCentered .tabs__item {
+  font-size: 1.75rem;       /* h2 size */
+  font-weight: 700;         /* bold */
+  padding-top: 2rem;
+  padding-left: 1rem;
+  padding-bottom: 0.5rem;
+  margin: 0 0.5rem;         /* spacing between tabs */
+  background: transparent;
+  border: none;
+  color: var(--ifm-heading-color);
+  cursor: pointer;
+  text-align: left;
+}
+
+/* Make active tab look the same as inactive */
+.tabsHeadingClean .tabs__item--active {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--ifm-heading-color); /* same as normal */
+}
+
+/* Kill the default underline */
+.tabsHeadingClean .tabs__list::after {
+  display: none !important;
+}
+
+.theme-doc-markdown details.nudge-details,
+.theme-doc-markdown .nudge-details details {
+  margin-left: 30px !important;
+}
+
+h5 {
+  font-size: 1.2rem;         /* smaller than h3 (usually ~1.3rem) */
+  margin-top: 1.2em;       /* spacing for readability */
+  margin-bottom: 0.6em;
+}

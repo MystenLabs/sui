@@ -53,6 +53,7 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
 use futures::{future::BoxFuture, FutureExt};
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
@@ -80,7 +81,7 @@ use sui_types::storage::{
     FullObjectKey, InputKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::transaction::{TransactionDataAPI, VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -1273,51 +1274,46 @@ impl WritebackCache {
 
     fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
-        assert!(
-            self.dirty.pending_transaction_writes.is_empty(),
-            "should be empty due to revert_state_update"
-        );
+
+        // Note: there cannot be any concurrent writes to self.dirty while we are in this function,
+        // as all transaction execution is paused.
+        for r in self.dirty.pending_transaction_writes.iter() {
+            let outputs = r.value();
+            if !outputs
+                .transaction
+                .transaction_data()
+                .shared_input_objects()
+                .is_empty()
+            {
+                debug_fatal!("transaction must be single writer");
+            }
+            info!(
+                "clearing state for transaction {:?}",
+                outputs.transaction.digest()
+            );
+            for (object_id, object) in outputs.written.iter() {
+                if object.is_package() {
+                    info!("removing non-finalized package from cache: {:?}", object_id);
+                    self.packages.invalidate(object_id);
+                }
+                self.object_by_id_cache.invalidate(object_id);
+                self.cached.object_cache.invalidate(object_id);
+            }
+
+            for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
+                self.object_by_id_cache.invalidate(object_id);
+                self.cached.object_cache.invalidate(object_id);
+            }
+        }
+
         self.dirty.clear();
+
         info!("clearing old transaction locks");
         self.object_locks.clear();
         info!("clearing object per epoch marker table");
         self.store
             .clear_object_per_epoch_marker_table(execution_guard)
             .expect("db error");
-    }
-
-    fn revert_state_update_impl(&self, tx: &TransactionDigest) {
-        // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
-        // state when clear_state_end_of_epoch_impl is called.
-        // Further, once we do this, we can delay the insertion of the transaction into
-        // pending_consensus_transactions until after the transaction has executed.
-        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
-            assert!(
-                !self.is_tx_already_executed(tx),
-                "attempt to revert committed transaction"
-            );
-
-            // A transaction can be inserted into pending_consensus_transactions, but then reconfiguration
-            // can happen before the transaction executes.
-            info!("Not reverting {:?} as it was not executed", tx);
-            return;
-        };
-
-        for (object_id, object) in outputs.written.iter() {
-            if object.is_package() {
-                info!("removing non-finalized package from cache: {:?}", object_id);
-                self.packages.invalidate(object_id);
-            }
-            self.object_by_id_cache.invalidate(object_id);
-            self.cached.object_cache.invalidate(object_id);
-        }
-
-        for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
-            self.object_by_id_cache.invalidate(object_id);
-            self.cached.object_cache.invalidate(object_id);
-        }
-
-        // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
     }
 
     fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) {

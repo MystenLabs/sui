@@ -1,0 +1,249 @@
+---
+title: Validator Node Tools
+description: Use the Sui CLI to interact with a Full node's validator commands. 
+keywords: [ sui cli, full node, delegator, validator, operation cap, report validators, join a committee, leave a committee, report a validator, proof of possession, generate proof of possession ]
+sidebar_position: 5
+sidebar_label: Tools
+---
+
+This guide focuses on using the Sui CLI `validator` commands. 
+
+:::info
+
+This tool supports only pending validators and active validators.
+
+:::
+
+<Tabs className="tabsHeadingCentered">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] Complete all [Sui installation prerequisites](../../developer/getting-started/sui-install.mdx#prerequisites).
+
+- [x] Build the `sui` binary, which you need for the genesis ceremony. You can do this on any computer.
+
+<details className="nudge-details">
+
+<summary>
+
+View `sui` binary installation details.
+
+</summary>
+
+    1. Clone the git repo:
+
+           `$ git clone git@github.com:MystenLabs/sui.git && cd sui`
+
+    2. Check out the commit to use for Testnet:
+
+           `$ git checkout testnet`
+
+    3. Build `sui` binary
+
+           `$ cargo build --bin sui`
+
+    4. Remember the path to your binary:
+
+           `$ export SUI_BINARY="$(pwd)/target/debug/sui"`
+
+</details>
+
+- [x] Set up your Sui account and CLI environment. 
+
+<details className="nudge-details">
+
+<summary>
+
+View Sui account and CLI environment instructions.
+
+</summary>
+
+    - If this is the first time running this program, it asks you to provide a Sui full node server URL and a meaningful environment alias. It also generates a random key pair in `sui.keystore` and a config `client.yaml`. Swap in your validator account key if you already have one.
+
+       By default, the `client.yaml` and `sui.keystore` files are located in `~/.sui/sui_config`. For more information, refer to the [Sui client CLI tutorial](/references/cli/client.mdx).
+
+       ```sh
+       $ sui client
+       ```
+
+    - If you already set it up, just make sure:
+      - `rpc` is correct in `client.yaml`. 
+      - `active_address` is correct in `client.yaml`.
+      - `sui.keystore` contains your account key pair.
+
+</details>
+
+- [x] Test your network connection and configuration by displaying your validator info:
+
+```sh
+$ sui validator display-metadata
+```
+
+</TabItem>
+</Tabs>
+
+## Using Sui CLI 
+Use the Sui CLI to perform validator tasks.
+### Print help info
+
+```sh
+$ sui validator --help
+```
+
+### Become a validator or join committee
+
+To become a validator candidate, first run:
+
+```sh
+$ sui validator make-validator-info <name> <description> <image-url> <project-url> <host-name> <gas_price>
+```
+
+This generates a `validator.info` file and key pair files. The output of this command includes:
+  1. Four [key pair files](./validator-tasks.mdx#key-management). **Set their permissions with the minimal visibility (`chmod 600`, for example) and store them securely**. They are needed when running the validator node.
+    a. If you follow this guide thoroughly, this key pair is actually copied from your `sui.keystore` file.
+  2. `validator.info` file that contains your validator information. Double check all information is correct.
+
+Then run:
+
+```sh
+$ sui validator become-candidate path/to/validator.info
+```
+
+This submits an on-chain transaction for you to become a validator candidate. The parameter is the file path to the `validator.info` file generated in the previous step. **Make sure the transaction succeeds (printed in the output).**
+
+At this point, you are validator candidate and can start to accept self-staking and delegated staking. 
+
+If you haven't already, start a full node now to catch up with the network. When you officially join the committee but are not fully up-to-date, you cannot make meaningful contributions to the network and might be subject to peer reporting. This imposes the risk of reduced staking rewards for you and your delegator.
+
+Then, you must acquire 30M SUI and stake it to the validator staking pool. You can add Sui to the validator staking pool with the command:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_add_stake --args 0x5 {sui_object_id} {validator_address}
+```
+
+This creates a stake object (of type `0x3::staking_pool::StakedSui`). This object can be withdrawn with the following command:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_withdraw_stake --args 0x5 {stake_object_id}
+```
+
+:::tip 
+
+You cannot withdraw non-activated stake from an inactive validator. If that is the case, you should be able to withdraw after the next epoch change when the stake becomes active. 
+
+:::
+
+After you have staked enough, run:
+
+```sh
+$ sui validator join-committee
+```
+
+Joining the committee makes you a pending validator. A pending validator becomes active and joins the committee starting from the next epoch.
+
+
+### Leave committee
+
+To leave the committee, run:
+
+```sh
+$ sui validator leave-committee
+```
+
+You are removed from the committee starting from the next epoch.
+
+### Proof of possession: Generate the payload
+
+Serialize the payload that is used to generate proof of possession. This allows the signer to take the payload offline for an authority protocol BLS key pair to sign.
+
+```sh
+$ sui validator serialize-payload-pop --account-address $ACCOUNT_ADDRESS --protocol-public-key $BLS_PUBKEY
+```
+
+```sh
+Serialized payload: $PAYLOAD_TO_SIGN
+```
+
+### Display validator metadata
+
+Display metadata about your local validator:
+
+```sh
+$ sui validator display-metadata
+```
+
+Display metadata about another validator via validator address
+
+```sh
+$ sui validator display-metadata <validator-address>
+```
+
+### Update validator metadata
+
+Run the following to see how to update validator metadata. Read description carefully about when the change takes effect.
+
+```sh
+$ sui validator update-metadata --help
+```
+
+You can update the following on-chain metadata:
+- Name
+- Description
+- Image URL
+- Project URL
+- Network address
+- P2P address
+- Primary address
+- Worker address
+- Protocol public key
+- Network public key
+- Worker public key
+
+:::info 
+Only the first 4 metadata listed above take effect immediately. Others are changed only after the next epoch. For those, restart the validator program immediately after the next epoch, with the new key files and updated `validator.yaml` config. 
+
+Particularly, make sure the new address is not behind a firewall.
+:::
+
+Run the following to see how to update each metadata.
+
+```sh
+$ sui validator update-metadata --help
+```
+
+### Operation Cap
+
+Operation Cap allows a validator to authorize another account to perform certain actions on behalf of this validator. [Learn more about Operation Cap](./validator-tasks.mdx#operation-cap).
+
+The Operation Cap holder (either the validator itself or the delegatee) updates its gas price and reports validator peers with the Operation Cap.
+
+### Update gas price
+
+If the account itself is a validator and holds the Operation Cap, update the gas price with:
+
+```sh
+$ sui validator update-gas-price <gas-price>
+```
+
+If the account is a delegatee:
+
+```sh
+$ sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
+```
+
+### Report validators
+
+If the account itself is a validator and holds the Operation Cap, report validators peers with:
+
+```sh
+$ sui validator report-validator <reportee-address>
+```
+
+Add the `--undo-report false` argument if it intends to undo an existing report.
+
+Similarly, if the account is a delegatee, add the `--operation-cap-id <operation-cap-id>` option to the command.
+
+If the account is a delegatee, run:
+
+```sh
+$ sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
+```

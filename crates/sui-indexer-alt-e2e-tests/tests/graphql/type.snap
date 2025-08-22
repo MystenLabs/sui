@@ -1,0 +1,556 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-22:
+//# run-graphql
+Response: {
+  "data": {
+    "complex": {
+      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::priority_queue::PriorityQueue<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>",
+      "abilities": [
+        "STORE"
+      ],
+      "signature": {
+        "datatype": {
+          "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "module": "priority_queue",
+          "type": "PriorityQueue",
+          "typeParameters": [
+            {
+              "datatype": {
+                "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "module": "coin",
+                "type": "Coin",
+                "typeParameters": [
+                  {
+                    "datatype": {
+                      "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                      "module": "sui",
+                      "type": "SUI",
+                      "typeParameters": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "layout": {
+        "struct": {
+          "type": "0x0000000000000000000000000000000000000000000000000000000000000002::priority_queue::PriorityQueue<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>",
+          "fields": [
+            {
+              "name": "entries",
+              "layout": {
+                "vector": {
+                  "struct": {
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::priority_queue::Entry<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>",
+                    "fields": [
+                      {
+                        "name": "priority",
+                        "layout": "u64"
+                      },
+                      {
+                        "name": "value",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                            "fields": [
+                              {
+                                "name": "id",
+                                "layout": {
+                                  "struct": {
+                                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                                    "fields": [
+                                      {
+                                        "name": "id",
+                                        "layout": {
+                                          "struct": {
+                                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "layout": "address"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "name": "balance",
+                                "layout": {
+                                  "struct": {
+                                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                                    "fields": [
+                                      {
+                                        "name": "value",
+                                        "layout": "u64"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "coin": {
+      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+      "abilities": [
+        "STORE",
+        "KEY"
+      ],
+      "signature": {
+        "datatype": {
+          "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "module": "coin",
+          "type": "Coin",
+          "typeParameters": [
+            {
+              "datatype": {
+                "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "module": "sui",
+                "type": "SUI",
+                "typeParameters": []
+              }
+            }
+          ]
+        }
+      },
+      "layout": {
+        "struct": {
+          "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "fields": [
+            {
+              "name": "id",
+              "layout": {
+                "struct": {
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                  "fields": [
+                    {
+                      "name": "id",
+                      "layout": {
+                        "struct": {
+                          "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                          "fields": [
+                            {
+                              "name": "bytes",
+                              "layout": "address"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "balance",
+              "layout": {
+                "struct": {
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                  "fields": [
+                    {
+                      "name": "value",
+                      "layout": "u64"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "token": {
+      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::token::Token<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+      "abilities": [
+        "KEY"
+      ],
+      "signature": {
+        "datatype": {
+          "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "module": "token",
+          "type": "Token",
+          "typeParameters": [
+            {
+              "datatype": {
+                "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "module": "sui",
+                "type": "SUI",
+                "typeParameters": []
+              }
+            }
+          ]
+        }
+      },
+      "layout": {
+        "struct": {
+          "type": "0x0000000000000000000000000000000000000000000000000000000000000002::token::Token<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "fields": [
+            {
+              "name": "id",
+              "layout": {
+                "struct": {
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                  "fields": [
+                    {
+                      "name": "id",
+                      "layout": {
+                        "struct": {
+                          "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                          "fields": [
+                            {
+                              "name": "bytes",
+                              "layout": "address"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "balance",
+              "layout": {
+                "struct": {
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                  "fields": [
+                    {
+                      "name": "value",
+                      "layout": "u64"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "balance": {
+      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+      "abilities": [
+        "STORE"
+      ],
+      "signature": {
+        "datatype": {
+          "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "module": "balance",
+          "type": "Balance",
+          "typeParameters": [
+            {
+              "datatype": {
+                "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "module": "sui",
+                "type": "SUI",
+                "typeParameters": []
+              }
+            }
+          ]
+        }
+      },
+      "layout": {
+        "struct": {
+          "type": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "fields": [
+            {
+              "name": "value",
+              "layout": "u64"
+            }
+          ]
+        }
+      }
+    },
+    "primitive": {
+      "repr": "u64",
+      "abilities": [
+        "COPY",
+        "DROP",
+        "STORE"
+      ],
+      "signature": "u64",
+      "layout": "u64"
+    },
+    "prim_vector": {
+      "repr": "vector<u64>",
+      "abilities": [
+        "COPY",
+        "DROP",
+        "STORE"
+      ],
+      "signature": {
+        "vector": "u64"
+      },
+      "layout": {
+        "vector": "u64"
+      }
+    },
+    "coin_vector": {
+      "repr": "vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>",
+      "abilities": [
+        "STORE"
+      ],
+      "signature": {
+        "vector": {
+          "datatype": {
+            "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+            "module": "coin",
+            "type": "Coin",
+            "typeParameters": [
+              {
+                "datatype": {
+                  "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                  "module": "sui",
+                  "type": "SUI",
+                  "typeParameters": []
+                }
+              }
+            ]
+          }
+        }
+      },
+      "layout": {
+        "vector": {
+          "struct": {
+            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+            "fields": [
+              {
+                "name": "id",
+                "layout": {
+                  "struct": {
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                    "fields": [
+                      {
+                        "name": "id",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                            "fields": [
+                              {
+                                "name": "bytes",
+                                "layout": "address"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "name": "balance",
+                "layout": {
+                  "struct": {
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                    "fields": [
+                      {
+                        "name": "value",
+                        "layout": "u64"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 24-38:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetTypes": [
+      {
+        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::priority_queue::PriorityQueue<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>"
+      },
+      {
+        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+      },
+      {
+        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::token::Token<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+      },
+      {
+        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+      },
+      {
+        "repr": "u64"
+      },
+      {
+        "repr": "vector<u64>"
+      },
+      {
+        "repr": "vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>"
+      },
+      null
+    ]
+  }
+}
+
+task 3, lines 40-43:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid type, expected: package::module::type[<type_params, ...>] or primitive type",
+      "locations": [
+        {
+          "line": 2,
+          "column": 14
+        }
+      ],
+      "path": [
+        "type"
+      ]
+    }
+  ]
+}
+
+task 4, lines 45-52:
+//# run-graphql
+Response: {
+  "data": {
+    "type": null
+  }
+}
+
+task 5, lines 54-59:
+//# run-graphql
+Response: {
+  "data": {
+    "type": null
+  }
+}
+
+task 6, lines 61-76:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Type parameter nesting exceeded limit of 16",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "type"
+      ],
+      "extensions": {
+        "code": "RESOURCE_EXHAUSTED"
+      }
+    }
+  ]
+}
+
+task 7, lines 78-83:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Error resolving type: Expected 1 type parameters, but got 2",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "type"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 8, lines 85-102:
+//# publish --upgradeable --sender A
+created: object(8,0), object(8,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6095200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 9, line 104:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 10, lines 106-111:
+//# run-graphql
+Response: {
+  "data": {
+    "type": null
+  },
+  "errors": [
+    {
+      "message": "Type layout nesting exceeded limit of 128",
+      "locations": [
+        {
+          "line": 3,
+          "column": 9
+        }
+      ],
+      "path": [
+        "type",
+        "layout"
+      ],
+      "extensions": {
+        "code": "RESOURCE_EXHAUSTED"
+      }
+    }
+  ]
+}
+
+task 11, lines 113-130:
+//# upgrade --package P0 --upgrade-capability 8,1 --sender A
+created: object(11,0)
+mutated: object(0,0), object(8,1)
+gas summary: computation_cost: 1000000, storage_cost: 6095200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 12, line 132:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 13, lines 134-143:
+//# run-graphql
+Response: {
+  "data": {
+    "atP0": {
+      "repr": "0x8b88208d3d8214ef802e9f5167a4d964cf1904d34c66517745e36bcfec7203d2::m::S0<u32>"
+    },
+    "atP1": {
+      "repr": "0x8b88208d3d8214ef802e9f5167a4d964cf1904d34c66517745e36bcfec7203d2::m::S0<u32>"
+    }
+  }
+}

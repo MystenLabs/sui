@@ -436,20 +436,6 @@ impl ConsensusOutputCache {
             executed_in_epoch.remove(tx_digest);
         }
     }
-
-    pub fn remove_reverted_transaction(&self, tx_digest: &TransactionDigest) {
-        // reverted transactions are not guaranteed to have been executed
-        self.executed_in_epoch.read().remove(tx_digest);
-    }
-
-    /// At reconfig time, all checkpointed transactions must have been removed from self.executed_in_epoch
-    pub fn get_uncheckpointed_transactions(&self) -> Vec<TransactionDigest> {
-        self.executed_in_epoch
-            .write() // exclusive lock to ensure consistent view
-            .iter()
-            .map(|e| *e.key())
-            .collect()
-    }
 }
 
 /// ConsensusOutputQuarantine holds outputs of consensus processing in memory until the checkpoints

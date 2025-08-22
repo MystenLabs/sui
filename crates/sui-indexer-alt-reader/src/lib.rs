@@ -4,6 +4,7 @@
 pub mod bigtable_reader;
 pub mod checkpoints;
 pub mod coin_metadata;
+pub mod consistent_reader;
 pub mod cp_sequence_numbers;
 pub mod displays;
 pub mod epochs;

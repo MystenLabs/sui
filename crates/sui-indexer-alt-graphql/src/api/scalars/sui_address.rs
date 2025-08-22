@@ -119,6 +119,12 @@ impl From<NativeSuiAddress> for SuiAddress {
     }
 }
 
+impl From<AccountAddress> for SuiAddress {
+    fn from(value: AccountAddress) -> Self {
+        SuiAddress(value.into_bytes())
+    }
+}
+
 impl From<ObjectID> for SuiAddress {
     fn from(value: ObjectID) -> Self {
         SuiAddress(value.into_bytes())

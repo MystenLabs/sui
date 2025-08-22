@@ -10,9 +10,7 @@ use diesel::{
 };
 use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_schema::schema::kv_packages;
-use sui_package_resolver::{
-    error::Error, Package, PackageStore, PackageStoreWithLruCache, Resolver, Result,
-};
+use sui_package_resolver::{error::Error, Package, PackageStore, PackageStoreWithLruCache, Result};
 use sui_types::object::Object;
 
 use crate::pg_reader::PgReader;
@@ -20,7 +18,6 @@ use crate::pg_reader::PgReader;
 const STORE: &str = "PostgreSQL";
 
 pub type PackageCache = PackageStoreWithLruCache<DbPackageStore>;
-pub type PackageResolver = Arc<Resolver<PackageCache>>;
 pub struct DbPackageStore(Arc<DataLoader<PgReader>>);
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]

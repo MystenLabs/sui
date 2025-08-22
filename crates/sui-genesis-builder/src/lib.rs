@@ -8,7 +8,7 @@ use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -1025,7 +1025,7 @@ fn process_package(
     #[cfg(debug_assertions)]
     {
         use move_core_types::account_address::AccountAddress;
-        let to_be_published_addresses: HashSet<_> = modules
+        let to_be_published_addresses: std::collections::HashSet<_> = modules
             .iter()
             .map(|module| *module.self_id().address())
             .collect();

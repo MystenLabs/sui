@@ -9,7 +9,7 @@
 //!
 //! This module is private to the `DataStore` and packcaged in its own module for convenience.
 
-use crate::{data_store::DataStore, replay_interface::EpochData};
+use crate::{replay_interface::EpochData, DataStore};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
 
@@ -21,29 +21,29 @@ mod schema {
     cynic::impl_scalar!(ChronoDateTime<Utc>, DateTime);
 }
 
-pub mod epoch_query {
+pub(crate) mod epoch_query {
     use super::*;
     use anyhow::anyhow;
     use chrono::{DateTime as ChronoDateTime, Utc};
 
     #[derive(cynic::QueryVariables)]
-    pub struct EpochDataArgs {
+    pub(crate) struct EpochDataArgs {
         pub epoch: Option<u64>,
     }
 
     #[derive(cynic::QueryFragment)]
     #[cynic(variables = "EpochDataArgs")]
-    pub struct Query {
+    pub(crate) struct Query {
         #[arguments(epochId: $epoch)]
         epoch: Option<Epoch>,
     }
 
     #[derive(cynic::Scalar, Clone)]
     #[cynic(graphql_type = "BigInt")]
-    pub struct BigInt(String);
+    pub(crate) struct BigInt(String);
 
     #[derive(cynic::QueryFragment)]
-    pub struct Epoch {
+    pub(crate) struct Epoch {
         epoch_id: u64,
         protocol_configs: Option<ProtocolConfigs>,
         reference_gas_price: Option<BigInt>,
@@ -51,24 +51,23 @@ pub mod epoch_query {
     }
 
     #[derive(cynic::QueryFragment)]
-    pub struct ProtocolConfigs {
+    pub(crate) struct ProtocolConfigs {
         protocol_version: u64,
     }
 
-    pub async fn query(epoch_id: u64, data_store: &DataStore) -> Result<EpochData, anyhow::Error> {
+    pub(crate) async fn query(
+        epoch_id: u64,
+        data_store: &DataStore,
+    ) -> Result<Option<EpochData>, anyhow::Error> {
         let query = Query::build(EpochDataArgs {
             epoch: Some(epoch_id),
         });
         let response = data_store.run_query(&query).await?;
 
-        let epoch = response
-            .data
-            .and_then(|epoch| epoch.epoch)
-            .ok_or(anyhow!(format!(
-                "Canot find epoch info for epoch {}",
-                epoch_id
-            )))?;
-        Ok(EpochData {
+        let Some(epoch) = response.data.and_then(|epoch| epoch.epoch) else {
+            return Ok(None);
+        };
+        Ok(Some(EpochData {
             epoch_id: epoch.epoch_id,
             protocol_version: epoch
                 .protocol_configs
@@ -93,52 +92,53 @@ pub mod epoch_query {
                     "Canot find epoch info for epoch {}",
                     epoch_id
                 )))?,
-        })
+        }))
     }
 }
 
-pub mod txn_query {
+pub(crate) mod txn_query {
     use super::*;
     use anyhow::Context;
     use sui_types::transaction::TransactionData;
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "Base64")]
-    pub struct Base64(pub String);
+    pub(crate) struct Base64(pub String);
 
     #[derive(cynic::QueryVariables)]
-    pub struct TransactionDataArgs {
+    pub(crate) struct TransactionDataArgs {
         pub digest: String,
     }
 
     #[derive(cynic::QueryFragment)]
     #[cynic(variables = "TransactionDataArgs")]
-    pub struct Query {
+    pub(crate) struct Query {
         #[arguments(digest: $digest)]
         transaction: Option<Transaction>,
     }
 
     #[derive(cynic::QueryFragment)]
-    pub struct Transaction {
+    pub(crate) struct Transaction {
         transaction_bcs: Option<Base64>,
         effects: Option<TransactionEffects>,
     }
 
     #[derive(cynic::QueryFragment)]
-    pub struct TransactionEffects {
+    pub(crate) struct TransactionEffects {
         checkpoint: Option<Checkpoint>,
         effects_bcs: Option<Base64>,
     }
 
     #[derive(cynic::QueryFragment)]
-    pub struct Checkpoint {
+    pub(crate) struct Checkpoint {
         sequence_number: u64,
     }
 
-    pub async fn query(
+    pub(crate) async fn query(
         digest: String,
         data_store: &DataStore,
-    ) -> Result<(TransactionData, sui_types::effects::TransactionEffects, u64), anyhow::Error> {
+    ) -> Result<Option<(TransactionData, sui_types::effects::TransactionEffects, u64)>, anyhow::Error>
+    {
         let query = Query::build(TransactionDataArgs {
             digest: digest.clone(),
         });
@@ -147,12 +147,9 @@ pub mod txn_query {
             .await
             .context("Failed to run transaction query")?;
 
-        let transaction = response
-            .data
-            .and_then(|txn| txn.transaction)
-            .ok_or_else(|| {
-                anyhow::anyhow!(format!("Transaction not found for digest: {}", digest),)
-            })?;
+        let Some(transaction) = response.data.and_then(|txn| txn.transaction) else {
+            return Ok(None);
+        };
 
         let txn_data: TransactionData = bcs::from_bytes(
             &CryptoBase64::decode(
@@ -203,11 +200,11 @@ pub mod txn_query {
             .ok_or_else(|| anyhow::anyhow!("Missing checkpoint in transaction query response"))?
             .sequence_number;
 
-        Ok((txn_data, effects, checkpoint))
+        Ok(Some((txn_data, effects, checkpoint)))
     }
 }
 
-pub mod object_query {
+pub(crate) mod object_query {
     use sui_types::object::Object;
 
     use super::*;
@@ -215,15 +212,15 @@ pub mod object_query {
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "SuiAddress")]
-    pub struct SuiAddress(pub String);
+    pub(crate) struct SuiAddress(pub String);
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "Base64")]
-    pub struct Base64(pub String);
+    pub(crate) struct Base64(pub String);
 
     #[derive(cynic::InputObject, Debug)]
     #[cynic(graphql_type = "ObjectKey")]
-    pub struct ObjectKey {
+    pub(crate) struct ObjectKey {
         pub address: SuiAddress,
         pub version: Option<u64>,
         pub root_version: Option<u64>,
@@ -231,21 +228,26 @@ pub mod object_query {
     }
 
     #[derive(cynic::QueryVariables)]
-    pub struct MultiGetObjectsVars {
+    pub(crate) struct MultiGetObjectsVars {
         pub keys: Vec<ObjectKey>,
     }
 
     #[derive(cynic::QueryFragment)]
     #[cynic(variables = "MultiGetObjectsVars", graphql_type = "Query")]
-    pub struct MultiGetObjectsQuery {
+    pub(crate) struct MultiGetObjectsQuery {
         #[arguments(keys: $keys)]
         pub multi_get_objects: Vec<Option<ObjectFragment>>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(graphql_type = "Object", schema_module = "crate::gql_queries::schema")]
-    pub struct ObjectFragment {
+    #[cynic(
+        graphql_type = "Object",
+        schema_module = "crate::data_stores::gql_queries::schema"
+    )]
+    pub(crate) struct ObjectFragment {
+        #[allow(dead_code)]
         pub address: SuiAddress,
+        pub version: u64,
         pub object_bcs: Option<Base64>,
     }
 
@@ -254,10 +256,10 @@ pub mod object_query {
     // we are picking a "random" and conservative number.
     const MAX_KEYS_SIZE: usize = 30;
 
-    pub async fn query(
+    pub(crate) async fn query(
         keys: &[replay_interface::ObjectKey],
         data_store: &DataStore,
-    ) -> Result<Vec<Option<Object>>, anyhow::Error> {
+    ) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
         let mut keys = keys
             .iter()
             .cloned()
@@ -291,17 +293,16 @@ pub mod object_query {
                     Some(frag) => {
                         let b64 = frag
                             .object_bcs
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(format!("Object bcs is None for object"),)
-                            })?
+                            .ok_or_else(|| anyhow::anyhow!("Object bcs is None for object"))?
                             .0;
                         let bytes = CryptoBase64::decode(&b64)?;
                         let obj: Object = bcs::from_bytes(&bytes)?;
-                        Ok::<_, anyhow::Error>(Some(obj))
+                        let version = frag.version;
+                        Ok::<_, anyhow::Error>(Some((obj, version)))
                     }
                     None => Ok::<_, anyhow::Error>(None),
                 })
-                .collect::<Result<Vec<Option<Object>>, _>>()?;
+                .collect::<Result<Vec<Option<(Object, u64)>>, _>>()?;
             objects.extend(chunk);
         }
         Ok(objects)
@@ -325,5 +326,23 @@ pub mod object_query {
                 },
             }
         }
+    }
+}
+
+pub(crate) mod chain_id_query {
+    use super::*;
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Query {
+        chain_identifier: Option<String>,
+    }
+
+    pub(crate) async fn query(data_store: &DataStore) -> Result<String, anyhow::Error> {
+        let query = Query::build(());
+        let response = data_store.run_query(&query).await?;
+        let Some(chain_id) = response.data.and_then(|data| data.chain_identifier) else {
+            return Err(anyhow::anyhow!("Missing chain identifier"));
+        };
+        Ok(chain_id)
     }
 }

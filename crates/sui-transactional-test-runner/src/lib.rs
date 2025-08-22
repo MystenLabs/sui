@@ -4,6 +4,7 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 pub mod args;
+pub mod cursor;
 pub mod offchain_state;
 pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;

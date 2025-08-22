@@ -53,7 +53,7 @@ task 8, line 30:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 9, lines 32-50:
+task 9, lines 32-56:
 //# run-graphql
 Response: {
   "data": {
@@ -70,7 +70,18 @@ Response: {
           "node": {
             "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
             "version": 1,
-            "objectBcs": "AAEBAQAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHoAwG4x2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAhYMxtpUe8VbuLRSLzHY4j/iAX6Zq6YBhs7be1Cgf3GgAAAAAAAAAA"
+            "objectBcs": "AAEBAQAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHoAwG4x2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAhYMxtpUe8VbuLRSLzHY4j/iAX6Zq6YBhs7be1Cgf3GgAAAAAAAAAA",
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "balance": "300000000000000",
+                  "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+                }
+              }
+            }
           }
         },
         {
@@ -78,7 +89,18 @@ Response: {
           "node": {
             "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
             "version": 2,
-            "objectBcs": "AAEBAgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHpgalAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAJXmDaTN9/8Me8Ls9qOM7J6Xg4QCrKcwjLGSUh7RlNrGATDwAAAAAA"
+            "objectBcs": "AAEBAgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHpgalAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAJXmDaTN9/8Me8Ls9qOM7J6Xg4QCrKcwjLGSUh7RlNrGATDwAAAAAA",
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "balance": "299999998012000",
+                  "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+                }
+              }
+            }
           }
         },
         {
@@ -86,7 +108,18 @@ Response: {
           "node": {
             "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
             "version": 3,
-            "objectBcs": "AAEBAwAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHqIAUEx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiDWUsSOzQErUliOrDD0D+QXvoz1w3yXlmqqxLHIMOllUWATDwAAAAAA"
+            "objectBcs": "AAEBAwAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHqIAUEx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiDWUsSOzQErUliOrDD0D+QXvoz1w3yXlmqqxLHIMOllUWATDwAAAAAA",
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "balance": "299999997002120",
+                  "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+                }
+              }
+            }
           }
         },
         {
@@ -94,7 +127,18 @@ Response: {
           "node": {
             "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
             "version": 4,
-            "objectBcs": "AAEBBAAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHqwmDEx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiBEF4j2ubw/i05PSuc8wW+G5u+n+iAYppE65LNP6EWO0WATDwAAAAAA"
+            "objectBcs": "AAEBBAAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHqwmDEx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiBEF4j2ubw/i05PSuc8wW+G5u+n+iAYppE65LNP6EWO0WATDwAAAAAA",
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "balance": "299999995992240",
+                  "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+                }
+              }
+            }
           }
         },
         {
@@ -102,7 +146,18 @@ Response: {
           "node": {
             "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
             "version": 5,
-            "objectBcs": "AAEBBQAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHrYLyIx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiBeBpKe2ojL1pdSppjgneSTpwq7wxmfLlWyw6UYAFXH9GATDwAAAAAA"
+            "objectBcs": "AAEBBQAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHrYLyIx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiBeBpKe2ojL1pdSppjgneSTpwq7wxmfLlWyw6UYAFXH9GATDwAAAAAA",
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "balance": "299999994982360",
+                  "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+                }
+              }
+            }
           }
         },
         {
@@ -110,7 +165,18 @@ Response: {
           "node": {
             "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
             "version": 6,
-            "objectBcs": "AAEBBgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHoAxxIx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiD0+HVckKf75XBKr9/8sIyj8s7FsGEzAD4kjxYxM/vRaGATDwAAAAAA"
+            "objectBcs": "AAEBBgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHoAxxIx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiD0+HVckKf75XBKr9/8sIyj8s7FsGEzAD4kjxYxM/vRaGATDwAAAAAA",
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "balance": "299999993972480",
+                  "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+                }
+              }
+            }
           }
         }
       ]
@@ -118,7 +184,7 @@ Response: {
   }
 }
 
-task 10, lines 52-63:
+task 10, lines 58-69:
 //# run-graphql
 Response: {
   "data": {
@@ -144,7 +210,7 @@ Response: {
   }
 }
 
-task 11, lines 65-76:
+task 11, lines 71-82:
 //# run-graphql
 Response: {
   "data": {
@@ -170,7 +236,7 @@ Response: {
   }
 }
 
-task 12, lines 78-89:
+task 12, lines 84-95:
 //# run-graphql --cursors 1
 Response: {
   "data": {
@@ -196,7 +262,7 @@ Response: {
   }
 }
 
-task 13, lines 91-102:
+task 13, lines 97-108:
 //# run-graphql --cursors 4
 Response: {
   "data": {
@@ -219,7 +285,7 @@ Response: {
   }
 }
 
-task 14, lines 104-115:
+task 14, lines 110-121:
 //# run-graphql --cursors 4
 Response: {
   "data": {
@@ -242,7 +308,7 @@ Response: {
   }
 }
 
-task 15, lines 117-128:
+task 15, lines 123-134:
 //# run-graphql --cursors 5
 Response: {
   "data": {
@@ -268,7 +334,7 @@ Response: {
   }
 }
 
-task 16, lines 130-141:
+task 16, lines 136-147:
 //# run-graphql --cursors 5
 Response: {
   "data": {
@@ -294,7 +360,7 @@ Response: {
   }
 }
 
-task 17, lines 143-154:
+task 17, lines 149-160:
 //# run-graphql --cursors 2
 Response: {
   "data": {
@@ -314,7 +380,7 @@ Response: {
   }
 }
 
-task 18, lines 156-167:
+task 18, lines 162-173:
 //# run-graphql --cursors 2
 Response: {
   "data": {
@@ -334,7 +400,7 @@ Response: {
   }
 }
 
-task 19, lines 169-180:
+task 19, lines 175-186:
 //# run-graphql --cursors 1 4
 Response: {
   "data": {
@@ -357,7 +423,7 @@ Response: {
   }
 }
 
-task 20, lines 182-193:
+task 20, lines 188-199:
 //# run-graphql --cursors 1 4
 Response: {
   "data": {
@@ -377,7 +443,7 @@ Response: {
   }
 }
 
-task 21, lines 195-206:
+task 21, lines 201-212:
 //# run-graphql --cursors 1 4
 Response: {
   "data": {
@@ -397,7 +463,7 @@ Response: {
   }
 }
 
-task 22, lines 208-219:
+task 22, lines 214-225:
 //# run-graphql
 Response: {
   "data": {

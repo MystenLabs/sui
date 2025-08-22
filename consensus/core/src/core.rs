@@ -490,6 +490,11 @@ impl Core {
             let dag_state = self.dag_state.read();
             let clock_round = dag_state.threshold_clock_round();
             if clock_round <= dag_state.get_last_proposed_block().round() {
+                debug!(
+                    "Skipping block proposal for round {} as it is not higher than the last proposed block {}",
+                    clock_round,
+                    dag_state.get_last_proposed_block().round()
+                );
                 return None;
             }
             clock_round
@@ -512,6 +517,12 @@ impl Core {
                     .saturating_sub(self.last_proposed_timestamp_ms()),
             ) < self.context.parameters.min_round_delay
             {
+                debug!(
+                    "Skipping block proposal for round {} as it is too soon after the last proposed block timestamp {}; min round delay is {}ms",
+                    clock_round,
+                    self.last_proposed_timestamp_ms(),
+                    self.context.parameters.min_round_delay.as_millis(),
+                );
                 return None;
             }
         }
@@ -525,6 +536,10 @@ impl Core {
             assert!(
                 !force,
                 "Ancestors should have been returned if force is true!"
+            );
+            debug!(
+                "Skipping block proposal for round {} because no good ancestor is found",
+                clock_round,
             );
             return None;
         }

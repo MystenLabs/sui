@@ -311,6 +311,13 @@ macro_rules! as_ref_impl {
 as_ref_impl!(Arc<dyn PackageStore>);
 as_ref_impl!(Box<dyn PackageStore>);
 
+#[async_trait]
+impl<S: PackageStore> PackageStore for Arc<S> {
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        self.as_ref().fetch(id).await
+    }
+}
+
 /// Check $value does not exceed $limit in config, if the limit config exists, returning an error
 /// containing the max value and actual value otherwise.
 macro_rules! check_max_limit {

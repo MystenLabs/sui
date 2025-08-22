@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use async_graphql::dataloader::Loader;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
@@ -17,19 +17,19 @@ pub struct VersionedObjectKey(pub ObjectID, pub u64);
 #[async_trait::async_trait]
 impl Loader<VersionedObjectKey> for PgReader {
     type Value = StoredObject;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[VersionedObjectKey],
-    ) -> Result<HashMap<VersionedObjectKey, StoredObject>, Self::Error> {
+    ) -> Result<HashMap<VersionedObjectKey, StoredObject>, Error> {
         use kv_objects::dsl as o;
 
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let mut query = o::kv_objects.into_boxed();
 
@@ -41,7 +41,7 @@ impl Loader<VersionedObjectKey> for PgReader {
             );
         }
 
-        let objects: Vec<StoredObject> = conn.results(query).await.map_err(Arc::new)?;
+        let objects: Vec<StoredObject> = conn.results(query).await?;
 
         let key_to_stored: HashMap<_, _> = objects
             .iter()
@@ -66,12 +66,12 @@ impl Loader<VersionedObjectKey> for PgReader {
 #[async_trait::async_trait]
 impl Loader<VersionedObjectKey> for BigtableReader {
     type Value = Object;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[VersionedObjectKey],
-    ) -> Result<HashMap<VersionedObjectKey, Object>, Self::Error> {
+    ) -> Result<HashMap<VersionedObjectKey, Object>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }

@@ -82,7 +82,7 @@
   }
 }
 
-//# run-graphql --cursors bcs(0x2)
+//# run-graphql --cursors bcs(bcs(0x2))
 { # Offset at the front and limit
   epoch {
     systemPackages(after: "@{cursor_0}", first: 2) {

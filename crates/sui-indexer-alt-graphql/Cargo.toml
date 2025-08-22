@@ -33,6 +33,7 @@ fastcrypto.workspace = true
 futures.workspace = true
 headers.workspace = true
 prometheus.workspace = true
+prost-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 telemetry-subscribers.workspace = true

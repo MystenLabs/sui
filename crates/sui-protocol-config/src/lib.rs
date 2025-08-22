@@ -258,6 +258,7 @@ const MAX_PROTOCOL_VERSION: u64 = 94;
 // Version 92: Disable checking shared object transfer restrictions per command = false
 // Version 93: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
 // Version 94: Decrease stored observations limit by 10% to stay within system object size limit.
+//             Enable party transfer on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3951,6 +3952,9 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                             },
                         );
+
+                    // Enable party transfer on mainnet.
+                    cfg.feature_flags.enable_party_transfer = true;
                 }
                 // Use this template when making changes:
                 //

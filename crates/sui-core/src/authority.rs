@@ -3737,10 +3737,20 @@ impl AuthorityState {
         // Safe to being reconfiguration now. No transactions are being executed,
         // and no epoch-specific tasks are running.
 
-        // TODO: revert_uncommitted_epoch_transactions will soon be unnecessary -
-        // clear_state_end_of_epoch() can simply drop all uncommitted transactions
-        self.revert_uncommitted_epoch_transactions(cur_epoch_store)
-            .await?;
+        {
+            let state = cur_epoch_store.get_reconfig_state_write_lock_guard();
+            if state.should_accept_user_certs() {
+                // Need to change this so that consensus adapter do not accept certificates from user.
+                // This can happen if our local validator did not initiate epoch change locally,
+                // but 2f+1 nodes already concluded the epoch.
+                //
+                // This lock is essentially a barrier for
+                // `epoch_store.pending_consensus_certificates` table we are reading on the line after this block
+                cur_epoch_store.close_user_certs(state);
+            }
+            // lock is dropped here
+        }
+
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
         self.check_system_consistency(cur_epoch_store, state_hasher, expensive_safety_check_config);
@@ -3860,10 +3870,6 @@ impl AuthorityState {
             "Performing sui conservation consistency check for epoch {}",
             cur_epoch_store.epoch()
         );
-
-        if cfg!(debug_assertions) {
-            cur_epoch_store.check_all_executed_transactions_in_checkpoint();
-        }
 
         if let Err(err) = self
             .get_reconfig_api()
@@ -5816,45 +5822,6 @@ impl AuthorityState {
         // The change epoch transaction cannot fail to execute.
         assert!(effects.status().is_ok());
         Ok((system_obj, effects))
-    }
-
-    /// This function is called at the very end of the epoch.
-    /// This step is required before updating new epoch in the db and calling reopen_epoch_db.
-    #[instrument(level = "error", skip_all)]
-    async fn revert_uncommitted_epoch_transactions(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult {
-        {
-            let state = epoch_store.get_reconfig_state_write_lock_guard();
-            if state.should_accept_user_certs() {
-                // Need to change this so that consensus adapter do not accept certificates from user.
-                // This can happen if our local validator did not initiate epoch change locally,
-                // but 2f+1 nodes already concluded the epoch.
-                //
-                // This lock is essentially a barrier for
-                // `epoch_store.pending_consensus_certificates` table we are reading on the line after this block
-                epoch_store.close_user_certs(state);
-            }
-            // lock is dropped here
-        }
-        let pending_certificates = epoch_store.pending_consensus_certificates();
-        info!(
-            "Reverting {} locally executed transactions that was not included in the epoch: {:?}",
-            pending_certificates.len(),
-            pending_certificates,
-        );
-        for digest in pending_certificates {
-            if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
-                info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
-                continue;
-            }
-            info!("Reverting {:?} at the end of epoch", digest);
-            epoch_store.revert_executed_transaction(&digest)?;
-            self.get_reconfig_api().revert_state_update(&digest);
-        }
-        info!("All uncommitted local transactions reverted");
-        Ok(())
     }
 
     #[instrument(level = "error", skip_all)]

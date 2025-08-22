@@ -130,7 +130,7 @@ Response: {
 }
 
 task 13, lines 58-102:
-//# run-graphql --cursors bcs(@{obj_3_1},1) bcs(@{obj_7_0},1)
+//# run-graphql --cursors bcs(bcs(@{obj_3_1}),1) bcs(bcs(@{obj_7_0}),1)
 Response: {
   "data": {
     "no_coins_after_obj_3_1_chkpt_1": {
@@ -157,7 +157,7 @@ Response: {
 }
 
 task 14, lines 104-147:
-//# run-graphql --cursors bcs(@{obj_3_1},3) bcs(@{obj_7_0},3)
+//# run-graphql --cursors bcs(bcs(@{obj_3_1}),3) bcs(bcs(@{obj_7_0}),3)
 Response: {
   "data": {
     "coins_after_obj_3_1_chkpt_3": {

@@ -794,6 +794,8 @@ impl SuiClientCommands {
                     output_dir,
                     show_effects: false,
                     overwrite_existing,
+                    verbose: false,
+                    store_mode: SR2::StoreMode::GqlOnly,
                 };
 
                 let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
@@ -826,6 +828,8 @@ impl SuiClientCommands {
                     output_dir,
                     show_effects: false,
                     overwrite_existing,
+                    verbose: false,
+                    store_mode: SR2::StoreMode::GqlOnly,
                 };
 
                 let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
