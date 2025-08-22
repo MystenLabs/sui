@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::normalized::{Constant};
+use move_binary_format::normalized::Constant;
 
 use move_stackless_bytecode_2::stackless::ast::{DataOp, PrimitiveOp, Value};
 use move_symbol_pool::Symbol;
@@ -48,6 +48,7 @@ pub enum Exp {
     Value(Value),
     Variable(String),
     Constant(std::rc::Rc<Constant<Symbol>>),
+    // TODO should we add specific exps for unpacks?
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -125,23 +126,38 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     if let Some(alt) = &**alt {
                         writeln!(f, "}} else {{")?;
-                        fmt_exp(f, &alt, level + 1)?;
+                        fmt_exp(f, alt, level + 1)?;
                         indent(f, level)?;
                     }
                     writeln!(f, "}}")
                 }
-                Exp::Switch(term, cases) => writeln!(f, "switch({}, {:?})", term, cases), //TODO iterate over cases and write on buffer accordingly
-                Exp::Data { op, args } => write_data_op(f, op, args),
+                Exp::Switch(term, cases) => {
+                    indent(f, level)?;
+                    writeln!(f, "match({}) {{", term)?;
+                    for case in cases {
+                        indent(f, level + 1)?;
+                        // TODO fix variant name
+                        writeln!(f, "VARIANT NAME => {{")?;
+                        fmt_exp(f, case, level + 2)?;
+                        indent(f, level + 1)?;
+                        writeln!(f, "}},")?;
+                    }
+                    indent(f, level)?;
+                    writeln!(f, "}}")
+                }
+                Exp::Data { op, args } => {
+                    indent(f, level)?;
+                    write_data_op(f, op, args)
+                }
                 Exp::Return(exps) => {
                     indent(f, level)?;
                     write!(f, "return ")?;
                     for exp in exps {
                         fmt_exp(f, exp, level)?;
                     }
-                    writeln!(f, "")
+                    writeln!(f)
                 }
                 Exp::Assign(items, exp) => {
-                    //FIXME should it be a vec of exps?, what if we have multiple assignments?
                     indent(f, level)?;
                     writeln!(f, "{} = {};", items.join(", "), exp)
                 }
@@ -150,15 +166,17 @@ impl std::fmt::Display for Exp {
                     writeln!(f, "let {} = {};", items.join(", "), exp)
                 }
                 Exp::Call(fun_name, exps) => {
-                    //FIXME how do I know if the call is e rhs or not?
                     indent(f, level)?;
                     write!(f, "{fun_name}(")?;
                     for exp in exps {
                         fmt_exp(f, exp, level)?;
                     }
                     writeln!(f, ")")
-                }, 
-                Exp::Abort(exp) => writeln!(f, "abort!({});", exp),
+                }
+                Exp::Abort(exp) => {
+                    indent(f, level)?;
+                    writeln!(f, "abort!({});", exp)
+                }
                 Exp::Primitive { op, args } => write_primitive_op(f, op, args),
                 Exp::Borrow(mut_, exp) => write!(f, "{}{}", if *mut_ { "&mut " } else { "&" }, exp),
                 Exp::Value(value) => write!(f, "{}", value),
@@ -180,7 +198,7 @@ fn write_data_op(
         DataOp::Pack => write!(f, "S .. fields .. args"),
         DataOp::Unpack => unreachable!(),
         DataOp::ReadRef => write!(f, "*{}", args[0]),
-        DataOp::WriteRef => write!(f, "*{} = {}", args[0], args[1]),
+        DataOp::WriteRef => writeln!(f, "*{} = {}", args[0], args[1]),
         DataOp::FreezeRef => write!(f, "freeze({})", args[0]),
         DataOp::MutBorrowField(field_ref) => {
             write!(f, "&mut ({}).{}", args[0], field_ref.field.name)
@@ -189,7 +207,7 @@ fn write_data_op(
         DataOp::VecPack => write!(
             f,
             "vec![{}]",
-            args.into_iter()
+            args.iter()
                 .map(|e| format!("{}", e))
                 .collect::<Vec<_>>()
                 .join(", ")

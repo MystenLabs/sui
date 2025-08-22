@@ -7,11 +7,7 @@ pub(crate) mod graph;
 pub(crate) mod loop_refinement;
 pub(crate) mod term_reconstruction;
 
-use crate::structuring::{
-    ast as D,
-    graph::Graph,
-    loop_refinement::{loop_type, refine_loop},
-};
+use crate::structuring::{ast as D, graph::Graph, loop_refinement::refine_loop};
 use petgraph::{graph::NodeIndex, visit::DfsPostOrder};
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
@@ -72,7 +68,7 @@ fn structure_loop(
     let loop_body = loop_body.into_iter().rev().collect::<Vec<_>>();
     let seq = D::Structured::Seq(loop_body);
     graph.update_loop_info(loop_head);
-    let mut result = D::Structured::Loop(Box::new(seq));
+    let result = D::Structured::Loop(Box::new(seq));
     let mut result = refine_loop(result);
     if let Some(succ_node) = succ_node {
         if graph
