@@ -310,6 +310,42 @@ public fun create_currency_v2<T: drop>(
     (treasury_cap, metadata_cap, init_coin_data)
 }
 
+public fun create_currency_dynamically<T: key>(
+    registry: &mut CoinRegistry,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &mut TxContext,
+): (TreasuryCap<T>, MetadataCap<T>) {
+    assert!(!registry.exists<T>(), EMetadataNotFound);
+
+    let treasury_cap = TreasuryCap {
+        id: object::new(ctx),
+        total_supply: balance::create_supply_internal<T>(),
+    };
+
+    let mut coin_data = coin_registry::create_coin_data<T>(
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        option::none(),
+        option::some(object::id(&treasury_cap)),
+        option::none(),
+        option::none(),
+        ctx,
+    );
+
+    let metadata_cap = coin_registry::create_cap(&mut coin_data, ctx);
+
+    registry.register_coin_data(coin_data);
+
+    (treasury_cap, metadata_cap)
+}
+
 /// This creates a new currency, via `create_currency_v2`, but with an extra capability that
 /// allows for specific addresses to have their coins frozen. When an address is added to the
 /// deny list, it is immediately unable to interact with the currency's coin as input objects.
