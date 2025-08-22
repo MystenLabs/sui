@@ -7,16 +7,13 @@ submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::AuthorityState;
-use crate::authority_aggregator::AuthorityAggregator;
-use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
-use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
-use crate::transaction_driver::{
-    choose_transaction_driver_percentage, QuorumTransactionResponse, SubmitTransactionOptions,
-    SubmitTxRequest, TransactionDriver, TransactionDriverError, TransactionDriverMetrics,
-};
+use std::net::SocketAddr;
+use std::ops::Deref;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
 use futures::future::{select, Either, Future};
 use futures::FutureExt;
 use mysten_common::sync::notify_read::NotifyRead;
@@ -29,13 +26,8 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, Registry,
 };
 use rand::Rng;
-use std::net::SocketAddr;
-use std::ops::Deref;
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 use sui_config::NodeConfig;
+use sui_protocol_config::Chain;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
@@ -53,6 +45,17 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
+
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::AuthorityState;
+use crate::authority_aggregator::AuthorityAggregator;
+use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
+use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
+use crate::transaction_driver::{
+    choose_transaction_driver_percentage, QuorumTransactionResponse, SubmitTransactionOptions,
+    SubmitTxRequest, TransactionDriver, TransactionDriverError, TransactionDriverMetrics,
+};
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -433,6 +436,7 @@ where
         }
     }
 
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?verified_transaction.digest()))]
     async fn execute_transaction_impl(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -472,8 +476,7 @@ where
 
         // Check if TransactionDriver should be used for submission
         if let Some(td) = &self.transaction_driver {
-            let random_value = rand::thread_rng().gen_range(1..=100);
-            if random_value <= self.td_percentage {
+            if self.should_use_transaction_driver(epoch_store, tx_digest) {
                 // Mark that we're using TD before submitting
                 using_td.store(true, Ordering::Release);
 
@@ -740,6 +743,26 @@ where
                 Ok(())
             }
         }
+    }
+
+    fn should_use_transaction_driver(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_digest: TransactionDigest,
+    ) -> bool {
+        const MAX_PERCENTAGE: u8 = 100;
+        let unknown_network = epoch_store.get_chain() == Chain::Unknown;
+        let v = if unknown_network {
+            rand::thread_rng().gen_range(1..=MAX_PERCENTAGE)
+        } else {
+            let v = u32::from_le_bytes(tx_digest.inner()[..4].try_into().unwrap());
+            (v % (MAX_PERCENTAGE as u32) + 1) as u8
+        };
+        debug!(
+            "Choosing whether to use transaction driver: {} vs {}",
+            v, self.td_percentage
+        );
+        v <= self.td_percentage
     }
 
     // TODO: Potentially cleanup this function and pending transaction log.
