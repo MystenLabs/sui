@@ -8,7 +8,7 @@ use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256
 
 const SIZE_CONFIG: SizeConfig = SizeConfig {
     traverse_references: false,
-    wide_vector_size: false,
+    include_vector_size: false,
 };
 
 #[test]
