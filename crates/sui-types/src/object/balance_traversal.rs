@@ -12,7 +12,7 @@ use crate::balance::Balance;
 
 /// Traversal to gather the total balances of all coin types visited.
 #[derive(Default)]
-pub(crate) struct BalanceTraversal {
+pub struct BalanceTraversal {
     balances: BTreeMap<TypeTag, u64>,
 }
 
@@ -25,7 +25,7 @@ struct Accumulator {
 
 impl BalanceTraversal {
     /// Consume the traversal to get at its balance mapping.
-    pub(crate) fn finish(self) -> BTreeMap<TypeTag, u64> {
+    pub fn finish(self) -> BTreeMap<TypeTag, u64> {
         self.balances
     }
 }

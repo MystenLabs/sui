@@ -37,6 +37,7 @@ sui-framework.workspace = true
 sui-types.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
+sui-package-resolver.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
