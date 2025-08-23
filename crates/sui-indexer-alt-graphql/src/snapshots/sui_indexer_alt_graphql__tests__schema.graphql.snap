@@ -82,6 +82,12 @@ type Address implements IAddressable {
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
+	Dynamic fields owned by this address.
+	
+	The address must correspond to an object (account addresses cannot own dynamic fields), but that object may be wrapped.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
@@ -529,6 +535,12 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
+	Dynamic fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
@@ -584,6 +596,35 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	The version of this object that this content comes from.
 	"""
 	version: UInt53!
+}
+
+type DynamicFieldConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [DynamicFieldEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [DynamicField!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type DynamicFieldEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: DynamicField!
 }
 
 """
@@ -1020,6 +1061,12 @@ interface IMoveObject {
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
+	Dynamic fields and dynamic object fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
@@ -1195,6 +1242,12 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
 	"""
