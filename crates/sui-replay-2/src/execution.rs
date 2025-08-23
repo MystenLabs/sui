@@ -15,33 +15,43 @@ use crate::{
     replay_interface::{EpochStore, ObjectKey, ObjectStore, VersionQuery},
     replay_txn::{get_input_objects_for_replay, ReplayTransaction},
 };
-use anyhow::Context;
+use anyhow::{bail, ensure, Context};
 use move_core_types::{
+    account_address::AccountAddress,
+    annotated_value::{MoveTypeLayout, MoveValue},
+    annotated_visitor as AV,
     language_storage::{ModuleId, StructTag},
     resolver::ModuleResolver,
 };
 use move_trace_format::format::MoveTraceBuilder;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 use sui_execution::Executor;
+use sui_package_resolver::{Package, PackageStore, Resolver};
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
+    balance_change::BalanceChange,
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::{TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind},
     error::{ExecutionError, SuiError, SuiResult},
     execution_params::{get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError},
     gas::SuiGasStatus,
+    gas_coin::GAS,
+    id::UID,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
-    object::Object,
+    move_package::TypeOrigin,
+    object::{balance_traversal::BalanceTraversal, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
     transaction::{CheckedInputObjects, TransactionDataAPI},
+    TypeTag,
 };
 use tracing::{debug, debug_span, trace};
 
@@ -237,8 +247,127 @@ pub fn execute_transaction_to_effects(
         checkpoint: _,
         store: _,
     } = store;
-    let object_cache = object_cache.into_inner();
+    let mut object_cache = object_cache.into_inner();
     debug!(op = "execute_tx", phase = "end", "execution");
+
+    // HACK: Redirect defining package IDs to latest package IDs, so the type resolver has
+    // something to look at.
+    let mut defining_to_latest = BTreeMap::new();
+    for (id, versions) in &object_cache {
+        for object in versions.values() {
+            let Some(package) = object.data.try_as_package() else {
+                continue;
+            };
+
+            for TypeOrigin { package, .. } in package.type_origin_table() {
+                defining_to_latest.insert(*package, *id);
+            }
+        }
+    }
+
+    for (defining, latest) in defining_to_latest {
+        if !object_cache.contains_key(&defining) {
+            object_cache.insert(defining, object_cache[&latest].clone());
+        }
+    }
+
+    let mut unchanged = BTreeMap::new();
+
+    for (id, meta) in &inner_store.loaded_runtime_objects {
+        let obj = object_cache
+            .get(id)
+            .and_then(|vs| vs.get(&meta.version.value()).cloned())
+            .context("Loaded runtime object not in cache")?;
+
+        unchanged.insert(*id, obj);
+    }
+
+    for (id, kind) in effects.unchanged_consensus_objects() {
+        let UnchangedConsensusKind::ReadOnlyRoot((v, _)) = kind else {
+            continue;
+        };
+
+        let obj = object_cache
+            .get(&id)
+            .and_then(|vs| vs.get(&v.value()).cloned())
+            .context("Unchanged consensus object not in cache")?;
+
+        unchanged.insert(id, obj);
+    }
+
+    let mut reads = unchanged.clone();
+    let mut writes = unchanged.clone();
+    for change in effects.object_changes() {
+        if let Some(input) = change.input_version {
+            reads.insert(
+                change.id,
+                object_cache
+                    .get(&change.id)
+                    .and_then(|vs| vs.get(&input.value()).cloned())
+                    .context("Input object not in cache")?,
+            );
+        };
+
+        if let Some(output) = change.output_version {
+            let object = inner_store
+                .written
+                .get(&change.id)
+                .context("Written object not in inner store")?;
+
+            ensure!(
+                object.version() == output,
+                "Written object version mismatch"
+            );
+
+            writes.insert(change.id, object.clone());
+        } else {
+            writes.remove(&change.id);
+        }
+    }
+
+    #[allow(clippy::disallowed_methods)]
+    let mut address_balance_changes = futures::executor::block_on(balance_changes(
+        &reads,
+        &writes,
+        ObjectCache(object_cache.clone()),
+    ))
+    .context("Failed to compute balance changes")?;
+
+    address_balance_changes.push(BalanceChange {
+        address: SuiAddress::ZERO,
+        coin_type: GAS::type_().into(),
+        amount: effects.gas_cost_summary().net_gas_usage() as i128,
+    });
+
+    let mut balance_changes = BTreeMap::new();
+    for change in &address_balance_changes {
+        *balance_changes.entry(change.coin_type.clone()).or_insert(0) += change.amount;
+    }
+
+    for (coin_type, amount) in balance_changes {
+        if amount != 0 {
+            println!(
+                "{} not conserved: {amount}",
+                coin_type.to_canonical_display(true)
+            );
+        }
+    }
+
+    println!(
+        "\nBalance Changes:\n{}",
+        serde_json::to_string_pretty(
+            &address_balance_changes
+                .into_iter()
+                .map(|change| json!({
+                    "address": change.address,
+                    "coin_type": change.coin_type.to_canonical_string(true),
+                    "amount": change.amount,
+                }))
+                .collect::<Vec<_>>()
+        )
+        .unwrap()
+    );
+
     Ok((
         result,
         TxnContextAndEffects {
@@ -384,6 +513,15 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
                 .next()?
                 .map(|(obj, _version)| obj),
         };
+
+        if let Some(obj) = &object {
+            self.object_cache
+                .borrow_mut()
+                .entry(obj.id())
+                .or_default()
+                .insert(obj.version().value(), obj.clone());
+        }
+
         object
     }
 
@@ -423,6 +561,15 @@ impl ChildObjectResolver for ReplayStore<'_> {
             .next()
             .unwrap()
             .map(|(obj, _version)| obj);
+
+        if let Some(obj) = &object {
+            self.object_cache
+                .borrow_mut()
+                .entry(obj.id())
+                .or_default()
+                .insert(obj.version().value(), obj.clone());
+        }
+
         Ok(object)
     }
 
@@ -464,5 +611,169 @@ impl ModuleResolver for ReplayStore<'_> {
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         unreachable!("unexpected ModuleResolver::get_module({})", id)
+    }
+}
+
+struct ObjectCache(BTreeMap<ObjectID, BTreeMap<u64, Object>>);
+
+async fn balance_changes(
+    read: &BTreeMap<ObjectID, Object>,
+    write: &BTreeMap<ObjectID, Object>,
+    cache: ObjectCache,
+) -> anyhow::Result<Vec<BalanceChange>> {
+    let package_resolver = Resolver::new(cache);
+
+    let balance_in = root_balances(read, &package_resolver).await?;
+    let balance_out = root_balances(write, &package_resolver).await?;
+
+    let mut balance_changes = BTreeMap::new();
+    for ((address, coin_type), amount) in balance_out {
+        *balance_changes.entry((address, coin_type)).or_insert(0) += amount;
+    }
+
+    for ((address, coin_type), amount) in balance_in {
+        *balance_changes.entry((address, coin_type)).or_insert(0) -= amount;
+    }
+
+    Ok(balance_changes
+        .into_iter()
+        .filter_map(|((address, coin_type), amount)| {
+            (amount != 0).then_some(BalanceChange {
+                address,
+                coin_type,
+                amount,
+            })
+        })
+        .collect())
+}
+
+async fn root_balances(
+    working_set: &BTreeMap<ObjectID, Object>,
+    resolver: &Resolver<ObjectCache>,
+) -> anyhow::Result<BTreeMap<(SuiAddress, TypeTag), i128>> {
+    // Traverse each object to find the UIDs and balances it wraps.
+    let mut wrapper = BTreeMap::new();
+    let mut object_balances = BTreeMap::new();
+    for (id, obj) in working_set {
+        let Some(obj) = obj.data.try_as_move() else {
+            continue;
+        };
+
+        let layout = resolver.type_layout(obj.type_().clone().into()).await?;
+        object_balances.insert(*id, balances(&layout, obj.contents())?);
+
+        for child in wrapped_uids(&layout, obj.contents())? {
+            wrapper.insert(child, *id);
+        }
+    }
+
+    // Work back through wrappers to associate each object with a root owning address. This walks
+    // back through parent -> child object relationships (dynamic fields) until it finds an
+    // address-owner, or a shared or immutable object.
+    let mut root_owners = BTreeMap::new();
+    for (id, mut obj) in working_set {
+        let mut curr = *id;
+        loop {
+            match obj.owner() {
+                Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                    root_owners.insert(*id, *owner);
+                    break;
+                }
+
+                Owner::Immutable | Owner::Shared { .. } => {
+                    root_owners.insert(*id, curr.into());
+                    break;
+                }
+
+                Owner::ObjectOwner(address) => {
+                    let mut next = ObjectID::from(*address);
+                    if let Some(parent) = wrapper.get(&next) {
+                        next = *parent;
+                    }
+
+                    let Some(next_obj) = working_set.get(&next) else {
+                        bail!("Cannot find owner of {curr} in the working set: {next}");
+                    };
+
+                    curr = next;
+                    obj = next_obj;
+                }
+            }
+        }
+    }
+
+    // Accumulate balance changes to root owners.
+    let mut balances = BTreeMap::new();
+    for (id, obj_balances) in object_balances {
+        let Some(root) = root_owners.get(&id) else {
+            bail!("Cannot find root owner of {id} in the working set");
+        };
+
+        for (coin_type, amount) in obj_balances {
+            *balances.entry((*root, coin_type)).or_insert(0) += amount as i128;
+        }
+    }
+
+    Ok(balances)
+}
+
+fn balances(layout: &MoveTypeLayout, contents: &[u8]) -> anyhow::Result<BTreeMap<TypeTag, u64>> {
+    let mut visitor = BalanceTraversal::default();
+    MoveValue::visit_deserialize(contents, layout, &mut visitor)?;
+    Ok(visitor.finish())
+}
+
+fn wrapped_uids(layout: &MoveTypeLayout, contents: &[u8]) -> anyhow::Result<BTreeSet<ObjectID>> {
+    let mut ids = BTreeSet::new();
+    struct UIDTraversal<'i>(&'i mut BTreeSet<ObjectID>);
+    struct UIDCollector<'i>(&'i mut BTreeSet<ObjectID>);
+
+    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'_> {
+        type Error = AV::Error;
+
+        fn traverse_struct(
+            &mut self,
+            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            if driver.struct_layout().type_ == UID::type_() {
+                while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
+            } else {
+                while driver.next_field(self)?.is_some() {}
+            }
+            Ok(())
+        }
+    }
+
+    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'_> {
+        type Error = AV::Error;
+        fn traverse_address(
+            &mut self,
+            _driver: &AV::ValueDriver<'_, 'b, 'l>,
+            value: AccountAddress,
+        ) -> Result<(), Self::Error> {
+            self.0.insert(value.into());
+            Ok(())
+        }
+    }
+
+    MoveValue::visit_deserialize(contents, layout, &mut UIDTraversal(&mut ids))?;
+    Ok(ids)
+}
+
+#[async_trait::async_trait]
+impl PackageStore for ObjectCache {
+    /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
+    /// some way.
+    async fn fetch(&self, id: AccountAddress) -> sui_package_resolver::Result<Arc<Package>> {
+        let object_id = ObjectID::from(id);
+        // HACK: assumes packages will always be found in the cache.
+        let versions = self
+            .0
+            .get(&object_id)
+            .unwrap_or_else(|| panic!("Failed to find package {object_id} in the object cache"));
+
+        let (_, obj) = versions.last_key_value().unwrap();
+
+        Ok(Arc::new(Package::read_from_object(obj)?))
     }
 }

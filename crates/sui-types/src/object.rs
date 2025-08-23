@@ -38,7 +38,7 @@ use sui_protocol_config::ProtocolConfig;
 use self::balance_traversal::BalanceTraversal;
 use self::bounded_visitor::BoundedVisitor;
 
-mod balance_traversal;
+pub mod balance_traversal;
 pub mod bounded_visitor;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
