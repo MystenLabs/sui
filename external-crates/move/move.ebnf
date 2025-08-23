@@ -1,0 +1,101 @@
+
+/* Module */
+
+/* A module is a sequence of module members enclosed in braces or terminated by a semicolon. */
+module ::= module_header module_body
+
+/* A module header is a module keyword followed by an address literal or identifier followed by a double colon and an identifier. */
+module_header ::= "module" (hex_numeric_literal | identifier) "::" module_identifier
+
+/* A module body is a sequence of module members enclosed in braces or terminated by a semicolon. */
+module_body ::= ("{" (module_member)* "}") | ";" (module_member)*
+
+/* Module Members */
+
+/* A module member is a struct definition, enum definition, const definition, fun definition, or friend declaration. */
+module_member ::= struct_definition | enum_definition | const_definition | fun_definition | friend_declaration
+
+/* A const definition is a const keyword followed by a const identifier, a colon, a built-in type, an equals sign, and a literal. */
+const_definition ::= "const" const_identifier ":" built_in_type "=" literal ";"
+
+/*
+ * A friend declaration is a friend keyword followed by an address literal or identifier followed by a double colon and an identifier.
+ *
+ * friend 0x0::mod;
+ * friend pkg::mod;
+ */
+friend_declaration ::= "friend" (hex_numeric_literal | identifier) "::" identifier ";"
+
+/* Identifiers */
+
+/*
+ * Address identifiers start with any allowed symbol but not a digit.
+ * a_0
+ * _Argument_1
+ * A
+ * _0
+ * _
+ */
+address_identifier ::= (lowercase_letter | uppercase_letter | underscore) (lowercase_letter | uppercase_letter | digit | underscore)*
+
+/* Module identifiers must start with a letter. */
+module_identifier ::= (uppercase_letter | lowercase_letter) (lowercase_letter | digit | underscore)*
+
+/* Struct identifiers must start with an uppercase letter followed by any number of lowercase letters, digits, and underscores. */
+struct_identifier ::= uppercase_letter (lowercase_letter | digit | underscore)*
+
+/* Const identifiers must start with an uppercase letter followed by any number of lowercase letters, digits, and underscores. */
+const_identifier ::= uppercase_letter (lowercase_letter | digit | underscore)*
+
+/* Local identifiers must start with a lowercase letter. */
+local_identifier ::= (lowercase_letter | underscore) (lowercase_letter | digit | underscore)*
+
+/* Types */
+
+/* Currently, only unsigned integers are supported. */
+integer_type ::= "u8" | "u16" | "u32" | "u64" | "u128" | "u256"
+
+/* An element type is either a built-in type or a custom type. */
+element_type ::= built_in_type | struct_identifier
+
+/* An address type */
+address_type ::= "address"
+
+/* A built-in type is a vector type, integer type, or boolean type. */
+built_in_type ::= integer_type | boolean_type | built_in_vector_type | address_type
+
+/* A built-in vector type is a vector of elements. */
+built_in_vector_type ::= "vector" "<" built_in_type ">"
+
+/* A vector type is a vector of elements. */
+vector_type ::= "vector" "<" element_type ">"
+
+/* Literals */
+
+/* A boolean is either true or false. */
+boolean_literal ::= "true" | "false"
+
+/* A vector literal is a sequence of elements separated by commas. */
+vector_literal ::= "vector" ("<" element_type ">")? "[" (literal ("," literal)*)? "]"
+
+/* A numeric literal is a sequence of digits (cannot start with 0) followed by an optional integer type. */
+numeric_literal ::= ("0" | non_zero_digit+) (integer_type)?
+
+/* A hex numeric literal is a sequence of hex digits (0-9, a-f, A-F) starting with 0x. */
+hex_numeric_literal ::= "0x" (hex_digit+)
+
+/* An address literal is a either a sequence of @ followed by a hex numeric literal up to 64 characters. */
+address_literal ::= "@" (("0" | non_zero_digit)+) | "@" hex_numeric_literal
+
+/* A literal is a boolean literal, vector literal, numeric literal, hex numeric literal, or address literal. */
+literal ::= boolean_literal | vector_literal | numeric_literal | hex_numeric_literal | address_literal
+
+/* Utility non-terminals */
+
+digit ::= "0".."9"
+hex_digit ::= "0".."9" | "a".."f" | "A".."F"
+non_zero_digit ::= "1".."9"
+
+underscore ::= "_"
+uppercase_letter ::= "A".."Z"
+lowercase_letter ::= "a".."Z"
