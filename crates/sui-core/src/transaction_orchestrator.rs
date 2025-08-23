@@ -542,7 +542,7 @@ where
         }
     }
 
-    #[instrument(level = "error", skip_all, err, fields(tx_digest = ?request.transaction.digest()))]
+    #[instrument(level = "error", skip_all, err(level = "info"), fields(tx_digest = ?request.transaction.digest()))]
     async fn submit_with_transaction_driver(
         &self,
         td: &Arc<TransactionDriver<A>>,

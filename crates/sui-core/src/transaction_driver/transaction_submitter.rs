@@ -35,7 +35,7 @@ impl TransactionSubmitter {
         Self { metrics }
     }
 
-    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx_digest))]
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -106,7 +106,7 @@ impl TransactionSubmitter {
         }
     }
 
-    #[instrument(level = "debug", skip_all, err, ret, fields(validator_display_name = ?display_name))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(validator_display_name = ?display_name))]
     async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
