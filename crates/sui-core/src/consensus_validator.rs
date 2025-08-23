@@ -186,7 +186,7 @@ impl SuiTxValidator {
         result
     }
 
-    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx.digest()))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.digest()))]
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
