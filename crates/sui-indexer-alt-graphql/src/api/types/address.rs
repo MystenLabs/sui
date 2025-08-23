@@ -81,6 +81,31 @@ impl Address {
         .await
     }
 
+    /// Dynamic fields owned by this address.
+    ///
+    /// The address must correspond to an object (account addresses cannot own dynamic fields), but that object may be wrapped.
+    pub(crate) async fn dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::CLive>,
+        last: Option<u64>,
+        before: Option<object::CLive>,
+    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
+        if self.scope.root_version().is_some() {
+            return Err(bad_user_input(object::Error::RootVersionOwnership));
+        }
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Address", "dynamicFields");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let dynamic_fields =
+            DynamicField::paginate(ctx, self.scope.clone(), self.address.into(), page).await?;
+
+        Ok(Some(dynamic_fields))
+    }
+
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
     pub(crate) async fn dynamic_object_field(
         &self,

@@ -2,18 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, InputObject, Object, Union};
+use async_graphql::{
+    connection::{Connection, Edge},
+    Context, InputObject, Object, Union,
+};
+use move_core_types::language_storage::StructTag;
 use sui_types::{
-    dynamic_field::{derive_dynamic_field_id, visitor as DFV, DynamicFieldInfo, DynamicFieldType},
-    TypeTag,
+    dynamic_field::{
+        derive_dynamic_field_id, visitor as DFV, DynamicFieldInfo, DynamicFieldType,
+        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
+    },
+    TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 use tokio::sync::OnceCell;
 
 use crate::{
     api::scalars::{
-        base64::Base64, sui_address::SuiAddress, type_filter::TypeInput, uint53::UInt53,
+        base64::Base64,
+        owner_kind::OwnerKind,
+        sui_address::SuiAddress,
+        type_filter::{TypeFilter, TypeInput},
+        uint53::UInt53,
     },
     error::{upcast, RpcError},
+    pagination::Page,
     scope::Scope,
 };
 
@@ -113,6 +125,22 @@ impl DynamicField {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
         self.super_.dynamic_field(ctx, name).await
+    }
+
+    /// Dynamic fields owned by this object.
+    ///
+    /// Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+    pub(crate) async fn dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
+        self.super_
+            .dynamic_fields(ctx, first, after, last, before)
+            .await
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
@@ -336,6 +364,40 @@ impl DynamicField {
 
         let move_object = MoveObject::from_super(object);
         Ok(Some(DynamicField::from_super(move_object)))
+    }
+
+    /// Paginate dynamic fields owned by a parent object
+    pub(crate) async fn paginate(
+        ctx: &Context<'_>,
+        scope: Scope,
+        parent: SuiAddress,
+        page: Page<CLive>,
+    ) -> Result<Connection<String, DynamicField>, RpcError<object::Error>> {
+        // Create a filter for dynamic fields: they are objects owned by the parent
+        // with type 0x2::dynamic_field::Field
+        let filter = ObjectFilter {
+            owner_kind: Some(OwnerKind::Object),
+            owner: Some(parent),
+            type_: Some(TypeFilter::Type(StructTag {
+                address: SUI_FRAMEWORK_ADDRESS,
+                module: DYNAMIC_FIELD_MODULE_NAME.to_owned(),
+                name: DYNAMIC_FIELD_FIELD_STRUCT_NAME.to_owned(),
+                type_params: vec![],
+            })),
+        };
+
+        let objects = Object::paginate_live(ctx, scope, page, filter).await?;
+        let mut dynamic_fields = Connection::new(objects.has_previous_page, objects.has_next_page);
+
+        for edge in objects.edges {
+            let move_obj = MoveObject::from_super(edge.node);
+            let dynamic_field = DynamicField::from_super(move_obj);
+            dynamic_fields
+                .edges
+                .push(Edge::new(edge.cursor, dynamic_field));
+        }
+
+        Ok(dynamic_fields)
     }
 
     /// Get the native dynamic field data, loading it lazily if needed.

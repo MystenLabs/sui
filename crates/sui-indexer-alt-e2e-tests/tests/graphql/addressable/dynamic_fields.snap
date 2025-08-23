@@ -1,0 +1,273 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-27:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5715200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 29-36:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 38-40:
+//# programmable --sender A --inputs 3u64 @A
+//> 0: P::M::o(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 42-44:
+//# programmable --sender A --inputs 4u64 @A
+//> 0: P::M::o(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 46-48:
+//# programmable --sender A --inputs 5u64 @A
+//> 0: P::M::o(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 50-52:
+//# programmable --sender A --inputs 6u64 @A
+//> 0: P::M::o(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 54-56:
+//# programmable --sender A --inputs 7u64 @A
+//> 0: P::M::o(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 58-60:
+//# programmable --sender A --inputs 8u64 @A
+//> 0: P::M::o(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 62-67:
+//# programmable --sender A --inputs object(3,0) object(4,0) object(5,0) object(6,0) object(7,0) object(8,0) 20u64 30u64 40u64 50u64
+//> 0: P::M::df(Input(1), Input(7), Input(2));
+//> 1: P::M::df(Input(0), Input(6), Input(1));
+//> 2: P::M::df(Input(3), Input(8), Input(4));
+//> 3: P::M::dof(Input(0), Input(6), Input(3));
+//> 4: P::M::df(Input(0), Input(9), Input(5));
+created: object(9,0), object(9,1), object(9,2), object(9,3), object(9,4)
+mutated: object(0,0), object(3,0), object(6,0)
+wrapped: object(4,0), object(5,0), object(7,0), object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 13946000,  storage_rebate: 8517168, non_refundable_storage_fee: 86032
+
+task 10, line 69:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 11, lines 71-125:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "name": {
+              "json": "20"
+            },
+            "value": {
+              "json": {
+                "id": "0xc5581d8a3a00218d5a1c11c5e8c14ace525878ce0871c15c406281653f6d316a",
+                "x": "4"
+              }
+            }
+          },
+          {
+            "name": {
+              "json": "50"
+            },
+            "value": {
+              "json": {
+                "id": "0x5b2a45c7909afc830fcdf3ab9378212daf2ee22a7926b9b7c221ee0e898604c0",
+                "x": "8"
+              }
+            }
+          },
+          {
+            "name": {
+              "json": "20"
+            },
+            "value": {
+              "contents": {
+                "json": {
+                  "id": "0x858c320e55fb43b779aba3924ec3e2b7cdcfb64a92b17ac94c6654678cb6a18a",
+                  "x": "6"
+                }
+              },
+              "dynamicFields": {
+                "nodes": [
+                  {
+                    "name": {
+                      "json": "40"
+                    },
+                    "value": {
+                      "json": {
+                        "id": "0x294abaf3d927d219f1e7c205788b19754ebeb82f0f3eac65c67b3f6cd3f13dc5",
+                        "x": "7"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "object": {
+      "version": 8,
+      "asMoveObject": {
+        "dynamicFields": {
+          "nodes": [
+            {
+              "name": {
+                "json": "20"
+              },
+              "value": {
+                "json": {
+                  "id": "0xc5581d8a3a00218d5a1c11c5e8c14ace525878ce0871c15c406281653f6d316a",
+                  "x": "4"
+                }
+              }
+            },
+            {
+              "name": {
+                "json": "50"
+              },
+              "value": {
+                "json": {
+                  "id": "0x5b2a45c7909afc830fcdf3ab9378212daf2ee22a7926b9b7c221ee0e898604c0",
+                  "x": "8"
+                }
+              }
+            },
+            {
+              "name": {
+                "json": "20"
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x858c320e55fb43b779aba3924ec3e2b7cdcfb64a92b17ac94c6654678cb6a18a",
+                    "x": "6"
+                  }
+                },
+                "dynamicFields": {
+                  "nodes": [
+                    {
+                      "name": {
+                        "json": "40"
+                      },
+                      "value": {
+                        "json": {
+                          "id": "0x294abaf3d927d219f1e7c205788b19754ebeb82f0f3eac65c67b3f6cd3f13dc5",
+                          "x": "7"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "wrapped": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "name": {
+              "json": "30"
+            },
+            "value": {
+              "json": {
+                "id": "0xc29d7c3f5cb9e0561d46e3d8178460b76e5f2455115e24959902dcb570fd0d78",
+                "x": "5"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12, lines 127-137:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "dynamicFields"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 13, lines 139-151:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 4,
+          "column": 7
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "dynamicFields"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
