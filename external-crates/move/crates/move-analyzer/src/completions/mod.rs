@@ -11,7 +11,7 @@ use crate::{
     },
     context::Context,
     symbols::{
-        self, Symbols, compilation::PrecomputedPkgInfo, cursor::CursorContext,
+        self, Symbols, compilation::CachedPackages, cursor::CursorContext,
         runner::SymbolicatorRunner,
     },
 };
@@ -32,8 +32,8 @@ use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 
 use std::{
-    collections::{BTreeMap, HashSet},
-    path::{Path, PathBuf},
+    collections::HashSet,
+    path::Path,
     sync::{Arc, Mutex},
 };
 use vfs::VfsPath;
@@ -82,7 +82,7 @@ pub fn on_completion_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     implicit_deps: Dependencies,
 ) {
     eprintln!("handling completion request");
@@ -128,7 +128,7 @@ pub fn on_completion_request(
 fn completions(
     context: &Context,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
     implicit_deps: Dependencies,
@@ -156,7 +156,7 @@ fn completions(
 pub fn compute_completions(
     current_symbols: &Symbols,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
     implicit_deps: Dependencies,
@@ -178,7 +178,7 @@ pub fn compute_completions(
 /// view of the code (returns `None` if the symbols could not be re-computed).
 fn compute_completions_new_symbols(
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     cursor_position: Position,
     implicit_deps: Dependencies,

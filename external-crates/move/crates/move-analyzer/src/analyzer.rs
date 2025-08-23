@@ -27,7 +27,7 @@ use crate::{
     inlay_hints,
     symbols::{
         self,
-        compilation::PrecomputedPkgInfo,
+        compilation::CachedPackages,
         requests::{
             on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
             on_hover_request, on_references_request,
@@ -59,7 +59,7 @@ pub fn run(implicit_deps: Dependencies) {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
-    let pkg_deps = Arc::new(Mutex::new(BTreeMap::<PathBuf, PrecomputedPkgInfo>::new()));
+    let pkg_deps = Arc::new(Mutex::new(CachedPackages::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
     let (id, client_response) = connection
@@ -170,7 +170,7 @@ pub fn run(implicit_deps: Dependencies) {
         let build_path = uri.to_file_path().unwrap();
         if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
             if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
-                Arc::new(Mutex::new(BTreeMap::new())),
+                Arc::new(Mutex::new(CachedPackages::new())),
                 ide_files_root.clone(),
                 p.as_path(),
                 None,
@@ -310,7 +310,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     shutdown_request_received: bool,
     implicit_deps: Dependencies,
 ) -> bool {
