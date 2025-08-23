@@ -42,13 +42,27 @@ Finally, Tom sends all of his SUI coins to John. For this transaction, the input
 
 ```mermaid
 flowchart LR
-    id1(Object A\nfa:fa-coins 5 SUI\n fa:fa-person Tom):::object-a;
-    id2(Object C\nfa:fa-coins 1 SUI\n fa:fa-person Alice);
-    id3(Object A\nfa:fa-coins 4 SUI\n fa:fa-person Tom):::object-a;
-    id4(Object B\nfa:fa-coins 2 SUI\n fa:fa-person John):::object-b;
-    id5(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Anna):::object-b;
-    id6(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Tom):::object-b;
-    id7(Object A\nfa:fa-coins 6 SUI\n fa:fa-person John):::object-a;
+    id1(Object A
+    fa:fa-coins 5 SUI
+    fa:fa-person Tom):::object-a;
+    id2(Object C
+    fa:fa-coins 1 SUI
+    fa:fa-person Alice);
+    id3(Object A
+    fa:fa-coins 4 SUI
+    fa:fa-person Tom):::object-a;
+    id4(Object B
+    fa:fa-coins 2 SUI
+    fa:fa-person John):::object-b;
+    id5(Object B
+    fa:fa-coins 2 SUI
+    fa:fa-person Anna):::object-b;
+    id6(Object B
+    fa:fa-coins 2 SUI
+    fa:fa-person Tom):::object-b;
+    id7(Object A
+    fa:fa-coins 6 SUI
+    fa:fa-person John):::object-a;
     id1-->|tx-1|id2;
     id1-->|tx-1|id3;
     id4-->|tx-2|id5;

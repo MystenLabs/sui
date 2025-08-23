@@ -3,6 +3,8 @@ title: Stablecoins on Sui
 sidebar_label: Stablecoins
 description: Stablecoins are a type of cryptocurrency that are designed to maintain a stable value relative to a fiat currency or a basket of assets. 
 keywords: [ stablecoins, USDT, tether, agora, USDC, USD coin, AUSD, ondo USDY, USDY, using stablecoins, stablecoins in ptbs, ptbs, programmable transaction blocks, stablecoins in programmable transaction blocks ]
+mdx:
+  format: md
 ---
 
 Stablecoins are a type of cryptocurrency that are designed to maintain a stable value relative to a fiat currency or a basket of assets. They are widely used for trading, lending, and as a store of value. 
@@ -62,7 +64,7 @@ usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "pack
 
 After importing the module, your Move package should look like the following:
 
-{@inject: examples/move/usdc_usage/Move.toml}
+{@inject: ../../../../examples/move/usdc_usage/Move.toml}
 
 :::warning
 The `usdc` package uses a specific version of the `sui` package, which causes a version conflict with the `Sui` package in the Sui framework. You can override the version of the `Sui` package in your `Move.toml` file to use a different version. Add the `override = true` flag to the `Sui` package in your `Move.toml` file.
@@ -80,11 +82,11 @@ use usdc::usdc::USDC;
 
 Then use the `USDC` type just as you would use the `SUI` type when accepting a `Coin<SUI>` parameter.
 
-{@inject: examples/move/usdc_usage/sources/example.move#fun=buy_sword_with_usdc}
+{@inject: ../../../../examples/move/usdc_usage/sources/example.move#fun=buy_sword_with_usdc}
 
 The following example demonstrates how to use the USDC stablecoin in a Move package and how it relates to using the `SUI` type as well as any generic coin types.
 
-{@inject: examples/move/usdc_usage/sources/example.move}
+{@inject: ../../../../examples/move/usdc_usage/sources/example.move}
 
 ### Using USDC in PTBs
 

@@ -1205,7 +1205,7 @@ fun compute_adjusted_reward_distribution(
     let mut adjusted_storage_fund_reward_amounts = vector[];
 
     let length = validators.length();
-    let num_unslashed_validators = length - individual_staking_reward_adjustments.size();
+    let num_unslashed_validators = length - individual_staking_reward_adjustments.length();
 
     length.do!(|i| {
         let validator = &validators[i];

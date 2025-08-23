@@ -57,6 +57,11 @@ Follow the comments in each module's code to understand the logic each creates.
 
 The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, and dynamic object fields, to create on-chain Plinko games.
 
+<details>
+<summary>
+`plinko.move`
+</summary>
+
 ```move title="plinko.move"
 module plinko::plinko {
 // === Imports ===
@@ -308,6 +313,8 @@ fun internal_start_game(counter: &mut Counter, num_balls: u64, coin: Coin<SUI>, 
 }
 ```
 
+</details>
+
 #### Error codes
 
 Error handling is integral to the module, with specific codes indicating various failure states or invalid operations:
@@ -357,6 +364,11 @@ Include utilities like:
 ### plinko::house_data
 
 The `plinko::house_data` module in the Plinko game is designed to manage the game's treasury and configurations. It's responsible for storing the house funds, setting the game parameters (like maximum and minimum stakes), and handling game fees. It also stores the house public key for verifying game outcomes. The module provides functions to adjust game settings, manage the house funds, and ensure the integrity and fairness of the game through cryptographic verification.
+
+<details>
+<summary>
+`house_data.move`
+</summary>
 
 ```move title="house_data.move"
 module plinko::house_data {
@@ -572,6 +584,7 @@ public fun init_for_testing(ctx: &mut TxContext) {
 }
 }
 ```
+</details>
 
 #### Error codes
 
@@ -625,6 +638,11 @@ Provide read-only and mutable access to house data properties, enabling operatio
 The `plinko::counter_nft` module introduces a unique, non-transferable Counter NFT. This Counter object is pivotal for generating a distinct VRF input for each round of the game, thereby ensuring the randomness and fairness of game outcomes. It includes functionalities to create, increment, and destroy these Counter objects. Each Counter is tied to a unique game round and increments its count with each use, providing a fresh input for the game's randomness mechanism.
 
 Unlike traditional NFTs, the Counter NFT is non-transferable, ensuring it remains tied to its original owner and serves its purpose without the risk of duplication or unauthorized transfer.
+
+<details>
+<summary>
+`counter_nft.move`
+</summary>
 
 ```move title="counter_nft.move"
 module plinko::counter_nft {
@@ -702,6 +720,7 @@ public fun get_vrf_input_for_testing(self: &mut Counter): vector<u8> {
 }
 }
 ```
+</details>
 
 #### Structures
 

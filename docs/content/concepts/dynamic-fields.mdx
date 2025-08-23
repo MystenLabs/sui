@@ -2,6 +2,8 @@
 title: Dynamic (Object) Fields
 description: Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values.
 keywords: [ dynamic fields, dynamic object fields, adding dynamic fields, field names, adding dynamic object fields, accessing dynamic fields, accessing dynamic object fields, deleting an object with dynamic fields ]
+mdx:
+  format: md
 ---
 
 There are various ways to use object fields to store primitive data and other objects (wrapping), but there are a few limitations to these:
@@ -31,21 +33,24 @@ Use the `add` function from the relevant Sui framework module to add dynamic fie
 
 **Dynamic field**
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/dynamic_field.move#fun=add noComments}
+{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/dynamic_field.move#fun=add noComments}
 
 **Dynamic object field**
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move#fun=add noComments}
+{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move#fun=add noComments}
 
 These functions add a field with name `name` and value `value` to `object`. To see it in action, consider these code snippets:
 
 First, define two object types for the parent and the child:
 
-{@inject: examples/move/dynamic_fields/sources/example.move#struct=Parent,Child noComments}
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#struct=Parent noComments}
+
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#struct=Child noComments}
+
 
 Next, define an API to add a `Child` object as a dynamic field of a `Parent` object:
 
-{@inject: examples/move/dynamic_fields/sources/example.move#fun=add_child}
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#fun=add_child}
 
 This function takes the `Child` object by value and makes it a dynamic field of `parent` with name `b"child"` (a byte string of type `vector<u8>`). This call results in the following ownership relationship:
 
@@ -58,7 +63,10 @@ It is an error to overwrite a field (attempt to add a field with the same `<Name
 
 You can reference dynamic fields by reference using the following APIs:
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/dynamic_field.move#fun=borrow,borrow_mut noComments}
+{@inject:  ../../../crates/sui-framework/packages/sui-framework/sources/dynamic_field.move#fun=borrow noComments}
+
+{@inject:  ../../../crates/sui-framework/packages/sui-framework/sources/dynamic_field.move#fun=borrow_mut noComments}
+
 
 Where `object` is the UID of the object the field is defined on and `name` is the field's name.
 
@@ -70,7 +78,10 @@ Where `object` is the UID of the object the field is defined on and `name` is th
 
 To use these APIs with the `Parent` and `Child` types defined earlier:
 
-{@inject: examples/move/dynamic_fields/sources/example.move#fun=mutate_child,mutate_child_via_parent noComments}
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#fun=mutate_child noComments}
+
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#fun=mutate_child_via_parent noComments}
+
 
 The first function accepts a mutable reference to the `Child` object directly, and you can call it with `Child` objects that haven't been added as fields to `Parent` objects.
 
@@ -90,7 +101,7 @@ You must access dynamic object field values through these APIs. A transaction th
 
 Similar to unwrapping an object held in a regular field, you can remove a dynamic field, exposing its value:
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/dynamic_field.move#fun=remove noComments}
+{@inject:  ../../../crates/sui-framework/packages/sui-framework/sources/dynamic_field.move#fun=remove noComments}
 
 This function takes a mutable reference to the ID of the `object` the field is defined on, and the field's `name`.  If a field with a `value: Value` is defined on `object` at `name`, it is removed and `value` returned, otherwise it aborts. Future attempts to access this field on `object` will fail.
 
@@ -102,7 +113,10 @@ This function takes a mutable reference to the ID of the `object` the field is d
 
 The value that is returned can be interacted with just like any other value (because it is any other value). For example, removed dynamic object field values can then be `delete`-d or `transfer`-ed to an address (back to the sender):
 
-{@inject: examples/move/dynamic_fields/sources/example.move#fun=delete_child,reclaim_child noComments}
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#fun=delete_child noComments}
+
+{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#fun=reclaim_child noComments}
+
 
 Similar to borrowing a field, a transaction that attempts to remove a non-existent field, or a field with a different `Value` type, fails.
 

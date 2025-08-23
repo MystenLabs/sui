@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use sui_types::{
     digests::{TransactionDigest, TransactionEffectsDigest},
@@ -45,6 +46,21 @@ pub enum SubmitTxResponse {
         // TODO(fastpath): validate this field is always present and return an error during deserialization.
         details: Option<Box<ExecutedData>>,
     },
+}
+
+impl fmt::Debug for SubmitTxResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Submitted { consensus_position } => f
+                .debug_struct("Submitted")
+                .field("consensus_position", consensus_position)
+                .finish(),
+            Self::Executed { effects_digest, .. } => f
+                .debug_struct("Executed")
+                .field("effects_digest", &format_args!("{}", effects_digest))
+                .finish(),
+        }
+    }
 }
 
 impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
@@ -153,6 +169,23 @@ pub enum WaitForEffectsResponse {
         epoch: u64,
         round: Option<u32>,
     },
+}
+
+impl fmt::Debug for WaitForEffectsResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Executed { effects_digest, .. } => f
+                .debug_struct("Executed")
+                .field("effects_digest", effects_digest)
+                .finish(),
+            Self::Rejected { error } => f.debug_struct("Rejected").field("error", error).finish(),
+            Self::Expired { epoch, round } => f
+                .debug_struct("Expired")
+                .field("epoch", epoch)
+                .field("round", round)
+                .finish(),
+        }
+    }
 }
 
 impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {

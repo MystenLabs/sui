@@ -555,7 +555,7 @@ Kiosk trades will not be possible.
     <b>let</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a> { <a href="../sui/transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_from">from</a>, receipts } = request;
     <b>let</b> <b>mut</b> completed = receipts.into_keys();
     <b>let</b> <b>mut</b> total = completed.length();
-    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
+    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.length(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
     <b>while</b> (total &gt; 0) {
         <b>let</b> rule_type = completed.pop_back();
         <b>assert</b>!(self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="../sui/transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>);

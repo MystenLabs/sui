@@ -1,8 +1,9 @@
 ---
 title: Using Nautilus
 description: Details on how to use Nautilus using the provided reproducible build template.
+mdx:
+  format: md
 ---
-
 The [Nautilus framework](https://github.com/MystenLabs/nautilus) helps you deploy an AWS Nitro Enclave with all the necessary scaffolding, such as reproducible builds, signature formatting, and HTTPS traffic forwarding, so you can focus on implementing the off-chain computation logic inside the enclave.
 
 In addition, the framework provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. These are the steps you take to use Nautilus in your dApp:
@@ -177,7 +178,9 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
 ```
 
 <details>
+
 <summary>Output</summary>
+
 ```json
 {
   "response":
@@ -193,6 +196,7 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
   "signature":"b75d2d44c4a6b3c676fe087465c0e85206b101e21be6cda4c9ab2fd4ba5c0d8c623bf0166e274c5491a66001d254ce4c8c345b78411fdee7225111960cff250a"
 }
 ```
+
 </details>
 
 
@@ -205,7 +209,9 @@ $ curl -H 'Content-Type: application/json' -X GET http://<PUBLIC_IP>:3000/health
 ```
 
 <details>
+
 <summary>Output</summary>
+
 ```json
 {
   "pk":"f343dae1df7f2c4676612368e40bf42878e522349e4135c2caa52bc79f0fc6e2",
@@ -215,6 +221,7 @@ $ curl -H 'Content-Type: application/json' -X GET http://<PUBLIC_IP>:3000/health
     }
 }
 ```
+
 </details>
 
 - **Docker is not running:** The EC2 instance might still be starting up. Wait a few moments, then try again.
@@ -240,12 +247,15 @@ $ cat out/nitro.pcrs
 ```
 
 <details>
+
 <summary>Output</summary>
+
 ```sh
 911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR0
 911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR1
 21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
 ```
+
 </details>
 
 ```sh
@@ -331,11 +341,13 @@ $ cat out/nitro.pcrs
 
 <details>
 <summary>Output</summary>
+
 ```sh
 968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR0
 968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR1
 21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
 ```
+
 </details>
 
 ```sh
@@ -381,7 +393,9 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
 ```
 
 <details>
+
 <summary>Output</summary>
+
 ```json
 {
   "response":
@@ -397,6 +411,7 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
   "signature":"77b6d8be225440d00f3d6eb52e91076a8927cebfb520e58c19daf31ecf06b3798ec3d3ce9630a9eceee46d24f057794a60dd781657cb06d952269cfc5ae19500"
 }
 ```
+
 </details>
 
 Then use the values from the enclave response - `signature`, `timestamp`, `location`, and `temperature` - to call `update_weather` in the Move contract. In this example, the call is demonstrated using a script, but it should be integrated into your dApp frontend.

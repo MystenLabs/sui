@@ -2,19 +2,21 @@
 title: Create Coins and Tokens
 description: Learn how to mint coins and tokens on the Sui network.
 keywords: [ mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins ]
+mdx:
+  format: md
 ---
 
 Coins and tokens on Sui are similar. In practice, the terms are used interchangeably, but there are some differences in their implementation. You can learn about these differences in the respective standard documentation, [Closed-Loop Token](../../standards/closed-loop-token.mdx) and [Coin](../../standards/coin.mdx).
 
 Publishing a coin on Sui is similar to publishing a new type. The main difference is the requirement of a one time witness when creating a coin.
 
-{@inject: examples/move/coin/sources/my_coin.move noComments}
+{@inject: ../../../../examples/move/coin/sources/my_coin.move noComments}
 
 The `Coin<T>` is a generic implementation of a coin on Sui. Access to the `TreasuryCap` provides control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
 
 The example module includes a `mint` function. You pass the `TreasuryCap` created from the `init` function to the module's `mint` function. The function then uses the `mint` function from the `Coin` module to create (mint) a coin and then transfer it to an address. 
 
-{@inject: examples/move/coin/sources/my_coin.move#fun=mint noComments}
+{@inject: ../../../../examples/move/coin/sources/my_coin.move#fun=mint noComments}
 
 ### Sui CLI
 

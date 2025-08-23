@@ -2,6 +2,8 @@
 title: Regulated Coin and Deny List
 description: You can create regulated coins on Sui, such as stablecoins. These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list.
 keywords: [ regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, sui token standards ]
+mdx:
+  format: md
 ---
 
 You can create regulated coins on Sui, such as [stablecoins](../stablecoins.mdx). These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list. 
@@ -64,10 +66,15 @@ Take care not to expose the secret key for your address to the public.
 The example uses a single file to create the smart contract for the project (`regulated_coin.move`). The contract defines the regulated coin when you publish it to the network. The treasury capability (`TreasuryCap`) and deny capability (`DenyCapV2`) are transferred to the address that publishes the contract. The `TreasuryCap` permits the bearer to mint or burn coins (`REGULATED_COIN` in this example), and the `DenyCapV2` bearer can add and remove addresses from the list of unauthorized users. 
 
 <details>
+
 <summary>
+
 `regulated_coin.move`
+
 </summary>
-{@inject: examples/regulated-coin/move/sources/regulated_coin.move}
+
+{@inject: ../../../../../examples/regulated-coin/move/sources/regulated_coin.move}
+
 </details>
 
 ### Creating regulated coins
@@ -79,11 +86,15 @@ The TypeScript and Rust clients handle the call to the `coin` package's `mint` f
 <Tabs groupId="code-language">
 
 <TabItem label="TypeScript" value="typescript">
-{@inject: examples/regulated-coin/ts-client/src/main.ts#mint}
+
+{@inject: ../../../../../examples/regulated-coin/ts-client/src/main.ts#mint}
+
 </TabItem>
 
 <TabItem label="Rust" value="rust">
-{@inject: examples/regulated-coin/rust-client/src/tx_run/coin.rs#mint}
+
+{@inject: ../../../../../examples/regulated-coin/rust-client/src/tx_run/coin.rs#mint}
+
 </TabItem>
 
 </Tabs>
@@ -91,28 +102,50 @@ The TypeScript and Rust clients handle the call to the `coin` package's `mint` f
 For all `Coin` functions available, see the Sui framework [`coin` module documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md). The following functions are the most common. 
 
 <details>
+
 <summary>
+
   `coin::mint<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint}
+
+{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint}
+
 </details>
 <details>
+
 <summary>
+
   `coin::mint_balance<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_balance}
+
+{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_balance}
+
 </details>
+
 <details>
+
 <summary>
+
   `coin::mint_and_transfer<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_and_transfer}
+
+{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_and_transfer}
+
 </details>
+
 <details>
+
 <summary>
+
   `coin::burn<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=burn}
+
+{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=burn}
+
 </details>
 
 ### Manage deny list
@@ -126,11 +159,15 @@ To use these functions, you pass the address you want to either add or remove. T
 <Tabs groupId="code-language">
 
 <TabItem label="TypeScript" value="typescript">
-{@inject: examples/regulated-coin/ts-client/src/main.ts#deny}
+
+{@inject: ../../../../../examples/regulated-coin/ts-client/src/main.ts#deny}
+
 </TabItem>
 
 <TabItem label="Rust" value="rust">
-{@inject: examples/regulated-coin/rust-client/src/tx_run/deny.rs#deny}
+
+{@inject: ../../../../../examples/regulated-coin/rust-client/src/tx_run/deny.rs#deny}
+
 </TabItem>
 
 </Tabs>

@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
-    "start": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus start",
-    "build": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus build",
+    "start": "node src/utils/grpc-download.js && docusaurus graphql-to-doc:beta; rm '../content/references/sui-api/sui-graphql/reference/generated.md'; node src/utils/getopenrpcspecs.js; docusaurus start",
+    "build": "node src/utils/grpc-download.js && docusaurus graphql-to-doc:beta; rm '../content/references/sui-api/sui-graphql/reference/generated.md'; node src/utils/getopenrpcspecs.js; docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
@@ -19,27 +19,21 @@
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",
-    "@docusaurus/core": "3.1.1",
-    "@docusaurus/preset-classic": "3.1.1",
     "@docusaurus/remark-plugin-npm2yarn": "3.1.1",
     "@docusaurus/theme-common": "3.1.1",
-    "@docusaurus/theme-mermaid": "3.1.1",
-    "@docusaurus/theme-search-algolia": "^3.8.0",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
     "@graphql-markdown/docusaurus": "^1.24.0",
     "@graphql-tools/graphql-file-loader": "^8.0.1",
-    "@mdx-js/react": "^1.6.22",
+    "@mdx-js/react": "3.1.0",
     "@mui/material": "^5.14.8",
     "algoliasearch": "^5.25.0",
     "autoprefixer": "^10.4.18",
     "axios": "^1.6.8",
     "clsx": "^2.1.0",
     "copy-text-to-clipboard": "^3.2.0",
-    "docusaurus-plugin-includes": "^1.1.5",
-    "docusaurus-theme-frontmatter": "^1.3.0",
+    "docusaurus-theme-github-codeblock": "^2.0.2",
     "dotenv": "^16.4.5",
-    "github": "link:prism-react-renderer/themes/github",
     "graphql": "^16.8.1",
     "graphql-config": "^5.0.3",
     "gray-matter": "^4.0.3",
@@ -47,12 +41,16 @@
     "he": "^1.2.0",
     "lodash": "^4.17.21",
     "markdown-to-jsx": "^7.4.3",
-    "nightOwl": "link:prism-react-renderer/themes/nightOwl",
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-gfm": "^3.1.0",
     "postcss": "^8.4.37",
     "posthog-docusaurus": "^2.0.0",
-    "prism-react-renderer": "^2.3.1",
+    "prism-react-renderer": "^1.3.5",
     "prismjs": "^1.29.0",
     "pure-react-carousel-thumbs": "^1.0.6",
+    "pushfeedback": "^0.1.73",
+    "pushfeedback-react": "^0.1.73",
+    "raw-loader": "^4.0.2",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-instantsearch": "^7.15.8",
@@ -61,16 +59,30 @@
     "react-syntax-highlighter": "^15.5.0",
     "react-ui-scrollspy": "^2.3.0",
     "rehype-katex": "^7.0.0",
+    "remark-directive": "^4.0.0",
     "remark-math": "^6.0.0",
     "tailwindcss": "^3.4.1",
-    "turndown": "^7.2.0"
+    "turndown": "^7.2.0",
+    "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.23.4",
+    "@docusaurus/core": "3.8.1",
     "@docusaurus/module-type-aliases": "^3.1.1",
+    "@docusaurus/preset-classic": "3.8.1",
+    "@docusaurus/remark-plugin-npm2yarn": "3.8.1",
+    "@docusaurus/theme-classic": "3.8.1",
+    "@docusaurus/theme-common": "3.8.1",
+    "@docusaurus/theme-mermaid": "3.8.1",
+    "@docusaurus/theme-search-algolia": "3.8.1",
+    "@mdx-js/react": "3.1.0",
     "@tsconfig/docusaurus": "^1.0.5",
-    "@types/react": "^19.1.9",
-    "typescript": "^4.7.4"
+    "micromark": "^4.0.2",
+    "micromark-extension-gfm": "^3.0.0",
+    "rehype-raw": "^7.0.0",
+    "remark-parse": "^11.0.0",
+    "typescript": "^4.7.4",
+    "unified": "^11.0.5"
   },
   "resolutions": {
     "graphql": "^16.8.1"
@@ -95,5 +107,8 @@
     "overrides": {
       "@docusaurus/types": "3.1.1"
     }
+  },
+  "overrides": {
+    "@docusaurus/*": "3.8.1"
   }
 }

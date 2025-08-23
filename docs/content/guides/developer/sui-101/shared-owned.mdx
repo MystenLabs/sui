@@ -2,6 +2,8 @@
 title: Shared versus Owned Objects
 description: On Sui, you can use shared objects, owned objects, or both in your transactions. Weigh the benefits of each to decide the best approach for your project.
 keywords: [ shared objects, owned objects, object types, locked<t>, key, types of objects, shared, owned, address-owned ]
+mdx:
+  format: md
 ---
 
 Objects on Sui can be shared (accessible for reads and writes by any transaction) or owned (accessible for reads and writes by transactions signed by their owner). Many applications can be built using a solution that either uses shared objects or only owned objects, with trade-offs for each that need to be weighed.
@@ -43,7 +45,9 @@ The important property that this interface provides is that locked values cannot
 <summary>
 `owned.move`
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/owned.move}
+
+{@inject: ../../../../../examples/trading/contracts/escrow/sources/owned.move}
+
 </details>
 
 The protocol for swapping via escrow implemented using owned objects starts with both parties locking their respective objects. 
@@ -74,7 +78,7 @@ flowchart LR
 
 A third party acts as custodian. The custodian holds objects that are waiting for their counterparts to arrive and when they arrive, it matches them up to complete the swap.
 
-{@inject: examples/trading/contracts/escrow/sources/owned.move#fun=create noComments}
+{@inject: ../../../../../examples/trading/contracts/escrow/sources/owned.move#fun=create noComments}
 
 ```mermaid
 flowchart TB
@@ -120,7 +124,7 @@ flowchart TB
     Third_Party--fa:fa-coins B-->Seller
 ```
 
-{@inject: examples/trading/contracts/escrow/sources/owned.move#fun=swap}
+{@inject: ../../../../../examples/trading/contracts/escrow/sources/owned.move#fun=swap}
 
 The `swap` function checks that senders and recipients match and that each party wants the object that the other party is offering, by comparing their respective key IDs. If the custodian tried to match together two unrelated escrow requests to swap, the transaction would not succeed.
 
@@ -130,7 +134,9 @@ The `swap` function checks that senders and recipients match and that each party
 <summary>
 `shared.move`
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/shared.move}
+
+{@inject: ../../../../../examples/trading/contracts/escrow/sources/shared.move}
+
 </details>
 
 The protocol in the shared object case is less symmetric, but still starts with the first party locking the object they want to swap. 
@@ -161,7 +167,7 @@ flowchart TB
     end
 ```
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=create noComments}
+{@inject: ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=create noComments}
 
 This time the `create` request accepts the object being escrowed directly (not locked), and creates a shared `Escrow` object. The request remembers the address that sent it (who is allowed to reclaim the object if the swap hasn't already happened), and the intended recipient, who is then expected to continue the swap by providing the object they initially locked:
 
@@ -178,7 +184,7 @@ flowchart TB
     swap--fa:fa-coins B-->Seller
 ```
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=swap}
+{@inject: ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=swap}
 
 
 Even though the `Escrow` object is a shared object that is accessible by anyone, the Move interface ensures that only the original sender and the intended recipient can successfully interact with it. `swap` checks that the locked object matches the object that was requested when the `Escrow` was created (again, by comparing key IDs) and assumes that the intended recipient wants the escrowed object (if they did not, they would not have called `swap`).

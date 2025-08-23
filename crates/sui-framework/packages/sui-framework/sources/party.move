@@ -81,7 +81,7 @@ public macro fun public_transfer<$T: key + store>($self: Party, $obj: $T) {
 
 public(package) fun is_single_owner(p: &Party): bool {
     p.default.0 == NO_PERMISSIONS &&
-    p.members.size() == 1 &&
+    p.members.length() == 1 &&
     { let (_, m) = p.members.get_entry_by_idx(0); m.0 == ALL_PERMISSIONS }
 }
 

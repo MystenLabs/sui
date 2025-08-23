@@ -2,6 +2,8 @@
 title: Swaps
 description: Use DeepBookV3 to execute token swaps.
 keywords: [ automatic market makers, amms, swap_exact_amount, balancemanager, base_in, quote_in, deep_in, swaps, swap base quantity, deep quantity, DEEP, swap exact quantity, deepbook, deepbookv3  ]
+mdx:
+  format: md
 ---
 
 DeepBook provides a swap-like interface commonly seen in automatic market makers (AMMs). Unlike the order functions, you can call `swap_exact_amount` without a `BalanceManager`. You call it directly with `Coin` objects instead. When swapping from base to quote, `base_in` must have a positive value while `quote_in` must be zero. When swapping from quote to base, `quote_in` must be positive and `base_in` zero. Some `deep_in` amount is required to pay for trading fees. You can overestimate this amount, as the unused DEEP tokens are returned at the end of the call.
@@ -24,7 +26,7 @@ Some base quantity may be left over, if the input quantity is not divisible by l
 
 You can overestimate the amount of DEEP required. The remaining balance is returned.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=swap_exact_base_for_quote noComments}
+{@inject: ../deepbook-ref/pool.move#fun=swap_exact_base_for_quote noComments}
 
 ### Swap exact quote for base
 
@@ -36,13 +38,13 @@ Swap exact quote quantity without needing a `balance_manager`. You can overestim
 
 Some quote quantity might be left over if the input quantity is not divisible by lot size.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=swap_exact_quote_for_base noComments}
+{@inject: ../deepbook-ref/pool.move#fun=swap_exact_quote_for_base noComments}
 
 ### Swap exact quantity
 
 This function is what the previous two functions call with `coin::zero()` set for the third coin. Users can call this directly for base → quote or quote → base as long as base or quote have a zero value.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=swap_exact_quantity noComments}
+{@inject: ../deepbook-ref/pool.move#fun=swap_exact_quantity noComments}
 
 ## Related links
 

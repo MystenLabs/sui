@@ -56,7 +56,7 @@ impl EffectsCertifier {
         Self { metrics }
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "error", skip_all, err)]
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -188,6 +188,7 @@ impl EffectsCertifier {
         }
     }
 
+    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx_digest, consensus_position = ?consensus_position, ret_effects_digest = tracing::field::Empty))]
     async fn get_full_effects<A>(
         &self,
         client: Arc<SafeClient<A>>,
@@ -217,6 +218,8 @@ impl EffectsCertifier {
                     details,
                 } => {
                     if let Some(details) = details {
+                        tracing::Span::current()
+                            .record("ret_effects_digest", format!("{:?}", effects_digest));
                         Ok((effects_digest, details))
                     } else {
                         tracing::debug!("Execution data not found, retrying...");
@@ -238,6 +241,7 @@ impl EffectsCertifier {
         }
     }
 
+    #[instrument(level = "debug", skip_all, err, ret, fields(consensus_position = ?consensus_position))]
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -285,7 +289,7 @@ impl EffectsCertifier {
                 )
                 .await
                 {
-                    Ok(result) => result,
+                    Ok(result) => (name, result),
                     Err(_) => {
                         client_monitor.record_interaction_result(OperationFeedback {
                             authority_name: name,
@@ -494,6 +498,7 @@ impl EffectsCertifier {
         }
     }
 
+    #[instrument(level = "debug", skip_all, err, ret, fields(validator_display_name = ?display_name))]
     async fn wait_for_acknowledgment_rpc<A>(
         &self,
         name: AuthorityName,
@@ -502,7 +507,7 @@ impl EffectsCertifier {
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         raw_request: &RawWaitForEffectsRequest,
         options: &SubmitTransactionOptions,
-    ) -> (AuthorityName, Result<WaitForEffectsResponse, SuiError>)
+    ) -> Result<WaitForEffectsResponse, SuiError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
@@ -524,7 +529,7 @@ impl EffectsCertifier {
                         operation: OperationType::Effects,
                         result: Ok(latency),
                     });
-                    return (name, Ok(response));
+                    return Ok(response);
                 }
                 Err(e) => {
                     client_monitor.record_interaction_result(OperationFeedback {
@@ -534,7 +539,7 @@ impl EffectsCertifier {
                         result: Err(()),
                     });
                     if !matches!(e, SuiError::RpcError(_, _)) {
-                        return (name, Err(e));
+                        return Err(e);
                     }
                     tracing::trace!(
                         ?name,
@@ -545,7 +550,7 @@ impl EffectsCertifier {
             };
             sleep(delay).await;
         }
-        (name, Err(SuiError::TimeoutError))
+        Err(SuiError::TimeoutError)
     }
 
     /// Creates the final full response.

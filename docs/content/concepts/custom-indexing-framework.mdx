@@ -2,6 +2,8 @@
 title: Custom Indexing Framework
 description: The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui. It provides customizable, production-ready components for data ingestion, processing, and storage.
 keywords: [ indexer, framework, indexer framework, dex, events, framework architecture ]
+mdx:
+    format: md
 ---
 
 Sui generates rich, complex data, including transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing for workflows such as tracking specific events, aggregating analytics, building dashboards, or creating specialized databases.
@@ -40,7 +42,6 @@ Checkpoint data comes from various data sources, including:
 - **Local files** allow you to process checkpoint files dumped by a local Sui Full node, providing the lowest latency, but should be used for testing only as these files are not automatically cleaned up.
 - **RPC endpoints** enable direct connection to a Sui Full node RPC endpoint, allowing you to use a trusted data source that you control or to connect to networks (like Devnet) that lack a remote store.
 The indexing framework supports multiple data sources to maximize flexibility.
-{/*→ Different data source configurations are covered in the section [Checkpoint Data Sources](https://www.notion.so/Checkpoint-Data-Sources-2336d9dcb4e980ffa5c7eabb07958007?pvs=21)*/} 
 
 ### Ingestion layer
 
@@ -64,17 +65,20 @@ The framework then exposes specific interfaces that you implement to define your
 Sequential and concurrent pipeline types and their trade-offs are detailed in [Pipeline Architecture](./custom-indexer/pipeline-architecture.mdx).
 
 <details>
+
 <summary>
+
 `CheckpointData` struct
+
 </summary>
-{@inject: crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
+
+{@inject: ../../../crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
+
 </details>
 
 ### Storage layer
 
 The indexing framework abstracts database operations through a flexible storage layer. PostgreSQL comes with built-in support using Diesel ORM, providing production-ready database operations, connection pooling, migrations, and watermark management out of the box. For custom database implementations, you can implement the framework's storage interfaces to use any database, for example, [MongoDB](https://www.mongodb.com/) for document storage or [ClickHouse](https://clickhouse.com/) for analytics.
-
-{/*→* Implementing custom DB (Bring Your Own Store) is covered in the section *[**Bring Your Own Store (BYOS)**](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21).*/}
 
 ## Single program, multiple threads
 

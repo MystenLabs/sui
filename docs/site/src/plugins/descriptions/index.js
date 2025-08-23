@@ -10,147 +10,236 @@ import fs from "fs";
 import matter from "gray-matter";
 import TurndownService from "turndown";
 
+// ---------- helpers ----------
+function walk(dir, filter) {
+  const out = [];
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const abs = path.join(dir, e.name);
+      let st;
+      try {
+        st = fs.statSync(abs);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) out.push(...walk(abs, filter));
+      else if (st.isFile() && filter(abs)) out.push(abs);
+    }
+  } catch {
+    // ignore unreadable dirs
+  }
+  return out;
+}
+
+function createSection(routePath) {
+  const parts = routePath.replace(/^\//, "").split("/");
+  if (parts.length === 0) return "";
+  if (parts.length === 1)
+    return (parts[0][0].toUpperCase() + parts[0].slice(1)).replaceAll("-", " ");
+  const p = parts[parts.length - 2];
+  return (p[0].toUpperCase() + p.slice(1)).replaceAll("-", " ");
+}
+
+function firstParagraphFrom(body) {
+  const lines = body.split(/\r?\n/);
+  const buf = [];
+  for (const raw of lines) {
+    const s = raw.trim();
+    if (!s) {
+      if (buf.length) break;
+      continue;
+    }
+    if (/^import\s+/.test(s)) continue;      // skip import lines
+    if (/^#{1,6}\s/.test(s)) continue;       // skip headings
+    if (/^{\s*@\w+:\s*.+}\s*$/.test(s)) continue; // skip directives
+    if (!/^[a-zA-Z]{1}/.test(s)) continue;   // must start with a letter (keeps your old intent)
+    buf.push(s);
+  }
+  let paragraph = buf.join(" ").trim();
+  if (!paragraph) return "";
+  // strip simple md/HTML
+  paragraph = paragraph
+    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return paragraph;
+}
+
+function computeRouteFromFile(docsRootAbs, fileAbs) {
+  const rel = path.relative(docsRootAbs, fileAbs).replace(/\\/g, "/");
+  const noExt = rel.replace(/\.(md|mdx|markdown)$/i, "");
+  // collapse foo/index -> /foo
+  if (noExt.endsWith("/index")) return `/${noExt.slice(0, -"/index".length)}`;
+  return `/${noExt}`;
+}
+
+// ---------- plugin ----------
 const descriptionPlugin = (context, options) => {
   return {
     name: "sui-description-plugin",
 
     async loadContent() {
-      const c = context.siteConfig.presets.filter((s) => s[0] === "classic");
-      const docs = c[0][1].docs.path;
-      const docPath = path.join(__dirname, "../../..", docs);
-      const mdxFiles = recurseFiles(docPath);
+      // Find classic preset options robustly
+      const presetTuple = (context.siteConfig.presets || []).find(
+        (p) =>
+          Array.isArray(p) &&
+          typeof p[0] === "string" &&
+          (p[0] === "classic" ||
+            p[0] === "@docusaurus/preset-classic" ||
+            p[0].endsWith("preset-classic"))
+      );
 
-      function recurseFiles(dirPath, files = []) {
-        const f = fs.readdirSync(dirPath, { withFileTypes: true });
+      const docsPathConfig = presetTuple?.[1]?.docs?.path ?? "docs";
+      // Make absolute against siteDir
+      const docsRootAbs = path.resolve(context.siteDir, docsPathConfig);
 
-        f.forEach((file) => {
-          const fp = path.join(dirPath, file.name);
-          if (file.isDirectory()) {
-            recurseFiles(fp, files);
-          } else if (file.isFile() && path.extname(file.name) === ".mdx") {
-            if (!fp.match(/\/sui-api\/sui-graphql\//) && !fp.match(/snippets/))
-              files.push(fp);
-          }
-        });
+      // Collect .md/.mdx, skipping known heavy/irrelevant trees
+      const EXCLUDES = [
+        "/sui-api/sui-graphql/",
+        "/content/snippets/",
+        "/references/framework/",
+        "/standards/deepbook-ref/",
+        "/submodules/",
+        "/app-examples/ts-sdk-ref/",
+      ].map((s) => s.replace(/\\/g, "/"));
 
-        return files;
-      }
-
-      // Creates a default section name if one is not provided in frontmatter
-      // The section name is currently only used in the llm text file
-      function createSection(path) {
-        const parts = path.replace(/^\//, "").split("/");
-        if (parts.length === 0) {
-          return "";
-        } else if (parts.length === 1) {
-          return (parts[0][0].toUpperCase() + parts[0].substring(1)).replaceAll(
-            "-",
-            " ",
-          );
-        } else {
-          return (
-            parts[parts.length - 2][0].toUpperCase() +
-            parts[parts.length - 2].substring(1)
-          ).replaceAll("-", " ");
-        }
-      }
-
-      let descriptions = [];
-
-      mdxFiles.forEach((file) => {
-        const markdown = fs.readFileSync(file, "utf8");
-        const { data, content } = matter(markdown);
-        if (!data.draft) {
-          const re = new RegExp(".*" + docs + "/");
-          const id = `/${file.replace(re, "").replace(/\.mdx$/, "")}`;
-          const title = data.title ? data.title : "No title";
-          const llmSection = data.section ? data.section : createSection(id);
-          let description = "";
-          if (typeof data.description !== "undefined") {
-            description = data.description;
-          } else {
-            const splits = content.split("\n");
-            for (const s of splits) {
-              if (
-                s.trim() !== "" &&
-                !s.match(/^import/) &&
-                s.match(/^[a-zA-Z]{1}(.*)$/)
-              ) {
-                description = s.replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1");
-                break;
-              }
-            }
-          }
-
-          descriptions.push({
-            llmSection,
-            title,
-            id,
-            description,
-          });
-        }
+      const mdFiles = walk(docsRootAbs, (abs) => {
+        const norm = abs.replace(/\\/g, "/");
+        if (!/\.(md|mdx|markdown)$/i.test(norm)) return false;
+        if (EXCLUDES.some((seg) => norm.includes(seg))) return false;
+        return true;
       });
-      const descriptionData = {
-        descriptions,
-      };
-      return descriptionData;
+
+      const descriptions = [];
+
+      for (const file of mdFiles) {
+        let markdown = "";
+        try {
+          markdown = fs.readFileSync(file, "utf8");
+        } catch {
+          continue; // unreadable file
+        }
+
+        let data = {};
+        let content = "";
+        try {
+          const parsed = matter(markdown);
+          data = parsed.data || {};
+          content = parsed.content || "";
+        } catch {
+          // not valid front-matter; treat whole file as content
+          content = markdown;
+        }
+
+        if (data.draft) continue;
+
+        const id = computeRouteFromFile(docsRootAbs, file);
+        const title = data.title || "No title";
+        const llmSection = data.section || createSection(id);
+
+        let description = "";
+        if (typeof data.description !== "undefined" && data.description !== null) {
+          description = String(data.description).trim();
+        } else {
+          description = firstParagraphFrom(content);
+        }
+
+        descriptions.push({ llmSection, title, id, description });
+      }
+
+      return { descriptions, docsRootAbs };
     },
-    // This function exposes the loaded content to `globalData`
+
     async contentLoaded({ content, actions }) {
       const { setGlobalData } = actions;
-      setGlobalData(content);
+      setGlobalData(content || { descriptions: [] });
     },
-    // Create llm text file after build so that all processed content like
-    // imports and tabs are included
+
     async postBuild({ content, siteConfig, routesPaths = [], outDir }) {
-      // Build a doc that adheres to the early spec: https://llmstxt.org/
+      const safeContent = content || { descriptions: [] };
+      const items = Array.isArray(safeContent.descriptions)
+        ? safeContent.descriptions
+        : [];
+
+      // -------- llms.txt (grouped by section)
       let llms = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
-      const grouped = content.descriptions.reduce((acc, item) => {
-        if (!acc[item.llmSection]) {
-          acc[item.llmSection] = [];
-        }
-        acc[item.llmSection].push(item);
+      const grouped = items.reduce((acc, item) => {
+        const key = item.llmSection || "";
+        (acc[key] ||= []).push(item);
         return acc;
       }, {});
-
       Object.keys(grouped)
         .sort()
         .forEach((section) => {
           llms.push(`\n## ${section}\n`);
           grouped[section].forEach((item) => {
-            llms.push(
-              `- [${item.title}](${item.id})${item.description !== "" ? `: ${item.description}` : ""}`,
-            );
+            const tail =
+              item.description && String(item.description).trim() !== ""
+                ? `: ${item.description}`
+                : "";
+            llms.push(`- [${item.title}](${item.id})${tail}`);
           });
         });
-      fs.writeFileSync(`${outDir}/llms.txt`, llms.join(`\n`));
+      try {
+        fs.writeFileSync(path.join(outDir, "llms.txt"), llms.join("\n"));
+      } catch {
+        // ignore write errors to keep build alive
+      }
 
-      // Build a doc that puts all site content into a text file
-      // Array of pages that don't need to be included in the llm file
-      const skips = ["/404.html", "/search", "/sui-api-ref", "/"];
-      let llmsFull = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
-      var turndownService = new TurndownService({
+      // -------- llms-full.txt (raw site content converted to markdown)
+      const skips = new Set(["/404.html", "/search", "/sui-api-ref", "/"]);
+      const td = new TurndownService({
         headingStyle: "atx",
         preformattedCode: true,
       });
-      turndownService.keep(["table"]);
+      td.keep(["table"]);
+
+      let llmsFull = [`# ${siteConfig.title}\n`, `${siteConfig.tagline}`];
       for (const route of routesPaths) {
-        if (!skips.includes(route)) {
-          const pathToFile = path.join(outDir, path.join(route, "index.html"));
-          const raw = fs.readFileSync(`${pathToFile}`, "utf-8");
-          let start = raw.match(/<div class="theme-doc-markdown markdown">/);
-          if (!start) {
-            start = raw.match(/<div.*class="main-wrapper/);
-          }
-          const end = raw.match(/<footer class=/);
-          llmsFull.push(
-            turndownService.turndown(
-              `<html>${raw.substring(start.index, end.index)}</html>`,
-            ),
-          );
+        if (skips.has(route)) continue;
+
+        const htmlPath = path.join(outDir, route, "index.html");
+        let raw = "";
+        try {
+          raw = fs.readFileSync(htmlPath, "utf-8");
+        } catch {
+          continue;
+        }
+
+        // Try to isolate the main content region, but fall back safely
+        const startMatch =
+          raw.match(/<div class="theme-doc-markdown markdown">/) ||
+          raw.match(/<main[^>]*>/i) ||
+          raw.match(/<div[^>]*class="main-wrapper[^"]*"[^>]*>/i);
+        const endMatch =
+          raw.match(/<footer class=/) ||
+          raw.match(/<\/main>/i) ||
+          raw.match(/<\/body>/i);
+
+        let slice;
+        if (startMatch && endMatch && endMatch.index > startMatch.index) {
+          slice = raw.substring(startMatch.index, endMatch.index);
+        } else {
+          // last resort: whole document
+          slice = raw;
+        }
+
+        try {
+          llmsFull.push(td.turndown(`<html>${slice}</html>`));
+        } catch {
+          // if turndown chokes on something odd, skip this route
+          continue;
         }
       }
-      fs.writeFileSync(`${outDir}/llms-full.txt`, llmsFull.join("\n\n"));
+
+      try {
+        fs.writeFileSync(path.join(outDir, "llms-full.txt"), llmsFull.join("\n\n"));
+      } catch {
+        // ignore write errors
+      }
     },
   };
 };

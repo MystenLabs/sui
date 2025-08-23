@@ -11,11 +11,12 @@ title: Module `sui::vec_set`
 -  [Function `insert`](#sui_vec_set_insert)
 -  [Function `remove`](#sui_vec_set_remove)
 -  [Function `contains`](#sui_vec_set_contains)
--  [Function `size`](#sui_vec_set_size)
+-  [Function `length`](#sui_vec_set_length)
 -  [Function `is_empty`](#sui_vec_set_is_empty)
 -  [Function `into_keys`](#sui_vec_set_into_keys)
 -  [Function `from_keys`](#sui_vec_set_from_keys)
 -  [Function `keys`](#sui_vec_set_keys)
+-  [Function `size`](#sui_vec_set_size)
 
 
 <pre><code><b>use</b> <a href="../std/option.md#std_option">std::option</a>;
@@ -211,14 +212,14 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 
 </details>
 
-<a name="sui_vec_set_size"></a>
+<a name="sui_vec_set_length"></a>
 
-## Function `size`
+## Function `length`
 
 Return the number of entries in <code>self</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_size">size</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;K&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_length">length</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;K&gt;): u64
 </code></pre>
 
 
@@ -227,8 +228,8 @@ Return the number of entries in <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_size">size</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;): u64 {
-    self.contents.length()
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_length">length</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;): u64 {
+    self.contents.<a href="../sui/vec_set.md#sui_vec_set_length">length</a>()
 }
 </code></pre>
 
@@ -253,7 +254,7 @@ Return true if <code>self</code> has 0 elements, false otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_is_empty">is_empty</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;): bool {
-    <a href="../sui/vec_set.md#sui_vec_set_size">size</a>(self) == 0
+    self.<a href="../sui/vec_set.md#sui_vec_set_length">length</a>() == 0
 }
 </code></pre>
 
@@ -309,7 +310,7 @@ and are *not* sorted.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b> + drop&gt;(<b>mut</b> <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>: vector&lt;K&gt;): <a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt; {
     <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.reverse();
     <b>let</b> <b>mut</b> set = <a href="../sui/vec_set.md#sui_vec_set_empty">empty</a>();
-    <b>while</b> (<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.length() != 0) set.<a href="../sui/vec_set.md#sui_vec_set_insert">insert</a>(<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.pop_back());
+    <b>while</b> (<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.<a href="../sui/vec_set.md#sui_vec_set_length">length</a>() != 0) set.<a href="../sui/vec_set.md#sui_vec_set_insert">insert</a>(<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.pop_back());
     set
 }
 </code></pre>
@@ -338,6 +339,31 @@ without unpacking. The contents are stored in insertion order,
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;): &vector&lt;K&gt; {
     &self.contents
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_vec_set_size"></a>
+
+## Function `size`
+
+Return the number of entries in <code>self</code>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_size">size</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;K&gt;): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_size">size</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;): u64 {
+    self.contents.<a href="../sui/vec_set.md#sui_vec_set_length">length</a>()
 }
 </code></pre>
 

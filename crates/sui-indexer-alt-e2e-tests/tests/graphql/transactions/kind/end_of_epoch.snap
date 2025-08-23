@@ -18,7 +18,7 @@ Response: {
     "endOfEpochTransaction": {
       "nodes": [
         {
-          "digest": "EcCHhAqWVoWmQ6nxiUdXuiA3qNC8KbpmqjoYh9CT4USx",
+          "digest": "FK76EKRWM3S37m6qQbnjCHNyWQ4wJoTDega9GoNNssMX",
           "kind": {
             "__typename": "EndOfEpochTransaction",
             "transactions": {
@@ -73,7 +73,7 @@ Response: {
                       {
                         "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "version": 1,
-                        "digest": "4GFiUZhi8rPdyhZBDam24vMwg4auYhmoy5NLfuTQj8dC"
+                        "digest": "By4Sq7nahY3ZM5FfsdqTtgpDCQ6jmHVqh9C4daFVNiAG"
                       },
                       {
                         "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
@@ -88,7 +88,7 @@ Response: {
                       {
                         "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
                         "version": 1,
-                        "digest": "47AUJgzTqMXJoeU8a4DvNHCepLqQjFF8Vksw9sGK8HKj"
+                        "digest": "6ifF7D6ueAjDovYfSnsjcUa4HCxqpPXPQ5Vupd9sPdcu"
                       }
                     ]
                   }

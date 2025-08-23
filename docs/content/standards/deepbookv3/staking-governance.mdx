@@ -2,6 +2,8 @@
 title: Staking and Governance
 description: Learn how to stake DEEP tokens and take advantage of taker and minter incentives.
 keywords: [ taker fee, maker fee, stake, staking, governance, unstake, submit proposal, vote, claim rebates, deepbook pool, deepbook governance, deepbookv3 ]
+mdx:
+  format: md
 ---
 
 DeepBook's novel approach to governance allows users to update a single pool's three parameters: 
@@ -22,7 +24,7 @@ Stake required is the amount of DEEP tokens a user must have staked in the pool 
 
 DEEP tokens must be available in the `balance_manager` for staking. A user's stake becomes active in the following epoch. If the user's active stake is greater than the stake required, the user can get reduced taker fees and can accumulate trading fee rebates during that epoch.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=stake noComments}
+{@inject: ../deepbook-ref/pool.move#fun=stake noComments}
 
 ### Unstake
 
@@ -30,7 +32,7 @@ All of the user's active and inactive stake are removed and added back into the 
 
 The `balance_manager` must have enough staked DEEP tokens. The `balance_manager` data is updated with the unstaked amount. Balance is transferred to the `balance_manager` immediately.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=unstake noComments}
+{@inject: ../deepbook-ref/pool.move#fun=unstake noComments}
 
 ### Submit proposal
 
@@ -38,19 +40,19 @@ Users with a non zero active stake can submit proposals. One proposal per user. 
 
 Submit a proposal to change the taker fee, maker fee, and stake required. The `balance_manager` must have enough staked DEEP tokens to participate. Each `balance_manager` can only submit one proposal per epoch. If the maximum proposal is reached, the proposal with the lowest vote is removed. If the `balance_manager` has less voting power than the lowest voted proposal, the proposal is not added.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=submit_proposal noComments}
+{@inject: ../deepbook-ref/pool.move#fun=submit_proposal noComments}
 
 ### Vote
 
 Users with non-zero voting power can vote on a proposal. All voting power is used on a single proposal. If the user has voted on a different proposal during this epoch, then that vote is removed and recasted into the new proposal. The `balance_manager` must have enough staked DEEP tokens to participate.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=vote noComments}
+{@inject: ../deepbook-ref/pool.move#fun=vote noComments}
 
 ### Claim rebates
 
 Use `claim_rebates` to claim the rewards for the `balance_manager`. The `balance_manager` must have rewards to claim. The `balance_manager` data is updated with the claimed rewards.
 
-{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=claim_rebates noComments}
+{@inject: ../deepbook-ref/pool.move#fun=claim_rebates noComments}
 
 ## Related links
 

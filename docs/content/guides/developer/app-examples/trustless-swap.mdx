@@ -3,6 +3,8 @@ title: Trustless Swap
 description: An app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 effort: large
 keywords: [ trustless, swap, atomic swaps, shared objects, composability, example app, example dapp, example swap, swap example, how to swap tokens  ]
+mdx:
+  format: md
 ---
 
 {@include: ../../../snippets/app-examples-swap-source.mdx}
@@ -67,7 +69,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 :::
 
-{@inject: examples/trading/contracts/escrow/Move.toml}
+{@inject:  ../../../../../examples/trading/contracts/escrow/Move.toml}
 
 ### Locked and Key
 
@@ -80,10 +82,15 @@ Click the titles at the top of codeblocks to open the relevant source file in Gi
 :::
 
 <details>
+
 <summary>
+
 `lock.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/lock.move noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move noComments}
+
 </details>
 
 After a trade is initiated, you don't want the trading party to modify the object they agreed to trade. Imagine you're trading in-game items and you agree to trade a weapon with all its attachments, and its owner strips all its attachments just before the trade.
@@ -96,7 +103,7 @@ This is done by requiring that an object that is available for trading is **lock
 
 To tamper with the object would require unlocking it, which consumes the key. Consequently, there would no longer be a key to finish the trade.
 
-{@inject: examples/trading/contracts/escrow/sources/lock.move#struct=Locked,Key noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#struct=Locked,Key noComments}
 
 - The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a dynamic object field, so that it is still readable at its own ID off chain.
 - The corresponding `Key` type only stores its own `id`.
@@ -104,21 +111,32 @@ To tamper with the object would require unlocking it, which consumes the key. Co
 The lock and key are made single-use by the signatures of the `lock` and `unlock` functions. `lock` accepts any object of type `T: store` (the `store` ability is necessary for storing it inside a `Locked<T>`), and creates both the `Locked<T>` and its corresponding `Key`:
 
 <details>
+
 <summary>
+
 `lock` function in `lock.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
+
 </details>
 
 
 The `unlock` function accepts the `Locked<T>` and `Key` by value (which consumes them), and returns the underlying `T` as long as the correct key has been supplied for the lock:
 
 <details>
+
 <summary>
+
 `unlock` function in `lock.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/lock.move#variable=ELockKeyMismatch noComments}
-{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=unlock noTitle noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#variable=ELockKeyMismatch noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=unlock noTitle noComments}
+
 </details>
 
 
@@ -140,7 +158,7 @@ Move's type system guarantees that a given `Key` cannot be re-used (because `unl
 
 The test starts with a helper function for creating an object, it doesn't matter what kind of object it is, as long as it has the `store` ability. The test uses `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
 
-{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=test_coin noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=test_coin noComments}
 
 - All test-related functions and imports are annotated with `#[test_only]` to make sure they don't show up in the published package. This can also be done by separating tests into their own module – e.g. `lock_tests.move` – and marking that module as `#[test_only]`.
 - The `test_scenario` module is used to provide access to a `&mut TxContext` in the test (necessary for creating new objects). Tests that don't need to simulate multiple transactions but still need access to a `TxContext` can use `sui::tx_context::dummy` to create a test context instead.
@@ -148,13 +166,13 @@ The test starts with a helper function for creating an object, it doesn't matter
 The first test works by creating an object to test, locking it and unlocking it – this should finish executing without aborting.
 The last two lines exist to keep the Move compiler happy by cleaning up the test coin and test scenario objects, because values in Move are not implicitly cleaned up unless they have the `drop` ability.
 
-{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=test_lock_unlock noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=test_lock_unlock noComments}
 
 The other test is testing a failure scenario – that an abort happens. It creates two locked objects (this time the values are just `u64`s), and use the key from one to try and unlock the other, which should fail (specified using the `expected_failure` attribute).
 
 Unlike the previous test, the same clean up is not needed, because the code is expected to terminate. Instead, add another abort after the code that you expect to abort (making sure to use a different code for this second abort).
 
-{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=test_lock_key_mismatch noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=test_lock_key_mismatch noComments}
 
 :::tip Additional resources
 
@@ -191,10 +209,15 @@ You might notice that the Move compiler creates a `build` subfolder inside `escr
 Create a new file in your `escrow` folder titled `shared.move`. The code in this file creates the shared `Escrow` object and completes the trading logic. The complete source code for this file follows and the sections that come after detail its components.
 
 <details>
+
 <summary>
+
 `shared.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/shared.move noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move noComments}
+
 </details>
 
 Trading proceeds in three steps:
@@ -205,15 +228,20 @@ Trading proceeds in three steps:
 
 You can start by implementing steps two and three, by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it's an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#struct=Escrow noComments singleSpace}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#struct=Escrow noComments singleSpace}
 
 You also need to create a function for creating the `Escrow` object. The object is shared because it needs to be accessed by the address that created it (in case the object needs to be returned) and by the intended recipient (to complete the swap).
 
 <details>
+
 <summary>
+
 `create` function in `shared.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/shared.move#noemit noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#noemit noComments}
+
 </details>
 
 If the second party stops responding, the first party can unlock their object. You need to create a function so the second party can recover their object in the symmetric case as well.
@@ -222,10 +250,15 @@ If the second party stops responding, the first party can unlock their object. Y
 - It accepts the `Escrow` by value so that it can clean it up after extracting the escrowed object, reclaiming the storage rebate for the sender and cleaning up an unused object on chain.
 
 <details>
+
 <summary>
+
 `return_to_sender` function in `shared.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=return_to_sender noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=return_to_sender noComments}
+
 </details>
 
 Finally, you need to add a function to allow the first party to complete the trade.
@@ -236,11 +269,17 @@ Finally, you need to add a function to allow the first party to complete the tra
 - Instead of transferring the escrowed object to the recipient address, it is returned by the `swap` function. You can do this because you checked that the transaction sender is the recipient, and it makes this API more composable. Programmable transaction blocks (PTBs) provide the flexibility to decide whether to transfer the object as it is received or do something else with it.
 
 <details>
+
 <summary>
+
 `swap` function in `shared.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/shared.move#variable=EMismatchedSenderRecipient,EMismatchedExchangeObject singleSpace noComments}
-{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=swap noComments noTitle}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#variable=EMismatchedSenderRecipient,EMismatchedExchangeObject singleSpace noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=swap noComments noTitle}
+
 </details>
 
 
@@ -261,29 +300,29 @@ The guide focuses on the test for a successful swap, but you can find a link to 
 
 As with the lock test, start by creating a function to mint a test coin. You also create some constants to represent our transaction senders, `ALICE`, `BOB`, and `DIANE`.
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=test_coin noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=test_coin noComments}
 
 The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address you pass to `begin`, because you pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#test}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#test}
 
 The first transaction is from `BOB` who creates a coin and locks it. You must remember the ID of the coin and the ID of the key, which you will need later, and then you transfer the locked object and the key itself to `BOB`, because this is what would happen in a real transaction: When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
 
 Write these transactions inside the `test_successful_swap` function, between the call to `begin` and `end`.
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#variable=i2 noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#variable=i2 noComments}
 
 Next, `ALICE` comes along and sets up the `Escrow`, which locks their coin. They register their interest for `BOB'`s coin by referencing `BOB`'s key's ID (`ik2`):
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#variable=i1 noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#variable=i1 noComments}
 
 Finally, `BOB` completes the trade by calling `swap`. The `take_shared` function is used to simulate accepting a shared input. It uses type inference to know that the object must be an `Escrow`, and finds the last object of this type that was shared (by `ALICE` in the previous transaction). Similarly, use `take_from_sender` to simulate accepting owned inputs (in this case, `BOB`'s lock and key). The coin returned by `swap` is transferred back to `BOB`, as if it was called as part of a PTB, followed by a transfer command.
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#bob noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#bob noComments}
 
 The rest of the test is designed to check that `ALICE` has `BOB`'s coin and vice versa. It starts by calling `next_tx` to make sure the effects of the previous transaction have been committed, before running the necessary checks.
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#finish noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#finish noComments}
 
 :::tip Additional resources
 
@@ -299,16 +338,22 @@ The `escrow` Move package is now functional: You could publish it on chain and p
 
 Querying `Escrow` objects by their sender or recipient requires custom indexing, and to make it easy for the indexer to spot relevant transactions, add the following **events** to `escrow.move`:
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#struct=EscrowCreated,EscrowSwapped,EscrowCancelled noComments}
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#struct=EscrowCreated,EscrowSwapped,EscrowCancelled noComments}
 
 Functions responsible for various aspects of the escrow's lifecycle emit these events. The custom indexer can then subscribe to transactions that emit these events and process only those, rather than the entire chain state:
 
 <details>
+
 <summary>
+
 `emit` events included in functions from `shared.move`
+
 </summary>
-{@inject: examples/trading/contracts/escrow/sources/shared.move#use=sui::event}
-{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=create,swap,return_to_sender noTitle noComments}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#use=sui::event}
+
+{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=create,swap,return_to_sender noTitle noComments}
+
 </details>
 
 :::tip Additional resources
@@ -355,34 +400,49 @@ With the contract adapted to emit events, you can now write an indexer that keep
 The indexer is backed by a Prisma DB with the following schema:
 
 <details>
+
 <summary>
+
 `schema.prisma`
+
 </summary>
-{@inject: examples/trading/api/prisma/schema.prisma}
+
+{@inject:  ../../../../../examples/trading/api/prisma/schema.prisma}
+
 </details>
 
 The core of the indexer is an event loop, initialized in a function called `setupListeners`.
 
-{@inject: examples/trading/api/indexer.ts}
+{@inject:  ../../../../../examples/trading/api/indexer.ts}
 
 The indexer queries events related to the `escrow` module, using a `queryEvent` filter, and keeps track of a cursor representing the latest event it has processed so it can resume indexing from the right place even if it is restarted. The filter is looking for any events whose type is from the `escrow` module of the Move package (see the `event-indexer.ts` code that follows).
 
 The core event job works by polling: It queries RPC for events following its latest cursor and sends them to a callback for processing. If it detects more than one page of new events, it immediately requests the next page. Otherwise, the job waits for the next polling interval before checking again.
 
 <details>
+
 <summary>
+
 `event-indexer.ts`
+
 </summary>
-{@inject: examples/trading/api/indexer/event-indexer.ts}
+
+{@inject:  ../../../../../examples/trading/api/indexer/event-indexer.ts}
+
 </details>
 
 The callback is responsible for reading the event and updating the database accordingly. For demo purposes, SQLite is being used, and so you need to issue a separate `UPSERT` to the database for each escrowed object. In a production setting, however, you would want to batch requests to the database to optimize data flow.
 
 <details>
+
 <summary>
+
 `escrow-handler.ts`
+
 </summary>
-{@inject: examples/trading/api/indexer/escrow-handler.ts}
+
+{@inject:  ../../../../../examples/trading/api/indexer/escrow-handler.ts}
+
 </details>
 
 :::tip Additional resources
@@ -402,12 +462,19 @@ The data that the indexer captures can then be served over an API, so that a fro
 You want your API to accept the query string in the URL as the parameters for database `WHERE` query. Hence, you want a utility that can extract and parse the URL query string into valid query parameters for Prisma. With the `parseWhereStatement()` function, the callers filter the set of keys from the URL query string and transforms those corresponding key-value pairs into the correct format for Prisma.
 
 <details>
+
 <summary>
+
 `parseWhereStatement` in `api-queries.ts`
+
 </summary>
-{@inject: examples/trading/api/utils/api-queries.ts#enum=WhereParamTypes}
-{@inject: examples/trading/api/utils/api-queries.ts#type=WhereParam noTitle}
-{@inject: examples/trading/api/utils/api-queries.ts#variable=parseWhereStatement noTitle}
+
+{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#enum=WhereParamTypes}
+
+{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#type=WhereParam noTitle}
+
+{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#variable=parseWhereStatement noTitle}
+
 </details>
 
 
@@ -418,11 +485,17 @@ Pagination is another crucial part to ensure your API returns sufficient and/or 
 In this example, the `id` field of the model in the database as the cursor that allows clients to continue subsequent queries with the next page.
 
 <details>
+
 <summary>
+
 `parsePaginationForQuery` in `api-queries.ts`
+
 </summary>
-{@inject: examples/trading/api/utils/api-queries.ts#type=ApiPagination}
-{@inject: examples/trading/api/utils/api-queries.ts#variable=parsePaginationForQuery noTitle}
+
+{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#type=ApiPagination}
+
+{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#variable=parsePaginationForQuery noTitle}
+
 </details>
 
 #### API endpoints
@@ -435,10 +508,15 @@ All the endpoints are defined in `server.ts`, particularly, there are two endpoi
 You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, and `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, and `sender` for `Escrow` data. Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
 
 <details>
+
 <summary>
+
 `server.ts`
+
 </summary>
-{@inject: examples/trading/api/server.ts}
+
+{@inject:  ../../../../../examples/trading/api/server.ts}
+
 </details>
 
 ### Deployment {#deployment}
@@ -451,67 +529,72 @@ Now that you have an indexer and an API service, you can deploy your move packag
 
 3. Deploy the Sui package
 
-  <details>
-    <summary>
-      Deployment instructions
-    </summary>
-    {@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<details>
 
-  Next, configure the Sui CLI to use `testnet` as the active environment. 
+<summary>
 
-  Use the following command to list your available environments:
+Deployment instructions
 
-  ```sh
-  $ sui client envs
-  ```
+</summary>
 
-  If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
+{@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
-  ```sh
-  $ sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
-  ```
+Next, configure the Sui CLI to use `testnet` as the active environment. 
 
-  Run the following command to activate the `testnet` environment:
+Use the following command to list your available environments:
 
-  ```sh
-  $ sui client switch --env testnet
-  ```
+```sh
+$ sui client envs
+```
 
-  Before being able to publish your package to Testnet, you need Testnet SUI tokens. To get some, run the following command: 
+If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
-  ```sh
-  $ sui client faucet
-  ```
+```sh
+$ sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+```
 
-  For other ways to get SUI in your Testnet account, see [Get SUI Tokens](/guides/developer/getting-started/get-coins).
+Run the following command to activate the `testnet` environment:
 
-  Now that you have an account with some Testnet SUI, you can deploy your contracts. 
+```sh
+$ sui client switch --env testnet
+```
 
-  There are some helper functions to publish the smart contracts so you can create some demo data (for Testnet). The helper function to publish the smart contracts expects built smart contracts in both the `escrow` and `demo` directories. Run `sui move build` in both directories, if necessary. Be sure to update the Sui dependency in the manifest to point to the correct source based on your environment. 
+Before being able to publish your package to Testnet, you need Testnet SUI tokens. To get some, run the following command: 
 
-  To publish the smart contracts and produce demo data: 
+```sh
+$ sui client faucet
+```
 
-  1. Publish the smart contracts by running the following command from your `api` folder: 
+For other ways to get SUI in your Testnet account, see [Get SUI Tokens](/guides/developer/getting-started/get-coins).
 
-      ```sh
-      $ npx ts-node helpers/publish-contracts.ts
-      ```
+Now that you have an account with some Testnet SUI, you can deploy your contracts. 
 
-      If successful, `demo-contract.json` and `escrow-contract.json` are created in the backend root directory. These files contain the contract addresses and are used by the backend and frontend to interact with the contracts.
+There are some helper functions to publish the smart contracts so you can create some demo data (for Testnet). The helper function to publish the smart contracts expects built smart contracts in both the `escrow` and `demo` directories. Run `sui move build` in both directories, if necessary. Be sure to update the Sui dependency in the manifest to point to the correct source based on your environment. 
 
-  2. Produce demo non-locked and locked objects
+To publish the smart contracts and produce demo data: 
 
-      ```sh
-      $ npx ts-node helpers/create-demo-data.ts
-      ```
+1. Publish the smart contracts by running the following command from your `api` folder: 
 
-  3. Produce demo escrows
+```sh
+$ npx ts-node helpers/publish-contracts.ts
+```
 
-      ```sh
-      $ npx ts-node helpers/create-demo-escrows.ts
-      ```
+If successful, `demo-contract.json` and `escrow-contract.json` are created in the backend root directory. These files contain the contract addresses and are used by the backend and frontend to interact with the contracts.
 
-  If you want to reset the database (for a clean demo, for example), run `pnpm db:reset:dev && pnpm db:setup:dev` or `yarn db:reset:dev && yarn db:setup:dev`.
+2. Produce demo non-locked and locked objects
+
+```sh
+$ npx ts-node helpers/create-demo-data.ts
+```
+
+3. Produce demo escrows
+
+```sh
+$ npx ts-node helpers/create-demo-escrows.ts
+```
+
+If you want to reset the database (for a clean demo, for example), run `pnpm db:reset:dev && pnpm db:setup:dev` or `yarn db:reset:dev && yarn db:setup:dev`.
+
 </details>
 
 4. Run both the API and the indexer by running `pnpm dev` or `yarn dev`.
@@ -567,16 +650,23 @@ The UI design consists of three parts:
 The first step is to set up the client app. Run the following command to scaffold a new app from your `frontend` folder.
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm create @mysten/dapp --template react-client-dapp
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn create @mysten/dapp --template react-client-dapp
-    ```
-  </TabItem>
+
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm create @mysten/dapp --template react-client-dapp
+```
+
+</TabItem>
+
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn create @mysten/dapp --template react-client-dapp
+```
+
+</TabItem>
+
 </Tabs>
 
 When asked for a name for your dApp, provide one of your liking. The dApp scaffold gets created in a new directory with the name you provide. This is convenient to keep your working code separate from the example source code that might already populate this folder. The codeblocks that follow point to the code in the default example location. Be aware the path to your own code includes the dApp name you provide.
@@ -586,19 +676,29 @@ When asked for a name for your dApp, provide one of your liking. The dApp scaffo
 First, set up import aliases to make the code more readable and maintainable. This allows you to import files using `@/` instead of relative paths.
 
 <details>
-  <summary>
-    Replace the content of `tsconfig.json` with the following:
-  </summary>
-  {@inject: examples/trading/frontend/tsconfig.json}
+
+<summary>
+
+Replace the content of `tsconfig.json` with the following:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/tsconfig.json}
+
 </details>
 
 The paths option under `compilerOptions` is what defines the aliasing for TypeScript. Here, the alias `@/*` is mapped to the `./src/*` directory, meaning that any time you use `@/`, TypeScript resolves it as a reference to the `src` folder. This setup reduces the need for lengthy relative paths when importing files in your project.
 
 <details>
-  <summary>
-    Replace the content of `vite.config.ts` with the following:
-  </summary>
-  {@inject: examples/trading/frontend/vite.config.ts}
+
+<summary>
+
+Replace the content of `vite.config.ts` with the following:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/vite.config.ts}
+
 </details>
 
 Vite also needs to be aware of the aliasing to resolve imports correctly during the build process. In the `resolve.alias` configuration of `vite.config.ts`, we map the alias `@` to the `/src` directory.
@@ -608,16 +708,20 @@ Vite also needs to be aware of the aliasing to resolve imports correctly during 
 To streamline the styling process and keep the codebase clean and maintainable, this guide uses Tailwind CSS, which provides utility-first CSS classes to rapidly build custom designs. Run the following command from the base of your dApp project to add Tailwind CSS and its dependencies:
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm add tailwindcss@latest postcss@latest autoprefixer@latest
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn add tailwindcss@latest postcss@latest autoprefixer@latest
-    ```
-  </TabItem>
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm add tailwindcss@latest postcss@latest autoprefixer@latest
+```
+
+</TabItem>
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn add tailwindcss@latest postcss@latest autoprefixer@latest
+```
+
+</TabItem>
 </Tabs>
 
 Next, generate the Tailwind CSS configuration file by running the following:
@@ -627,17 +731,27 @@ $ npx tailwindcss init -p
 ```
 
 <details>
-  <summary>
-    Replace the content of `tailwind.config.js` with the following:
-  </summary>
-  {@inject: examples/trading/frontend/tailwind.config.js}
+
+<summary>
+
+Replace the content of `tailwind.config.js` with the following:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/tailwind.config.js}
+
 </details>
 
 <details>
-  <summary>
-    Add the `src/styles/` directory and add `base.css`: 
-  </summary>
-  {@inject: examples/trading/frontend/src/styles/base.css}
+
+<summary>
+
+Add the `src/styles/` directory and add `base.css`: 
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/styles/base.css}
+
 </details>
 
 ### Connecting your deployed package
@@ -645,10 +759,15 @@ $ npx tailwindcss init -p
 First, deploy your package via the [scripts in the api directory](#deployment).
 
 <details>
-  <summary>
-    Then, create a `src/constants.ts` file and fill it with the following:
-  </summary>
-  {@inject: examples/trading/frontend/src/constants.ts}
+
+<summary>
+
+Then, create a `src/constants.ts` file and fill it with the following:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/constants.ts}
+
 </details>
 
 :::warning
@@ -660,55 +779,84 @@ If you create a dApp using a project name so that your `src` files are in a subf
 ### Add helper functions and UI components
 
 <details>
-  <summary>
-    Create a `src/utils/` directory and add the following file: 
-  </summary>
-  {@inject: examples/trading/frontend/src/utils/helpers.ts}
+
+<summary>
+
+Create a `src/utils/` directory and add the following file: 
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/utils/helpers.ts}
+
 </details>
 
 Create a `src/components/` directory and add the following components: 
 
 <details>
-  <summary>
-    `ExplorerLink.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/ExplorerLink.tsx}
+
+<summary>
+
+`ExplorerLink.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/ExplorerLink.tsx}
+
 </details>
 
 <details>
-  <summary>
-    `InfiniteScrollArea.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/InfiniteScrollArea.tsx}
+
+<summary>
+
+`InfiniteScrollArea.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/InfiniteScrollArea.tsx}
+
 </details>
 
 <details>
-  <summary>
-    `Loading.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/Loading.tsx}
+
+<summary>
+
+`Loading.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/Loading.tsx}
+
 </details>
 
 <details>
-  <summary>
-    `SuiObjectDisplay.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/SuiObjectDisplay.tsx}
+
+<summary>
+
+`SuiObjectDisplay.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/SuiObjectDisplay.tsx}
+
 </details>
 
 Install the necessary dependencies:
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm add react-hot-toast
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn add react-hot-toast
-    ```
-  </TabItem>
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm add react-hot-toast
+```
+
+</TabItem>
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn add react-hot-toast
+```
+
+</TabItem>
 </Tabs>
 
 
@@ -719,69 +867,98 @@ The imported template only has a single page. To add more pages, you need to set
 First, install the necessary dependencies:
 
 <Tabs groupId="packagemanager">
-  <TabItem label="PNPM" value="pnpm">
-    ```sh
-    $ pnpm add react-router-dom
-    ```
-  </TabItem>
-  <TabItem label="Yarn" value="yarn">
-    ```sh
-    $ yarn add react-router-dom
-    ```
-  </TabItem>
+<TabItem label="PNPM" value="pnpm">
+
+```sh
+$ pnpm add react-router-dom
+```
+
+</TabItem>
+<TabItem label="Yarn" value="yarn">
+
+```sh
+$ yarn add react-router-dom
+```
+
+</TabItem>
 </Tabs>
 
 <details>
-  <summary>
-    Then, create a `src/routes/` directory and add `index.tsx`. This file contains the routing configuration:
-  </summary>
-  {@inject: examples/trading/frontend/src/routes/index.tsx}
+
+<summary>
+
+Then, create a `src/routes/` directory and add `index.tsx`. This file contains the routing configuration:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/routes/index.tsx}
+
 </details>
 
 Add the following respective files to the `src/routes/` directory:
 
 <details>
-  <summary>
-    `root.tsx`. This file contains the root component that is rendered on every page:
-  </summary>
-  {@inject: examples/trading/frontend/src/routes/root.tsx}
+
+<summary>
+
+`root.tsx`. This file contains the root component that is rendered on every page:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/routes/root.tsx}
+
 </details>
 
 <details>
-  <summary>
-    `LockedDashboard.tsx`. This file contains the component for the `Manage Objects` page.
-  </summary>
+
+<summary>
+
+`LockedDashboard.tsx`. This file contains the component for the `Manage Objects` page.
+
+</summary>
+
 ```tsx
 export function LockedDashboard() {
-  return (
-    <div>
-      <h1>Locked Dashboard</h1>
-    </div>
-  )
+return (
+<div>
+<h1>Locked Dashboard</h1>
+</div>
+)
 }
 ```
+
 </details>
 
 <details>
-  <summary>
-    `EscrowDashboard.tsx`. This file contains the component for the `Escrows` page.
-  </summary>
+
+<summary>
+
+`EscrowDashboard.tsx`. This file contains the component for the `Escrows` page.
+
+</summary>
+
 ```tsx
 export function EscrowDashboard() {
-  return (
-    <div>
-      <h1>Escrow Dashboard</h1>
-    </div>
-  )
+return (
+<div>
+<h1>Escrow Dashboard</h1>
+</div>
+)
 }
 ```
+
 </details>
 
 <details>
-  <summary>
-  Update `src/main.tsx` by replacing the `App` component with the `RouterProvider` and replace `"dark"` with `"light"` in the `Theme` component:
-  </summary>
-  {@inject: examples/trading/frontend/src/main.tsx}
+
+<summary>
+
+Update `src/main.tsx` by replacing the `App` component with the `RouterProvider` and replace `"dark"` with `"light"` in the `Theme` component:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/main.tsx}
+
 </details>
 
 Note that `dApp Kit` provides a set of hooks for making query and mutation calls to the Sui blockchain. These hooks are thin wrappers around query and mutation hooks from `@tanstack/react-query`.
@@ -794,9 +971,13 @@ Note that `dApp Kit` provides a set of hooks for making query and mutation calls
 :::
 
 <details>
-  <summary>
-    Create `src/components/Header.tsx`. This file contains the navigation links and the connect wallet button:
-  </summary>
+
+<summary>
+
+Create `src/components/Header.tsx`. This file contains the navigation links and the connect wallet button:
+
+</summary>
+
 ```tsx
 import { ConnectButton } from "@mysten/dapp-kit";
 import { SizeIcon } from "@radix-ui/react-icons";
@@ -859,6 +1040,7 @@ export function Header() {
   );
 }
 ```
+
 </details>
 
 The dApp Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you don't need to worry about repeating yourself doing the same logic all over again.
@@ -879,10 +1061,15 @@ Note, the styles should be applied. The `Header` component should look like this
 ### Type definitions
 
 <details>
-  <summary>
-    All the type definitions are in `src/types/types.ts`. Create this file and add the following:
-  </summary>
-  {@inject: examples/trading/frontend/src/types/types.ts}
+
+<summary>
+
+All the type definitions are in `src/types/types.ts`. Create this file and add the following:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/types/types.ts}
+
 </details>
 
 `ApiLockedObject` and `ApiEscrowObject` represent the `Locked` and `Escrow` indexed data model the indexing and API service return.
@@ -894,9 +1081,13 @@ Note, the styles should be applied. The `Header` component should look like this
 Now, display the objects owned by the connected wallet address. This is the `Manage Objects` page.
 
 <details>
-  <summary>
-    First add this file `src/components/locked/LockOwnedObjects.tsx`: 
-  </summary>
+
+<summary>
+
+First add this file `src/components/locked/LockOwnedObjects.tsx`: 
+
+</summary>
+
 ```tsx
 import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
@@ -946,15 +1137,20 @@ export function LockOwnedObjects() {
   );
 }
 ```
+
 </details>
 
 Fetch the owned objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account as the `owner`. The returned data is stored inside the cache at query key `getOwnedObjects`. In a future step you invalidate this cache after a mutation succeeds, so the data will be re-fetched automatically.
 
 
 <details>
-  <summary>
-    Next, update `src/routes/LockedDashboard.tsx` to include the `LockOwnedObjects` component:
-  </summary>
+
+<summary>
+
+Next, update `src/routes/LockedDashboard.tsx` to include the `LockOwnedObjects` component:
+
+</summary>
+
 ```tsx
 import { useState } from "react";
 import { Tabs } from "@radix-ui/themes";
@@ -996,6 +1192,7 @@ export function LockedDashboard() {
   );
 }
 ```
+
 </details>
 
 :::checkpoint
@@ -1016,10 +1213,15 @@ In the frontend, you might need to execute a transaction block in multiple place
 
 
 <details>
-  <summary>
-    Create `src/hooks/useTransactionExecution.ts`:
-  </summary>
-  {@inject: examples/trading/frontend/src/hooks/useTransactionExecution.ts}
+
+<summary>
+
+Create `src/hooks/useTransactionExecution.ts`:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/hooks/useTransactionExecution.ts}
+
 </details>
 
 A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
@@ -1037,10 +1239,15 @@ The full source code of the demo bear smart contract is available at [Trading Co
 You need a utility function to create a dummy object representing a real world asset so you can use it to test and demonstrate escrow users flow on the UI directly.
 
 <details>
-  <summary>
-    Create `src/mutations/demo.ts`:
-  </summary>
-  {@inject: examples/trading/frontend/src/mutations/demo.ts}
+
+<summary>
+
+Create `src/mutations/demo.ts`:
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/mutations/demo.ts}
+
 </details>
 
 As previously mentioned, this example uses `@tanstack/react-query` to query, cache, and mutate server state. Server state is data only available on remote servers, and the only way to retrieve or update this data is by interacting with these remote servers. In this case, it could be from an API or directly from Sui blockchain RPC.
@@ -1054,10 +1261,15 @@ Another benefit of wrapping the main mutating logic inside `useMutation()` is th
 Now the logic to create a dummy bear object exists. You just need to attach it into the button in the header.
 
 <details>
-  <summary>
-    `Header.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/Header.tsx}
+
+<summary>
+
+`Header.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/Header.tsx}
+
 </details>
 
 :::checkpoint
@@ -1077,9 +1289,13 @@ To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}
 It's beneficial to extract logic of locking owned objects into a separated mutating function to enhance discoverability and encapsulation.
 
 <details>
-  <summary>
-    Create `src/mutations/locked.ts`:
-  </summary>
+
+<summary>
+
+Create `src/mutations/locked.ts`:
+
+</summary>
+
 ```tsx
 import { CONSTANTS } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -1113,15 +1329,21 @@ export function useLockObjectMutation() {
   });
 }
 ```
+
 </details>
 
 Update `src/components/locked/LockOwnedObjects.tsx` to include the `useLockObjectMutation` hook:
 
 <details>
-  <summary>
-    `LockOwnedObjects.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
+
+<summary>
+
+`LockOwnedObjects.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
+
 </details>
 
 :::checkpoint
@@ -1141,10 +1363,15 @@ The object should disappear from the list of owned objects. You view and unlock 
 Let's take a look at the **My Locked Objects** tab by examining `src/components/locked/OwnedLockedList.tsx`. Focus on the logic on how to retrieve this list.
 
 <details>
-  <summary>
-    `OwnedLockedList.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/locked/OwnedLockedList.tsx}
+
+<summary>
+
+`OwnedLockedList.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/locked/OwnedLockedList.tsx}
+
 </details>
 
 This instance of `useSuiClientInfiniteQuery()` is similar to the one in the `LockOwnedObjects` component. The difference is that it fetches the locked objects instead of the owned objects. The `Locked` object is a struct type in the smart contract, so you need to supply the struct type to the query call as a `filter`. The struct type is usually identified by the format of `{PACKAGE_ID}::{MODULE_NAME}::{STRUCT_TYPE}`.
@@ -1154,18 +1381,27 @@ This instance of `useSuiClientInfiniteQuery()` is similar to the one in the `Loc
 The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using `dApp Kit` `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recalling that in this smart contract, the locked item is put into a dynamic object field.
 
 <details>
-  <summary>
-    `LockedObject.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/locked/LockedObject.tsx}
+
+<summary>
+
+`LockedObject.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/locked/LockedObject.tsx}
+
 </details>
 
 The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it will also consist of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
 
 <details>
-  <summary>
-    `Locked.tsx`
-  </summary>
+
+<summary>
+
+`Locked.tsx`
+
+</summary>
+
 ```tsx
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
@@ -1240,15 +1476,21 @@ export function Locked({
   );
 }
 ```
+
 </details>
 
 Update `src/routes/LockedDashboard.tsx` to include the `OwnedLockedList` component:
 
 <details>
-  <summary>
-    `LockedDashboard.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/routes/LockedDashboard.tsx}
+
+<summary>
+
+`LockedDashboard.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/routes/LockedDashboard.tsx}
+
 </details>
 
 :::checkpoint
@@ -1268,18 +1510,27 @@ To unlock the object, execute the `unlock` Move function identified by `{PACKAGE
 Unlocking owned objects is another crucial and complex on-chain action in this application. Hence, it's beneficial to extract its logic into separated mutating functions to enhance discoverability and encapsulation.
 
 <details>
-  <summary>
-    `src/mutations/locked.ts`
-  </summary>
-  {@inject: examples/trading/frontend/src/mutations/locked.ts}
+
+<summary>
+
+`src/mutations/locked.ts`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/mutations/locked.ts}
+
 </details>
 
 Update `src/components/locked/partials/Locked.tsx` to include the `useUnlockObjectMutation` hook:
 
 <details>
-  <summary>
-    `Locked.tsx`
-  </summary>
+
+<summary>
+
+`Locked.tsx`
+
+</summary>
+
 ```tsx
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
@@ -1383,6 +1634,7 @@ export function Locked({
   );
 }
 ```
+
 </details>
 
 :::checkpoint
@@ -1400,9 +1652,13 @@ Run your app and ensure you can:
 Update `src/routes/EscrowDashboard.tsx` to include the `LockedList` component:
 
 <details>
-  <summary>
-    `EscrowDashboard.tsx`
-  </summary>
+
+<summary>
+
+`EscrowDashboard.tsx`
+
+</summary>
+
 ```tsx
 import { useState } from "react";
 import { Tabs, Tooltip } from "@radix-ui/themes";
@@ -1456,15 +1712,21 @@ export function EscrowDashboard() {
   );
 }
 ```
+
 </details>
 
 Add `src/components/locked/ApiLockedList.tsx`:
 
 <details>
-  <summary>
-    `ApiLockedList.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
+
+<summary>
+
+`ApiLockedList.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
+
 </details>
 
 This hook fetches all the non-deleted system `Locked` objects from the API in a paginated fashion. Then, it proceeds into fetching the on-chain state, to ensure the latest state of the object is displayed.
@@ -1472,10 +1734,15 @@ This hook fetches all the non-deleted system `Locked` objects from the API in a 
 This component uses tanstack's `useInfiniteQuery` instead of `useSuiClientInfiniteQuery` since the data is being fetched from the example's API rather than Sui. 
 
 <details>
-  <summary>
-    Add `src/hooks/useGetLockedObject.ts`
-  </summary>
-  {@inject: examples/trading/frontend/src/hooks/useGetLockedObject.ts}
+
+<summary>
+
+Add `src/hooks/useGetLockedObject.ts`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/hooks/useGetLockedObject.ts}
+
 </details>
 
 :::checkpoint
@@ -1493,9 +1760,13 @@ Run your app and ensure you can:
 To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
 
 <details>
-  <summary>
-    `escrow.ts`
-  </summary>
+
+<summary>
+
+`escrow.ts`
+
+</summary>
+
 ```tsx
 import { CONSTANTS } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -1539,20 +1810,31 @@ export function useCreateEscrowMutation() {
   });
 }
 ```
+
 </details>
 
 <details>
-  <summary>
-    Update `src/components/locked/partials/Locked.tsx` to include the `useCreateEscrowMutation` hook
-  </summary>
-  {@inject: examples/trading/frontend/src/components/locked/partials/Locked.tsx}
+
+<summary>
+
+Update `src/components/locked/partials/Locked.tsx` to include the `useCreateEscrowMutation` hook
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/locked/partials/Locked.tsx}
+
 </details>
 
 <details>
-  <summary>
-    Add `src/components/escrows/CreateEscrow.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
+
+<summary>
+
+Add `src/components/escrows/CreateEscrow.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
+
 </details>
 
 :::checkpoint
@@ -1572,9 +1854,13 @@ The object should disappear from the list of locked objects in the `Browse Locke
 To cancel the escrow, create a mutation through the `useCancelEscrowMutation` hook in `src/mutations/escrow.ts`. The cancel function accepts the escrow `ApiEscrowObject` and its on-chain data. The `{PACKAGE_ID}::shared::return_to_sender` Move call is generic, thus it requires the type parameters of the escrowed object. Next, execute `{PACKAGE_ID}::shared::return_to_sender` and transfer the returned escrowed object to the creator of the escrow.
 
 <details>
-  <summary>
-    `escrow.ts`
-  </summary>
+
+<summary>
+
+`escrow.ts`
+
+</summary>
+
 ```tsx
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -1657,12 +1943,17 @@ export function useCancelEscrowMutation() {
   });
 }
 ```
+
 </details>
 
 <details>
-  <summary>
-    Add `src/components/escrows/Escrow.tsx`
-  </summary>
+
+<summary>
+
+Add `src/components/escrows/Escrow.tsx`
+
+</summary>
+
 ```tsx
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
@@ -1809,19 +2100,29 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
   );
 }
 ```
+
 </details>
 
 <details>
-  <summary>
-    Add `src/components/escrows/EscrowList.tsx`
-  </summary>
-  {@inject: examples/trading/frontend/src/components/escrows/EscrowList.tsx}
+
+<summary>
+
+Add `src/components/escrows/EscrowList.tsx`
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/escrows/EscrowList.tsx}
+
 </details>
 
 <details>
-  <summary>
-    Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component
-  </summary>
+
+<summary>
+
+Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component
+
+</summary>
+
 ```tsx
 import { useState } from "react";
 import { Tabs, Tooltip } from "@radix-ui/themes";
@@ -1893,6 +2194,7 @@ export function EscrowDashboard() {
   );
 }
 ```
+
 </details>
 
 :::checkpoint
@@ -1911,9 +2213,13 @@ Run your app and ensure you can:
 To accept the escrow, create a mutation through the `useAcceptEscrowMutation` hook in `src/mutations/escrow.ts`. The implementation should be fairly familiar to you now. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. The `{PACKAGE_ID}::shared::swap` Move call is generic, thus it requires the type parameters of the escrowed and locked objects. Query the objects details by using `multiGetObjects` on Sui client instance. Lastly, execute the `{PACKAGE_ID}::shared::swap` Move call and transfer the returned escrowed item to the connected wallet account. When the mutation succeeds, invalidate the cache to allow automatic re-fetch of the data.
 
 <details>
-  <summary>
-    `escrow.ts`
-  </summary>
+
+<summary>
+
+`escrow.ts`
+
+</summary>
+
 ```tsx
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -2059,20 +2365,31 @@ export function useAcceptEscrowMutation() {
   });
 }
 ```
+
 </details>
 
 <details>
-  <summary>
-    Update `src/components/escrows/Escrow.tsx` to include the `useAcceptEscrowMutation` hook
-  </summary>
-  {@inject: examples/trading/frontend/src/components/escrows/Escrow.tsx}
+
+<summary>
+
+Update `src/components/escrows/Escrow.tsx` to include the `useAcceptEscrowMutation` hook
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/components/escrows/Escrow.tsx}
+
 </details>
 
 <details>
-  <summary>
-    Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component
-  </summary>
-  {@inject: examples/trading/frontend/src/routes/EscrowDashboard.tsx}
+
+<summary>
+
+Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component
+
+</summary>
+
+{@inject:  ../../../../../examples/trading/frontend/src/routes/EscrowDashboard.tsx}
+
 </details>
 
 :::checkpoint

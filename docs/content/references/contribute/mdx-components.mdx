@@ -1,6 +1,8 @@
 ---
 title: MDX Components
 description: Extensions to the Sui docs rendering engine.
+mdx:
+  format: md
 ---
 
 Sui Docs uses the MDX format for its network documentation, which allows [JSX in markdown content](https://mdxjs.com/). Sui uses features provided by Docusaurus, plugins from its community, and custom plugins in an effort to improve reader experience. None of these features are required in your markdown contributions to the Sui documentation, but the Sui community might include them if it improves experience.
@@ -129,7 +131,7 @@ The empty newlines between each opening and closing element in the example are i
 
 ## Snippets
 
-Snippets are short pieces of reusable text. This feature uses the Docusaurus community provided [docusaurus-plugin-includes](https://github.com/simologos/docusaurus-plugin-includes) plugin. The `docs/content/snippets` folder contains all the reusable content. Pages in that directory do not appear in the ToC and are hidden from search engines. Upon build, the process deletes the folder so the content doesn't get rendered to the final site as it's own page.
+Snippets are short pieces of reusable text, such as tips, tab components, or other plaintext. Snippets are not used for code snippets; see code inject for embedding code. The `docs/content/snippets` folder contains all the reusable content. Pages in that directory do not appear in the ToC and are hidden from search engines. Upon build, the process deletes the folder so the content doesn't get rendered to the final site as it's own page.
 
 ### When to use
 
@@ -152,6 +154,15 @@ You do not need to `import` a component to use snippets.
 
     `{@include: ../../snippets/reusable.mdx}`
 
+There must be an empty line above and below the `{@include} line for it to render properly. 
+
+You must also add the following frontmatter to the page that includes the `{@include}` statement:
+
+```
+mdx:
+  format: md
+```
+
 1. Repeat the previous step for all locations the content should appear. Be sure to update the relative location of the snippet based on where the file containing the directive exists in the repo.
 1. Check each page in the Vercel preview of your PR (`sui-core` preview link in Vercel comment) to make sure the content displays. If the relative link you provide does not resolve correctly, the page displays error text instead of the expected content.
 
@@ -163,7 +174,9 @@ Do not use links relative to the file structure in snippets (for example, `../co
 
 ## Code inject
 
-Sui documentation uses a custom Docusaurus plugin to include code from the Sui repo in its pages. The plugin is based on the docusaurus-plugin-includes plugin used for [snippets](#snippets). 
+Sui documentation uses a custom Docusaurus plugin to include code from the Sui repo in its pages. 
+
+Code inject formats code in a code block with syntax highlighting. Code inject can only be used for files located in the current repo, as they must be referenced via relative path.
 
 ### When to use
 
@@ -177,11 +190,22 @@ When including sections of code, understand that the code might change from what
 
 ### How to use
 
-To include the entire source file, use the `{@inject}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write `{@inject: examples/move/hero/sources/example.move`. The file location is automatically used as the title for the codeblock.
+To include the entire source file, use the `{@inject: ...}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write:
 
-#### Non-Sui repos
+``
+{@inject: examples/move/hero/sources/example.move`
+```
 
-You can use source code from other GitHub repositories, but should do so sparingly and purposefully. There is almost no way to track those projects to ensure the code is valid, unlike the CI processes running on the sui repo. To use, format the directive as `{@inject: github:<GITHUB_ORG_NAME>/<GITHUB_REPO_NAME>/<PATH_TO_FILE>}`.
+The file location is automatically used as the title for the codeblock.
+
+You must also add the following frontmatter to the page that includes the `{@inject}` statement:
+
+```
+mdx:
+  format: md
+```
+
+There must be an empty line above and below the `{@inject} line for it to render properly. 
 
 #### Include part of code
 
@@ -334,6 +358,36 @@ You can include a space-limited list of options after the @inject call. The foll
 
 For example, `{@inject: examples/move/example.source#module=example::example noComments noTests noTitle singleSpace}`
 
+## Summary and details 
+
+For long portions of text or code that can be omitted, but should be available for readers looking for it, you can use the `<details>` syntax to create a collapsible component. The collapsible component takes up less space on the page, making it easier for readers to skim the page's content. 
+
+
+<details> 
+
+<summary> Example </summary>
+
+Example collapsible component.
+
+</details>
+
+### How to use 
+
+Use `<details>` opening and closing tags to create the component, and the `<summary>` opening and closing tags to display the text shown when the component is closed:
+
+    <details>
+
+    <summary> 
+    
+    Example title 
+    
+    </summary>
+
+    Component details.
+
+    </details>
+
+There must be an empty line above and below the both the opening and closing `<summary>` and `<detail>` tags for it to render properly. 
 
 ## Mermaid graphs
 
