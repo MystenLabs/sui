@@ -11,7 +11,8 @@ use tokio::sync::OnceCell;
 
 use crate::{
     api::scalars::{base64::Base64, sui_address::SuiAddress, uint53::UInt53},
-    error::RpcError,
+    error::{bad_user_input, RpcError},
+    pagination::{Page, PaginationConfig},
 };
 
 use super::{
@@ -66,6 +67,15 @@ pub(crate) struct MoveObject {
         arg(name = "keys", ty = "Vec<DynamicFieldName>"),
         ty = "Result<Vec<Option<DynamicField>>, RpcError<object::Error>>",
         desc = "Access dynamic object fields on an object using their types and BCS-encoded names.\n\nReturns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.",
+    ),
+    field(
+        name = "dynamic_fields",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<object::CLive>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<object::CLive>"),
+        ty = "Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>>",
+        desc = "Dynamic fields and dynamic object fields owned by this object.\n\nDynamic fields on wrapped objects can be accessed using `Address.dynamicFields`."
     ),
     field(
         name = "move_object_bcs",
@@ -136,6 +146,36 @@ impl MoveObject {
             name,
         )
         .await
+    }
+
+    /// Dynamic fields owned by this object.
+    ///
+    /// Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+    pub(crate) async fn dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
+        if self.super_.super_.scope.root_version().is_some() {
+            return Err(bad_user_input(object::Error::RootVersionOwnership));
+        }
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IMoveObject", "dynamicFields");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let dynamic_fields = DynamicField::paginate(
+            ctx,
+            self.super_.super_.scope.clone(),
+            self.super_.super_.address.into(),
+            page,
+        )
+        .await?;
+
+        Ok(Some(dynamic_fields))
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
