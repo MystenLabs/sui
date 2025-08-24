@@ -664,6 +664,10 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
 	The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
 	"""
 	value: DynamicFieldValue
@@ -1208,6 +1212,10 @@ interface IObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
 	The version of this object that this content comes from.
 	"""
 	version: UInt53!
@@ -1402,6 +1410,10 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
 	The version of this object that this content comes from.
 	"""
 	version: UInt53!
@@ -1517,6 +1529,10 @@ type MovePackage implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
 	"""
 	A table identifying which versions of a package introduced each of its types.
 	"""
@@ -1743,6 +1759,10 @@ type Object implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
 	"""
 	The version of this object that this content comes from.
 	"""
