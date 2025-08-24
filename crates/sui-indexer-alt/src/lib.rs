@@ -53,8 +53,7 @@ pub async fn setup_indexer(
         committer,
         pruner,
         pipeline,
-        extra: _,
-    } = indexer_config.finish()?;
+    } = indexer_config;
 
     let PipelineLayer {
         sum_displays,
@@ -78,8 +77,7 @@ pub async fn setup_indexer(
         tx_calls,
         tx_digests,
         tx_kinds,
-        extra: _,
-    } = pipeline.finish()?;
+    } = pipeline;
 
     let ingestion = ingestion.finish(IngestionConfig::default())?;
     let committer = committer.finish(CommitterConfig::default())?;

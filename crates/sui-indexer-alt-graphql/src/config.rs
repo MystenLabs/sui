@@ -3,14 +3,12 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    mem,
     time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use tracing::warn;
 
 use crate::{
     extensions::{query_limits::QueryLimitsConfig, timeout::TimeoutConfig},
@@ -31,13 +29,11 @@ pub struct RpcConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RpcLayer {
     pub limits: LimitsLayer,
     pub health: HealthLayer,
     pub watermark: WatermarkLayer,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[derive(Clone)]
@@ -48,11 +44,9 @@ pub struct HealthConfig {
 
 #[DefaultConfig]
 #[derive(Default, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct HealthLayer {
     pub max_checkpoint_lag_ms: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 /// Config for an indexer writing to a database used by this RPC service. It is simplified w.r.t.
@@ -134,6 +128,7 @@ pub struct Limits {
 
 #[DefaultConfig]
 #[derive(Default, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct LimitsLayer {
     pub mutation_timeout_ms: Option<u32>,
     pub query_timeout_ms: Option<u32>,
@@ -152,9 +147,6 @@ pub struct LimitsLayer {
     pub max_type_nodes: Option<usize>,
     pub max_move_value_depth: Option<usize>,
     pub max_move_value_bound: Option<usize>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 pub struct WatermarkConfig {
@@ -164,11 +156,9 @@ pub struct WatermarkConfig {
 
 #[DefaultConfig]
 #[derive(Default, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct WatermarkLayer {
     pub watermark_polling_interval_ms: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 impl RpcLayer {
@@ -177,12 +167,10 @@ impl RpcLayer {
             limits: Limits::default().into(),
             health: HealthConfig::default().into(),
             watermark: WatermarkConfig::default().into(),
-            extra: Default::default(),
         }
     }
 
-    pub fn finish(mut self) -> RpcConfig {
-        check_extra("top-level", mem::take(&mut self.extra));
+    pub fn finish(self) -> RpcConfig {
         RpcConfig {
             limits: self.limits.finish(Limits::default()),
             health: self.health.finish(HealthConfig::default()),
@@ -192,8 +180,7 @@ impl RpcLayer {
 }
 
 impl HealthLayer {
-    pub(crate) fn finish(mut self, base: HealthConfig) -> HealthConfig {
-        check_extra("health", mem::take(&mut self.extra));
+    pub(crate) fn finish(self, base: HealthConfig) -> HealthConfig {
         HealthConfig {
             max_checkpoint_lag: self
                 .max_checkpoint_lag_ms
@@ -272,8 +259,7 @@ impl Limits {
 }
 
 impl LimitsLayer {
-    pub(crate) fn finish(mut self, base: Limits) -> Limits {
-        check_extra("limits", mem::take(&mut self.extra));
+    pub(crate) fn finish(self, base: Limits) -> Limits {
         Limits {
             mutation_timeout_ms: self.mutation_timeout_ms.unwrap_or(base.mutation_timeout_ms),
             query_timeout_ms: self.query_timeout_ms.unwrap_or(base.query_timeout_ms),
@@ -311,8 +297,7 @@ impl LimitsLayer {
 }
 
 impl WatermarkLayer {
-    pub(crate) fn finish(mut self, base: WatermarkConfig) -> WatermarkConfig {
-        check_extra("watermark", mem::take(&mut self.extra));
+    pub(crate) fn finish(self, base: WatermarkConfig) -> WatermarkConfig {
         WatermarkConfig {
             watermark_polling_interval: self
                 .watermark_polling_interval_ms
@@ -326,7 +311,6 @@ impl From<HealthConfig> for HealthLayer {
     fn from(value: HealthConfig) -> Self {
         Self {
             max_checkpoint_lag_ms: Some(value.max_checkpoint_lag.as_millis() as u64),
-            extra: Default::default(),
         }
     }
 }
@@ -351,7 +335,6 @@ impl From<Limits> for LimitsLayer {
             max_type_nodes: Some(value.max_type_nodes),
             max_move_value_depth: Some(value.max_move_value_depth),
             max_move_value_bound: Some(value.max_move_value_bound),
-            extra: Default::default(),
         }
     }
 }
@@ -360,7 +343,6 @@ impl From<WatermarkConfig> for WatermarkLayer {
     fn from(value: WatermarkConfig) -> Self {
         Self {
             watermark_polling_interval_ms: Some(value.watermark_polling_interval.as_millis() as u64),
-            extra: Default::default(),
         }
     }
 }
@@ -427,18 +409,6 @@ impl Default for WatermarkConfig {
         Self {
             watermark_polling_interval: Duration::from_millis(500),
         }
-    }
-}
-
-/// Check whether there are any unrecognized extra fields and if so, warn about them.
-fn check_extra(pos: &str, extra: toml::Table) {
-    if !extra.is_empty() {
-        warn!(
-            "Found unrecognized {pos} field{} which will be ignored. This could be \
-             because of a typo, or because it was introduced in a newer version of the indexer:\n{}",
-            if extra.len() != 1 { "s" } else { "" },
-            extra,
-        )
     }
 }
 
