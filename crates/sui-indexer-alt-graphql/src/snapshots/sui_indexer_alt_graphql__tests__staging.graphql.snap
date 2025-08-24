@@ -130,6 +130,16 @@ type Address implements IAddressable {
 }
 
 """
+Object is exclusively owned by a single address, and is mutable.
+"""
+type AddressOwner {
+	"""
+	The owner's address.
+	"""
+	address: Address
+}
+
+"""
 System transaction for creating the on-chain state used by zkLogin.
 """
 type AuthenticatorStateCreateTransaction {
@@ -481,6 +491,20 @@ type CommandEdge {
 }
 
 """
+Object is exclusively owned by a single adderss and sequenced via consensis.
+"""
+type ConsensusAddressOwner {
+	"""
+	The owner's address.
+	"""
+	address: Address
+	"""
+	The version at which the object most recently bcame a consensus object. This serves the same function as `Shared.initialSharedVersion`, except it may change if the object's `owner` type changes.
+	"""
+	startVersion: UInt53
+}
+
+"""
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
 """
 type ConsensusCommitPrologueTransaction {
@@ -663,6 +687,10 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	Objects owned by this object, optionally filtered by type.
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
 	"""
 	The transaction that created this version of the object.
 	"""
@@ -1212,6 +1240,10 @@ interface IObject {
 	"""
 	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
 	The transaction that created this version of the object
 	"""
 	previousTransaction: Transaction
@@ -1223,6 +1255,13 @@ interface IObject {
 	The version of this object that this content comes from.
 	"""
 	version: UInt53!
+}
+
+"""
+Object is accessible to all addresses, and is immutable.
+"""
+type Immutable {
+	_: Boolean
 }
 
 type Input {
@@ -1410,6 +1449,10 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
@@ -1511,6 +1554,10 @@ type MovePackage implements IAddressable & IObject {
 	Objects owned by this package, optionally filtered by type.
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
 	"""
 	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
 	
@@ -1760,6 +1807,10 @@ type Object implements IAddressable & IObject {
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
@@ -1921,6 +1972,16 @@ input ObjectKey {
 }
 
 """
+Object is exclusively owned by a single object, and is mutable. Note that the owning object may be inaccessible because it is wrapped.
+"""
+type ObjectOwner {
+	"""
+	The owner's address.
+	"""
+	address: Address
+}
+
+"""
 Placeholder for unimplemented command types
 """
 type OtherCommand {
@@ -1936,6 +1997,11 @@ A Move object, either immutable, or owned mutable.
 type OwnedOrImmutable {
 	object: Object
 }
+
+"""
+The object's owner kind.
+"""
+union Owner = AddressOwner | ObjectOwner | Shared | Immutable | ConsensusAddressOwner
 
 """
 Filter on who owns an object.
@@ -2453,6 +2519,16 @@ type ServiceConfig {
 	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	queryTimeoutMs: Int
+}
+
+"""
+Object is shared, can be used by any address, and is mutable.
+"""
+type Shared {
+	"""
+	The version at which the object became shared.
+	"""
+	initialSharedVersion: UInt53
 }
 
 """
