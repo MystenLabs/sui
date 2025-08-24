@@ -4,7 +4,10 @@
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
-use crate::diagnostics::codes::{DiagnosticInfo, Severity, custom};
+use crate::{
+    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    shared::stdlib_definitions,
+};
 
 pub mod id_leak;
 pub mod info;
@@ -21,7 +24,7 @@ pub const BRIDGE_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0xb);
 pub const INIT_FUNCTION_NAME: Symbol = symbol!("init");
 pub const ID_FIELD_NAME: Symbol = symbol!("id");
 
-pub const STD_ADDR_NAME: Symbol = symbol!("std");
+pub const STD_ADDR_NAME: Symbol = stdlib_definitions::STDLIB_ADDRESS_NAME;
 pub const OPTION_MODULE_NAME: Symbol = symbol!("option");
 pub const OPTION_TYPE_NAME: Symbol = symbol!("Option");
 pub const UTF_MODULE_NAME: Symbol = symbol!("string");

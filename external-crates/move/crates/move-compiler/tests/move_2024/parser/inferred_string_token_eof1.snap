@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01019]: invalid string literal
+  ┌─ tests/move_2024/parser/inferred_string_token_eof1.move:3:9
+  │
+3 │         "
+  │         ^ Missing closing quote (") after string
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/inferred_string_token_eof1.move:4:1
+  │
+4 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

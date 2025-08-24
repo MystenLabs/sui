@@ -15,7 +15,7 @@ error[E04005]: expected a single type
   ┌─ tests/move_check/typing/recursive_local.move:5:9
   │
 5 │         x = (x, 0);
-  │         ^   ------ Expected a single type, but found expression list type: '(_, u64)'
+  │         ^   ------ Expected a single type, but found expression list type: '(_, {integer})'
   │         │    
   │         Invalid type for local
 
