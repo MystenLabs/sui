@@ -101,7 +101,7 @@ async fn test_custom_coin_balance() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     let sender = test_cluster.get_address_0();
     let init_ret = init_package(
@@ -180,7 +180,7 @@ async fn test_default_balance() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let client = test_cluster.wallet.get_client().await.unwrap();
 
-    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     let request: AccountBalanceRequest = serde_json::from_value(json!(
         {
@@ -230,7 +230,7 @@ async fn test_custom_coin_transfer() {
         .await
         .unwrap();
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     let ops = serde_json::from_value(json!(
         [{
