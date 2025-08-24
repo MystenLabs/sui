@@ -33,6 +33,7 @@ use tokio::{join, sync::OnceCell};
 use crate::{
     api::scalars::{
         base64::Base64,
+        big_int::BigInt,
         cursor::{BcsCursor, JsonCursor},
         owner_kind::OwnerKind,
         sui_address::SuiAddress,
@@ -107,6 +108,11 @@ use super::{
         name = "previous_transaction",
         ty = "Result<Option<Transaction>, RpcError>",
         desc = "The transaction that created this version of the object"
+    ),
+    field(
+        name = "storage_rebate",
+        ty = "Result<Option<BigInt>, RpcError<Error>>",
+        desc = "The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object."
     )
 )]
 pub(crate) enum IObject {
@@ -380,6 +386,18 @@ impl Object {
             self.super_.scope.without_root_version(),
             object.previous_transaction,
         )))
+    }
+
+    /// The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+    pub(crate) async fn storage_rebate(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<BigInt>, RpcError<Error>> {
+        let Some(object) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(BigInt::from(object.storage_rebate)))
     }
 }
 
