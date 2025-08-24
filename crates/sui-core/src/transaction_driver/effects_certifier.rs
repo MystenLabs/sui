@@ -9,6 +9,7 @@ use std::{
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
+use mysten_metrics::TxType;
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
@@ -62,6 +63,7 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
+        tx_type: TxType,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
         submit_txn_resp: SubmitTxResponse,
@@ -97,6 +99,7 @@ impl EffectsCertifier {
                 authority_aggregator,
                 client_monitor,
                 tx_digest,
+                tx_type,
                 consensus_position,
                 options,
             ),
@@ -247,13 +250,17 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
+        tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        self.metrics.certified_effects_ack_attempts.inc();
+        self.metrics
+            .certified_effects_ack_attempts
+            .with_label_values(&[tx_type.as_str()])
+            .inc();
         let timer = tokio::time::Instant::now();
         let clients = authority_aggregator
             .authority_clients
@@ -346,9 +353,13 @@ impl EffectsCertifier {
                             }
                         }
                         // Record success and latency
-                        self.metrics.certified_effects_ack_successes.inc();
+                        self.metrics
+                            .certified_effects_ack_successes
+                            .with_label_values(&[tx_type.as_str()])
+                            .inc();
                         self.metrics
                             .certified_effects_ack_latency
+                            .with_label_values(&[tx_type.as_str()])
                             .observe(timer.elapsed().as_secs_f64());
                         return Ok(effects_digest);
                     }
