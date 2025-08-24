@@ -46,7 +46,7 @@ use crate::{
 };
 
 use super::{
-    address::{Address, AddressableImpl},
+    address::Address,
     balance::{self, Balance},
     dynamic_field::DynamicField,
     move_object::MoveObject,
@@ -124,9 +124,6 @@ pub(crate) struct Object {
     pub(crate) contents: OnceCell<Option<Arc<NativeObject>>>,
 }
 
-/// Type to implement GraphQL fields that are shared by all Objects.
-pub(crate) struct ObjectImpl<'o>(&'o Object);
-
 /// Identifies a specific version of an object.
 ///
 /// The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
@@ -192,18 +189,18 @@ pub(crate) type CVersion = JsonCursor<u64>;
 #[Object]
 impl Object {
     /// The Object's ID.
-    pub(crate) async fn address(&self) -> SuiAddress {
-        AddressableImpl::from(&self.super_).address()
+    pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
+        self.super_.address(ctx).await
     }
 
     /// The version of this object that this content comes from.
-    async fn version(&self) -> UInt53 {
-        ObjectImpl::from(self).version()
+    pub(crate) async fn version(&self) -> Result<UInt53, RpcError> {
+        Ok(self.version.into())
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    async fn digest(&self) -> String {
-        ObjectImpl::from(self).digest()
+    pub(crate) async fn digest(&self) -> Result<String, RpcError> {
+        Ok(Base58::encode(self.digest.inner()))
     }
 
     /// Attempts to convert the object into a MoveObject.
@@ -230,9 +227,7 @@ impl Object {
         ctx: &Context<'_>,
         coin_type: TypeInput,
     ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_)
-            .balance(ctx, coin_type)
-            .await
+        self.super_.balance(ctx, coin_type).await
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -244,9 +239,7 @@ impl Object {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_)
-            .balances(ctx, first, after, last, before)
-            .await
+        self.super_.balances(ctx, first, after, last, before).await
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -257,33 +250,43 @@ impl Object {
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
     ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_)
-            .multi_get_balances(ctx, keys)
-            .await
+        self.super_.multi_get_balances(ctx, keys).await
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
     ///
     /// If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
-    async fn object_at(
+    pub(crate) async fn object_at(
         &self,
         ctx: &Context<'_>,
         version: Option<UInt53>,
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        ObjectImpl::from(self)
-            .object_at(ctx, version, root_version, checkpoint)
-            .await
+        let key = ObjectKey {
+            address: self.super_.address.into(),
+            version,
+            root_version,
+            at_checkpoint: checkpoint,
+        };
+
+        Object::by_key(ctx, self.super_.scope.without_root_version(), key).await
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError<Error>> {
-        ObjectImpl::from(self).object_bcs(ctx).await
+    pub(crate) async fn object_bcs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Base64>, RpcError<Error>> {
+        let Some(object) = self.contents(ctx).await? else {
+            return Ok(None);
+        };
+        let bytes = bcs::to_bytes(object.as_ref()).context("Failed to serialize object")?;
+        Ok(Some(Base64(bytes)))
     }
 
     /// Paginate all versions of this object after this one.
-    async fn object_versions_after(
+    pub(crate) async fn object_versions_after(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
@@ -292,13 +295,31 @@ impl Object {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<Error>> {
-        ObjectImpl::from(self)
-            .object_versions_after(ctx, first, after, last, before, filter)
-            .await
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IObject", "objectVersionsAfter");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Apply any filter that was supplied to the query, but add an additional version
+        // lowerbound constraint.
+        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+            after_version: Some(self.version.into()),
+            ..VersionFilter::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        Object::paginate_by_version(
+            ctx,
+            self.super_.scope.without_root_version(),
+            page,
+            self.super_.address,
+            filter,
+        )
+        .await
     }
 
     /// Paginate all versions of this object before this one.
-    async fn object_versions_before(
+    pub(crate) async fn object_versions_before(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
@@ -307,9 +328,27 @@ impl Object {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<Error>> {
-        ObjectImpl::from(self)
-            .object_versions_before(ctx, first, after, last, before, filter)
-            .await
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IObject", "objectVersionsBefore");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Apply any filter that was supplied to the query, but add an additional version
+        // upperbound constraint.
+        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+            before_version: Some(self.version.into()),
+            ..VersionFilter::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        Object::paginate_by_version(
+            ctx,
+            self.super_.scope.without_root_version(),
+            page,
+            self.super_.address,
+            filter,
+        )
+        .await
     }
 
     /// Objects owned by this object, optionally filtered by type.
@@ -322,17 +361,24 @@ impl Object {
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
-        AddressableImpl::from(&self.super_)
+        self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
     }
 
     /// The transaction that created this version of the object.
-    async fn previous_transaction(
+    pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Transaction>, RpcError<Error>> {
-        ObjectImpl::from(self).previous_transaction(ctx).await
+        let Some(object) = self.contents(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(Transaction::with_id(
+            self.super_.scope.without_root_version(),
+            object.as_ref().previous_transaction,
+        )))
     }
 }
 
@@ -761,123 +807,6 @@ impl Object {
     }
 }
 
-impl ObjectImpl<'_> {
-    pub(crate) fn version(&self) -> UInt53 {
-        self.0.version.into()
-    }
-
-    pub(crate) fn digest(&self) -> String {
-        Base58::encode(self.0.digest.inner())
-    }
-
-    pub(crate) async fn object_at(
-        &self,
-        ctx: &Context<'_>,
-        version: Option<UInt53>,
-        root_version: Option<UInt53>,
-        checkpoint: Option<UInt53>,
-    ) -> Result<Option<Object>, RpcError<Error>> {
-        let key = ObjectKey {
-            address: self.0.super_.address.into(),
-            version,
-            root_version,
-            at_checkpoint: checkpoint,
-        };
-
-        Object::by_key(ctx, self.0.super_.scope.without_root_version(), key).await
-    }
-
-    pub(crate) async fn object_bcs(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<Error>> {
-        let Some(object) = self.0.contents(ctx).await? else {
-            return Ok(None);
-        };
-
-        let bytes = bcs::to_bytes(object.as_ref()).context("Failed to serialize object")?;
-        Ok(Some(Base64(bytes)))
-    }
-
-    pub(crate) async fn object_versions_after(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<CVersion>,
-        last: Option<u64>,
-        before: Option<CVersion>,
-        filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IObject", "objectVersionsAfter");
-        let page = Page::from_params(limits, first, after, last, before)?;
-
-        // Apply any filter that was supplied to the query, but add an additional version
-        // lowerbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            after_version: Some(self.0.version.value().into()),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Connection::new(false, false));
-        };
-
-        Object::paginate_by_version(
-            ctx,
-            self.0.super_.scope.without_root_version(),
-            page,
-            self.0.super_.address,
-            filter,
-        )
-        .await
-    }
-
-    pub(crate) async fn object_versions_before(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<CVersion>,
-        last: Option<u64>,
-        before: Option<CVersion>,
-        filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IObject", "objectVersionsBefore");
-        let page = Page::from_params(limits, first, after, last, before)?;
-
-        // Apply any filter that was supplied to the query, but add an additional version
-        // upperbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            before_version: Some(self.0.version.value().into()),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Connection::new(false, false));
-        };
-
-        Object::paginate_by_version(
-            ctx,
-            self.0.super_.scope.without_root_version(),
-            page,
-            self.0.super_.address,
-            filter,
-        )
-        .await
-    }
-
-    pub(crate) async fn previous_transaction(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError<Error>> {
-        let Some(object) = self.0.contents(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(Transaction::with_id(
-            self.0.super_.scope.without_root_version(),
-            object.as_ref().previous_transaction,
-        )))
-    }
-}
-
 impl VersionFilter {
     /// Try to create a filter whose results are the intersection of `self`'s results and `other`'s
     /// results. This may not be possible if the resulting filter is inconsistent (guaranteed to
@@ -898,12 +827,6 @@ impl VersionFilter {
                 before_version: b,
             }),
         }
-    }
-}
-
-impl<'o> From<&'o Object> for ObjectImpl<'o> {
-    fn from(value: &'o Object) -> Self {
-        ObjectImpl(value)
     }
 }
 

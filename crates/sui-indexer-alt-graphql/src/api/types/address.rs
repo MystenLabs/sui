@@ -78,13 +78,11 @@ pub(crate) struct Address {
     pub(crate) address: NativeSuiAddress,
 }
 
-pub(crate) struct AddressableImpl<'a>(&'a Address);
-
 #[Object]
 impl Address {
     /// The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
-    pub(crate) async fn address(&self) -> SuiAddress {
-        AddressableImpl::from(self).address()
+    pub(crate) async fn address(&self) -> Result<SuiAddress, RpcError> {
+        Ok(self.address.into())
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -95,7 +93,9 @@ impl Address {
         ctx: &Context<'_>,
         coin_type: TypeInput,
     ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(self).balance(ctx, coin_type).await
+        Balance::fetch_one(ctx, &self.scope, self.address, coin_type.into())
+            .await
+            .map(Some)
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -107,9 +107,12 @@ impl Address {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        AddressableImpl::from(self)
-            .balances(ctx, first, after, last, before)
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IAddressable", "balances");
+        let page = Page::from_params(limits, first, after, last, before)?;
+        Balance::paginate(ctx, self.scope.clone(), self.address, page)
             .await
+            .map(Some)
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -213,9 +216,8 @@ impl Address {
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
     ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(self)
-            .multi_get_balances(ctx, keys)
-            .await
+        let coin_types = keys.into_iter().map(|k| k.into()).collect();
+        Balance::fetch_many(ctx, &self.scope, self.address, coin_types).await
     }
 
     /// Objects owned by this address, optionally filtered by type.
@@ -228,70 +230,6 @@ impl Address {
         before: Option<object::CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
-        AddressableImpl::from(self)
-            .objects(ctx, first, after, last, before, filter)
-            .await
-    }
-}
-
-impl Address {
-    /// Construct an address that is represented by just its identifier (`SuiAddress`).
-    /// This does not check whether the address is valid or exists in the system.
-    pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
-        Self { scope, address }
-    }
-}
-
-impl AddressableImpl<'_> {
-    pub(crate) fn address(&self) -> SuiAddress {
-        self.0.address.into()
-    }
-
-    pub(crate) async fn balance(
-        &self,
-        ctx: &Context<'_>,
-        coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        Balance::fetch_one(ctx, &self.0.scope, self.0.address, coin_type.into())
-            .await
-            .map(Some)
-    }
-
-    pub(crate) async fn balances(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<balance::Cursor>,
-        last: Option<u64>,
-        before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IAddressable", "balances");
-        let page = Page::from_params(limits, first, after, last, before)?;
-
-        Balance::paginate(ctx, self.0.scope.clone(), self.0.address, page)
-            .await
-            .map(Some)
-    }
-
-    pub(crate) async fn multi_get_balances(
-        &self,
-        ctx: &Context<'_>,
-        keys: Vec<TypeInput>,
-    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
-        let coin_types = keys.into_iter().map(|k| k.into()).collect();
-        Balance::fetch_many(ctx, &self.0.scope, self.0.address, coin_types).await
-    }
-
-    pub(crate) async fn objects(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<object::CLive>,
-        last: Option<u64>,
-        before: Option<object::CLive>,
-        filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IAddressable", "objects");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -299,13 +237,13 @@ impl AddressableImpl<'_> {
         // Create a filter that constrains to ADDRESS kind and this owner
         let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
             owner_kind: Some(OwnerKind::Address),
-            owner: Some(self.address()),
+            owner: Some(self.address.into()),
             ..Default::default()
         }) else {
             return Ok(Some(Connection::new(false, false)));
         };
 
-        let objects = Object::paginate_live(ctx, self.0.scope.clone(), page, filter).await?;
+        let objects = Object::paginate_live(ctx, self.scope.clone(), page, filter).await?;
         let mut move_objects = Connection::new(objects.has_previous_page, objects.has_next_page);
 
         for edge in objects.edges {
@@ -317,8 +255,10 @@ impl AddressableImpl<'_> {
     }
 }
 
-impl<'a> From<&'a Address> for AddressableImpl<'a> {
-    fn from(address: &'a Address) -> Self {
-        AddressableImpl(address)
+impl Address {
+    /// Construct an address that is represented by just its identifier (`SuiAddress`).
+    /// This does not check whether the address is valid or exists in the system.
+    pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
+        Self { scope, address }
     }
 }
