@@ -19,7 +19,7 @@ use move_core_types::vm_status::StatusCode;
 //
 // If `check_datatype_layout` is false, type safety over a series of upgrades cannot be guaranteed
 // for either structs or enums.
-// This is because the type could first be removed, and then re-introduced with a diferent layout and/or
+// This is because the type could first be removed, and then re-introduced with a different layout and/or
 // additional variants in a later upgrade. E.g.,
 // * For enums you could add a new variant even if `disallow_new_variants` is true, by first
 //   removing the enum in an upgrade, and then reintroducing it with a new variant in a later
