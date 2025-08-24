@@ -121,7 +121,7 @@ pub(crate) struct Object {
     pub(crate) super_: Address,
     pub(crate) version: SequenceNumber,
     pub(crate) digest: ObjectDigest,
-    pub(crate) contents: OnceCell<Option<Arc<NativeObject>>>,
+    pub(crate) contents: Arc<OnceCell<Option<NativeObject>>>,
 }
 
 /// Identifies a specific version of an object.
@@ -278,10 +278,11 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<Error>> {
-        let Some(object) = self.contents(ctx).await? else {
+        let Some(object) = self.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
-        let bytes = bcs::to_bytes(object.as_ref()).context("Failed to serialize object")?;
+
+        let bytes = bcs::to_bytes(object).context("Failed to serialize object")?;
         Ok(Some(Base64(bytes)))
     }
 
@@ -371,13 +372,13 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Transaction>, RpcError<Error>> {
-        let Some(object) = self.contents(ctx).await? else {
+        let Some(object) = self.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
         Ok(Some(Transaction::with_id(
             self.super_.scope.without_root_version(),
-            object.as_ref().previous_transaction,
+            object.previous_transaction,
         )))
     }
 }
@@ -400,7 +401,7 @@ impl Object {
             super_,
             version,
             digest,
-            contents: OnceCell::new(),
+            contents: Arc::new(OnceCell::new()),
         }
     }
 
@@ -518,11 +519,8 @@ impl Object {
     /// Construct a GraphQL representation of an `Object` from a raw object bundled into the genesis transaction.
     pub(crate) fn from_genesis_object(scope: Scope, genesis_obj: GenesisObject) -> Self {
         let GenesisObject::RawObject { data, owner } = genesis_obj;
-        let native = Arc::new(NativeObject::new_from_genesis(
-            data,
-            owner,
-            TransactionDigest::genesis_marker(),
-        ));
+        let prev = TransactionDigest::genesis_marker();
+        let native = NativeObject::new_from_genesis(data, owner, prev);
 
         Self::from_contents(scope, native)
     }
@@ -531,14 +529,14 @@ impl Object {
     ///
     /// Note that this constructor does not adjust version bounds in the scope. It is the
     /// caller's responsibility to do that, if appropriate.
-    pub(crate) fn from_contents(scope: Scope, contents: Arc<NativeObject>) -> Self {
+    pub(crate) fn from_contents(scope: Scope, contents: NativeObject) -> Self {
         let address = Address::with_address(scope, contents.id().into());
 
         Self {
             super_: address,
             version: contents.version(),
             digest: contents.digest(),
-            contents: OnceCell::from(Some(contents)),
+            contents: Arc::new(OnceCell::from(Some(contents))),
         }
     }
 
@@ -571,7 +569,7 @@ impl Object {
             version: SequenceNumber::from_u64(stored.object_version as u64),
             digest: ObjectDigest::try_from(&digest[..])
                 .context("Failed to deserialize Object Digest")?,
-            contents: OnceCell::new(),
+            contents: Arc::new(OnceCell::new()),
         }))
     }
 
@@ -786,7 +784,7 @@ impl Object {
                 super_: address,
                 version,
                 digest,
-                contents: OnceCell::new(),
+                contents: Arc::new(OnceCell::new()),
             };
             conn.edges.push(Edge::new(cursor.encode_cursor(), object));
         }
@@ -798,7 +796,7 @@ impl Object {
     pub(crate) async fn contents(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<Arc<NativeObject>>, RpcError<Error>> {
+    ) -> Result<&Option<NativeObject>, RpcError<Error>> {
         self.contents
             .get_or_try_init(async || {
                 contents(ctx, self.super_.address.into(), self.version.into()).await
@@ -835,11 +833,10 @@ async fn contents(
     ctx: &Context<'_>,
     address: SuiAddress,
     version: UInt53,
-) -> Result<Option<Arc<NativeObject>>, RpcError<Error>> {
+) -> Result<Option<NativeObject>, RpcError<Error>> {
     let kv_loader: &KvLoader = ctx.data()?;
     Ok(kv_loader
         .load_one_object(address.into(), version.into())
         .await
-        .context("Failed to fetch object contents")?
-        .map(Arc::new))
+        .context("Failed to fetch object contents")?)
 }

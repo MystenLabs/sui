@@ -353,7 +353,7 @@ impl DynamicField {
         move_object: &MoveObject,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let Some(native) = move_object.native(ctx).await? else {
+        let Some(native) = move_object.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
