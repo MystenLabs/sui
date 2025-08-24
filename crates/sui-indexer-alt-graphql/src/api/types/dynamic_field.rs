@@ -31,6 +31,7 @@ use crate::{
 
 use super::{
     address::AddressableImpl,
+    balance::{self, Balance},
     move_object::MoveObject,
     move_type::MoveType,
     move_value::MoveValue,
@@ -110,6 +111,33 @@ impl DynamicField {
         ObjectImpl::from(&self.super_.super_).digest()
     }
 
+    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    ///
+    /// If the address does not own any coins of that type, a balance of zero is returned.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_.super_.super_)
+            .balance(ctx, coin_type)
+            .await
+    }
+
+    /// Total balance across coins owned by this address, grouped by coin type.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_.super_.super_)
+            .balances(ctx, first, after, last, before)
+            .await
+    }
+
     /// The structured representation of the object's contents.
     pub(crate) async fn contents(
         &self,
@@ -180,6 +208,19 @@ impl DynamicField {
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
         self.super_.move_object_bcs(ctx).await
+    }
+
+    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    ///
+    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    pub(crate) async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_.super_.super_)
+            .multi_get_balances(ctx, keys)
+            .await
     }
 
     /// The dynamic field's name, as a Move value.
