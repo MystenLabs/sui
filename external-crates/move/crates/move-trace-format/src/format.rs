@@ -200,8 +200,8 @@ pub struct MoveTrace {
 /// The Move trace format. The custom tracer is not serialized, but the events are.
 /// This is the format that the Move VM will output traces in, and the `tracer` can output
 /// additional events to the trace.
-pub struct MoveTraceBuilder {
-    pub tracer: Box<dyn Tracer>,
+pub struct MoveTraceBuilder<'a> {
+    pub tracer: Box<dyn Tracer + 'a>,
 
     pub trace: MoveTrace,
 }
@@ -302,7 +302,7 @@ impl Default for MoveTrace {
     }
 }
 
-impl MoveTraceBuilder {
+impl<'a> MoveTraceBuilder<'a> {
     /// Create a new `MoveTraceBuilder` with no additional tracing.
     pub fn new() -> Self {
         Self {
@@ -312,7 +312,7 @@ impl MoveTraceBuilder {
     }
 
     /// Create a new `MoveTraceBuilder` with a custom `tracer`.
-    pub fn new_with_tracer(tracer: Box<dyn Tracer>) -> Self {
+    pub fn new_with_tracer(tracer: Box<dyn Tracer + 'a>) -> Self {
         Self {
             tracer,
             trace: MoveTrace::new(),
@@ -401,7 +401,7 @@ impl MoveTraceBuilder {
     }
 }
 
-impl Default for MoveTraceBuilder {
+impl<'a> Default for MoveTraceBuilder<'a> {
     fn default() -> Self {
         Self::new()
     }

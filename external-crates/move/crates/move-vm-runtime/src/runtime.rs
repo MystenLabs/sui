@@ -322,7 +322,7 @@ impl VMRuntime {
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        tracer: &mut Option<VMTracer<'_>>,
+        tracer: &mut Option<VMTracer<'_, '_>>,
     ) -> VMResult<SerializedReturnValues> {
         let arg_types = param_types
             .into_iter()
@@ -392,7 +392,7 @@ impl VMRuntime {
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        tracer: &mut Option<VMTracer<'_>>,
+        tracer: &mut Option<VMTracer<'_, '_>>,
     ) -> VMResult<Vec<Value>> {
         Interpreter::entrypoint(
             func,
