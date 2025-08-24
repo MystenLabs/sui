@@ -1138,6 +1138,19 @@ impl From<crate::transaction::CallArg> for Input {
                     initial_shared_version: initial_shared_version.value(),
                     mutable,
                 },
+                crate::transaction::ObjectArg::SharedObjectV2 {
+                    id,
+                    initial_shared_version,
+                    mutability,
+                } => Self::Shared {
+                    object_id: id.into(),
+                    initial_shared_version: initial_shared_version.value(),
+                    mutable: match mutability {
+                        crate::transaction::SharedObjectMutability::Mutable => true,
+                        crate::transaction::SharedObjectMutability::Immutable => false,
+                        crate::transaction::SharedObjectMutability::NonExclusiveWrite => todo!(),
+                    },
+                },
                 crate::transaction::ObjectArg::Receiving((id, version, digest)) => Self::Receiving(
                     ObjectReference::new(id.into(), version.value(), digest.into()),
                 ),

@@ -109,6 +109,9 @@ fn stable_call_arg_display(ca: &CallArg) -> String {
             ObjectArg::SharedObject { mutable, .. } => {
                 format!("SharedObject(mutable: {})", mutable)
             }
+            ObjectArg::SharedObjectV2 { mutability, .. } => {
+                format!("SharedObjectV2(mutability: {})", mutability)
+            }
             ObjectArg::Receiving(_) => "Receiving".to_string(),
         },
         CallArg::BalanceWithdraw(_) => "BalanceWithdraw".to_string(),

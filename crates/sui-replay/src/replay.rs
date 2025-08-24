@@ -1739,11 +1739,9 @@ impl LocalExec {
                     imm_owned_inputs.push((o_ref.0, o_ref.1));
                     Ok(())
                 }
-                InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version: _,
-                    mutable: _,
-                } if !deleted_shared_info_map.contains_key(id) => {
+                InputObjectKind::SharedMoveObject { id, .. }
+                    if !deleted_shared_info_map.contains_key(id) =>
+                {
                     // We already downloaded
                     if let Some(o) = self
                         .storage
