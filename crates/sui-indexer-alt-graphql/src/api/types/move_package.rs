@@ -40,11 +40,10 @@ use crate::{
 };
 
 use super::{
-    address::AddressableImpl,
     balance::{self, Balance},
     linkage::Linkage,
     move_object::MoveObject,
-    object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
+    object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     transaction::Transaction,
     type_origin::TypeOrigin,
@@ -115,18 +114,18 @@ pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
 #[Object]
 impl MovePackage {
     /// The MovePackage's ID.
-    pub(crate) async fn address(&self) -> SuiAddress {
-        AddressableImpl::from(&self.super_.super_).address()
+    pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
+        self.super_.address(ctx).await
     }
 
     /// The version of this package that this content comes from.
-    pub(crate) async fn version(&self) -> UInt53 {
-        ObjectImpl::from(&self.super_).version()
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<UInt53, RpcError> {
+        self.super_.version(ctx).await
     }
 
     /// 32-byte hash that identifies the package's contents, encoded in Base58.
-    pub(crate) async fn digest(&self) -> String {
-        ObjectImpl::from(&self.super_).digest()
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.digest(ctx).await
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -137,9 +136,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         coin_type: TypeInput,
     ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_)
-            .balance(ctx, coin_type)
-            .await
+        self.super_.balance(ctx, coin_type).await
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -151,9 +148,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_)
-            .balances(ctx, first, after, last, before)
-            .await
+        self.super_.balances(ctx, first, after, last, before).await
     }
 
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
@@ -171,9 +166,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
     ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_)
-            .multi_get_balances(ctx, keys)
-            .await
+        self.super_.multi_get_balances(ctx, keys).await
     }
 
     /// Objects owned by this package, optionally filtered by type.
@@ -186,7 +179,7 @@ impl MovePackage {
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
-        AddressableImpl::from(&self.super_.super_)
+        self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -201,7 +194,7 @@ impl MovePackage {
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Result<Option<Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_at(ctx, version, root_version, checkpoint)
             .await
     }
@@ -211,7 +204,7 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_).object_bcs(ctx).await
+        self.super_.object_bcs(ctx).await
     }
 
     /// Paginate all versions of this package treated as an object, after this one.
@@ -224,7 +217,7 @@ impl MovePackage {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
     }
@@ -239,7 +232,7 @@ impl MovePackage {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
     }
@@ -342,9 +335,7 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Transaction>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
-            .previous_transaction(ctx)
-            .await
+        self.super_.previous_transaction(ctx).await
     }
 
     /// The transitive dependencies of this package.
