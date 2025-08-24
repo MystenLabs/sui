@@ -20,7 +20,7 @@ use super::{
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
-    object::{self, Object},
+    object::{self, Object, ObjectKey},
     object_filter::{ObjectFilter, Validator as OFValidator},
 };
 
@@ -83,6 +83,24 @@ impl Address {
     /// The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
     pub(crate) async fn address(&self) -> Result<SuiAddress, RpcError> {
         Ok(self.address.into())
+    }
+
+    /// Attempts to fetch the object at this address.
+    pub(crate) async fn as_object(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Object>, RpcError<object::Error>> {
+        Object::by_key(
+            ctx,
+            self.scope.clone(),
+            ObjectKey {
+                address: self.address.into(),
+                version: None,
+                root_version: self.scope.root_version().map(Into::into),
+                at_checkpoint: None,
+            },
+        )
+        .await
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
