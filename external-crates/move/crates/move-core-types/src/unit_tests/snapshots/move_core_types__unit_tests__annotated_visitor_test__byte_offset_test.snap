@@ -1,0 +1,30 @@
+---
+source: crates/move-core-types/src/unit_tests/annotated_visitor_test.rs
+expression: value_visitor.0
+---
+[  0 ..   0] struct 0x0::foo::Bar {
+    inner: struct 0x0::baz::Qux {
+        f: u64,
+        g: vector<u32>,
+    },
+    last: enum 0x0::foo::Baz {
+        e {
+            h: u64,
+        },
+    },
+}
+[  0 ..   0] struct 0x0::baz::Qux {
+    f: u64,
+    g: vector<u32>,
+}
+[  0 ..   8] 7: u64
+[  8 ..   9] vector<u32>
+[  9 ..  13] 1: u32
+[ 13 ..  17] 2: u32
+[ 17 ..  21] 3: u32
+[ 21 ..  22] enum 0x0::foo::Baz {
+    e {
+        h: u64,
+    },
+}
+[ 22 ..  30] 4: u64

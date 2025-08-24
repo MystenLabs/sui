@@ -1,0 +1,22 @@
+---
+source: crates/move-core-types/src/unit_tests/runtime_visitor_test.rs
+expression: value_visitor.output
+---
+[0] struct {
+    0: struct {
+        0: u64,
+        1: vector<u32>,
+    },
+    1: enum variant_tag: 0 { 0: u64,  } ,
+}
+[1] struct {
+    0: u64,
+    1: vector<u32>,
+}
+[2] 7: u64
+[2] vector<u32>
+[3] 1: u32
+[3] 2: u32
+[3] 3: u32
+[1] enum variant_tag: 0 { 0: u64,  } 
+[2] 4: u64
