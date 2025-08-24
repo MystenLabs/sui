@@ -10,7 +10,7 @@ use crate::{
     parser::ast::{FunctionName, ModuleName},
     shared::{unique_map::UniqueMap, Name, NumericalAddress},
 };
-use move_binary_format::file_format as F;
+use move_binary_format::{file_format as F, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier as MoveCoreIdentifier,
@@ -42,7 +42,7 @@ pub struct NamedCompiledModule {
     pub address: NumericalAddress,
     pub address_name: Option<Name>,
     pub name: Symbol,
-    pub module: F::CompiledModule,
+    pub module: CompiledModule,
     pub source_map: SourceMap,
 }
 
@@ -164,7 +164,7 @@ fn bytecode_verifier_mismatch_bug(
     )])
 }
 
-fn verify_module(sm: &SourceMap, loc: Loc, cm: &F::CompiledModule) -> Diagnostics {
+fn verify_module(sm: &SourceMap, loc: Loc, cm: &CompiledModule) -> Diagnostics {
     match move_bytecode_verifier::verifier::verify_module_unmetered(cm) {
         Ok(_) => Diagnostics::new(),
         Err(e) => bytecode_verifier_mismatch_bug(

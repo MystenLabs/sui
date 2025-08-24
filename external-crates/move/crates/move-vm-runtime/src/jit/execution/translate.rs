@@ -28,9 +28,10 @@ use indexmap::IndexMap;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        self as FF, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
+        self as FF, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
+        SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
     },
+    CompiledModule,
 };
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};
 use std::collections::{BTreeMap, BTreeSet, HashMap};

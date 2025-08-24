@@ -6,12 +6,12 @@
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
+        AbilitySet, Bytecode, CodeOffset, DatatypeHandleIndex, DatatypeTyParameter,
         FunctionDefinitionIndex, FunctionHandleIndex, ModuleHandleIndex, SignatureToken,
         TableIndex, Visibility,
     },
     file_format_common::VERSION_5,
-    safe_unwrap, IndexKind,
+    safe_unwrap, CompiledModule, IndexKind,
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
 use std::collections::{BTreeMap, BTreeSet};

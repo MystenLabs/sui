@@ -4,9 +4,12 @@
 
 //! Utilities for property-based testing.
 
-use crate::file_format::{
-    AddressIdentifierIndex, CompiledModule, EnumDefinition, FunctionDefinition, FunctionHandle,
-    IdentifierIndex, ModuleHandle, ModuleHandleIndex, StructDefinition, TableIndex,
+use crate::{
+    file_format::{
+        AddressIdentifierIndex, EnumDefinition, FunctionDefinition, FunctionHandle,
+        IdentifierIndex, ModuleHandle, ModuleHandleIndex, StructDefinition, TableIndex,
+    },
+    CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use proptest::{

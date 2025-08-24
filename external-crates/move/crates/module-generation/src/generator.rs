@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{options::ModuleGeneratorOptions, padding::Pad, utils::random_string};
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_bytecode_verifier::verify_module_unmetered;
 use move_core_types::account_address::AccountAddress;
 use move_ir_to_bytecode::compiler::compile_module;

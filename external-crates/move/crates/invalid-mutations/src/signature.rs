@@ -2,8 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::file_format::{
-    CompiledModule, Signature, SignatureToken, StructFieldInformation, TypeSignature,
+use move_binary_format::{
+    file_format::{Signature, SignatureToken, StructFieldInformation, TypeSignature},
+    CompiledModule,
 };
 use proptest::sample::Index as PropIndex;
 

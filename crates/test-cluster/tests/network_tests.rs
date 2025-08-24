@@ -49,7 +49,7 @@ async fn test_package_override() {
             .to_vec();
 
         // Create an empty module that is pretending to be part of the sui framework.
-        let mut test_module = move_binary_format::file_format::empty_module();
+        let mut test_module = move_binary_format::compiled_module::empty_module();
         let address_idx = test_module.self_handle().address.0 as usize;
         test_module.address_identifiers[address_idx] = SUI_SYSTEM_ADDRESS;
 

@@ -8,7 +8,7 @@ use std::str::FromStr;
 
 use fastcrypto::encoding::Base58;
 use fastcrypto::traits::EncodeDecodeBase64;
-use move_binary_format::file_format;
+use move_binary_format::compiled_module::empty_module;
 
 use crate::crypto::bcs_signable_test::{Bar, Foo};
 use crate::crypto::{
@@ -357,7 +357,7 @@ fn test_move_object_size_for_gas_metering() {
 
 #[test]
 fn test_move_package_size_for_gas_metering() {
-    let module = file_format::empty_module();
+    let module = empty_module();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let package = Object::new_package(
         &[module],

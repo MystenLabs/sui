@@ -15,7 +15,7 @@ mod checked {
     use std::{collections::BTreeMap, sync::Arc};
 
     use anyhow::Result;
-    use move_binary_format::file_format::CompiledModule;
+    use move_binary_format::CompiledModule;
     use move_bytecode_verifier::verify_module_with_config_metered;
     use move_bytecode_verifier_meter::{Meter, Scope};
     use move_core_types::account_address::AccountAddress;

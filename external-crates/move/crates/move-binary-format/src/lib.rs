@@ -10,6 +10,7 @@ pub mod binary_config;
 pub mod check_bounds;
 pub mod compatibility;
 pub mod compatibility_mode;
+pub mod compiled_module;
 #[macro_use]
 pub mod errors;
 pub mod constant;
@@ -26,7 +27,7 @@ pub mod inclusion_mode;
 #[cfg(test)]
 mod unit_tests;
 
-pub use file_format::CompiledModule;
+pub use compiled_module::CompiledModule;
 
 /// Represents a kind of index -- useful for error messages.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

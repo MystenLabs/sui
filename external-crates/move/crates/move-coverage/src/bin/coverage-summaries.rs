@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_coverage::{
     coverage_map::{CoverageMap, TraceMap},
     format_csv_summary, format_human_summary, summary,

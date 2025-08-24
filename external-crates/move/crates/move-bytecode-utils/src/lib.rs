@@ -5,7 +5,10 @@
 pub mod layout;
 pub mod module_cache;
 
-use move_binary_format::file_format::{CompiledModule, DatatypeHandleIndex, SignatureToken};
+use move_binary_format::{
+    file_format::{DatatypeHandleIndex, SignatureToken},
+    CompiledModule,
+};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };

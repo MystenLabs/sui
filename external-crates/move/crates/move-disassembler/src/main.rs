@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_bytecode_source_map::{mapping::SourceMapping, utils::source_map_from_file};
 use move_command_line_common::files::{
     DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,

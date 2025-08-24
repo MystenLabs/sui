@@ -11,9 +11,11 @@ use crate::{
     },
 };
 use itertools::Itertools;
-use move_binary_format::file_format::{
-    Bytecode as MoveBytecode, CodeOffset, CompiledModule, FieldHandleIndex, JumpTableInner,
-    SignatureIndex,
+use move_binary_format::{
+    file_format::{
+        Bytecode as MoveBytecode, CodeOffset, FieldHandleIndex, JumpTableInner, SignatureIndex,
+    },
+    CompiledModule,
 };
 use move_core_types::{
     language_storage::{self, CORE_CODE_ADDRESS},
