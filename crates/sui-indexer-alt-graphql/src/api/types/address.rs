@@ -9,13 +9,14 @@ use futures::future::try_join_all;
 use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::DynamicFieldType};
 
 use crate::{
-    api::scalars::{owner_kind::OwnerKind, sui_address::SuiAddress},
-    error::{bad_user_input, RpcError},
+    api::scalars::{owner_kind::OwnerKind, sui_address::SuiAddress, type_filter::TypeInput},
+    error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
+    balance::{self, Balance},
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
@@ -31,6 +32,27 @@ use super::{
 #[graphql(
     name = "IAddressable",
     field(name = "address", ty = "SuiAddress"),
+    field(
+        name = "balance",
+        arg(name = "coin_type", ty = "TypeInput"),
+        ty = "Result<Option<Balance>, RpcError<balance::Error>>",
+        desc = "Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.\n\nIf the address does not own any coins of that type, a balance of zero is returned.",
+    ),
+    field(
+        name = "balances",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<balance::Cursor>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<balance::Cursor>"),
+        ty = "Result<Option<Connection<String, Balance>>, RpcError<balance::Error>>",
+        desc = "Total balance across coins owned by this address, grouped by coin type.",
+    ),
+    field(
+        name = "multi_get_balances",
+        arg(name = "keys", ty = "Vec<TypeInput>"),
+        ty = "Result<Vec<Balance>, RpcError<balance::Error>>",
+        desc = "Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.\n\nIf the address does not own any coins of a given type, a balance of zero is returned for that type.",
+    ),
     field(
         name = "objects",
         arg(name = "first", ty = "Option<u64>"),
@@ -65,6 +87,31 @@ impl Address {
         AddressableImpl::from(self).address()
     }
 
+    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    ///
+    /// If the address does not own any coins of that type, a balance of zero is returned.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(self).balance(ctx, coin_type).await
+    }
+
+    /// Total balance across coins owned by this address, grouped by coin type.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+        AddressableImpl::from(self)
+            .balances(ctx, first, after, last, before)
+            .await
+    }
+
     /// Access a dynamic field on an object using its type and BCS-encoded name.
     pub(crate) async fn dynamic_field(
         &self,
@@ -92,10 +139,6 @@ impl Address {
         last: Option<u64>,
         before: Option<object::CLive>,
     ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
-        if self.scope.root_version().is_some() {
-            return Err(bad_user_input(object::Error::RootVersionOwnership));
-        }
-
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Address", "dynamicFields");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -162,6 +205,19 @@ impl Address {
         .await
     }
 
+    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    ///
+    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    pub(crate) async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(self)
+            .multi_get_balances(ctx, keys)
+            .await
+    }
+
     /// Objects owned by this address, optionally filtered by type.
     pub(crate) async fn objects(
         &self,
@@ -191,6 +247,42 @@ impl AddressableImpl<'_> {
         self.0.address.into()
     }
 
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
+        Balance::fetch_one(ctx, &self.0.scope, self.0.address, coin_type.into())
+            .await
+            .map(Some)
+    }
+
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IAddressable", "balances");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Balance::paginate(ctx, self.0.scope.clone(), self.0.address, page)
+            .await
+            .map(Some)
+    }
+
+    pub(crate) async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+        let coin_types = keys.into_iter().map(|k| k.into()).collect();
+        Balance::fetch_many(ctx, &self.0.scope, self.0.address, coin_types).await
+    }
+
     pub(crate) async fn objects(
         &self,
         ctx: &Context<'_>,
@@ -200,10 +292,6 @@ impl AddressableImpl<'_> {
         before: Option<object::CLive>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
-        if self.0.scope.root_version().is_some() {
-            return Err(bad_user_input(object::Error::RootVersionOwnership));
-        }
-
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IAddressable", "objects");
         let page = Page::from_params(limits, first, after, last, before)?;

@@ -54,48 +54,42 @@ module T::test {
     # All objects including coins and bags
     allObjects: objects {
       pageInfo { hasNextPage }
-      nodes {
-        address
-        contents {
-          type { repr }
-          json
-        }
-      }
+      nodes { ...O }
     }
 
     # All coins (no marker filter)
     allCoins: objects(filter: { type: "0x2::coin::Coin" }) {
       pageInfo { hasNextPage }
-      nodes {
-        address
-        contents {
-          type { repr }
-          json
-        }
-      }
+      nodes { ...O }
     }
 
 
     # Only TEST coin objects
     testCoins: objects(filter: { type: "0x2::coin::Coin<@{T}::test::TEST>" }) {
       pageInfo { hasNextPage }
-      nodes {
-        address
-        contents {
-          json
-        }
-      }
+      nodes { ...O }
     }
 
     # Only SUI coin objects
     suiCoins: objects(filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }) {
       pageInfo { hasNextPage }
-      nodes {
-        address
-        contents {
-          json
-        }
-      }
+      nodes { ...O }
+    }
+
+    # Balance queries
+    testBalance: balance(coinType: "@{T}::test::TEST") { ...B }
+    suiBalance: balance(coinType: "0x2::sui::SUI") { ...B }
+    emptyBalance: balance(coinType: "0x42::empty::COIN") { ...B }
+
+    multiGetBalances(keys: [
+      "@{T}::test::TEST",
+      "0x2::sui::SUI",
+      "0x42::empty::COIN",
+    ]) { ...B }
+
+    balances {
+      pageInfo { hasNextPage }
+      nodes { ...B }
     }
   }
 
@@ -104,37 +98,50 @@ module T::test {
     # All objects for B
     allObjects: objects {
       pageInfo { hasNextPage }
-      nodes {
-        address
-        contents {
-          type { repr }
-          json
-        }
-      }
+      nodes { ...O }
     }
 
     # Only TEST coin objects for B
     testCoins: objects(filter: { type: "0x2::coin::Coin<@{T}::test::TEST>" }) {
       pageInfo { hasNextPage }
-      nodes {
-        address
-        contents {
-          json
-        }
-      }
+      nodes { ...O }
     }
 
     # Only SUI coin objects for B
     suiCoins: objects(filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }) {
       pageInfo { hasNextPage }
-      nodes {
-        address
-        contents {
-          json
-        }
-      }
+      nodes { ...O }
+    }
+
+    # Balance queries
+    testBalance: balance(coinType: "@{T}::test::TEST") { ...B }
+    suiBalance: balance(coinType: "0x2::sui::SUI") { ...B }
+    emptyBalance: balance(coinType: "0x42::empty::COIN") { ...B }
+
+    multiGetBalances(keys: [
+      "@{T}::test::TEST",
+      "0x2::sui::SUI",
+      "0x42::empty::COIN",
+    ]) { ...B }
+
+    balances {
+      pageInfo { hasNextPage }
+      nodes { ...B }
     }
   }
+}
+
+fragment O on MoveObject {
+  address
+  contents {
+    type { repr }
+    json
+  }
+}
+
+fragment B on Balance {
+  coinType { repr }
+  totalBalance
 }
 
 //# run-graphql
@@ -151,6 +158,14 @@ module T::test {
               type { repr }
               json
             }
+          }
+        }
+
+        balances {
+          pageInfo { hasNextPage }
+          nodes {
+            coinType { repr }
+            totalBalance
           }
         }
       }

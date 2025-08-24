@@ -31,6 +31,7 @@ use crate::{
         base64::Base64,
         cursor::{BcsCursor, JsonCursor},
         sui_address::SuiAddress,
+        type_filter::TypeInput,
         uint53::UInt53,
     },
     error::{bad_user_input, RpcError},
@@ -40,6 +41,7 @@ use crate::{
 
 use super::{
     address::AddressableImpl,
+    balance::{self, Balance},
     linkage::Linkage,
     move_object::MoveObject,
     object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
@@ -117,6 +119,63 @@ impl MovePackage {
         AddressableImpl::from(&self.super_.super_).address()
     }
 
+    /// The version of this package that this content comes from.
+    pub(crate) async fn version(&self) -> UInt53 {
+        ObjectImpl::from(&self.super_).version()
+    }
+
+    /// 32-byte hash that identifies the package's contents, encoded in Base58.
+    pub(crate) async fn digest(&self) -> String {
+        ObjectImpl::from(&self.super_).digest()
+    }
+
+    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    ///
+    /// If the address does not own any coins of that type, a balance of zero is returned.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_.super_)
+            .balance(ctx, coin_type)
+            .await
+    }
+
+    /// Total balance across coins owned by this address, grouped by coin type.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_.super_)
+            .balances(ctx, first, after, last, before)
+            .await
+    }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
+        Ok(Some(bytes.into()))
+    }
+
+    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    ///
+    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    pub(crate) async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_.super_)
+            .multi_get_balances(ctx, keys)
+            .await
+    }
+
     /// Objects owned by this package, optionally filtered by type.
     pub(crate) async fn objects(
         &self,
@@ -130,23 +189,6 @@ impl MovePackage {
         AddressableImpl::from(&self.super_.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
-    }
-
-    /// The version of this package that this content comes from.
-    pub(crate) async fn version(&self) -> UInt53 {
-        ObjectImpl::from(&self.super_).version()
-    }
-
-    /// 32-byte hash that identifies the package's contents, encoded in Base58.
-    pub(crate) async fn digest(&self) -> String {
-        ObjectImpl::from(&self.super_).digest()
-    }
-
-    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
-    /// name, followed by module bytes), in alphabetic order by module name.
-    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
-        Ok(Some(bytes.into()))
     }
 
     /// Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.

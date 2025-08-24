@@ -9,10 +9,13 @@ use anyhow::{anyhow, Context};
 use prometheus::Registry;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, owner::OwnerKind, AvailableRangeRequest,
-    AvailableRangeResponse, End, ListObjectsByTypeRequest, ListOwnedObjectsRequest, Object, Owner,
-    CHECKPOINT_METADATA,
+    AvailableRangeResponse, Balance, BatchGetBalancesRequest, End, ListObjectsByTypeRequest,
+    ListOwnedObjectsRequest, Object, Owner, CHECKPOINT_METADATA,
 };
-use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::{
+    base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber},
+    TypeTag,
+};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::instrument;
@@ -130,6 +133,110 @@ impl ConsistentReader {
             AvailableRangeRequest {},
         )
         .await
+    }
+
+    /// Batch get balances for multiple (owner, coin_type) pairs at a given checkpoint.
+    #[instrument(skip(self), level = "debug")]
+    pub async fn batch_get_balances(
+        &self,
+        checkpoint: u64,
+        address: String,
+        coin_types: Vec<String>,
+    ) -> Result<Vec<(TypeTag, u64)>, Error> {
+        let response = self
+            .request(
+                "batch_get_balances",
+                Some(checkpoint),
+                |mut client, request| async move { client.batch_get_balances(request).await },
+                BatchGetBalancesRequest {
+                    requests: coin_types
+                        .into_iter()
+                        .map(|coin_type| proto::GetBalanceRequest {
+                            owner: Some(address.clone()),
+                            coin_type: Some(coin_type),
+                        })
+                        .collect(),
+                },
+            )
+            .await?;
+
+        let mut results = vec![];
+        for balance in response.balances {
+            let edge: Edge<(TypeTag, u64)> = balance.try_into()?;
+            results.push(edge.value);
+        }
+
+        Ok(results)
+    }
+
+    /// Get the balance for a single (owner, coin_type) pair at a given checkpoint.
+    #[instrument(skip(self), level = "debug")]
+    pub async fn get_balance(
+        &self,
+        checkpoint: u64,
+        address: String,
+        coin_type: String,
+    ) -> Result<(TypeTag, u64), Error> {
+        let response = self
+            .request(
+                "get_balance",
+                Some(checkpoint),
+                |mut client, request| async move { client.get_balance(request).await },
+                proto::GetBalanceRequest {
+                    owner: Some(address),
+                    coin_type: Some(coin_type),
+                },
+            )
+            .await?;
+
+        let edge: Edge<(TypeTag, u64)> = response.try_into()?;
+        Ok(edge.value)
+    }
+
+    /// Paginate coin balances for `address`, at checkpoint `checkpoint`.
+    #[instrument(skip(self), level = "debug")]
+    pub async fn list_balances(
+        &self,
+        checkpoint: u64,
+        address: String,
+        page_size: Option<u32>,
+        after_token: Option<Vec<u8>>,
+        before_token: Option<Vec<u8>>,
+        is_from_front: bool,
+    ) -> Result<Page<(TypeTag, u64)>, Error> {
+        let response = self
+            .request(
+                "list_balances",
+                Some(checkpoint),
+                |mut client, request| async move { client.list_balances(request).await },
+                proto::ListBalancesRequest {
+                    owner: Some(address),
+                    page_size,
+                    after_token: after_token.map(Into::into),
+                    before_token: before_token.map(Into::into),
+                    end: if is_from_front {
+                        Some(End::Front.into())
+                    } else {
+                        Some(End::Back.into())
+                    },
+                },
+            )
+            .await?;
+
+        let has_next_page = response.has_next_page();
+        let has_previous_page = response.has_previous_page();
+
+        let results = response
+            .balances
+            .into_iter()
+            .map(TryFrom::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Page {
+            results,
+            has_next_page,
+            has_previous_page,
+        })
     }
 
     /// Paginate live objects with type filter `object_type`, at checkpoint `checkpoint`.
@@ -296,6 +403,27 @@ impl ConsistentReader {
         }
 
         response
+    }
+}
+
+impl TryFrom<Balance> for Edge<(TypeTag, u64)> {
+    type Error = Error;
+
+    fn try_from(proto: Balance) -> Result<Self, Error> {
+        let coin_type: TypeTag = proto
+            .coin_type
+            .context("coin type missing")?
+            .parse()
+            .context("invalid coin type")?;
+
+        let balance: u64 = proto.balance.unwrap_or(0);
+
+        let token: Vec<u8> = proto.page_token.unwrap_or_default().into();
+
+        Ok(Edge {
+            token,
+            value: (coin_type, balance),
+        })
     }
 }
 
