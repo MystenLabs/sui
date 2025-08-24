@@ -78,6 +78,10 @@ type Address implements IAddressable {
 	"""
 	address: SuiAddress!
 	"""
+	Attempts to fetch the object at this address.
+	"""
+	asObject: Object
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
