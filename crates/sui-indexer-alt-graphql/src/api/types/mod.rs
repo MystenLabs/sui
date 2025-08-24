@@ -21,6 +21,7 @@ pub(crate) mod move_value;
 pub(crate) mod object;
 pub(crate) mod object_change;
 pub(crate) mod object_filter;
+pub(crate) mod owner;
 pub(crate) mod protocol_configs;
 pub(crate) mod safe_mode;
 pub(crate) mod service_config;
