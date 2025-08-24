@@ -30,12 +30,11 @@ use crate::{
 };
 
 use super::{
-    address::AddressableImpl,
     balance::{self, Balance},
     move_object::MoveObject,
     move_type::MoveType,
     move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, ObjectImpl, ObjectKey, VersionFilter},
+    object::{self, CLive, CVersion, Object, ObjectKey, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     transaction::Transaction,
 };
@@ -97,18 +96,18 @@ pub(crate) enum DynamicFieldValue {
 #[Object]
 impl DynamicField {
     /// The DynamicField's ID.
-    pub(crate) async fn address(&self) -> SuiAddress {
-        AddressableImpl::from(&self.super_.super_.super_).address()
+    pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
+        self.super_.address(ctx).await
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self) -> UInt53 {
-        ObjectImpl::from(&self.super_.super_).version()
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<UInt53, RpcError> {
+        self.super_.version(ctx).await
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self) -> String {
-        ObjectImpl::from(&self.super_.super_).digest()
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.digest(ctx).await
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -119,9 +118,7 @@ impl DynamicField {
         ctx: &Context<'_>,
         coin_type: TypeInput,
     ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_.super_)
-            .balance(ctx, coin_type)
-            .await
+        self.super_.balance(ctx, coin_type).await
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -133,9 +130,7 @@ impl DynamicField {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_.super_)
-            .balances(ctx, first, after, last, before)
-            .await
+        self.super_.balances(ctx, first, after, last, before).await
     }
 
     /// The structured representation of the object's contents.
@@ -218,9 +213,7 @@ impl DynamicField {
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
     ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_.super_)
-            .multi_get_balances(ctx, keys)
-            .await
+        self.super_.multi_get_balances(ctx, keys).await
     }
 
     /// The dynamic field's name, as a Move value.
@@ -243,7 +236,7 @@ impl DynamicField {
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Result<Option<Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_.super_)
+        self.super_
             .object_at(ctx, version, root_version, checkpoint)
             .await
     }
@@ -253,7 +246,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_.super_).object_bcs(ctx).await
+        self.super_.object_bcs(ctx).await
     }
 
     /// Paginate all versions of this object after this one.
@@ -266,7 +259,7 @@ impl DynamicField {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_.super_)
+        self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
     }
@@ -281,7 +274,7 @@ impl DynamicField {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_.super_)
+        self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
     }
@@ -296,7 +289,7 @@ impl DynamicField {
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
-        AddressableImpl::from(&self.super_.super_.super_)
+        self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -306,9 +299,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Transaction>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_.super_)
-            .previous_transaction(ctx)
-            .await
+        self.super_.previous_transaction(ctx).await
     }
 
     /// The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
