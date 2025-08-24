@@ -33,7 +33,7 @@ pub(crate) struct MoveObject {
     pub(crate) super_: Object,
 
     /// Move object specific data, lazily loaded from the super object.
-    native: OnceCell<Option<Arc<NativeMoveObject>>>,
+    native: Arc<OnceCell<Option<NativeMoveObject>>>,
 }
 
 /// Interface implemented by types that represent a Move object on-chain (A Move value whose type has `key`).
@@ -144,7 +144,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
@@ -274,11 +274,11 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
-        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MoveObject")?;
+        let bytes = bcs::to_bytes(native).context("Failed to serialize MoveObject")?;
         Ok(Some(Base64(bytes)))
     }
 
@@ -365,7 +365,7 @@ impl MoveObject {
     pub(crate) fn from_super(super_: Object) -> Self {
         Self {
             super_,
-            native: OnceCell::new(),
+            native: Arc::new(OnceCell::new()),
         }
     }
 
@@ -375,7 +375,7 @@ impl MoveObject {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let Some(super_contents) = object.contents(ctx).await? else {
+        let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
@@ -385,7 +385,7 @@ impl MoveObject {
 
         Ok(Some(Self {
             super_: object.clone(),
-            native: OnceCell::from(Some(Arc::new(native.clone()))),
+            native: Arc::new(OnceCell::from(Some(native.clone()))),
         }))
     }
 
@@ -393,10 +393,10 @@ impl MoveObject {
     pub(crate) async fn native(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<Arc<NativeMoveObject>>, RpcError<object::Error>> {
+    ) -> Result<&Option<NativeMoveObject>, RpcError<object::Error>> {
         self.native
             .get_or_try_init(async || {
-                let Some(contents) = self.super_.contents(ctx).await? else {
+                let Some(contents) = self.super_.contents(ctx).await?.as_ref() else {
                     return Ok(None);
                 };
 
@@ -405,7 +405,7 @@ impl MoveObject {
                     .try_as_move()
                     .context("Object is not a MoveObject")?;
 
-                Ok(Some(Arc::new(native.clone())))
+                Ok(Some(native.clone()))
             })
             .await
     }

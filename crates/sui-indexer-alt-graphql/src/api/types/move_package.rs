@@ -372,7 +372,7 @@ impl MovePackage {
     pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
         let package = native.data.try_as_package()?.clone();
         let scope = scope.with_root_version(package.version().value());
-        let super_ = Object::from_contents(scope, Arc::new(native));
+        let super_ = Object::from_contents(scope, native);
         Some(Self {
             super_,
             native: package,
@@ -385,7 +385,7 @@ impl MovePackage {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let Some(super_contents) = object.contents(ctx).await? else {
+        let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
@@ -509,7 +509,7 @@ impl MovePackage {
             return Ok(None);
         };
 
-        let super_ = Object::from_contents(scope, Arc::new(native));
+        let super_ = Object::from_contents(scope, native);
         Ok(Some(Self {
             super_,
             native: package,
