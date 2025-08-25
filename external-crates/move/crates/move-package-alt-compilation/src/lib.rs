@@ -65,6 +65,9 @@ pub mod layout;
 /// including warning levels, error promotion, and lint rule customization.
 pub mod lint_flag;
 
+/// Migration related functionality.
+pub mod migrate;
+
 /// Move model building and analysis integration.
 pub mod model_builder;
 
