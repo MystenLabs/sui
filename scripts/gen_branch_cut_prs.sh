@@ -5,7 +5,7 @@
 # This script creates two PRs:
 # 1. Generate framework bytecode snapshot PR
 #   cargo run --bin sui-framework-snapshot
-# 2. Generate a version bump
+# 2. Generate a version bump PR
 
 set -Eeuo pipefail
 
@@ -55,6 +55,7 @@ PR_URL=$(gh pr create \
   --base main \
   --head "$BRANCH" \
   --title "Sui v${SUI_VERSION} Framework Bytecode snapshot" \
+  --reviewer "MystenLabs/mysten-pe" \
   --body "$BODY" \
   2>&1 | grep -Eo 'https://github.com/[^ ]+')
 
@@ -101,6 +102,7 @@ PR_URL=$(gh pr create \
   --base main \
   --head "$BRANCH" \
   --title "Sui v${NEW_SUI_VERSION} Version Bump" \
+  --reviewer "MystenLabs/mysten-pe" \
   --body "$BODY" \
   2>&1 | grep -Eo 'https://github.com/[^ ]+')
 
