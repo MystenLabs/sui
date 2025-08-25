@@ -20,6 +20,7 @@ use super::{
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
+    name_service::address_to_name,
     object::{self, Object, ObjectKey},
     object_filter::{ObjectFilter, Validator as OFValidator},
 };
@@ -46,6 +47,11 @@ use super::{
         arg(name = "before", ty = "Option<balance::Cursor>"),
         ty = "Result<Option<Connection<String, Balance>>, RpcError<balance::Error>>",
         desc = "Total balance across coins owned by this address, grouped by coin type.",
+    ),
+    field(
+        name = "default_suins_name",
+        ty = "Result<Option<String>, RpcError<object::Error>>",
+        desc = "The domain explicitly configured as the default SuiNS name for this address."
     ),
     field(
         name = "multi_get_balances",
@@ -130,6 +136,14 @@ impl Address {
         Balance::paginate(ctx, self.scope.clone(), self.address, page)
             .await
             .map(Some)
+    }
+
+    /// The domain explicitly configured as the default SuiNS name for this address.
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<String>, RpcError<object::Error>> {
+        address_to_name(ctx, &self.scope, self.address).await
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.

@@ -233,6 +233,11 @@ impl Watermarks {
         DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive)
     }
 
+    /// Timestamp corresponding to high watermark, as milliseconds since Unix epoch.
+    pub(crate) fn timestamp_hi_ms(&self) -> u64 {
+        self.timestamp_ms_hi_inclusive as u64
+    }
+
     fn merge(&mut self, row: WatermarkRow) {
         self.global_hi.epoch = self.global_hi.epoch.min(row.epoch_hi_inclusive);
         self.global_hi.checkpoint = self.global_hi.checkpoint.min(row.checkpoint_hi_inclusive);
