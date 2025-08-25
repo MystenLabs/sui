@@ -13,6 +13,7 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, TypeTag},
 };
+use move_vm_stack::Stack;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::{fmt::Display, sync::mpsc::Receiver};
@@ -343,6 +344,7 @@ impl MoveTraceBuilder {
         locals_types: Vec<TypeTagWithRefs>,
         is_native: bool,
         gas_left: u64,
+        stack: &Stack
     ) {
         let frame = Box::new(Frame {
             frame_id,
@@ -356,16 +358,16 @@ impl MoveTraceBuilder {
             locals_types,
             is_native,
         });
-        self.push_event(TraceEvent::OpenFrame { frame, gas_left });
+        self.push_event_runtime(TraceEvent::OpenFrame { frame, gas_left }, Some(stack));
     }
 
     /// Record a `CloseFrame` event in the trace.
-    pub fn close_frame(&mut self, frame_id: TraceIndex, return_: Vec<TraceValue>, gas_left: u64) {
-        self.push_event(TraceEvent::CloseFrame {
+    pub fn close_frame(&mut self, frame_id: TraceIndex, return_: Vec<TraceValue>, gas_left: u64, stack: &Stack) {
+        self.push_event_runtime(TraceEvent::CloseFrame {
             frame_id,
             return_,
             gas_left,
-        });
+        }, Some(stack));
     }
 
     /// Record an `Instruction` event in the trace along with the effects of the instruction.
@@ -376,28 +378,34 @@ impl MoveTraceBuilder {
         effects: Vec<Effect>,
         gas_left: u64,
         pc: u16,
+        stack: &Stack
     ) {
-        self.push_event(TraceEvent::Instruction {
+        self.push_event_runtime(TraceEvent::Instruction {
             type_parameters,
             pc,
             gas_left,
             instruction: Box::new(format!("{:?}", instruction_opcode(instruction))),
-        });
+        }, Some(stack));
         for effect in effects {
-            self.push_event(TraceEvent::Effect(Box::new(effect)));
+            self.push_event_runtime(TraceEvent::Effect(Box::new(effect)), Some(stack));
         }
     }
 
     /// Push an `Effect` event to the trace.
-    pub fn effect(&mut self, effect: Effect) {
-        self.push_event(TraceEvent::Effect(Box::new(effect)));
+    pub fn effect(&mut self, effect: Effect, stack: &Stack) {
+        self.push_event_runtime(TraceEvent::Effect(Box::new(effect)), Some(stack));
     }
 
     // All events pushed to the trace are first pushed, and then the tracer is notified of the
     // event.
     pub fn push_event(&mut self, event: TraceEvent) {
+        self.push_event_runtime(event, None);
+    }
+
+    /// Push an `Event` with `Stack` during runtime
+    pub fn push_event_runtime(&mut self, event: TraceEvent, stack: Option<&Stack>) {
         self.trace.push_event(event.clone());
-        self.tracer.notify(&event, Writer(&mut self.trace));
+        self.tracer.notify(&event, Writer(&mut self.trace), stack);
     }
 }
 
@@ -555,6 +563,7 @@ fn emit_trace() {
 fn large_numeric_values_in_trace() {
     use move_core_types::u256;
     let mut builder = MoveTraceBuilder::new();
+    let stack = Stack::new();
     let effects = vec![
         Effect::Push(TraceValue::RuntimeValue {
             value: SerializableMoveValue::U256(u256::U256::max_value()),
