@@ -20,6 +20,7 @@ use sui_types::{
     transaction::{Transaction, TransactionData},
     Identifier, TypeTag,
 };
+use tokio_util::sync::CancellationToken;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -165,6 +166,8 @@ impl TypeLimitCluster {
                 },
                 ..OffchainClusterConfig::default()
             },
+            &prometheus::Registry::new(),
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to set-up cluster");

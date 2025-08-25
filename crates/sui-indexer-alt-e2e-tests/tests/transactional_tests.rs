@@ -24,6 +24,7 @@ use sui_transactional_test_runner::{
     test_adapter::{OffChainConfig, SuiTestAdapter, PRE_COMPILED},
 };
 use tokio::join;
+use tokio_util::sync::CancellationToken;
 
 struct OffchainReader {
     cluster: Arc<OffchainCluster>,
@@ -165,6 +166,8 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
                 indexer_config,
                 ..OffchainClusterConfig::default()
             },
+            &prometheus::Registry::new(),
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create off-chain cluster"),

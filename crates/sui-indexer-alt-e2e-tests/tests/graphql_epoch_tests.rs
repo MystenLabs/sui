@@ -17,6 +17,7 @@ use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV
 use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointDataBuilder};
+use tokio_util::sync::CancellationToken;
 
 const SAFE_MODE_QUERY: &str = "query {
         epoch(epochId: 0) {
@@ -204,6 +205,8 @@ async fn test_graphql<T: DeserializeOwned>(
             }),
             ..OffchainClusterConfig::default()
         },
+        &prometheus::Registry::new(),
+        CancellationToken::new(),
     )
     .await?;
 

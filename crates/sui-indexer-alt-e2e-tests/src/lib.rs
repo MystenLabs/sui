@@ -143,7 +143,13 @@ impl FullCluster {
     /// Creates a cluster with a fresh executor where the off-chain services are set up with a
     /// default configuration.
     pub async fn new() -> anyhow::Result<Self> {
-        Self::new_with_configs(Simulacrum::new(), OffchainClusterConfig::default()).await
+        Self::new_with_configs(
+            Simulacrum::new(),
+            OffchainClusterConfig::default(),
+            &prometheus::Registry::new(),
+            CancellationToken::new(),
+        )
+        .await
     }
 
     /// Creates a new cluster executing transactions using `executor`. The indexer is configured
@@ -152,11 +158,13 @@ impl FullCluster {
     pub async fn new_with_configs(
         mut executor: Simulacrum,
         offchain_cluster_config: OffchainClusterConfig,
+        registry: &prometheus::Registry,
+        cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
         let (client_args, temp_dir) = local_ingestion_client_args();
         executor.set_data_ingestion_path(temp_dir.path().to_owned());
 
-        let offchain = OffchainCluster::new(client_args, offchain_cluster_config)
+        let offchain = OffchainCluster::new(client_args, offchain_cluster_config, registry, cancel)
             .await
             .context("Failed to create off-chain cluster")?;
 
@@ -310,6 +318,8 @@ impl OffchainCluster {
             graphql_config,
             bootstrap_genesis,
         }: OffchainClusterConfig,
+        registry: &prometheus::Registry,
+        cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
         let consistent_port = get_available_port();
         let consistent_listen_address =
@@ -346,8 +356,6 @@ impl OffchainCluster {
             .await
             .context("Failed to connect to database")?;
 
-        let registry = &prometheus::Registry::new();
-        let cancel = CancellationToken::new();
         let indexer = setup_indexer(
             database_url.clone(),
             DbArgs::default(),
