@@ -14,9 +14,6 @@ pub use pin::PinnedDependencyInfo;
 mod fetch;
 pub use fetch::{FetchError, FetchedDependency};
 
-mod dependency_set;
-pub use dependency_set::DependencySet;
-
 use crate::{
     errors::FileHandle,
     schema::{EnvironmentName, PackageName, PublishAddresses},
