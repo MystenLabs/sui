@@ -16,7 +16,7 @@ In previous releases, Sui used a special `Signable` trait that attached the Rust
 The intent signing standard provides a compact domain separator to the data being signed for both user signatures and authority signatures. It has several benefits, including:
 
 - The intent scope is replaced by a u8 representation instead of a Rust struct tag name string.
-- In addition to the intent scope, other important domain separators can be committed as well (such as intent version and app id).
+- In addition to the intent scope, other important domain separators can be committed as well (such as intent version and app ID).
 - The data itself no longer needs to implement the `Signable` trait, it just needs to implement `Serialize`.
 - All signatures can adopt the same intent message structure, including both user signatures (only to commit to `TransactionData`) and authority signature (commits to all internal intent scopes such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`).
 

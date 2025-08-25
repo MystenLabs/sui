@@ -18,6 +18,13 @@ An immutable object is an object that can't be mutated, transferred, or deleted.
 
 Go to [Immutable Objects](./object-ownership/immutable.mdx).
 
+
+## Party
+
+A party object is an object that is transferred using the `0x2::transfer::party_transfer` or `0x2::transfer::public_party_transfer` function and is accessible by the `Party` to which it is transferred. Party objects can be singly owned, but unlike address-owned objects, they are versioned by consensus.
+
+Go to [Party Objects](./object-ownership/party.mdx).
+
 ## Shared
 
 A shared object is an object that is shared using the `0x2::transfer::share_object` function and is accessible to everyone. Unlike owned objects, anyone can access shared ones on the network.

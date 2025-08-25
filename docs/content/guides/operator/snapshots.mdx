@@ -1,12 +1,12 @@
 ---
 title: Database Snapshots
-description: Database snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis.
+description: Database snapshots of the Sui network enable full node operators a way to bootstrap a full node without having to execute all the transactions that occurred after genesis.
 keywords: [ node snapshots, database snapshots, full node snapshots, formal snapshots, rocksdb, rocksdb snapshot, restoring a node, restoring a full node, restoring from snapshot, managed snapshots, enabling snapshots ]
 ---
 
-Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for Full node operators.
+Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for full node operators.
 
-Snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis. You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you're more easily able to recover quickly from catastrophic failures in your system or hardware.
+Snapshots of the Sui network enable full node operators a way to bootstrap a full node without having to execute all the transactions that occurred after genesis. You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your full node. With snapshots stored in the cloud, you're more easily able to recover quickly from catastrophic failures in your system or hardware.
 
 To maintain a healthy Sui network, Sui encourages the Sui community to bring up additional snapshots to ensure stronger data availability across the network.
 
@@ -23,8 +23,8 @@ Formal snapshots are not suitable for use if you are running an RPC node that do
 
 :::
 
-You can configure a Full node snapshot to generate a state snapshot at the end of each epoch.
-A single Full node can generate RocksDB snapshots, Formal snapshots, or both.
+You can configure a full node snapshot to generate a state snapshot at the end of each epoch.
+A single full node can generate RocksDB snapshots, Formal snapshots, or both.
 
 ## Formal snapshots
 
@@ -34,9 +34,9 @@ Formal snapshots provide a mechanism for a node to restore to a canonical state 
 1. **Agnosticism:** Formal snapshots are by nature agnostic to the underlying database choice or implementation of the protocol. As the live object set is protocol defined, so is the formal snapshot.
 1. **Verifiability:** Formal snapshots have first-class support in the core Sui protocol. As such, they must be trustless/verifiable by the node operator upon download. To support this, the protocol signs a commitment to the live object state at end of epoch, which formal snapshots are checked against at restore time. If this verification fails, the node state is moved back to the state before the snapshot restore attempt.
 
-Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more efficiently.
+Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more efficiently.
 
-## Restoring a Full node using snapshots
+## Restoring a full node using snapshots
 
 ### Restoring using RocksDB snapshots
 
@@ -45,7 +45,7 @@ To restore from a RocksDB snapshot, follow these steps:
 1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
 1. Place the snapshot into the directory that the `db-path` value points to in your fullnode.yaml file. For example, if the `db-path` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
 
-   You can use the aws cli (provided you have credentials to associate with the download):
+   You can use the AWS CLI (provided you have credentials to associate with the download):
    `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive --request-payer requester`.
    
    An alternative is to use `sui-tool` to copy the files. The following example command is for reading from a snapshot bucket that you host:
@@ -77,7 +77,7 @@ To restore from a RocksDB snapshot, follow these steps:
 
 :::info
 
-When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. When restoring a Validator node, you can shorten the database destination to `/opt/sui/db/authorities_db/live`. Check the `db_path` field of your Full node or Validator configs to confirm the path location.
+When you restore a full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. When restoring a validator node, you can shorten the database destination to `/opt/sui/db/authorities_db/live`. Check the `db_path` field of your full node or Validator configs to confirm the path location.
 
 :::
 
@@ -136,9 +136,9 @@ Mainnet: `gs://mysten-mainnet-snapshots/`,  `gs://mysten-mainnet-formal/`
 
 ## Enabling snapshots
 
-Full nodes do not take snapshots by default. To enable this feature you must apply specific configs to your Full node.
+Full nodes do not take snapshots by default. To enable this feature you must apply specific configs to your full node.
 
-Follow these steps to change the configs for a Full node:
+Follow these steps to change the configs for a full node:
 
 1. Stop your node, if it's running.
 2. Open your `fullnode.yaml` config file and apply config updates as the following sections show.

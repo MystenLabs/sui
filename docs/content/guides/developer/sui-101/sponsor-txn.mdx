@@ -16,7 +16,7 @@ In a sponsored transaction there are three roles: the user, the gas station, and
 - The gas station is the entity that fulfills the sponsorship request for the user's transaction by providing the gas payment they own.
 - The sponsor is entity that funds the gas station for its operations.
 
-It's not uncommon for the gas station and the sponsor to be the same entity. For example, a web3 gaming studio could run its own gas station to sponsor users with real free-to-play gaming experiences at its user acquisition stage. Because it's not always trivial to maintain a gas station for teams of any size, that gaming studio could also leverage third-party gas stations to sponsor transactions they want to promote. 
+It's not uncommon for the gas station and the sponsor to be the same entity. For example, a Web3 gaming studio could run its own gas station to sponsor users with real free-to-play gaming experiences at its user acquisition stage. Because it's not always trivial to maintain a gas station for teams of any size, that gaming studio could also leverage third-party gas stations to sponsor transactions they want to promote. 
 
 The remainder of this guide assumes the sponsor uses their own gas station. 
 
@@ -117,10 +117,10 @@ Practically speaking, client equivocation is rare, mostly caused by buggy client
 
 Although this risk might seem trivial, it is helpful to be aware of it. Your gas station should actively monitor user behavior and alert on anything abnormal. Whether you're a user taking advantage of sponsored transactions or a developer integrating with a gas station, consider your reputation to minimize the risk of client equivocation.
 
-Both the user and the sponsor need to sign over the entire `TransactionData`, including `GasData` because otherwise a third party (such as a malicious Full node) could snip the partially signed data and cause client equivocation and locking of owned objects. 
+Both the user and the sponsor need to sign over the entire `TransactionData`, including `GasData` because otherwise a third party (such as a malicious full node) could snip the partially signed data and cause client equivocation and locking of owned objects. 
 
 ### Censorship risk
 
-If you chooses to submit the dual-signed transaction to the sponsor or gas station rather than a Full node, the transaction might be subject to sponsor or gas station censorship. Namely, the sponsor might choose not to submit the transaction to the network, or delay the submission. 
+If you chooses to submit the dual-signed transaction to the sponsor or gas station rather than a full node, the transaction might be subject to sponsor or gas station censorship. Namely, the sponsor might choose not to submit the transaction to the network, or delay the submission. 
 
-You can mitigate this risk by submitting the transaction directly to a Full node.
+You can mitigate this risk by submitting the transaction directly to a full node.

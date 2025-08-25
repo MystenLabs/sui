@@ -36,9 +36,9 @@ These results show the data growth increase relative to the increase in TPS rate
 Pruning Full nodes are very similar in disk usage to validators, as the pruning configurations are essentially identical. There are two notable exceptions:
 
 1. Full nodes do keep a `consensus_db`, this makes up about half of validator disk usage.
-1. If you serve RPC queries from your Full node, the `indexes/` in Mainnet takes up a substantial amount of data. Today the mainnet `indexes/` are 1.5TB, growing in relation to TPS.
+1. If you serve RPC queries from your full node, the `indexes/` in Mainnet takes up a substantial amount of data. Today the Mainnet `indexes/` are 1.5TB, growing in relation to TPS.
 
-The total disk usage of a pruned Full node with indexes in Mainnet is 1.6TB. With indexing disabled, the total disk usage would be ~100GB.
+The total disk usage of a pruned full node with indexes in Mainnet is 1.6TB. With indexing disabled, the total disk usage would be ~100GB.
 
 ## Unpruned Full nodes
 
@@ -55,13 +55,13 @@ In the two-week period mid year, where Mainnet averaged ~183 TPS, disk usage inc
 
 There are two types of [snapshots](../../guides/operator/snapshots.mdx), database snapshots and formal snapshots.
 
-Database snapshot size is equal to the database size of the Full node that produces it, as its a 1:1 copy of the database. 
+Database snapshot size is equal to the database size of the full node that produces it, as its a 1:1 copy of the database. 
 
 Formal snapshot size is very lightweight, ~30GB for the latest Mainnet epochs as of May of 2024.
 
 ## State-sync archival
 
-This is a cloud storage bucket, that a Full node (or data-ingestion daemon) writes to. 
+This is a cloud storage bucket, that a full node (or data-ingestion daemon) writes to. 
 
 Examining the same 90-day period of time mentioned previously, disk usage went from 867GB to 1.18TB. Average growth per day was just over 3GB.
 
@@ -70,5 +70,5 @@ In the two-week period mid year, disk usage went from 1.18TB to 1.32TB. Average 
 ## Related links
 
 - [Custom Indexers](../../guides/developer/advanced/custom-indexer.mdx): Build custom indexers using the Sui micro-data ingestion framework.
-- [Snapshots](../../guides/operator/snapshots.mdx): Bootstrap a Full node without having to execute all the transactions that occurred after genesis.
-- [Sui Archives](../../guides/operator/archives.mdx): Enable archiving on your Full nodes for a historical record of all transactions on Sui.
+- [Snapshots](../../guides/operator/snapshots.mdx): Bootstrap a full node without having to execute all the transactions that occurred after genesis.
+- [Sui Archives](../../guides/operator/archives.mdx): Enable archiving on your full nodes for a historical record of all transactions on Sui.

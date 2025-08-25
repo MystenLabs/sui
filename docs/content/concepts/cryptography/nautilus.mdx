@@ -5,7 +5,7 @@ mdx:
   format: md
 ---
 
-Nautilus is a framework for secure and verifiable off chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on chain through smart contract-based verification.
+Nautilus is a framework for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on chain through smart contract-based verification.
 
 Nautilus is designed for hybrid decentralized applications (dApps) that require private data handling, complex computation, or integration with external (Web2) systems. It ensures that off-chain computations are tamper resistant, isolated, and cryptographically verifiable. 
 
@@ -22,7 +22,7 @@ A Nautilus application consists of two components:
 
 Initial support for AWS Nitro Enclaves is due to its maturity and reproducibility. Additional TEE providers might become available in the future.
 
-::::
+:::
 
 ### How it works
 
@@ -31,7 +31,7 @@ Initial support for AWS Nitro Enclaves is due to its maturity and reproducibilit
 - Sui smart contracts verify the attestation on chain before accepting the TEE output.
 - The integrity of the TEE is auditable and anchored by the provider’s root of trust.
 
-Refer to [Nautilus Design](./nautilus/nautilus-design.mdx) and [Using Nautilus](./nautilus/using-nautilus.mdx) for details.
+Refer to [Nautilus Design](nautilus/nautilus-design.mdx) and [Using Nautilus](nautilus/using-nautilus.mdx) for details.
 
 :::important
 

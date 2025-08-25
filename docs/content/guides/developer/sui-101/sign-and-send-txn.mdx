@@ -110,7 +110,7 @@ The full code example below can be found under [crates/sui-sdk](https://github.c
 There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK.
 
 ```rust
-    // deterministically generate a keypair, testing only, do not use for mainnet, use the next section to randomly generate a keypair instead.
+    // deterministically generate a key pair, testing only, do not use for mainnet, use the next section to randomly generate a key pair instead.
     let skp_determ_0 =
         SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
     let _skp_determ_1 =
@@ -118,12 +118,12 @@ There are various ways to instantiate a `SuiKeyPair` and to derive its public ke
     let _skp_determ_2 =
         SuiKeyPair::Secp256r1(Secp256r1KeyPair::generate(&mut StdRng::from_seed([0; 32])));
 
-    // randomly generate a keypair.
+    // randomly generate a key pair.
     let _skp_rand_0 = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
     let _skp_rand_1 = SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
     let _skp_rand_2 = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
 
-    // import a keypair from a base64 encoded 32-byte `private key`.
+    // import a key pair from a base64 encoded 32-byte `private key`.
     let _skp_import_no_flag_0 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(
         &Base64::decode("1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=")
             .map_err(|_| anyhow!("Invalid base64"))?,
@@ -137,7 +137,7 @@ There are various ways to instantiate a `SuiKeyPair` and to derive its public ke
             .map_err(|_| anyhow!("Invalid base64"))?,
     )?);
 
-    // import a keypair from a base64 encoded 33-byte `flag || private key`. The signature scheme is determined by the flag.
+    // import a key pair from a base64 encoded 33-byte `flag || private key`. The signature scheme is determined by the flag.
     let _skp_import_with_flag_0 =
         SuiKeyPair::decode_base64("ANRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C")
             .map_err(|_| anyhow!("Invalid base64"))?;
@@ -179,7 +179,7 @@ Next, sign transaction data constructed using an example programmable transactio
 Commit a signature to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`).
 
 ```rust
-    // derive the digest that the keypair should sign on, i.e. the blake2b hash of `intent || tx_data`.
+    // derive the digest that the key pair should sign on, i.e. the blake2b hash of `intent || tx_data`.
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
     let raw_tx = bcs::to_bytes(&intent_msg).expect("bcs should not fail");
     let mut hasher = sui_types::crypto::DefaultHash::default();
@@ -242,7 +242,7 @@ sui keytool import "$MNEMONICS" secp256k1
 sui keytool import "$MNEMONICS" secp256r1
 ```
 
-Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corresponding to the keypair used to sign. `$GAS_COIN_ID` refers to the object ID that is owned by the sender to be used as gas. `$GAS_BUDGET` refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. `$MNEMONICS` refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
+Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corresponding to the key pair used to sign. `$GAS_COIN_ID` refers to the object ID that is owned by the sender to be used as gas. `$GAS_BUDGET` refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. `$MNEMONICS` refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
 
 {@include: ../../../snippets/info-gas-budget.mdx}
 
