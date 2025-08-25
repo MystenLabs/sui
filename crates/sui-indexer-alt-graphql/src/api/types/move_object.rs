@@ -51,9 +51,6 @@ pub(crate) enum IMoveObject {
     MoveObject(MoveObject),
 }
 
-/// Type to implement GraphQL fields that are shared by all MoveObjects.
-pub(crate) struct MoveObjectImpl<'o>(pub &'o MoveObject);
-
 /// A MoveObject is a kind of Object that reprsents data stored on-chain.
 #[Object]
 impl MoveObject {
@@ -77,7 +74,16 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
-        MoveObjectImpl(self).contents(ctx).await
+        let Some(native) = self.native(ctx).await? else {
+            return Ok(None);
+        };
+
+        let type_ = MoveType::from_native(
+            native.type_().clone().into(),
+            self.super_.super_.scope.clone(),
+        );
+
+        Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
     }
 
     /// The Base64-encoded BCS serialize of this object, as a `MoveObject`.
@@ -85,7 +91,12 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        MoveObjectImpl(self).move_object_bcs(ctx).await
+        let Some(native) = self.native(ctx).await? else {
+            return Ok(None);
+        };
+
+        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MoveObject")?;
+        Ok(Some(Base64(bytes)))
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -216,35 +227,5 @@ impl MoveObject {
                 Ok(Some(Arc::new(native.clone())))
             })
             .await
-    }
-}
-
-impl MoveObjectImpl<'_> {
-    pub(crate) async fn contents(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
-        let Some(native) = self.0.native(ctx).await? else {
-            return Ok(None);
-        };
-
-        let type_ = MoveType::from_native(
-            native.type_().clone().into(),
-            self.0.super_.super_.scope.clone(),
-        );
-
-        Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
-    }
-
-    pub(crate) async fn move_object_bcs(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        let Some(native) = self.0.native(ctx).await? else {
-            return Ok(None);
-        };
-
-        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MoveObject")?;
-        Ok(Some(Base64(bytes)))
     }
 }
