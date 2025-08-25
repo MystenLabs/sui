@@ -53,6 +53,7 @@ use super::{
     move_object::MoveObject,
     move_package::MovePackage,
     object_filter::{ObjectFilter, Validator as OFValidator},
+    owner::Owner,
     transaction::Transaction,
 };
 
@@ -105,8 +106,13 @@ use super::{
         desc = "Paginate all versions of this object before this one."
     ),
     field(
+        name = "owner",
+        ty = "Result<Option<Owner>, RpcError<Error>>",
+        desc = "The object's owner kind."
+    ),
+    field(
         name = "previous_transaction",
-        ty = "Result<Option<Transaction>, RpcError>",
+        ty = "Result<Option<Transaction>, RpcError<Error>>",
         desc = "The transaction that created this version of the object"
     ),
     field(
@@ -371,6 +377,18 @@ impl Object {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+    }
+
+    /// The object's owner kind.
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError<Error>> {
+        let Some(object) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(Owner::from_native(
+            self.super_.scope.clone(),
+            object.owner.clone(),
+        )))
     }
 
     /// The transaction that created this version of the object.

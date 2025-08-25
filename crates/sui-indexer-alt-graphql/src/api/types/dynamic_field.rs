@@ -37,6 +37,7 @@ use super::{
     move_value::MoveValue,
     object::{self, CLive, CVersion, Object, ObjectKey, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
+    owner::Owner,
     transaction::Transaction,
 };
 
@@ -293,6 +294,14 @@ impl DynamicField {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+    }
+
+    /// The object's owner kind.
+    pub(crate) async fn owner(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Owner>, RpcError<object::Error>> {
+        self.super_.owner(ctx).await
     }
 
     /// The transaction that created this version of the object.
