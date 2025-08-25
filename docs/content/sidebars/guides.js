@@ -56,7 +56,7 @@ const guides = [
 					id: 'guides/developer/sui-101',
 				},
 				items: [
-					'guides/developer/sui-101/shared-owned',
+					'guides/developer/sui-101/object-ownership',
 					'guides/developer/sui-101/using-events',
 					'guides/developer/sui-101/access-time',
 					'guides/developer/sui-101/sign-and-send-txn',
