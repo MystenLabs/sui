@@ -375,9 +375,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             let mut m = always_dep_graphs;
             // Only add dev dependencies that don't already exist as regular dependencies
             for (key, dev_dep_info) in dev_dep_graphs {
-                if !m.contains_key(&key) {
-                    m.insert(key, dev_dep_info);
-                }
+                m.entry(key).or_insert(dev_dep_info);
                 // If the key already exists in regular deps, keep the regular dep version
                 // which has DependencyMode::Always instead of DevOnly
             }
