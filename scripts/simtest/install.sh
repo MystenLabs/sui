@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -16,7 +16,7 @@ fi
 SIMTEST=$BIN_DIR/cargo-simtest
 
 cat <<EOF > "$SIMTEST" || exit 1
-#!/bin/bash
+#!/usr/bin/env bash
 
 REPO_ROOT=\$(git rev-parse --show-toplevel)
 source "\$REPO_ROOT/scripts/simtest/cargo-simtest"
