@@ -32,6 +32,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::BlockRef;
 use futures::{stream::FuturesOrdered, StreamExt as _};
 use itertools::Itertools as _;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -46,7 +47,7 @@ use tokio::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{BlockAPI, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
         CertifiedCommit, CertifiedCommits, Commit, CommitAPI as _, CommitDigest, CommitRange,
@@ -785,8 +786,8 @@ impl<C: NetworkClient> Inner<C> {
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
             // Only block signatures need to be verified, to verify commit votes.
             // But the blocks will be sent to Core, so they need to be fully verified.
-            let reject_transaction_votes = self.block_verifier.verify_and_vote(&block)?;
-            let block = VerifiedBlock::new_verified(block, serialized);
+            let (block, reject_transaction_votes) =
+                self.block_verifier.verify_and_vote(block, serialized)?;
             if self.context.protocol_config.mysticeti_fastpath() {
                 self.transaction_certifier
                     .add_voted_blocks(vec![(block.clone(), reject_transaction_votes)]);
@@ -823,11 +824,12 @@ mod tests {
 
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_types::block::{BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
 
     use crate::{
-        block::{BlockRef, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_syncer::CommitSyncer,
@@ -839,7 +841,7 @@ mod tests {
         network::{BlockStream, NetworkClient},
         storage::mem_store::MemStore,
         transaction_certifier::TransactionCertifier,
-        CommitConsumerMonitor, CommitDigest, CommitRef, Round,
+        CommitConsumerMonitor, CommitDigest, CommitRef,
     };
 
     #[derive(Default)]
@@ -932,7 +934,7 @@ mod tests {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
         let mut commit_syncer = CommitSyncer::new(
             context,
             core_thread_dispatcher,

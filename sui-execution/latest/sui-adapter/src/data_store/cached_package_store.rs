@@ -140,10 +140,12 @@ impl<'state> CachedPackageStore<'state> {
         Ok(pkg)
     }
 
-    pub fn take_new_packages(&self) -> IndexMap<ObjectID, Rc<MovePackage>> {
-        // Take the new packages and clear the cache.
-        let mut new_packages = self.new_packages.borrow_mut();
-        std::mem::take(&mut *new_packages)
+    pub fn to_new_packages(&self) -> Vec<MovePackage> {
+        self.new_packages
+            .borrow()
+            .iter()
+            .map(|(_, pkg)| pkg.as_ref().clone())
+            .collect()
     }
 
     /// Get a package by its package ID (i.e., not original ID). This will first look in the new

@@ -4,6 +4,7 @@
 use tonic::Code;
 
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
+pub use sui_rpc::proto::sui::rpc::v2beta2::ErrorReason;
 
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
 
@@ -35,22 +36,25 @@ impl RpcError {
             details: None,
         }
     }
+
+    pub fn into_status_proto(self) -> crate::proto::google::rpc::Status {
+        crate::proto::google::rpc::Status {
+            code: self.code.into(),
+            message: self.message.unwrap_or_default(),
+            details: self
+                .details
+                .map(ErrorDetails::into_status_details)
+                .unwrap_or_default(),
+        }
+    }
 }
 
 impl From<RpcError> for tonic::Status {
     fn from(value: RpcError) -> Self {
         use prost::Message;
 
-        let status = crate::proto::google::rpc::Status {
-            code: value.code.into(),
-            message: value.message.unwrap_or_default(),
-            details: value
-                .details
-                .map(ErrorDetails::into_status_details)
-                .unwrap_or_default(),
-        };
-
         let code = value.code;
+        let status = value.into_status_proto();
         let details = status.encode_to_vec().into();
         let message = status.message;
 
@@ -141,6 +145,13 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     "timed-out before finality could be reached",
                 )
             }
+            TimeoutBeforeFinalityWithErrors { last_error, attempts, timeout } => {
+                // TODO add a Retry-After header
+                RpcError::new(
+                    Code::Unavailable,
+                    format!("Transaction timed out before finality could be reached. Attempts: {attempts} & timeout: {timeout:?}. Last error: {last_error}"),
+                )
+            }
             NonRecoverableTransactionError { errors } => {
                 let new_errors: Vec<String> = errors
                     .into_iter()
@@ -188,34 +199,20 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 // TODO add a Retry-After header
                 RpcError::new(Code::Unavailable, "system is overloaded")
             }
+            TransactionFailed { retriable, details } => RpcError::new(
+                // TODO(fastpath): improve the error code precision. add a Retry-After header.
+                if retriable {
+                    Code::Aborted
+                } else {
+                    Code::InvalidArgument
+                },
+                format!("[MFP experimental]: {details}"),
+            ),
+            PendingExecutionInTransactionOrchestrator => RpcError::new(
+                Code::AlreadyExists,
+                "Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results",
+            ),
         }
-    }
-}
-
-//TODO define proto for this
-pub enum ErrorReason {
-    FieldInvalid,
-    FieldMissing,
-}
-
-impl ErrorReason {
-    fn as_str(&self) -> &'static str {
-        match self {
-            ErrorReason::FieldInvalid => "FIELD_INVALID",
-            ErrorReason::FieldMissing => "FIELD_MISSING",
-        }
-    }
-}
-
-impl AsRef<str> for ErrorReason {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl From<ErrorReason> for String {
-    fn from(value: ErrorReason) -> Self {
-        value.as_ref().into()
     }
 }
 
@@ -301,12 +298,12 @@ impl ErrorDetails {
 
 #[derive(Debug)]
 pub struct ObjectNotFoundError {
-    object_id: sui_sdk_types::ObjectId,
+    object_id: sui_sdk_types::Address,
     version: Option<sui_sdk_types::Version>,
 }
 
 impl ObjectNotFoundError {
-    pub fn new(object_id: sui_sdk_types::ObjectId) -> Self {
+    pub fn new(object_id: sui_sdk_types::Address) -> Self {
         Self {
             object_id,
             version: None,
@@ -314,7 +311,7 @@ impl ObjectNotFoundError {
     }
 
     pub fn new_with_version(
-        object_id: sui_sdk_types::ObjectId,
+        object_id: sui_sdk_types::Address,
         version: sui_sdk_types::Version,
     ) -> Self {
         Self {
@@ -347,7 +344,7 @@ impl From<ObjectNotFoundError> for crate::RpcError {
 #[derive(Debug)]
 pub struct CheckpointNotFoundError {
     sequence_number: Option<u64>,
-    digest: Option<sui_sdk_types::CheckpointDigest>,
+    digest: Option<sui_sdk_types::Digest>,
 }
 
 impl CheckpointNotFoundError {
@@ -358,7 +355,7 @@ impl CheckpointNotFoundError {
         }
     }
 
-    pub fn digest(digest: sui_sdk_types::CheckpointDigest) -> Self {
+    pub fn digest(digest: sui_sdk_types::Digest) -> Self {
         Self {
             sequence_number: None,
             digest: Some(digest),

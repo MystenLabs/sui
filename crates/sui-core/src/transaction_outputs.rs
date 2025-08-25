@@ -1,24 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{FullObjectID, ObjectRef};
-use sui_types::config::is_config;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
 use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
-use sui_types::SUI_DENY_LIST_OBJECT_ID;
 
 /// TransactionOutputs
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TransactionOutputs {
     pub transaction: Arc<VerifiedTransaction>,
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
-    pub accumulator_events: Vec<AccumulatorEvent>,
+    pub accumulator_events: Mutex<Vec<AccumulatorEvent>>,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
     pub wrapped: Vec<ObjectKey>,
@@ -103,7 +102,7 @@ impl TransactionOutputs {
                         // when it could have been transferred to consensus from `ObjectOwner`, as
                         // its root owner may not have been a fastpath object. However, whether or
                         // not it was technically in the fastpath at the version the marker is
-                        // written, it cetainly is not in the fastpath *anymore*. This is needed
+                        // written, it certainly is not in the fastpath *anymore*. This is needed
                         // to produce the required behavior in `ObjectCacheRead::multi_input_objects_available`
                         // when checking whether receiving objects are available.
                         (
@@ -148,34 +147,11 @@ impl TransactionOutputs {
                 )
             });
 
-            // Create markers for each config update. Note that we always place it under the same
-            // object key. This way we can easily query to see if the config marker has already
-            // been updated this epoch.
-            let mutated_config_objects = input_objects
-                .iter()
-                .filter_map(|(id, obj)| {
-                    if obj.struct_tag().is_some_and(|tag| is_config(&tag))
-                        || *id == SUI_DENY_LIST_OBJECT_ID
-                    {
-                        if let Some(((seqno, _), _)) = mutable_inputs.get(id) {
-                            return Some((*id, *seqno));
-                        }
-                    }
-                    None
-                })
-                .map(|(id, version)| {
-                    (
-                        FullObjectKey::config_key_for_id(&id),
-                        MarkerValue::ConfigUpdate(version),
-                    )
-                });
-
             received
                 .chain(tombstones)
                 .chain(fastpath_stream_ended)
                 .chain(consensus_stream_ended)
                 .chain(consensus_smears)
-                .chain(mutated_config_objects)
                 .collect()
         };
 
@@ -211,7 +187,7 @@ impl TransactionOutputs {
             transaction: Arc::new(transaction),
             effects,
             events,
-            accumulator_events,
+            accumulator_events: Mutex::new(accumulator_events),
             markers,
             wrapped,
             deleted,
@@ -222,13 +198,17 @@ impl TransactionOutputs {
         }
     }
 
+    pub fn take_accumulator_events(&self) -> Vec<AccumulatorEvent> {
+        std::mem::take(&mut *self.accumulator_events.lock())
+    }
+
     #[cfg(test)]
     pub fn new_for_testing(transaction: VerifiedTransaction, effects: TransactionEffects) -> Self {
         Self {
             transaction: Arc::new(transaction),
             effects,
             events: TransactionEvents { data: vec![] },
-            accumulator_events: vec![],
+            accumulator_events: Default::default(),
             markers: vec![],
             wrapped: vec![],
             deleted: vec![],

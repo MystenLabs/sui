@@ -298,7 +298,8 @@ async fn test_transaction_execution() {
         .network
         .validator_fullnode_handle
         .wallet
-        .sign_transaction(&tx);
+        .sign_transaction(&tx)
+        .await;
     let original_digest = signed_tx.digest();
     let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
     let tx_bytes = tx_bytes.encoded();
@@ -816,7 +817,8 @@ async fn test_payload_using_vars_mutation_passes() {
         .network
         .validator_fullnode_handle
         .wallet
-        .sign_transaction(&tx);
+        .sign_transaction(&tx)
+        .await;
     let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
     let tx_bytes = tx_bytes.encoded();
     let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();

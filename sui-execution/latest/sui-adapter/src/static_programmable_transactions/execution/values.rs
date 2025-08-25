@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::account_address::AccountAddress;
@@ -17,16 +15,10 @@ use sui_types::{
     digests::TransactionDigest,
     error::ExecutionError,
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
-    object::Owner,
 };
 pub enum InputValue<'a> {
     Bytes(&'a ByteValue),
     Loaded(Local<'a>),
-}
-
-pub enum InitialInput {
-    Bytes(ByteValue),
-    Object(InputObjectMetadata, Value),
 }
 
 pub enum ByteValue {
@@ -37,135 +29,40 @@ pub enum ByteValue {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct InputObjectMetadata {
-    pub id: ObjectID,
-    pub is_mutable_input: bool,
-    pub owner: Owner,
-    pub version: SequenceNumber,
-    pub type_: Type,
-}
-
-pub struct InputObjectValue {
-    pub object_metadata: InputObjectMetadata,
-    pub value: Option<Value>,
-}
-
-pub struct Inputs {
-    metadata: BTreeMap<u16, InputObjectMetadata>,
-    byte_values: BTreeMap<u16, ByteValue>,
-    locals: Locals,
-}
-
 /// A memory location that can be borrowed or moved from
 pub struct Local<'a>(&'a mut Locals, u16);
 
 /// A set of memory locations that can be borrowed or moved from. Used for inputs and results
 pub struct Locals(VMLocals);
 
+#[derive(Debug)]
 pub struct Value(VMValue);
-
-impl Inputs {
-    pub fn new<Items>(values: Items) -> Result<Self, ExecutionError>
-    where
-        Items: IntoIterator<Item = InitialInput>,
-        Items::IntoIter: ExactSizeIterator,
-    {
-        let values = values.into_iter();
-        let n = values.len();
-        assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
-        let mut locals = VMLocals::new(n);
-        let mut metadata = BTreeMap::new();
-        let mut byte_values = BTreeMap::new();
-        for (i, value) in values.enumerate() {
-            match value {
-                InitialInput::Bytes(byte_value) => {
-                    byte_values.insert(i as u16, byte_value);
-                }
-                InitialInput::Object(object_metadata, value) => {
-                    metadata.insert(i as u16, object_metadata);
-                    locals
-                        .store_loc(i, value.0, /* violation check */ true)
-                        .map_err(iv("store loc"))?;
-                }
-            }
-        }
-        Ok(Self {
-            metadata,
-            byte_values,
-            locals: Locals(locals),
-        })
-    }
-
-    /// Is the input a non-fixed byte value?
-    /// Once it is fixed, it will be a loaded value and this will return false
-    pub fn is_bytes(&self, index: u16) -> bool {
-        self.byte_values.contains_key(&index)
-    }
-
-    /// Retrieve an input, either a loaded value or a byte value
-    pub fn get(&mut self, index: u16) -> Result<InputValue, ExecutionError> {
-        Ok(match self.byte_values.get(&index) {
-            Some(byte_value) => InputValue::Bytes(byte_value),
-            None => InputValue::Loaded(self.locals.local(index)?),
-        })
-    }
-
-    /// Fix a byte value to a loaded value
-    pub fn fix(&mut self, index: u16, value: Value) -> Result<(), ExecutionError> {
-        let byte_value = self.byte_values.remove(&index);
-        assert_invariant!(
-            byte_value.is_some(),
-            "Cannot fix a value that is not a byte value"
-        );
-        self.locals
-            .0
-            .store_loc(index as usize, value.0, /* violation check */ true)
-            .map_err(iv("store loc"))?;
-        Ok(())
-    }
-
-    /// Collect object data and the value, if it was not moved
-    pub fn into_objects(self) -> Result<Vec<(InputObjectMetadata, Option<Value>)>, ExecutionError> {
-        let Self {
-            metadata,
-            byte_values: _,
-            mut locals,
-        } = self;
-
-        metadata
-            .into_iter()
-            .map(|(i, object_metadata)| {
-                let mut local = locals.local(i)?;
-                let value = if local.is_invalid()? {
-                    // Object was moved, nothing to take
-                    None
-                } else {
-                    // Object was not moved, take the value
-                    Some(local.move_()?)
-                };
-                Ok((object_metadata, value))
-            })
-            .collect()
-    }
-}
 
 impl Locals {
     pub fn new<Items>(values: Items) -> Result<Self, ExecutionError>
     where
-        Items: IntoIterator<Item = Value>,
+        Items: IntoIterator<Item = Option<Value>>,
         Items::IntoIter: ExactSizeIterator,
     {
         let values = values.into_iter();
         let n = values.len();
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
         let mut locals = VMLocals::new(n);
-        for (i, value) in values.enumerate() {
+        for (i, value_opt) in values.enumerate() {
+            let Some(value) = value_opt else {
+                // If the value is None, we leave the local invalid
+                continue;
+            };
             locals
                 .store_loc(i, value.0, /* violation check */ true)
                 .map_err(iv("store loc"))?;
         }
         Ok(Self(locals))
+    }
+
+    pub fn new_invalid(n: usize) -> Result<Self, ExecutionError> {
+        assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
+        Ok(Self(VMLocals::new(n)))
     }
 
     pub fn local(&mut self, index: u16) -> Result<Local, ExecutionError> {
@@ -180,6 +77,13 @@ impl Local<'_> {
             .0
             .is_invalid(self.1 as usize)
             .map_err(iv("out of bounds"))
+    }
+
+    pub fn store(&mut self, value: Value) -> Result<(), ExecutionError> {
+        self.0
+            .0
+            .store_loc(self.1 as usize, value.0, /* violation check */ true)
+            .map_err(iv("store loc"))
     }
 
     /// Move the value out of the local
@@ -210,6 +114,14 @@ impl Local<'_> {
                 .borrow_loc(self.1 as usize)
                 .map_err(iv("borrow loc"))?,
         ))
+    }
+
+    pub fn move_if_valid(&mut self) -> Result<Option<Value>, ExecutionError> {
+        if self.is_invalid()? {
+            Ok(None)
+        } else {
+            Ok(Some(self.move_()?))
+        }
     }
 }
 
@@ -288,7 +200,7 @@ impl Value {
 
     pub fn receiving(id: ObjectID, version: SequenceNumber) -> Self {
         Self(VMValue::struct_(Struct::pack([
-            Self::uid(id.into()).0,
+            Self::id(id.into()).0,
             VMValue::u64(version.into()),
         ])))
     }
@@ -315,7 +227,9 @@ impl Value {
         Ok(Self(vec))
     }
 
-    pub fn tx_context(digest: TransactionDigest) -> Result<Self, ExecutionError> {
+    /// Should be called once at the start of a transaction to populate the location with the
+    /// transaction context.
+    pub fn new_tx_context(digest: TransactionDigest) -> Result<Self, ExecutionError> {
         // public struct TxContext has drop {
         //     sender: address,
         //     tx_hash: vector<u8>,
@@ -330,6 +244,13 @@ impl Value {
             VMValue::u64(0),
             VMValue::u64(0),
         ]))))
+    }
+
+    pub fn one_time_witness() -> Result<Self, ExecutionError> {
+        // public struct <ONE_TIME_WITNESS> has drop{
+        //     _dummy: bool,
+        // }
+        Ok(Self(VMValue::struct_(Struct::pack([VMValue::bool(true)]))))
     }
 }
 

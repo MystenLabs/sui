@@ -9,7 +9,7 @@ use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
 use std::sync::Arc;
 use sui_kv_rpc::KvRpcServer;
-use sui_rpc_api::proto::rpc::v2beta::ledger_service_server::LedgerServiceServer;
+use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer;
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
 use telemetry_subscribers::TelemetryConfig;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
@@ -30,6 +30,8 @@ struct App {
     tls_cert: String,
     #[clap(long = "tls-key", default_value = "")]
     tls_key: String,
+    #[clap(long = "app-profile-id")]
+    app_profile_id: Option<String>,
 }
 
 async fn health_check() -> &'static str {
@@ -47,7 +49,13 @@ async fn main() -> Result<()> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
-    let server = KvRpcServer::new(app.instance_id, server_version, &registry).await?;
+    let server = KvRpcServer::new(
+        app.instance_id,
+        app.app_profile_id,
+        server_version,
+        &registry,
+    )
+    .await?;
     let addr = app.address.parse()?;
     let mut builder = Server::builder();
     if !app.tls_cert.is_empty() && !app.tls_key.is_empty() {
@@ -56,6 +64,24 @@ async fn main() -> Result<()> {
         let tls_config = ServerTlsConfig::new().identity(identity);
         builder = builder.tls_config(tls_config)?;
     }
+    let reflection_v1 = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(
+            sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+        )
+        .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(
+            sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
+        )
+        .build_v1()?;
+    let reflection_v1alpha = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(
+            sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+        )
+        .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(
+            sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
+        )
+        .build_v1alpha()?;
     tokio::spawn(async {
         let web_server = Router::new().route("/health", get(health_check));
         let listener = tokio::net::TcpListener::bind("0.0.0.0:8081")
@@ -70,6 +96,8 @@ async fn main() -> Result<()> {
             Arc::new(RpcMetrics::new(&registry)),
         )))
         .add_service(LedgerServiceServer::new(server))
+        .add_service(reflection_v1)
+        .add_service(reflection_v1alpha)
         .serve(addr)
         .await?;
     Ok(())

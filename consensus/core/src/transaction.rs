@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{collections::BTreeMap, sync::Arc};
 
+use consensus_config::Epoch;
+use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
 use parking_lot::Mutex;
@@ -10,11 +12,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{error, warn};
 
-use crate::{
-    block::{BlockRef, Transaction, TransactionIndex},
-    context::Context,
-    Round,
-};
+use crate::{block::Transaction, context::Context};
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
@@ -223,6 +221,7 @@ impl TransactionConsumer {
 
 #[derive(Clone)]
 pub struct TransactionClient {
+    context: Arc<Context>,
     sender: Sender<TransactionsGuard>,
     max_transaction_size: u64,
     max_transactions_in_block_bytes: u64,
@@ -258,9 +257,15 @@ impl TransactionClient {
                 max_transactions_in_block_count: context
                     .protocol_config
                     .max_num_transactions_in_block(),
+                context: context.clone(),
             },
             receiver,
         )
+    }
+
+    /// Returns the current epoch of this client.
+    pub fn epoch(&self) -> Epoch {
+        self.context.committee.epoch()
     }
 
     /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included
@@ -361,6 +366,7 @@ pub trait TransactionVerifier: Send + Sync + 'static {
     /// transactions. So if a batch from a peer fails validation, the peer is equivocating.
     fn verify_and_vote_batch(
         &self,
+        block_ref: &BlockRef,
         batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError>;
 }
@@ -383,6 +389,7 @@ impl TransactionVerifier for NoopTransactionVerifier {
 
     fn verify_and_vote_batch(
         &self,
+        _block_ref: &BlockRef,
         _batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError> {
         Ok(vec![])
@@ -394,13 +401,13 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::{BlockDigest, BlockRef};
     use futures::{stream::FuturesUnordered, StreamExt};
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::timeout;
 
     use crate::transaction::NoopTransactionVerifier;
     use crate::{
-        block::{BlockDigest, BlockRef},
         block_verifier::SignedBlockVerifier,
         context::Context,
         transaction::{BlockStatus, LimitReached, TransactionClient, TransactionConsumer},

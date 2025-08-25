@@ -53,7 +53,9 @@ use sui_graphql_rpc::{
     test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
 
+use move_core_types::account_address::AccountAddress;
 use serde_json::json;
+use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::manage_package::resolve_lock_file_path;
@@ -447,7 +449,8 @@ impl SuiCommand {
             } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
-                let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+                let mut keystore =
+                    Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
                 cmd.execute(&mut keystore).await?.print(!json);
                 Ok(())
             }
@@ -507,7 +510,7 @@ impl SuiCommand {
             SuiCommand::Move {
                 package_path,
                 build_config,
-                cmd,
+                mut cmd,
                 config: client_config,
             } => {
                 match cmd {
@@ -576,6 +579,18 @@ impl SuiCommand {
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
                         let mut build_config =
                             resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+
+                        let previous_id = if let Some(ref chain_id) = chain_id {
+                            sui_package_management::set_package_id(
+                                &rerooted_path,
+                                build_config.install_dir.clone(),
+                                chain_id,
+                                AccountAddress::ZERO,
+                            )?
+                        } else {
+                            None
+                        };
+
                         if let Some(client) = &client {
                             let protocol_config =
                                 client.read_api().get_protocol_config(None).await?;
@@ -589,12 +604,22 @@ impl SuiCommand {
                         }
 
                         let mut pkg = SuiBuildConfig {
-                            config: build_config,
+                            config: build_config.clone(),
                             run_bytecode_verifier: true,
                             print_diags_to_stderr: true,
-                            chain_id,
+                            chain_id: chain_id.clone(),
                         }
                         .build(&rerooted_path)?;
+
+                        // Restore original ID, then check result.
+                        if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                            let _ = sui_package_management::set_package_id(
+                                &rerooted_path,
+                                build_config.install_dir.clone(),
+                                &chain_id,
+                                previous_id,
+                            )?;
+                        }
 
                         let with_unpublished_deps = build.with_unpublished_dependencies;
 
@@ -621,6 +646,20 @@ impl SuiCommand {
                     }
                     _ => (),
                 };
+
+                // If a specific environment is specified for the build command we set the chain ID
+                // to the one that is specified.
+                if client_config.env.is_some() && matches!(cmd, sui_move::Command::Build(_)) {
+                    let (chain_id, _) =
+                        get_chain_id_and_client(client_config, "sui move build").await?;
+
+                    let sui_move::Command::Build(build_config) = &mut cmd else {
+                        unreachable!("We checked for Build above, so this should never happen");
+                    };
+
+                    build_config.chain_id = chain_id;
+                }
+
                 execute_move_command(package_path.as_deref(), build_config, cmd, None)
             }
             SuiCommand::BridgeInitialize {
@@ -671,7 +710,7 @@ impl SuiCommand {
                 );
                 for node_config in network_config.validator_configs() {
                     let account_kp = node_config.account_key_pair.keypair();
-                    context.add_account(None, account_kp.copy());
+                    context.add_account(None, account_kp.copy()).await;
                 }
 
                 let context = context;
@@ -703,7 +742,7 @@ impl SuiCommand {
                         1000000000,
                     )
                     .unwrap();
-                    let signed_tx = context.sign_transaction(&tx);
+                    let signed_tx = context.sign_transaction(&tx).await;
                     tasks.push(context.execute_transaction_must_succeed(signed_tx));
                 }
                 futures::future::join_all(tasks).await;
@@ -987,11 +1026,16 @@ async fn start(
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
-            let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+            let mut keystore =
+                Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
             let address: SuiAddress = kp.public().into();
-            keystore.add_key(None, SuiKeyPair::Ed25519(kp)).unwrap();
+            keystore
+                .import(None, SuiKeyPair::Ed25519(kp))
+                .await
+                .unwrap();
             SuiClientConfig {
                 keystore,
+                external_keys: None,
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
                     rpc: fullnode_url,
@@ -1080,7 +1124,7 @@ async fn genesis(
     if write_config.is_none() && !files.is_empty() {
         if force {
             // check old keystore and client.yaml is compatible
-            let is_compatible = FileBasedKeystore::new(&keystore_path).is_ok()
+            let is_compatible = FileBasedKeystore::load_or_create(&keystore_path).is_ok()
                 && PersistedConfig::<SuiClientConfig>::read(&client_path).is_ok();
             // Keep keystore and client.yaml if they are compatible
             if is_compatible {
@@ -1121,16 +1165,16 @@ async fn genesis(
             if let Some(ips) = benchmark_ips {
                 // Make a keystore containing the key for the genesis gas object.
                 let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
-                let mut keystore = FileBasedKeystore::new(&path)?;
+                let mut keystore = FileBasedKeystore::load_or_create(&path)?;
                 for gas_key in GenesisConfig::benchmark_gas_keys(ips.len()) {
-                    keystore.add_key(None, gas_key)?;
+                    keystore.import(None, gas_key).await?;
                 }
-                keystore.save()?;
+                keystore.save().await?;
 
                 // Make a new genesis config from the provided ip addresses.
                 GenesisConfig::new_for_benchmarks(&ips)
             } else if keystore_path.exists() {
-                let existing_keys = FileBasedKeystore::new(&keystore_path)?.addresses();
+                let existing_keys = FileBasedKeystore::load_or_create(&keystore_path)?.addresses();
                 GenesisConfig::for_local_testing_with_addresses(existing_keys)
             } else {
                 GenesisConfig::for_local_testing()
@@ -1175,9 +1219,11 @@ async fn genesis(
             .build()
     };
 
-    let mut keystore = FileBasedKeystore::new(&keystore_path)?;
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
     for key in &network_config.account_keys {
-        keystore.add_key(None, SuiKeyPair::Ed25519(key.copy()))?;
+        keystore
+            .import(None, SuiKeyPair::Ed25519(key.copy()))
+            .await?;
     }
     let active_address = keystore.addresses().pop();
 
@@ -1375,7 +1421,7 @@ async fn prompt_if_no_config(
             }
             .join(SUI_KEYSTORE_FILENAME);
 
-            let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+            let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {
@@ -1385,9 +1431,10 @@ async fn prompt_if_no_config(
                     Err(e) => return Err(anyhow!("{e}")),
                 }
             };
-            let (new_address, phrase, scheme) =
-                keystore.generate_and_add_new_key(key_scheme, None, None, None)?;
-            let alias = keystore.get_alias_by_address(&new_address)?;
+
+            let (new_address, key_pair, scheme, phrase) = generate_new_key(key_scheme, None, None)?;
+            keystore.import(None, key_pair).await?;
+            let alias = keystore.get_alias(&new_address)?;
             println!(
                 "Generated new keypair and alias for address with scheme {:?} [{alias}: {new_address}]",
                 scheme.to_string()
@@ -1396,6 +1443,7 @@ async fn prompt_if_no_config(
             let alias = env.alias.clone();
             SuiClientConfig {
                 keystore,
+                external_keys: None,
                 envs: vec![env],
                 active_address: Some(new_address),
                 active_env: Some(alias),

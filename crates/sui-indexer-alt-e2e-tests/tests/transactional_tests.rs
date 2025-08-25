@@ -15,7 +15,8 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::{header::HeaderName, Client};
 use serde_json::{json, Value};
-use sui_indexer_alt::config::{IndexerConfig, Merge, PrunerLayer};
+use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, Merge, PipelineLayer, PrunerLayer};
+use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
@@ -51,8 +52,11 @@ impl OffchainReader {
 impl OffchainStateReader for OffchainReader {
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         let indexer = self.cluster.wait_for_indexer(checkpoint, base_timeout);
+        let consistent_store = self
+            .cluster
+            .wait_for_consistent_store(checkpoint, base_timeout);
         let graphql = self.cluster.wait_for_graphql(checkpoint, base_timeout);
-        let _ = join!(indexer, graphql);
+        let _ = join!(indexer, consistent_store, graphql);
     }
 
     async fn wait_for_pruned_checkpoint(&self, _: u64, _: Duration) {
@@ -134,6 +138,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
     let registry = Registry::new();
 
     let indexer_args = IndexerArgs::default();
+    let consistent_indexer_args = IndexerArgs::default();
 
     let client_args = ClientArgs {
         local_ingestion_path: Some(config.data_ingestion_path.clone()),
@@ -145,22 +150,39 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
 
     // The test config includes every pipeline, we configure its consistent range using the
     // off-chain config that was passed in.
-    let indexer_config = IndexerConfig::for_test().merge(IndexerConfig {
-        consistency: PrunerLayer {
-            retention: Some(config.snapshot_config.snapshot_min_lag as u64),
-            ..Default::default()
-        },
+    let pruner = PrunerLayer {
+        retention: Some(config.snapshot_config.snapshot_min_lag as u64),
         ..Default::default()
-    });
+    };
 
+    let indexer_config = IndexerConfig::for_test()
+        .merge(IndexerConfig {
+            pipeline: PipelineLayer {
+                coin_balance_buckets: Some(ConcurrentLayer {
+                    pruner: Some(pruner.clone()),
+                    ..Default::default()
+                }),
+                obj_info: Some(ConcurrentLayer {
+                    pruner: Some(pruner),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .expect("Failed to create indexer config");
+
+    let consistent_store_config = ConsistentConfig::for_test();
     let jsonrpc_config = JsonRpcConfig::default();
     let graphql_config = GraphQlConfig::default();
 
     Arc::new(
         OffchainCluster::new(
             indexer_args,
+            consistent_indexer_args,
             client_args,
             indexer_config,
+            consistent_store_config,
             jsonrpc_config,
             graphql_config,
             &registry,
@@ -189,7 +211,7 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
     adapter.with_offchain_reader(Box::new(OffchainReader::new(c.clone())));
 
     // run the tasks in the test
-    run_tasks_with_adapter(path, adapter, output).await?;
+    run_tasks_with_adapter(path, adapter, output, None).await?;
 
     // clean-up the off-chain cluster
     Arc::try_unwrap(c)

@@ -35,7 +35,6 @@ pub mod args;
 pub mod benchmark;
 pub(crate) mod bootstrap;
 pub mod config;
-pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
 
 pub async fn setup_indexer(
@@ -54,12 +53,11 @@ pub async fn setup_indexer(
 ) -> anyhow::Result<Indexer<Db>> {
     let IndexerConfig {
         ingestion,
-        consistency,
         committer,
         pruner,
         pipeline,
         extra: _,
-    } = indexer_config.finish();
+    } = indexer_config.finish()?;
 
     let PipelineLayer {
         sum_displays,
@@ -84,12 +82,11 @@ pub async fn setup_indexer(
         tx_digests,
         tx_kinds,
         extra: _,
-    } = pipeline.finish();
+    } = pipeline.finish()?;
 
-    let ingestion = ingestion.finish(IngestionConfig::default());
-    let consistency = consistency.finish(PrunerConfig::default());
-    let committer = committer.finish(CommitterConfig::default());
-    let pruner = pruner.finish(PrunerConfig::default());
+    let ingestion = ingestion.finish(IngestionConfig::default())?;
+    let committer = committer.finish(CommitterConfig::default())?;
+    let pruner = pruner.finish(PrunerConfig::default())?;
 
     let retry_interval = ingestion.retry_interval();
 
@@ -109,11 +106,13 @@ pub async fn setup_indexer(
         store.clone(),
     )))?;
 
+    let metrics_prefix = None;
     let mut indexer = Indexer::new(
         store,
         indexer_args,
         client_args,
         ingestion,
+        metrics_prefix,
         registry,
         cancel.clone(),
     )
@@ -127,28 +126,9 @@ pub async fn setup_indexer(
     //  - Combining shared and per-pipeline configurations.
     //  - Registering the pipeline with the indexer.
     //
-    // There are three kinds of pipeline, each with their own macro: `add_concurrent`,
-    // `add_sequential`, and `add_consistent`. `add_concurrent` and `add_sequential` map directly
-    // to `Indexer::concurrent_pipeline` and `Indexer::sequential_pipeline` respectively while
-    // `add_consistent` is a special case that generates both a sequential "summary" pipeline and a
-    // `concurrent` "write-ahead log" pipeline, with their configuration based on the supplied
-    // ConsistencyConfig.
-
-    macro_rules! add_consistent {
-        ($handler:expr, $config:expr) => {
-            if let Some(layer) = $config {
-                indexer
-                    .concurrent_pipeline(
-                        $handler,
-                        ConcurrentConfig {
-                            committer: layer.finish(committer.clone()),
-                            pruner: Some(consistency.clone()),
-                        },
-                    )
-                    .await?
-            }
-        };
-    }
+    // There are two kinds of pipelines, each with their own macro: `add_concurrent` and
+    // `add_sequential`. They map directly to `Indexer::concurrent_pipeline` and
+    // `Indexer::sequential_pipeline` respectively.
 
     macro_rules! add_concurrent {
         ($handler:expr, $config:expr) => {
@@ -159,7 +139,7 @@ pub async fn setup_indexer(
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: Some(pruner.clone()),
-                        }),
+                        })?,
                     )
                     .await?
             }
@@ -175,7 +155,7 @@ pub async fn setup_indexer(
                         layer.finish(SequentialConfig {
                             committer: committer.clone(),
                             ..Default::default()
-                        }),
+                        })?,
                     )
                     .await?
             }
@@ -190,12 +170,12 @@ pub async fn setup_indexer(
         add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
     }
 
-    // Consistent pipelines
-    add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
-    add_consistent!(ObjInfo::default(), obj_info);
-
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
+
+    // Concurrent pipelines with retention
+    add_concurrent!(CoinBalanceBuckets, coin_balance_buckets);
+    add_concurrent!(ObjInfo, obj_info);
 
     // Unpruned concurrent pipelines
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);

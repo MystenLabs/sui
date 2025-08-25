@@ -3,17 +3,18 @@
 
 use std::sync::Arc;
 
-use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
+use consensus_core::{TransactionVerifier, ValidationError};
+use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+    messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{debug, info, warn};
+use tracing::{info, instrument, warn};
 
 use crate::{
     authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
@@ -62,6 +63,19 @@ impl SuiTxValidator {
                     cert_batch.push(certificate.as_ref());
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
+                    ckpt_messages.push(signature.as_ref());
+                    ckpt_batch.push(&signature.summary);
+                }
+                ConsensusTransactionKind::CheckpointSignatureV2(signature) => {
+                    if !epoch_store
+                        .protocol_config()
+                        .consensus_checkpoint_signature_key_includes_digest()
+                    {
+                        return Err(SuiError::UnexpectedMessage(
+                            "ConsensusTransactionKind::CheckpointSignatureV2 is unsupported"
+                                .to_string(),
+                        ));
+                    }
                     ckpt_messages.push(signature.as_ref());
                     ckpt_batch.push(&signature.summary);
                 }
@@ -137,7 +151,12 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    fn vote_transactions(&self, txs: Vec<ConsensusTransactionKind>) -> Vec<TransactionIndex> {
+    #[instrument(level = "debug", skip_all, fields(block_ref = ?block_ref))]
+    fn vote_transactions(
+        &self,
+        block_ref: &BlockRef,
+        txs: Vec<ConsensusTransactionKind>,
+    ) -> Vec<TransactionIndex> {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return vec![];
@@ -149,15 +168,25 @@ impl SuiTxValidator {
                 continue;
             };
 
-            if let Err(e) = self.vote_transaction(&epoch_store, tx) {
-                debug!("Failed to vote transaction: {:?}", e);
+            if let Err(error) = self.vote_transaction(&epoch_store, tx) {
                 result.push(i as TransactionIndex);
+
+                // Cache the rejection vote reason (error) for the transaction
+                epoch_store.set_rejection_vote_reason(
+                    ConsensusPosition {
+                        epoch: epoch_store.epoch(),
+                        block: *block_ref,
+                        index: i as TransactionIndex,
+                    },
+                    &error,
+                );
             }
         }
 
         result
     }
 
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.digest()))]
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -165,7 +194,7 @@ impl SuiTxValidator {
     ) -> SuiResult<()> {
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
-        tx.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
             &*self.consensus_overload_checker,
@@ -208,6 +237,7 @@ impl TransactionVerifier for SuiTxValidator {
 
     fn verify_and_vote_batch(
         &self,
+        block_ref: &BlockRef,
         batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError> {
         let _scope = monitored_scope("VerifyAndVoteBatch");
@@ -220,7 +250,7 @@ impl TransactionVerifier for SuiTxValidator {
         self.validate_transactions(&txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))?;
 
-        Ok(self.vote_transactions(txs))
+        Ok(self.vote_transactions(block_ref, txs))
     }
 }
 
@@ -250,12 +280,26 @@ impl SuiTxValidatorMetrics {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroUsize;
     use std::sync::Arc;
 
     use consensus_core::TransactionVerifier as _;
+    use consensus_types::block::BlockRef;
+    use fastcrypto::traits::KeyPair;
+    use sui_config::transaction_deny_config::TransactionDenyConfigBuilder;
     use sui_macros::sim_test;
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+    use sui_types::crypto::deterministic_random_account_key;
+    use sui_types::error::{SuiError, UserInputError};
+    use sui_types::messages_checkpoint::{
+        CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
+    };
+    use sui_types::messages_consensus::ConsensusPosition;
     use sui_types::{
-        crypto::Ed25519SuiSignature, messages_consensus::ConsensusTransaction, object::Object,
+        base_types::{ExecutionDigests, ObjectID},
+        crypto::Ed25519SuiSignature,
+        messages_consensus::ConsensusTransaction,
+        object::Object,
         signature::GenericSignature,
     };
 
@@ -263,7 +307,7 @@ mod tests {
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::{
-            consensus_tests::{test_certificates, test_gas_objects},
+            consensus_tests::{test_certificates, test_gas_objects, test_user_transaction},
             NoopConsensusOverloadChecker,
         },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
@@ -335,5 +379,226 @@ mod tests {
             .collect();
         let res_batch = validator.verify_batch(&batch);
         assert!(res_batch.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_verify_and_vote_batch() {
+        // 1 account keypair
+        let (sender, keypair) = deterministic_random_account_key();
+
+        // 8 gas objects.
+        let gas_objects: Vec<Object> = (0..8)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+
+        // 2 owned objects.
+        let owned_objects: Vec<Object> = (0..2)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let denied_object = owned_objects[1].clone();
+
+        let mut objects = gas_objects.clone();
+        objects.extend(owned_objects.clone());
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(1).unwrap())
+                .with_objects(objects.clone())
+                .build();
+
+        // Add the 2nd object in the deny list. Once we try to process/vote on the transaction that depends on this object, it will be rejected.
+        let transaction_deny_config = TransactionDenyConfigBuilder::new()
+            .add_denied_object(denied_object.id())
+            .build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_transaction_deny_config(transaction_deny_config)
+            .build()
+            .await;
+
+        // Create two user transactions
+
+        // A valid transaction
+        let valid_transaction = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_objects[0].clone(),
+            vec![owned_objects[0].clone()],
+        )
+        .await;
+
+        // An invalid transaction where the input object is denied
+        let invalid_transaction = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_objects[1].clone(),
+            vec![denied_object.clone()],
+        )
+        .await;
+
+        // Now create the vector with the transactions and serialize them.
+        let transactions = vec![valid_transaction, invalid_transaction];
+        let serialized_transactions: Vec<_> = transactions
+            .into_iter()
+            .map(|t| {
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+                    &state.name,
+                    t.inner().clone(),
+                ))
+                .unwrap()
+            })
+            .collect();
+        let batch: Vec<_> = serialized_transactions
+            .iter()
+            .map(|t| t.as_slice())
+            .collect();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        // WHEN
+        let rejected_transactions = validator
+            .verify_and_vote_batch(&BlockRef::MAX, &batch)
+            .unwrap();
+
+        // THEN
+        // The 2nd transaction should be rejected
+        assert_eq!(rejected_transactions, vec![1]);
+
+        // AND
+        // The reject reason should get cached
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+        let reason = epoch_store
+            .get_rejection_vote_reason(ConsensusPosition {
+                epoch: state.load_epoch_store_one_call_per_task().epoch(),
+                block: BlockRef::MAX,
+                index: 1,
+            })
+            .expect("Rejection vote reason should be set");
+
+        assert_eq!(
+            reason,
+            SuiError::UserInputError {
+                error: UserInputError::TransactionDenied {
+                    error: format!(
+                        "Access to input object {:?} is temporarily disabled",
+                        denied_object.id()
+                    )
+                }
+            }
+        );
+    }
+
+    #[sim_test]
+    async fn reject_checkpoint_signature_v2_when_flag_disabled() {
+        // Build a single-validator network and authority with protocol version < 93 (flag disabled)
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+
+        let disabled_cfg =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(92), Chain::Unknown);
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(disabled_cfg)
+            .build()
+            .await;
+
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Create a minimal checkpoint summary and sign it with the validator's protocol key
+        let checkpoint_summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+            epoch_store.epoch(),
+            0,
+            0,
+            &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]),
+            None,
+            Default::default(),
+            None,
+            0,
+            Vec::new(),
+        );
+
+        let keypair = network_config.validator_configs()[0].protocol_key_pair();
+        let authority = keypair.public().into();
+        let signed = SignedCheckpointSummary::new(
+            epoch_store.epoch(),
+            checkpoint_summary,
+            keypair,
+            authority,
+        );
+        let message = CheckpointSignatureMessage { summary: signed };
+
+        let tx = ConsensusTransaction::new_checkpoint_signature_message_v2(message);
+        let bytes = bcs::to_bytes(&tx).unwrap();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(res.is_err());
+    }
+
+    #[sim_test]
+    async fn accept_checkpoint_signature_v2_when_flag_enabled() {
+        // Build a single-validator network and authority with protocol version >= 93 (flag enabled)
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+
+        let enabled_cfg = ProtocolConfig::get_for_version(ProtocolVersion::new(93), Chain::Unknown);
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(enabled_cfg)
+            .build()
+            .await;
+
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Create a minimal checkpoint summary and sign it with the validator's protocol key
+        let checkpoint_summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+            epoch_store.epoch(),
+            0,
+            0,
+            &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]),
+            None,
+            Default::default(),
+            None,
+            0,
+            Vec::new(),
+        );
+
+        let keypair = network_config.validator_configs()[0].protocol_key_pair();
+        let authority = keypair.public().into();
+        let signed = SignedCheckpointSummary::new(
+            epoch_store.epoch(),
+            checkpoint_summary,
+            keypair,
+            authority,
+        );
+        let message = CheckpointSignatureMessage { summary: signed };
+
+        let tx = ConsensusTransaction::new_checkpoint_signature_message_v2(message);
+        let bytes = bcs::to_bytes(&tx).unwrap();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(res.is_ok(), "{res:?}");
     }
 }

@@ -8,7 +8,7 @@ A: object(0,0)
 
 task 1, line 6:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 2, lines 8-25:
 //# run-graphql
@@ -143,7 +143,7 @@ Response: {
 }
 
 task 6, lines 85-102:
-//# run-graphql --cursors bcs(0x2)
+//# run-graphql --cursors bcs(bcs(0x2))
 Response: {
   "data": {
     "epoch": {

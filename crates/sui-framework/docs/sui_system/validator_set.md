@@ -36,6 +36,7 @@ title: Module `sui_system::validator_set`
 -  [Function `staking_pool_mappings`](#sui_system_validator_set_staking_pool_mappings)
 -  [Function `validator_address_by_pool_id`](#sui_system_validator_set_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#sui_system_validator_set_pool_exchange_rates)
+-  [Function `validator_by_pool_id`](#sui_system_validator_set_validator_by_pool_id)
 -  [Function `next_epoch_validator_count`](#sui_system_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#sui_system_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#sui_system_validator_set_is_duplicate_with_active_validator)
@@ -88,6 +89,7 @@ title: Module `sui_system::validator_set`
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -1672,6 +1674,38 @@ gas price, weighted by stake.
 
 </details>
 
+<a name="sui_system_validator_set_validator_by_pool_id"></a>
+
+## Function `validator_by_pool_id`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_by_pool_id">validator_by_pool_id</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, pool_id: &<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_by_pool_id">validator_by_pool_id</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: &ID): &Validator {
+    // If the pool id is recorded in the mapping, then it must be either candidate or active.
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <b>if</b> (self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>.contains(*pool_id)) {
+        <b>let</b> validator_address = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>[*pool_id];
+        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(validator_address, <a href="../sui_system/validator_set.md#sui_system_validator_set_ANY_VALIDATOR">ANY_VALIDATOR</a>)
+    } <b>else</b> {
+        // otherwise it's inactive
+        self.inactive_validators[*pool_id].load_validator_maybe_upgrade()
+    };
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_system_validator_set_next_epoch_validator_count"></a>
 
 ## Function `next_epoch_validator_count`
@@ -2764,7 +2798,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
     <b>let</b> <b>mut</b> adjusted_staking_reward_amounts = vector[];
     <b>let</b> <b>mut</b> adjusted_storage_fund_reward_amounts = vector[];
     <b>let</b> length = validators.length();
-    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.size();
+    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.length();
     length.do!(|i| {
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &validators[i];
         // Integer divisions will truncate the results. Because of this, we expect that at the end

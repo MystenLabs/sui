@@ -1,0 +1,103 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 6:
+//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee --include-system-packages
+Epoch advanced: 1
+
+task 2, line 8:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 3, lines 10-69:
+//# run-graphql
+Response: {
+  "data": {
+    "endOfEpochTransaction": {
+      "nodes": [
+        {
+          "digest": "6B7sh7SRjg8TFaRxrXLu7oHteFb695zvw1sxRGX8iTCo",
+          "kind": {
+            "__typename": "EndOfEpochTransaction",
+            "transactions": {
+              "nodes": [
+                {
+                  "__typename": "RandomnessStateCreateTransaction",
+                  "_": null
+                },
+                {
+                  "__typename": "AuthenticatorStateCreateTransaction",
+                  "_": null
+                },
+                {
+                  "__typename": "AuthenticatorStateExpireTransaction",
+                  "minEpoch": {
+                    "epochId": 0
+                  },
+                  "authenticatorObjInitialSharedVersion": 1
+                },
+                {
+                  "__typename": "CoinDenyListStateCreateTransaction",
+                  "_": null
+                },
+                {
+                  "__typename": "BridgeStateCreateTransaction",
+                  "chainIdentifier": "00000000"
+                },
+                {
+                  "__typename": "BridgeCommitteeInitTransaction",
+                  "bridgeObjectVersion": 1
+                },
+                {
+                  "__typename": "ChangeEpochTransaction",
+                  "epoch": {
+                    "epochId": 1
+                  },
+                  "protocolConfigs": {
+                    "protocolVersion": 70
+                  },
+                  "storageCharge": 0,
+                  "computationCharge": 0,
+                  "storageRebate": 0,
+                  "nonRefundableStorageFee": 0,
+                  "epochStartTimestamp": "1970-01-01T00:00:00Z",
+                  "systemPackages": {
+                    "nodes": [
+                      {
+                        "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                        "version": 1,
+                        "digest": "GEHCiTADXRCe89WBYiZtxgELEf5K6EnNVD4XRpSNS6EG"
+                      },
+                      {
+                        "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "version": 1,
+                        "digest": "By4Sq7nahY3ZM5FfsdqTtgpDCQ6jmHVqh9C4daFVNiAG"
+                      },
+                      {
+                        "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                        "version": 1,
+                        "digest": "HjUqDATfMdcEGdhoKaerBfpx1tqesHDy67XEp8YKAoP5"
+                      },
+                      {
+                        "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                        "version": 1,
+                        "digest": "AiuUdqUdc9KBX9zqNf3YVZMznwTuMSkza3Be2yyFgHLS"
+                      },
+                      {
+                        "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
+                        "version": 1,
+                        "digest": "6ifF7D6ueAjDovYfSnsjcUa4HCxqpPXPQ5Vupd9sPdcu"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

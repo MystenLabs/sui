@@ -6,7 +6,7 @@
 use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use crate::{TransactionalAdapter, ValidatorWithFullnode};
+use crate::{cursor, TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
@@ -14,13 +14,14 @@ use criterion::Criterion;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
+use iso8601::Duration as IsoDuration;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
-    Flags, FullyCompiledProgram,
+    Flags, PreCompiledProgramInfo,
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -41,6 +42,8 @@ use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Deserialize;
 use serde_json::Value;
+use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fmt::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -59,7 +62,7 @@ use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
 };
-use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
@@ -85,14 +88,14 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     object::{self, Object},
-    transaction::{Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction},
+    transaction::{Transaction, TransactionData, VerifiedTransaction},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{
     move_package::MovePackage,
-    transaction::{Argument, CallArg},
+    transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
 };
 use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
@@ -333,7 +336,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -363,8 +366,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        protocol_config
-            .set_enable_ptb_execution_v2_for_testing(ENABLE_PTB_V2.get().copied().unwrap_or(false));
+        let enabled_ptb_v2 = protocol_config.version >= ProtocolVersion::max()
+            && ENABLE_PTB_V2.get().copied().unwrap_or(false);
+        protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
         let (
             executor,
@@ -760,20 +764,44 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand {
-                count,
-                create_random_state,
-            }) => {
-                for _ in 0..count.unwrap_or(1) {
-                    self.executor.advance_epoch(create_random_state).await?;
+            SuiSubcommand::AdvanceEpoch(cmd) => {
+                for _ in 0..cmd.count.unwrap_or(1) {
+                    self.executor.advance_epoch((&cmd).into()).await?;
                 }
                 let epoch = self.get_latest_epoch_id()?;
                 Ok(Some(format!("Epoch advanced: {epoch}")))
             }
-            SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
-                self.executor
-                    .advance_clock(Duration::from_nanos(duration_ns))
-                    .await?;
+            SuiSubcommand::AdvanceClock(advance_clock_command) => {
+                let duration = match advance_clock_command {
+                    AdvanceClockCommand {
+                        duration: Some(_),
+                        duration_ns: Some(_),
+                    } => panic!("Must specify only one of `--duration` or `--duration_ns`"),
+                    AdvanceClockCommand {
+                        duration: Some(duration),
+                        duration_ns: None,
+                    } => duration.parse::<IsoDuration>().unwrap().into(),
+                    AdvanceClockCommand {
+                        duration: None,
+                        duration_ns: Some(duration_ns),
+                    } => Duration::from_nanos(duration_ns),
+                    AdvanceClockCommand {
+                        duration: None,
+                        duration_ns: None,
+                    } => panic!("Must specify either `--duration` or `--duration_ns`"),
+                };
+
+                let effects = self.executor.advance_clock(duration).await?;
+
+                // Add the transaction digest to digest_enumeration for variable substitution
+                let digest = effects.transaction_digest();
+                let task = self.next_fake.0;
+                if let Some(prev) = self.digest_enumeration.insert(task, *digest) {
+                    panic!(
+                        "Task {task} executed two transactions (expected at most one): {prev}, {digest}"
+                    );
+                }
+
                 Ok(None)
             }
             SuiSubcommand::SetRandomState(SetRandomStateCommand {
@@ -794,6 +822,51 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
                 self.execute_txn(tx.into()).await?;
                 Ok(None)
+            }
+            SuiSubcommand::AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand {
+                round,
+                jwk_iss,
+                authenticator_obj_initial_shared_version,
+            }) => {
+                use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+                use sui_types::authenticator_state::ActiveJwk;
+
+                let current_epoch = self.get_latest_epoch_id()?;
+
+                // Create ActiveJwk instances with auto-generated key IDs
+                // Example: --jwk-iss "google.com,microsoft.com"
+                // Results in: [(google.com, key1), (microsoft.com, key2)]
+                let active_jwks: Vec<ActiveJwk> = jwk_iss
+                    .iter()
+                    .enumerate()
+                    .map(|(index, iss)| ActiveJwk {
+                        jwk_id: JwkId::new(iss.clone(), format!("key{}", index + 1)),
+                        jwk: JWK {
+                            kty: "RSA".to_string(),
+                            e: "AQAB".to_string(),
+                            n: "test_modulus_value".to_string(),
+                            alg: "RS256".to_string(),
+                        },
+                        epoch: current_epoch,
+                    })
+                    .collect();
+
+                let auth_obj_version = authenticator_obj_initial_shared_version
+                    .map(SequenceNumber::from_u64)
+                    .unwrap_or_else(SequenceNumber::new);
+
+                let tx = VerifiedTransaction::new_authenticator_state_update(
+                    current_epoch,
+                    round,
+                    active_jwks,
+                    auth_obj_version,
+                );
+
+                self.execute_txn(tx.into()).await?;
+                Ok(Some(format!(
+                    "AuthenticatorStateUpdate executed at epoch {} round {}",
+                    current_epoch, round
+                )))
             }
             SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
                 let obj = get_obj!(fake_id);
@@ -878,6 +951,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 gas_payment,
                 dev_inspect,
                 dry_run,
+                expiration,
                 inputs,
             }) => {
                 if dev_inspect && self.is_simulator() {
@@ -927,37 +1001,46 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let summary = if !dev_inspect && !dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
+                    let expiration = expiration
+                        .map(TransactionExpiration::Epoch)
+                        .unwrap_or(TransactionExpiration::None);
                     let transaction = self.sign_sponsor_txn(
                         sender,
                         sponsor,
                         gas_payment.unwrap_or_default(),
                         |sender, sponsor, gas| {
-                            TransactionData::new_programmable_allow_sponsor(
+                            let mut tx_data = TransactionData::new_programmable_allow_sponsor(
                                 sender,
                                 gas,
                                 ProgrammableTransaction { inputs, commands },
                                 gas_budget,
                                 gas_price,
                                 sponsor,
-                            )
+                            );
+                            *tx_data.expiration_mut_for_testing() = expiration;
+                            tx_data
                         },
                     );
                     self.execute_txn(transaction).await?
                 } else if dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
+                    let expiration = expiration
+                        .map(TransactionExpiration::Epoch)
+                        .unwrap_or(TransactionExpiration::None);
                     let sender = self.get_sender(sender);
                     let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
                     let payments = self.get_payments(sponsor, gas_payment.unwrap_or_default());
 
-                    let transaction = TransactionData::new_programmable(
+                    let mut transaction = TransactionData::new_programmable(
                         sender.address,
                         payments,
                         ProgrammableTransaction { inputs, commands },
                         gas_budget,
                         gas_price,
                     );
+                    *transaction.expiration_mut_for_testing() = expiration;
                     self.dry_run(transaction).await?
                 } else {
                     assert!(
@@ -1385,18 +1468,14 @@ impl SuiTestAdapter {
 
         let re = regex::Regex::new(r"@\{([^\}]+)\}").unwrap();
 
-        let unique_vars = re
+        let unique_vars: HashSet<_> = re
             .captures_iter(contents)
             .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
-            .collect::<std::collections::HashSet<_>>();
+            .collect();
 
         for var_name in unique_vars {
             let Some(value) = variables.get(&var_name) else {
-                return Err(anyhow!(
-                    "Unknown variable: {}\nAllowed variable mappings are {:#?}",
-                    var_name,
-                    variables
-                ));
+                bail!("Unknown variable: {var_name}\nAllowed variable mappings are {variables:#?}");
             };
 
             let pattern = format!("@{{{}}}", var_name);
@@ -1404,33 +1483,6 @@ impl SuiTestAdapter {
         }
 
         Ok(interpolated_contents)
-    }
-
-    fn encode_cursor(&self, cursor: &str) -> anyhow::Result<String> {
-        // Cursor format is either bcs(object_id,n1,n2,...) or a json value,
-        // in which case we just return its base64 encoding.
-        let Some(args) = cursor
-            .strip_prefix("bcs(")
-            .and_then(|c| c.strip_suffix(")"))
-        else {
-            return Ok(Base64::encode(cursor));
-        };
-
-        let mut parts = args.split(",");
-
-        let id: ObjectID = parts
-            .next()
-            .context("bcs(...) cursors must have at least one argument")?
-            .trim()
-            .parse()?;
-
-        let mut bytes = bcs::to_bytes(&id.to_vec())?;
-        for part in parts {
-            let n: u64 = part.trim().parse()?;
-            bytes.extend(bcs::to_bytes(&n)?);
-        }
-
-        Ok(Base64::encode(bytes))
     }
 
     fn interpolate_query(
@@ -1448,11 +1500,13 @@ impl SuiTestAdapter {
 
         // Then interpolate the cursors which may reference objects
         for (idx, s) in cursors.iter().enumerate() {
-            let interpolated_cursor = self.interpolate_contents(s, &variables)?;
-            let encoded_cursor = self.encode_cursor(&interpolated_cursor)?;
+            // Try and parse the encoded cursor, if it fails, assume the cursor is a plain
+            // JSON cursor.
+            let c = self.interpolate_contents(s, &variables)?;
+            let encoded = Base64::encode(cursor::parse(&c).unwrap_or_else(|_| c.into_bytes()));
 
             // Add the encoded cursor to the variables map because they may get used in the query.
-            variables.insert(format!("cursor_{idx}"), encoded_cursor);
+            variables.insert(format!("cursor_{idx}"), encoded);
         }
         self.interpolate_contents(contents, &variables)
     }
@@ -1674,11 +1728,7 @@ impl SuiTestAdapter {
     }
 
     async fn execute_txn(&mut self, transaction: Transaction) -> anyhow::Result<TxnSummary> {
-        let with_shared = transaction
-            .data()
-            .intent_message()
-            .value
-            .contains_shared_object();
+        let is_consensus_tx = transaction.is_consensus_tx();
         let (effects, error_opt) = self.executor.execute_txn(transaction).await?;
         let digest = effects.transaction_digest();
 
@@ -1731,7 +1781,7 @@ impl SuiTestAdapter {
         }
 
         let mut unchanged_shared_ids = effects
-            .unchanged_shared_objects()
+            .unchanged_consensus_objects()
             .iter()
             .map(|(id, _)| *id)
             .collect::<Vec<_>>();
@@ -1767,7 +1817,7 @@ impl SuiTestAdapter {
                 })
             }
             ExecutionStatus::Failure { error, command } => {
-                let execution_msg = if with_shared {
+                let execution_msg = if is_consensus_tx {
                     format!("Debug of error: {error:?} at command {command:?}")
                 } else {
                     format!("Execution Error: {}", error_opt.unwrap())
@@ -2130,15 +2180,27 @@ impl SuiTestAdapter {
 impl<'a> GetModule for &'a SuiTestAdapter {
     type Error = anyhow::Error;
 
-    type Item = &'a CompiledModule;
+    type Item = Cow<'a, CompiledModule>;
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        Ok(Some(
-            self.compiled_state
-                .dep_modules()
-                .find(|m| &m.self_id() == id)
-                .unwrap_or_else(|| panic!("Internal error: Unbound module {}", id)),
-        ))
+        if let Some(m) = self
+            .compiled_state
+            .dep_modules()
+            .find(|m| &m.self_id() == id)
+        {
+            Ok(Some(Cow::Borrowed(m)))
+        } else {
+            let module = self
+                .executor
+                .get_object(&ObjectID::from(*id.address()))
+                .and_then(|obj| {
+                    let data = obj.data.try_as_package()?.get_module(id)?;
+                    let module = CompiledModule::deserialize_with_defaults(data).unwrap();
+                    Some(module)
+                })
+                .unwrap_or_else(|| panic!("Internal error: Unbound module {}", id));
+            Ok(Some(Cow::Owned(module)))
+        }
     }
 }
 
@@ -2205,7 +2267,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
@@ -2239,7 +2301,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "bridge", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
+    let pre_compiled_program = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
             paths: vec![
@@ -2256,7 +2318,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         None,
     )
     .unwrap();
-    match fully_compiled_res {
+    match pre_compiled_program {
         Err((files, diags)) => {
             eprintln!("!!!Sui framework failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, diags)

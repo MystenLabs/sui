@@ -532,6 +532,7 @@ public fun split(self: &mut StakedSui, split_amount: u64, ctx: &mut TxContext): 
 /// Allows calling `.split_to_sender()` on `StakedSui` to invoke `split_staked_sui`
 public use fun split_staked_sui as StakedSui.split_to_sender;
 
+#[allow(lint(public_entry))]
 /// Split the given StakedSui to the two parts, one with principal `split_amount`,
 /// transfer the newly split part to the sender address.
 public entry fun split_staked_sui(stake: &mut StakedSui, split_amount: u64, ctx: &mut TxContext) {
@@ -541,6 +542,7 @@ public entry fun split_staked_sui(stake: &mut StakedSui, split_amount: u64, ctx:
 /// Allows calling `.join()` on `StakedSui` to invoke `join_staked_sui`
 public use fun join_staked_sui as StakedSui.join;
 
+#[allow(lint(public_entry))]
 /// Consume the staked sui `other` and add its value to `self`.
 /// Aborts if some of the staking parameters are incompatible (pool id, stake activation epoch, etc.)
 public entry fun join_staked_sui(self: &mut StakedSui, other: StakedSui) {
@@ -644,11 +646,12 @@ macro fun mul_div($a: u64, $b: u64, $c: u64): u64 {
     (($a as u128) * ($b as u128) / ($c as u128)) as u64
 }
 
-// ==== test-related functions ====
-
 // Given the `staked_sui` receipt calculate the current rewards (in terms of SUI) for it.
-#[test_only]
-public fun calculate_rewards(pool: &StakingPool, staked_sui: &StakedSui, current_epoch: u64): u64 {
+public(package) fun calculate_rewards(
+    pool: &StakingPool,
+    staked_sui: &StakedSui,
+    current_epoch: u64,
+): u64 {
     let staked_amount = staked_sui.amount();
     let pool_token_withdraw_amount = {
         let exchange_rate_at_staking_epoch = pool.pool_token_exchange_rate_at_epoch(staked_sui.stake_activation_epoch);
@@ -665,8 +668,10 @@ public fun calculate_rewards(pool: &StakingPool, staked_sui: &StakedSui, current
     } else 0;
     reward_withdraw_amount = reward_withdraw_amount.min(pool.rewards_pool.value());
 
-    staked_amount + reward_withdraw_amount
+    reward_withdraw_amount
 }
+
+// ==== test-related functions ====
 
 #[test_only]
 public(package) fun fungible_staked_sui_data(pool: &StakingPool): &FungibleStakedSuiData {

@@ -32,6 +32,7 @@ use crate::{
         shared_object_version_manager::Schedulable,
     },
     execution_cache::ObjectCacheRead,
+    execution_scheduler::balance_withdraw_scheduler::BalanceSettlement,
 };
 use crate::{
     authority::{AuthorityMetrics, ExecutionEnv},
@@ -517,7 +518,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
                 let mut input_object_keys = epoch_store.get_input_object_keys(
                     &cert.key(),
                     &input_object_kinds,
-                    execution_env.assigned_versions.as_ref(),
+                    &execution_env.assigned_versions,
                 );
 
                 if input_object_kinds.len() != input_object_keys.len() {
@@ -577,7 +578,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
             .multi_input_objects_available(
                 &input_object_cache_misses,
                 &receiving_objects,
-                &epoch_store.epoch(),
+                epoch_store.epoch(),
             )
             .into_iter()
             .zip(input_object_cache_misses);
@@ -732,6 +733,10 @@ impl ExecutionSchedulerAPI for TransactionManager {
             .set(inner.pending_certificates.len() as i64);
 
         inner.maybe_reserve_capacity();
+    }
+
+    fn settle_balances(&self, _: BalanceSettlement) {
+        unimplemented!("balance withdraw scheduler not implemented for TransactionManager");
     }
 
     fn check_execution_overload(

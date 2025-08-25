@@ -20,6 +20,7 @@ bcs.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 consensus-config.workspace = true
+consensus-types.workspace = true
 dashmap.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
@@ -59,6 +60,7 @@ tonic-rustls.workspace = true
 sui-http.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
 telemetry-subscribers.workspace = true
@@ -66,3 +68,7 @@ telemetry-subscribers.workspace = true
 [build-dependencies]
 anemo-build.workspace = true
 tonic-build.workspace = true
+
+[[bench]]
+name = "commit_finalizer_bench"
+harness = false

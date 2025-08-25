@@ -1,0 +1,41 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-26:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 28-32:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::r();
+//> 1: test::m1::r();
+//> 2: test::m1::r();
+//> TransferObjects([Result(0), Result(1), Result(2)], Input(0))
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 34-38:
+//# programmable --sender A --inputs object(2,0) object(2,1) object(2,2)
+//> 0: test::m1::clean(Input(2));
+//> 1: test::m1::priv1(Input(2));
+//> 2: MakeMoveVec([Input(0), Input(1), Input(2)]);
+//> test::m1::priv2(Result(2))
+mutated: object(0,0)
+deleted: object(2,0), object(2,1), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 4589640, non_refundable_storage_fee: 46360
+
+task 4, lines 40-43:
+//# programmable --sender A --inputs 0 0 0
+//> 0: test::m1::clean_u64(Input(1));
+//> 1: MakeMoveVec<u64>([Input(0), Input(1), Input(2)]);
+//> test::m1::priv3(Result(1))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

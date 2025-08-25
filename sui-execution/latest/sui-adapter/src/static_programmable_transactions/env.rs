@@ -10,6 +10,7 @@ use crate::{
         PackageStore, cached_package_store::CachedPackageStore, linked_data_store::LinkedDataStore,
     },
     execution_value::ExecutionState,
+    programmable_transactions::execution::subst_signature,
     static_programmable_transactions::{
         linkage::{
             analysis::{LinkageAnalysis, type_linkage},
@@ -20,17 +21,16 @@ use crate::{
         },
     },
 };
-use indexmap::IndexSet;
 use move_binary_format::{
     CompiledModule,
-    errors::VMError,
+    errors::{Location, PartialVMError, VMError},
     file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
-    account_address::AccountAddress,
     annotated_value,
     language_storage::{ModuleId, StructTag},
     runtime_value::{self, MoveTypeLayout},
+    vm_status::StatusCode,
 };
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runtime_type};
@@ -38,7 +38,7 @@ use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, TypeTag,
-    base_types::{ObjectID, TxContextKind},
+    base_types::{ObjectID, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
     gas_coin::GasCoin,
@@ -57,6 +57,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
     upgrade_cap_type: OnceCell<Type>,
+    tx_context_type: OnceCell<Type>,
 }
 
 macro_rules! get_or_init_ty {
@@ -89,6 +90,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             upgrade_ticket_type: OnceCell::new(),
             upgrade_receipt_type: OnceCell::new(),
             upgrade_cap_type: OnceCell::new(),
+            tx_context_type: OnceCell::new(),
         }
     }
 
@@ -141,22 +143,22 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         ty: &Type,
     ) -> Result<annotated_value::MoveTypeLayout, ExecutionError> {
-        let (ty, linkage) = self.load_vm_type_from_adapter_type(ty)?;
+        let ty = self.load_vm_type_from_adapter_type(None, ty)?;
         self.vm
             .get_runtime()
             .type_to_fully_annotated_layout(&ty)
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))
+            .map_err(|e| self.convert_vm_error(e))
     }
 
     pub fn runtime_layout(
         &self,
         ty: &Type,
     ) -> Result<runtime_value::MoveTypeLayout, ExecutionError> {
-        let (ty, linkage) = self.load_vm_type_from_adapter_type(ty)?;
+        let ty = self.load_vm_type_from_adapter_type(None, ty)?;
         self.vm
             .get_runtime()
             .type_to_type_layout(&ty)
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))
+            .map_err(|e| self.convert_vm_error(e))
     }
 
     pub fn load_function(
@@ -180,7 +182,8 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         let mut data_store = LinkedDataStore::new(&linkage, self.linkable_store);
         let loaded_type_arguments = type_arguments
             .iter()
-            .map(|ty| self.load_vm_type_from_adapter_type(ty).map(|(ty, _)| ty))
+            .enumerate()
+            .map(|(idx, ty)| self.load_vm_type_argument_from_adapter_type(idx, ty))
             .collect::<Result<Vec<_>, _>>()?;
         let runtime_signature = self
             .vm
@@ -191,21 +194,31 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 &loaded_type_arguments,
                 &mut data_store,
             )
+            .map_err(|e| {
+                if e.major_status() == StatusCode::FUNCTION_RESOLUTION_FAILURE {
+                    ExecutionError::new_with_source(
+                        ExecutionErrorKind::FunctionNotFound,
+                        format!(
+                            "Could not resolve function '{}' in module {}",
+                            name, &storage_id,
+                        ),
+                    )
+                } else {
+                    self.convert_linked_vm_error(e, &linkage)
+                }
+            })?;
+        let runtime_signature = subst_signature(runtime_signature, &loaded_type_arguments)
             .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let parameters = runtime_signature
             .parameters
             .into_iter()
-            .map(|ty| self.adapter_type_from_vm_type(&ty, &linkage))
+            .map(|ty| self.adapter_type_from_vm_type(&ty))
             .collect::<Result<Vec<_>, _>>()?;
         let return_ = runtime_signature
             .return_
             .into_iter()
-            .map(|ty| self.adapter_type_from_vm_type(&ty, &linkage))
+            .map(|ty| self.adapter_type_from_vm_type(&ty))
             .collect::<Result<Vec<_>, _>>()?;
-        let tx_context = match parameters.last() {
-            Some(adapter_ty) => adapter_ty.is_tx_context(),
-            None => TxContextKind::None,
-        };
         let signature = LoadedFunctionInstantiation {
             parameters,
             return_,
@@ -216,23 +229,22 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             name,
             type_arguments,
             signature,
-            tx_context,
             linkage,
             instruction_length: runtime_signature.instruction_length,
             definition_index: runtime_signature.definition_index,
         })
     }
 
-    pub fn load_type_input(&self, _idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
-        let (runtime_type, linkage) = self.load_vm_type_from_type_input(ty)?;
-        self.adapter_type_from_vm_type(&runtime_type, &linkage)
+    pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
+        let runtime_type = self.load_vm_type_from_type_input(idx, ty)?;
+        self.adapter_type_from_vm_type(&runtime_type)
     }
 
     /// We verify that all types in the `StructTag` are defining ID-based types.
     pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
-        let (vm_type, linkage) =
-            self.load_vm_type_from_type_tag(&TypeTag::Struct(Box::new(tag.clone())))?;
-        self.adapter_type_from_vm_type(&vm_type, &linkage)
+        let vm_type =
+            self.load_vm_type_from_type_tag(None, &TypeTag::Struct(Box::new(tag.clone())))?;
+        self.adapter_type_from_vm_type(&vm_type)
     }
 
     pub fn type_layout_for_struct(
@@ -259,6 +271,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         get_or_init_ty!(self, upgrade_cap_type, UpgradeCap::type_())
     }
 
+    pub fn tx_context_type(&self) -> Result<Type, ExecutionError> {
+        get_or_init_ty!(self, tx_context_type, TxContext::type_())
+    }
+
     pub fn vector_type(&self, element_type: Type) -> Result<Type, ExecutionError> {
         let abilities = AbilitySet::polymorphic_abilities(
             AbilitySet::VECTOR,
@@ -283,38 +299,155 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     /// Takes an adapter Type and returns a VM runtime Type and the linkage for it.
-    pub fn load_vm_type_from_adapter_type(
+    pub fn load_vm_type_argument_from_adapter_type(
         &self,
+        idx: usize,
         ty: &Type,
-    ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
+    ) -> Result<vm_runtime_type::Type, ExecutionError> {
+        self.load_vm_type_from_adapter_type(Some(idx), ty)
+    }
+
+    fn load_vm_type_from_adapter_type(
+        &self,
+        type_arg_idx: Option<usize>,
+        ty: &Type,
+    ) -> Result<vm_runtime_type::Type, ExecutionError> {
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
             ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
         })?;
-        self.load_vm_type_from_type_tag(&tag)
+        self.load_vm_type_from_type_tag(type_arg_idx, &tag)
     }
 
     /// Take a type tag and returns a VM runtime Type and the linkage for it.
     fn load_vm_type_from_type_tag(
         &self,
+        type_arg_idx: Option<usize>,
         tag: &TypeTag,
-    ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
-        let (addresses, link_context) = link_info_for_type_tag(tag)?;
-        let ids: Vec<_> = addresses.into_iter().map(ObjectID::from).collect();
-        let linkage = type_linkage(&ids, self.linkable_store)?;
-        let linkage = RootedLinkage::new(link_context, linkage);
-        let linked_store = LinkedDataStore::new(&linkage, self.linkable_store);
-        self.vm
-            .get_runtime()
-            .load_type_tag(tag, &linked_store)
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))
-            .map(|runtime_ty| (runtime_ty, linkage))
+    ) -> Result<vm_runtime_type::Type, ExecutionError> {
+        use vm_runtime_type as VMR;
+
+        fn load_type_tag(
+            env: &Env,
+            type_arg_idx: Option<usize>,
+            tag: &TypeTag,
+        ) -> Result<VMR::Type, ExecutionError> {
+            Ok(match tag {
+                TypeTag::Bool => VMR::Type::Bool,
+                TypeTag::U8 => VMR::Type::U8,
+                TypeTag::U16 => VMR::Type::U16,
+                TypeTag::U32 => VMR::Type::U32,
+                TypeTag::U64 => VMR::Type::U64,
+                TypeTag::U128 => VMR::Type::U128,
+                TypeTag::U256 => VMR::Type::U256,
+                TypeTag::Address => VMR::Type::Address,
+                TypeTag::Signer => VMR::Type::Signer,
+
+                TypeTag::Vector(inner) => {
+                    VMR::Type::Vector(Box::new(load_type_tag(env, type_arg_idx, inner)?))
+                }
+                TypeTag::Struct(tag) => load_struct_tag(env, type_arg_idx, tag)?,
+            })
+        }
+
+        fn load_struct_tag(
+            env: &Env,
+            type_arg_idx: Option<usize>,
+            struct_tag: &StructTag,
+        ) -> Result<vm_runtime_type::Type, ExecutionError> {
+            fn execution_error(
+                env: &Env,
+                type_arg_idx: Option<usize>,
+                e: VMError,
+                linkage: &RootedLinkage,
+            ) -> ExecutionError {
+                if let Some(idx) = type_arg_idx {
+                    env.convert_type_argument_error(idx, e, linkage)
+                } else {
+                    env.convert_linked_vm_error(e, linkage)
+                }
+            }
+
+            fn verification_error(code: StatusCode) -> VMError {
+                PartialVMError::new(code).finish(Location::Undefined)
+            }
+
+            let StructTag {
+                address,
+                module,
+                name,
+                type_params,
+            } = struct_tag;
+
+            let tag_linkage = type_linkage(&[(*address).into()], env.linkable_store)?;
+            let linkage = RootedLinkage::new(*address, tag_linkage);
+            let linked_store = LinkedDataStore::new(&linkage, env.linkable_store);
+
+            let original_id = linkage
+                .resolved_linkage
+                .resolve_to_original_id(&(*address).into())
+                .ok_or_else(|| {
+                    make_invariant_violation!(
+                        "StructTag {:?} is not found in linkage generated for that struct tag -- this shouldn't happen.",
+                        struct_tag
+                    )
+                })?;
+            let runtime_id = ModuleId::new(*original_id, module.clone());
+
+            let (idx, struct_type) = env
+                .vm
+                .get_runtime()
+                .load_type(&runtime_id, name, &linked_store)
+                .map_err(|e| execution_error(env, type_arg_idx, e, &linkage))?;
+
+            let type_param_constraints = struct_type.type_param_constraints();
+            if type_param_constraints.len() != type_params.len() {
+                return Err(execution_error(
+                    env,
+                    type_arg_idx,
+                    verification_error(StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH),
+                    &linkage,
+                ));
+            }
+
+            if type_params.is_empty() {
+                Ok(VMR::Type::Datatype(idx))
+            } else {
+                let loaded_type_params = type_params
+                    .iter()
+                    .map(|type_param| load_type_tag(env, type_arg_idx, type_param))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                // Verify that the type parameter constraints on the struct are met
+                for (constraint, param) in type_param_constraints.zip(&loaded_type_params) {
+                    let abilities = env
+                        .vm
+                        .get_runtime()
+                        .get_type_abilities(param)
+                        .map_err(|e| execution_error(env, type_arg_idx, e, &linkage))?;
+                    if !constraint.is_subset(abilities) {
+                        return Err(execution_error(
+                            env,
+                            type_arg_idx,
+                            verification_error(StatusCode::CONSTRAINT_NOT_SATISFIED),
+                            &linkage,
+                        ));
+                    }
+                }
+
+                Ok(VMR::Type::DatatypeInstantiation(Box::new((
+                    idx,
+                    loaded_type_params,
+                ))))
+            }
+        }
+
+        load_type_tag(self, type_arg_idx, tag)
     }
 
     /// Converts a VM runtime Type to an adapter Type.
     fn adapter_type_from_vm_type(
         &self,
         vm_type: &vm_runtime_type::Type,
-        linkage: &RootedLinkage,
     ) -> Result<Type, ExecutionError> {
         use vm_runtime_type as VRT;
 
@@ -330,21 +463,21 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             VRT::Type::Signer => Type::Signer,
 
             VRT::Type::Reference(ref_ty) => {
-                let inner_ty = self.adapter_type_from_vm_type(ref_ty, linkage)?;
+                let inner_ty = self.adapter_type_from_vm_type(ref_ty)?;
                 Type::Reference(false, Rc::new(inner_ty))
             }
             VRT::Type::MutableReference(ref_ty) => {
-                let inner_ty = self.adapter_type_from_vm_type(ref_ty, linkage)?;
+                let inner_ty = self.adapter_type_from_vm_type(ref_ty)?;
                 Type::Reference(true, Rc::new(inner_ty))
             }
 
             VRT::Type::Vector(inner) => {
-                let element_type = self.adapter_type_from_vm_type(inner, linkage)?;
+                let element_type = self.adapter_type_from_vm_type(inner)?;
                 let abilities = self
                     .vm
                     .get_runtime()
                     .get_type_abilities(vm_type)
-                    .map_err(|e| self.convert_linked_vm_error(e, linkage))?;
+                    .map_err(|e| self.convert_vm_error(e))?;
                 let vector_ty = Vector {
                     abilities,
                     element_type,
@@ -381,12 +514,12 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
 
                 let abilities = runtime
                     .get_type_abilities(ty)
-                    .map_err(|e| self.convert_linked_vm_error(e, linkage))?;
+                    .map_err(|e| self.convert_vm_error(e))?;
                 let module = cached_info.defining_id.clone();
                 let name = cached_info.name.clone();
                 let type_arguments = type_arguments
                     .iter()
-                    .map(|t| self.adapter_type_from_vm_type(t, linkage))
+                    .map(|t| self.adapter_type_from_vm_type(t))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Type::Datatype(Rc::new(Datatype {
@@ -412,9 +545,14 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     /// IDs.
     fn load_vm_type_from_type_input(
         &self,
+        type_arg_idx: usize,
         ty: TypeInput,
-    ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
-        fn to_type_tag_internal(ty: TypeInput) -> Result<TypeTag, ExecutionError> {
+    ) -> Result<vm_runtime_type::Type, ExecutionError> {
+        fn to_type_tag_internal(
+            env: &Env,
+            type_arg_idx: usize,
+            ty: TypeInput,
+        ) -> Result<TypeTag, ExecutionError> {
             Ok(match ty {
                 TypeInput::Bool => TypeTag::Bool,
                 TypeInput::U8 => TypeTag::U8,
@@ -426,7 +564,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 TypeInput::Address => TypeTag::Address,
                 TypeInput::Signer => TypeTag::Signer,
                 TypeInput::Vector(type_input) => {
-                    let inner = to_type_tag_internal(*type_input)?;
+                    let inner = to_type_tag_internal(env, type_arg_idx, *type_input)?;
                     TypeTag::Vector(Box::new(inner))
                 }
                 TypeInput::Struct(struct_input) => {
@@ -436,14 +574,39 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         name,
                         type_params,
                     } = *struct_input;
+
+                    let pkg = env
+                        .linkable_store
+                        .get_package(&address.into())
+                        .ok()
+                        .flatten()
+                        .ok_or_else(|| {
+                            ExecutionError::from_kind(ExecutionErrorKind::TypeArgumentError {
+                                argument_idx: type_arg_idx as u16,
+                                kind: TypeArgumentError::TypeNotFound,
+                            })
+                        })?;
+                    let Some(resolved_address) = pkg
+                        .type_origin_map()
+                        .get(&(module.clone(), name.clone()))
+                        .cloned()
+                    else {
+                        return Err(ExecutionError::from_kind(
+                            ExecutionErrorKind::TypeArgumentError {
+                                argument_idx: type_arg_idx as u16,
+                                kind: TypeArgumentError::TypeNotFound,
+                            },
+                        ));
+                    };
+
                     let module = to_identifier(module)?;
                     let name = to_identifier(name)?;
                     let tys = type_params
                         .into_iter()
-                        .map(to_type_tag_internal)
+                        .map(|tp| to_type_tag_internal(env, type_arg_idx, tp))
                         .collect::<Result<Vec<_>, _>>()?;
                     TypeTag::Struct(Box::new(StructTag {
-                        address,
+                        address: *resolved_address,
                         module,
                         name,
                         type_params: tys,
@@ -451,33 +614,15 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 }
             })
         }
-        let tag = to_type_tag_internal(ty)?;
-        self.load_vm_type_from_type_tag(&tag)
+        let tag = to_type_tag_internal(self, type_arg_idx, ty)?;
+        self.load_vm_type_from_type_tag(Some(type_arg_idx), &tag)
     }
 }
 
-#[allow(unused)]
 fn to_identifier(name: String) -> Result<Identifier, ExecutionError> {
     Identifier::new(name).map_err(|e| {
         ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e.to_string())
     })
-}
-
-/// Given a `TypeTag` returns the set of addresses (IDs) within the type, and the link context for
-/// the type.
-///
-/// The Link context for a type is the first address encountered in the type tag in a pre-order
-/// traversal. If no address is encountered in the type tag that we can use, we default to using
-/// the `AccountAddress::ZERO` link context.
-fn link_info_for_type_tag(
-    tag: &TypeTag,
-) -> Result<(IndexSet<AccountAddress>, AccountAddress), ExecutionError> {
-    let addresses = tag.all_addresses();
-    // The link context is the first address encountered in the type tag.
-    // If no address is encountered in the type tag that we can use, we default to
-    // AccountAddress::ZERO.
-    let link_context = addresses.first().cloned().unwrap_or(AccountAddress::ZERO);
-    Ok((addresses, link_context))
 }
 
 fn convert_vm_error(
@@ -498,6 +643,7 @@ fn convert_vm_error(
                 .and_then(|linkage| LinkedDataStore::new(linkage, store).relocate(id).ok())
                 .unwrap_or_else(|| id.clone())
         },
+        // NB: the `id` here is the original ID (and hence _not_ relocated).
         &|id, function| {
             debug_assert!(
                 linkage.is_some(),

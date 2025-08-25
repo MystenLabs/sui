@@ -5,21 +5,22 @@
 use std::{
     io::BufRead,
     path::{Path, PathBuf},
-    process::{Output, Stdio},
+    process::Stdio,
 };
 
+use path_clean::PathClean;
 use tokio::process::Command;
 use tracing::{debug, info};
 
-use super::{
-    errors::{GitError, GitResult},
-    sha::GitSha,
-};
+use crate::schema::GitSha;
+
+use super::errors::{GitError, GitResult};
 
 use once_cell::sync::OnceCell;
 
 static CONFIG: OnceCell<String> = OnceCell::new();
 
+// TODO: this should be moved into [crate::dependency::git]
 fn get_cache_path() -> &'static str {
     CONFIG.get_or_init(|| {
         #[cfg(test)]
@@ -51,11 +52,18 @@ pub struct GitTree {
     /// Commit-ish (branch, tag, or SHA)
     sha: GitSha,
 
-    /// relative path inside the repository to use for sparse checkout
+    /// relative path inside the repository to use for sparse checkout. Guaranteed to not begin
+    /// with `..`
     path_in_repo: PathBuf,
 
     /// Absolute path to the root of the repository
     path_to_repo: PathBuf,
+}
+
+impl Default for GitCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GitCache {
@@ -85,7 +93,7 @@ impl GitCache {
         path_in_repo: Option<PathBuf>,
     ) -> GitResult<GitTree> {
         let sha = Self::find_sha(repo, rev).await?;
-        Ok(self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone()))
+        self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone())
     }
 
     /// Construct a tree in `self` for the repository `repo` with the provided `sha` and
@@ -95,17 +103,21 @@ impl GitCache {
         repo: String,
         sha: GitSha,
         path_in_repo: Option<PathBuf>,
-    ) -> GitTree {
+    ) -> GitResult<GitTree> {
         let filename = url_to_file_name(repo.as_str());
         let path_to_repo = self.root_dir.join(format!("{filename}_{sha}"));
-        let path_in_repo = path_in_repo.unwrap_or_default();
+        let path_in_repo = path_in_repo.unwrap_or_default().clean();
 
-        GitTree {
+        if path_in_repo.starts_with("..") {
+            return Err(GitError::BadPath { path: path_in_repo });
+        }
+
+        Ok(GitTree {
             repo,
             sha,
             path_in_repo,
             path_to_repo,
-        }
+        })
     }
 }
 
@@ -144,6 +156,21 @@ impl GitTree {
         &self.sha
     }
 
+    /// A new tree in the same repository with `path_in_repo` set to
+    /// `self.path_in_repo.join(relative_path)`.
+    pub fn relative_tree(&self, relative_path: impl AsRef<Path>) -> GitResult<Self> {
+        let mut result = self.clone();
+
+        result.path_in_repo = self.path_in_repo.join(relative_path).clean();
+        if result.path_in_repo.to_string_lossy().starts_with("..") {
+            Err(GitError::BadPath {
+                path: result.path_in_repo,
+            })
+        } else {
+            Ok(result)
+        }
+    }
+
     /// Checkout the directory using a sparse checkout. It will try to clone without checkout, set
     /// sparse checkout directory, and then checkout the folder specified by `self.path_in_repo` at the
     /// given sha.
@@ -151,6 +178,7 @@ impl GitTree {
     /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
     async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
         let tree_path = self.path_to_tree();
+
         let mut fresh = false;
 
         // create repo if necessary
@@ -189,11 +217,6 @@ impl GitTree {
             // git checkout
             self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
                 .await?;
-            let cmd = Command::new("ls")
-                .arg(&self.path_to_repo)
-                .output()
-                .await
-                .unwrap();
         }
 
         // check for dirt
@@ -266,31 +289,25 @@ fn url_to_file_name(url: &str) -> String {
 }
 
 /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
-/// `repo` to a commit SHA. This will make a remote call so network is required.
+/// `repo` to a 40-character commit SHA. This will make a remote call so network is required.
 async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
     if let Some(r) = rev {
         if let Ok(sha) = GitSha::try_from(r.to_string()) {
             return Ok(sha);
         }
 
+        // if the sha is a short sha, then the repo will be cloned to a temp directory and full
+        // history will be downloaded to retrieve the full sha
+        if let Ok(Some(full_sha)) = try_find_full_sha(repo, r).await {
+            return Ok(full_sha);
+        }
+
         // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
         // letter), then we have a different set of arguments than if there is no revision. In no
         // revision case, we need to find the default branch of that remote.
 
-        // we have a branch or tag
-        // git ls-remote https://github.com/user/repo.git refs/heads/main
-        let stdout =
-            run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{r}")], None).await?;
-
-        let sha = stdout
-            .split_whitespace()
-            .next()
-            .ok_or(GitError::no_sha(repo, r))?
-            .to_string()
-            .try_into()
-            .expect("git returns valid shas");
-
-        Ok(sha)
+        // we have a branch or tag so we need to look up its Sha.
+        find_branch_or_tag_sha(repo, r).await
     } else {
         // nothing specified, so we need to find the default branch
         find_default_branch_and_get_sha(repo).await
@@ -375,100 +392,106 @@ fn display_cmd(cmd: &Command) -> String {
     result
 }
 
-// TODO: add more tests
+/// Tries to convert a "branch" or "tag" into a full SHA, using `ls-remote`.
+/// It first tries to find a tag, and if that fails, it fallbacks into a branch lookup.
+async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
+    // Note: a "no results" search for tags or branches returns an empty result (`Ok("")`)
+    // and not an error, which is why we manually cast an empty result into an error.
+    // Results from `ls-remote` are expected in format `<hash> \t <name>`.
+
+    // TODO(manos): Figure out if doing both lookups at once works fine (and add appropriate tests)
+
+    // Try to find a tag matching the `rev`:
+    // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
+    let tag = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/tags/{rev}")], None)
+        .await?
+        .split_whitespace()
+        .next()
+        .map(|s| s.to_string())
+        .ok_or(GitError::no_sha(repo, rev));
+
+    // return early if `rev` maps to a valid tag.
+    if let Ok(tag_sha) = tag {
+        return Ok(tag_sha.try_into().expect("git returns valid shas"));
+    }
+
+    // Try to find a branch matching the `rev`:
+    // git ls-remote https://github.com/user/repo.git refs/heads/<branch_name>
+    let branch = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{rev}")], None)
+        .await?
+        .split_whitespace()
+        .next()
+        .map(|s| s.to_string())
+        .ok_or(GitError::no_sha(repo, rev))?;
+
+    Ok(branch.try_into().expect("git returns valid shas"))
+}
+
+/// If the given rev is a short sha, clone the repository to a temp dir and return the full sha.
+async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
+    if rev.len() < 7
+        && !rev
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
+        return Ok(None);
+    }
+
+    let git_cache_path = PathBuf::from(get_cache_path());
+    let lookup_path = git_cache_path.join("lookups");
+
+    std::fs::create_dir_all(&lookup_path).map_err(GitError::TempDirectory)?;
+
+    let path_to_clone = lookup_path.join(url_to_file_name(repo));
+    let path_to_clone_str = path_to_clone.to_string_lossy();
+
+    if path_to_clone.exists() {
+        debug!("Repository is already in the cache for lookups, fetching the list of new history.");
+        // We are fetching the "latest" history for that repository.
+        run_git_cmd_with_args(&["fetch", "--filter=blob:none"], Some(&path_to_clone)).await?;
+    } else {
+        debug!(
+            "downloading temporary git repo with full history to {}",
+            path_to_clone_str
+        );
+        let mut args = vec![
+            "-c",
+            "advice.detachedHead=false",
+            "clone",
+            "--quiet",
+            "--sparse",
+            "--filter=blob:none",
+            "--no-checkout",
+            repo,
+            &path_to_clone_str,
+        ];
+
+        run_git_cmd_with_args(&args, None).await?;
+    }
+
+    let full_sha = run_git_cmd_with_args(&["rev-parse", rev], Some(&path_to_clone))
+        .await?
+        .trim()
+        .replace("\n", "");
+
+    debug!("Found full sha {full_sha} for temp git repo {path_to_clone_str}");
+
+    Ok(Some(
+        GitSha::try_from(full_sha).expect("Git should return correctly formatted shas"),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::basic_manifest;
+    use crate::test_utils::git;
     use std::collections::BTreeSet;
-    use std::env;
     use std::fs;
     use std::path::Path;
-    use tempfile::{TempDir, tempdir};
-    use test_log::test;
+    use tempfile::tempdir;
     use walkdir::DirEntry;
     use walkdir::WalkDir;
-
-    fn setup_temp_dir() -> TempDir {
-        tempdir().unwrap()
-    }
-
-    pub async fn run_git_cmd(args: &[&str], repo_path: &PathBuf) -> Output {
-        Command::new("git")
-            .args(args)
-            .current_dir(repo_path)
-            .output()
-            .await
-            .unwrap()
-    }
-
-    /// Sets up a test Move project with git repository
-    /// It returns the temporary directory, the path to the directory containing the repository,
-    /// the first commit sha, and and the second commit sha.
-    ///
-    /// The first commit contains the following files:
-    ///  - packages/pkg_a/Move.toml (copied from tests/data/basic_move_project/config
-    ///
-    /// The second commit contains the following files:
-    ///  - packages/pkg_a/Move.toml (copied from tests/data/basic_move_project/pkg_a/Move.toml
-    ///  - packages/pkg_b/Move.toml (copied from tests/data/basic_move_project/pkg_b/Move.toml
-    pub async fn setup_test_move_project() -> (TempDir, String, String, String) {
-        // Create a temporary directory
-        let temp_dir = tempdir().unwrap();
-        let root_path = temp_dir.path().to_path_buf();
-
-        // Create the root directory for the Move project
-        fs::create_dir_all(&root_path).unwrap();
-
-        // Initialize git repository with main as default branch
-        run_git_cmd(&["init", "--initial-branch=main"], &root_path).await;
-
-        fs::copy(
-            "tests/data/basic_move_project/config",
-            root_path.join(".git").join("config"),
-        )
-        .unwrap();
-
-        // Create directory structure
-        let pkg_a_path = root_path.join("packages").join("pkg_a");
-        let pkg_b_path = root_path.join("packages").join("pkg_b");
-        fs::create_dir_all(&pkg_a_path).unwrap();
-        fs::copy(
-            "tests/data/basic_move_project/pkg_a/Move.toml",
-            pkg_a_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Initial commit
-        run_git_cmd(&["add", "."], &root_path).await;
-        run_git_cmd(&["commit", "-m", "Initial commit"], &root_path).await;
-
-        fs::create_dir_all(&pkg_b_path).unwrap();
-        fs::copy(
-            "tests/data/basic_move_project/pkg_b/Move.toml",
-            pkg_b_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Commit updates
-        run_git_cmd(&["add", "."], &root_path).await;
-        run_git_cmd(&["commit", "-m", "Second commit"], &root_path).await;
-
-        // Get commits SHA
-        let output = run_git_cmd(&["log"], &root_path).await;
-        debug!("{output:?}");
-        let commits = run_git_cmd(&["log", "--pretty=format:%H"], &root_path).await;
-        let commits = String::from_utf8_lossy(&commits.stdout);
-        let commits: Vec<_> = commits.lines().collect();
-
-        let branch = run_git_cmd(&["rev-parse", "--abbrev-ref", "HEAD"], &root_path).await;
-
-        (
-            temp_dir,
-            format!("file://{}", root_path.to_string_lossy()),
-            commits[1].to_string(),
-            commits[0].to_string(),
-        )
-    }
 
     /// Asserts that `root/path` exists for each path in `paths`, and that no other files exist
     /// inside `root`. Ignores empty directories and files that start with `.` (in particular, `.git`)
@@ -505,16 +528,21 @@ mod tests {
     }
 
     /// Ensure that loading a package into an empty cache outputs only the correct files
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_sparse_checkout_branch() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project
+                .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+        });
+
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         // Pass in a branch name
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
+                project.root_path_str(),
                 &Some("main".into()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -529,18 +557,23 @@ mod tests {
         assert_exactly_paths(&checkout_path, ["Move.toml"]);
     }
 
-    /// Ensure that loading a package into an empty cache from a SHA outputs only the correct files
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_sparse_checkout_sha() {
-        let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
+        // create a git repository with two packages
+        let project = git::new("git_repo", |project| {
+            project
+                .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+        });
+
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         // Pass in a commit SHA
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
-                &Some(second_sha),
+                project.root_path_str(),
+                &Some(project.commits().first().unwrap().to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
             .await
@@ -549,24 +582,36 @@ mod tests {
         // Fetch the dependency
         let checkout_path = git_tree.fetch().await.unwrap();
 
-        // Verify only packages/pkg_b was checked out
+        // Verify only packages/pkg_a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["packages/pkg_a/Move.toml"]);
     }
 
     /// Ensure that checking out two different paths from the same repo / sha works
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_multi_checkout() {
-        let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project
+                .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree_a = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path_str(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 
         let git_tree_b = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_b")))
+            .resolve_to_tree(
+                project.root_path_str(),
+                &None,
+                Some(PathBuf::from("packages/pkg_b")),
+            )
             .await
             .unwrap();
 
@@ -582,9 +627,12 @@ mod tests {
     }
 
     /// Creating a git tree should fail if the sha doesn't exist
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_wrong_sha() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
+
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
@@ -595,7 +643,7 @@ mod tests {
         // contact the server - we only fail when we try to fetch (which seems reasonable)
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
+                project.root_path_str(),
                 &Some(wrong_sha),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -608,16 +656,17 @@ mod tests {
     }
 
     /// Creating a git tree should fail if the branch doesn't exist
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_wrong_branch_name() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
-        let wrong_branch = "test";
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
+                project.root_path_str(),
                 &Some("nonexisting_branch".to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -627,14 +676,16 @@ mod tests {
     }
 
     /// Fetching should succeeed if the path is `None`
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_no_path() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_path, &None, None)
+            .resolve_to_tree(project.root_path_str(), &None, None)
             .await
             .unwrap();
 
@@ -642,14 +693,20 @@ mod tests {
     }
 
     /// Fetching should fail if a dirty checkout exists
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_dirty_fail() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path_str(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 
@@ -664,14 +721,20 @@ mod tests {
     }
 
     /// `fetch_allow_dirty` should succeed with a dirty checkout
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_allow_dirty() {
-        let (repo_dir, repo_url, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_url, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path_str(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 
@@ -685,14 +748,20 @@ mod tests {
     }
 
     /// Fetching should succeed if a clean checkout exists
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_clean_exists() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path_str(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 
@@ -700,7 +769,11 @@ mod tests {
 
         // same as above
         let git_tree = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path_str(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 
@@ -708,14 +781,20 @@ mod tests {
     }
 
     /// Fetching should succeed if the path is clean but other paths are not
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_clean_parallel_dirty() {
-        let (repo_dir, repo_url, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_url, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path_str(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 
@@ -731,5 +810,76 @@ mod tests {
 
         // fetch again - subtree should still be clean so it should succeed
         let result = git_tree.fetch().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_tag_checkout() {
+        let tag = "releases/1";
+
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
+
+        project.add_tag(tag);
+
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+
+        let git_tree = cache
+            .resolve_to_tree(project.root_path_str(), &Some(tag.to_string()), None)
+            .await
+            .unwrap();
+
+        let result = git_tree.fetch().await;
+        assert!(result.is_ok());
+
+        let another_tag = "releases/2";
+        project.add_tag(another_tag);
+
+        let git_tree = cache
+            .resolve_to_tree(
+                project.root_path_str(),
+                &Some(another_tag.to_string()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let result = git_tree.fetch().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_try_find_full_sha() {
+        let (project_with_git, repository) = git::new_repo("pkg_git", |project| {
+            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
+        });
+
+        let commits = project_with_git.commits();
+        let commit = commits.first().unwrap();
+        let short_sha = commit[..7].to_string();
+
+        assert_eq!(
+            &try_find_full_sha(project_with_git.root_path_str(), &short_sha)
+                .await
+                .unwrap()
+                .unwrap()
+                .to_string(),
+            commit
+        );
+
+        // change a file and verify "fetch" works.
+        project_with_git.change_file("Move.toml", "new content");
+        let sha = repository.commit().to_string();
+        let new_short_sha = sha[..7].to_string();
+
+        assert_eq!(
+            &try_find_full_sha(project_with_git.root_path_str(), &new_short_sha)
+                .await
+                .unwrap()
+                .unwrap()
+                .to_string(),
+            &sha
+        );
     }
 }

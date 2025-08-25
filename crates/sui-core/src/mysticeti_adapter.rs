@@ -84,14 +84,15 @@ impl ConsensusClient for LazyMysticetiClient {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
-        let client = self.get().await;
+        let client_guard = self.get().await;
+        let client = client_guard
+            .as_ref()
+            .expect("Client should always be returned");
         let transactions_bytes = transactions
             .iter()
             .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
             .collect::<Vec<_>>();
         let (block_ref, tx_indices, status_waiter) = client
-            .as_ref()
-            .expect("Client should always be returned")
             .submit(transactions_bytes)
             .await
             .tap_err(|err| {
@@ -134,8 +135,9 @@ impl ConsensusClient for LazyMysticetiClient {
         let mut consensus_positions = Vec::new();
         for index in tx_indices {
             consensus_positions.push(ConsensusPosition {
-                index,
+                epoch: client.epoch(),
                 block: block_ref,
+                index,
             });
         }
         Ok((consensus_positions, status_waiter))

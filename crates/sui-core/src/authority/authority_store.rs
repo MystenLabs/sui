@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
@@ -23,7 +22,6 @@ use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -272,14 +270,6 @@ impl AuthorityStore {
                     .insert(transaction.digest(), genesis.events())
                     .unwrap();
             }
-            let event_digests = genesis.events().digest();
-            let events = genesis
-                .events()
-                .data
-                .iter()
-                .enumerate()
-                .map(|(i, e)| ((event_digests, i), e));
-            store.perpetual_tables.events.multi_insert(events).unwrap();
         }
 
         Ok(store)
@@ -329,30 +319,7 @@ impl AuthorityStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionEvents>, TypedStoreError> {
-        // For now, during this transition period, if we don't find events for a particular
-        // Transaction we need to fallback to try and read from the older table. Once the migration
-        // has finished and we've removed the older events table we can stop doing the fallback
-        if let Some(events) = self.perpetual_tables.events_2.get(digest)? {
-            return Ok(Some(events));
-        }
-
-        self.get_executed_effects(digest)?
-            .and_then(|effects| effects.events_digest().copied())
-            .and_then(|events_digest| self.get_events_by_events_digest(&events_digest).transpose())
-            .transpose()
-    }
-
-    pub fn get_events_by_events_digest(
-        &self,
-        event_digest: &TransactionEventsDigest,
-    ) -> Result<Option<TransactionEvents>, TypedStoreError> {
-        let data = self
-            .perpetual_tables
-            .events
-            .safe_range_iter((*event_digest, 0)..=(*event_digest, usize::MAX))
-            .map_ok(|(_, event)| event)
-            .collect::<Result<Vec<_>, TypedStoreError>>()?;
-        Ok(data.is_empty().not().then_some(TransactionEvents { data }))
+        self.perpetual_tables.events_2.get(digest)
     }
 
     pub fn multi_get_events(
@@ -801,36 +768,10 @@ impl AuthorityStore {
         )?;
 
         // Add batched writes for objects and locks.
-
-        // Get the already-written markers for configs this epoch.
-        // This is safe and race free since all mutated config objects must occur as mutable shared
-        // object inputs in the transaction. Therefore there can be no other simultaneous writes to the
-        // datastore for these objects.
-        let (config_update_markers, all_other_markers): (Vec<_>, Vec<_>) = markers
-            .iter()
-            .partition::<Vec<&(FullObjectKey, MarkerValue)>, _>(|(_, marker_value)| {
-                matches!(marker_value, MarkerValue::ConfigUpdate(_))
-            });
-        let already_written_config_updates = self
-            .perpetual_tables
-            .object_per_epoch_marker_table_v2
-            .multi_contains_keys(config_update_markers.iter().map(|(k, _)| (epoch_id, *k)))?;
-        assert_eq!(
-            already_written_config_updates.len(),
-            config_update_markers.len(),
-            "Already written config update information should have the same length as the config updates"
-        );
-        let config_update_markers_to_write = config_update_markers
-            .into_iter()
-            .zip(already_written_config_updates)
-            .filter(|(_, already_written)| !*already_written)
-            .map(|(marker_key, _)| marker_key);
-
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table_v2,
-            all_other_markers
-                .into_iter()
-                .chain(config_update_markers_to_write)
+            markers
+                .iter()
                 .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
         )?;
         write_batch.insert_batch(
@@ -859,16 +800,6 @@ impl AuthorityStore {
                 [(transaction_digest, events)],
             )?;
         }
-
-        // Continue writing events into the old table for now keyed off of events digest
-        let event_digest = events.digest();
-        let events = events
-            .data
-            .iter()
-            .enumerate()
-            .map(|(i, e)| ((event_digest, i), e));
-
-        write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
         self.initialize_live_object_markers_impl(write_batch, new_locks_to_init, false)?;
 
@@ -1168,108 +1099,6 @@ impl AuthorityStore {
         self.initialize_live_object_markers_impl(&mut batch, objects, false)
             .unwrap();
         batch.write().unwrap();
-    }
-
-    /// This function is called at the end of epoch for each transaction that's
-    /// executed locally on the validator but didn't make to the last checkpoint.
-    /// The effects of the execution is reverted here.
-    /// The following things are reverted:
-    /// 1. All new object states are deleted.
-    /// 2. owner_index table change is reverted.
-    ///
-    /// NOTE: transaction and effects are intentionally not deleted. It's
-    /// possible that if this node is behind, the network will execute the
-    /// transaction in a later epoch. In that case, we need to keep it saved
-    /// so that when we receive the checkpoint that includes it from state
-    /// sync, we are able to execute the checkpoint.
-    /// TODO: implement GC for transactions that are no longer needed.
-    pub fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
-        let Some(effects) = self.get_executed_effects(tx_digest)? else {
-            info!("Not reverting {:?} as it was not executed", tx_digest);
-            return Ok(());
-        };
-
-        info!(?tx_digest, ?effects, "reverting transaction");
-
-        // We should never be reverting shared object transactions.
-        assert!(effects.input_shared_objects().is_empty());
-
-        let mut write_batch = self.perpetual_tables.transactions.batch();
-        write_batch.delete_batch(
-            &self.perpetual_tables.executed_effects,
-            iter::once(tx_digest),
-        )?;
-        if let Some(events_digest) = effects.events_digest() {
-            write_batch.delete_batch(&self.perpetual_tables.events_2, [tx_digest])?;
-            write_batch.schedule_delete_range(
-                &self.perpetual_tables.events,
-                &(*events_digest, usize::MIN),
-                &(*events_digest, usize::MAX),
-            )?;
-        }
-
-        let tombstones = effects
-            .all_tombstones()
-            .into_iter()
-            .map(|(id, version)| ObjectKey(id, version));
-        write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
-
-        let all_new_object_keys = effects
-            .all_changed_objects()
-            .into_iter()
-            .map(|((id, version, _), _, _)| ObjectKey(id, version));
-        write_batch.delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
-
-        let modified_object_keys = effects
-            .modified_at_versions()
-            .into_iter()
-            .map(|(id, version)| ObjectKey(id, version));
-
-        macro_rules! get_objects_and_locks {
-            ($object_keys: expr) => {
-                self.perpetual_tables
-                    .objects
-                    .multi_get($object_keys.clone())?
-                    .into_iter()
-                    .zip($object_keys)
-                    .filter_map(|(obj_opt, key)| {
-                        let obj = self
-                            .perpetual_tables
-                            .object(
-                                &key,
-                                obj_opt.unwrap_or_else(|| {
-                                    panic!("Older object version not found: {:?}", key)
-                                }),
-                            )
-                            .expect("Matching indirect object not found")?;
-
-                        if obj.is_immutable() {
-                            return None;
-                        }
-
-                        let obj_ref = obj.compute_object_reference();
-                        Some(obj.is_address_owned().then_some(obj_ref))
-                    })
-            };
-        }
-
-        let old_locks = get_objects_and_locks!(modified_object_keys);
-        let new_locks = get_objects_and_locks!(all_new_object_keys);
-
-        let old_locks: Vec<_> = old_locks.flatten().collect();
-
-        // Re-create old locks.
-        self.initialize_live_object_markers_impl(&mut write_batch, &old_locks, true)?;
-
-        // Delete new locks
-        write_batch.delete_batch(
-            &self.perpetual_tables.live_owned_object_markers,
-            new_locks.flatten(),
-        )?;
-
-        write_batch.write()?;
-
-        Ok(())
     }
 
     /// Return the object with version less then or eq to the provided seq number.

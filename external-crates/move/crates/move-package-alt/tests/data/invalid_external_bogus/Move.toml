@@ -1,6 +1,6 @@
 [package]
 name = "example"
-edition = "2024"
+edition = "2025"
 
 [environments]
 default = "default"

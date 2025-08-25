@@ -2,6 +2,7 @@
 title: Sui Bridge Validator Node Configuration
 sidebar_label: Sui Bridge Node Configuration
 description: Correct configuration of your node ensures optimal performance and valid metrics data.
+keywords: [ bridge validator node, bridge node, bridge, bridge committee, metric data, metrics, metadata, committee registration, waf, web application firewall, bridge client, bridgeclient, bridge node monitoring, build bridge node, run bridge node ]
 ---
 
 Running a Bridge Validator Node (Bridge Node) requires registering your node with the bridge committee. Correct configuration of your node ensures optimal performance and valid metrics data. Follow this topic to make sure your Bridge Node is set up properly.
@@ -80,7 +81,7 @@ $ sui validator update-bridge-committee-node-url
 ```
 Refer to [offline signing section](#offline-signing) in this page for how to sign the transaction offline.
 
-Authoritiy key rotation is not supported yet.
+Authority key rotation is not supported yet.
 
 
 ## Bridge Node
@@ -96,7 +97,7 @@ Suggested hardware requirements:
 - Storage: 200GB
 - Network: 100Mbps
 
-### WAF protection for Bridge Node
+### Web application firewall (WAF) protection for Bridge Node
 
 To protect against distributed denial of service (DDoS) attacks and similar attacks intended to expend validator resources, you must provide rate limit protection for the bridge server. 
 
@@ -169,7 +170,7 @@ With `run-client: true`, you can find these additional fields in the generated c
 | `db-path` | Path of BridgeClient database, for BridgeClient. |
 | `sui:bridge-client-key-path` | The file path of Bridge Client key. This key can be generated with `sui-bridge-cli create-bridge-client-key` as previously shown. When `run-client` is true but you do not provide `sui:bridge-client-key-path`, it defaults to use the Bridge Validator key to submit transactions on Sui. This is not recommended for the sake of key separation. | 
 
-### Bridge Client
+### BridgeClient
 
 `BridgeClient` orchestrates bridge transfer requests. It is **optional** to run for a `BridgeNode`. `BridgeClient` submits transaction on the Sui network. Thus when it's enabled, you need a Sui account key with enough SUI balance.
 

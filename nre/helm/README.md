@@ -8,7 +8,7 @@ This directory contains helm charts to deploy Sui RPC2.0 infra. These charts are
 
 # Note
 ### DB_URL Secret for indexers/graphql
-For RPC2.0 services it's recommended that you create a K8's secret that contains the DB_URL. The indexer-reader/writer and graphql charts will assume a secret exists. Ensure the secret name matches that what is in the env section in the values.yaml file. 
+For RPC2.0 services it's recommended that you create a K8's secret that contains the DB_URL. The indexer-reader/writer and graphql charts will assume a secret exists. Ensure the secret name matches what is in the env section in the values.yaml file. 
 
 Example:
 ```

@@ -23,10 +23,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_extensions::NativeExtensionMarker;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    values::{GlobalValue, Value},
-};
+use move_vm_types::values::{GlobalValue, Value};
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -42,9 +39,9 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
-    SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID,
+    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+    SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::error;
 
@@ -250,11 +247,14 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
+    /// In the new PTB adapter, this function is also used for persisting owners at the end
+    /// of the transaction. In which case, we don't check the transfer limits.
     pub fn transfer(
         &mut self,
         owner: Owner,
         ty: MoveObjectType,
         obj: Value,
+        end_of_transaction: bool,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
@@ -276,11 +276,6 @@ impl<'a> ObjectRuntime<'a> {
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
             TransferResult::New
-        } else if is_framework_obj {
-            // framework objects are always created when they are transferred, but the id is
-            // hard-coded so it is not yet in new_ids
-            self.state.new_ids.insert(id);
-            TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
                 // don't use == for dummy values in Shared or ConsensusAddressOwner
@@ -296,15 +291,30 @@ impl<'a> ObjectRuntime<'a> {
                 (new, old) if new == old => TransferResult::SameOwner,
                 _ => TransferResult::OwnerChanged,
             }
+        } else if is_framework_obj {
+            // framework objects are always created when they are transferred, but the id is
+            // hard-coded so it is not yet in new_ids
+            self.state.new_ids.insert(id);
+            TransferResult::New
         } else {
             TransferResult::OwnerChanged
         };
+        // assert!(end of transaction ==> same owner)
+        if end_of_transaction && !matches!(transfer_result, TransferResult::SameOwner) {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Untransferred object {} had its owner change", id)),
+            );
+        }
 
         // Metered transactions don't have limits for now
 
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             // TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
-            self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
+            // We have higher limits for unmetered transactions and framework obj
+            // We don't check the limit for objects whose owner is persisted at the end of the
+            // transaction
+            self.is_metered && !is_framework_obj && !end_of_transaction,
             self.state.transfers.len(),
             self.protocol_config.max_num_transferred_move_object_ids(),
             self.protocol_config
@@ -339,7 +349,7 @@ impl<'a> ObjectRuntime<'a> {
         accumulator_id: ObjectID,
         action: MoveAccumulatorAction,
         target_addr: AccountAddress,
-        target_ty: Type,
+        target_ty: TypeTag,
         value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
         let event = MoveAccumulatorEvent {
@@ -486,6 +496,17 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state)
     }
 
+    pub fn is_deleted(&self, id: &ObjectID) -> bool {
+        self.state.deleted_ids.contains(id)
+    }
+
+    pub fn is_transferred(&self, id: &ObjectID) -> Option<Owner> {
+        self.state
+            .transfers
+            .get(id)
+            .map(|(owner, _, _)| owner.clone())
+    }
+
     pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
         let loaded_child_objects = self.loaded_runtime_objects();
         let child_effects = self.child_object_store.take_effects().map_err(|e| {
@@ -536,10 +557,6 @@ impl<'a> ObjectRuntime<'a> {
     /// transaction.
     pub fn wrapped_object_containers(&self) -> BTreeMap<ObjectID, ObjectID> {
         self.child_object_store.wrapped_object_containers().clone()
-    }
-
-    pub fn accessed_configs(&self) -> BTreeSet<ObjectID> {
-        self.child_object_store.accessed_configs()
     }
 }
 

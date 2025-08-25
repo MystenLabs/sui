@@ -17,13 +17,14 @@ use crate::{
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
-    expansion::ast as E,
+    expansion::ast::{self as E, ModuleIdent},
     hlir::ast as H,
-    naming::ast as N,
-    parser::ast as P,
+    naming::ast::{self as N, Function, UseFuns},
+    parser::ast::{self as P, FunctionName},
     shared::{
         files::{FileName, MappedFiles},
         ide::IDEInfo,
+        unique_map::UniqueMap,
     },
     sui_mode,
     typing::{
@@ -179,7 +180,7 @@ pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 pub struct NamedAddressMapIndex(usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NamedAddressMaps(Vec<NamedAddressMap>);
+pub struct NamedAddressMaps(Vec<Arc<NamedAddressMap>>);
 
 impl Default for NamedAddressMaps {
     fn default() -> Self {
@@ -194,15 +195,15 @@ impl NamedAddressMaps {
 
     pub fn insert(&mut self, m: NamedAddressMap) -> NamedAddressMapIndex {
         let index = self.0.len();
-        self.0.push(m);
+        self.0.push(Arc::new(m));
         NamedAddressMapIndex(index)
     }
 
-    pub fn get(&self, idx: NamedAddressMapIndex) -> &NamedAddressMap {
-        &self.0[idx.0]
+    pub fn get(&self, idx: NamedAddressMapIndex) -> Arc<NamedAddressMap> {
+        self.0[idx.0].clone()
     }
 
-    pub fn all(&self) -> &[NamedAddressMap] {
+    pub fn all(&self) -> &[Arc<NamedAddressMap>] {
         &self.0
     }
 }
@@ -560,6 +561,15 @@ impl CompilationEnv {
     pub fn save_cfgir_ast(&self, ast: &G::Program) {
         for hook in &self.save_hooks {
             hook.save_cfgir_ast(ast)
+        }
+    }
+
+    pub fn save_macro_definitions(
+        &self,
+        macro_definitions: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_macro_definitions(macro_definitions)
         }
     }
 
@@ -941,6 +951,7 @@ pub(crate) struct SavedInfo {
     typing_info: Option<Arc<program_info::TypingProgramInfo>>,
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
+    macro_definitions: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -952,6 +963,10 @@ pub enum SaveFlag {
     TypingInfo,
     HLIR,
     CFGIR,
+    ModuleNameAddresses,
+    ModuleResolvedMembers,
+    MacroDefinitions,
+    ModuleInfo,
 }
 
 impl SaveHook {
@@ -966,6 +981,7 @@ impl SaveHook {
             typing_info: None,
             hlir: None,
             cfgir: None,
+            macro_definitions: None,
         })))
     }
 
@@ -1015,6 +1031,16 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
             r.cfgir = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_macro_definitions(
+        &self,
+        macro_definitions: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.macro_definitions.is_none() && r.flags.contains(&SaveFlag::MacroDefinitions) {
+            r.macro_definitions = Some(macro_definitions.clone());
         }
     }
 
@@ -1079,6 +1105,17 @@ impl SaveHook {
             "CFGIR AST not saved. Please set the flag when creating the SaveHook"
         );
         r.cfgir.take().unwrap()
+    }
+
+    pub fn take_macro_definitions(
+        &self,
+    ) -> BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::MacroDefinitions),
+            "Macro definitions not saved. Please set the flag when creating the SaveHook"
+        );
+        r.macro_definitions.take().unwrap()
     }
 }
 

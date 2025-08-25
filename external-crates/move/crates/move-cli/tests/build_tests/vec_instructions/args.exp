@@ -1,0 +1,56 @@
+Command `build`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING Test
+Command `disassemble --package Test --name m`:
+// Move bytecode v6
+module 42.m {
+
+public vec_ops_post() {
+L0:	v#1#0: vector<u64>
+L1:	y#1#0: &mut u64
+B0:
+	0: VecPack(2, 0)
+	1: StLoc[0](v#1#0: vector<u64>)
+	2: MutBorrowLoc[0](v#1#0: vector<u64>)
+	3: LdU64(0)
+	4: VecPushBack(2)
+	5: MutBorrowLoc[0](v#1#0: vector<u64>)
+	6: LdU64(1)
+	7: VecPushBack(2)
+	8: MutBorrowLoc[0](v#1#0: vector<u64>)
+	9: LdU64(1)
+	10: VecMutBorrow(2)
+	11: StLoc[1](y#1#0: &mut u64)
+	12: LdU64(2)
+	13: MoveLoc[1](y#1#0: &mut u64)
+	14: WriteRef
+	15: ImmBorrowLoc[0](v#1#0: vector<u64>)
+	16: LdU64(1)
+	17: VecImmBorrow(2)
+	18: ReadRef
+	19: LdU64(2)
+	20: Eq
+	21: BrFalse(23)
+B1:
+	22: Branch(25)
+B2:
+	23: LdU64(13906834230177955839)
+	24: Abort
+B3:
+	25: MutBorrowLoc[0](v#1#0: vector<u64>)
+	26: LdU64(0)
+	27: LdU64(1)
+	28: VecSwap(2)
+	29: MutBorrowLoc[0](v#1#0: vector<u64>)
+	30: VecPopBack(2)
+	31: Pop
+	32: MutBorrowLoc[0](v#1#0: vector<u64>)
+	33: VecPopBack(2)
+	34: Pop
+	35: MoveLoc[0](v#1#0: vector<u64>)
+	36: VecUnpack(2, 0)
+	37: Ret
+}
+
+}
+

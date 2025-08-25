@@ -7,92 +7,29 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use codespan_reporting::{
-    diagnostic::{Diagnostic, Label},
-    term::{
-        self,
-        termcolor::{ColorChoice, StandardStream},
+use codespan_reporting::diagnostic::{Diagnostic, Label};
+
+use thiserror::Error;
+
+use crate::{
+    errors::{FileHandle, Location},
+    schema::{
+        DefaultDependency, PackageMetadata, PackageName, ParsedManifest, ReplacementDependency,
     },
 };
 
-use serde::Deserialize;
-use thiserror::Error;
-use tracing::debug;
-
-use crate::{
-    dependency::{DependencySet, UnpinnedDependencyInfo},
-    errors::{FileHandle, Files, Located, Location, TheFile},
-    flavor::MoveFlavor,
-};
-
 use super::*;
-use sha2::{Digest as ShaDigest, Sha256};
+use serde_spanned::Spanned;
 
-// TODO: add 2025 edition
 const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 
 // TODO: replace this with something more strongly typed
-type Digest = String;
+pub type Digest = String;
 
-// Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
-// writing these files should use [toml_edit] to set / preserve the formatting, since these are
-// user-editable files
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
-#[serde(bound = "")]
-pub struct Manifest<F: MoveFlavor> {
-    package: PackageMetadata<F>,
-
-    // invariant: environments is nonempty
-    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
-
-    #[serde(default)]
-    dependencies: BTreeMap<PackageName, ManifestDependency>,
-
-    /// Replace dependencies for the given environment.
-    /// invariant: all keys have entries in `self.environments`
-    #[serde(default)]
-    dep_replacements:
-        BTreeMap<EnvironmentName, BTreeMap<PackageName, Located<ManifestDependencyReplacement>>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(bound = "")]
-struct PackageMetadata<F: MoveFlavor> {
-    name: Located<PackageName>,
-    edition: Located<String>,
-
-    #[serde(flatten)]
-    metadata: F::PackageMetadata,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(bound = "")]
-#[serde(rename_all = "kebab-case")]
-pub struct ManifestDependency {
-    #[serde(flatten)]
-    dependency_info: UnpinnedDependencyInfo,
-
-    #[serde(rename = "override", default)]
-    is_override: bool,
-
-    #[serde(default)]
-    rename_from: Option<PackageName>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(bound = "")]
-#[serde(rename_all = "kebab-case")]
-pub struct ManifestDependencyReplacement {
-    #[serde(flatten, default)]
-    dependency: Option<ManifestDependency>,
-
-    #[serde(flatten, default)]
-    address_info: Option<AddressInfo>,
-
-    #[serde(default)]
-    use_environment: Option<EnvironmentName>,
+pub struct Manifest {
+    inner: ParsedManifest,
+    digest: Digest,
+    file_handle: FileHandle,
 }
 
 #[derive(Error, Debug)]
@@ -131,127 +68,82 @@ pub enum ManifestErrorKind {
     IoError(#[from] std::io::Error),
 }
 
-type ManifestResult<T> = Result<T, ManifestError>;
+pub type ManifestResult<T> = Result<T, ManifestError>;
 
-impl<F: MoveFlavor> Manifest<F> {
-    /// Read the manifest file at the given path, returning a [`Manifest`].
-    // TODO: probably return a more specific error
+impl Manifest {
+    /// Read the manifest file from the file handle, returning a [`Manifest`].
     pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
-        debug!("Reading manifest from {:?}", path.as_ref());
+        let file_handle = FileHandle::new(&path).map_err(ManifestError::with_file(&path))?;
+        let parsed: ParsedManifest = toml_edit::de::from_str(file_handle.source())
+            .map_err(ManifestError::from_toml(file_handle))?;
 
-        let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)
-            .map_err(ManifestError::with_file(&path))?;
+        let result = Self {
+            inner: parsed,
+            digest: compute_digest(file_handle.source()),
+            file_handle,
+        };
 
-        let manifest = manifest.map_err(ManifestError::from_toml(file_id))?;
-
-        manifest.validate_manifest(file_id)?;
-        Ok(manifest)
+        Ok(result)
     }
 
-    /// Validate the manifest contents, after deserialization.
-    ///
-    // TODO: add more validation
-    pub fn validate_manifest(&self, handle: FileHandle) -> ManifestResult<()> {
-        // Validate package name
-        // TODO: this should be impossible now, since [Identifier]s can't be empty
-        if self.package.name.as_ref().is_empty() {
-            return Err(ManifestError::with_span(self.package.name.location())(
-                ManifestErrorKind::EmptyPackageName,
-            ));
-        }
-
-        // Validate edition
-        if !ALLOWED_EDITIONS.contains(&self.package.edition.as_ref().as_str()) {
-            return Err(ManifestError::with_span(self.package.edition.location())(
-                ManifestErrorKind::InvalidEdition {
-                    edition: self.package.edition.as_ref().clone(),
-                    valid: ALLOWED_EDITIONS.join(", ").to_string(),
-                },
-            ));
-        }
-
-        // Are there any environments?
-        if self.environments().is_empty() {
-            return Err(ManifestError::with_file(handle.path())(
-                ManifestErrorKind::NoEnvironments,
-            ));
-        }
-
-        // Do all dep-replacements have valid environments?
-        // TODO: maybe better to do by making an `Environment` type?
-        for (env, entries) in self.dep_replacements.iter() {
-            if !self.environments().contains_key(env) {
-                let loc = entries
-                    .first_key_value()
-                    .expect("dep-replacements.<env> only exists if it has a dep")
-                    .1
-                    .location();
-
-                return Err(ManifestError::with_span(loc)(
-                    ManifestErrorKind::MissingEnvironment { env: env.clone() },
-                ));
-            }
-        }
-
-        Ok(())
+    pub fn metadata(&self) -> PackageMetadata {
+        self.inner.package.clone()
     }
 
-    /// Return the dependency set of this manifest, including replacements.
-    pub fn dependencies(&self) -> DependencySet<UnpinnedDependencyInfo> {
-        let mut deps = DependencySet::new();
-
-        // TODO: this drops everything besides the [UnpinnedDependencyInfo] (e.g. override,
-        // published-at, etc).
-        for env in self.environments().keys() {
-            for (pkg, dep) in self.dependencies.iter() {
-                deps.insert(env.clone(), pkg.clone(), dep.dependency_info.clone());
-            }
-
-            if let Some(replacements) = self.dep_replacements.get(env) {
-                for (pkg, dep) in replacements {
-                    if let Some(dep) = &dep.as_ref().dependency {
-                        deps.insert(env.clone(), pkg.clone(), dep.dependency_info.clone());
-                    }
-                }
-            }
-        }
-
-        deps
+    pub fn dep_replacements(
+        &self,
+    ) -> &BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>> {
+        &self.inner.dep_replacements
     }
 
-    pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
-        &self.environments
+    pub fn dependencies(&self) -> BTreeMap<PackageName, DefaultDependency> {
+        self.inner
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k.as_ref().clone(), v.clone()))
+            .collect()
     }
 
+    /// The entries from the `[environments]` section
+    pub fn environments(&self) -> BTreeMap<EnvironmentName, EnvironmentID> {
+        self.inner
+            .environments
+            .iter()
+            .map(|(name, id)| (name.as_ref().clone(), id.as_ref().clone()))
+            .collect()
+    }
+
+    /// The name declared in the `[package]` section
     pub fn package_name(&self) -> &PackageName {
-        self.package.name()
-    }
-}
-
-impl<F: MoveFlavor> PackageMetadata<F> {
-    pub fn name(&self) -> &PackageName {
-        self.name.as_ref()
+        self.inner.package.name.as_ref()
     }
 
-    pub fn edition(&self) -> &str {
-        self.edition.as_ref()
+    /// A digest of the file, suitable for detecting changes
+    pub fn digest(&self) -> &Digest {
+        &self.digest
     }
-}
 
-/// Compute a digest of this input data using SHA-256.
-pub fn digest(data: &[u8]) -> Digest {
-    format!("{:X}", Sha256::digest(data))
+    pub fn file_handle(&self) -> &FileHandle {
+        &self.file_handle
+    }
+
+    pub(crate) fn parsed(&self) -> &ParsedManifest {
+        &self.inner
+    }
 }
 
 impl ManifestError {
-    fn with_file<T: Into<ManifestErrorKind>>(path: impl AsRef<Path>) -> impl Fn(T) -> Self {
+    pub(crate) fn with_file<T: Into<ManifestErrorKind>>(
+        path: impl AsRef<Path>,
+    ) -> impl Fn(T) -> Self {
         move |e| ManifestError {
             kind: Box::new(e.into()),
             location: ErrorLocation::WholeFile(path.as_ref().to_path_buf()),
         }
     }
 
-    fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
+    pub(crate) fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
         move |e| ManifestError {
             kind: Box::new(e.into()),
             location: ErrorLocation::AtLoc(loc.clone()),
@@ -282,5 +174,72 @@ impl ManifestError {
                 .with_labels(vec![Label::primary(loc.file(), loc.span().clone())])
                 .with_notes(vec![self.to_string()]),
         }
+    }
+}
+
+impl std::fmt::Debug for Manifest {
+    // TODO: not sure we want this
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO: comprehensive testing
+
+    use tempfile::TempDir;
+    use test_log::test;
+
+    use crate::{flavor::vanilla::default_environment, schema::PackageName};
+
+    use super::{Manifest, ManifestResult};
+
+    /// Create a file containing `contents` and pass it to `Manifest::read_from_file`
+    fn load_manifest(contents: impl AsRef<[u8]>) -> ManifestResult<Manifest> {
+        // TODO: we need a better implementation for this
+        let tempdir = TempDir::new().unwrap();
+        let manifest_path = tempdir.path().join("Move.toml");
+
+        std::fs::write(&manifest_path, contents).expect("write succeeds");
+
+        Manifest::read_from_file(manifest_path)
+    }
+
+    /// The `environments` table may be missing
+    #[test]
+    fn empty_environments_allowed() {
+        let manifest = load_manifest(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+            "#,
+        )
+        .unwrap();
+
+        assert!(manifest.environments().is_empty());
+    }
+
+    /// Environment names in `dep-replacements` must be defined in `environments`
+    #[test]
+    #[ignore] // TODO: this tests new behavior that isn't implemented yet
+    fn dep_replacement_envs_are_declared() {
+        let manifest = load_manifest(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dep-replacements]
+            mainnet.foo = { local = "../foo" }
+            "#,
+        )
+        .unwrap();
+
+        let name = PackageName::new("foo").unwrap();
+        assert!(manifest.dependencies().contains_key(&name));
+        let default_env = default_environment();
+        assert!(!manifest.dep_replacements()[default_env.name()].contains_key(&name));
     }
 }

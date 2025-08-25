@@ -5,6 +5,7 @@ use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
+use crate::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use crate::verifier_signing_config::VerifierSigningConfig;
 use crate::Config;
 use anyhow::Result;
@@ -65,7 +66,7 @@ pub struct NodeConfig {
     pub json_rpc_address: SocketAddr,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc: Option<sui_rpc_api::Config>,
+    pub rpc: Option<crate::RpcConfig>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,
@@ -211,6 +212,44 @@ pub struct NodeConfig {
     /// override this value on production networks will result in an error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain_override_for_testing: Option<Chain>,
+
+    /// Configuration for validator client monitoring from the client perspective.
+    /// When enabled, tracks client-observed performance metrics for validators.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validator_client_monitor_config: Option<ValidatorClientMonitorConfig>,
+
+    /// Fork recovery configuration for handling validator equivocation after forks
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fork_recovery: Option<ForkRecoveryConfig>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ForkCrashBehavior {
+    #[serde(rename = "await-fork-recovery")]
+    #[default]
+    AwaitForkRecovery,
+    /// Return an error instead of blocking forever. This is primarily for testing.
+    #[serde(rename = "return-error")]
+    ReturnError,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ForkRecoveryConfig {
+    /// Map of transaction digest to effects digest overrides
+    /// Used to repoint transactions to correct effects after a fork
+    #[serde(default)]
+    pub transaction_overrides: BTreeMap<String, String>,
+
+    /// Map of checkpoint sequence number to checkpoint digest overrides
+    /// Used to repoint checkpoints to correct versions after a fork
+    #[serde(default)]
+    pub checkpoint_overrides: BTreeMap<u64, String>,
+
+    /// Behavior when a fork is detected after recovery attempts
+    #[serde(default)]
+    pub fork_crash_behavior: ForkCrashBehavior,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -275,6 +314,30 @@ pub struct ExecutionTimeObserverConfig {
     ///
     /// If unspecified, this will default to `100` observations.
     pub observation_sharing_burst_limit: Option<NonZeroU32>,
+
+    /// Whether to use gas price weighting in execution time estimates.
+    /// When enabled, samples with higher gas prices have more influence on the
+    /// execution time estimates, providing protection against volume-based
+    /// manipulation attacks.
+    ///
+    /// If unspecified, this will default to `false`.
+    pub enable_gas_price_weighting: Option<bool>,
+
+    /// Size of the weighted moving average window for execution time observations.
+    /// This determines how many recent observations are kept in the weighted moving average
+    /// calculation for each execution time observation key.
+    /// Note that this is independent of the window size for the simple moving average.
+    ///
+    /// If unspecified, this will default to `20`.
+    pub weighted_moving_average_window_size: Option<usize>,
+
+    /// Whether to inject synthetic execution time for testing in simtest.
+    /// When enabled, synthetic timings will be generated for execution time observations
+    /// to enable deterministic testing of congestion control features.
+    ///
+    /// If unspecified, this will default to `false`.
+    #[cfg(msim)]
+    pub inject_synthetic_execution_time: Option<bool>,
 }
 
 impl ExecutionTimeObserverConfig {
@@ -324,6 +387,19 @@ impl ExecutionTimeObserverConfig {
     pub fn observation_sharing_burst_limit(&self) -> NonZeroU32 {
         self.observation_sharing_burst_limit
             .unwrap_or(nonzero!(100u32))
+    }
+
+    pub fn enable_gas_price_weighting(&self) -> bool {
+        self.enable_gas_price_weighting.unwrap_or(false)
+    }
+
+    pub fn weighted_moving_average_window_size(&self) -> usize {
+        self.weighted_moving_average_window_size.unwrap_or(20)
+    }
+
+    #[cfg(msim)]
+    pub fn inject_synthetic_execution_time(&self) -> bool {
+        self.inject_synthetic_execution_time.unwrap_or(false)
     }
 }
 
@@ -757,6 +833,7 @@ impl NodeConfig {
             .first()
             .map(|config| ArchiveReaderConfig {
                 ingestion_url: config.ingestion_url.clone(),
+                remote_store_options: config.remote_store_options.clone(),
                 download_concurrency: NonZeroUsize::new(config.concurrency)
                     .unwrap_or(NonZeroUsize::new(5).unwrap()),
                 remote_store_config: ObjectStoreConfig::default(),
@@ -767,7 +844,7 @@ impl NodeConfig {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
     }
 
-    pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
+    pub fn rpc(&self) -> Option<&crate::RpcConfig> {
         self.rpc.as_ref()
     }
 }
@@ -1112,6 +1189,7 @@ pub struct ArchiveReaderConfig {
     pub remote_store_config: ObjectStoreConfig,
     pub download_concurrency: NonZeroUsize,
     pub ingestion_url: Option<String>,
+    pub remote_store_options: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1122,6 +1200,12 @@ pub struct StateArchiveConfig {
     pub concurrency: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ingestion_url: Option<String>,
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        default,
+        deserialize_with = "deserialize_remote_store_options"
+    )]
+    pub remote_store_options: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1201,7 +1285,7 @@ pub struct AuthorityOverloadConfig {
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
-    Duration::from_millis(500)
+    Duration::from_millis(1000)
 }
 
 fn default_overload_monitor_interval() -> Duration {
@@ -1237,7 +1321,7 @@ fn default_max_transaction_manager_queue_length() -> usize {
 }
 
 fn default_max_transaction_manager_per_object_queue_length() -> usize {
-    20
+    2000
 }
 
 impl Default for AuthorityOverloadConfig {
@@ -1455,6 +1539,42 @@ pub struct StateDebugDumpConfig {
     pub dump_file_directory: Option<PathBuf>,
 }
 
+fn read_credential_from_path_or_literal(value: &str) -> Result<String, std::io::Error> {
+    let path = Path::new(value);
+    if path.exists() && path.is_file() {
+        std::fs::read_to_string(path).map(|content| content.trim().to_string())
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+// Custom deserializer for remote store options that supports file paths or literal values
+fn deserialize_remote_store_options<'de, D>(
+    deserializer: D,
+) -> Result<Vec<(String, String)>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    let raw_options: Vec<(String, String)> = Vec::deserialize(deserializer)?;
+    let mut processed_options = Vec::new();
+
+    for (key, value) in raw_options {
+        match read_credential_from_path_or_literal(&value) {
+            Ok(processed_value) => processed_options.push((key, processed_value)),
+            Err(e) => {
+                return Err(D::Error::custom(format!(
+                    "Failed to read credential for key '{}': {}",
+                    key, e
+                )))
+            }
+        }
+    }
+
+    Ok(processed_options)
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -1464,7 +1584,7 @@ mod tests {
     use sui_keys::keypair_file::{write_authority_keypair_to_file, write_keypair_to_file};
     use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair};
 
-    use super::Genesis;
+    use super::{Genesis, StateArchiveConfig};
     use crate::NodeConfig;
 
     #[test]
@@ -1527,6 +1647,79 @@ mod tests {
             template.worker_key_pair().public(),
             worker_key_pair.public()
         );
+    }
+
+    #[test]
+    fn test_remote_store_options_file_path_support() {
+        // Create temporary credential files
+        let temp_dir = std::env::temp_dir();
+        let access_key_file = temp_dir.join("test_access_key");
+        let secret_key_file = temp_dir.join("test_secret_key");
+
+        std::fs::write(&access_key_file, "test_access_key_value").unwrap();
+        std::fs::write(&secret_key_file, "test_secret_key_value\n").unwrap();
+
+        let yaml_config = format!(
+            r#"
+object-store-config: null
+concurrency: 5
+ingestion-url: "https://example.com"
+remote-store-options:
+  - ["aws_access_key_id", "{}"]
+  - ["aws_secret_access_key", "{}"]
+  - ["literal_key", "literal_value"]
+"#,
+            access_key_file.to_string_lossy(),
+            secret_key_file.to_string_lossy()
+        );
+
+        let config: StateArchiveConfig = serde_yaml::from_str(&yaml_config).unwrap();
+
+        // Verify that file paths were resolved and literal values preserved
+        assert_eq!(config.remote_store_options.len(), 3);
+
+        let access_key_option = config
+            .remote_store_options
+            .iter()
+            .find(|(key, _)| key == "aws_access_key_id")
+            .unwrap();
+        assert_eq!(access_key_option.1, "test_access_key_value");
+
+        let secret_key_option = config
+            .remote_store_options
+            .iter()
+            .find(|(key, _)| key == "aws_secret_access_key")
+            .unwrap();
+        assert_eq!(secret_key_option.1, "test_secret_key_value");
+
+        let literal_option = config
+            .remote_store_options
+            .iter()
+            .find(|(key, _)| key == "literal_key")
+            .unwrap();
+        assert_eq!(literal_option.1, "literal_value");
+
+        // Clean up
+        std::fs::remove_file(&access_key_file).ok();
+        std::fs::remove_file(&secret_key_file).ok();
+    }
+
+    #[test]
+    fn test_remote_store_options_literal_values_only() {
+        let yaml_config = r#"
+object-store-config: null
+concurrency: 5
+ingestion-url: "https://example.com"
+remote-store-options:
+  - ["aws_access_key_id", "literal_access_key"]
+  - ["aws_secret_access_key", "literal_secret_key"]
+"#;
+
+        let config: StateArchiveConfig = serde_yaml::from_str(yaml_config).unwrap();
+
+        assert_eq!(config.remote_store_options.len(), 2);
+        assert_eq!(config.remote_store_options[0].1, "literal_access_key");
+        assert_eq!(config.remote_store_options[1].1, "literal_secret_key");
     }
 }
 

@@ -6,19 +6,11 @@ pub mod vanilla;
 
 pub use vanilla::Vanilla;
 
-use std::{
-    collections::BTreeMap,
-    fmt::Debug,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, fmt::Debug};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{
-    dependency::{DependencySet, Pinned, PinnedDependencyInfo, Unpinned},
-    errors::PackageResult,
-    package::PackageName,
-};
+use crate::schema::{EnvironmentID, EnvironmentName, PackageName, ReplacementDependency};
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
@@ -41,15 +33,17 @@ pub trait MoveFlavor: Debug {
     /// An [AddressInfo] should give a unique identifier for a compiled package
     type AddressInfo: Debug + Serialize + DeserializeOwned + Clone;
 
-    /// An [EnvironmentID] uniquely identifies a place that a package can be published. For
-    /// example, an environment ID might be a chain identifier
-    //
-    // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
-    type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq + Ord + Debug + ToString;
+    /// Return the default environments for the flavor.
+    /// Used for populating new manifests & migration purposes.
+    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID>;
 
-    /// Return the implicit dependencies for the environments listed in [environments]
-    fn implicit_deps(
-        &self,
-        environments: impl Iterator<Item = Self::EnvironmentID>,
-    ) -> DependencySet<PinnedDependencyInfo>;
+    /// Return ALL the system dependencies for the requested environment.
+    fn system_dependencies(
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency>;
+
+    /// Return the default system dependencies for the requested environment.
+    fn default_system_dependencies(
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency>;
 }

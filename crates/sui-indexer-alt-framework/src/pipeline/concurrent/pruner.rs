@@ -362,7 +362,7 @@ mod tests {
     use super::*;
 
     #[derive(Clone, FieldCount)]
-    pub struct StoredData {}
+    pub struct StoredData;
 
     pub struct DataPipeline;
 
@@ -393,30 +393,7 @@ mod tests {
             to_exclusive: u64,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            let should_fail = conn
-                .0
-                .prune_failure_attempts
-                .lock()
-                .unwrap()
-                .get_mut(&(from, to_exclusive))
-                .is_some_and(|remaining| {
-                    if *remaining > 0 {
-                        *remaining -= 1;
-                        true
-                    } else {
-                        false
-                    }
-                });
-
-            if should_fail {
-                return Err(anyhow::anyhow!("Pruning failed"));
-            }
-
-            let mut data = conn.0.data.lock().unwrap();
-            for cp_sequence_number in from..to_exclusive {
-                data.remove(&cp_sequence_number);
-            }
-            Ok((to_exclusive - from) as usize)
+            conn.0.prune_data(from, to_exclusive)
         }
     }
 
@@ -551,7 +528,7 @@ mod tests {
             prune_concurrency: 1,
         };
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let cancel = CancellationToken::new();
 
         // Update data
@@ -633,7 +610,7 @@ mod tests {
 
         // Clean up
         cancel.cancel();
-        let _ = tokio::time::timeout(Duration::from_millis(1000), pruner_handle).await;
+        let _ = pruner_handle.await;
     }
 
     #[tokio::test]
@@ -647,7 +624,7 @@ mod tests {
             prune_concurrency: 1,
         };
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let cancel = CancellationToken::new();
 
         // Update data
@@ -711,7 +688,7 @@ mod tests {
 
         // Clean up
         cancel.cancel();
-        let _ = tokio::time::timeout(Duration::from_millis(1000), pruner_handle).await;
+        let _ = pruner_handle.await;
     }
 
     #[tokio::test]
@@ -725,7 +702,7 @@ mod tests {
             prune_concurrency: 1,
         };
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let cancel = CancellationToken::new();
 
         // Set up test data for checkpoints 1-4
@@ -752,14 +729,12 @@ mod tests {
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let mut prune_failure_attempts = HashMap::new();
-        prune_failure_attempts.insert((1, 2), 1);
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
-            prune_failure_attempts: Arc::new(Mutex::new(prune_failure_attempts)),
             ..Default::default()
-        };
+        }
+        .with_prune_failures(1, 2, 1);
 
         // Start the pruner
         let store_clone = store.clone();
@@ -811,6 +786,6 @@ mod tests {
 
         // Clean up
         cancel.cancel();
-        let _ = tokio::time::timeout(Duration::from_millis(1000), pruner_handle).await;
+        let _ = pruner_handle.await;
     }
 }

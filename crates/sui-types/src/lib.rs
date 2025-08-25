@@ -27,6 +27,7 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 pub mod error;
 
 pub mod accumulator_event;
+pub mod accumulator_metadata;
 pub mod accumulator_root;
 pub mod authenticator_state;
 pub mod balance;
@@ -50,6 +51,7 @@ pub mod event;
 pub mod executable_transaction;
 pub mod execution;
 pub mod execution_config_utils;
+pub mod execution_params;
 pub mod execution_status;
 pub mod full_checkpoint_content;
 pub mod gas;
@@ -79,6 +81,7 @@ pub mod proto_value;
 pub mod ptb_trace;
 pub mod quorum_driver_types;
 pub mod randomness_state;
+pub mod rpc_proto_conversions;
 pub mod signature;
 pub mod signature_verification;
 pub mod storage;
@@ -235,6 +238,10 @@ impl<T: MoveTypeTagTrait> MoveTypeTagTrait for Vec<T> {
     fn get_type_tag() -> TypeTag {
         TypeTag::Vector(Box::new(T::get_type_tag()))
     }
+}
+
+pub trait MoveTypeTagTraitGeneric {
+    fn get_type_tag(type_params: &[TypeTag]) -> TypeTag;
 }
 
 pub fn is_primitive(

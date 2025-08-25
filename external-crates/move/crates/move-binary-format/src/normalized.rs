@@ -119,10 +119,12 @@ pub struct Constant<S> {
 }
 
 /// Normalized version of a `StructDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// `ModuleId` or `Module` to ensure the two types are defined at the same place.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Struct<S: Hash + Eq> {
+    // Defining module name
+    pub defining_module: ModuleId<S>,
     pub name: S,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
@@ -154,6 +156,7 @@ pub struct Function<S: Hash + Eq> {
     pub visibility: Visibility,
     pub is_entry: bool,
     pub type_parameters: Vec<AbilitySet>,
+    pub locals: Signature<S>,
     pub parameters: Signature<S>,
     pub return_: Signature<S>,
     code_included: bool,
@@ -162,10 +165,12 @@ pub struct Function<S: Hash + Eq> {
 }
 
 /// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// `ModuleId` or `Module` to ensure the two types are defined at the same place.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Enum<S: Hash + Eq> {
+    // Defining module name
+    pub defining_module: ModuleId<S>,
     pub name: S,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
@@ -430,6 +435,10 @@ impl<S> Type<S> {
 
     pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: &StructTag) -> Self {
         Type::Datatype(Box::new(Datatype::from_struct_tag(pool, tag)))
+    }
+
+    pub fn from_datatype(datatype: Datatype<S>) -> Self {
+        Type::Datatype(Box::new(datatype))
     }
 
     /// Return true if `self` is a closed type with no free type variables
@@ -772,6 +781,17 @@ impl<S: Hash + Eq> Struct<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.struct_handle);
+
+        let name = pool.intern(m.identifier_at(handle.name));
+
+        let defining_module_handle = m.module_handle_at(handle.module);
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let defining_module = ModuleId {
+            address: defining_module_address,
+            name: defining_module_name,
+        };
+
         let fields = match &def.field_information {
             StructFieldInformation::Native => {
                 // Pretend for compatibility checking no fields
@@ -779,8 +799,9 @@ impl<S: Hash + Eq> Struct<S> {
             }
             StructFieldInformation::Declared(fields) => Fields::new(pool, m, fields),
         };
-        let name = pool.intern(m.identifier_at(handle.name));
+
         Struct {
+            defining_module,
             name,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
@@ -792,17 +813,41 @@ impl<S: Hash + Eq> Struct<S> {
         self.type_parameters.iter().map(|param| &param.constraints)
     }
 
+    // Checks equivalence, omitting the defining module to avoid module name comparisons (which may
+    // be invalid during publication, etc).
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
+            defining_module,
             name,
             abilities,
             type_parameters,
             fields,
         } = self;
         name == &other.name
+            && defining_module == &other.defining_module
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && fields.equivalent(&other.fields)
+    }
+}
+
+impl<S: Hash + Eq + Clone> Struct<S> {
+    /// Returns a instantiated datatype signature token, using the provided types. The module
+    /// address and name are the definining ID. Note that the address may be `0` if this module is
+    /// unpublished.
+    ///
+    /// Returns `None` if an incorrect number of arguments is provided.
+    /// Does not check type ability constraints.
+    pub fn datatype(&self, args: Vec<Type<S>>) -> Option<Datatype<S>> {
+        if self.type_parameters.len() != args.len() {
+            return None;
+        };
+        let datatype = Datatype {
+            module: self.defining_module.clone(),
+            name: self.name.clone(),
+            type_arguments: args.into_iter().collect(),
+        };
+        Some(datatype)
     }
 }
 
@@ -867,7 +912,13 @@ impl<S: Hash + Eq> Function<S> {
     ) -> Self {
         let fhandle = m.function_handle_at(def.function);
         let name = pool.intern(m.identifier_at(fhandle.name));
-        let (jump_tables, code) = if include_code {
+        let (locals, jump_tables, code) = if include_code {
+            let locals_index_opt = def.code.as_ref().map(|code| code.locals);
+            let locals = if let Some(locals_index) = locals_index_opt {
+                tables.signatures[locals_index.0 as usize].clone()
+            } else {
+                Rc::new(vec![])
+            };
             let jump_tables = def
                 .code
                 .iter()
@@ -884,9 +935,9 @@ impl<S: Hash + Eq> Function<S> {
                         .collect()
                 })
                 .unwrap_or_default();
-            (jump_tables, code)
+            (locals, jump_tables, code)
         } else {
-            (vec![], vec![])
+            (Rc::new(vec![]), vec![], vec![])
         };
         Function {
             name,
@@ -896,6 +947,7 @@ impl<S: Hash + Eq> Function<S> {
             parameters: tables.signatures[fhandle.parameters.0 as usize].clone(),
             return_: tables.signatures[fhandle.return_.0 as usize].clone(),
             code_included: include_code,
+            locals,
             jump_tables,
             code,
         }
@@ -908,6 +960,7 @@ impl<S: Hash + Eq> Function<S> {
     }
 
     /// Should not be called if `code_included` is `false`--will panic in debug builds.
+    /// This ignores locals.
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             name,
@@ -917,6 +970,7 @@ impl<S: Hash + Eq> Function<S> {
             parameters,
             return_,
             code_included,
+            locals: _,
             jump_tables,
             code,
         } = self;
@@ -933,6 +987,11 @@ impl<S: Hash + Eq> Function<S> {
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
     }
+
+    pub fn jump_tables(&self) -> &[Rc<VariantJumpTable<S>>] {
+        assert!(self.code_included);
+        &self.jump_tables
+    }
 }
 
 impl<S: Hash + Eq> Enum<S> {
@@ -945,7 +1004,17 @@ impl<S: Hash + Eq> Enum<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.enum_handle);
+
         let name = pool.intern(m.identifier_at(handle.name));
+
+        let defining_module_handle = m.module_handle_at(handle.module);
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let defining_module = ModuleId {
+            address: defining_module_address,
+            name: defining_module_name,
+        };
+
         let variants = def
             .variants
             .iter()
@@ -955,6 +1024,7 @@ impl<S: Hash + Eq> Enum<S> {
             })
             .collect();
         Enum {
+            defining_module,
             name,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
@@ -962,17 +1032,41 @@ impl<S: Hash + Eq> Enum<S> {
         }
     }
 
+    // Checks equivalence, omitting the defining module to avoid module name comparisons (which may
+    // be invalid during publication, etc).
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
+            defining_module,
             name,
             abilities,
             type_parameters,
             variants,
         } = self;
         name == &other.name
+            && defining_module == &other.defining_module
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && map_ordered_equivalent(variants, &other.variants, |v1, v2| v1.equivalent(v2))
+    }
+}
+
+impl<S: Hash + Eq + Clone> Enum<S> {
+    /// Returns a instantiated datatype signature token, using the provided types. The module
+    /// address and name are the definining ID. Note that the address may be `0` if this module is
+    /// unpublished.
+    ///
+    /// Returns `None` if an incorrect number of arguments is provided.
+    /// Does not check type ability constraints.
+    pub fn datatype(&self, args: Vec<Type<S>>) -> Option<Datatype<S>> {
+        if self.type_parameters.len() != args.len() {
+            return None;
+        };
+        let datatype = Datatype {
+            module: self.defining_module.clone(),
+            name: self.name.clone(),
+            type_arguments: args.into_iter().collect(),
+        };
+        Some(datatype)
     }
 }
 
@@ -1443,6 +1537,316 @@ impl<S: Hash + Eq> Bytecode<S> {
     }
 }
 
+impl<S: Hash + Eq> Bytecode<S> {
+    pub fn is_unconditional_branch(&self) -> bool {
+        match self {
+            Bytecode::Ret | Bytecode::Abort | Bytecode::Branch(_) => true,
+            Bytecode::VariantSwitch(_) => true,
+            Bytecode::Pop
+            | Bytecode::BrTrue(_)
+            | Bytecode::BrFalse(_)
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::Pack(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveToDeprecated(_) => false,
+        }
+    }
+
+    pub fn is_conditional_branch(&self) -> bool {
+        match self {
+            Bytecode::BrTrue(_) | Bytecode::BrFalse(_) => true,
+            Bytecode::Pop
+            | Bytecode::Ret
+            | Bytecode::Branch(_)
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::Pack(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Abort
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::VariantSwitch(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveToDeprecated(_) => false,
+        }
+    }
+
+    pub fn is_branch(&self) -> bool {
+        self.is_unconditional_branch() || self.is_conditional_branch()
+    }
+
+    pub fn offsets(&self, jump_tables: &[Rc<VariantJumpTable<S>>]) -> Vec<CodeOffset> {
+        match self {
+            Bytecode::BrTrue(offset) | Bytecode::BrFalse(offset) | Bytecode::Branch(offset) => {
+                vec![*offset]
+            }
+            Bytecode::VariantSwitch(jt) => {
+                let JumpTableInner::Full(offsets) = &jt.jump_table;
+
+                assert!(
+                    // The jump table index must be within the bounds of the jump tables. This is
+                    // checked in the bounds checker.
+                    // TODO is this really necessary?
+                    jump_tables.iter().any(|jt_| jt_.equivalent(jt)),
+                    "Jump table index out of bounds"
+                );
+
+                offsets.clone()
+            }
+            Bytecode::Ret | Bytecode::Abort => vec![],
+            Bytecode::Pop
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::Pack(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveToDeprecated(_) => vec![],
+        }
+    }
+
+    fn get_successors(
+        pc: CodeOffset,
+        code: &[Bytecode<S>],
+        jump_tables: &[Rc<VariantJumpTable<S>>],
+    ) -> Vec<CodeOffset> {
+        assert!(
+            // The program counter must remain within the bounds of the code
+            pc < u16::MAX && (pc as usize) < code.len(),
+            "Program counter out of bounds"
+        );
+
+        let bytecode = &code[pc as usize];
+        let mut v = vec![];
+
+        v.extend(bytecode.offsets(jump_tables));
+
+        let next_pc = pc + 1;
+        if next_pc >= code.len() as CodeOffset {
+            return v;
+        }
+
+        if !bytecode.is_unconditional_branch() && !v.contains(&next_pc) {
+            // avoid duplicates
+            v.push(pc + 1);
+        }
+
+        // always give successors in ascending order
+        // NB: the size of `v` is generally quite small (bounded by maximum # of variants allowed
+        // in a variant jump table), so a sort here is not a performance concern.
+        v.sort();
+
+        v
+    }
+}
+
+impl<S: Hash + Eq> move_abstract_interpreter::control_flow_graph::Instruction for Bytecode<S> {
+    type Index = CodeOffset;
+    type VariantJumpTables = [Rc<VariantJumpTable<S>>];
+
+    const ENTRY_BLOCK_ID: CodeOffset = 0;
+
+    fn get_successors(
+        pc: Self::Index,
+        code: &[Self],
+        jump_tables: &Self::VariantJumpTables,
+    ) -> Vec<Self::Index> {
+        Bytecode::get_successors(pc, code, jump_tables)
+    }
+
+    fn offsets(&self, jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index> {
+        self.offsets(jump_tables)
+    }
+
+    fn usize_as_index(i: usize) -> Self::Index {
+        i as CodeOffset
+    }
+
+    fn index_as_usize(i: Self::Index) -> usize {
+        i as usize
+    }
+
+    fn is_branch(&self) -> bool {
+        self.is_branch()
+    }
+}
+
 fn signature_to_single_type<S: Hash + Eq>(
     tables: &Tables<S>,
     sig_idx: SignatureIndex,
@@ -1644,5 +2048,100 @@ impl StringPool for ArcPool {
 
     fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr {
         s.0.as_ident_str()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_bytecode_vec<S: Hash + Eq>(codes: Vec<Bytecode<S>>) -> Vec<Bytecode<S>> {
+        codes
+    }
+
+    #[test]
+    fn test_get_successors_ret_and_abort() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::Ret, Bytecode::Abort]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Ret and Abort should have no successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    fn test_get_successors_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::LdU8(42),
+            Bytecode::Branch(2),
+            Bytecode::LdU8(42),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Branch should only have the branch target as successor
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_conditional_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::BrTrue(2),
+            Bytecode::BrFalse(2),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Conditional branch should have both the branch target and next instruction as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_variant_switch() {
+        let jt = Rc::new(VariantJumpTable {
+            enum_: Rc::new(Enum {
+                defining_module: ModuleId {
+                    address: AccountAddress::ZERO,
+                    name: Identifier::new("E").unwrap(),
+                },
+                name: Identifier::new("E").unwrap(),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+                variants: IndexMap::new(),
+            }),
+            jump_table: JumpTableInner::Full(vec![1, 2]),
+        });
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::VariantSwitch(jt.clone()),
+            Bytecode::Ret,
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![jt];
+
+        // VariantSwitch should have all jump table offsets as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_get_successors_fallthrough() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::LdU8(42), Bytecode::LdU8(43), Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // LdU8 is not a branch, so successor is next instruction
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+        assert_eq!(Bytecode::get_successors(2, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Program counter out of bounds")]
+    fn test_get_successors_out_of_bounds() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+        // pc out of bounds should panic
+        Bytecode::get_successors(10, &code, &jump_tables);
     }
 }

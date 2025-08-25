@@ -9,11 +9,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{errors::PackageResult, package::PackageName};
-use anyhow::{Context, ensure};
-use clap::{Command, Parser, Subcommand};
-use move_core_types::identifier::Identifier;
-use move_package::source_package::layout::SourcePackageLayout;
+use crate::errors::PackageResult;
+use crate::{package::layout::SourcePackageLayout, schema::PackageName};
+use anyhow::Context;
+use clap::Parser;
 
 const MAINNET_CHAIN_ID: &str = "35834a8a";
 const TESTNET_CHAIN_ID: &str = "4c78adac";
@@ -29,10 +28,10 @@ pub struct New {
 impl New {
     pub fn execute(&self) -> PackageResult<()> {
         let path = match self.path {
-            Some(ref path) => path.join(&self.name.to_string()),
+            Some(ref path) => path.join(self.name.to_string()),
             None => {
                 let current_dir = std::env::current_dir()?;
-                current_dir.join(&self.name.to_string())
+                current_dir.join(self.name.to_string())
             }
         };
 
@@ -103,18 +102,19 @@ edition = "2025"         # use "2024" for Move 2024 edition
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 # flavor = sui
 
-[environments]           # add the environment names and their chain ids here
-mainnet = "{MAINNET_CHAIN_ID}"
-testnet = "{TESTNET_CHAIN_ID}"
+# This section contains custom environments of the form `name = "chain-id"`.
+# In most cases you can leave this blank, since there are `mainnet` and `testnet` environments implicitly available
+[environments]
+# env = "chain-id"
 
 [dependencies]
 # Add your dependencies here or leave empty.
 
 # Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
-# bar = { path = "../bar" }
+# bar = { local = "../bar" }
 
 # Git dependency
-# foo = { git = "https://example.com/foo.git", rev = "releases/v1"}
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", subdir = "foo" }
 
 # Setting `override = true` forces your dependencies to use this version of the package.
 # This is required if you need to link against a different version from one of your dependencies, or if

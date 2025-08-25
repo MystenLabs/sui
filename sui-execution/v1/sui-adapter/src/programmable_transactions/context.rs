@@ -524,12 +524,7 @@ mod checked {
             modules: &[CompiledModule],
             dependencies: impl IntoIterator<Item = &'p MovePackage>,
         ) -> Result<MovePackage, ExecutionError> {
-            MovePackage::new_initial(
-                modules,
-                self.protocol_config.max_move_package_size(),
-                self.protocol_config.move_binary_format_version(),
-                dependencies,
-            )
+            MovePackage::new_initial(modules, self.protocol_config, dependencies)
         }
 
         /// Create a package upgrade from `previous_package` with `new_modules` and `dependencies`
@@ -1230,6 +1225,9 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
+            CallArg::BalanceWithdraw(_) => {
+                unreachable!("Impossible to hit BalanceWithdraw in v1")
+            }
         })
     }
 

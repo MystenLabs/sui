@@ -188,7 +188,7 @@ public fun confirm_request<T>(
     let mut completed = receipts.into_keys();
     let mut total = completed.length();
 
-    assert!(total == self.rules.size(), EPolicyNotSatisfied);
+    assert!(total == self.rules.length(), EPolicyNotSatisfied);
 
     while (total > 0) {
         let rule_type = completed.pop_back();
@@ -219,7 +219,7 @@ public fun add_rule<T, Rule: drop, Config: store + drop>(
     assert!(object::id(policy) == cap.policy_id, ENotOwner);
     assert!(!has_rule<T, Rule>(policy), ERuleAlreadySet);
     df::add(&mut policy.id, RuleKey<Rule> {}, cfg);
-    policy.rules.insert(type_name::get<Rule>())
+    policy.rules.insert(type_name::with_defining_ids<Rule>())
 }
 
 /// Get the custom Config for the Rule (can be only one per "Rule" type).
@@ -239,7 +239,7 @@ public fun add_to_balance<T, Rule: drop>(_: Rule, policy: &mut TransferPolicy<T>
 /// Adds a `Receipt` to the `TransferRequest`, unblocking the request and
 /// confirming that the policy requirements are satisfied.
 public fun add_receipt<T, Rule: drop>(_: Rule, request: &mut TransferRequest<T>) {
-    request.receipts.insert(type_name::get<Rule>())
+    request.receipts.insert(type_name::with_defining_ids<Rule>())
 }
 
 /// Check whether a custom rule has been added to the `TransferPolicy`.
@@ -254,7 +254,7 @@ public fun remove_rule<T, Rule: drop, Config: store + drop>(
 ) {
     assert!(object::id(policy) == cap.policy_id, ENotOwner);
     let _: Config = df::remove(&mut policy.id, RuleKey<Rule> {});
-    policy.rules.remove(&type_name::get<Rule>());
+    policy.rules.remove(&type_name::with_defining_ids<Rule>());
 }
 
 // === Fields access: TransferPolicy ===

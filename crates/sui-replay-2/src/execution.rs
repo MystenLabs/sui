@@ -7,7 +7,7 @@
 //! `execute_transaction_to_effects` requires info from the `EpochStore`
 //! (epoch, protocol config, epoch start timestamp, rgp), from the `TransactionStore`
 //! as in transaction data and effects, and from the `ObjectStore` for dynamic loads
-//! (e.g. synamic fields).
+//! (e.g. dynamic fields).
 //! This module also contains the traits used by execution to talk to
 //! the store (BackingPackageStore, ObjectStore, ChildObjectResolver)
 
@@ -31,10 +31,12 @@ use sui_types::{
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiError, SuiResult},
+    execution_params::{get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError},
     gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
     object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, ConfigStore, PackageObject, ParentSync},
+    storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
     transaction::{CheckedInputObjects, TransactionDataAPI},
 };
@@ -45,6 +47,17 @@ pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
     executor: Arc<dyn Executor + Send + Sync>,
     metrics: Arc<LimitsMetrics>,
+}
+
+// Returned struct from execution. Contains all the data related to a transaction.
+// Transaction data and effects (both expected and actual) and the caches containing
+// the objects used during execution.
+pub struct TxnContextAndEffects {
+    pub execution_effects: TransactionEffects, // effects of the replay execution
+    pub expected_effects: TransactionEffects,  // expected effects as found in the transaction data
+    pub gas_status: SuiGasStatus,              // gas status of the replay execution
+    pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
+    pub inner_store: InnerTemporaryStore,      // temporary store used during execution
 }
 
 // Entry point. Executes a transaction.
@@ -58,17 +71,14 @@ pub fn execute_transaction_to_effects(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<
     (
-        Result<(), ExecutionError>,                // transaction result
-        TransactionEffects,                        // effects of the replay execution
-        SuiGasStatus,                              // gas status of the replay execution
-        TransactionEffects, // expected effects as found in the transaction data
-        BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
+        Result<(), ExecutionError>, // transaction result
+        TxnContextAndEffects,       // data touched and changed during execution
     ),
     anyhow::Error,
 > {
     debug!("Start execution");
     // TODO: Hook up...
-    let certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
+    let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
     let ReplayTransaction {
         digest,
@@ -82,7 +92,9 @@ pub fn execute_transaction_to_effects(
     let input_objects = get_input_objects_for_replay(&txn_data, &digest, &object_cache)?;
     let protocol_config = &executor.protocol_config;
     let epoch = expected_effects.executed_epoch();
-    let epoch_data = epoch_store.epoch_info(epoch)?;
+    let epoch_data = epoch_store
+        .epoch_info(epoch)?
+        .ok_or_else(|| anyhow::anyhow!(format!("Epoch {} not found", epoch)))?;
     let epoch_start_timestamp = epoch_data.start_timestamp;
     let gas_status = if txn_data.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
@@ -100,16 +112,29 @@ pub fn execute_transaction_to_effects(
         store: object_store,
         object_cache: RefCell::new(object_cache),
     };
-    let (_inner_store, gas_status, effects, _execution_timing, result) =
+    let input_objects = CheckedInputObjects::new_for_replay(input_objects);
+    // TODO(address-balances): Get withdraw status from effects.
+    let early_execution_error = get_early_execution_error(
+        &digest,
+        &input_objects,
+        &config_certificate_deny_set,
+        // TODO(address-balances): Support balance withdraw status for replay
+        &BalanceWithdrawStatus::NoWithdraw,
+    );
+    let execution_params = match early_execution_error {
+        Some(error) => ExecutionOrEarlyError::Err(error),
+        None => ExecutionOrEarlyError::Ok(()),
+    };
+    let (inner_store, gas_status, effects, _execution_timing, result) =
         executor.executor.execute_transaction_to_effects(
             &store,
             protocol_config,
             executor.metrics.clone(),
             false, // expensive checks
-            &certificate_deny_set,
+            execution_params,
             &epoch,
             epoch_start_timestamp,
-            CheckedInputObjects::new_for_replay(input_objects),
+            input_objects,
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),
@@ -124,7 +149,16 @@ pub fn execute_transaction_to_effects(
     } = store;
     let object_cache = object_cache.into_inner();
     debug!("End execution");
-    Ok((result, effects, gas_status, expected_effects, object_cache))
+    Ok((
+        result,
+        TxnContextAndEffects {
+            execution_effects: effects,
+            expected_effects,
+            gas_status,
+            object_cache,
+            inner_store,
+        },
+    ))
 }
 
 impl ReplayExecutor {
@@ -184,7 +218,8 @@ impl ReplayStore<'_> {
             .map_err(|e| SuiError::Storage(e.to_string()))
             .ok()?
             .into_iter()
-            .next()?;
+            .next()?
+            .map(|(obj, _version)| obj);
         // add it to the cache
         if let Some(obj) = &object {
             self.object_cache
@@ -195,33 +230,6 @@ impl ReplayStore<'_> {
         }
 
         object
-    }
-}
-
-impl ConfigStore for ReplayStore<'_> {
-    fn get_current_epoch_stable_sequence_number(
-        &self,
-        object_id: &ObjectID,
-        _epoch_id: EpochId,
-    ) -> Option<VersionNumber> {
-        let object_key = ObjectKey {
-            object_id: *object_id,
-            // we could have used `VersionQuery::ImmutableOrLatest`
-            // but we would have to track system packages separetly
-            // which we may want to consider
-            version_query: VersionQuery::AtCheckpoint(self.checkpoint),
-        };
-
-        let object = self
-            .store
-            .get_objects(&[object_key])
-            .expect("Storage error");
-        debug_assert!(object.len() == 1, "Expected one object for {}", object_id);
-        let object = object.into_iter().next().unwrap().unwrap();
-        // Return the version of the object as the stable sequence number -- this is fine as we
-        // just need a sequence number in the in order to fetch a workable version of the object
-        // for replay and not necessarily the actual epoch-stable sequence number.
-        Some(object.version())
     }
 }
 
@@ -243,9 +251,7 @@ impl BackingPackageStore for ReplayStore<'_> {
         // If the package is not in the cache, fetch it from the store
         let object_key = ObjectKey {
             object_id: *package_id,
-            // we could have used `VersionQuery::ImmutableOrLatest`
-            // but we would have to track system packages separetly
-            // which we may want to consider
+            // Using AtCheckpoint to get the package version at the time of execution
             version_query: VersionQuery::AtCheckpoint(self.checkpoint),
         };
         let package = self
@@ -257,7 +263,7 @@ impl BackingPackageStore for ReplayStore<'_> {
             "Expected one package object for {}",
             package_id
         );
-        let package = package.into_iter().next().unwrap().unwrap();
+        let (package, _version) = package.into_iter().next().unwrap().unwrap();
         self.object_cache
             .borrow_mut()
             .entry(*package_id)
@@ -283,7 +289,8 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
                 .map_err(|e| SuiError::Storage(e.to_string()))
                 .ok()?
                 .into_iter()
-                .next()?,
+                .next()?
+                .map(|(obj, _version)| obj),
         };
         object
     }
@@ -319,7 +326,11 @@ impl ChildObjectResolver for ReplayStore<'_> {
             .get_objects(&[object_key])
             .map_err(|e| SuiError::Storage(e.to_string()))?;
         debug_assert!(object.len() == 1, "Expected one object for {}", child,);
-        let object = object.into_iter().next().unwrap();
+        let object = object
+            .into_iter()
+            .next()
+            .unwrap()
+            .map(|(obj, _version)| obj);
         Ok(object)
     }
 

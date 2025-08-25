@@ -1,23 +1,26 @@
 ---
-title: DeepBook Design
-sidebar_label: Design
+title: Design
+description: Learn about DeepBookV3 design, including the Pool, PoolRegistry, and BalanceManager shared objects.
+keywords: [ deepbook design, deepbookv3, deep book, pool, poolregistry, balancemanager, pool shared object, poolregister shared object, balancemanager shared object, book, state, vault, governance, history, account, bigvector ]
 ---
 
-At a high level, the DeepBook design follows the following flow, which revolves around three shared objects:
-  - `Pool`: A shared object that represents one market and is responsible for managing its order book, users, stakes, and so on. See the [Pool shared object](#pool) section to learn more.
-  - `PoolRegistry`: Used only during pool creation, it makes sure that duplicate pools are not created and maintains package versioning.
-  - `BalanceManager`: Used to source a user's funds when placing orders. A single `BalanceManager` can be used between all pools. See [BalanceManager](./balance-manager.mdx) to learn more.
+At a high level, the DeepBookV3 design follows the following flow, which revolves around three shared objects:
+
+- `Pool`: A shared object that represents one market and is responsible for managing its order book, users, stakes, and so on. See the [Pool shared object](#pool) section to learn more.
+- `PoolRegistry`: Used only during pool creation, it makes sure that duplicate pools are not created and maintains package versioning.
+- `BalanceManager`: Used to source a user's funds when placing orders. A single `BalanceManager` can be used between all pools. See [BalanceManager](./balance-manager.mdx) to learn more.
 
 <p class="flex justify-center">![1](./images/DBv3Architecture.png)</p>
 
 ## Pool shared object {#pool}
 
 All public facing functions take in the `Pool` shared object as a mutable or immutable reference. `Pool` is made up of three distinct components: 
-  - [`Book`](#book)
-  - [`State`](#state)
-  - [`Vault`](#vault)
 
-Logic is isolated between components and each component builds on top of the previous one. By maintaining a book, then state, then vault relationship, DeepBook can provide data availability guarantees, improve code readability, and help make maintaining and upgrading the protocol easier. 
+- [`Book`](#book)
+- [`State`](#state)
+- [`Vault`](#vault)
+
+Logic is isolated between components and each component builds on top of the previous one. By maintaining a book, then state, then vault relationship, DeepBookV3 can provide data availability guarantees, improve code readability, and help make maintaining and upgrading the protocol easier. 
 
 <p class="flex justify-center">![Pool Modules](./images/pool.png)</p>
 
@@ -66,7 +69,7 @@ Users can also vote on live proposals. When a proposal exceeds the quorum, the n
 
 The following diagram helps visualize the governance lifecycle.
 
-<p class="flex justify-center">![DeepBook Governance Timeline](./images/governance.png)</p>
+<p class="flex justify-center">![DeepBookV3 Governance Timeline](./images/governance.png)</p>
 
 #### History
 
@@ -105,7 +108,7 @@ Each account has settled and owed balances. Settled balances are what the pool o
 
 ### Vault
 
-Every transaction that a user performs on DeepBook resets their settled and owed balances. The vault then processes these balances for the user, deducting or adding to funds to their `BalanceManager`.
+Every transaction that a user performs on DeepBookV3 resets their settled and owed balances. The vault then processes these balances for the user, deducting or adding to funds to their `BalanceManager`.
 
 The vault also stores the `DeepPrice` struct. This object holds up to 100 data points representing the conversion rate between the pool's base or quote asset and DEEP. These data points are sourced from a whitelisted pool, DEEP/USDC or DEEP/SUI. This conversion rate is used to determine the quantity of DEEP tokens required to pay for trading fees.
 
@@ -126,25 +129,27 @@ The following diagram of the lifecycle of an order placement action helps visual
 ### Pool
 
 In the `Pool` module, `place_order_int` is called with the user's input parameters. In this function, four things happen in order: 
-  1. An `OrderInfo` is created.
-  1. The `Book` function `create_order` is called.
-  1. The `State` function `process_create` is called.
-  1. The `Vault` function `settle_balance_manager` is called. 
+
+1. An `OrderInfo` is created.
+1. The `Book` function `create_order` is called.
+1. The `State` function `process_create` is called.
+1. The `Vault` function `settle_balance_manager` is called. 
 
 ### Book
 
 The order creation within the book involves three primary tasks:
-  - Validate inputs.
-  - Match against existing orders.
-  - Inject any remaining quantity into the order book as a limit order.
+
+- Validate inputs.
+- Match against existing orders.
+- Inject any remaining quantity into the order book as a limit order.
 
 Validation of inputs ensures that quantity, price, timestamp, and order type are within expected ranges.
 
-To match an `OrderInfo` against the book, the list of `Order`s is iterated in the opposite side of the book. If there is an overlap in price and the existing maker order has not expired, then DeepBook matches their quantities and generates a `Fill`. DeepBook appends that fill to the `OrderInfo` fills, to use later in state. DeepBook updates the existing maker order quantities and status during each match, and removes them from the book if they are completely filled or expired.
+To match an `OrderInfo` against the book, the list of `Order`s is iterated in the opposite side of the book. If there is an overlap in price and the existing maker order has not expired, then DeepBookV3 matches their quantities and generates a `Fill`. DeepBookV3 appends that fill to the `OrderInfo` fills, to use later in state. DeepBookV3 updates the existing maker order quantities and status during each match, and removes them from the book if they are completely filled or expired.
 
-Finally, if the `OrderInfo` object has any remaining quantity, DeepBook converts it into a compact `Order` object and injects it into the order book. `Order` has the minimum amount of data necessary for matching, while `OrderInfo` has the maximum amount of data for general processing.
+Finally, if the `OrderInfo` object has any remaining quantity, DeepBookV3 converts it into a compact `Order` object and injects it into the order book. `Order` has the minimum amount of data necessary for matching, while `OrderInfo` has the maximum amount of data for general processing.
 
-Regardless of direction or order type, all DeepBook matching is processed in a single function.
+Regardless of direction or order type, all DeepBookV3 matching is processed in a single function.
 
 ### State
 
@@ -163,3 +168,7 @@ First, the function validates that a trader is authorized to use the `BalanceMan
 Then, for each asset type the process compares `balances_out` against `balances_in`. If the `balances_out` total exceeds `balances_in`, the function splits the difference from the vault's balance and deposits it into the `BalanceManager`. Conversely, if the `balances_in` total exceeds `balances_out`, the function withdraws the difference from the `BalanceManager` and joins it to the vault's balance. 
 
 This process is repeated for base, quote, and DEEP asset balances, ensuring all asset balances are accurately reflected and settled between the vault and the `BalanceManager`.
+
+## Related links
+
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

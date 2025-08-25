@@ -83,6 +83,7 @@ control over the currency which a simple open-loop system can't provide.
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -1091,7 +1092,7 @@ required by the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolic
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_add_approval">add_approval</a>&lt;T, W: drop&gt;(_t: W, request: &<b>mut</b> <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> TxContext) {
-    request.<a href="../sui/token.md#sui_token_approvals">approvals</a>.insert(type_name::get&lt;W&gt;())
+    request.<a href="../sui/token.md#sui_token_approvals">approvals</a>.insert(type_name::with_defining_ids&lt;W&gt;())
 }
 </code></pre>
 
@@ -1396,7 +1397,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     <b>if</b> (!self.<a href="../sui/token.md#sui_token_rules">rules</a>.contains(&<a href="../sui/token.md#sui_token_action">action</a>)) {
         <a href="../sui/token.md#sui_token_allow">allow</a>(self, cap, <a href="../sui/token.md#sui_token_action">action</a>, ctx);
     };
-    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).insert(type_name::get&lt;Rule&gt;())
+    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -1430,7 +1431,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     _ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
-    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).remove(&type_name::get&lt;Rule&gt;())
+    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).remove(&type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 

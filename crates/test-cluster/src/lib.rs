@@ -93,6 +93,7 @@ pub struct TestCluster {
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
     indexer_handle: Option<test_indexer_handle::IndexerHandle>,
+    transaction_driver_percentage: Option<u8>,
 }
 
 impl TestCluster {
@@ -156,6 +157,10 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone())
+    }
+
+    pub fn transaction_driver_percentage(&self) -> Option<u8> {
+        self.transaction_driver_percentage
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -579,15 +584,15 @@ impl TestCluster {
         TestTransactionBuilder::new(sender, gas, rgp)
     }
 
-    pub fn sign_transaction(&self, tx_data: &TransactionData) -> Transaction {
-        self.wallet.sign_transaction(tx_data)
+    pub async fn sign_transaction(&self, tx_data: &TransactionData) -> Transaction {
+        self.wallet.sign_transaction(tx_data).await
     }
 
     pub async fn sign_and_execute_transaction(
         &self,
         tx_data: &TransactionData,
     ) -> SuiTransactionBlockResponse {
-        let tx = self.wallet.sign_transaction(tx_data);
+        let tx = self.wallet.sign_transaction(tx_data).await;
         self.execute_transaction(tx).await
     }
 
@@ -710,11 +715,13 @@ impl TestCluster {
     ) -> ObjectRef {
         let context = &self.wallet;
         let (sender, gas) = context.get_one_gas_object().await.unwrap().unwrap();
-        let tx = context.sign_transaction(
-            &TestTransactionBuilder::new(sender, gas, rgp)
-                .transfer_sui(amount, funding_address)
-                .build(),
-        );
+        let tx = context
+            .sign_transaction(
+                &TestTransactionBuilder::new(sender, gas, rgp)
+                    .transfer_sui(amount, funding_address)
+                    .build(),
+            )
+            .await;
         context.execute_transaction_must_succeed(tx).await;
 
         context
@@ -850,6 +857,11 @@ pub struct TestClusterBuilder {
     indexer_backed_rpc: bool,
 
     chain_override: Option<Chain>,
+
+    transaction_driver_percentage: Option<u8>,
+
+    #[cfg(msim)]
+    inject_synthetic_execution_time: bool,
 }
 
 impl TestClusterBuilder {
@@ -884,6 +896,9 @@ impl TestClusterBuilder {
                 true,
             ),
             indexer_backed_rpc: false,
+            transaction_driver_percentage: None,
+            #[cfg(msim)]
+            inject_synthetic_execution_time: false,
         }
     }
 
@@ -1106,6 +1121,19 @@ impl TestClusterBuilder {
         self
     }
 
+    #[cfg(msim)]
+    pub fn with_synthetic_execution_time_injection(mut self) -> Self {
+        self.inject_synthetic_execution_time = true;
+        self
+    }
+
+    /// Percentage of transactions going through TransactionDriver, instead of QuorumDriver.
+    /// Can be overridden by setting the TRANSACTION_DRIVER environment variable.
+    pub fn transaction_driver_percentage(mut self, percent: u8) -> Self {
+        self.transaction_driver_percentage = Some(percent);
+        self
+    }
+
     pub async fn build(mut self) -> TestCluster {
         // All test clusters receive a continuous stream of random JWKs.
         // If we later use zklogin authenticated transactions in tests we will need to supply
@@ -1193,11 +1221,14 @@ impl TestClusterBuilder {
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
         let wallet = WalletContext::new(&wallet_conf).unwrap();
 
+        let transaction_driver_percentage = self.transaction_driver_percentage;
+
         TestCluster {
             swarm,
             wallet,
             fullnode_handle,
             indexer_handle,
+            transaction_driver_percentage,
         }
     }
 
@@ -1283,6 +1314,15 @@ impl TestClusterBuilder {
             builder = builder.with_disable_fullnode_pruning();
         }
 
+        #[cfg(msim)]
+        if self.inject_synthetic_execution_time {
+            use sui_config::node::ExecutionTimeObserverConfig;
+
+            let mut config = ExecutionTimeObserverConfig::default();
+            config.inject_synthetic_execution_time = Some(true);
+            builder = builder.with_execution_time_observer_config(config);
+        }
+
         let mut swarm = builder.build();
         swarm.launch().await?;
 
@@ -1293,16 +1333,19 @@ impl TestClusterBuilder {
         let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
 
         swarm.config().save(network_path)?;
-        let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
         for key in &swarm.config().account_keys {
-            keystore.add_key(None, SuiKeyPair::Ed25519(key.copy()))?;
+            keystore
+                .import(None, SuiKeyPair::Ed25519(key.copy()))
+                .await?;
         }
 
         let active_address = keystore.addresses().first().cloned();
 
         // Create wallet config with stated authorities port
         SuiClientConfig {
-            keystore: Keystore::from(FileBasedKeystore::new(&keystore_path)?),
+            keystore: Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?),
+            external_keys: None,
             envs: Default::default(),
             active_address,
             active_env: Default::default(),

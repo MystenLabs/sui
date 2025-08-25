@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use consensus_config::{AuthorityIndex, Epoch, Stake};
+use consensus_types::block::{BlockRef, Round};
 use fastcrypto::error::FastCryptoError;
 use strum_macros::IntoStaticStr;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
-use crate::{
-    block::{BlockRef, Round},
-    commit::{Commit, CommitIndex},
-};
+use crate::commit::{Commit, CommitIndex};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
 #[derive(Clone, Debug, Error, IntoStaticStr)]
-pub(crate) enum ConsensusError {
+pub enum ConsensusError {
     #[error("Error deserializing block: {0}")]
     MalformedBlock(bcs::Error),
 

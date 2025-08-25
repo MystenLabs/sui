@@ -516,8 +516,7 @@ mod checked {
             Object::new_package(
                 modules,
                 self.tx_context.digest(),
-                self.protocol_config.max_move_package_size(),
-                self.protocol_config.move_binary_format_version(),
+                self.protocol_config,
                 dependencies,
             )
         }
@@ -1235,6 +1234,7 @@ mod checked {
             CallArg::Object(obj_arg) => {
                 load_object_arg(vm, state_view, session, input_object_map, obj_arg)?
             }
+            CallArg::BalanceWithdraw(_) => unreachable!("Impossible to hit BalanceWithdraw in v0"),
         })
     }
 

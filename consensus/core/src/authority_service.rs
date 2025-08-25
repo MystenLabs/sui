@@ -11,6 +11,7 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 use futures::{ready, stream, task, Stream, StreamExt};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
@@ -22,7 +23,7 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI as _, BlockRef, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
+    block::{BlockAPI as _, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
@@ -36,7 +37,7 @@ use crate::{
     storage::Store,
     synchronizer::SynchronizerHandle,
     transaction_certifier::TransactionCertifier,
-    CommitIndex, Round,
+    CommitIndex,
 };
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
@@ -181,9 +182,9 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
-        let reject_txn_votes = self
+        let (verified_block, reject_txn_votes) = self
             .block_verifier
-            .verify_and_vote(&signed_block)
+            .verify_and_vote(signed_block, serialized_block.block)
             .tap_err(|e| {
                 self.context
                     .metrics
@@ -193,7 +194,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     .inc();
                 info!("Invalid block from {}: {}", peer, e);
             })?;
-        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block.block);
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
 
@@ -849,13 +849,14 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::{BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::{Mutex, RwLock};
     use tokio::{sync::broadcast, time::sleep};
 
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
@@ -868,7 +869,6 @@ mod tests {
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
         transaction_certifier::TransactionCertifier,
-        Round,
     };
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,

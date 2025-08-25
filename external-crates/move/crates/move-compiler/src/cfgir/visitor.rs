@@ -1,9 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use crate::{
+    PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
         absint::{AbstractDomain, JoinResult, TransferFunctions, analyze_function},
@@ -25,7 +26,12 @@ pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
 pub trait CFGIRVisitor: Send + Sync {
-    fn visit(&self, env: &CompilationEnv, program: &G::Program);
+    fn visit(
+        &self,
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    );
 
     fn visitor(self) -> Visitor
     where
@@ -53,10 +59,18 @@ pub trait AbstractInterpreterVisitor: Send + Sync {
 pub trait CFGIRVisitorConstructor: Send {
     type Context<'a>: Sized + CFGIRVisitorContext;
 
-    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a>;
+    fn context<'a>(
+        env: &'a CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) -> Self::Context<'a>;
 
-    fn visit(env: &CompilationEnv, program: &G::Program) {
-        let mut context = Self::context(env, program);
+    fn visit(
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) {
+        let mut context = Self::context(env, pre_compiled_program, program);
         context.visit(program);
     }
 }
@@ -318,8 +332,13 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
 }
 
 impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
-    fn visit(&self, env: &CompilationEnv, program: &G::Program) {
-        Self::visit(env, program)
+    fn visit(
+        &self,
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) {
+        Self::visit(env, pre_compiled_program, program)
     }
 }
 
@@ -336,7 +355,11 @@ macro_rules! simple_visitor {
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
-            fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
+            fn context<'a>(
+                env: &'a crate::shared::CompilationEnv,
+                _pre_compiled_program: Option<std::sync::Arc<crate::command_line::compiler::PreCompiledProgramInfo>>,
+                _program: &crate::cfgir::ast::Program,
+            ) -> Self::Context<'a> {
                 let reporter = env.diagnostic_reporter_at_top_level();
                 Context {
                     env,

@@ -79,7 +79,7 @@ const SIZE_BUCKETS: &[f64] = &[
 // Because of indirect finalization, the round delay should be at most 3 rounds.
 const ROUND_DELAY_BUCKETS: &[f64] = &[0.0, 0.5, 1.0, 2.0, 3.0, 4.0];
 
-pub(crate) struct Metrics {
+pub struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) network_metrics: NetworkMetrics,
 }
@@ -94,7 +94,6 @@ pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     })
 }
 
-#[cfg(test)]
 pub(crate) fn test_metrics() -> Arc<Metrics> {
     initialise_metrics(Registry::new())
 }
@@ -118,6 +117,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
+    pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
@@ -211,6 +211,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) certifier_gc_round: IntGauge,
     pub(crate) certifier_own_reject_votes: IntCounterVec,
     pub(crate) certifier_output_blocks: IntCounterVec,
+    pub(crate) certifier_rejected_transactions: IntCounterVec,
+    pub(crate) certifier_accepted_transactions: IntCounterVec,
     pub(crate) finalizer_buffered_commits: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
@@ -327,6 +329,11 @@ impl NodeMetrics {
                 "broadcaster_rtt_estimate_ms",
                 "Estimated RTT latency per peer authority, for block sending in Broadcaster",
                 &["peer"],
+                registry,
+            ).unwrap(),
+            commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(
+                "commit_observer_last_recovered_commit_index",
+                "The last commit index recovered by the commit observer",
                 registry,
             ).unwrap(),
             core_add_blocks_batch_size: register_histogram_with_registry!(
@@ -486,6 +493,18 @@ impl NodeMetrics {
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
                 &["authority", "source", "error"],
+                registry,
+            ).unwrap(),
+            certifier_rejected_transactions: register_int_counter_vec_with_registry!(
+                "certifier_rejected_transactions",
+                "Number of transactions rejected by authority in transaction certifier",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            certifier_accepted_transactions: register_int_counter_vec_with_registry!(
+                "certifier_accepted_transactions",
+                "Number of transactions accepted by authority in transaction certifier",
+                &["authority"],
                 registry,
             ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(

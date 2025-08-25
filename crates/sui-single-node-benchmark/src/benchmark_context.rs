@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::sync::Arc;
 use sui_config::node::RunWithRange;
-use sui_core::authority::shared_object_version_manager::AssignedTxAndVersions;
+use sui_core::authority::shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions};
 use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -293,8 +293,8 @@ impl BenchmarkContext {
             transactions.len()
         );
 
-        let has_shared_object = transactions.iter().any(|tx| tx.contains_shared_object());
-        if has_shared_object {
+        let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
+        if is_consensus_tx {
             // With shared objects, we must execute each transaction in order.
             for transaction in transactions {
                 let key = transaction.key();
@@ -313,7 +313,13 @@ impl BenchmarkContext {
                     let validator = self.validator();
                     let component = self.benchmark_component;
                     tokio::spawn(async move {
-                        validator.execute_certificate(tx, &vec![], component).await
+                        validator
+                            .execute_certificate(
+                                tx,
+                                &AssignedVersions::non_withdraw(vec![]),
+                                component,
+                            )
+                            .await
                     })
                 })
                 .collect();
@@ -487,9 +493,9 @@ impl BenchmarkContext {
         transactions: Vec<CertifiedTransaction>,
         assigned_versions: AssignedTxAndVersions,
     ) -> Vec<TransactionEffects> {
-        let has_shared_object = transactions.iter().any(|tx| tx.contains_shared_object());
+        let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
         let assigned_versions = assigned_versions.into_map();
-        if has_shared_object {
+        if is_consensus_tx {
             // With shared objects, we must execute each transaction in order.
             let mut effects = Vec::new();
             for transaction in transactions {
@@ -513,7 +519,11 @@ impl BenchmarkContext {
                     let validator = self.validator();
                     tokio::spawn(async move {
                         validator
-                            .execute_transaction_in_memory(store, tx, &vec![])
+                            .execute_transaction_in_memory(
+                                store,
+                                tx,
+                                &AssignedVersions::non_withdraw(vec![]),
+                            )
                             .await
                     })
                 })

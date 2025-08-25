@@ -42,7 +42,7 @@ use crate::{
         epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration},
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
-    checkpoints::{CheckpointHeight, PendingCheckpointV2},
+    checkpoints::{CheckpointHeight, PendingCheckpoint},
     consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
@@ -72,7 +72,7 @@ pub(crate) struct ConsensusCommitOutput {
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
-    pending_checkpoints: Vec<PendingCheckpointV2>,
+    pending_checkpoints: Vec<PendingCheckpoint>,
 
     // random beacon state
     next_randomness_round: Option<(RandomnessRound, TimestampMs)>,
@@ -108,6 +108,10 @@ impl ConsensusCommitOutput {
         self.deleted_deferred_txns.iter().cloned()
     }
 
+    pub fn has_deferred_transactions(&self) -> bool {
+        !self.deferred_txns.is_empty()
+    }
+
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
         self.next_randomness_round.as_ref().map(|(_, ts)| *ts)
     }
@@ -119,7 +123,7 @@ impl ConsensusCommitOutput {
     fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointHeight>,
-    ) -> impl Iterator<Item = &PendingCheckpointV2> {
+    ) -> impl Iterator<Item = &PendingCheckpoint> {
         self.pending_checkpoints.iter().filter(move |cp| {
             if let Some(last) = last {
                 cp.height() > last
@@ -193,7 +197,7 @@ impl ConsensusCommitOutput {
             .extend(deferral_keys.iter().cloned());
     }
 
-    pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpointV2) {
+    pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpoint) {
         self.pending_checkpoints.push(checkpoint);
     }
 
@@ -432,20 +436,6 @@ impl ConsensusOutputCache {
             executed_in_epoch.remove(tx_digest);
         }
     }
-
-    pub fn remove_reverted_transaction(&self, tx_digest: &TransactionDigest) {
-        // reverted transactions are not guaranteed to have been executed
-        self.executed_in_epoch.read().remove(tx_digest);
-    }
-
-    /// At reconfig time, all checkpointed transactions must have been removed from self.executed_in_epoch
-    pub fn get_uncheckpointed_transactions(&self) -> Vec<TransactionDigest> {
-        self.executed_in_epoch
-            .write() // exclusive lock to ensure consistent view
-            .iter()
-            .map(|e| *e.key())
-            .collect()
-    }
 }
 
 /// ConsensusOutputQuarantine holds outputs of consensus processing in memory until the checkpoints
@@ -612,7 +602,12 @@ impl ConsensusOutputQuarantine {
                 .checkpoint_height
                 .expect("non-genesis checkpoint must have height");
             if let Some(highest) = highest_committed_height {
-                assert!(checkpoint_height > highest);
+                assert!(
+                    checkpoint_height >= highest,
+                    "current checkpoint height {} must be no less than highest committed height {}",
+                    checkpoint_height,
+                    highest
+                );
             }
 
             highest_committed_height = Some(checkpoint_height);
@@ -791,7 +786,7 @@ impl ConsensusOutputQuarantine {
     pub(super) fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointHeight>,
-    ) -> Vec<(CheckpointHeight, PendingCheckpointV2)> {
+    ) -> Vec<(CheckpointHeight, PendingCheckpoint)> {
         let mut checkpoints = Vec::new();
         for output in &self.output_queue {
             checkpoints.extend(

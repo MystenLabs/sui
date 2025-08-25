@@ -127,6 +127,7 @@ async fn main() -> Result<()> {
                 Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                 "ingestion".to_string(),
                 None,
+                None,
             )
             .await?;
             bigtable_store = Some(BigTableProgressStore::new(bigtable_client));
@@ -159,6 +160,7 @@ async fn main() -> Result<()> {
                     false,
                     Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                     "ingestion".to_string(),
+                    None,
                     None,
                 )
                 .await?;

@@ -4,7 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::wait_for_effects_request::{ExecutedData, WaitForEffectsResponse};
+use crate::transaction_driver::{ExecutedData, SubmitTxResponse, WaitForEffectsResponse};
 use prometheus::core::GenericCounter;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
@@ -19,7 +19,6 @@ use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI, Transa
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, RawWaitForEffectsRequest,
@@ -319,20 +318,13 @@ where
         &self,
         request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<ConsensusPosition, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
             .submit_transaction(request, client_addr)
             .await?;
-
-        let consensus_position = bcs::from_bytes(&response.consensus_position).map_err(|e| {
-            SuiError::GrpcMessageSerializeError {
-                type_info: "RawSubmitTxResponse.consensus_position".to_string(),
-                error: e.to_string(),
-            }
-        })?;
-        Ok(consensus_position)
+        response.try_into()
     }
 
     /// Wait for effects of a transaction that has been submitted to the network
@@ -594,6 +586,7 @@ where
     }
 
     /// Handle Transaction information requests for a given digest.
+    /// Only used for testing.
     #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_transaction_info_request(
         &self,
@@ -702,5 +695,31 @@ where
         self.authority_client
             .handle_system_state_object(SystemStateRequest { _unused: false })
             .await
+    }
+
+    /// Handle validator health check requests (for latency measurement)
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
+    pub async fn validator_health(
+        &self,
+        request: sui_types::messages_grpc::ValidatorHealthRequest,
+    ) -> Result<sui_types::messages_grpc::ValidatorHealthResponse, SuiError> {
+        // Convert typed request to raw for gRPC
+        let raw_request = request.try_into().map_err(|e| {
+            sui_types::error::SuiError::GrpcMessageSerializeError {
+                type_info: "ValidatorHealthRequest".to_string(),
+                error: format!("Failed to convert to raw request: {}", e),
+            }
+        })?;
+
+        // Call the raw gRPC interface
+        let raw_response = self.authority_client.validator_health(raw_request).await?;
+
+        // Convert raw response back to typed
+        raw_response.try_into().map_err(|e| {
+            sui_types::error::SuiError::GrpcMessageDeserializeError {
+                type_info: "RawValidatorHealthResponse".to_string(),
+                error: format!("Failed to convert from raw response: {}", e),
+            }
+        })
     }
 }

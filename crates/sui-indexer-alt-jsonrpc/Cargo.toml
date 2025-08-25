@@ -19,7 +19,9 @@ async-graphql = { workspace = true, features = ["dataloader"] }
 async-trait.workspace = true
 axum.workspace = true
 bcs.workspace = true
+bin-version.workspace = true
 clap.workspace = true
+const-str.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 fastcrypto.workspace = true
@@ -27,6 +29,7 @@ futures.workspace = true
 http.workspace = true
 jsonrpsee = { workspace = true, features = ["macros", "server"] }
 pin-project-lite.workspace = true
+pin-project.workspace = true
 prometheus.workspace = true
 schemars.workspace = true
 serde.workspace = true

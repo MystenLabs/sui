@@ -157,6 +157,9 @@ initial_exchange_rate
 check_balance_invariants
 	fun
 	0x3::staking_pool
+calculate_rewards
+	public(package) fun
+	0x3::staking_pool
 ValidatorMetadata
 	public struct
 	0x3::validator
@@ -550,6 +553,9 @@ validator_address_by_pool_id
 pool_exchange_rates
 	public(package) fun
 	0x3::validator_set
+validator_by_pool_id
+	public(package) fun
+	0x3::validator_set
 next_epoch_validator_count
 	public(package) fun
 	0x3::validator_set
@@ -889,6 +895,12 @@ extract_coin_balance
 store_execution_time_estimates
 	public(package) fun
 	0x3::sui_system_state_inner
+validators
+	public(package) fun
+	0x3::sui_system_state_inner
+validators_mut
+	public(package) fun
+	0x3::sui_system_state_inner
 SuiSystemState
 	public struct
 	0x3::sui_system
@@ -1012,6 +1024,15 @@ pool_exchange_rates
 active_validator_addresses
 	public fun
 	0x3::sui_system
+active_validator_addresses_ref
+	public fun
+	0x3::sui_system
+active_validator_voting_powers
+	public fun
+	0x3::sui_system
+calculate_rewards
+	public(package) fun
+	0x3::sui_system
 advance_epoch
 	fun
 	0x3::sui_system
@@ -1019,6 +1040,9 @@ load_system_state
 	fun
 	0x3::sui_system
 load_system_state_mut
+	fun
+	0x3::sui_system
+load_system_state_ref
 	fun
 	0x3::sui_system
 load_inner_maybe_upgrade
@@ -1120,13 +1144,19 @@ fresh_object_address
 fresh_id
 	fun
 	0x2::tx_context
-ids_created
+reference_gas_price
+	public fun
+	0x2::tx_context
+native_rgp
+	fun
+	0x2::tx_context
+gas_price
+	public fun
+	0x2::tx_context
+native_gas_price
 	fun
 	0x2::tx_context
 native_ids_created
-	fun
-	0x2::tx_context
-native_gas_price
 	fun
 	0x2::tx_context
 native_gas_budget
@@ -1171,7 +1201,7 @@ try_get
 contains
 	public fun
 	0x2::vec_map
-size
+length
 	public fun
 	0x2::vec_map
 is_empty
@@ -1202,6 +1232,9 @@ get_entry_by_idx_mut
 	public fun
 	0x2::vec_map
 remove_entry_by_idx
+	public fun
+	0x2::vec_map
+size
 	public fun
 	0x2::vec_map
 Party
@@ -1399,12 +1432,6 @@ transfer_impl
 receive_impl
 	fun
 	0x2::transfer
-AccumulatorRoot
-	public struct
-	0x2::accumulator
-create
-	fun
-	0x2::accumulator
 Field
 	public struct
 	0x2::dynamic_field
@@ -1456,6 +1483,138 @@ has_child_object
 has_child_object_with_ty
 	public(package) fun
 	0x2::dynamic_field
+AccumulatorRoot
+	public struct
+	0x2::accumulator
+U128
+	public struct
+	0x2::accumulator
+Key
+	public struct
+	0x2::accumulator
+create
+	fun
+	0x2::accumulator
+root_id
+	public(package) fun
+	0x2::accumulator
+root_id_mut
+	public(package) fun
+	0x2::accumulator
+create_u128
+	public(package) fun
+	0x2::accumulator
+destroy_u128
+	public(package) fun
+	0x2::accumulator
+update_u128
+	public(package) fun
+	0x2::accumulator
+is_zero_u128
+	public(package) fun
+	0x2::accumulator
+accumulator_key
+	public(package) fun
+	0x2::accumulator
+accumulator_address
+	public(package) fun
+	0x2::accumulator
+root_has_accumulator
+	public(package) fun
+	0x2::accumulator
+root_add_accumulator
+	public(package) fun
+	0x2::accumulator
+root_borrow_accumulator_mut
+	public(package) fun
+	0x2::accumulator
+root_remove_accumulator
+	public(package) fun
+	0x2::accumulator
+emit_deposit_event
+	public(package) fun
+	0x2::accumulator
+emit_withdraw_event
+	public(package) fun
+	0x2::accumulator
+Bag
+	public struct
+	0x2::bag
+new
+	public fun
+	0x2::bag
+add
+	public fun
+	0x2::bag
+borrow
+	public fun
+	0x2::bag
+borrow_mut
+	public fun
+	0x2::bag
+remove
+	public fun
+	0x2::bag
+contains
+	public fun
+	0x2::bag
+contains_with_type
+	public fun
+	0x2::bag
+length
+	public fun
+	0x2::bag
+is_empty
+	public fun
+	0x2::bag
+destroy_empty
+	public fun
+	0x2::bag
+OwnerKey
+	public struct
+	0x2::accumulator_metadata
+Owner
+	public struct
+	0x2::accumulator_metadata
+MetadataKey
+	public struct
+	0x2::accumulator_metadata
+Metadata
+	public struct
+	0x2::accumulator_metadata
+accumulator_root_owner_exists
+	fun
+	0x2::accumulator_metadata
+accumulator_root_borrow_owner_mut
+	fun
+	0x2::accumulator_metadata
+accumulator_root_attach_owner
+	fun
+	0x2::accumulator_metadata
+accumulator_root_detach_owner
+	fun
+	0x2::accumulator_metadata
+create_accumulator_metadata
+	public(package) fun
+	0x2::accumulator_metadata
+remove_accumulator_metadata
+	public(package) fun
+	0x2::accumulator_metadata
+accumulator_owner_attach_metadata
+	fun
+	0x2::accumulator_metadata
+accumulator_owner_detach_metadata
+	fun
+	0x2::accumulator_metadata
+accumulator_owner_destroy
+	fun
+	0x2::accumulator_metadata
+settlement_prologue
+	fun
+	0x2::accumulator_settlement
+settle_u128
+	fun
+	0x2::accumulator_settlement
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1510,39 +1669,6 @@ expire_jwks
 get_active_jwks
 	fun
 	0x2::authenticator_state
-Bag
-	public struct
-	0x2::bag
-new
-	public fun
-	0x2::bag
-add
-	public fun
-	0x2::bag
-borrow
-	public fun
-	0x2::bag
-borrow_mut
-	public fun
-	0x2::bag
-remove
-	public fun
-	0x2::bag
-contains
-	public fun
-	0x2::bag
-contains_with_type
-	public fun
-	0x2::bag
-length
-	public fun
-	0x2::bag
-is_empty
-	public fun
-	0x2::bag
-destroy_empty
-	public fun
-	0x2::bag
 Supply
 	public struct
 	0x2::balance
@@ -1587,6 +1713,12 @@ destroy_storage_rebates
 	0x2::balance
 destroy_supply
 	public(package) fun
+	0x2::balance
+send_to_account
+	fun
+	0x2::balance
+withdraw_from_account
+	fun
 	0x2::balance
 BCS
 	public struct
@@ -1963,7 +2095,7 @@ remove
 contains
 	public fun
 	0x2::vec_set
-size
+length
 	public fun
 	0x2::vec_set
 is_empty
@@ -1978,11 +2110,8 @@ from_keys
 keys
 	public fun
 	0x2::vec_set
-get_idx_opt
-	fun
-	0x2::vec_set
-get_idx
-	fun
+size
+	public fun
 	0x2::vec_set
 Table
 	public struct
@@ -4525,6 +4654,12 @@ insert
 swap_remove
 	public fun
 	0x1::vector
+skip
+	public fun
+	0x1::vector
+take
+	public fun
+	0x1::vector
 flatten
 	public fun
 	0x1::vector
@@ -4741,13 +4876,31 @@ length
 TypeName
 	public struct
 	0x1::type_name
+with_defining_ids
+	public fun
+	0x1::type_name
+with_original_ids
+	public fun
+	0x1::type_name
+is_primitive
+	public fun
+	0x1::type_name
+as_string
+	public fun
+	0x1::type_name
+address_string
+	public fun
+	0x1::type_name
+module_string
+	public fun
+	0x1::type_name
+into_string
+	public fun
+	0x1::type_name
 get
 	public fun
 	0x1::type_name
 get_with_original_ids
-	public fun
-	0x1::type_name
-is_primitive
 	public fun
 	0x1::type_name
 borrow_string
@@ -4757,9 +4910,6 @@ get_address
 	public fun
 	0x1::type_name
 get_module
-	public fun
-	0x1::type_name
-into_string
 	public fun
 	0x1::type_name
 bitwise_not

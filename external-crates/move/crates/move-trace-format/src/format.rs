@@ -9,7 +9,10 @@ use move_binary_format::{
     file_format::{Bytecode, FunctionDefinitionIndex as BinaryFunctionDefinitionIndex},
     file_format_common::instruction_opcode,
 };
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, TypeTag},
+};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::{fmt::Display, sync::mpsc::Receiver};
@@ -23,7 +26,7 @@ pub type TraceVersion = u64;
 pub const TRACE_FILE_EXTENSION: &str = "json.zst";
 
 /// The current version of the trace format.
-const TRACE_VERSION: TraceVersion = 2;
+const TRACE_VERSION: TraceVersion = 3;
 
 /// Compression level for the trace. This is the level of compression that we will use for the
 /// trace in zstd.
@@ -114,6 +117,7 @@ pub struct Frame {
     pub frame_id: TraceIndex,
     pub function_name: String,
     pub module: ModuleId,
+    pub version_id: AccountAddress,
     // External pointer out into the module -- the `FunctionDefinitionIndex` in the module.
     pub binary_member_index: u16,
     pub type_instantiation: Vec<TypeTag>,
@@ -332,6 +336,7 @@ impl MoveTraceBuilder {
         binary_member_index: BinaryFunctionDefinitionIndex,
         name: String,
         module: ModuleId,
+        version_id: AccountAddress,
         parameters: Vec<TraceValue>,
         type_instantiation: Vec<TypeTag>,
         return_types: Vec<TypeTagWithRefs>,
@@ -343,6 +348,7 @@ impl MoveTraceBuilder {
             frame_id,
             function_name: name,
             module,
+            version_id,
             binary_member_index: binary_member_index.0,
             type_instantiation,
             parameters,
@@ -536,5 +542,58 @@ fn emit_trace() {
             panic!("unexpected event: {:?}", event);
         };
         assert_eq!(event.get("data").unwrap().as_u64().unwrap(), i as u64);
+    }
+}
+
+// Make sure that we can handle large numeric values in the trace (both ser and deser) as in the
+// previous value format that we used in the trace we needed to handle large numeric values
+// (e.g., u256, u128, u64) that are larger than what serde_json can handle natively with `Number`.
+// Since we switched to a typed value format, this is no longer an issue, but we should test to
+// make sure that we can still serialize and deserialize these values correctly and prevent any
+// possible regressions.
+#[test]
+fn large_numeric_values_in_trace() {
+    use move_core_types::u256;
+    let mut builder = MoveTraceBuilder::new();
+    let effects = vec![
+        Effect::Push(TraceValue::RuntimeValue {
+            value: SerializableMoveValue::U256(u256::U256::max_value()),
+        }),
+        Effect::Push(TraceValue::RuntimeValue {
+            value: SerializableMoveValue::U128(u128::MAX),
+        }),
+        Effect::Push(TraceValue::RuntimeValue {
+            value: SerializableMoveValue::U64(u64::MAX),
+        }),
+    ];
+
+    for eff in effects {
+        builder.push_event(TraceEvent::Effect(Box::new(eff)));
+    }
+
+    let bytes = builder.into_trace().into_compressed_json_bytes();
+
+    let reader = MoveTraceReader::new(std::io::Cursor::new(bytes)).unwrap();
+    assert_eq!(reader.version, TRACE_VERSION);
+
+    for event in reader {
+        let event = event.unwrap();
+        let TraceEvent::Effect(event) = event else {
+            panic!("unexpected event: {:?}", event);
+        };
+
+        let Effect::Push(value) = &*event else {
+            panic!("expected Push event, got: {:?}", event);
+        };
+
+        match value {
+            TraceValue::RuntimeValue { value } => match value {
+                SerializableMoveValue::U256(v) => assert_eq!(*v, u256::U256::max_value()),
+                SerializableMoveValue::U128(v) => assert_eq!(*v, u128::MAX),
+                SerializableMoveValue::U64(v) => assert_eq!(*v, u64::MAX),
+                _ => panic!("unexpected value type: {:?}", value),
+            },
+            _ => panic!("expected RuntimeValue, got: {:?}", value),
+        }
     }
 }

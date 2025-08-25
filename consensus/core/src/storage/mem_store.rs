@@ -7,11 +7,12 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use parking_lot::RwLock;
 
 use super::{Store, WriteBatch};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, VerifiedBlock},
+    block::{BlockAPI as _, VerifiedBlock},
     commit::{
         CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitRange, CommitRef,
         TrustedCommit,
@@ -20,7 +21,7 @@ use crate::{
 };
 
 /// In-memory storage for testing.
-pub(crate) struct MemStore {
+pub struct MemStore {
     inner: RwLock<Inner>,
 }
 
@@ -30,10 +31,12 @@ struct Inner {
     commits: BTreeMap<(CommitIndex, CommitDigest), TrustedCommit>,
     commit_votes: BTreeSet<(CommitIndex, CommitDigest, BlockRef)>,
     commit_info: BTreeMap<(CommitIndex, CommitDigest), CommitInfo>,
+    finalized_commits:
+        BTreeMap<(CommitIndex, CommitDigest), BTreeMap<BlockRef, Vec<TransactionIndex>>>,
 }
 
 impl MemStore {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         MemStore {
             inner: RwLock::new(Inner {
                 blocks: BTreeMap::new(),
@@ -41,8 +44,15 @@ impl MemStore {
                 commits: BTreeMap::new(),
                 commit_votes: BTreeSet::new(),
                 commit_info: BTreeMap::new(),
+                finalized_commits: BTreeMap::new(),
             }),
         }
+    }
+}
+
+impl Default for MemStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -78,6 +88,12 @@ impl Store for MemStore {
             inner
                 .commit_info
                 .insert((commit_ref.index, commit_ref.digest), commit_info);
+        }
+
+        for (commit_ref, rejected_transactions) in write_batch.finalized_commits {
+            inner
+                .finalized_commits
+                .insert((commit_ref.index, commit_ref.digest), rejected_transactions);
         }
 
         Ok(())
@@ -196,5 +212,31 @@ impl Store for MemStore {
             .commit_info
             .last_key_value()
             .map(|(k, v)| (CommitRef::new(k.0, k.1), v.clone())))
+    }
+
+    fn read_last_finalized_commit(&self) -> ConsensusResult<Option<CommitRef>> {
+        let inner = self.inner.read();
+        Ok(inner
+            .finalized_commits
+            .last_key_value()
+            .map(|(k, _)| CommitRef::new(k.0, k.1)))
+    }
+
+    fn scan_finalized_commits(
+        &self,
+        range: CommitRange,
+    ) -> ConsensusResult<Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>> {
+        let inner = self.inner.read();
+        let mut finalized_commits = vec![];
+        for (commit, rejected_transactions) in inner.finalized_commits.range((
+            Included((range.start(), CommitDigest::MIN)),
+            Included((range.end(), CommitDigest::MAX)),
+        )) {
+            finalized_commits.push((
+                CommitRef::new(commit.0, commit.1),
+                rejected_transactions.clone(),
+            ));
+        }
+        Ok(finalized_commits)
     }
 }

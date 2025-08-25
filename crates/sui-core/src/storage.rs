@@ -31,7 +31,6 @@ use sui_types::storage::error::Result;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
 use sui_types::storage::CoinInfo;
-use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
@@ -530,20 +529,14 @@ impl RpcIndexes for RpcIndexStore {
                         object_type,
                         inverted_balance,
                     },
-                    OwnerIndexInfo {
-                        version,
-                        digest,
-                        start_version,
-                    },
+                    OwnerIndexInfo { version },
                 )| {
                     OwnedObjectInfo {
                         owner,
-                        start_version,
                         object_type,
                         balance: inverted_balance.map(std::ops::Not::not),
                         object_id,
                         version,
-                        digest,
                     }
                 },
             )
@@ -557,10 +550,7 @@ impl RpcIndexes for RpcIndexStore {
         parent: ObjectID,
         cursor: Option<ObjectID>,
     ) -> sui_types::storage::error::Result<
-        Box<
-            dyn Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>>
-                + '_,
-        >,
+        Box<dyn Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_>,
     > {
         let iter = self.dynamic_field_iter(parent, cursor)?;
         Ok(Box::new(iter) as _)
@@ -610,5 +600,19 @@ impl RpcIndexes for RpcIndexStore {
                     .map_err(Into::into)
             },
         )))
+    }
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>,
+    > {
+        let iter = self.package_versions_iter(original_id, cursor)?;
+        Ok(
+            Box::new(iter.map(|result| result.map(|(key, info)| (key.version, info.storage_id))))
+                as _,
+        )
     }
 }

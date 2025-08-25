@@ -30,7 +30,6 @@ const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
-const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 
 /// Options to apply to every column family of the `perpetual` DB.
 #[derive(Default)]
@@ -95,11 +94,9 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    // Currently this is needed in the validator for returning events during process certificates.
-    // We could potentially remove this if we decided not to provide events in the execution path.
-    // TODO: Figure out what to do with this table in the long run.
-    // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
-    pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+    #[allow(dead_code)]
+    #[deprecated]
+    events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     // Events keyed by the digest of the transaction that produced them.
     pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
@@ -193,10 +190,6 @@ impl AuthorityPerpetualTables {
                 "effects".to_string(),
                 effects_table_config(db_options.clone()),
             ),
-            (
-                "events".to_string(),
-                events_table_config(db_options.clone()),
-            ),
         ]));
 
         Self::open_tables_read_write(
@@ -212,14 +205,14 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
-            WalPosition,
+            default_cells_per_mutex, Bytes, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType,
+            ThConfig,
         };
-        const MUTEXES: usize = 1024;
-        const VALUE_CACHE_SIZE: usize = 20_000;
+        const MUTEXES: usize = 2 * 1024;
+        const VALUE_CACHE_SIZE: usize = 2_000;
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
-        let objects_compactor = |index: &mut BTreeMap<Bytes, WalPosition>| {
+        let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
             const OID_SIZE: usize = 32;
@@ -339,20 +332,20 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "object_per_epoch_marker_table".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
                     MUTEXES,
                     uniform_key,
-                    KeySpaceConfig::new_with_key_offset(8),
+                    KeySpaceConfig::default(),
                 ),
             ),
             (
                 "object_per_epoch_marker_table_v2".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
                     MUTEXES,
                     uniform_key,
-                    KeySpaceConfig::new_with_key_offset(8),
+                    KeySpaceConfig::default(),
                 ),
             ),
         ];
@@ -517,43 +510,6 @@ impl AuthorityPerpetualTables {
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
         self.pruned_checkpoint.get(&())
-    }
-
-    pub fn get_current_epoch_stable_sequence_number(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Option<VersionNumber> {
-        let object_key = (epoch_id, FullObjectKey::config_key_for_id(object_id));
-        // Read the object first then read the marker. This is to guard against data races between
-        // the data store and marker table where the object could be mutated after we read the
-        // marker table but before we read the object.
-        //
-        // In particular, since we read the object first then the marker table either:
-        // 1. The object was mutated this epoch before the object read (and marker table read), in
-        //    which case the marker table will have an entry in it and we use the pre-mutation
-        //    version from the marker table.
-        // 2. There was no mutation of the object this epoch either before the object read
-        //    or the marker table read. In which case we will use the object's version -- the
-        //    "pre-mutation" version for it during the epoch.
-        // 3. There is a mutation that occurs between the object read and the marker table read. In
-        //    this case we will use the marker table version, which holds the pre-mutation version.
-        // In either case this gives us the correct "pre-mutation" version for the object
-        // for the epoch.
-        let object = self.get_object(object_id);
-        match self
-            .object_per_epoch_marker_table_v2
-            .get(&object_key)
-            .expect("marker table error")
-        {
-            Some(MarkerValue::ConfigUpdate(seqno)) => Some(seqno),
-            Some(
-                MarkerValue::FastpathStreamEnded
-                | MarkerValue::ConsensusStreamEnded(_)
-                | MarkerValue::Received,
-            )
-            | None => object.map(|o| o.version()),
-        }
     }
 
     pub fn set_highest_pruned_checkpoint(
@@ -872,10 +828,4 @@ fn effects_table_config(db_options: DBOptions) -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
-}
-
-fn events_table_config(db_options: DBOptions) -> DBOptions {
-    db_options
-        .optimize_for_write_throughput()
-        .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }

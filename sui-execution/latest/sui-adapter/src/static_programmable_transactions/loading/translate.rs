@@ -22,7 +22,8 @@ pub fn transaction(
         .collect::<Result<Vec<_>, _>>()?;
     let commands = commands
         .into_iter()
-        .map(|cmd| command(env, cmd))
+        .enumerate()
+        .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(L::Transaction { inputs, commands })
 }
@@ -47,7 +48,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 Owner::ObjectOwner(_)
                 | Owner::Shared { .. }
                 | Owner::ConsensusAddressOwner { .. } => {
-                    invariant_violation!("Unepected owner for ImmOrOwnedObject: {:?}", obj.owner);
+                    invariant_violation!("Unexpected owner for ImmOrOwnedObject: {:?}", obj.owner);
                 }
             };
             (L::InputArg::Object(arg), L::InputType::Fixed(ty))
@@ -63,14 +64,26 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
+            let kind = match obj.owner {
+                Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
+                    invariant_violation!("Unexpected owner for SharedObject: {:?}", obj.owner)
+                }
+                Owner::Shared { .. } => L::SharedObjectKind::Legacy,
+                Owner::ConsensusAddressOwner { .. } => L::SharedObjectKind::Party,
+            };
             (
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
                     mutable,
+                    kind,
                 }),
                 L::InputType::Fixed(ty),
             )
+        }
+        CallArg::BalanceWithdraw(_) => {
+            // TODO(address-balances): Add support for balance withdraws.
+            todo!("Load balance withdraw call arg")
         }
     })
 }

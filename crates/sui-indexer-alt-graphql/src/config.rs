@@ -110,6 +110,10 @@ pub struct Limits {
     /// `TransactionEffects.objectChanges`.
     pub page_size_override_fx_object_changes: u32,
 
+    /// Maximum (and default) number of packages that can be returned in a single page of
+    /// `Query.packages`.
+    pub page_size_override_packages: u32,
+
     /// Maximum amount of nesting among type arguments (type arguments nest when a type argument is
     /// itself generic and has arguments).
     pub max_type_argument_depth: usize,
@@ -123,6 +127,9 @@ pub struct Limits {
 
     /// Maximum nesting allowed in datatype fields when calculating the layout of a single type.
     pub max_move_value_depth: usize,
+
+    /// Maximum budget in bytes to spend when outputting a structured Move value.
+    pub max_move_value_bound: usize,
 }
 
 #[DefaultConfig]
@@ -139,10 +146,12 @@ pub struct LimitsLayer {
     pub max_page_size: Option<u32>,
     pub max_multi_get_size: Option<u32>,
     pub page_size_override_fx_object_changes: Option<u32>,
+    pub page_size_override_packages: Option<u32>,
     pub max_type_argument_depth: Option<usize>,
     pub max_type_argument_width: Option<usize>,
     pub max_type_nodes: Option<usize>,
     pub max_move_value_depth: Option<usize>,
+    pub max_move_value_bound: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -216,7 +225,7 @@ impl Limits {
             max_query_depth: self.max_query_depth,
             max_query_payload_size: self.max_query_payload_size,
             max_tx_payload_size: self.max_tx_payload_size,
-            tx_payload_args: BTreeSet::from_iter([
+            tx_payload_args: BTreeSet::from([
                 ("Mutation", "executeTransaction", "txBytes"),
                 ("Mutation", "executeTransaction", "signatures"),
                 ("Query", "simulateTransaction", "txBytes"),
@@ -233,13 +242,22 @@ impl Limits {
                 default: self.default_page_size,
                 max: self.max_page_size,
             },
-            BTreeMap::from_iter([(
-                ("TransactionEffects", "objectChanges"),
-                PageLimits {
-                    default: self.page_size_override_fx_object_changes,
-                    max: self.page_size_override_fx_object_changes,
-                },
-            )]),
+            BTreeMap::from([
+                (
+                    ("TransactionEffects", "objectChanges"),
+                    PageLimits {
+                        default: self.page_size_override_fx_object_changes,
+                        max: self.page_size_override_fx_object_changes,
+                    },
+                ),
+                (
+                    ("Query", "packages"),
+                    PageLimits {
+                        default: self.page_size_override_packages,
+                        max: self.page_size_override_packages,
+                    },
+                ),
+            ]),
         )
     }
 
@@ -272,6 +290,9 @@ impl LimitsLayer {
             page_size_override_fx_object_changes: self
                 .page_size_override_fx_object_changes
                 .unwrap_or(base.page_size_override_fx_object_changes),
+            page_size_override_packages: self
+                .page_size_override_packages
+                .unwrap_or(base.page_size_override_packages),
             max_type_argument_depth: self
                 .max_type_argument_depth
                 .unwrap_or(base.max_type_argument_depth),
@@ -282,6 +303,9 @@ impl LimitsLayer {
             max_move_value_depth: self
                 .max_move_value_depth
                 .unwrap_or(base.max_move_value_depth),
+            max_move_value_bound: self
+                .max_move_value_bound
+                .unwrap_or(base.max_move_value_bound),
         }
     }
 }
@@ -321,10 +345,12 @@ impl From<Limits> for LimitsLayer {
             max_page_size: Some(value.max_page_size),
             max_multi_get_size: Some(value.max_multi_get_size),
             page_size_override_fx_object_changes: Some(value.page_size_override_fx_object_changes),
+            page_size_override_packages: Some(value.page_size_override_packages),
             max_type_argument_depth: Some(value.max_type_argument_depth),
             max_type_argument_width: Some(value.max_type_argument_width),
             max_type_nodes: Some(value.max_type_nodes),
             max_move_value_depth: Some(value.max_move_value_depth),
+            max_move_value_bound: Some(value.max_move_value_bound),
             extra: Default::default(),
         }
     }
@@ -386,10 +412,12 @@ impl Default for Limits {
             // A much larger page size than the default, to make it unlikely that users need to
             // fetch a second page.
             page_size_override_fx_object_changes: 1024,
+            page_size_override_packages: 200,
             max_type_argument_depth,
             max_type_argument_width,
             max_type_nodes,
             max_move_value_depth,
+            max_move_value_bound: 1024 * 1024,
         }
     }
 }

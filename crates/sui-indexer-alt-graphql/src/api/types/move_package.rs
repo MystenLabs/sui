@@ -9,7 +9,8 @@ use async_graphql::{
     dataloader::DataLoader,
     Context, InputObject, Object,
 };
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
+use serde::{Deserialize, Serialize};
 use sui_indexer_alt_reader::{
     packages::{
         CheckpointBoundedOriginalPackageKey, PackageOriginalIdKey, VersionedOriginalPackageKey,
@@ -17,6 +18,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
+use sui_pg_db::sql;
 use sui_sql_macro::query;
 use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
@@ -37,9 +39,13 @@ use crate::{
 };
 
 use super::{
-    addressable::AddressableImpl,
-    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
+    address::AddressableImpl,
+    linkage::Linkage,
+    move_object::MoveObject,
+    object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
+    object_filter::{ObjectFilter, Validator as OFValidator},
     transaction::Transaction,
+    type_origin::TypeOrigin,
 };
 
 pub(crate) struct MovePackage {
@@ -47,7 +53,7 @@ pub(crate) struct MovePackage {
     super_: Object,
 
     /// Move package specific data, extracted from the native representation of the generic object.
-    contents: NativeMovePackage,
+    native: NativeMovePackage,
 }
 
 /// Identifies a specific version of a package.
@@ -67,6 +73,24 @@ pub(crate) struct PackageKey {
     pub(crate) at_checkpoint: Option<UInt53>,
 }
 
+/// Filter for paginating packages published within a range of checkpoints.
+#[derive(InputObject, Default, Debug)]
+pub(crate) struct PackageCheckpointFilter {
+    /// Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+    pub(crate) after_checkpoint: Option<UInt53>,
+
+    /// Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+    pub(crate) before_checkpoint: Option<UInt53>,
+}
+
+/// Inner struct for the cursor produced while iterating over all package publishes.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub(crate) struct PackageCursor {
+    pub cp_sequence_number: u64,
+    pub original_id: Vec<u8>,
+    pub package_version: u64,
+}
+
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
     #[error(
@@ -74,6 +98,10 @@ pub(crate) enum Error {
     )]
     OneBound,
 }
+
+/// Cursor for iterating over package publishes. Points to the publish of a particular
+/// version of a package, in a given checkpoint.
+pub(crate) type CPackage = BcsCursor<PackageCursor>;
 
 /// Cursor for iterating over system packages. Points at a particular system package, by its ID.
 pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
@@ -86,6 +114,21 @@ impl MovePackage {
         AddressableImpl::from(&self.super_.super_).address()
     }
 
+    /// Objects owned by this package, optionally filtered by type.
+    pub(crate) async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+        #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
+    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+        AddressableImpl::from(&self.super_.super_)
+            .objects(ctx, first, after, last, before, filter)
+            .await
+    }
+
     /// The version of this package that this content comes from.
     pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl::from(&self.super_).version()
@@ -94,6 +137,13 @@ impl MovePackage {
     /// 32-byte hash that identifies the package's contents, encoded in Base58.
     pub(crate) async fn digest(&self) -> String {
         ObjectImpl::from(&self.super_).digest()
+    }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
+        Ok(Some(bytes.into()))
     }
 
     /// Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
@@ -172,7 +222,7 @@ impl MovePackage {
 
     /// The Base64-encoded BCS serialization of this package, as a `MovePackage`.
     async fn package_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(&self.contents).context("Failed to serialize MovePackage")?;
+        let bytes = bcs::to_bytes(&self.native).context("Failed to serialize MovePackage")?;
         Ok(Some(Base64(bytes)))
     }
 
@@ -251,26 +301,65 @@ impl MovePackage {
             .previous_transaction(ctx)
             .await
     }
+
+    /// The transitive dependencies of this package.
+    async fn linkage(&self) -> Option<Vec<Linkage>> {
+        let linkage = self
+            .native
+            .linkage_table()
+            .iter()
+            .map(|(object_id, upgrade_info)| Linkage {
+                object_id,
+                upgrade_info,
+            })
+            .collect();
+
+        Some(linkage)
+    }
+
+    /// A table identifying which versions of a package introduced each of its types.
+    async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
+        let type_origins = self
+            .native
+            .type_origin_table()
+            .iter()
+            .map(|native| TypeOrigin::from(native.clone()))
+            .collect();
+
+        Some(type_origins)
+    }
 }
 
 impl MovePackage {
+    /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
+    /// is not a package. This is more efficient when you already have the native object.
+    pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
+        let package = native.data.try_as_package()?.clone();
+        let super_ = Object::from_contents(scope, Arc::new(native));
+        Some(Self {
+            super_,
+            native: package,
+        })
+    }
+
     /// Try to downcast an `Object` to a `MovePackage`. This function returns `None` if `object`'s
     /// contents cannot be fetched, or it is not a package.
     pub(crate) async fn from_object(
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let super_ = object.inflated(ctx).await?;
-
-        let Some(super_contents) = &super_.contents else {
+        let Some(super_contents) = object.contents(ctx).await? else {
             return Ok(None);
         };
 
-        let Some(contents) = super_contents.data.try_as_package().cloned() else {
+        let Some(package) = super_contents.data.try_as_package().cloned() else {
             return Ok(None);
         };
 
-        Ok(Some(Self { super_, contents }))
+        Ok(Some(Self {
+            super_: object.clone(),
+            native: package,
+        }))
     }
 
     /// Fetch a package by its key. The key can either specify an exact version to fetch, an
@@ -374,12 +463,15 @@ impl MovePackage {
         let native: NativeObject = bcs::from_bytes(&stored.serialized_object)
             .context("Failed to deserialize package as object")?;
 
-        let Some(contents) = native.data.try_as_package().cloned() else {
+        let Some(package) = native.data.try_as_package().cloned() else {
             return Ok(None);
         };
 
         let super_ = Object::from_contents(scope, Arc::new(native));
-        Ok(Some(Self { super_, contents }))
+        Ok(Some(Self {
+            super_,
+            native: package,
+        }))
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
@@ -462,6 +554,96 @@ impl MovePackage {
 
         let (prev, next, results) =
             page.paginate_results(results, |p| JsonCursor::new(p.package_version as u64));
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        for (cursor, stored) in results {
+            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
+                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
+            }
+        }
+
+        Ok(conn)
+    }
+
+    /// Paginate through all packages published in a range of checkpoints.
+    pub(crate) async fn paginate_by_checkpoint(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CPackage>,
+        filter: PackageCheckpointFilter,
+    ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
+        use kv_packages::dsl as p;
+
+        let mut conn = Connection::new(false, false);
+
+        let pg_reader: &PgReader = ctx.data()?;
+
+        let mut query = p::kv_packages
+            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .limit(page.limit() as i64 + 2)
+            .into_boxed();
+
+        if let Some(after_cp) = filter.after_checkpoint {
+            query = query.filter(p::cp_sequence_number.gt(i64::from(after_cp)));
+        }
+
+        if let Some(before_cp) = filter.before_checkpoint {
+            query = query.filter(p::cp_sequence_number.lt(i64::from(before_cp)));
+        }
+
+        query = if page.is_from_front() {
+            query
+                .order_by(p::cp_sequence_number)
+                .then_order_by(p::original_id)
+                .then_order_by(p::package_version)
+        } else {
+            query
+                .order_by(p::cp_sequence_number.desc())
+                .then_order_by(p::original_id.desc())
+                .then_order_by(p::package_version.desc())
+        };
+
+        if let Some(after) = page.after() {
+            query = query.filter(sql!(as Bool,
+                "(cp_sequence_number, original_id, package_version) >= ({BigInt}, {Bytea}, {BigInt})",
+                after.cp_sequence_number as i64,
+                after.original_id.as_slice(),
+                after.package_version as i64,
+            ));
+        }
+
+        if let Some(before) = page.before() {
+            query = query.filter(sql!(as Bool,
+                "(cp_sequence_number, original_id, package_version) <= ({BigInt}, {Bytea}, {BigInt})",
+                before.cp_sequence_number as i64,
+                before.original_id.as_slice(),
+                before.package_version as i64,
+            ));
+        }
+
+        let mut c = pg_reader
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
+
+        let mut results: Vec<StoredPackage> = c
+            .results(query)
+            .await
+            .context("Failed to read from database")?;
+
+        if !page.is_from_front() {
+            results.reverse();
+        }
+
+        let (prev, next, results) = page.paginate_results(results, |p| {
+            BcsCursor::new(PackageCursor {
+                cp_sequence_number: p.cp_sequence_number as u64,
+                original_id: p.original_id.clone(),
+                package_version: p.package_version as u64,
+            })
+        });
 
         conn.has_previous_page = prev;
         conn.has_next_page = next;

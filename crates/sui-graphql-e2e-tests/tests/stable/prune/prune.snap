@@ -21,7 +21,7 @@ Checkpoint created: 1
 
 task 4, line 31:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 5, line 33:
 //# run Test::M1::create --args 1 @A
@@ -35,7 +35,7 @@ Checkpoint created: 3
 
 task 7, line 37:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 8, line 39:
 //# run Test::M1::create --args 2 @A
@@ -49,7 +49,7 @@ Checkpoint created: 5
 
 task 10, line 43:
 //# advance-epoch
-Epoch advanced: 2
+Epoch advanced: 3
 
 task 11, lines 45-58:
 //# run-graphql --wait-for-checkpoint-pruned 4

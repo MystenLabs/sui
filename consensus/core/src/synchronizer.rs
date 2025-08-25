@@ -8,6 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 use futures::{stream::FuturesUnordered, StreamExt as _};
 use itertools::Itertools as _;
 use mysten_common::debug_fatal;
@@ -33,14 +34,14 @@ use crate::{
     transaction_certifier::TransactionCertifier,
 };
 use crate::{
-    block::{BlockRef, SignedBlock, VerifiedBlock},
+    block::{SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
-    BlockAPI, Round,
+    BlockAPI,
 };
 
 /// The number of concurrent fetch blocks requests per authority
@@ -660,23 +661,22 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
 
             // TODO: cache received and verified block refs to avoid duplicated work.
-            let reject_txn_votes = block_verifier.verify_and_vote(&signed_block).tap_err(|e| {
-                // TODO: we might want to use a different metric to track the invalid "served" blocks
-                // from the invalid "proposed" ones.
-                let hostname = context.committee.authority(peer_index).hostname.clone();
-                context
-                    .metrics
-                    .node_metrics
-                    .invalid_blocks
-                    .with_label_values(&[&hostname, "synchronizer", e.clone().name()])
-                    .inc();
-                info!("Invalid block received from {}: {}", peer_index, e);
-            })?;
-            let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
+            let (verified_block, reject_txn_votes) = block_verifier
+                .verify_and_vote(signed_block, serialized_block)
+                .tap_err(|e| {
+                    let hostname = context.committee.authority(peer_index).hostname.clone();
+                    context
+                        .metrics
+                        .node_metrics
+                        .invalid_blocks
+                        .with_label_values(&[&hostname, "synchronizer", e.clone().name()])
+                        .inc();
+                    info!("Invalid block received from {}: {}", peer_index, e);
+                })?;
 
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
             let now = context.clock.timestamp_utc_ms();
-            let drift = verified_block.timestamp_ms().saturating_sub(now) as u64;
+            let drift = verified_block.timestamp_ms().saturating_sub(now);
             if drift > 0 {
                 let peer_hostname = &context
                     .committee
@@ -789,7 +789,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     let mut result = Vec::new();
                     for serialized_block in blocks {
                         let signed_block = bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
-                        block_verifier.verify_and_vote(&signed_block).tap_err(|err|{
+                        let (verified_block, _) = block_verifier.verify_and_vote(signed_block, serialized_block).tap_err(|err|{
                             let hostname = context.committee.authority(authority_index).hostname.clone();
                             context
                                 .metrics
@@ -800,7 +800,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             warn!("Invalid block received from {}: {}", authority_index, err);
                         })?;
 
-                        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
                         if verified_block.author() != context.own_index {
                             return Err(ConsensusError::UnexpectedLastOwnBlock { index: authority_index, block_ref: verified_block.reference()});
                         }
@@ -1315,6 +1314,7 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_types::block::{BlockDigest, BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
     use tokio::{sync::Mutex, time::sleep};
@@ -1325,7 +1325,7 @@ mod tests {
         transaction_certifier::TransactionCertifier,
     };
     use crate::{
-        block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,

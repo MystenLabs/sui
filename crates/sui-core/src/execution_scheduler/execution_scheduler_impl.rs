@@ -4,27 +4,37 @@
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
+        shared_object_version_manager::{Schedulable, WithdrawType},
+        AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::{ExecutingGuard, PendingCertificateStats},
+    execution_scheduler::{
+        balance_withdraw_scheduler::{
+            scheduler::BalanceWithdrawScheduler, BalanceSettlement, ScheduleStatus,
+            TxBalanceWithdraw,
+        },
+        ExecutingGuard, PendingCertificateStats,
+    },
 };
+use futures::stream::{FuturesUnordered, StreamExt};
+use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
-    base_types::FullObjectID,
+    base_types::{FullObjectID, SequenceNumber},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    storage::InputKey,
-    transaction::{SenderSignedData, TransactionDataAPI},
+    storage::{ChildObjectResolver, InputKey},
+    transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, warn};
+use tracing::{debug, error};
 
 use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
 
@@ -34,6 +44,7 @@ pub struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
+    balance_withdraw_scheduler: Option<Arc<BalanceWithdrawScheduler>>,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -70,16 +81,31 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
+        balance_accumulator_enabled: bool,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
+        let balance_withdraw_scheduler = if balance_accumulator_enabled {
+            let starting_accumulator_version = object_cache_read
+                .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .expect("Accumulator root object must be present if balance accumulator is enabled")
+                .version();
+            Some(BalanceWithdrawScheduler::new(
+                Arc::new(child_object_resolver),
+                starting_accumulator_version,
+            ))
+        } else {
+            None
+        };
         Self {
             object_cache_read,
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
+            balance_withdraw_scheduler,
             metrics,
         }
     }
@@ -91,6 +117,9 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let enqueue_time = Instant::now();
+        let tx_digest = cert.digest();
+        let digests = [*tx_digest];
+
         let tx_data = cert.transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
@@ -121,13 +150,9 @@ impl ExecutionScheduler {
         .concat();
 
         let epoch = epoch_store.epoch();
-        let digest = cert.digest();
-        let digests = [*digest];
-        debug!(?digest, "Scheduled transaction in execution scheduler");
-        tracing::trace!(
-            ?digests,
-            "Waiting for input objects: {:?}",
-            input_and_receiving_keys
+        debug!(
+            ?tx_digest,
+            "Scheduled transaction, waiting for input objects: {:?}", input_and_receiving_keys,
         );
 
         let availability = self
@@ -146,7 +171,7 @@ impl ExecutionScheduler {
                 .transaction_manager_num_enqueued_certificates
                 .with_label_values(&["ready"])
                 .inc();
-            debug!(?digest, "Input objects already available");
+            debug!(?tx_digest, "Input objects already available");
             self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
             return;
         }
@@ -158,12 +183,12 @@ impl ExecutionScheduler {
             .inc();
         tokio::select! {
             _ = self.object_cache_read
-                .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, &epoch)
+                .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, epoch)
                 => {
                     self.metrics
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
-                    debug!(?digest, "Input objects available");
+                    debug!(?tx_digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     self.send_transaction_for_execution(
                         &cert,
@@ -171,8 +196,11 @@ impl ExecutionScheduler {
                         enqueue_time,
                     );
                 }
-            _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
-                debug!(?digests, "Transaction already executed");
+            _ = self.transaction_cache_read.notify_read_executed_effects_digests(
+                "ExecutionScheduler::notify_read_executed_effects_digests",
+                &digests,
+            ) => {
+                debug!(?tx_digest, "Transaction already executed");
             }
         };
     }
@@ -199,6 +227,175 @@ impl ExecutionScheduler {
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
+
+    fn schedule_balance_withdraws(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, SequenceNumber, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if certs.is_empty() {
+            return;
+        }
+        let scheduler = self
+            .balance_withdraw_scheduler
+            .as_ref()
+            .expect("Balance withdraw scheduler must be enabled if there are withdraws");
+        let mut withdraws = BTreeMap::new();
+        let mut prev_version = None;
+        for (cert, version, _) in &certs {
+            let tx_withdraws = cert
+                .transaction_data()
+                .process_balance_withdraws()
+                .expect("Balance withdraws should have already been checked");
+            assert!(!tx_withdraws.is_empty());
+            if let Some(prev_version) = prev_version {
+                // Transactions must be in order.
+                assert!(prev_version <= *version);
+            }
+            prev_version = Some(*version);
+            let tx_digest = *cert.digest();
+            withdraws
+                .entry(*version)
+                .or_insert(Vec::new())
+                .push(TxBalanceWithdraw {
+                    tx_digest,
+                    reservations: tx_withdraws,
+                });
+        }
+        let mut receivers = FuturesUnordered::new();
+        for (version, tx_withdraws) in withdraws {
+            receivers.extend(scheduler.schedule_withdraws(version, tx_withdraws));
+        }
+        let scheduler = self.clone();
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+            let mut cert_map = HashMap::new();
+            for (cert, _, env) in certs {
+                cert_map.insert(*cert.digest(), (cert, env));
+            }
+            while let Some(result) = receivers.next().await {
+                match result {
+                    Ok(result) => match result.status {
+                        ScheduleStatus::InsufficientBalance => {
+                            let tx_digest = result.tx_digest;
+                            debug!(
+                                ?tx_digest,
+                                "Balance withdraw scheduling result: Insufficient balance"
+                            );
+                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            let env = env.with_insufficient_balance();
+                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                        }
+                        ScheduleStatus::SufficientBalance => {
+                            let tx_digest = result.tx_digest;
+                            debug!(?tx_digest, "Balance withdraw scheduling result: Success");
+                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            let env = env.with_sufficient_balance();
+                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                        }
+                        ScheduleStatus::AlreadyExecuted => {
+                            let tx_digest = result.tx_digest;
+                            debug!(?tx_digest, "Withdraw already executed");
+                        }
+                    },
+                    Err(e) => {
+                        error!("Withdraw scheduler stopped: {:?}", e);
+                    }
+                }
+            }
+        }));
+    }
+
+    fn schedule_settlement_transactions(
+        &self,
+        settlement_txns: Vec<(TransactionKey, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if !settlement_txns.is_empty() {
+            let scheduler = self.clone();
+            let epoch_store = epoch_store.clone();
+
+            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+                let mut futures: FuturesUnordered<_> =
+                        settlement_txns
+                            .into_iter()
+                            .map(|(key, env)| {
+                                let epoch_store = epoch_store.clone();
+                                async move {
+                                    (epoch_store.wait_for_settlement_transactions(key).await, env)
+                                }
+                            })
+                            .collect();
+
+                while let Some((txns, env)) = futures.next().await {
+                    let txns = txns
+                        .into_iter()
+                        .map(|tx| (tx, env.clone()))
+                        .collect::<Vec<_>>();
+                    scheduler.enqueue_transactions(txns, &epoch_store);
+                }
+            }));
+        }
+    }
+
+    fn schedule_tx_keys(
+        &self,
+        tx_with_keys: Vec<(TransactionKey, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if tx_with_keys.is_empty() {
+            return;
+        }
+
+        let scheduler = self.clone();
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+            let tx_keys: Vec<_> = tx_with_keys.iter().map(|(key, _)| key).cloned().collect();
+            let digests = epoch_store
+                .notify_read_tx_key_to_digest(&tx_keys)
+                .await
+                .expect("db error");
+            let transactions = scheduler
+                .transaction_cache_read
+                .multi_get_transaction_blocks(&digests)
+                .into_iter()
+                .map(|tx| {
+                    let tx = tx.expect("tx must exist").as_ref().clone();
+                    VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
+                })
+                .zip(tx_with_keys.into_iter().map(|(_, env)| env))
+                .collect::<Vec<_>>();
+            scheduler.enqueue_transactions(transactions, &epoch_store);
+        }));
+    }
+
+    /// When we schedule a certificate, it should be impossible for it to have been executed in a
+    /// previous epoch.
+    #[cfg(debug_assertions)]
+    fn assert_cert_not_executed_previous_epochs(&self, cert: &VerifiedExecutableTransaction) {
+        let epoch = cert.epoch();
+        let digest = *cert.digest();
+        let digests = [digest];
+        let executed = self
+            .transaction_cache_read
+            .multi_get_executed_effects(&digests)
+            .pop()
+            .unwrap();
+        // Due to pruning, we may not always have an executed effects for the certificate
+        // even if it was executed. So this is a best-effort check.
+        if let Some(executed) = executed {
+            use sui_types::effects::TransactionEffectsAPI;
+
+            assert_eq!(
+                executed.executed_epoch(),
+                epoch,
+                "Transaction {} was executed in epoch {}, but scheduled again in epoch {}",
+                digest,
+                executed.executed_epoch(),
+                epoch
+            );
+        }
+    }
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
@@ -208,47 +405,37 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         // schedule all transactions immediately
-        let mut txns = Vec::with_capacity(certs.len());
-        let mut rest = Vec::new();
+        let mut ordinary_txns = Vec::with_capacity(certs.len());
+        let mut tx_with_keys = Vec::new();
+        let mut tx_with_withdraws = Vec::new();
+        let mut settlement_txns = Vec::new();
 
         for (schedulable, env) in certs {
-            if let Schedulable::Transaction(tx) = schedulable {
-                txns.push((tx, env));
-            } else {
-                rest.push((schedulable, env));
+            match schedulable {
+                Schedulable::Transaction(tx) => {
+                    // Check if this transaction has withdraws based on the assigned versions
+                    match env.assigned_versions.withdraw_type {
+                        WithdrawType::Withdraw(accumulator_version) => {
+                            tx_with_withdraws.push((tx, accumulator_version, env));
+                        }
+                        WithdrawType::NonWithdraw => {
+                            ordinary_txns.push((tx, env));
+                        }
+                    }
+                }
+                s @ Schedulable::RandomnessStateUpdate(..) => {
+                    tx_with_keys.push((s.key(), env));
+                }
+                Schedulable::AccumulatorSettlement(_, _) => {
+                    settlement_txns.push((schedulable.key(), env));
+                }
             }
         }
 
-        self.enqueue_transactions(txns, epoch_store);
-
-        if rest.is_empty() {
-            return;
-        }
-
-        let rest_keys = rest
-            .iter()
-            .map(|(schedulable, _)| schedulable.key())
-            .collect::<Vec<_>>();
-
-        let scheduler = self.clone();
-        let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-            let rest_digests = epoch_store
-                .notify_read_tx_key_to_digest(&rest_keys)
-                .await
-                .expect("db error");
-            let rest_transactions = scheduler
-                .transaction_cache_read
-                .multi_get_transaction_blocks(&rest_digests)
-                .into_iter()
-                .map(|tx| {
-                    let tx = tx.expect("tx must exist").as_ref().clone();
-                    VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
-                })
-                .zip(rest.into_iter().map(|(_, env)| env))
-                .collect::<Vec<_>>();
-            scheduler.enqueue_transactions(rest_transactions, &epoch_store);
-        }));
+        self.enqueue_transactions(ordinary_txns, epoch_store);
+        self.schedule_tx_keys(tx_with_keys, epoch_store);
+        self.schedule_balance_withdraws(tx_with_withdraws, epoch_store);
+        self.schedule_settlement_transactions(settlement_txns, epoch_store);
     }
 
     fn enqueue_transactions(
@@ -261,12 +448,15 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .into_iter()
             .filter_map(|cert| {
                 if cert.0.epoch() == epoch_store.epoch() {
+                    #[cfg(debug_assertions)]
+                    self.assert_cert_not_executed_previous_epochs(&cert.0);
+
                     Some(cert)
                 } else {
-                    warn!(
-                        "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                    debug_fatal!(
+                        "We should never enqueue certificate from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
-                        cert.0.epoch(),
+                        cert.0.epoch()
                     );
                     None
                 }
@@ -308,6 +498,13 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .inc_by(already_executed_certs_num);
     }
 
+    fn settle_balances(&self, settlement: BalanceSettlement) {
+        self.balance_withdraw_scheduler
+            .as_ref()
+            .expect("Balance withdraw scheduler must be enabled if there are settlements")
+            .settle_balances(settlement);
+    }
+
     fn check_execution_overload(
         &self,
         overload_config: &AuthorityOverloadConfig,
@@ -339,6 +536,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
 mod test {
     use std::{time::Duration, vec};
 
+    use crate::authority::shared_object_version_manager::AssignedVersions;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
@@ -379,8 +577,10 @@ mod test {
         let execution_scheduler =
             ExecutionSchedulerWrapper::ExecutionScheduler(ExecutionScheduler::new(
                 state.get_object_cache_reader().clone(),
+                state.get_child_object_resolver().clone(),
                 state.get_transaction_cache_reader().clone(),
                 tx_ready_certificates,
+                false,
                 state.metrics.clone(),
             ));
 
@@ -647,19 +847,27 @@ mod test {
             vec![
                 (
                     transaction_read_0.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_0_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_0_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_read_1.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_1_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_1_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_default.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_default_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_default_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_read_2.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_2_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_2_assigned_versions,
+                    )),
                 ),
             ],
             &state.epoch_store_for_testing(),
@@ -1195,7 +1403,8 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 cancelled_transaction.clone(),
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                ExecutionEnv::new()
+                    .with_assigned_versions(AssignedVersions::non_withdraw(assigned_versions)),
             )],
             &state.epoch_store_for_testing(),
         );

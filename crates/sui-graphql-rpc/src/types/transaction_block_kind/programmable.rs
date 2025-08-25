@@ -448,6 +448,9 @@ impl TransactionInput {
                     checkpoint_viewed_at,
                 },
             }),
+
+            // TODO(address-balances): Add support for balance withdraws.
+            N::BalanceWithdraw(_) => todo!("BalanceWithdraw is not supported for GraphQL"),
         }
     }
 }

@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::register_debug_fatal_handler;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use sui_macros::register_fail_point;
-use sui_macros::register_fail_point_if;
+use sui_macros::register_fail_point_arg;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
+use sui_types::base_types::AuthorityName;
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 use tracing::info;
@@ -56,16 +57,33 @@ async fn test_checkpoint_split_brain() {
             panic_timeout: None,
         });
     }
+
     let committee_size = 9;
     // count number of nodes that have reached split brain condition
     let count_split_brain_nodes: Arc<Mutex<AtomicUsize>> = Default::default();
     let count_clone = count_split_brain_nodes.clone();
-    register_fail_point("split_brain_reached", move || {
-        let counter = count_clone.lock().unwrap();
-        counter.fetch_add(1, Ordering::Relaxed);
-    });
 
-    register_fail_point_if("cp_execution_nondeterminism", || true);
+    register_debug_fatal_handler!(
+        "Split brain detected in checkpoint signature aggregation",
+        move || {
+            let counter = count_clone.lock().unwrap();
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
+    );
+
+    register_fail_point_arg("simulate_fork_during_execution", || {
+        Some((
+            std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::<
+                AuthorityName,
+            >::new())),
+            true, // full_halt
+            std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::<
+                String,
+                String,
+            >::new())),
+            1.0f32, // fork_probability
+        ))
+    });
 
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(committee_size)
@@ -157,4 +175,51 @@ async fn test_checkpoint_timestamps_non_decreasing() {
     }
 
     assert!(checkpoints_checked > 0, "Test created only 1 checkpoint",);
+}
+
+#[sim_test]
+async fn test_checkpoint_fork_detection_storage() {
+    use sui_types::messages_checkpoint::CheckpointDigest;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
+
+    // Get the first validator for testing
+    let validator_handle = test_cluster
+        .swarm
+        .validator_node_handles()
+        .into_iter()
+        .next()
+        .expect("No validator found");
+
+    // Test 1: Basic fork detection storage functionality
+    validator_handle.with(|node| {
+        let checkpoint_store = node.state().checkpoint_store.clone();
+        let fork_seq = 42;
+        let fork_digest = CheckpointDigest::random();
+
+        assert!(checkpoint_store
+            .get_checkpoint_fork_detected()
+            .unwrap()
+            .is_none());
+
+        checkpoint_store
+            .record_checkpoint_fork_detected(fork_seq, fork_digest)
+            .expect("Failed to record checkpoint fork");
+
+        let retrieved = checkpoint_store.get_checkpoint_fork_detected().unwrap();
+        assert!(retrieved.is_some());
+        let (retrieved_seq, retrieved_digest) = retrieved.unwrap();
+        assert_eq!(retrieved_seq, fork_seq);
+        assert_eq!(retrieved_digest, fork_digest);
+
+        checkpoint_store.clear_checkpoint_fork_detected().unwrap();
+        let retrieved_after_clear = checkpoint_store.get_checkpoint_fork_detected().unwrap();
+        assert!(
+            retrieved_after_clear.is_none(),
+            "Fork state should be cleared"
+        );
+    });
 }

@@ -9,7 +9,7 @@ use sui_indexer_alt_graphql::{
     config::{IndexerConfig, RpcLayer},
     start_rpc,
 };
-use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::{uptime, MetricsService};
 use tokio::{fs, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -40,8 +40,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Rpc {
             database_url,
             bigtable_instance,
+            full_node,
             db_args,
             bigtable_args,
+            consistent_reader_args,
             rpc_args,
             system_package_task_args,
             metrics_args,
@@ -94,11 +96,18 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
+            metrics
+                .registry()
+                .register(uptime(VERSION)?)
+                .context("Failed to register uptime metric.")?;
+
             let h_rpc = start_rpc(
                 Some(database_url),
                 bigtable_instance,
+                full_node,
                 db_args,
                 bigtable_args,
+                consistent_reader_args,
                 rpc_args,
                 system_package_task_args,
                 VERSION,

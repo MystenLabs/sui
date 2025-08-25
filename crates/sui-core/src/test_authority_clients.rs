@@ -8,16 +8,19 @@ use std::{
     time::Duration,
 };
 
-use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
+use crate::{
+    authority::AuthorityState, authority_client::AuthorityAPI, transaction_driver::SubmitTxResponse,
+};
 use crate::{
     authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv},
     execution_scheduler::ExecutionSchedulerAPI,
 };
 use async_trait::async_trait;
-use consensus_core::BlockRef;
+use consensus_types::block::BlockRef;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::{
+    committee::EpochId,
     crypto::AuthorityKeyPair,
     error::SuiError,
     executable_transaction::VerifiedExecutableTransaction,
@@ -82,7 +85,17 @@ impl AuthorityAPI for LocalAuthorityClient {
         }
         let state = self.state.clone();
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transaction)
+        // TODO(fastpath): handle multiple transactions.
+        if request.transactions.len() != 1 {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: format!(
+                    "Expected exactly 1 transaction in request, got {}",
+                    request.transactions.len()
+                ),
+            });
+        }
+
+        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transactions[0])
             .map_err(|e| SuiError::TransactionDeserializationError {
                 error: e.to_string(),
             })?;
@@ -105,13 +118,12 @@ impl AuthorityAPI for LocalAuthorityClient {
         // dummy consensus position
         // TODO(fastpath): Return the actual consensus position
         let consensus_position = ConsensusPosition {
+            epoch: EpochId::MIN,
             block: BlockRef::MIN,
             index: 0,
         };
 
-        Ok(RawSubmitTxResponse {
-            consensus_position: consensus_position.into_raw()?,
-        })
+        SubmitTxResponse::Submitted { consensus_position }.try_into()
     }
 
     async fn handle_transaction(
@@ -235,6 +247,25 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<SuiSystemState, SuiError> {
         self.state.get_sui_system_state_object_for_testing()
     }
+
+    async fn validator_health(
+        &self,
+        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+        let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+            num_inflight_consensus_transactions: 0,
+            num_inflight_execution_transactions: 0,
+            last_committed_leader_round: 1000,
+            last_locally_built_checkpoint: 500,
+        };
+
+        typed_response.try_into().map_err(|e| {
+            sui_types::error::SuiError::GrpcMessageSerializeError {
+                type_info: "ValidatorHealthResponse".to_string(),
+                error: format!("Failed to convert to raw response: {}", e),
+            }
+        })
+    }
 }
 
 impl LocalAuthorityClient {
@@ -290,7 +321,7 @@ impl LocalAuthorityClient {
                     )],
                     &epoch_store,
                 );
-                let effects = state.notify_read_effects(*certificate.digest()).await?;
+                let effects = state.notify_read_effects("", *certificate.digest()).await?;
                 state.sign_effects(effects, &epoch_store)?
             }
         }
@@ -332,6 +363,7 @@ impl LocalAuthorityClient {
     }
 }
 
+// TODO: The way we are passing in and using delay and count is really ugly code. Please fix it.
 #[derive(Clone)]
 pub struct MockAuthorityApi {
     delay: Duration,
@@ -455,6 +487,25 @@ impl AuthorityAPI for MockAuthorityApi {
     ) -> Result<SuiSystemState, SuiError> {
         unimplemented!();
     }
+
+    async fn validator_health(
+        &self,
+        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+        let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+            num_inflight_consensus_transactions: 0,
+            num_inflight_execution_transactions: 0,
+            last_committed_leader_round: 1000,
+            last_locally_built_checkpoint: 500,
+        };
+
+        typed_response.try_into().map_err(|e| {
+            sui_types::error::SuiError::GrpcMessageSerializeError {
+                type_info: "ValidatorHealthResponse".to_string(),
+                error: format!("Failed to convert to raw response: {}", e),
+            }
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -554,6 +605,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
+        unimplemented!()
+    }
+
+    async fn validator_health(
+        &self,
+        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
         unimplemented!()
     }
 }

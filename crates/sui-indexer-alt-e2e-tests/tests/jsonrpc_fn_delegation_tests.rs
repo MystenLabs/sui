@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 
 use anyhow::Context;
 use prometheus::Registry;
@@ -14,7 +15,7 @@ use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_swarm_config::genesis_config::AccountConfig;
-use sui_test_transaction_builder::make_staking_transaction;
+use sui_test_transaction_builder::{make_publish_transaction, make_staking_transaction};
 use sui_types::{base_types::SuiAddress, transaction::TransactionDataAPI};
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::task::JoinHandle;
@@ -34,7 +35,7 @@ impl FnDelegationTestCluster {
     async fn new() -> anyhow::Result<Self> {
         let onchain_cluster = TestClusterBuilder::new()
             .with_num_validators(1)
-            .with_epoch_duration_ms(2000)
+            .with_epoch_duration_ms(300_000) // 5 minutes
             .with_accounts(vec![
                 AccountConfig {
                     address: None,
@@ -101,7 +102,7 @@ impl FnDelegationTestCluster {
             .transfer_sui(Some(1_000), recipient)
             .build();
         let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
+        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
         let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
@@ -118,7 +119,7 @@ impl FnDelegationTestCluster {
             .call_request_remove_validator()
             .build();
         let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
+        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
         let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
@@ -545,5 +546,81 @@ async fn test_get_validators_apy() {
         response["result"]["apys"][0]["address"],
         validator_address.to_string()
     );
+    test_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_get_balance() {
+    let test_cluster = FnDelegationTestCluster::new()
+        .await
+        .expect("Failed to create test cluster");
+    let wallet = &test_cluster.onchain_cluster.wallet;
+
+    // Publish another coin to better test the API.
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["packages", "coin"]);
+    let publish_transaction = make_publish_transaction(wallet, path).await;
+    let owner_address = publish_transaction.data().transaction_data().sender();
+
+    let execution_result = wallet
+        .execute_transaction_must_succeed(publish_transaction)
+        .await;
+
+    let package_id = execution_result.get_new_package_obj().unwrap().0;
+
+    // Test out the specified coin type.
+    // Parse the coin type so we have the same string representation as the used by fullnode.
+    let coin_type = sui_types::parse_sui_struct_tag(&format!("{}::my_coin::MY_COIN", package_id))
+        .unwrap()
+        .to_string();
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getBalance".to_string(),
+            json!({ "owner": owner_address.to_string().as_str(), "coinType": coin_type}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response["result"]["totalBalance"], "1230");
+    assert_eq!(response["result"]["coinType"], coin_type);
+
+    // Test out the default coin type.
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getBalance".to_string(),
+            json!({ "owner": owner_address.to_string().as_str()}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response["result"]["coinType"], "0x2::sui::SUI");
+
+    // Test out the invalid coin type.
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getBalance".to_string(),
+            json!({ "owner": owner_address.to_string().as_str(), "coinType": "invalid_coin_type"}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response["error"]["code"], -32602);
+    assert!(response["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Invalid struct type: invalid_coin_type"));
+
+    // Test out the invalid address.
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getBalance".to_string(),
+            json!({ "owner": "invalid_address", "coinType": coin_type}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response["error"]["code"], -32602);
+    assert!(response["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Invalid params"));
     test_cluster.stopped().await;
 }

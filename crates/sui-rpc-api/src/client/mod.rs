@@ -1,26 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod response_ext;
 use std::time::Duration;
-
-pub use response_ext::ResponseExt;
 
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
-use crate::field_mask::FieldMaskUtil;
-use crate::proto::rpc::v2beta as proto;
-use crate::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
-use crate::proto::rpc::v2beta::transaction_execution_service_client::TransactionExecutionServiceClient;
-use crate::proto::TryFromProtoError;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2beta2 as proto;
+use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::transaction_execution_service_client::TransactionExecutionServiceClient;
+use sui_rpc::proto::TryFromProtoError;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
+
+pub use sui_rpc::client::ResponseExt;
 
 pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -114,6 +113,9 @@ impl Client {
             .await?
             .into_parts();
 
+        let checkpoint = checkpoint
+            .checkpoint
+            .ok_or_else(|| tonic::Status::not_found("no checkpoint returned"))?;
         certified_checkpoint_summary_try_from_proto(&checkpoint)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
     }
@@ -146,7 +148,10 @@ impl Client {
             .await?
             .into_parts();
 
-        checkpoint_data_try_from_proto(&response)
+        let checkpoint = response
+            .checkpoint
+            .ok_or_else(|| tonic::Status::not_found("no checkpoint returned"))?;
+        checkpoint_data_try_from_proto(&checkpoint)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
     }
 
@@ -169,7 +174,7 @@ impl Client {
         version: Option<u64>,
     ) -> Result<Object> {
         let request = proto::GetObjectRequest {
-            object_id: Some(sui_sdk_types::ObjectId::from(object_id).to_string()),
+            object_id: Some(sui_sdk_types::Address::from(object_id).to_string()),
             version,
             read_mask: FieldMask::from_paths(["bcs"]).pipe(Some),
         };
@@ -177,6 +182,9 @@ impl Client {
         let (metadata, object, _extentions) =
             self.raw_client().get_object(request).await?.into_parts();
 
+        let object = object
+            .object
+            .ok_or_else(|| tonic::Status::not_found("no object returned"))?;
         object_try_from_proto(&object).map_err(|e| status_from_error_with_metadata(e, metadata))
     }
 
@@ -233,6 +241,7 @@ pub struct TransactionExecutionResponse {
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
+#[allow(clippy::result_large_err)]
 fn certified_checkpoint_summary_try_from_proto(
     checkpoint: &proto::Checkpoint,
 ) -> Result<CertifiedCheckpointSummary, TryFromProtoError> {
@@ -240,9 +249,9 @@ fn certified_checkpoint_summary_try_from_proto(
         .summary
         .as_ref()
         .and_then(|summary| summary.bcs.as_ref())
-        .ok_or_else(|| TryFromProtoError::missing("summary_bcs"))?
+        .ok_or_else(|| TryFromProtoError::missing("summary.bcs"))?
         .deserialize()
-        .map_err(TryFromProtoError::from_error)?;
+        .map_err(|e| TryFromProtoError::invalid("summary.bcs", e))?;
 
     let signature = sui_types::crypto::AuthorityStrongQuorumSignInfo::from(
         sui_sdk_types::ValidatorAggregatedSignature::try_from(
@@ -251,7 +260,7 @@ fn certified_checkpoint_summary_try_from_proto(
                 .as_ref()
                 .ok_or_else(|| TryFromProtoError::missing("signature"))?,
         )
-        .map_err(TryFromProtoError::from_error)?,
+        .map_err(|e| TryFromProtoError::invalid("signature", e))?,
     );
 
     Ok(CertifiedCheckpointSummary::new_from_data_and_sig(
@@ -260,6 +269,7 @@ fn certified_checkpoint_summary_try_from_proto(
 }
 
 /// Attempts to parse `CheckpointData` from a proto::Checkpoint
+#[allow(clippy::result_large_err)]
 fn checkpoint_data_try_from_proto(
     checkpoint: &proto::Checkpoint,
 ) -> Result<CheckpointData, TryFromProtoError> {
@@ -269,9 +279,9 @@ fn checkpoint_data_try_from_proto(
         .contents
         .as_ref()
         .and_then(|contents| contents.bcs.as_ref())
-        .ok_or_else(|| TryFromProtoError::missing("contents_bcs"))?
+        .ok_or_else(|| TryFromProtoError::missing("contents.bcs"))?
         .deserialize::<sui_types::messages_checkpoint::CheckpointContents>()
-        .map_err(TryFromProtoError::from_error)?;
+        .map_err(|e| TryFromProtoError::invalid("contents.bcs", e))?;
 
     let transactions = checkpoint
         .transactions
@@ -299,20 +309,20 @@ fn checkpoint_data_try_from_proto(
                     .and_then(|transaction| transaction.bcs.as_ref())
                     .ok_or_else(|| TryFromProtoError::missing("transaction_bcs"))?
                     .deserialize()
-                    .map_err(TryFromProtoError::from_error)?;
+                    .map_err(|e| TryFromProtoError::invalid("transaction.bcs", e))?;
                 let transaction = Transaction::from_generic_sig_data(transaction, signatures);
                 let effects = effects
                     .as_ref()
                     .and_then(|effects| effects.bcs.as_ref())
                     .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?
                     .deserialize()
-                    .map_err(TryFromProtoError::from_error)?;
+                    .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
                 let events = events
                     .as_ref()
                     .and_then(|events| events.bcs.as_ref())
                     .map(|bcs| bcs.deserialize())
                     .transpose()
-                    .map_err(TryFromProtoError::from_error)?;
+                    .map_err(|e| TryFromProtoError::invalid("events.bcs", e))?;
                 let input_objects = input_objects
                     .iter()
                     .map(object_try_from_proto)
@@ -344,16 +354,18 @@ fn checkpoint_data_try_from_proto(
 }
 
 /// Attempts to parse `Object` from the bcs fields in `GetObjectResponse`
+#[allow(clippy::result_large_err)]
 fn object_try_from_proto(object: &proto::Object) -> Result<Object, TryFromProtoError> {
     object
         .bcs
         .as_ref()
         .ok_or_else(|| TryFromProtoError::missing("bcs"))?
         .deserialize()
-        .map_err(TryFromProtoError::from_error)
+        .map_err(|e| TryFromProtoError::invalid("bcs", e))
 }
 
 /// Attempts to parse `TransactionExecutionResponse` from the fields in `TransactionExecutionResponse`
+#[allow(clippy::result_large_err)]
 fn execute_transaction_response_try_from_proto(
     response: &proto::ExecuteTransactionResponse,
 ) -> Result<TransactionExecutionResponse, TryFromProtoError> {
@@ -373,14 +385,14 @@ fn execute_transaction_response_try_from_proto(
         .and_then(|effects| effects.bcs.as_ref())
         .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?
         .deserialize()
-        .map_err(TryFromProtoError::from_error)?;
+        .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
     let events = executed_transaction
         .events
         .as_ref()
         .and_then(|events| events.bcs.as_ref())
         .map(|bcs| bcs.deserialize())
         .transpose()
-        .map_err(TryFromProtoError::from_error)?;
+        .map_err(|e| TryFromProtoError::invalid("events.bcs", e))?;
 
     let balance_changes = executed_transaction
         .balance_changes

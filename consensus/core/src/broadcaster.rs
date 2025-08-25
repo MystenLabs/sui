@@ -192,16 +192,16 @@ mod test {
 
     use async_trait::async_trait;
     use bytes::Bytes;
+    use consensus_types::block::{BlockRef, Round};
     use parking_lot::Mutex;
     use tokio::time::sleep;
 
     use super::*;
     use crate::{
-        block::{BlockRef, ExtendedBlock, TestBlock},
+        block::{ExtendedBlock, TestBlock},
         commit::CommitRange,
         core::CoreSignals,
         network::BlockStream,
-        Round,
     };
 
     struct FakeNetworkClient {

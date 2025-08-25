@@ -4,15 +4,18 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 pub mod args;
+pub mod cursor;
 pub mod offchain_state;
 pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;
 pub mod test_adapter;
 
+use move_command_line_common::testing::InstaOptions;
 pub use move_transactional_test_runner::framework::{
     create_adapter, run_tasks_with_adapter, run_test_impl,
 };
 use rand::rngs::StdRng;
+use simulacrum::AdvanceEpochConfig;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulator_persisted_store::PersistedStore;
@@ -46,7 +49,6 @@ use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::Transaction;
-use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction::{InputObjects, TransactionData};
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
@@ -60,7 +62,8 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
-    run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone()))).await?;
+    run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone())), None)
+        .await?;
     Ok(())
 }
 
@@ -68,20 +71,17 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg_attr(msim, msim::main)]
 pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     ENABLE_PTB_V2.set(true).unwrap();
-
-    // check if the test is enabled
-    const ENABLED_DIRECTORIES: &[&str] = &[];
-    let mut components = path.parent().unwrap().components();
-    if !components.any(|c| {
-        let string = c.as_os_str().to_string_lossy().to_string();
-        ENABLED_DIRECTORIES.contains(&string.as_str())
-    }) {
-        return Ok(());
-    }
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
-    run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone()))).await?;
+    let mut options = InstaOptions::new();
+    options.suffix("v2");
+    run_test_impl::<SuiTestAdapter>(
+        path,
+        Some(std::sync::Arc::new(PRE_COMPILED.clone())),
+        Some(options),
+    )
+    .await?;
     Ok(())
 }
 
@@ -119,7 +119,7 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
         duration: std::time::Duration,
     ) -> anyhow::Result<TransactionEffects>;
 
-    async fn advance_epoch(&mut self, create_random_state: bool) -> anyhow::Result<()>;
+    async fn advance_epoch(&mut self, config: AdvanceEpochConfig) -> anyhow::Result<()>;
 
     async fn request_gas(
         &mut self,
@@ -147,6 +147,8 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
     ) -> SuiResult<Vec<Event>>;
 
     async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>>;
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object>;
 }
 
 #[async_trait::async_trait]
@@ -155,16 +157,12 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         &mut self,
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let with_shared = transaction
-            .data()
-            .intent_message()
-            .value
-            .contains_shared_object();
+        let is_consensus_tx = transaction.is_consensus_tx();
         let (_, effects, execution_error) = send_and_confirm_transaction_with_execution_error(
             &self.validator,
             Some(&self.fullnode),
             transaction,
-            with_shared,
+            is_consensus_tx,
             false,
         )
         .await?;
@@ -274,7 +272,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         unimplemented!("advance_clock not supported")
     }
 
-    async fn advance_epoch(&mut self, _create_random_state: bool) -> anyhow::Result<()> {
+    async fn advance_epoch(&mut self, _config: AdvanceEpochConfig) -> anyhow::Result<()> {
         self.validator.reconfigure_for_testing().await;
         self.fullnode.reconfigure_for_testing().await;
         Ok(())
@@ -303,6 +301,10 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             .iter()
             .map(|x| x.sui_address)
             .collect::<Vec<_>>())
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.validator.get_object_store().get_object(object_id)
     }
 }
 
@@ -488,8 +490,8 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         Ok(self.advance_clock(duration))
     }
 
-    async fn advance_epoch(&mut self, create_random_state: bool) -> anyhow::Result<()> {
-        self.advance_epoch(create_random_state);
+    async fn advance_epoch(&mut self, config: AdvanceEpochConfig) -> anyhow::Result<()> {
+        self.advance_epoch(config);
         Ok(())
     }
 
@@ -505,5 +507,9 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         // TODO: this is a hack to get the validator addresses. Currently using start state
         //       but we should have a better way to get this information after reconfig
         Ok(self.epoch_start_state().get_validator_addresses())
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        ObjectStore::get_object(&self.store(), object_id)
     }
 }

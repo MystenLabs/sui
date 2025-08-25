@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 86;
+const MAX_PROTOCOL_VERSION: u64 = 94;
 
 // Record history of protocol version allocations here:
 //
@@ -244,8 +244,21 @@ const MAX_PROTOCOL_VERSION: u64 = 86;
 // Version 85: Enable party transfer in devnet.
 // Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
 //             Make variant count limit explicit in protocol config.
-//             Enable epoch stable sequence number in effects for unsequenced config reads.
 //             Enable party transfer in testnet.
+// Version 87: Enable better type resolution errors in the adapter.
+// Version 88: Update `sui-system` package to use `calculate_rewards` function.
+//             Define the cost for the native Move function `rgp`.
+//             Ignore execution time observations after validator stops accepting certs.
+// Version 89: Add additional signature checks
+//             Add additional linkage checks
+// Version 90: Standard library improvements.
+//             Enable `debug_fatal` on Move invariant violations.
+//             Enable passkey and passkey inside multisig for mainnet.
+// Version 91: Minor changes in Sui Framework. Include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
+// Version 92: Disable checking shared object transfer restrictions per command = false
+// Version 93: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
+// Version 94: Decrease stored observations limit by 10% to stay within system object size limit.
+//             Enable party transfer on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -442,6 +455,10 @@ struct FeatureFlags {
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
+
+    // If true, include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_checkpoint_signature_key_includes_digest: bool,
 
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -718,13 +735,52 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
-    // Rethrow type layout errors during serialization instead of trying to convert them.
-    #[serde(skip_serializing_if = "is_false")]
-    include_epoch_stable_sequence_number_in_effects: bool,
-
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
+
+    // Provide better type resolution errors in the adapter.
+    #[serde(skip_serializing_if = "is_false")]
+    better_adapter_type_resolution_errors: bool,
+
+    // If true, record the time estimate processed in the consensus commit prologue.
+    #[serde(skip_serializing_if = "is_false")]
+    record_time_estimate_processed: bool,
+
+    // If true enable additional linkage checks.
+    #[serde(skip_serializing_if = "is_false")]
+    dependency_linkage_error: bool,
+
+    // If true enable additional multisig checks.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_multisig_checks: bool,
+
+    // If true, ignore execution time observations after certs are closed.
+    #[serde(skip_serializing_if = "is_false")]
+    ignore_execution_time_observations_after_certs_closed: bool,
+
+    // If true use `debug_fatal` to report invariant violations.
+    // `debug_fatal` panics in debug builds and breaks tests/behavior based on older
+    // protocol versions (see make_vec_non_existent_type_v71.move)
+    #[serde(skip_serializing_if = "is_false")]
+    debug_fatal_on_move_invariant_violation: bool,
+
+    // DO NOT ENABLE THIS FOR PRODUCTION NETWORKS. used for testing only.
+    // Allow private accumulator entrypoints
+    #[serde(skip_serializing_if = "is_false")]
+    allow_private_accumulator_entrypoints: bool,
+
+    // If true, include indirect state in the additional consensus digest.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_consensus_digest_indirect_state: bool,
+
+    // Check for `init` for new modules to a package on upgrade.
+    #[serde(skip_serializing_if = "is_false")]
+    check_for_init_during_upgrade: bool,
+
+    // Check shared object transfer restrictions per command.
+    #[serde(skip_serializing_if = "is_false")]
+    per_command_shared_object_transfer_rules: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -782,6 +838,12 @@ pub struct ExecutionTimeEstimateParams {
     // observation-based execution time estimates instead of the default.
     #[serde(skip_serializing_if = "is_zero")]
     pub stake_weighted_median_threshold: u64,
+
+    // For backwards compatibility with old behavior we use a zero default duration when adding
+    // new execution time observation keys and a zero generation when loading stored observations.
+    // This can be removed once set to "true" on mainnet.
+    #[serde(skip_serializing_if = "is_false")]
+    pub default_none_duration_for_new_keys: bool,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -954,6 +1016,10 @@ pub struct ProtocolConfig {
 
     /// Maximum amount of the proposed gas price in MIST (defined in the transaction).
     max_gas_price: Option<u64>,
+
+    /// For aborted txns, we cap the gas price at a factor of RGP. This lowers risk of setting higher priority gas price
+    /// if there's a chance the txn will abort.
+    max_gas_price_rgp_factor_for_aborted_transactions: Option<u64>,
 
     /// The max computation bucket for gas. This is the max that can be charged for computation.
     max_gas_computation_bucket: Option<u64>,
@@ -1230,6 +1296,7 @@ pub struct ProtocolConfig {
     tx_context_epoch_cost_base: Option<u64>,
     tx_context_epoch_timestamp_ms_cost_base: Option<u64>,
     tx_context_sponsor_cost_base: Option<u64>,
+    tx_context_rgp_cost_base: Option<u64>,
     tx_context_gas_price_cost_base: Option<u64>,
     tx_context_gas_budget_cost_base: Option<u64>,
     tx_context_ids_created_cost_base: Option<u64>,
@@ -1921,12 +1988,7 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        if cfg!(msim) {
-            // exercise a very low gc_depth
-            5
-        } else {
-            self.consensus_gc_depth.unwrap_or(0)
-        }
+        self.consensus_gc_depth.unwrap_or(0)
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
@@ -2072,13 +2134,55 @@ impl ProtocolConfig {
         self.feature_flags.type_tags_in_object_runtime
     }
 
-    pub fn include_epoch_stable_sequence_number_in_effects(&self) -> bool {
-        self.feature_flags
-            .include_epoch_stable_sequence_number_in_effects
-    }
-
     pub fn enable_ptb_execution_v2(&self) -> bool {
         self.feature_flags.enable_ptb_execution_v2
+    }
+
+    pub fn better_adapter_type_resolution_errors(&self) -> bool {
+        self.feature_flags.better_adapter_type_resolution_errors
+    }
+
+    pub fn record_time_estimate_processed(&self) -> bool {
+        self.feature_flags.record_time_estimate_processed
+    }
+
+    pub fn ignore_execution_time_observations_after_certs_closed(&self) -> bool {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed
+    }
+
+    pub fn dependency_linkage_error(&self) -> bool {
+        self.feature_flags.dependency_linkage_error
+    }
+
+    pub fn additional_multisig_checks(&self) -> bool {
+        self.feature_flags.additional_multisig_checks
+    }
+
+    pub fn debug_fatal_on_move_invariant_violation(&self) -> bool {
+        self.feature_flags.debug_fatal_on_move_invariant_violation
+    }
+
+    pub fn allow_private_accumulator_entrypoints(&self) -> bool {
+        self.feature_flags.allow_private_accumulator_entrypoints
+    }
+
+    pub fn additional_consensus_digest_indirect_state(&self) -> bool {
+        self.feature_flags
+            .additional_consensus_digest_indirect_state
+    }
+
+    pub fn check_for_init_during_upgrade(&self) -> bool {
+        self.feature_flags.check_for_init_during_upgrade
+    }
+
+    pub fn per_command_shared_object_transfer_rules(&self) -> bool {
+        self.feature_flags.per_command_shared_object_transfer_rules
+    }
+
+    pub fn consensus_checkpoint_signature_key_includes_digest(&self) -> bool {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest
     }
 }
 
@@ -2250,6 +2354,7 @@ impl ProtocolConfig {
             max_publish_or_upgrade_per_ptb: None,
             max_tx_gas: Some(10_000_000_000),
             max_gas_price: Some(100_000),
+            max_gas_price_rgp_factor_for_aborted_transactions: None,
             max_gas_computation_bucket: Some(5_000_000),
             max_loop_depth: Some(5),
             max_generic_instantiation_length: Some(32),
@@ -2380,6 +2485,7 @@ impl ProtocolConfig {
             tx_context_epoch_cost_base: None,
             tx_context_epoch_timestamp_ms_cost_base: None,
             tx_context_sponsor_cost_base: None,
+            tx_context_rgp_cost_base: None,
             tx_context_gas_price_cost_base: None,
             tx_context_gas_budget_cost_base: None,
             tx_context_ids_created_cost_base: None,
@@ -3589,6 +3695,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
                     }
@@ -3669,6 +3776,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
 
@@ -3699,6 +3807,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
 
@@ -3722,6 +3831,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                     cfg.feature_flags.allow_unbounded_system_objects = true;
@@ -3744,6 +3854,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                 }
@@ -3762,15 +3873,88 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
-                    cfg.feature_flags
-                        .include_epoch_stable_sequence_number_in_effects = true;
-
                     // Enable party transfer for testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_party_transfer = true;
                     }
+                }
+                87 => {
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.record_time_estimate_processed = true;
+                    }
+                    cfg.feature_flags.better_adapter_type_resolution_errors = true;
+                }
+                88 => {
+                    cfg.feature_flags.record_time_estimate_processed = true;
+                    cfg.tx_context_rgp_cost_base = Some(30);
+                    cfg.feature_flags
+                        .ignore_execution_time_observations_after_certs_closed = true;
+
+                    // Disable backwards compatible behavior in execution time estimator for
+                    // new protocol version.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 20,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                            },
+                        );
+                }
+                89 => {
+                    cfg.feature_flags.dependency_linkage_error = true;
+                    cfg.feature_flags.additional_multisig_checks = true;
+                }
+                90 => {
+                    // 100x RGP
+                    cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
+                    cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
+                    cfg.feature_flags.additional_consensus_digest_indirect_state = true;
+                    cfg.feature_flags.accept_passkey_in_multisig = true;
+                    cfg.feature_flags.passkey_auth = true;
+                    cfg.feature_flags.check_for_init_during_upgrade = true;
+
+                    // Enable Mysticeti fastpath handlers on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.mysticeti_fastpath = true;
+                    }
+                }
+                91 => {
+                    cfg.feature_flags.per_command_shared_object_transfer_rules = true;
+                }
+                92 => {
+                    cfg.feature_flags.per_command_shared_object_transfer_rules = false;
+                }
+                93 => {
+                    cfg.feature_flags
+                        .consensus_checkpoint_signature_key_includes_digest = true;
+                }
+                94 => {
+                    // Decrease stored observations limit 20->18 to stay within system object size limit.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 18,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                            },
+                        );
+
+                    // Enable party transfer on mainnet.
+                    cfg.feature_flags.enable_party_transfer = true;
                 }
                 // Use this template when making changes:
                 //
@@ -3785,6 +3969,18 @@ impl ProtocolConfig {
                 _ => panic!("unsupported version {:?}", version),
             }
         }
+
+        // Simtest specific overrides.
+        if cfg!(msim) {
+            // Trigger GC more often.
+            cfg.consensus_gc_depth = Some(5);
+
+            // Trigger checkpoint splitting more often.
+            // cfg.max_transactions_per_checkpoint = Some(10);
+            // FIXME: Re-introduce this once we resolve the checkpoint splitting issue
+            // in the quarantine output.
+        }
+
         cfg
     }
 
@@ -3820,7 +4016,7 @@ impl ProtocolConfig {
             max_back_edges_per_function,
             max_back_edges_per_module,
             max_basic_blocks_in_script: None,
-            max_idenfitier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
+            max_identifier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
             disallow_self_identifier: self.feature_flags.disallow_self_identifier,
             allow_receiving_object_id: self.allow_receiving_object_id(),
             reject_mutable_random_on_entry_functions: self
@@ -3926,6 +4122,10 @@ impl ProtocolConfig {
         self.feature_flags.passkey_auth = val
     }
 
+    pub fn set_enable_party_transfer_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_party_transfer = val
+    }
+
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy = val;
@@ -3961,6 +4161,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_ptb_execution_v2 = val;
     }
 
+    pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
+        self.feature_flags.record_time_estimate_processed = val;
+    }
+
     pub fn push_aliased_addresses_for_testing(
         &mut self,
         original: [u8; 32],
@@ -3973,9 +4177,10 @@ impl ProtocolConfig {
             allowed_tx_digests,
         });
     }
-    pub fn set_include_epoch_stable_sequence_number_in_effects_for_testing(&mut self, val: bool) {
-        self.feature_flags
-            .include_epoch_stable_sequence_number_in_effects = val;
+
+    pub fn enable_accumulators_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = true;
+        self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 }
 

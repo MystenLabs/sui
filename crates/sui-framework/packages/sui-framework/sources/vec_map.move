@@ -98,13 +98,13 @@ public fun contains<K: copy, V>(self: &VecMap<K, V>, key: &K): bool {
 }
 
 /// Return the number of entries in `self`
-public fun size<K: copy, V>(self: &VecMap<K, V>): u64 {
+public fun length<K: copy, V>(self: &VecMap<K, V>): u64 {
     self.contents.length()
 }
 
 /// Return true if `self` has 0 elements, false otherwise
 public fun is_empty<K: copy, V>(self: &VecMap<K, V>): bool {
-    self.size() == 0
+    self.length() == 0
 }
 
 /// Destroy an empty map. Aborts if `self` is not empty
@@ -168,7 +168,7 @@ public fun keys<K: copy, V>(self: &VecMap<K, V>): vector<K> {
 /// Note that map entries are stored in insertion order, *not* sorted by key.
 public fun get_idx_opt<K: copy, V>(self: &VecMap<K, V>, key: &K): Option<u64> {
     let mut i = 0;
-    let n = size(self);
+    let n = self.length();
     while (i < n) {
         if (&self.contents[i].key == key) {
             return option::some(i)
@@ -188,26 +188,32 @@ public fun get_idx<K: copy, V>(self: &VecMap<K, V>, key: &K): u64 {
 
 /// Return a reference to the `idx`th entry of `self`. This gives direct access into the backing array of the map--use with caution.
 /// Note that map entries are stored in insertion order, *not* sorted by key.
-/// Aborts if `idx` is greater than or equal to `size(self)`
+/// Aborts if `idx` is greater than or equal to `self.length()`
 public fun get_entry_by_idx<K: copy, V>(self: &VecMap<K, V>, idx: u64): (&K, &V) {
-    assert!(idx < size(self), EIndexOutOfBounds);
+    assert!(idx < self.length(), EIndexOutOfBounds);
     let entry = &self.contents[idx];
     (&entry.key, &entry.value)
 }
 
 /// Return a mutable reference to the `idx`th entry of `self`. This gives direct access into the backing array of the map--use with caution.
 /// Note that map entries are stored in insertion order, *not* sorted by key.
-/// Aborts if `idx` is greater than or equal to `size(self)`
+/// Aborts if `idx` is greater than or equal to `self.length()`
 public fun get_entry_by_idx_mut<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (&K, &mut V) {
-    assert!(idx < size(self), EIndexOutOfBounds);
+    assert!(idx < self.length(), EIndexOutOfBounds);
     let entry = &mut self.contents[idx];
     (&entry.key, &mut entry.value)
 }
 
 /// Remove the entry at index `idx` from self.
-/// Aborts if `idx` is greater than or equal to `size(self)`
+/// Aborts if `idx` is greater than or equal to `self.length()`
 public fun remove_entry_by_idx<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (K, V) {
-    assert!(idx < size(self), EIndexOutOfBounds);
+    assert!(idx < self.length(), EIndexOutOfBounds);
     let Entry { key, value } = self.contents.remove(idx);
     (key, value)
+}
+
+#[deprecated(note = b"Renamed to `length` for consistency.")]
+/// Return the number of entries in `self`
+public fun size<K: copy, V>(self: &VecMap<K, V>): u64 {
+    self.contents.length()
 }

@@ -69,7 +69,7 @@ async fn test_transaction_expiration() {
     // Expired transaction returns an error
     let mut expired_data = data.clone();
     *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
-    let expired_transaction = test_cluster.wallet.sign_transaction(&expired_data);
+    let expired_transaction = test_cluster.wallet.sign_transaction(&expired_data).await;
     let result = test_cluster
         .wallet
         .execute_transaction_may_fail(expired_transaction)
@@ -81,7 +81,7 @@ async fn test_transaction_expiration() {
 
     // Non expired transaction signed without issue
     *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
-    let transaction = test_cluster.wallet.sign_transaction(&data);
+    let transaction = test_cluster.wallet.sign_transaction(&data).await;
     test_cluster
         .wallet
         .execute_transaction_may_fail(transaction)
@@ -100,21 +100,27 @@ async fn reconfig_with_revert_end_to_end_test() {
 
     // gas1 transaction is committed
     let gas1 = gas_objects.pop().unwrap();
-    let tx = test_cluster.wallet.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas1, rgp)
-            .transfer_sui(None, sender)
-            .build(),
-    );
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas1, rgp)
+                .transfer_sui(None, sender)
+                .build(),
+        )
+        .await;
     let effects1 = test_cluster.execute_transaction(tx).await;
     assert_eq!(0, effects1.effects.unwrap().executed_epoch());
 
     // gas2 transaction is (most likely) reverted
     let gas2 = gas_objects.pop().unwrap();
-    let tx = test_cluster.wallet.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas2, rgp)
-            .transfer_sui(None, sender)
-            .build(),
-    );
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas2, rgp)
+                .transfer_sui(None, sender)
+                .build(),
+        )
+        .await;
     let net = test_cluster
         .fullnode_handle
         .sui_node
@@ -234,6 +240,9 @@ async fn test_passive_reconfig_mainnet_smoke_test() {
 
 #[sim_test]
 async fn test_passive_reconfig_testnet_smoke_test() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
     do_test_passive_reconfig(Some(Chain::Testnet)).await;
 }
 
@@ -301,16 +310,14 @@ async fn test_expired_locks() {
     let gas_object = accounts_and_objs[0].1[0];
 
     let transfer_sui = |amount| {
-        test_cluster.wallet.sign_transaction(
-            &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .transfer_sui(Some(amount), receiver)
-                .build(),
-        )
+        TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .transfer_sui(Some(amount), receiver)
+            .build()
     };
 
-    let t1 = transfer_sui(1);
+    let t1 = test_cluster.wallet.sign_transaction(&transfer_sui(1)).await;
     // attempt to equivocate
-    let t2 = transfer_sui(2);
+    let t2 = test_cluster.wallet.sign_transaction(&transfer_sui(2)).await;
 
     for (idx, validator) in test_cluster.all_validator_handles().into_iter().enumerate() {
         let state = validator.state();
@@ -419,6 +426,9 @@ async fn test_create_advance_epoch_tx_race() {
     // proceeded with reconfiguration.
     sleep(Duration::from_secs(1)).await;
     reconfig_delay_tx.send(()).unwrap();
+
+    // wait for reconfiguration to complete
+    test_cluster.wait_for_epoch(None).await;
 }
 
 #[sim_test]
@@ -1304,7 +1314,7 @@ async fn execute_add_stake_transaction(
         .build();
 
     let response = test_cluster
-        .execute_transaction(test_cluster.wallet.sign_transaction(&tx))
+        .execute_transaction(test_cluster.wallet.sign_transaction(&tx).await)
         .await;
 
     response

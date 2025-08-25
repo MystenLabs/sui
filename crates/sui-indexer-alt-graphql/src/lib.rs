@@ -4,10 +4,10 @@
 use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use anyhow::{self, Context};
-use api::types::{addressable::IAddressable, object::IObject};
+use api::types::{address::IAddressable, move_object::IMoveObject, object::IObject};
 use async_graphql::{
-    extensions::ExtensionFactory, http::GraphiQLSource, EmptyMutation, EmptySubscription,
-    ObjectType, Schema, SchemaBuilder, SubscriptionType,
+    extensions::ExtensionFactory, http::GraphiQLSource, EmptySubscription, ObjectType, Schema,
+    SchemaBuilder, SubscriptionType,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
@@ -30,11 +30,12 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
+    consistent_reader::{ConsistentReader, ConsistentReaderArgs},
+    full_node_client::{FullNodeArgs, FullNodeClient},
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
 };
-use sui_package_resolver::Resolver;
 use task::{
     chain_identifier,
     watermark::{WatermarkTask, WatermarksLock},
@@ -45,7 +46,7 @@ use tower_http::cors;
 use tracing::{error, info};
 use url::Url;
 
-use crate::api::query::Query;
+use crate::api::{mutation::Mutation, query::Query};
 use crate::extensions::logging::{Logging, Session};
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
@@ -241,10 +242,11 @@ impl Default for RpcArgs {
 }
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
-pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
-    Schema::build(Query::default(), EmptyMutation, EmptySubscription)
+pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
+    Schema::build(Query::default(), Mutation, EmptySubscription)
         .register_output_type::<IAddressable>()
         .register_output_type::<IObject>()
+        .register_output_type::<IMoveObject>()
 }
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
@@ -265,8 +267,10 @@ pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
 pub async fn start_rpc(
     database_url: Option<Url>,
     bigtable_instance: Option<String>,
+    full_node_args: FullNodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
+    consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
     version: &'static str,
@@ -277,6 +281,9 @@ pub async fn start_rpc(
 ) -> anyhow::Result<JoinHandle<()>> {
     let rpc = RpcService::new(args, version, schema(), registry, cancel.child_token());
     let metrics = rpc.metrics();
+
+    // Create gRPC full node client wrapper
+    let grpc_client = FullNodeClient::new(full_node_args, cancel.child_token()).await?;
 
     let pg_reader = PgReader::new(
         Some("graphql_db"),
@@ -301,6 +308,14 @@ pub async fn start_rpc(
         None
     };
 
+    let consistent_reader = ConsistentReader::new(
+        Some("graphql_consistent"),
+        consistent_reader_args,
+        registry,
+        cancel.child_token(),
+    )
+    .await?;
+
     let pg_loader = Arc::new(pg_reader.as_data_loader());
     let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
         KvLoader::new_with_bigtable(Arc::new(reader.as_data_loader()))
@@ -308,15 +323,12 @@ pub async fn start_rpc(
         KvLoader::new_with_pg(pg_loader.clone())
     };
 
-    let package_resolver = Arc::new(Resolver::new_with_limits(
-        PackageCache::new(DbPackageStore::new(pg_loader.clone())),
-        config.limits.package_resolver(),
-    ));
+    let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
         pg_reader.clone(),
-        package_resolver.clone(),
+        package_store.clone(),
         cancel.child_token(),
     );
 
@@ -333,6 +345,8 @@ pub async fn start_rpc(
         pg_pipelines,
         pg_reader.clone(),
         bigtable_reader,
+        consistent_reader.clone(),
+        metrics.clone(),
         cancel.child_token(),
     );
 
@@ -351,9 +365,11 @@ pub async fn start_rpc(
         .data(config.limits)
         .data(chain_identifier)
         .data(pg_reader)
+        .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
-        .data(package_resolver);
+        .data(package_store)
+        .data(grpc_client);
 
     let h_rpc = rpc.run().await?;
     let h_system_package_task = system_package_task.run();
@@ -370,7 +386,7 @@ pub async fn start_rpc(
 /// Handler for RPC requests (POST requests making GraphQL queries).
 async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(schema): Extension<Schema<Query, EmptyMutation, EmptySubscription>>,
+    Extension(schema): Extension<Schema<Query, Mutation, EmptySubscription>>,
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
@@ -397,17 +413,18 @@ async fn graphiql(path: MatchedPath) -> Html<String> {
 
 #[cfg(test)]
 mod tests {
+    use async_graphql::SDLExportOptions;
+    use insta::assert_snapshot;
     use std::fs;
     use std::path::PathBuf;
-
-    use insta::assert_snapshot;
 
     use super::*;
 
     /// Check that the exported schema is up-to-date.
     #[test]
     fn test_schema_sdl_export() {
-        let sdl = schema().finish().sdl();
+        let options = SDLExportOptions::new().sorted_fields();
+        let sdl = schema().finish().sdl_with_options(options);
 
         let file = if cfg!(feature = "staging") {
             "staging.graphql"

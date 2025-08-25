@@ -104,10 +104,7 @@ impl LegacyLinkage {
             .resolution_table_with_native_packages(store)?;
         for id in deps {
             let pkg = get_package(id, store)?;
-            resolution_table.resolution_table.insert(
-                pkg.original_package_id(),
-                ConflictResolution::Exact(pkg.version(), pkg.id()),
-            );
+            add_and_unify(id, store, &mut resolution_table, ConflictResolution::exact)?;
             resolution_table
                 .all_versions_resolution_table
                 .insert(pkg.id(), pkg.original_package_id());

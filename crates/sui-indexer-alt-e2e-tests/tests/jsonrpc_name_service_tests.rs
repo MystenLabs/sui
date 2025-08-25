@@ -10,6 +10,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
 use sui_indexer_alt_e2e_tests::{find_immutable, find_shared, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
@@ -436,7 +437,9 @@ impl SuiNSCluster {
         let cluster = FullCluster::new_with_configs(
             sim,
             IndexerArgs::default(),
+            IndexerArgs::default(),
             IndexerConfig::for_test(),
+            ConsistentConfig::for_test(),
             jsonrpc_config,
             GraphQlConfig::default(),
             &prometheus::Registry::new(),

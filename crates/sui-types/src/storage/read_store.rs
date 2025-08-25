@@ -7,7 +7,7 @@ use crate::balance_change::{derive_balance_changes, BalanceChange};
 use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
-    ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, ObjectDigest, TransactionDigest,
+    ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
 };
 use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
@@ -28,6 +28,8 @@ use std::sync::Arc;
 use typed_store_error::TypedStoreError;
 
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
+pub type PackageVersionsIterator<'a> =
+    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
 
 pub trait ReadStore: ObjectStore {
     //
@@ -576,8 +578,7 @@ pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
     fn get_struct_layout(&self, type_tag: &StructTag) -> Result<Option<MoveTypeLayout>>;
 }
 
-pub type DynamicFieldIteratorItem =
-    Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>;
+pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub trait RpcIndexes: Send + Sync {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
@@ -606,18 +607,21 @@ pub trait RpcIndexes: Send + Sync {
         owner: &SuiAddress,
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> Result<BalanceIterator<'_>>;
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<PackageVersionsIterator<'_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct OwnedObjectInfo {
     pub owner: SuiAddress,
-    // Indicates if this is a normal Address or ConsensusAddress owned object
-    pub start_version: Option<SequenceNumber>,
     pub object_type: StructTag,
     pub balance: Option<u64>,
     pub object_id: ObjectID,
     pub version: SequenceNumber,
-    pub digest: ObjectDigest,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]

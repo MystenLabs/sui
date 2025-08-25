@@ -39,7 +39,7 @@ use crate::{
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     transaction_certifier::TransactionCertifier,
-    CommitConsumer, CommitConsumerMonitor,
+    CommitConsumerArgs,
 };
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
@@ -62,7 +62,7 @@ impl ConsensusAuthority {
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
-        commit_consumer: CommitConsumer,
+        commit_consumer: CommitConsumerArgs,
         registry: Registry,
         // A counter that keeps track of how many times the authority node has been booted while the binary
         // or the component that is calling the `ConsensusAuthority` has been running. It's mostly useful to
@@ -124,13 +124,6 @@ impl ConsensusAuthority {
         }
     }
 
-    pub async fn replay_complete(&self) {
-        match self {
-            Self::WithAnemo(authority) => authority.replay_complete().await,
-            Self::WithTonic(authority) => authority.replay_complete().await,
-        }
-    }
-
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
@@ -156,7 +149,6 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
-    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
@@ -187,7 +179,7 @@ where
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
-        commit_consumer: CommitConsumer,
+        commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
     ) -> Self {
@@ -198,12 +190,14 @@ where
         );
         let own_hostname = committee.authority(own_index).hostname.clone();
         info!(
-            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}",
+            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
             own_index,
             own_hostname,
             protocol_config.version,
             epoch_start_timestamp_ms,
-            boot_counter
+            boot_counter,
+            commit_consumer.replay_after_commit_index,
+            commit_consumer.consumer_last_processed_commit_index
         );
         info!(
             "Consensus authorities: {}",
@@ -271,9 +265,10 @@ where
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
         );
+        // TODO(fastpath): recover incrementally by chunk inside CommitObserver::new()
         transaction_certifier.recover(
             block_verifier.as_ref(),
-            commit_consumer.last_processed_commit_index,
+            commit_consumer.replay_after_commit_index,
         );
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
@@ -284,8 +279,6 @@ where
 
         let proposed_block_handler =
             spawn_logged_monitored_task!(proposed_block_handler.run(), "proposed_block_handler");
-
-        let highest_known_commit_at_startup = dag_state.read().last_commit_index();
 
         let sync_last_known_own_block = boot_counter == 0
             && dag_state.read().highest_accepted_round() == 0
@@ -303,15 +296,14 @@ where
         ));
 
         let commit_consumer_monitor = commit_consumer.monitor();
-        commit_consumer_monitor
-            .set_highest_observed_commit_at_startup(highest_known_commit_at_startup);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
             transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
@@ -423,7 +415,6 @@ where
             synchronizer,
             commit_syncer_handle,
             round_prober_handle,
-            commit_consumer_monitor,
             proposed_block_handler,
             leader_timeout_handle,
             core_thread_handle,
@@ -478,10 +469,6 @@ where
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
     }
-
-    pub(crate) async fn replay_complete(&self) {
-        self.commit_consumer_monitor.replay_complete().await;
-    }
 }
 
 #[cfg(test)]
@@ -530,7 +517,7 @@ mod tests {
         let protocol_keypair = keypairs[own_index].1.clone();
         let network_keypair = keypairs[own_index].0.clone();
 
-        let (commit_consumer, _, _) = CommitConsumer::new(0);
+        let (commit_consumer, _, _) = CommitConsumerArgs::new(0, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -916,7 +903,7 @@ mod tests {
         let protocol_keypair = keypairs[index].1.clone();
         let network_keypair = keypairs[index].0.clone();
 
-        let (commit_consumer, commit_receiver, block_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, commit_receiver, block_receiver) = CommitConsumerArgs::new(0, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,

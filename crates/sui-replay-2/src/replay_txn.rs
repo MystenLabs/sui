@@ -11,22 +11,32 @@
 //! in this module and saved in the `ReplayTransaction` instance.
 
 use crate::{
-    execution::ReplayExecutor,
-    replay_interface::{EpochStore, ObjectKey, ObjectStore, TransactionStore, VersionQuery},
+    artifacts::{Artifact, ArtifactManager},
+    execution::{execute_transaction_to_effects, ReplayExecutor},
+    replay_interface::{
+        EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
+    },
+    tracing::save_trace_output,
 };
-use anyhow::Context;
+use anyhow::{anyhow, bail, Context};
+use move_trace_format::format::MoveTraceBuilder;
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
-use sui_types::transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind};
 use sui_types::{base_types::SequenceNumber, TypeTag};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
-    effects::{InputSharedObject, TransactionEffects, TransactionEffectsAPI, UnchangedSharedKind},
+    effects::{
+        InputConsensusObject, TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind,
+    },
     object::Object,
     transaction::{
         CallArg, Command, GasData, InputObjects, ObjectArg, TransactionData, TransactionDataAPI,
         TransactionKind,
     },
+};
+use sui_types::{
+    gas::SuiGasStatusAPI,
+    transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
 use tracing::{debug, trace};
 
@@ -45,6 +55,93 @@ pub struct ReplayTransaction {
     pub object_cache: BTreeMap<ObjectID, BTreeMap<ObjectVersion, Object>>,
 }
 
+//
+// Run a single transaction and print results to stdout
+//
+pub(crate) async fn replay_transaction<S: ReadDataStore>(
+    artifact_manager: &ArtifactManager<'_>,
+    tx_digest: &str,
+    data_store: &S,
+    trace: bool,
+) -> anyhow::Result<()> {
+    // load a `ReplayTransaction`
+    let replay_txn = match ReplayTransaction::load(tx_digest, data_store, data_store, data_store) {
+        Ok(replay_txn) => replay_txn,
+        Err(e) => {
+            bail!("Failed to load transaction {}: {:?}", tx_digest, e);
+        }
+    };
+
+    // replay the transaction
+    let mut trace_builder_opt = trace.then(MoveTraceBuilder::new);
+
+    let (result, context_and_effects) =
+        execute_transaction_to_effects(replay_txn, data_store, data_store, &mut trace_builder_opt)?;
+
+    // TODO: make tracing better abstracted? different tracers?
+    if let Some(trace_builder) = trace_builder_opt {
+        save_trace_output(artifact_manager, trace_builder, &context_and_effects).map_err(|e| {
+            anyhow!(
+                "transaction {} failed to build a trace output path -> {:?}",
+                tx_digest,
+                e
+            )
+        })?;
+    }
+
+    // Save results
+    tracing::info!(
+        "Executed transaction {}: {:?}. Saving artifacts under {}",
+        tx_digest,
+        result,
+        artifact_manager.base_path.display()
+    );
+
+    artifact_manager
+        .member(Artifact::TransactionEffects)
+        .serialize_artifact(&context_and_effects.execution_effects)
+        .transpose()?
+        .unwrap();
+
+    artifact_manager
+        .member(Artifact::TransactionGasReport)
+        .serialize_artifact(&context_and_effects.gas_status.gas_usage_report())
+        .transpose()?
+        .unwrap();
+
+    verify_txn_and_save_forked_effects(
+        artifact_manager,
+        &context_and_effects.expected_effects,
+        &context_and_effects.execution_effects,
+    )?;
+
+    Ok(())
+}
+
+fn verify_txn_and_save_forked_effects(
+    artifact_manager: &ArtifactManager<'_>,
+    expected_effects: &TransactionEffects,
+    effects: &TransactionEffects,
+) -> anyhow::Result<()> {
+    if effects != expected_effects {
+        tracing::error!(
+            "Transaction effects do not match expected effects for transaction {}. Saving to ",
+            effects.transaction_digest()
+        );
+        artifact_manager
+            .member(Artifact::ForkedTransactionEffects)
+            .serialize_artifact(effects)
+            .transpose()?
+            .unwrap();
+        bail!(
+            "Transaction effects do not match expected effects for transaction {}",
+            effects.transaction_digest()
+        );
+    } else {
+        Ok(())
+    }
+}
+
 impl ReplayTransaction {
     // Load a transaction and builds a `ReplayTransaction` instance.
     pub fn load(
@@ -61,7 +158,14 @@ impl ReplayTransaction {
 
         //
         // load transaction data and effects
-        let (txn_data, effects, checkpoint) = txn_store.transaction_data_and_effects(tx_digest)?;
+        let transaction_info = txn_store
+            .transaction_data_and_effects(tx_digest)?
+            .ok_or_else(|| {
+                anyhow::anyhow!(format!("Transaction not found for digest: {}", tx_digest))
+            })?;
+        let txn_data = transaction_info.data;
+        let effects = transaction_info.effects;
+        let checkpoint = transaction_info.checkpoint;
 
         //
         // load all objects and packages used by the transaction
@@ -72,7 +176,8 @@ impl ReplayTransaction {
         let epoch = effects.executed_epoch();
         let protocol_config = epoch_store
             .protocol_config(epoch)
-            .unwrap_or_else(|e| panic!("Failed to get protocol config: {:?}", e));
+            .unwrap_or_else(|e| panic!("Failed to get protocol config: {:?}", e))
+            .unwrap_or_else(|| panic!("Protocol config missing for epoch {}", epoch));
         let executor =
             ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
 
@@ -209,7 +314,7 @@ fn load_objects(
             // REVIEW: a `None` is simply ignored, is that correct?
             continue;
         }
-        let object = object.unwrap();
+        let (object, _version) = object.unwrap();
         let object_id = object.id();
         if let Some(tag) = object.as_inner().struct_tag() {
             packages_from_type_tag(&tag.into(), &mut packages);
@@ -331,41 +436,40 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<ObjectKey>, anyh
     Ok(object_keys)
 }
 
-// Get the input shared objects and unchanged shared objects from the transaction effects
+// Get the input shared objects and unchanged consensus objects from the transaction effects
 fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<ObjectKey>, anyhow::Error> {
     let mut object_keys = effects
-        .input_shared_objects()
+        .input_consensus_objects()
         .iter()
-        .map(|input_shared_object| match input_shared_object {
-            InputSharedObject::MutateConsensusStreamEnded(object_id, version)
-            | InputSharedObject::ReadConsensusStreamEnded(object_id, version)
-            | InputSharedObject::Cancelled(object_id, version) => ObjectKey {
+        .map(|input_consensus_object| match input_consensus_object {
+            InputConsensusObject::MutateConsensusStreamEnded(object_id, version)
+            | InputConsensusObject::ReadConsensusStreamEnded(object_id, version)
+            | InputConsensusObject::Cancelled(object_id, version) => ObjectKey {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             },
-            InputSharedObject::Mutate((object_id, version, _digest))
-            | InputSharedObject::ReadOnly((object_id, version, _digest)) => ObjectKey {
+            InputConsensusObject::Mutate((object_id, version, _digest))
+            | InputConsensusObject::ReadOnly((object_id, version, _digest)) => ObjectKey {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             },
         })
         .collect::<BTreeSet<_>>();
     effects
-        .unchanged_shared_objects()
+        .unchanged_consensus_objects()
         .iter()
         .for_each(|(obj_id, kind)| match kind {
-            UnchangedSharedKind::ReadOnlyRoot((ver, _digest)) => {
+            UnchangedConsensusKind::ReadOnlyRoot((ver, _digest)) => {
                 object_keys.insert(ObjectKey {
                     object_id: *obj_id,
                     version_query: VersionQuery::Version(ver.value()),
                 });
             }
-            UnchangedSharedKind::MutateConsensusStreamEnded(_)
-            | UnchangedSharedKind::ReadConsensusStreamEnded(_)
-            | UnchangedSharedKind::Cancelled(_)
-            | UnchangedSharedKind::PerEpochConfigDEPRECATED
-            | UnchangedSharedKind::PerEpochConfigWithSeqno(_) => {
-                trace!("Ignored `UnchangedSharedKind`: {:?}", kind);
+            UnchangedConsensusKind::MutateConsensusStreamEnded(_)
+            | UnchangedConsensusKind::ReadConsensusStreamEnded(_)
+            | UnchangedConsensusKind::Cancelled(_)
+            | UnchangedConsensusKind::PerEpochConfig => {
+                trace!("Ignored `UnchangedConsensusKind`: {:?}", kind);
             }
         });
     Ok(object_keys)
