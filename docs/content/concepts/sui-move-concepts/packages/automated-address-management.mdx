@@ -6,9 +6,9 @@ keywords: [ track address, track package address, package addresses, managing pa
 
 When you publish or upgrade a package, its address (also called the package ID) is tracked in the `Move.lock` file. This happens automatically, so you don’t need to manually record or update hex addresses (for example, in the `Move.toml` file).  
 
-When you publish or upgrade your package on multiple chains (Mainnet, Testnet, Devnet), automated address management tracks separate addresses for each chain. Tracking is based on your active environment (run `sui client active-env` if unsure). For example, if your active environment is set to an RPC connected to `testnet` and you publish a package, the `Move.lock` records the address for that package and associates it with `testnet`.  
+When you publish or upgrade your package on multiple Sui networks (Mainnet, Testnet, Devnet), automated address management tracks separate addresses for each chain. Tracking is based on your active environment (run `sui client active-env` if unsure). For example, if your active environment is set to an RPC connected to `testnet` and you publish a package, the `Move.lock` records the address for that package and associates it with `testnet`.  
 
-Automated address management works for one package published to one or more chains. If a package is republished to a chain, tracked addresses for that chain are overwritten.
+Automated address management works for one package published to one or more Sui networks. If a package is republished to a network, tracked addresses for that network are overwritten.
 
 ## Adopting automated address management
 

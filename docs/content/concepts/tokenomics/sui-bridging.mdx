@@ -1,128 +1,122 @@
 ---
 title: SUI Bridging
-description: Moving tokens from one blockchain to another is called bridging. To bridge tokens from another blockchain to Sui, you can use the Sui Bridge, Wormhole Connect, or Wormhole Portal Bridge. 
+description: Bridge tokens between Sui and other blockchains using Sui Bridge, Wormhole Connect, or Wormhole Portal Bridge. 
 keywords: [ bridge, sui bridge, wormhole connect, wormhole portal bridge, bridging tokens to sui, how to bridge tokens, can you bridge tokens, how to bring token to sui, move token to sui, move tokens between blockchains, move tokens between chains ]
+mdx:
+  format: md
 ---
 
-Bridging is the process of moving tokens from one blockchain to another. When you use a bridge to move tokens between blockchains that are incompatible, the tokens are "wrapped" by the bridge, which means that they get converted to a derivative token for the target blockchain. You can transfer tokens in from other blockchains to SUI, or transfer SUI tokens out to other blockchains.
+Bridging is the process of moving tokens from one blockchain to another. When you bridge tokens across incompatible chains, the tokens are **wrapped** into a derivative token on the destination chain.  
 
-Sui supports bridging through [Sui Bridge](#sui-bridge), [Wormhole Connect](#wormhole-connect), and [Wormhole Portal Bridge](#wormhole-portal-bridge).
+You can bridge tokens into Sui or transfer SUI out to other blockchains. Sui supports bridging through:  
+
+- [Sui Bridge](#sui-bridge)  
+- [Wormhole Connect](#wormhole-connect)  
+- [Wormhole Portal Bridge](#wormhole-portal-bridge)  
 
 ## Sui Bridge
 
-Sui Bridge is the native bridge for the Sui network. Sui Bridge is built into the core architecture of the Sui blockchain, which provides optimal integration and operation. Sui Bridge enables the movement of digital assets between the Sui block chain and others, preserving security and maintaining interoperability between diverse ecosystems. Sui Bridge provides secure and efficient transfer of native and wrapped ETH to and from Sui. Sui Bridge leverages the unique capabilities of the Sui network to offer fast transaction speeds, lower transaction costs, and a decentralized architecture.
+Sui Bridge is the **native bridge** for the Sui network, built directly into the protocol. It enables secure transfer of digital assets between Sui and other chains, with validator-governed operations.  
 
-You can bridge tokens in the official Sui Bridge website: https://bridge.sui.io/.
+Key benefits:  
+- Secure and efficient transfers of native and wrapped ETH to and from Sui  
+- Fast transaction speeds and low costs  
+- Governance and validation by the same committee that secures Sui  
+
+You can bridge tokens using the official site: [bridge.sui.io](https://bridge.sui.io).  
 
 ### Operation and governance
 
-Sui Bridge is operated and governed by Sui network validators, the same set of validators that secure the Sui network. Bridge transfers and other actions require validator signatures with a minimal threshold of voting power.
+Sui Bridge is operated by **Sui validators**. All bridge actions require validator signatures above a threshold of voting power. Governance, like the network itself, happens through validator voting.  
 
-Similar to the Sui network, all governance related to the Sui Bridge is done through validator voting.
-
-To learn more about how to set up a Sui Bridge full node, see [Sui Bridge Validator Node Configuration](../../guides/operator/bridge-node-configuration.mdx).
+See [Sui Bridge Validator Node Configuration](../../guides/operator/bridge-node-configuration.mdx) to set up a full bridge node.  
 
 ### Supported chains and tokens
 
-You can transfer supported assets both to and from the Sui network. Sui Bridge supports token bridging between Sui and other networks with the following supported assets:
-
-| Asset | Description |
-| --- | --- |
-| Wrapped Bitcoin |  Tokenized representation of the native cryptocurrency of the Bitcoin network. |
-| Lightning Bitcoin (LBTC) | Fully decentralized Internet-of-value protocol for global payments. |
-| Ethereum (ETH) | The native cryptocurrency of the Ethereum network, widely used for transactions and smart contract interactions. |
-| Wrapped Ethereum (WETH) | Tokenized representation of native ETH. |
-| Tether (USDT) | A stablecoin pegged to the US dollar. |
+| Asset               | Description                                                                 |
+| ------------------- | --------------------------------------------------------------------------- |
+| Wrapped Bitcoin     | Tokenized Bitcoin representation                                            |
+| Lightning Bitcoin   | Decentralized Internet-of-Value protocol for payments                       |
+| Ethereum (ETH)      | Native cryptocurrency of Ethereum                                           |
+| Wrapped Ethereum    | Tokenized ETH                                                               |
+| Tether (USDT)       | Stablecoin pegged to USD                                                    |
 
 ### Package IDs and contract addresses
 
-The following package IDs and addresses are reserved for the Sui Bridge.
-
-| Asset | Address/ID |
-| --- | --- |
-| Sui Bridge package on Sui | [`0xb`](https://suiscan.xyz/mainnet/object/0x000000000000000000000000000000000000000000000000000000000000000b/txs) |
-| Sui Bridge object on Sui | [`0x9`](https://suiscan.xyz/mainnet/object/0x0000000000000000000000000000000000000000000000000000000000000009) |
-| Sui Bridge contract on Ethereum Mainnet | [`0xda3bD1fE1973470312db04551B65f401Bc8a92fD`](https://etherscan.io/address/0xda3bd1fe1973470312db04551b65f401bc8a92fd) |
-| ETH on Sui | [`0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH`](https://suiscan.xyz/mainnet/coin/0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH/txs) |
-| ETH on Ethereum | Native Ether |
-| WETH on Ethereum | [`0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) |
+| Asset / Component             | Address / ID |
+| ----------------------------- | ------------------------------------------------------------------ |
+| Sui Bridge package (Sui)      | [`0xb`](https://suiscan.xyz/mainnet/object/0xb/txs) |
+| Sui Bridge object (Sui)       | [`0x9`](https://suiscan.xyz/mainnet/object/0x9/txs) |
+| Ethereum contract (Mainnet)   | [`0xda3bD1fE1973470312db04551B65f401Bc8a92fD`](https://etherscan.io/address/0xda3bd1fe1973470312db04551b65f401bc8a92fd) |
+| ETH on Sui                    | [`0xd0e8…29::eth::ETH`](https://suiscan.xyz/mainnet/coin/0xd0e8…29::eth::ETH/txs) |
+| ETH on Ethereum               | Native Ether |
+| WETH on Ethereum              | [`0xC02a…Cc2`](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) |
 
 ### Source code
 
-The source code for Sui Bridge is open source and found in the following locations:
-
-- Move: https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/bridge
-- Solidity: https://github.com/MystenLabs/sui/tree/main/bridge/evm
-- Bridged ETH (Move): https://github.com/MystenLabs/sui/tree/main/bridge/move/tokens/eth
-- Bridge node: https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge
-- Bridge Indexer: https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge-indexer
+- [Bridge (Move)](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/bridge)  
+- [Bridge (Solidity)](https://github.com/MystenLabs/sui/tree/main/bridge/evm)  
+- [Bridged ETH (Move)](https://github.com/MystenLabs/sui/tree/main/bridge/move/tokens/eth)  
+- [Bridge Node](https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge)  
+- [Bridge Indexer](https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge-indexer)  
 
 ### Audits
 
-There are two audit reports available for Sui Bridge:
-- [OtterSec](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_bridge_v1_OtterSec.pdf)
-- [Zellic](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_Bridge_v1_Zellic.pdf)
+- [OtterSec](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_bridge_v1_OtterSec.pdf)  
+- [Zellic](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_Bridge_v1_Zellic.pdf)  
 
 ### Global limiter {#global-limiter}
 
-A limiter protects the user's funds by constraining the total value of assets leaving Sui Bridge in any 24-hour window. It tracks total value hourly and aggregates values from the previous 24 hours. Therefore, when the limiter cools down, it refreshes every hour.
+To protect funds, a **24-hour limit** caps the value of assets that can leave the bridge.  
 
-The limit applies globally and varies per direction. For example, the amount might be different between Ethereum to Sui and Sui to Ethereum.
+- Values refresh hourly  
+- Limits apply globally per route (e.g., Ethereum → Sui differs from Sui → Ethereum)  
+- Single transfers cannot exceed the limit  
 
-The limit also impacts the maximal amount of single transfer. In one bridge transfer, you cannot move assets worth more than the limit. The bridge frontend might apply stricter restrictions to protect user assets.
+Validator committees govern these limits through voting. Announcements are made in the [mn-validator-announcements Discord channel](https://discord.com/channels/916379725201563759/1093852827627040768).  
 
-The limit per route is governed by the validator committee through voting. The limit value is captured in the `approved-governance-actions` attribute of bridge node configurations, which is announced in the [mn-validator-announcements channel](https://discord.com/channels/916379725201563759/1093852827627040768) on Discord when it updates.
-
-The global limit is currently &dollar;16 million from Ethereum to Sui and &dollar;7 million from Sui to Ethereum every 24 hours.
+Current limits:  
+- $16M from Ethereum → Sui  
+- $7M from Sui → Ethereum  
 
 ### Asset price
 
-Sui Bridge v1 uses static pricing to calculate limits. The price for ETH is configured at &dollar;2,600.00. Namely, bridging one ETH consumes &dollar;2,600 USD in limit calculation.
+Sui Bridge v1 uses **static pricing** for limit calculations. ETH is priced at **$2,600** for this purpose.  
 
-The validator committee governs the pricing through voting. It works together with the global limiter to protect user funds.
+Pricing is validator-governed and works with the global limiter to protect funds.  
 
-### Transfer limit
+### Transfer limits
 
-There is no minimal limit for transfer, but a tiny fraction might be rounded down. Particularly for native Ethereum (ETH) and wrapped Ethereum (WETH) because of reduced precision of eight decimal places, the value of 10.0000000000000001 (W)ETH is rounded down to 10 (W)ETH.
+- **Minimum**: 0.00000001 ETH or WETH (8 decimal precision)  
+- **Maximum**: The global USD limit per route  
 
-| Token | Minimal value | 
-| --- | --- |
-| ETH | 0.00000001 ETH (eight decimal places of precision) |
-| WETH | 0.00000001 ETH (eight decimal places of precision) |
-
-The maximum limit per transfer is the global limit in USD value. Namely a user cannot claim assets on the destination chain if the USD value is higher than the global limit. See the [Global limiter section](#global-limiter) for details.
+Values smaller than 1e-8 ETH or WETH are rounded down.  
 
 ## Wormhole Connect {#wormhole-connect}
 
-Use Wormhole Connect to bridge tokens from any Wormhole supported chain into Sui and get dropped off with extra Sui to pay gas fees. Developers can also embed the Connect Token Bridge directly into their own websites and dApps.
+Wormhole Connect provides simple bridging into Sui with added features:  
+
+- **Automatic relay**: Pay gas only on the source chain (supported on EVM and Sui).  
+- **Gas drop-off**: Pay a small fee on the source chain to receive native SUI for gas on the destination chain.  
+- **Developer integration**: dApps can embed Wormhole Connect directly.  
 
 :::tip
-
-Wormhole provides a tutorial for cross-chain transfers of Sui using a Wormhole Connect integration. Visit [Cross-Chain Token Transfers with Wormhole Connect](https://wormhole.com/docs/tutorials/messaging/sui-connect/) on the Wormhole website to get started.
-
+See [Cross-Chain Token Transfers with Wormhole Connect](https://wormhole.com/docs/tutorials/messaging/sui-connect/) for a tutorial.  
 :::
 
-### Wormhole Connect asset support {#asset-support}
+### Supported assets
 
-Initially, Wormhole Connect supports only lock-and-mint bridging for ETH, WETH, USDC, MATIC, WMATIC, BNB, WBNB, AVAX, WAVAX, FTM, WFTM, CELO, GLMR, WGLRM, AND SOL across Ethereum, Polygon, BSC, Avalanche, Celo, Moonbeam, Solana and Sui. This means that any native token bridged through Wormhole Connect and the underlying Wormhole Token Bridge are received as a Wormhole-minted token on the destination chain. In some cases, Wormhole-minted tokens are the canonical representation on the chain. See the [Wormhole token list](https://github.com/wormhole-foundation/wormhole-token-list) on GitHub. Some Wormhole-minted tokens support swapping on the destination chain's DEX(s) for whichever assets you need.
+ETH, WETH, USDC, MATIC, WMATIC, BNB, WBNB, AVAX, WAVAX, FTM, WFTM, CELO, GLMR, WGLRM, SOL across Ethereum, Polygon, BSC, Avalanche, Celo, Moonbeam, Solana, and Sui.  
 
-### Wormhole Connect automatic relay {#automatic-relay}
-
-On EVM-based chains and Sui, Wormhole Connect lets you bridge assets while having to pay gas only on the source chain. The automatic relaying feature pays gas on behalf of users on the destination chain.
-
-### Wormhole Connect gas drop-off {#gas-drop-off}
-
-The gas drop-off feature enables users to pay an additional fee on the source chain to request a small amount of native gas on the destination chain. For example, a user bridging USDC from Ethereum to Sui can pay a fee denominated in USDC from their sending wallet to receive some native SUI in their receiving wallet. This is in addition to the USDC they are bridging over. Gas drop-off is currently supported on EVM-based chains and Sui.
-
-To learn more about Wormhole Connect, see their [FAQ](https://docs.wormhole.com/wormhole/faqs) page.
+Tokens are received as **Wormhole-minted tokens** on the destination chain. In some cases these are canonical representations. See the [Wormhole token list](https://github.com/wormhole-foundation/wormhole-token-list).  
 
 ## Wormhole Portal Bridge
 
-The Wormhole powered [Portal Bridge](https://www.portalbridge.com/sui) supports bridging any asset from any of the [22 supported Wormhole chains](https://www.wormhole.com/network).
+The [Portal Bridge](https://www.portalbridge.com/sui), powered by Wormhole, supports bridging **any asset** across the [22 Wormhole-supported chains](https://www.wormhole.com/network).  
 
 ## Token address list {#token-address-list}
 
-The following table lists the address associated with each token type. You can confirm the legitimacy of tokens when you bridge them by confirming that the address used matches the address for the token type.
+Confirm token legitimacy by checking addresses.  
 
 | Token   | Address                                                            |
 | ------- | ------------------------------------------------------------------ |
