@@ -59,8 +59,8 @@ impl TransactionFilter {
 /// upper (tx_hi) bounds of the sequence of tx_sequence_numbers to use in queries.
 ///
 /// tx_lo: The cp_sequence_number of the checkpoint at the start of the bounds.
-/// tx_hi: The tx_lo of the checkpoint directly after the cp_bounds.end(). If it does not exists,
-///      at cp_bounds.end() fallback to the maximum tx_sequence_number in the context's watermark
+/// tx_hi: The tx_lo of the checkpoint directly after the cp_bounds.end(). If it does not exist
+///      at cp_bounds.end(), fallback to the maximum tx_sequence_number in the context's watermark
 ///      (global_tx_hi).
 ///
 /// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
