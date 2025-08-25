@@ -369,14 +369,26 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         };
 
         // combine the subgraphs for the dependencies into a single graph for the root package
+        // When merging, preserve regular dependencies over dev dependencies to avoid
+        // incorrectly marking packages as DevOnly when they're also regular dependencies
         let mut dep_graphs = {
             let mut m = always_dep_graphs;
-            m.extend(dev_dep_graphs);
+            // Only add dev dependencies that don't already exist as regular dependencies
+            for (key, dev_dep_info) in dev_dep_graphs {
+                if !m.contains_key(&key) {
+                    m.insert(key, dev_dep_info);
+                }
+                // If the key already exists in regular deps, keep the regular dep version
+                // which has DependencyMode::Always instead of DevOnly
+            }
             m
         };
         let dep_names = {
             let mut m = always_dep_names;
-            m.extend(dev_dep_names);
+            // Similarly for dep_names - only add dev names that don't conflict
+            for (key, dev_name) in dev_dep_names {
+                m.entry(key).or_insert(dev_name);
+            }
             m
         };
 
@@ -433,7 +445,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .add_node(combined_graph.root_package_id);
         let resolved_id_deps = {
             let mut m = always_resolved_id_deps;
-            m.extend(dev_resolved_id_deps);
+            // Only add dev resolved deps that don't already exist as regular deps
+            for (key, dev_resolved_dep) in dev_resolved_id_deps {
+                m.entry(key).or_insert(dev_resolved_dep);
+            }
             m
         };
         combined_graph.merge(
