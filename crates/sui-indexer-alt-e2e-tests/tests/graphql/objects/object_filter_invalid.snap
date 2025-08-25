@@ -1,0 +1,147 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-13:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"ObjectFilter\": 'ADDRESS' owner kind requires an `owner` to be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
+    }
+  ]
+}
+
+task 2, lines 15-22:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"ObjectFilter\": 'OBJECT' owner kind requires an `owner` to be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
+    }
+  ]
+}
+
+task 3, lines 24-31:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"ObjectFilter\": Unexpected `owner` for 'SHARED' owner kind",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
+    }
+  ]
+}
+
+task 4, lines 33-40:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"ObjectFilter\": Unexpected `owner` for 'IMMUTABLE' owner kind",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
+    }
+  ]
+}
+
+task 5, lines 42-49:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"ObjectFilter\": 'SHARED' owner kind requires a `type` to be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
+    }
+  ]
+}
+
+task 6, lines 51-58:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"ObjectFilter\": 'IMMUTABLE' owner kind requires a `type` to be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
+    }
+  ]
+}
+
+task 7, lines 60-67:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"ObjectFilter\": No `ObjectFilter` specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
+    }
+  ]
+}

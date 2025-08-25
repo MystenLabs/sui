@@ -8,6 +8,14 @@ import TabItem from "@theme/TabItem";
 import { Card, Cards } from "@site/src/components/Cards";
 import EffortBox from "@site/src/components/EffortBox";
 import BetaTag from "@site/src/components/BetaTag";
+import CodeFromFile from '@site/src/components/CodeFromFile';
+import CodeBlock from '@theme/CodeBlock';
+import DocCardList from '@theme/DocCardList';
+import ProtocolConfig from "@site/src/components/ProtocolConfig";
+import YTCarousel from "@site/src/components/YTCarousel";
+import BrowserOnly from '@docusaurus/BrowserOnly';
+
+
 export default function MDXContent({ children }) {
   const suiComponents = {
     ...MDXComponents,
@@ -17,6 +25,12 @@ export default function MDXContent({ children }) {
     TabItem,
     EffortBox,
     BetaTag,
+    CodeFromFile,
+    CodeBlock,
+    DocCardList,
+    ProtocolConfig,
+    YTCarousel,
+    BrowserOnly,
   };
   return <MDXProvider components={suiComponents}>{children}</MDXProvider>;
 }

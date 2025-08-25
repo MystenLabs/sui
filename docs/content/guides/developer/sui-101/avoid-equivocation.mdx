@@ -1,6 +1,7 @@
 ---
 title: Avoiding Equivocation
 description: Avoid unintentionally locking objects with your smart contract logic. 
+keywords: [ equivocation, how to avoid equivocation, unintentionally locking objects, accidentally locking objects ]
 ---
 
 Equivocation is when validators send conflicting information about objects on the network. Sometimes this is because of bad actors trying to subvert the integrity of the Sui network. The network has measures in place to punish validators that might engage in such behavior.
@@ -13,7 +14,7 @@ Perhaps the most common source of equivocation stems from the attempt to pay for
 
 It's not just objects that can cause equivocation. Any object used in multiple transactions can be a source of equivocation if not handled properly. Sui uses object versioning to track the status of objects across transactions and epochs. If a transaction modifies an object, then one of the results of that transaction is to update the version of that same object.
 
-The versiong architecture is what supports paying the gas for a series of transactions using the same gas coin. Among other processing, the first transaction advances the version number of the coin and returns it to the sender. The next transaction can then use that same coin to pay for its gas. Equivocation is avoided because each transaction references a different version of the same coin.
+The versioning architecture is what supports paying the gas for a series of transactions using the same gas coin. Among other processing, the first transaction advances the version number of the coin and returns it to the sender. The next transaction can then use that same coin to pay for its gas. Equivocation is avoided because each transaction references a different version of the same coin.
 
 ## Common pitfalls to avoid
 

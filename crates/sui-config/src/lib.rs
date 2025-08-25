@@ -19,6 +19,7 @@ pub mod object_storage_config;
 pub mod p2p;
 pub mod rpc_config;
 pub mod transaction_deny_config;
+pub mod validator_client_monitor_config;
 pub mod verifier_signing_config;
 
 pub use node::{ConsensusConfig, ExecutionCacheConfig, NodeConfig};

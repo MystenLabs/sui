@@ -1,6 +1,8 @@
 ---
 title: MDX Components
-draft: true
+description: Extensions to the Sui docs rendering engine.
+mdx:
+  format: md
 ---
 
 Sui Docs uses the MDX format for its network documentation, which allows [JSX in markdown content](https://mdxjs.com/). Sui uses features provided by Docusaurus, plugins from its community, and custom plugins in an effort to improve reader experience. None of these features are required in your markdown contributions to the Sui documentation, but the Sui community might include them if it improves experience.
@@ -129,7 +131,7 @@ The empty newlines between each opening and closing element in the example are i
 
 ## Snippets
 
-Snippets are short pieces of reusable text. This feature uses the Docusaurus community provided [docusaurus-plugin-includes](https://github.com/simologos/docusaurus-plugin-includes) plugin. The `docs/content/snippets` folder contains all the reusable content. Pages in that directory do not appear in the ToC and are hidden from search engines. Upon build, the process deletes the folder so the content doesn't get rendered to the final site as it's own page.
+Snippets are short pieces of reusable text, such as tips, tab components, or other plaintext. Snippets are not used for code snippets; see code inject for embedding code. The `docs/content/snippets` folder contains all the reusable content. Pages in that directory do not appear in the ToC and are hidden from search engines. Upon build, the process deletes the folder so the content doesn't get rendered to the final site as it's own page.
 
 ### When to use
 
@@ -152,6 +154,15 @@ You do not need to `import` a component to use snippets.
 
     `{@include: ../../snippets/reusable.mdx}`
 
+There must be an empty line above and below the `{@include} line for it to render properly. 
+
+You must also add the following frontmatter to the page that includes the `{@include}` statement:
+
+```
+mdx:
+  format: md
+```
+
 1. Repeat the previous step for all locations the content should appear. Be sure to update the relative location of the snippet based on where the file containing the directive exists in the repo.
 1. Check each page in the Vercel preview of your PR (`sui-core` preview link in Vercel comment) to make sure the content displays. If the relative link you provide does not resolve correctly, the page displays error text instead of the expected content.
 
@@ -163,7 +174,9 @@ Do not use links relative to the file structure in snippets (for example, `../co
 
 ## Code inject
 
-Sui documentation uses a custom Docusaurus plugin to include code from the Sui repo in its pages. The plugin is based on the docusaurus-plugin-includes plugin used for [snippets](#snippets). 
+Sui documentation uses a custom Docusaurus plugin to include code from the Sui repo in its pages. 
+
+Code inject formats code in a code block with syntax highlighting. Code inject can only be used for files located in the current repo, as they must be referenced via relative path.
 
 ### When to use
 
@@ -177,9 +190,22 @@ When including sections of code, understand that the code might change from what
 
 ### How to use
 
-To include the entire source file, use the `{@inject}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write `{@inject: examples/move/hero/sources/example.move`. The file location is automatically used as the title for the codeblock.
+To include the entire source file, use the `{@inject: ...}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write:
 
-You can use source code from other GitHub repositories, but should do so sparingly and purposefully. There is almost no way to track those projects to ensure the code is valid, unlike the CI processes running on the sui repo. To use, format the directive as `{@inject: github:<GITHUB_ORG_NAME>/<GITHUB_REPO_NAME>/<PATH_TO_FILE>}`.
+``
+{@inject: examples/move/hero/sources/example.move`
+```
+
+The file location is automatically used as the title for the codeblock.
+
+You must also add the following frontmatter to the page that includes the `{@inject}` statement:
+
+```
+mdx:
+  format: md
+```
+
+There must be an empty line above and below the `{@inject} line for it to render properly. 
 
 #### Include part of code
 
@@ -197,7 +223,8 @@ You can include specific sections of Move code using the following constructs ap
 - Module: #module=MODULE::NAME
 - Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION
 - Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT
-- Variables: #var=variableName, anotherVariable
+- Trait: #trait=TRAIT_NAME,ANOTHER_TRAIT
+- Variables: #var=variableName,anotherVariable
 - Move import: #use=LIBRARY::NAME
 - React component: #component=ComponentName
 - Type declaration: #type=TypeName
@@ -327,9 +354,40 @@ You can include a space-limited list of options after the @inject call. The foll
 - `noTests`: Remove tests from captured section of code.
 - `noTitle`: Don't place a hyperlinked title at the top of the code block.
 - `singleSpace`: If the code source has spurious whitespace, use this option to display code without extra spaces between lines. Useful when the code uses extra blank lines for readability. 
+- `highlight`: Highlight a single line out of the injected code. Use a word (such as a variable name) in the line you want highlighted. 
 
 For example, `{@inject: examples/move/example.source#module=example::example noComments noTests noTitle singleSpace}`
 
+## Summary and details 
+
+For long portions of text or code that can be omitted, but should be available for readers looking for it, you can use the `<details>` syntax to create a collapsible component. The collapsible component takes up less space on the page, making it easier for readers to skim the page's content. 
+
+
+<details> 
+
+<summary> Example </summary>
+
+Example collapsible component.
+
+</details>
+
+### How to use 
+
+Use `<details>` opening and closing tags to create the component, and the `<summary>` opening and closing tags to display the text shown when the component is closed:
+
+    <details>
+
+    <summary> 
+    
+    Example title 
+    
+    </summary>
+
+    Component details.
+
+    </details>
+
+There must be an empty line above and below the both the opening and closing `<summary>` and `<detail>` tags for it to render properly. 
 
 ## Mermaid graphs
 
@@ -404,3 +462,31 @@ The import statement can go anywhere, but it's typically added to the top of the
 import YTCarousel from "@site/src/components/YTCarousel"
 
 <YTCarousel ids={["dQw4w9WgXcQ","EwTZ2xpQwpA","1TewCPi92ro"]}/>
+
+## Step titles
+
+It is recommended to use an actual ordered list when documenting processes. Each list item step should consist of a single instruction for the user. On occasion, however, you might want to have a group of instructions for each step, making it impractical for a standard ordered list. The step titles feature enables the use of numbered steps and sub-steps in a heading, where you can then group a set of instructions in a single step.
+
+### When to use
+
+Use when you detail a long process with multiple technologies, or a process that otherwise requires lengthy contextual content. Do not create a verbose ordered list or one where list item #1 requires several pages of depth before the reader gets to list item #2. If you find that you're creating such a process list, then it might be a good candidate for step headings. Having steps in the title of longer processes helps readers recall where they left off if they don't complete the task set, and enables them to easily navigate back using the ToC. 
+
+### How to use
+
+To create step headings, add a `step` or `substep` suffix to the usual heading levels. 
+
+For instance, to create a level 2 heading, write `##step Buy peanuts`, which is the same as typing `## Step 1: Buy peanuts`.
+
+The feature supports one level of [`nesting`](/) using the `substep` suffix in the same manner. Don't forget to use the proper number of hashes in relation to the parent step. Continuing the example, you might have `###substep Buy Cracker Jacks`, which would be the same as typing `### Step 1.1: Buy Cracker Jacks`.
+
+##step Buy peanuts
+
+Buy me some peanuts.
+
+###substep Buy Cracker Jacks
+
+And Cracker Jacks.
+
+##step Come back
+
+I don't care if I ever come back.

@@ -23,10 +23,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_extensions::NativeExtensionMarker;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    values::{GlobalValue, Value},
-};
+use move_vm_types::values::{GlobalValue, Value};
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -42,9 +39,9 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
-    SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID,
+    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+    SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::error;
 
@@ -352,7 +349,7 @@ impl<'a> ObjectRuntime<'a> {
         accumulator_id: ObjectID,
         action: MoveAccumulatorAction,
         target_addr: AccountAddress,
-        target_ty: Type,
+        target_ty: TypeTag,
         value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
         let event = MoveAccumulatorEvent {
@@ -497,6 +494,17 @@ impl<'a> ObjectRuntime<'a> {
     // returns None if a child object is still borrowed
     pub(crate) fn take_state(&mut self) -> ObjectRuntimeState {
         std::mem::take(&mut self.state)
+    }
+
+    pub fn is_deleted(&self, id: &ObjectID) -> bool {
+        self.state.deleted_ids.contains(id)
+    }
+
+    pub fn is_transferred(&self, id: &ObjectID) -> Option<Owner> {
+        self.state
+            .transfers
+            .get(id)
+            .map(|(owner, _, _)| owner.clone())
     }
 
     pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {

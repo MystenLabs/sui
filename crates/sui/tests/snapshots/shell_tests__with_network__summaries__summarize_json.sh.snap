@@ -26,6 +26,8 @@ Summary generation successful. Summaries stored in 'package_summaries'
 address_mapping.json
 root_package_metadata.json
 accumulator.json
+accumulator_metadata.json
+accumulator_settlement.json
 address.json
 authenticator_state.json
 bag.json

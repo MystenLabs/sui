@@ -37,9 +37,13 @@ pub trait MoveFlavor: Debug {
     /// Used for populating new manifests & migration purposes.
     fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID>;
 
-    /// Return the implicit dependencies for the environments listed in [environments]
-    fn implicit_deps(
-        &self,
+    /// Return ALL the system dependencies for the requested environment.
+    fn system_dependencies(
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency>;
+
+    /// Return the default system dependencies for the requested environment.
+    fn default_system_dependencies(
         environment: EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency>;
 }

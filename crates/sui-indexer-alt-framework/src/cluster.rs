@@ -58,7 +58,7 @@ pub struct IndexerClusterBuilder {
     args: Args,
     ingestion_config: IngestionConfig,
     migrations: Option<&'static EmbeddedMigrations>,
-    metric_label: Option<String>,
+    metrics_prefix: Option<String>,
 }
 
 impl IndexerClusterBuilder {
@@ -134,9 +134,9 @@ impl IndexerClusterBuilder {
         self
     }
 
-    /// Add a custom label to all metrics reported by this indexer instance.
-    pub fn with_metric_label(mut self, label: impl Into<String>) -> Self {
-        self.metric_label = Some(label.into());
+    /// Add a custom prefix to all metrics reported by this indexer instance.
+    pub fn with_metrics_prefix(mut self, label: impl Into<String>) -> Self {
+        self.metrics_prefix = Some(label.into());
         self
     }
 
@@ -152,10 +152,7 @@ impl IndexerClusterBuilder {
         tracing_subscriber::fmt::init();
 
         let cancel = CancellationToken::new();
-
-        let registry = Registry::new_custom(self.metric_label, None)
-            .context("Failed to create Prometheus registry.")?;
-
+        let registry = Registry::new();
         let metrics = MetricsService::new(self.args.metrics_args, registry, cancel.child_token());
         let client_args = self.args.client_args.context("client_args is required")?;
 
@@ -166,6 +163,7 @@ impl IndexerClusterBuilder {
             client_args,
             self.ingestion_config,
             self.migrations,
+            self.metrics_prefix.as_deref(),
             metrics.registry(),
             cancel.child_token(),
         )

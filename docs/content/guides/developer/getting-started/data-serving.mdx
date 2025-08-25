@@ -1,6 +1,7 @@
 ---
 title: Access Sui Data
 description: Overview of the types of data access mechanisms available in Sui.
+keywords: [ data types, data access, data access interfaces, json RPC, custom indexers, indexers, gRPC, graphql RPC, indexer 2.0 ]
 ---
 
 You can access Sui network data like [Transactions](/concepts/transactions.mdx), [Checkpoints](/concepts/cryptography/system/checkpoint-verification.mdx), [Objects](/concepts/object-model.mdx), [Events](/guides/developer/sui-101/using-events.mdx), and more through the available interfaces. You can use this data in your application workflows, to analyze network behavior across applications or protocols of interest, or to perform audits on parts or the whole of the network.
@@ -77,10 +78,9 @@ The target times indicated below are tentative and subject to updates based on p
 | Tentative time | Milestone | Description |
 | -------- | ------- | ------- |
 | :heavy_check_mark: April 2025 | Beta release of initial set of polling-based APIs. | You can start validating the initial gRPC integration from your application and share feedback on the improvements you want to see. |
-| June 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage will be complete at this point, so you can start migrating your application in non-production environments. |
-| August 2025 | GA release of polling-based APIs with appropriate SDK support. | You can start migration and cutover of your application in the production environment, with the support for streaming APIs still in beta. |
-| October 2025 | GA release of scalable streaming APIs. | If your use case requires streaming low-latency data, you can now use those APIs at scale. **JSON-RPC will be deprecated at this point and migration notice period will start.** |
-| June 2026 | End of migration timeline. | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 9 months of migration notice period. |
+| :heavy_check_mark: July 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage will be complete at this point, so you can start migrating your application in non-production environments. |
+| September 2025 | GA release of polling-based and streaming APIs. | You can start migration and cutover of your application in the production environment. **JSON-RPC will be deprecated at this point and migration notice period will start.** |
+| April 2026 | End of migration timeline. | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
 
 ### Indexer 2.0
 
@@ -116,10 +116,10 @@ The target times indicated in this table are tentative and subject to updates ba
 
 | Tentative time | Milestone | Description |
 | -------- | ------- | ------- |
-| July 2025 | Beta release of GraphQL RPC Server and Indexer 2.0. | You can start validating the setup of Indexer 2.0, along with testing the GraphQL RPC Server to access the indexed Sui data. You can also start migrating your application in the non-production environments, and share feedback on the improvements you want to see. |
-| October 2025 | Deprecation of JSON-RPC. | **JSON-RPC will be deprecated at this point and migration notice period will start.** |
+| August 2025 | Beta release of GraphQL RPC Server and Indexer 2.0. | You can start validating the setup of Indexer 2.0, along with testing the GraphQL RPC Server to access the indexed Sui data. You can also start migrating your application in the non-production environments, and share feedback on the improvements you want to see. |
+| September 2025 | Deprecation of JSON-RPC. | **JSON-RPC will be deprecated at this point and migration notice period will start.** |
 | December 2025 | GA release of GraphQL RPC Server and Indexer 2.0. | You can start migration and cutover of your application in the production environment. |
-| June 2026 | End of migration timeline. | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 9 months of migration notice period. |
+| April 2026 | End of migration timeline. | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
 
 ### When to use gRPC vs GraphQL with Indexer 2.0
 
@@ -127,7 +127,7 @@ You can use the high-level criteria mentioned in the following table to determin
 
 | Dimension | gRPC API | GraphQL RPC with Indexer 2.0 |
 | -------- | ------- | ------- |
-| Type of application or data consumer. | Ideal for Web3 exchanges, defi market maker apps, other defi protocols or apps with ultra low-latency needs. | Ideal for webapp builders or builders with slightly relaxed latency needs. |
+| Type of application or data consumer. | Ideal for Web3 exchanges, DeFi market maker apps, other DeFi protocols or apps with ultra low-latency needs. | Ideal for webapp builders or builders with slightly relaxed latency needs. |
 | Query patterns. | Okay to read data from different endpoints separately and combine on the client-side; faster serialization, parsing, and validation due to binary format. | Allows easier decoupling of the client with the ability to combine data from different tables in a single request; returns consistent data from different tables across similar checkpoints, including for paginated results. |
 | Retention period requirements. | Default retention period will be two weeks with actual configuration dependent on the Full node operator and their needs and goals; see history-related note after the table. | Default retention period in Postgres database will be four weeks with actual configuration depending on your or a RPC provider or Data indexer operator's needs; see history-related note after the table. |
 | Streaming needs. | Will include a streaming or subscription API before beta release. | Subscription API is planned but will be available after GA. |

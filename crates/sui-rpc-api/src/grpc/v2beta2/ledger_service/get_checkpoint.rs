@@ -15,7 +15,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCheckpointResponse;
-use sui_sdk_types::CheckpointDigest;
+use sui_sdk_types::Digest;
 
 pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
 
@@ -43,7 +43,7 @@ pub fn get_checkpoint(
             .get_checkpoint_by_sequence_number(s)
             .ok_or(CheckpointNotFoundError::sequence_number(s))?,
         Some(CheckpointId::Digest(digest)) => {
-            let digest = digest.parse::<CheckpointDigest>().map_err(|e| {
+            let digest = digest.parse::<Digest>().map_err(|e| {
                 FieldViolation::new("digest")
                     .with_description(format!("invalid digest: {e}"))
                     .with_reason(ErrorReason::FieldInvalid)

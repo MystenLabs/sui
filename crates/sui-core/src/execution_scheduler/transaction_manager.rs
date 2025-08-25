@@ -518,7 +518,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
                 let mut input_object_keys = epoch_store.get_input_object_keys(
                     &cert.key(),
                     &input_object_kinds,
-                    execution_env.assigned_versions.as_ref(),
+                    &execution_env.assigned_versions,
                 );
 
                 if input_object_kinds.len() != input_object_keys.len() {
@@ -578,7 +578,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
             .multi_input_objects_available(
                 &input_object_cache_misses,
                 &receiving_objects,
-                &epoch_store.epoch(),
+                epoch_store.epoch(),
             )
             .into_iter()
             .zip(input_object_cache_misses);

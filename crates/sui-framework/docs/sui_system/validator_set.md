@@ -89,6 +89,7 @@ title: Module `sui_system::validator_set`
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -2797,7 +2798,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
     <b>let</b> <b>mut</b> adjusted_staking_reward_amounts = vector[];
     <b>let</b> <b>mut</b> adjusted_storage_fund_reward_amounts = vector[];
     <b>let</b> length = validators.length();
-    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.size();
+    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.length();
     length.do!(|i| {
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &validators[i];
         // Integer divisions will truncate the results. Because of this, we expect that at the end

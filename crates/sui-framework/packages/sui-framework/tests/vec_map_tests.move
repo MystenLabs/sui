@@ -59,11 +59,11 @@ fun remove_entry_by_idx() {
 
     let (key, val) = m.remove_entry_by_idx(0);
     assert!(key == 5 && val == 50);
-    assert!(m.size() == 2);
+    assert!(m.length() == 2);
 
     let (key, val) = m.remove_entry_by_idx(1);
     assert!(key == 7 && val == 70);
-    assert!(m.size() == 1);
+    assert!(m.length() == 1);
 }
 
 #[test]
@@ -92,7 +92,7 @@ fun smoke() {
         i = i + 1;
     };
     assert!(!m.is_empty());
-    assert!(vec_map::size(&m) == 10);
+    assert!(m.length() == 10);
     let mut i = 0;
     // make sure the elements are as expected in all of the getter APIs we expose
     while (i < 10) {

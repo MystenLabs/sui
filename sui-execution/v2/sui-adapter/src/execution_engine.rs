@@ -14,7 +14,7 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
-    use sui_types::base_types::SequenceNumber;
+    use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
@@ -40,9 +40,8 @@ mod checked {
     use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution::is_certificate_denied;
     use sui_types::execution_config_utils::to_binary_config;
-    use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
+    use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
@@ -57,7 +56,7 @@ mod checked {
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
-        base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -79,7 +78,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        execution_params: ExecutionOrEarlyError,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -95,8 +94,6 @@ mod checked {
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-        let contains_deleted_input = input_objects.contains_consensus_stream_ended_objects();
-        let cancelled_objects = input_objects.get_cancelled_objects();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -124,7 +121,6 @@ mod checked {
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
-        let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
         let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
             &mut temporary_store,
             transaction_kind,
@@ -134,9 +130,7 @@ mod checked {
             protocol_config,
             metrics,
             enable_expensive_checks,
-            deny_cert,
-            contains_deleted_input,
-            cancelled_objects,
+            execution_params,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -267,9 +261,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        deny_cert: bool,
-        contains_deleted_input: bool,
-        cancelled_objects: Option<(Vec<ObjectID>, SequenceNumber)>,
+        execution_params: ExecutionOrEarlyError,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -289,32 +281,11 @@ mod checked {
         // we must still ensure an effect is committed and all objects versions incremented
         let result = gas_charger.charge_input_objects(temporary_store);
         let mut result = result.and_then(|()| {
-            let mut execution_result = if deny_cert {
-                Err(ExecutionError::new(
-                    ExecutionErrorKind::CertificateDenied,
-                    None,
-                ))
-            } else if contains_deleted_input {
-                Err(ExecutionError::new(
-                    ExecutionErrorKind::InputObjectDeleted,
-                    None,
-                ))
-            } else if let Some((cancelled_objects, reason)) = cancelled_objects {
-                match reason {
-                    SequenceNumber::CONGESTED => Err(ExecutionError::new(
-                        ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
-                            congested_objects: CongestedObjects(cancelled_objects),
-                        },
-                        None,
-                    )),
-                    SequenceNumber::RANDOMNESS_UNAVAILABLE => Err(ExecutionError::new(
-                        ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
-                        None,
-                    )),
-                    _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
+            let mut execution_result = match execution_params {
+                ExecutionOrEarlyError::Err(early_execution_error) => {
+                    Err(ExecutionError::new(early_execution_error, None))
                 }
-            } else {
-                execution_loop::<Mode>(
+                ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                     temporary_store,
                     transaction_kind,
                     tx_ctx,
@@ -322,7 +293,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics.clone(),
-                )
+                ),
             };
 
             let meter_check = check_meter_limit(

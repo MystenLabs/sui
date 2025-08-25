@@ -152,7 +152,7 @@ impl TestContext {
         txn_data: TransactionData,
         desc: &str,
     ) -> SuiTransactionBlockResponse {
-        let signature = self.get_context().sign(&txn_data, desc);
+        let signature = self.get_context().sign(&txn_data, desc).await;
         let resp = self
             .get_fullnode_client()
             .quorum_driver_api()

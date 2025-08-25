@@ -875,7 +875,7 @@ pub mod tests {
             wallet.get_reference_gas_price().await.unwrap(),
         );
 
-        let tx = wallet.sign_transaction(&tx_data);
+        let tx = wallet.sign_transaction(&tx_data).await;
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         let signature_base64 = &signatures[0];

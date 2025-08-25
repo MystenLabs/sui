@@ -9,6 +9,7 @@ services:
     container_name: validator1
     hostname: validator1
     environment:
+      - TH_FRAG_SIZE=8388608
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
@@ -38,6 +39,7 @@ services:
     container_name: validator2
     hostname: validator2
     environment:
+      - TH_FRAG_SIZE=8388608
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
@@ -67,6 +69,7 @@ services:
     container_name: validator3
     hostname: validator3
     environment:
+      - TH_FRAG_SIZE=8388608
       - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
@@ -96,6 +99,7 @@ services:
     container_name: validator4
     hostname: validator4
     environment:
+      - TH_FRAG_SIZE=8388608
       - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
@@ -125,6 +129,7 @@ services:
     hostname: fullnode1
     container_name: fullnode1
     environment:
+      - TH_FRAG_SIZE=8388608
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
@@ -151,7 +156,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.16
-    image: stress:${SUI_NODE_B_TAG}
+    image: stress:${STRESS_IMAGE_TAG}
     container_name: stress
     environment:
       - RUST_LOG=info

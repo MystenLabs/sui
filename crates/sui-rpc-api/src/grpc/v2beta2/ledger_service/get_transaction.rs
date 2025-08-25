@@ -21,8 +21,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
 use sui_rpc::proto::timestamp_ms_to_proto;
-use sui_sdk_types::TransactionDigest;
-use sui_types::base_types::ObjectID;
+use sui_sdk_types::{Address, Digest};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 pub const READ_MASK_DEFAULT: &str = "digest";
@@ -39,7 +38,7 @@ pub fn get_transaction(
                 .with_description("missing digest")
                 .with_reason(ErrorReason::FieldMissing)
         })?
-        .parse::<TransactionDigest>()
+        .parse::<Digest>()
         .map_err(|e| {
             FieldViolation::new("digest")
                 .with_description(format!("invalid digest: {e}"))
@@ -141,11 +140,11 @@ fn transaction_to_response(
         if let Some(object_types) = source.object_types {
             if submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
                 for changed_object in effects.changed_objects.iter_mut() {
-                    let Ok(object_id) = changed_object.object_id().parse::<ObjectID>() else {
+                    let Ok(object_id) = changed_object.object_id().parse::<Address>() else {
                         continue;
                     };
 
-                    if let Some(ty) = object_types.get(&object_id) {
+                    if let Some(ty) = object_types.get(&object_id.into()) {
                         changed_object.object_type = Some(match ty {
                             sui_types::base_types::ObjectType::Package => "package".to_owned(),
                             sui_types::base_types::ObjectType::Struct(struct_tag) => {
@@ -156,15 +155,15 @@ fn transaction_to_response(
                 }
             }
 
-            if submask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
-                    let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectID>()
+            if submask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut() {
+                    let Ok(object_id) = unchanged_consensus_object.object_id().parse::<Address>()
                     else {
                         continue;
                     };
 
-                    if let Some(ty) = object_types.get(&object_id) {
-                        unchanged_shared_object.object_type = Some(match ty {
+                    if let Some(ty) = object_types.get(&object_id.into()) {
+                        unchanged_consensus_object.object_type = Some(match ty {
                             sui_types::base_types::ObjectType::Package => "package".to_owned(),
                             sui_types::base_types::ObjectType::Struct(struct_tag) => {
                                 struct_tag.to_canonical_string(true)

@@ -4,7 +4,8 @@
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
+        shared_object_version_manager::{Schedulable, WithdrawType},
+        AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
@@ -27,7 +28,7 @@ use sui_types::{
     base_types::{FullObjectID, SequenceNumber},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    storage::InputKey,
+    storage::{ChildObjectResolver, InputKey},
     transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
@@ -80,6 +81,7 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         balance_accumulator_enabled: bool,
@@ -92,7 +94,7 @@ impl ExecutionScheduler {
                 .expect("Accumulator root object must be present if balance accumulator is enabled")
                 .version();
             Some(BalanceWithdrawScheduler::new(
-                Arc::new(object_cache_read.clone()),
+                Arc::new(child_object_resolver),
                 starting_accumulator_version,
             ))
         } else {
@@ -148,11 +150,9 @@ impl ExecutionScheduler {
         .concat();
 
         let epoch = epoch_store.epoch();
-        debug!(?tx_digest, "Scheduled transaction in execution scheduler");
-        tracing::trace!(
+        debug!(
             ?tx_digest,
-            "Waiting for input objects: {:?}",
-            input_and_receiving_keys
+            "Scheduled transaction, waiting for input objects: {:?}", input_and_receiving_keys,
         );
 
         let availability = self
@@ -183,7 +183,7 @@ impl ExecutionScheduler {
             .inc();
         tokio::select! {
             _ = self.object_cache_read
-                .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, &epoch)
+                .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, epoch)
                 => {
                     self.metrics
                         .transaction_manager_transaction_queue_age_s
@@ -196,7 +196,10 @@ impl ExecutionScheduler {
                         enqueue_time,
                     );
                 }
-            _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
+            _ = self.transaction_cache_read.notify_read_executed_effects_digests(
+                "ExecutionScheduler::notify_read_executed_effects_digests",
+                &digests,
+            ) => {
                 debug!(?tx_digest, "Transaction already executed");
             }
         };
@@ -290,9 +293,9 @@ impl ExecutionScheduler {
                             let env = env.with_sufficient_balance();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
-                        ScheduleStatus::AlreadyScheduled => {
+                        ScheduleStatus::AlreadyExecuted => {
                             let tx_digest = result.tx_digest;
-                            debug!(?tx_digest, "Withdraw already scheduled or executed");
+                            debug!(?tx_digest, "Withdraw already executed");
                         }
                     },
                     Err(e) => {
@@ -301,6 +304,38 @@ impl ExecutionScheduler {
                 }
             }
         }));
+    }
+
+    fn schedule_settlement_transactions(
+        &self,
+        settlement_txns: Vec<(TransactionKey, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if !settlement_txns.is_empty() {
+            let scheduler = self.clone();
+            let epoch_store = epoch_store.clone();
+
+            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+                let mut futures: FuturesUnordered<_> =
+                        settlement_txns
+                            .into_iter()
+                            .map(|(key, env)| {
+                                let epoch_store = epoch_store.clone();
+                                async move {
+                                    (epoch_store.wait_for_settlement_transactions(key).await, env)
+                                }
+                            })
+                            .collect();
+
+                while let Some((txns, env)) = futures.next().await {
+                    let txns = txns
+                        .into_iter()
+                        .map(|tx| (tx, env.clone()))
+                        .collect::<Vec<_>>();
+                    scheduler.enqueue_transactions(txns, &epoch_store);
+                }
+            }));
+        }
     }
 
     fn schedule_tx_keys(
@@ -373,17 +408,26 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         let mut ordinary_txns = Vec::with_capacity(certs.len());
         let mut tx_with_keys = Vec::new();
         let mut tx_with_withdraws = Vec::new();
+        let mut settlement_txns = Vec::new();
 
         for (schedulable, env) in certs {
             match schedulable {
                 Schedulable::Transaction(tx) => {
-                    ordinary_txns.push((tx, env));
+                    // Check if this transaction has withdraws based on the assigned versions
+                    match env.assigned_versions.withdraw_type {
+                        WithdrawType::Withdraw(accumulator_version) => {
+                            tx_with_withdraws.push((tx, accumulator_version, env));
+                        }
+                        WithdrawType::NonWithdraw => {
+                            ordinary_txns.push((tx, env));
+                        }
+                    }
                 }
                 s @ Schedulable::RandomnessStateUpdate(..) => {
                     tx_with_keys.push((s.key(), env));
                 }
-                Schedulable::Withdraw(tx, version) => {
-                    tx_with_withdraws.push((tx, version, env));
+                Schedulable::AccumulatorSettlement(_, _) => {
+                    settlement_txns.push((schedulable.key(), env));
                 }
             }
         }
@@ -391,6 +435,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         self.enqueue_transactions(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
         self.schedule_balance_withdraws(tx_with_withdraws, epoch_store);
+        self.schedule_settlement_transactions(settlement_txns, epoch_store);
     }
 
     fn enqueue_transactions(
@@ -411,7 +456,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     debug_fatal!(
                         "We should never enqueue certificate from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
-                        cert.0.epoch(),
+                        cert.0.epoch()
                     );
                     None
                 }
@@ -491,6 +536,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
 mod test {
     use std::{time::Duration, vec};
 
+    use crate::authority::shared_object_version_manager::AssignedVersions;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
@@ -531,6 +577,7 @@ mod test {
         let execution_scheduler =
             ExecutionSchedulerWrapper::ExecutionScheduler(ExecutionScheduler::new(
                 state.get_object_cache_reader().clone(),
+                state.get_child_object_resolver().clone(),
                 state.get_transaction_cache_reader().clone(),
                 tx_ready_certificates,
                 false,
@@ -800,19 +847,27 @@ mod test {
             vec![
                 (
                     transaction_read_0.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_0_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_0_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_read_1.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_1_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_1_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_default.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_default_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_default_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_read_2.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_2_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_2_assigned_versions,
+                    )),
                 ),
             ],
             &state.epoch_store_for_testing(),
@@ -1348,7 +1403,8 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 cancelled_transaction.clone(),
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                ExecutionEnv::new()
+                    .with_assigned_versions(AssignedVersions::non_withdraw(assigned_versions)),
             )],
             &state.epoch_store_for_testing(),
         );

@@ -8,14 +8,13 @@ use std::time::Duration;
 use move_core_types::language_storage::TypeTag;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::accumulator_root::update_account_balance_for_testing;
+use sui_types::accumulator_root::{update_account_balance_for_testing, AccumulatorValue};
+use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
-use sui_types::transaction::WithdrawTypeParam;
-use sui_types::type_input::TypeInput;
+use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::{
-    accumulator_root::create_account_for_testing,
     base_types::{SequenceNumber, SuiAddress},
     crypto::{get_account_key_pair, AccountKeyPair},
     executable_transaction::VerifiedExecutableTransaction,
@@ -30,8 +29,9 @@ use tokio::time::timeout;
 use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::{
     authority::{
-        shared_object_version_manager::Schedulable, test_authority_builder::TestAuthorityBuilder,
-        AuthorityState, BalanceWithdrawStatus, ExecutionEnv,
+        shared_object_version_manager::{Schedulable, WithdrawType},
+        test_authority_builder::TestAuthorityBuilder,
+        AuthorityState, ExecutionEnv,
     },
     execution_scheduler::{
         ExecutionScheduler, ExecutionSchedulerAPI, ExecutionSchedulerWrapper, PendingCertificate,
@@ -56,17 +56,14 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
     let mut starting_objects: Vec<_> = init_balances
         .into_iter()
         .map(|(type_tag, balance)| {
-            create_account_for_testing(
-                sender,
-                WithdrawTypeParam::Balance(TypeInput::from(type_tag)),
-                balance,
-            )
+            let type_tag = Balance::type_(type_tag);
+            AccumulatorValue::create_for_testing(sender, type_tag.into(), balance)
         })
         .collect();
     let account_objects = starting_objects.iter().map(|o| o.id()).collect();
     starting_objects.push(gas_object.clone());
     let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    protocol_config.set_enable_accumulators_for_testing(true);
+    protocol_config.enable_accumulators_for_testing();
     let state = TestAuthorityBuilder::new()
         .with_protocol_config(protocol_config)
         .with_starting_objects(&starting_objects)
@@ -75,6 +72,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
     let scheduler = Arc::new(ExecutionSchedulerWrapper::ExecutionScheduler(
         ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
+            state.get_child_object_resolver().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             true,
@@ -142,10 +140,9 @@ impl TestEnv {
             transactions
                 .iter()
                 .map(|tx| {
-                    (
-                        Schedulable::Withdraw(tx.clone(), version),
-                        ExecutionEnv::default(),
-                    )
+                    let mut env = ExecutionEnv::default();
+                    env.assigned_versions.withdraw_type = WithdrawType::Withdraw(version);
+                    (Schedulable::Transaction(tx.clone()), env)
                 })
                 .collect(),
             &self.state.epoch_store_for_testing(),
@@ -175,9 +172,8 @@ impl TestEnv {
 
     fn settle_balances(&mut self, balance_changes: BTreeMap<ObjectID, i128>) {
         let mut accumulator_object = self.get_accumulator_object();
-        let accumulator_version = accumulator_object.version().next();
+        let next_version = accumulator_object.version().next();
         self.scheduler.settle_balances(BalanceSettlement {
-            accumulator_version,
             balance_changes: balance_changes.clone(),
         });
         for (object_id, balance_change) in balance_changes {
@@ -191,7 +187,7 @@ impl TestEnv {
                 .data
                 .try_as_move_mut()
                 .unwrap()
-                .increment_version_to(accumulator_version);
+                .increment_version_to(next_version);
             self.state
                 .get_cache_writer()
                 .write_object_entry_for_test(account_object);
@@ -200,7 +196,7 @@ impl TestEnv {
             .data
             .try_as_move_mut()
             .unwrap()
-            .increment_version_to(accumulator_version);
+            .increment_version_to(next_version);
         self.state
             .get_cache_writer()
             .write_object_entry_for_test(accumulator_object);

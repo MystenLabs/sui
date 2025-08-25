@@ -205,8 +205,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     } = config;
 
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
+    //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
     let (collector_tx, committer_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    //docs::/#buff
     let (committer_tx, watermark_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
 
@@ -389,7 +391,7 @@ mod tests {
             initial_watermark: Option<CommitterWatermark>,
         ) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
-            let metrics = IndexerMetrics::new(&Registry::default());
+            let metrics = IndexerMetrics::new(None, &Registry::default());
             let cancel = CancellationToken::new();
 
             let skip_watermark = false;

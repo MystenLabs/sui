@@ -1,6 +1,7 @@
 ---
 title: Programmable Transaction Blocks
 description: Programmable transaction blocks are a group of commands that complete a transaction on Sui.
+keywords: [ programmable transaction blocks, transaction blocks, program transaction blocks, PTB, PTBs, what are PTBs, what is PTB, transaction group, programmable group of transactions, program transaction block, block of transactions, group of transactions ]
 ---
 
 On Sui, a transaction is more than a basic record of the flow of assets. Transactions on Sui are composed of a number of commands that execute on inputs to define the result of the transaction. Termed programmable transaction blocks (PTBs), these groups of commands define all user transactions on Sui. PTBs allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction--without publishing a new Move package. Designed with automation and transaction builders in mind, PTBs are a lightweight and flexible way of generating transactions. More intricate programming patterns, such as loops, are not supported, however, and in those cases you must publish a new Move package.
@@ -12,7 +13,7 @@ A PTB can perform up to 1,024 unique operations in a single execution, whereas t
 The remainder of this topic covers the semantics of the execution of the transaction commands. It assumes familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents:
 
 - [Object model](../object-model.mdx)
-- [Move Concepts](../sui-move-concepts.mdx)
+- [Move concepts](../sui-move-concepts.mdx)
 
 ## Transaction type
 

@@ -8,6 +8,7 @@ module.exports = {
     preflight: false, // disable Tailwind's reset
   },
   content: ["./src/**/*.{js,jsx,ts,tsx}", "./docs/**/*.mdx"], // my markdown stuff is in ../docs, not /src
+  safelist: ["text-sui-success-dark"],
   darkMode: ["class", '[data-theme="dark"]'], // hooks into docusaurus' dark mode settings
   theme: {
     extend: {
@@ -19,8 +20,8 @@ module.exports = {
         "sui-black": "var(--sui-black)",
         "sui-blue-primary": "rgb(var(--sui-blue-primary)/<alpha-value>)",
         "sui-blue": "var(--sui-blue)",
-        "sui-blue-bright": "var(--sui-blue-bright)",
-        "sui-blue-light": "var(--sui-blue-light)",
+        "sui-blue-bright": "rgb(var(--sui-blue-bright)/<alpha-value>)",
+        "sui-blue-light": "rgb(var(--sui-blue-light)/<alpha-value>)",
         "sui-blue-lighter": "var(--sui-blue-lighter)",
         "sui-blue-dark": "rgb(var(--sui-blue-dark)/<alpha-value>)",
         "sui-blue-darker": "var(--sui-blue-darker)",
@@ -40,12 +41,14 @@ module.exports = {
         "sui-warning-dark": "var(--sui-warning-dark)",
         "sui-warning-light": "var(--sui-warning-light)",
         "sui-code": "var(--sui-code)",
+        "sui-gray-3s": "rgb(var(--sui-gray-3s)/<alpha-value>)",
+        "sui-gray-5s": "rgb(var(--sui-gray-5s)/<alpha-value>)",
         "sui-gray": {
-          35: "var(--sui-gray-35)",
-          40: "var(--sui-gray-40)",
-          45: "var(--sui-gray-45)",
+          35: "rgb(var(--sui-gray-35)/<alpha-value>)",
+          40: "rgb(var(--sui-gray-40)/<alpha-value>)",
+          45: "rgb(var(--sui-gray-45)/<alpha-value>)",
           50: "var(--sui-gray-50)",
-          55: "var(--sui-gray-55)",
+          55: "rgb(var(--sui-gray-55)/<alpha-value>)",
           60: "var(--sui-gray-60)",
           65: "var(--sui-gray-65)",
           70: "var(--sui-gray-70)",
@@ -57,11 +60,11 @@ module.exports = {
           100: "var(--sui-gray-100)",
         },
         "sui-grey": {
-          35: "var(--sui-gray-35)",
-          40: "var(--sui-gray-40)",
-          45: "var(--sui-gray-45)",
+          35: "rgb(var(--sui-gray-35)/<alpha-value>)",
+          40: "rgb(var(--sui-gray-40)/<alpha-value>)",
+          45: "rgb(var(--sui-gray-45)/<alpha-value>)",
           50: "var(--sui-gray-50)",
-          55: "var(--sui-gray-55)",
+          55: "rgb(var(--sui-gray-55)/<alpha-value>)",
           60: "var(--sui-gray-60)",
           65: "var(--sui-gray-65)",
           70: "var(--sui-gray-70)",
@@ -72,6 +75,7 @@ module.exports = {
           95: "var(--sui-gray-95)",
           100: "var(--sui-gray-100)",
         },
+        "sui-disabled": "rgb(var(--sui-disabled)/<alpha-value>)",
         "sui-link-color-dark": "var(--sui-link-color-dark)",
         "sui-link-color-light": "var(--sui-link-color-light)",
         "sui-ghost-white": "var(--sui-ghost-white)",
@@ -94,5 +98,18 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function ({ addUtilities }) {
+      const arrowMask = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8.12 4.12a1 1 0 0 1 1.41 0l6.35 6.35a1 1 0 0 1 0 1.41l-6.35 6.35a1 1 0 1 1-1.41-1.41L13.59 12 8.12 6.53a1 1 0 0 1 0-1.41z'/></svg>") no-repeat center / contain`;
+
+      addUtilities({
+        ".mask-arrow": {
+          transition: "transform 0.2s ease",
+          background: "currentColor",
+          WebkitMask: arrowMask,
+          mask: arrowMask,
+        },
+      });
+    },
+  ],
 };

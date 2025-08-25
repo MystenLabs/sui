@@ -15,4 +15,13 @@ module branch::branch {
         return y * k
     }
 
+    public fun conditions(x: u64, y: u64): u64 {
+        if (x > 10 && y < 20 || x < 30) {
+            x + y
+        } else {
+            x * y
+        }
+
+    }
+
 }

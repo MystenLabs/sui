@@ -119,10 +119,12 @@ pub struct Constant<S> {
 }
 
 /// Normalized version of a `StructDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// `ModuleId` or `Module` to ensure the two types are defined at the same place.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Struct<S: Hash + Eq> {
+    // Defining module name
+    pub defining_module: ModuleId<S>,
     pub name: S,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
@@ -163,10 +165,12 @@ pub struct Function<S: Hash + Eq> {
 }
 
 /// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// `ModuleId` or `Module` to ensure the two types are defined at the same place.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Enum<S: Hash + Eq> {
+    // Defining module name
+    pub defining_module: ModuleId<S>,
     pub name: S,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
@@ -431,6 +435,10 @@ impl<S> Type<S> {
 
     pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: &StructTag) -> Self {
         Type::Datatype(Box::new(Datatype::from_struct_tag(pool, tag)))
+    }
+
+    pub fn from_datatype(datatype: Datatype<S>) -> Self {
+        Type::Datatype(Box::new(datatype))
     }
 
     /// Return true if `self` is a closed type with no free type variables
@@ -773,6 +781,17 @@ impl<S: Hash + Eq> Struct<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.struct_handle);
+
+        let name = pool.intern(m.identifier_at(handle.name));
+
+        let defining_module_handle = m.module_handle_at(handle.module);
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let defining_module = ModuleId {
+            address: defining_module_address,
+            name: defining_module_name,
+        };
+
         let fields = match &def.field_information {
             StructFieldInformation::Native => {
                 // Pretend for compatibility checking no fields
@@ -780,8 +799,9 @@ impl<S: Hash + Eq> Struct<S> {
             }
             StructFieldInformation::Declared(fields) => Fields::new(pool, m, fields),
         };
-        let name = pool.intern(m.identifier_at(handle.name));
+
         Struct {
+            defining_module,
             name,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
@@ -793,17 +813,41 @@ impl<S: Hash + Eq> Struct<S> {
         self.type_parameters.iter().map(|param| &param.constraints)
     }
 
+    // Checks equivalence, omitting the defining module to avoid module name comparisons (which may
+    // be invalid during publication, etc).
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
+            defining_module,
             name,
             abilities,
             type_parameters,
             fields,
         } = self;
         name == &other.name
+            && defining_module == &other.defining_module
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && fields.equivalent(&other.fields)
+    }
+}
+
+impl<S: Hash + Eq + Clone> Struct<S> {
+    /// Returns a instantiated datatype signature token, using the provided types. The module
+    /// address and name are the definining ID. Note that the address may be `0` if this module is
+    /// unpublished.
+    ///
+    /// Returns `None` if an incorrect number of arguments is provided.
+    /// Does not check type ability constraints.
+    pub fn datatype(&self, args: Vec<Type<S>>) -> Option<Datatype<S>> {
+        if self.type_parameters.len() != args.len() {
+            return None;
+        };
+        let datatype = Datatype {
+            module: self.defining_module.clone(),
+            name: self.name.clone(),
+            type_arguments: args.into_iter().collect(),
+        };
+        Some(datatype)
     }
 }
 
@@ -960,7 +1004,17 @@ impl<S: Hash + Eq> Enum<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.enum_handle);
+
         let name = pool.intern(m.identifier_at(handle.name));
+
+        let defining_module_handle = m.module_handle_at(handle.module);
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let defining_module = ModuleId {
+            address: defining_module_address,
+            name: defining_module_name,
+        };
+
         let variants = def
             .variants
             .iter()
@@ -970,6 +1024,7 @@ impl<S: Hash + Eq> Enum<S> {
             })
             .collect();
         Enum {
+            defining_module,
             name,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
@@ -977,17 +1032,41 @@ impl<S: Hash + Eq> Enum<S> {
         }
     }
 
+    // Checks equivalence, omitting the defining module to avoid module name comparisons (which may
+    // be invalid during publication, etc).
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
+            defining_module,
             name,
             abilities,
             type_parameters,
             variants,
         } = self;
         name == &other.name
+            && defining_module == &other.defining_module
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && map_ordered_equivalent(variants, &other.variants, |v1, v2| v1.equivalent(v2))
+    }
+}
+
+impl<S: Hash + Eq + Clone> Enum<S> {
+    /// Returns a instantiated datatype signature token, using the provided types. The module
+    /// address and name are the definining ID. Note that the address may be `0` if this module is
+    /// unpublished.
+    ///
+    /// Returns `None` if an incorrect number of arguments is provided.
+    /// Does not check type ability constraints.
+    pub fn datatype(&self, args: Vec<Type<S>>) -> Option<Datatype<S>> {
+        if self.type_parameters.len() != args.len() {
+            return None;
+        };
+        let datatype = Datatype {
+            module: self.defining_module.clone(),
+            name: self.name.clone(),
+            type_arguments: args.into_iter().collect(),
+        };
+        Some(datatype)
     }
 }
 
@@ -1969,5 +2048,100 @@ impl StringPool for ArcPool {
 
     fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr {
         s.0.as_ident_str()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_bytecode_vec<S: Hash + Eq>(codes: Vec<Bytecode<S>>) -> Vec<Bytecode<S>> {
+        codes
+    }
+
+    #[test]
+    fn test_get_successors_ret_and_abort() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::Ret, Bytecode::Abort]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Ret and Abort should have no successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    fn test_get_successors_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::LdU8(42),
+            Bytecode::Branch(2),
+            Bytecode::LdU8(42),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Branch should only have the branch target as successor
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_conditional_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::BrTrue(2),
+            Bytecode::BrFalse(2),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Conditional branch should have both the branch target and next instruction as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_variant_switch() {
+        let jt = Rc::new(VariantJumpTable {
+            enum_: Rc::new(Enum {
+                defining_module: ModuleId {
+                    address: AccountAddress::ZERO,
+                    name: Identifier::new("E").unwrap(),
+                },
+                name: Identifier::new("E").unwrap(),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+                variants: IndexMap::new(),
+            }),
+            jump_table: JumpTableInner::Full(vec![1, 2]),
+        });
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::VariantSwitch(jt.clone()),
+            Bytecode::Ret,
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![jt];
+
+        // VariantSwitch should have all jump table offsets as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_get_successors_fallthrough() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::LdU8(42), Bytecode::LdU8(43), Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // LdU8 is not a branch, so successor is next instruction
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+        assert_eq!(Bytecode::get_successors(2, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Program counter out of bounds")]
+    fn test_get_successors_out_of_bounds() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+        // pc out of bounds should panic
+        Bytecode::get_successors(10, &code, &jump_tables);
     }
 }

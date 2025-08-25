@@ -45,10 +45,15 @@ impl MoveFlavor for Vanilla {
         envs
     }
 
-    fn implicit_deps(
-        &self,
+    fn system_dependencies(
         environment: EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency> {
         empty().collect()
+    }
+
+    fn default_system_dependencies(
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
+        Self::system_dependencies(environment)
     }
 }

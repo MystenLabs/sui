@@ -48,8 +48,9 @@ use sui_types::sui_serde::{
 };
 use sui_types::transaction::{
     Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
-    InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
-    TransactionData, TransactionDataAPI, TransactionKind,
+    InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, Reservation,
+    SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
+    WithdrawTypeParam,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -256,6 +257,35 @@ impl SuiTransactionBlockResponse {
     pub fn status_ok(&self) -> Option<bool> {
         self.effects.as_ref().map(|e| e.status().is_ok())
     }
+
+    pub fn get_new_package_obj(&self) -> Option<ObjectRef> {
+        self.object_changes.as_ref().and_then(|changes| {
+            changes
+                .iter()
+                .find(|change| matches!(change, ObjectChange::Published { .. }))
+                .map(|change| change.object_ref())
+        })
+    }
+
+    pub fn get_new_package_upgrade_cap(&self) -> Option<ObjectRef> {
+        self.object_changes.as_ref().and_then(|changes| {
+            changes
+                .iter()
+                .find(|change| {
+                    matches!(change, ObjectChange::Created {
+                        owner: Owner::AddressOwner(_),
+                        object_type: StructTag {
+                            address: SUI_FRAMEWORK_ADDRESS,
+                            module,
+                            name,
+                            ..
+                        },
+                        ..
+                    } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+                })
+                .map(|change| change.object_ref())
+        })
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
@@ -363,39 +393,6 @@ fn write_obj_changes<T: Display>(
         }
     }
     Ok(())
-}
-
-pub fn get_new_package_obj_from_response(
-    response: &SuiTransactionBlockResponse,
-) -> Option<ObjectRef> {
-    response.object_changes.as_ref().and_then(|changes| {
-        changes
-            .iter()
-            .find(|change| matches!(change, ObjectChange::Published { .. }))
-            .map(|change| change.object_ref())
-    })
-}
-
-pub fn get_new_package_upgrade_cap_from_response(
-    response: &SuiTransactionBlockResponse,
-) -> Option<ObjectRef> {
-    response.object_changes.as_ref().and_then(|changes| {
-        changes
-            .iter()
-            .find(|change| {
-                matches!(change, ObjectChange::Created {
-                    owner: Owner::AddressOwner(_),
-                    object_type: StructTag {
-                        address: SUI_FRAMEWORK_ADDRESS,
-                        module,
-                        name,
-                        ..
-                    },
-                    ..
-                } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
-            })
-            .map(|change| change.object_ref())
-    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -957,7 +954,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 gas_used: effect.gas_cost_summary().clone(),
                 shared_objects: to_sui_object_ref(
                     effect
-                        .input_shared_objects()
+                        .input_consensus_objects()
                         .into_iter()
                         .map(|kind| {
                             #[allow(deprecated)]
@@ -2130,7 +2127,7 @@ impl From<InputObjectKind> for SuiInputObjectKind {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "TypeTag", rename_all = "camelCase")]
 pub struct SuiTypeTag(String);
 
@@ -2236,6 +2233,9 @@ pub enum SuiCallArg {
     Object(SuiObjectArg),
     // pure value, bcs encoded
     Pure(SuiPureValue),
+    // Reservation to withdraw balance. This will be converted into a Withdrawal struct and passed into Move.
+    // It is allowed to have multiple withdraw arguments even for the same balance type.
+    BalanceWithdraw(SuiBalanceWithdrawArg),
 }
 
 impl SuiCallArg {
@@ -2271,10 +2271,20 @@ impl SuiCallArg {
                     digest,
                 })
             }
-            CallArg::BalanceWithdraw(_) => {
-                // TODO(address-balances): Add support for balance withdraws.
-                todo!("Balance withdraws not yet supported in json rpc types")
-            }
+            CallArg::BalanceWithdraw(arg) => SuiCallArg::BalanceWithdraw(SuiBalanceWithdrawArg {
+                reservation: match arg.reservation {
+                    Reservation::EntireBalance => SuiReservation::EntireBalance,
+                    Reservation::MaxAmountU64(amount) => SuiReservation::MaxAmountU64(amount),
+                },
+                type_param: match arg.type_param {
+                    WithdrawTypeParam::Balance(type_input) => {
+                        SuiWithdrawTypeParam::Balance(type_input.to_type_tag()?.into())
+                    }
+                },
+                withdraw_from: match arg.withdraw_from {
+                    WithdrawFrom::Sender => SuiWithdrawFrom::Sender,
+                },
+            }),
         })
     }
 
@@ -2347,6 +2357,38 @@ pub enum SuiObjectArg {
         version: SequenceNumber,
         digest: ObjectDigest,
     },
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SuiReservation {
+    EntireBalance,
+    MaxAmountU64(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
+        u64,
+    ),
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SuiWithdrawTypeParam {
+    Balance(SuiTypeTag),
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SuiWithdrawFrom {
+    Sender,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiBalanceWithdrawArg {
+    pub reservation: SuiReservation,
+    pub type_param: SuiWithdrawTypeParam,
+    pub withdraw_from: SuiWithdrawFrom,
 }
 
 #[derive(Clone)]

@@ -158,11 +158,11 @@ task 18, lines 170-178:
 //> 1: t2::o2::pop_coin(Result(0));
 //> 2: SplitCoins(Result(1), [Input(0)]);
 //> 3: TransferObjects([Result(2)], Input(2));
-//> 4: sui::transfer::public_share_object(Input(1));
+//> 4: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Input(1));
 // Try to reshare the shared object -- this should fail since the input was
 // used for the `MakeMoveVec` call
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Debug of error: VMVerificationOrDeserializationError at command Some(4)
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(4)
 
 task 19, lines 179-187:
 //# programmable --inputs 0 object(15,0) @0x0

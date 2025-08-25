@@ -182,9 +182,9 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
-        let reject_txn_votes = self
+        let (verified_block, reject_txn_votes) = self
             .block_verifier
-            .verify_and_vote(&signed_block)
+            .verify_and_vote(signed_block, serialized_block.block)
             .tap_err(|e| {
                 self.context
                     .metrics
@@ -194,7 +194,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     .inc();
                 info!("Invalid block from {}: {}", peer, e);
             })?;
-        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block.block);
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
 

@@ -11,21 +11,20 @@ use crate::{
 };
 use enum_dispatch::enum_dispatch;
 use execution_scheduler_impl::ExecutionScheduler;
-use mysten_common::in_test_configuration;
 use prometheus::IntGauge;
-use rand::Rng;
 use std::{collections::BTreeSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
-use sui_protocol_config::Chain;
 use sui_types::{
-    error::SuiResult, executable_transaction::VerifiedExecutableTransaction, storage::InputKey,
+    error::SuiResult,
+    executable_transaction::VerifiedExecutableTransaction,
+    storage::{ChildObjectResolver, InputKey},
     transaction::SenderSignedData,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use transaction_manager::TransactionManager;
 
-mod balance_withdraw_scheduler;
+pub(crate) mod balance_withdraw_scheduler;
 pub(crate) mod execution_scheduler_impl;
 mod overload_tracker;
 pub(crate) mod transaction_manager;
@@ -103,36 +102,20 @@ pub enum ExecutionSchedulerWrapper {
 impl ExecutionSchedulerWrapper {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         _is_fullnode: bool,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        // If Mysticeti fastpath is enabled, we must use ExecutionScheduler.
-        // This is because TransactionManager prohibits enqueueing the same transaction twice,
-        // which we need in Mysticeti fastpath in order to finalize a transaction that
-        // was previously executed through fastpaht certification.
-        // In tests, we flip a coin to decide whether to use ExecutionScheduler or TransactionManager,
-        // so that both can be tested.
-        // In prod, we use ExecutionScheduler in devnet, and in testnet fullnodes.
-        // In other networks, we use TransactionManager by default.
-        let enable_execution_scheduler = if epoch_store.protocol_config().mysticeti_fastpath()
-            || std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
-        {
-            true
-        } else if std::env::var("ENABLE_TRANSACTION_MANAGER").is_ok() {
-            false
-        } else if in_test_configuration() {
-            rand::thread_rng().gen_bool(0.5)
-        } else {
-            let chain = epoch_store.get_chain_identifier().chain();
-            chain != Chain::Mainnet
-        };
+        // Execution scheduler is enabled by default unless ENABLE_TRANSACTION_MANAGER is explicitly set.
+        let enable_execution_scheduler = std::env::var("ENABLE_TRANSACTION_MANAGER").is_err();
         if enable_execution_scheduler {
             let enable_accumulators = epoch_store.accumulators_enabled();
             Self::ExecutionScheduler(ExecutionScheduler::new(
                 object_cache_read,
+                child_object_resolver,
                 transaction_cache_read,
                 tx_ready_certificates,
                 enable_accumulators,

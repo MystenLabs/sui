@@ -1,6 +1,7 @@
 ---
 title: Database Snapshots
 description: Database snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis.
+keywords: [ node snapshots, database snapshots, full node snapshots, formal snapshots, rocksdb, rocksdb snapshot, restoring a node, restoring a full node, restoring from snapshot, managed snapshots, enabling snapshots ]
 ---
 
 Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for Full node operators.
@@ -131,7 +132,7 @@ Mainnet: `s3://mysten-mainnet-snapshots/`,  `s3://mysten-mainnet-formal/`
 Testnet: `gs://mysten-testnet-snapshots/`, `gs://mysten-testnet-formal/`
 Mainnet: `gs://mysten-mainnet-snapshots/`,  `gs://mysten-mainnet-formal/`
 
-![Mysten Managed Snapshots](./images/mysten-cloud-snapshots.png "A diagram that shows the current architecture of mysten snapshot availability")
+![Mysten Managed Snapshots](./images/mysten-cloud-snapshots.png "A diagram that shows the current architecture of Mysten snapshot availability")
 
 ## Enabling snapshots
 
@@ -140,8 +141,8 @@ Full nodes do not take snapshots by default. To enable this feature you must app
 Follow these steps to change the configs for a Full node:
 
 1. Stop your node, if it's running.
-2. Open your fullnode.yaml config file and apply config updates as the following sections show.
-3. Save the fullnode.yaml file and restart the node.
+2. Open your `fullnode.yaml` config file and apply config updates as the following sections show.
+3. Save the `fullnode.yaml` file and restart the node.
 
 ### Enabling DB snapshots
 

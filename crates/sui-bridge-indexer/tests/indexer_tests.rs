@@ -166,6 +166,7 @@ async fn setup_bridge_env(with_eth_env: bool) -> (IndexerConfig, BridgeTestClust
         eth_bridge_genesis_block: 0,
         eth_sui_bridge_contract_address: bridge_test_cluster.sui_bridge_address(),
         metric_port: 9001,
+        eth_only: false,
     };
 
     (config, bridge_test_cluster, db)

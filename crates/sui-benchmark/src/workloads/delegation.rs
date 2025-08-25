@@ -13,13 +13,14 @@ use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use rand::seq::IteratorRandom;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::transaction::Transaction;
-use tracing::error;
+use tracing::{error, warn};
 
 #[derive(Debug)]
 pub struct DelegationTestPayload {
@@ -171,10 +172,15 @@ impl Workload<dyn Payload> for DelegationWorkload {
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
-        let validators = proxy
-            .get_validators()
-            .await
-            .expect("failed to fetch validators");
+        let validators = loop {
+            match proxy.get_validators().await {
+                Ok(validators) => break validators,
+                Err(e) => {
+                    warn!("failed to fetch validators: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        };
 
         self.payload_gas
             .iter()

@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-34:
+task 6, lines 16-86:
 //# run-graphql
 Response: {
   "data": {
@@ -27,34 +27,242 @@ Response: {
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
-      "totalCheckpoints": 1
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
+      "totalCheckpoints": 1,
+      "totalTransactions": 1,
+      "totalGasFees": "0",
+      "totalStakeRewards": "0",
+      "totalStakeSubsidies": "0",
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
+      },
+      "liveObjectSetDigest": null
     },
     "e0": {
       "epochId": 0,
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00Z",
       "endTimestamp": "1970-01-01T00:00:00.123Z",
-      "totalCheckpoints": 2
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
+      "totalCheckpoints": 2,
+      "totalTransactions": 3,
+      "totalGasFees": "0",
+      "totalStakeRewards": "0",
+      "totalStakeSubsidies": "0",
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      "systemStateVersion": 1,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
+      },
+      "liveObjectSetDigest": null
     },
     "e1": {
       "epochId": 1,
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.123Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
-      "totalCheckpoints": 1
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
+      "totalCheckpoints": 1,
+      "totalTransactions": 2,
+      "totalGasFees": "0",
+      "totalStakeRewards": "0",
+      "totalStakeSubsidies": "0",
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
+      },
+      "liveObjectSetDigest": null
     },
     "e2": {
       "epochId": 2,
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
-      "totalCheckpoints": 1
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
+      "totalCheckpoints": 1,
+      "totalTransactions": 1,
+      "totalGasFees": "0",
+      "totalStakeRewards": "0",
+      "totalStakeSubsidies": "0",
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
+      },
+      "liveObjectSetDigest": null
     },
     "e3": null
   }
 }
 
-task 7, lines 36-55:
+task 7, lines 88-159:
 //# run-graphql
 Response: {
   "data": {
@@ -65,21 +273,177 @@ Response: {
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
-          "totalCheckpoints": 1
+          "validatorSet": {
+            "totalStake": "20000000000000000",
+            "pendingRemovals": [],
+            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+            "pendingActiveValidatorsSize": 0,
+            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "stakingPoolMappingsSize": 1,
+            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "inactivePoolsSize": 0,
+            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "validatorCandidatesSize": 0
+          },
+          "totalCheckpoints": 1,
+          "totalTransactions": 2,
+          "totalGasFees": "0",
+          "totalStakeRewards": "0",
+          "totalStakeSubsidies": "0",
+          "fundSize": "0",
+          "netInflow": "0",
+          "fundInflow": "0",
+          "fundOutflow": "0",
+          "storageFund": {
+            "totalObjectStorageRebates": "0",
+            "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
+          },
+          "systemStateVersion": 2,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
+          },
+          "liveObjectSetDigest": null
         },
         "e0": {
           "epochId": 0,
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00Z",
           "endTimestamp": "1970-01-01T00:00:00.123Z",
-          "totalCheckpoints": 2
+          "validatorSet": {
+            "totalStake": "20000000000000000",
+            "pendingRemovals": [],
+            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+            "pendingActiveValidatorsSize": 0,
+            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "stakingPoolMappingsSize": 1,
+            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "inactivePoolsSize": 0,
+            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "validatorCandidatesSize": 0
+          },
+          "totalCheckpoints": 2,
+          "totalTransactions": 3,
+          "totalGasFees": "0",
+          "totalStakeRewards": "0",
+          "totalStakeSubsidies": "0",
+          "fundSize": "0",
+          "netInflow": "0",
+          "fundInflow": "0",
+          "fundOutflow": "0",
+          "storageFund": {
+            "totalObjectStorageRebates": "0",
+            "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
+          },
+          "systemStateVersion": 1,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
+          },
+          "liveObjectSetDigest": null
         },
         "e1": {
           "epochId": 1,
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
-          "totalCheckpoints": 1
+          "validatorSet": {
+            "totalStake": "20000000000000000",
+            "pendingRemovals": [],
+            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+            "pendingActiveValidatorsSize": 0,
+            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "stakingPoolMappingsSize": 1,
+            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "inactivePoolsSize": 0,
+            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "validatorCandidatesSize": 0
+          },
+          "totalCheckpoints": 1,
+          "totalTransactions": 2,
+          "totalGasFees": "0",
+          "totalStakeRewards": "0",
+          "totalStakeSubsidies": "0",
+          "fundSize": "0",
+          "netInflow": "0",
+          "fundInflow": "0",
+          "fundOutflow": "0",
+          "storageFund": {
+            "totalObjectStorageRebates": "0",
+            "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
+          },
+          "systemStateVersion": 2,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
+          },
+          "liveObjectSetDigest": null
         },
         "e2": null
       }

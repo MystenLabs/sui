@@ -40,8 +40,12 @@ use crate::{
 
 use super::{
     address::AddressableImpl,
-    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
+    linkage::Linkage,
+    move_object::MoveObject,
+    object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
+    object_filter::{ObjectFilter, Validator as OFValidator},
     transaction::Transaction,
+    type_origin::TypeOrigin,
 };
 
 pub(crate) struct MovePackage {
@@ -49,7 +53,7 @@ pub(crate) struct MovePackage {
     super_: Object,
 
     /// Move package specific data, extracted from the native representation of the generic object.
-    contents: NativeMovePackage,
+    native: NativeMovePackage,
 }
 
 /// Identifies a specific version of a package.
@@ -71,7 +75,7 @@ pub(crate) struct PackageKey {
 
 /// Filter for paginating packages published within a range of checkpoints.
 #[derive(InputObject, Default, Debug)]
-pub(crate) struct CheckpointFilter {
+pub(crate) struct PackageCheckpointFilter {
     /// Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
     pub(crate) after_checkpoint: Option<UInt53>,
 
@@ -82,8 +86,8 @@ pub(crate) struct CheckpointFilter {
 /// Inner struct for the cursor produced while iterating over all package publishes.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub(crate) struct PackageCursor {
-    pub original_id: Vec<u8>,
     pub cp_sequence_number: u64,
+    pub original_id: Vec<u8>,
     pub package_version: u64,
 }
 
@@ -110,6 +114,21 @@ impl MovePackage {
         AddressableImpl::from(&self.super_.super_).address()
     }
 
+    /// Objects owned by this package, optionally filtered by type.
+    pub(crate) async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+        #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
+    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+        AddressableImpl::from(&self.super_.super_)
+            .objects(ctx, first, after, last, before, filter)
+            .await
+    }
+
     /// The version of this package that this content comes from.
     pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl::from(&self.super_).version()
@@ -118,6 +137,13 @@ impl MovePackage {
     /// 32-byte hash that identifies the package's contents, encoded in Base58.
     pub(crate) async fn digest(&self) -> String {
         ObjectImpl::from(&self.super_).digest()
+    }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
+        Ok(Some(bytes.into()))
     }
 
     /// Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
@@ -196,7 +222,7 @@ impl MovePackage {
 
     /// The Base64-encoded BCS serialization of this package, as a `MovePackage`.
     async fn package_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(&self.contents).context("Failed to serialize MovePackage")?;
+        let bytes = bcs::to_bytes(&self.native).context("Failed to serialize MovePackage")?;
         Ok(Some(Base64(bytes)))
     }
 
@@ -275,26 +301,65 @@ impl MovePackage {
             .previous_transaction(ctx)
             .await
     }
+
+    /// The transitive dependencies of this package.
+    async fn linkage(&self) -> Option<Vec<Linkage>> {
+        let linkage = self
+            .native
+            .linkage_table()
+            .iter()
+            .map(|(object_id, upgrade_info)| Linkage {
+                object_id,
+                upgrade_info,
+            })
+            .collect();
+
+        Some(linkage)
+    }
+
+    /// A table identifying which versions of a package introduced each of its types.
+    async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
+        let type_origins = self
+            .native
+            .type_origin_table()
+            .iter()
+            .map(|native| TypeOrigin::from(native.clone()))
+            .collect();
+
+        Some(type_origins)
+    }
 }
 
 impl MovePackage {
+    /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
+    /// is not a package. This is more efficient when you already have the native object.
+    pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
+        let package = native.data.try_as_package()?.clone();
+        let super_ = Object::from_contents(scope, Arc::new(native));
+        Some(Self {
+            super_,
+            native: package,
+        })
+    }
+
     /// Try to downcast an `Object` to a `MovePackage`. This function returns `None` if `object`'s
     /// contents cannot be fetched, or it is not a package.
     pub(crate) async fn from_object(
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let super_ = object.inflated(ctx).await?;
-
-        let Some(super_contents) = &super_.contents else {
+        let Some(super_contents) = object.contents(ctx).await? else {
             return Ok(None);
         };
 
-        let Some(contents) = super_contents.data.try_as_package().cloned() else {
+        let Some(package) = super_contents.data.try_as_package().cloned() else {
             return Ok(None);
         };
 
-        Ok(Some(Self { super_, contents }))
+        Ok(Some(Self {
+            super_: object.clone(),
+            native: package,
+        }))
     }
 
     /// Fetch a package by its key. The key can either specify an exact version to fetch, an
@@ -398,12 +463,15 @@ impl MovePackage {
         let native: NativeObject = bcs::from_bytes(&stored.serialized_object)
             .context("Failed to deserialize package as object")?;
 
-        let Some(contents) = native.data.try_as_package().cloned() else {
+        let Some(package) = native.data.try_as_package().cloned() else {
             return Ok(None);
         };
 
         let super_ = Object::from_contents(scope, Arc::new(native));
-        Ok(Some(Self { super_, contents }))
+        Ok(Some(Self {
+            super_,
+            native: package,
+        }))
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
@@ -504,7 +572,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CPackage>,
-        filter: CheckpointFilter,
+        filter: PackageCheckpointFilter,
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 
@@ -571,8 +639,8 @@ impl MovePackage {
 
         let (prev, next, results) = page.paginate_results(results, |p| {
             BcsCursor::new(PackageCursor {
-                original_id: p.original_id.clone(),
                 cp_sequence_number: p.cp_sequence_number as u64,
+                original_id: p.original_id.clone(),
                 package_version: p.package_version as u64,
             })
         });

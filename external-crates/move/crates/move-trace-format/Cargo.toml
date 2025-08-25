@@ -12,8 +12,7 @@ move-core-types.workspace = true
 serde.workspace = true
 move-binary-format.workspace = true
 zstd.workspace = true
-
-serde_json = { workspace = true, features = ["arbitrary_precision"] }
+serde_json.workspace = true
 
 [features]
 default = []

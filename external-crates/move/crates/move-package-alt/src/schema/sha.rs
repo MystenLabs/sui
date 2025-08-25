@@ -7,11 +7,13 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+const SHA_FULL_LENGTH: usize = 40;
+
 pub type ShaResult<T> = std::result::Result<T, ShaError>;
 
 #[derive(Error, Debug)]
 pub enum ShaError {
-    #[error("`{input}` is an invalid commit sha; commits must be 40 characters")]
+    #[error("`{input}` is an invalid commit sha; commits must be between 7 and 40 characters")]
     WrongLength { input: String },
 
     #[error("`{input}` is an invalid commit sha; commits must be lowercase hex strings")]
@@ -28,10 +30,10 @@ pub struct GitSha {
 impl TryFrom<String> for GitSha {
     type Error = ShaError;
 
-    /// Check if the given string is a valid commit SHA, i.e., 40 character long with only
-    /// lowercase letters and digits
+    /// Check if the given string is a valid commit SHA, min 7 character, max 40 character long
+    /// with only lowercase letters and digits.
     fn try_from(input: String) -> ShaResult<Self> {
-        if input.len() != 40 {
+        if input.len() != SHA_FULL_LENGTH {
             return Err(ShaError::WrongLength { input });
         }
 
