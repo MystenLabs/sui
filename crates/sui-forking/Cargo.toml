@@ -26,13 +26,16 @@ thiserror.workspace = true
 tokio-util.workspace = true
 async-trait.workspace = true
 
+
 mysten-metrics.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-core.workspace = true
 sui-indexer-alt-jsonrpc.workspace = true
+sui-indexer-alt-reader.workspace = true
 sui-config.workspace = true
+sui-pg-db.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-swarm-config.workspace = true
