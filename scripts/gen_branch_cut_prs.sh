@@ -64,12 +64,12 @@ echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: 
 gh pr merge --auto --squash --delete-branch "$BRANCH"
 
 # Generate the version bump PR
-
 # Bump main branhch version
 IFS=. read -r major minor patch <<<"$SUI_VERSION"; NEW_SUI_VERSION="$major.$((minor+1)).$patch"
 
 # Setup new branch for staging
-BRANCH="ebmifa/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
+BRANCH="${GITHUB_ACTOR}/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
+git checkout main && git pull origin main
 git checkout -b "$BRANCH"
 
 # Update the version in Cargo.toml and openrpc.json
