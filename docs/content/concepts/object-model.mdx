@@ -2,9 +2,9 @@
 title: Object Model
 description: Everything on the Sui blockchain is an object, with metadata, type of ownership, and a referencing scheme. 
 keywords: [ object model, objects on sui, sui move package, sui move object, move objects, move packages, objects, packages, referring to objects, object metadata, transaction-objects, transaction objects, relating objects and transactions ]
+mdx:
+  format: md
 ---
-
-import ProtocolConfig from "@site/src/components/ProtocolConfig";
 
 The basic unit of storage in Sui is the object. In contrast to many other blockchains where storage is centered around accounts containing key-value stores, Sui's storage is centered around objects addressable on-chain by unique IDs. A smart contract is an object (called a Sui Move package), and these smart contracts manipulate objects on the Sui network:
 
@@ -53,9 +53,13 @@ The `ProtocolConfig` struct in the [`sui-protocol-config` crate](https://github.
 
 <details>
 <summary>
+
 `lib.rs`
+
 </summary>
+
 {@inject: crates/sui-protocol-config/src/lib.rs#struct=ProtocolConfig}
+
 </details>
 
 Select a network from the following tabs to see the currently configured limits and values.

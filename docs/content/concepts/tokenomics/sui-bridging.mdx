@@ -20,7 +20,7 @@ Sui Bridge is operated and governed by Sui network validators, the same set of v
 
 Similar to the Sui network, all governance related to the Sui Bridge is done through validator voting.
 
-To learn more about how to set up a Sui Bridge Full Node, see [Sui Bridge Validator Node Configuration](../../guides/operator/bridge-node-configuration.mdx).
+To learn more about how to set up a Sui Bridge full node, see [Sui Bridge Validator Node Configuration](../../guides/operator/bridge-node-configuration.mdx).
 
 ### Supported chains and tokens
 
@@ -49,12 +49,12 @@ The following package IDs and addresses are reserved for the Sui Bridge.
 
 ### Source code
 
-The source code for Sui Bridge is open-source and found in the following locations:
+The source code for Sui Bridge is open source and found in the following locations:
 
 - Move: https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/bridge
 - Solidity: https://github.com/MystenLabs/sui/tree/main/bridge/evm
 - Bridged ETH (Move): https://github.com/MystenLabs/sui/tree/main/bridge/move/tokens/eth
-- Bridge Node: https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge
+- Bridge node: https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge
 - Bridge Indexer: https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge-indexer
 
 ### Audits
@@ -71,7 +71,7 @@ The limit applies globally and varies per direction. For example, the amount mig
 
 The limit also impacts the maximal amount of single transfer. In one bridge transfer, you cannot move assets worth more than the limit. The bridge frontend might apply stricter restrictions to protect user assets.
 
-The limit per route is governed by the validator committee through voting. The limit value is captured in the `approved-governance-actions` attribute of Bridge node configurations, which is announced in the [mn-validator-announcements channel](https://discord.com/channels/916379725201563759/1093852827627040768) on Discord when it updates.
+The limit per route is governed by the validator committee through voting. The limit value is captured in the `approved-governance-actions` attribute of bridge node configurations, which is announced in the [mn-validator-announcements channel](https://discord.com/channels/916379725201563759/1093852827627040768) on Discord when it updates.
 
 The global limit is currently &dollar;16 million from Ethereum to Sui and &dollar;7 million from Sui to Ethereum every 24 hours.
 

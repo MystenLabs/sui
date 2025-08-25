@@ -188,7 +188,7 @@ impl EffectsCertifier {
         }
     }
 
-    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx_digest, consensus_position = ?consensus_position, ret_effects_digest = tracing::field::Empty))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx_digest, consensus_position = ?consensus_position, ret_effects_digest = tracing::field::Empty))]
     async fn get_full_effects<A>(
         &self,
         client: Arc<SafeClient<A>>,
@@ -241,7 +241,7 @@ impl EffectsCertifier {
         }
     }
 
-    #[instrument(level = "debug", skip_all, err, ret, fields(consensus_position = ?consensus_position))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(consensus_position = ?consensus_position))]
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -498,7 +498,7 @@ impl EffectsCertifier {
         }
     }
 
-    #[instrument(level = "debug", skip_all, err, ret, fields(validator_display_name = ?display_name))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(validator_display_name = ?display_name))]
     async fn wait_for_acknowledgment_rpc<A>(
         &self,
         name: AuthorityName,
