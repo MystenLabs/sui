@@ -1,0 +1,69 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4620800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-23:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 25-27:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 29-30:
+//# programmable --sender A --inputs object(3,0) 42
+//> 0: sui::bag::add<u64, u64>(Input(0), Input(1), Input(1));
+created: object(4,0)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3754400,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 5, line 32:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 34-46:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "display": null
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 48-61:
+//# run-graphql --cursors bcs(42u64)
+Response: {
+  "data": {
+    "address": {
+      "dynamicField": {
+        "name": {
+          "json": "42",
+          "display": null
+        }
+      }
+    }
+  }
+}

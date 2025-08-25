@@ -52,6 +52,7 @@ move-binary-format.workspace = true
 
 bin-version.workspace = true
 sui-default-config.workspace = true
+sui-display.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-reader.workspace = true
 sui-indexer-alt-schema.workspace = true

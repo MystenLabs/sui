@@ -1,10 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Name, Object};
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use async_graphql::{dataloader::DataLoader, indexmap::IndexMap, Context, Name, Object, Value};
 use prost_types::{self as proto, value::Kind};
 use serde_json::Number;
-use sui_types::proto_value::ProtoVisitorBuilder;
+use sui_indexer_alt_reader::{displays::DisplayKey, pg_reader::PgReader};
+use sui_types::{display::DisplayVersionUpdatedEvent, proto_value::ProtoVisitorBuilder, TypeTag};
+use tokio::join;
 
 use crate::{
     api::scalars::{base64::Base64, json::Json},
@@ -12,7 +17,7 @@ use crate::{
     error::{resource_exhausted, RpcError},
 };
 
-use super::move_type::MoveType;
+use super::{display::Display, move_type::MoveType};
 
 pub(crate) struct MoveValue {
     pub(crate) type_: MoveType,
@@ -28,6 +33,57 @@ impl MoveValue {
     /// The BCS representation of this value, Base64-encoded.
     async fn bcs(&self) -> Option<Base64> {
         Some(Base64::from(self.native.clone()))
+    }
+
+    /// A rendered JSON blob based on an on-chain template, substituted with data from this value.
+    ///
+    /// Returns `null` if the value's type does not have an associated `Display` template.
+    async fn display(&self, ctx: &Context<'_>) -> Result<Option<Display>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+        let Some(TypeTag::Struct(type_)) = self.type_.to_type_tag() else {
+            return Ok(None);
+        };
+
+        let (layout, display) = join!(
+            self.type_.layout_impl(),
+            pg_loader.load_one(DisplayKey(*type_)),
+        );
+
+        let (Some(layout), Some(display)) = (layout?, display.context("Failed to fetch Display")?)
+        else {
+            return Ok(None);
+        };
+
+        let event: DisplayVersionUpdatedEvent = bcs::from_bytes(&display.display)
+            .context("Failed to deserialize DisplayVersionUpdatedEvent")?;
+
+        let mut output = IndexMap::new();
+        let mut errors = IndexMap::new();
+
+        for (field, value) in
+            sui_display::v1::Format::parse(limits.max_display_field_depth, &event.fields)
+                .map_err(resource_exhausted)?
+                .display(limits.max_display_output_size, &self.native, &layout)
+                .map_err(resource_exhausted)?
+        {
+            match value {
+                Ok(v) => {
+                    output.insert(Name::new(&field), Value::String(v));
+                }
+
+                Err(e) => {
+                    output.insert(Name::new(&field), Value::Null);
+                    errors.insert(Name::new(&field), Value::String(e.to_string()));
+                }
+            };
+        }
+
+        Ok(Some(Display {
+            output: (!output.is_empty()).then(|| Json::from(Value::from(output))),
+            errors: (!errors.is_empty()).then(|| Json::from(Value::from(errors))),
+        }))
     }
 
     /// Representation of a Move value in JSON, where:
