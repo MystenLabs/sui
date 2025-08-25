@@ -229,7 +229,11 @@ The Wallet Standard uses a persistent authorization model. Despite the "connect"
 await wallet.features['standard:connect'].connect();
 ```
 
-**Note**: The `connect()` method has a `silent` parameter that is intended to retrieve previously authorized accounts without user interaction, but this parameter is planned for deprecation in future versions of the Wallet Standard. Wallets should instead automatically populate the `accounts` array on load.
+:::info
+
+The `connect()` method has a `silent` parameter that is intended to retrieve previously authorized accounts without user interaction, but this parameter is planned for deprecation in future versions of the Wallet Standard. Wallets should instead automatically populate the `accounts` array on load.
+
+:::
 
 When you do call `connect()`, the wallet will open a pop-up for the user to select and authorize which accounts the dApp can access.
 
