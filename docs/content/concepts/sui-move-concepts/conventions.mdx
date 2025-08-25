@@ -9,29 +9,25 @@ These conventions are recommendations, not strict rules. They represent patterns
 
 ## Organization principles
 
-### Package
 
 A Sui package consists of:
 
-- a `sources` directory containing the Move code uploaded on-chain  
-- a `Move.toml` manifest file that declares dependencies and package metadata  
-- a `Move.lock` file that the toolchain generates to lock dependency versions and track published and upgraded package addresses across networks  
+- A `sources` directory containing the Move code uploaded on-chain.
+- A `Move.toml` manifest file that declares dependencies and package metadata.
+- A `Move.lock` file that the toolchain generates to lock dependency versions and track published and upgraded package addresses across networks.
 
 Always commit the `Move.lock` file (do not add it to `.gitignore`). Use [automated address management](https://docs.sui.io/concepts/sui-move-concepts/packages/automated-address-management) instead of the old `published-at` field in the manifest.
 
-Optional directories:
-
-- `tests` for package tests  
-- `examples` for usage examples  
-
-These are not uploaded when you publish.
+Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded on chain when you publish the package.
 
 ```
 sources/
     my_module.move
     another_module.move
+    ...
 tests/
     my_module_tests.move
+    ...
 examples/
     using_my_module.move
 Move.lock
@@ -79,7 +75,9 @@ module conventions::comments;
 // === Test functions ===
 ```
 
-Guidelines:
+Here, "public functions" are the functions modifying state, "view functions" are often on-chain getters or off-chain helpers. The latter are not necessary because you can query objects to read their data. 
+
+Other general guidelines include:
 
 - Place the `init` function first if it exists.  
 - Group functions by purpose and in user-flow order.  
@@ -99,10 +97,11 @@ use my_dep::battle::{Battle, Score};
 
 ## Naming conventions
 
+Adhering to naming conventions in your code helps readability and ultimately makes your codebase easier to maintain. The following sections outline the key naming conventions to follow when writing Move code.
+
 ### Constants
 
-- Constants: uppercase snake case.  
-- Errors: PascalCase starting with `E`.  
+Constants should be uppercase and formatted as snake case. Errors are specific constants that use PascalCase and start with an E. Make them descriptive.
 
 ```move
 module conventions::constants;
@@ -122,8 +121,10 @@ const E_INVALID_NAME: u64 = 0; // wrong
 ```move
 module conventions::request;
 
+// dynamic field keys
 public struct ReceiptKey(ID) has copy, drop, store;
 
+// dynamic field
 public struct Receipt<Data> has key, store {
     id: UID,
     data: Data
@@ -137,16 +138,16 @@ public struct RequestPotato {} // wrong
 
 Standard names:
 
-- `new` → create an empty object  
-- `empty` → create an empty struct  
-- `create` → create an initialized object  
-- `add` / `remove` → add or remove a value  
-- `exists` / `contains` → check existence  
-- `borrow` / `borrow_mut` → return a reference  
-- `property_name` / `property_name_mut` → return a field  
-- `drop` → drop a struct  
-- `destroy` / `destroy_empty` → destroy an object  
-- `to_name` / `from_name` → type transformations  
+- `new` → Create an empty object  
+- `empty` → Create an empty struct  
+- `create` → Create an initialized object  
+- `add` / `remove` → Add or remove a value  
+- `exists` / `contains` → Check existence  
+- `borrow` / `borrow_mut` → Return a reference  
+- `property_name` / `property_name_mut` → Return a field  
+- `drop` → Drop a struct  
+- `destroy` / `destroy_empty` → Destroy an object  
+- `to_name` / `from_name` → Type transformations  
 
 ### Generics
 
@@ -154,6 +155,7 @@ Use either single letters (`T`, `U`) or descriptive names. Prioritize readabilit
 
 ```move
 public struct Receipt<T> has store { ... }
+// full name
 public struct Receipt<Data> has store { ... }
 ```
 

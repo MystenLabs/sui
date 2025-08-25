@@ -33,14 +33,14 @@ Certification starts when a full node submits the transaction to validators. A v
 
 A transaction passes certification if:  
 
-- It has a valid user signature.  
-- The initiator owns the required input objects.  
-- Any shared input objects exist.  
-- The gas coin is a `Coin<SUI>` with at least the specified gas budget.  
+- It has a valid user signature
+- The initiator owns the required input objects
+- Any shared input objects exist
+- The gas coin is a `Coin<SUI>` with at least the specified gas budget
 
 If the transaction passes, the validator signs it with its BLS private key and returns the signature. The full node collects signatures from a supermajority of validators to form a **transaction certificate**.  
 
-Because of quorum intersection, it is impossible to create two valid certificates for the same owned object version, even if some validators act dishonestly.
+Because of quorum intersection, it is impossible to create 2 valid certificates for the same owned object version, even if some validators act dishonestly.
 
 :::info
 Full nodes collect validator signatures in parallel to minimize latency.  
@@ -57,9 +57,9 @@ Validators execute transactions after certification.
 
 After execution, validators sign the effects of the transaction and return them. Effects include:  
 
-- Objects that were mutated, created, wrapped, unwrapped, or deleted.  
-- Gas spent.  
-- Execution status (success or error).  
+- Objects that were mutated, created, wrapped, unwrapped, or deleted
+- Gas spent
+- Execution status (success or error)
 
 The full node collects signatures from a supermajority and forms an **effects certificate**.  
 
@@ -78,7 +78,9 @@ Checkpoints are the final stage. Validators group ordered transactions from cons
 
 Checkpoints ensure causal completeness: dependencies appear before dependents. Each checkpoint contains transaction digests and effects digests. Formation usually takes a few seconds.  
 
-At this stage, the transaction is part of the permanent history of the Sui network.
+Then the validator constructs a checkpoint, which (among other data) contains a list of transaction digests as well as the digests of the transaction effects of each transaction. Because checkpoints must be complete, the network sometimes has to wait for the availability of all transactions to form the checkpoints, which may take a couple of commits to process. This process typically completes in the order of a few seconds.
+
+At this point, the transaction has reached the end of its life cycle and is included in the permanent record of transaction activity on the Sui network.
 
 ## Transaction finality
 
@@ -110,17 +112,29 @@ Imagine you pay 10 SUI to a coffee shop.
 
 ### Checkpoint processing
 
-If the wallet or full node fails before collecting enough signatures, the transaction can still finalize once included in a checkpoint. As long as one validator receives the certificate, checkpoints ensure finality.
+The process in the previous section demonstrates a finalized transaction through an effects certificate. As the process shows, the full node plays the quorum driving role.
+
+What if the full node goes offline before it collects a quorum of validator-signed effects? Your wallet app will probably retry the process with a different full node. Unfortunately, your phone runs out of battery before it sends the signed transaction to a new full node.
+
+No worries. The coffee shop shortly notices your payment arrive in its terminal, connected to a different full node. This full node learns about your transaction through checkpoints.
+
+As mentioned, a checkpoint contains a list of transactions. If a transaction appears in a certified checkpoint (a checkpoint that has been signed by a supermajority of validators), it is considered finalized.
+
+The full node that the coffee shop's terminal connects to knows about your transaction through state sync. In this case, as long as one validator receives the transaction certificate from your original full node, the transaction will highly likely finalize even without an effects certificate. The coffee shop is assured of payment and can give you your coffee.```
 
 ### Local execution on full node
 
-Full nodes may execute transactions locally before returning effects to keep state fresh, especially for high-frequency use cases. This behavior depends on the `WaitForLocalExecution` parameter.  
+Before the full node sends back an effects certificate to your wallet app, it may try to execute the transaction locally, if the request asks it to.
 
-For simple payments, `WaitForEffects` is usually preferred because it reduces latency.
+The purpose of this extra step is to keep the full node up to date as much as possible, especially when the wallet app frequently hits the same full node. In this coffee shop example, this might be trivial, but for a high frequency application, such as gaming, it could be important.
+
+When an app constructs a transaction, it typically requests that the full node choose a gas object for it. Gas objects are owned objects, meaning that if the full node is stale and not aware of the right version of the object, it could lead to invalid transactions, or worse, client equivocation if the client software does not handle it properly. Executing on full node before returning `EffectsCertificate` is one way to avoid this situation. A request can ask for such behavior by using the `WaitForLocalExecution` parameter. See [Sponsored Transactions](../transactions/sponsored-transactions.mdx) for more on client equivocation.
+
+Using `WaitForLocalExecution` is not always the best choice, however. For example, with this coffee payment it adds a layer of end-to-end latency without significant benefits. In this case, using the `WaitForEffects` parameter instead to have a slightly shorter user-perceived latency.```
 
 ### Epoch change
 
-Every ~24 hours, the network reconfigures during an epoch change. Rewards are distributed, validator metadata updates, and protocol upgrades may occur.  
+Every ~24 hours, the network reconfigures during an epoch change. Rewards are distributed, validator metadata updates, and protocol upgrades may occur.  All user transactions are delayed until the new epoch begins.
 
 If a transaction is caught at the epoch boundary, its certificate might become void (since signatures include the epoch ID). In this case, the wallet resubmits the transaction in the new epoch. Full nodes handle this automatically.
 
@@ -131,10 +145,14 @@ If your wallet crashes, it can query the full node with `getTransactionBlock` af
 - If transaction details are returned, it is finalized.  
 - If `None`, the transaction may be dropped or not yet checkpointed. The safe option is to resubmit.  
 
-Once included in a checkpoint, the effects appear locally on all full nodes.
+Before a transaction is locally executed, its effects are not reflected on the full node. The same idea applies to the coffee shop's full node. Your transaction was not submitted through this full node, hence it does not have a chance to locally execute it before it's included in a checkpoint. This full node must wait for the transaction to be checkpointed and state synced, which normally takes a few seconds. After the full node receives this transaction in a checkpoint, it is executed and has effects updated locally, for example the coffee shop's balance increases.
 
 ## Summary
 
-- A **transaction certificate** suggests finality but may become void after an epoch change.  
-- An **effects certificate** guarantees finality, backed by a supermajority of validators.  
-- Inclusion in a **certified checkpoint** also guarantees finality, as it represents validator consensus on executed transactions.  
+Hopefully, you now have a better understanding of how a transaction gets certified and finalized.
+
+1. A transaction certificate does not always guaranteed finality, even though it's highly likely. Specifically, a transaction certificate might become void after an epoch change.
+
+2. An effects certificate guarantees finality - it takes a supermajority of validators to execute the transaction and commit to the effects.
+
+3. An inclusion in a certified checkpoint guarantees finality - it takes a supermajority of validators to certify the checkpoint, in which every transaction is executed and effects-committed.

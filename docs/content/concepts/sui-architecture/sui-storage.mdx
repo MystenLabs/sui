@@ -37,7 +37,7 @@ These results show storage growth increases relative to TPS rates.
 Pruning full nodes are similar in disk usage to validators because pruning settings are the same. There are two exceptions:  
 
 - Full nodes keep a `consensus_db`, which accounts for about half of validator disk usage.  
-- If the node serves RPC queries, the `indexes/` directory in Mainnet consumes significant space. As of today, `indexes/` is 1.5TB and grows with TPS.  
+- If the node serves RPC queries, the `indexes/` directory in Mainnet consumes significant space. Currently, `indexes/` is 1.5TB and grows with TPS.  
 
 The total disk usage of a pruned full node with indexes is ~1.6TB. With indexing disabled, usage is ~100GB.  
 
