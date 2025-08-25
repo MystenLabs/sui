@@ -20,6 +20,7 @@ Sui object identifiers
 -  [Function `sui_accumulator_root_object_id`](#sui_object_sui_accumulator_root_object_id)
 -  [Function `sui_accumulator_root_address`](#sui_object_sui_accumulator_root_address)
 -  [Function `bridge`](#sui_object_bridge)
+-  [Function `sui_coin_registry_object_id`](#sui_object_sui_coin_registry_object_id)
 -  [Function `uid_as_inner`](#sui_object_uid_as_inner)
 -  [Function `uid_to_inner`](#sui_object_uid_to_inner)
 -  [Function `uid_to_bytes`](#sui_object_uid_to_bytes)
@@ -183,6 +184,16 @@ The hardcoded ID for the Bridge Object.
 
 
 <pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a>: <b>address</b> = 0x9;
+</code></pre>
+
+
+
+<a name="sui_object_SUI_COIN_REGISTRY_OBJECT_ID"></a>
+
+The hardcoded ID for the Coin Registry Object.
+
+
+<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a>: <b>address</b> = 0xc;
 </code></pre>
 
 
@@ -508,6 +519,34 @@ This should only be called once from <code><a href="../sui/object.md#sui_object_
 <pre><code><b>fun</b> <a href="../sui/object.md#sui_object_bridge">bridge</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a> },
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_sui_coin_registry_object_id"></a>
+
+## Function `sui_coin_registry_object_id`
+
+Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>CoinMetadataObject</code> object.
+This should only be called once from <code><a href="../sui/coin_registry.md#sui_coin_registry">coin_registry</a></code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_object_id">sui_coin_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_object_id">sui_coin_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+    <a href="../sui/object.md#sui_object_UID">UID</a> {
+        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a> },
     }
 }
 </code></pre>

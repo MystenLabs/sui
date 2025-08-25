@@ -62,6 +62,8 @@ pub const BRIDGE_TYPE_NAME: Symbol = symbol!("Bridge");
 pub const BRIDGE_CREATE: Symbol = symbol!("create");
 pub const ACCUMULATOR_MODULE_NAME: Symbol = symbol!("accumulator");
 pub const ACCUMULATOR_CREATE: Symbol = symbol!("create");
+pub const COIN_REGISTRY_MODULE_NAME: Symbol = symbol!("coin_registry");
+pub const COIN_REGISTRY_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");

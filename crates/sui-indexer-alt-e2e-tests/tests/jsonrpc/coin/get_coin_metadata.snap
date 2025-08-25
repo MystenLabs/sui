@@ -6,13 +6,13 @@ processed 19 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-68:
+task 1, lines 6-70:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 22625200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 70:
+task 2, line 72:
 //# view-object 1,1
 Owner: Immutable
 Version: 2
@@ -95,7 +95,7 @@ Contents: sui::coin::CoinMetadata<Test::fake::FAKE> {
     },
 }
 
-task 3, line 72:
+task 3, line 74:
 //# view-object 1,2
 Owner: Account Address ( A )
 Version: 2
@@ -178,7 +178,7 @@ Contents: sui::coin::CoinMetadata<Test::real::REAL> {
     },
 }
 
-task 4, line 74:
+task 4, line 76:
 //# view-object 1,4
 Owner: Account Address ( A )
 Version: 2
@@ -193,11 +193,11 @@ Contents: sui::coin::TreasuryCap<Test::real::REAL> {
     },
 }
 
-task 5, line 76:
+task 5, line 78:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 78-82:
+task 6, lines 80-84:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -212,7 +212,7 @@ Response: {
   }
 }
 
-task 7, lines 84-88:
+task 7, lines 86-90:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -227,7 +227,7 @@ Response: {
   }
 }
 
-task 8, lines 90-94:
+task 8, lines 92-96:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -235,7 +235,7 @@ Response: {
   "result": null
 }
 
-task 9, lines 96-100:
+task 9, lines 98-102:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -246,17 +246,17 @@ Response: {
   }
 }
 
-task 10, lines 102-103:
+task 10, lines 104-105:
 //# programmable --sender A --inputs object(1,4) object(1,2)
 //> 0: Test::real::update_metadata_name(Input(0),Input(1));
 mutated: object(0,0), object(1,2), object(1,4)
 gas summary: computation_cost: 1000000, storage_cost: 4780400,  storage_rebate: 4702500, non_refundable_storage_fee: 47500
 
-task 11, line 105:
+task 11, line 107:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 12, lines 107-111:
+task 12, lines 109-113:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -271,16 +271,16 @@ Response: {
   }
 }
 
-task 13, line 113:
+task 13, line 115:
 //# transfer-object 1,2 --sender A --recipient B
 mutated: object(0,0), object(1,2)
 gas summary: computation_cost: 1000000, storage_cost: 3078000,  storage_rebate: 3047220, non_refundable_storage_fee: 30780
 
-task 14, line 115:
+task 14, line 117:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 15, lines 117-121:
+task 15, lines 119-123:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -295,7 +295,7 @@ Response: {
   }
 }
 
-task 16, lines 123-124:
+task 16, lines 125-126:
 //# programmable --sender B --inputs object(1,2)
 //> 0: Test::real::wrap_coin_metadata(Input(0));
 created: object(16,0)
@@ -303,11 +303,11 @@ mutated: object(0,1)
 wrapped: object(1,2)
 gas summary: computation_cost: 1000000, storage_cost: 2948800,  storage_rebate: 2069100, non_refundable_storage_fee: 20900
 
-task 17, line 126:
+task 17, line 128:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 18, lines 128-132:
+task 18, lines 130-134:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",

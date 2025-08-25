@@ -7,6 +7,7 @@ use sui::coin;
 
 public struct REGULATED_COIN has drop {}
 
+#[allow(deprecated_usage)]
 fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
     // Creates a new currency using `create_currency`, but with an extra capability that
     // allows for specific addresses to have their coins frozen. Those addresses cannot interact

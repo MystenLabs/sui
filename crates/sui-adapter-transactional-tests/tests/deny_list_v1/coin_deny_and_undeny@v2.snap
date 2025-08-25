@@ -8,10 +8,10 @@ A: object(0,0), B: object(0,1)
 
 task 1, lines 12-35:
 //# publish --sender A
-created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 18316000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 20512400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 37:
 //# view-object 1,0

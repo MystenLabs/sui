@@ -9,6 +9,7 @@
 //# init --accounts A B --addresses test=0x0 --protocol-version 74
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::regulated_coin {
     use sui::coin;
     use sui::deny_list::DenyList;

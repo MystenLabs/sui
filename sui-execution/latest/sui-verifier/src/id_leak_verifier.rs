@@ -29,6 +29,7 @@ use move_core_types::{
 };
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
+use sui_types::coin_registry::{COIN_REGISTRY_CREATE_FUNCTION_NAME, COIN_REGISTRY_MODULE_NAME};
 use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
     accumulator_event::ACCUMULATOR_MODULE_NAME,
@@ -104,6 +105,11 @@ const SUI_ACCUMULATOR_CREATE: FunctionIdent = (
     ACCUMULATOR_MODULE_NAME,
     ident_str!("create"),
 );
+const SUI_COIN_REGISTRY_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    COIN_REGISTRY_MODULE_NAME,
+    COIN_REGISTRY_CREATE_FUNCTION_NAME,
+);
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
 const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_SYSTEM_CREATE,
@@ -113,6 +119,7 @@ const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_DENY_LIST_CREATE,
     SUI_BRIDGE_CREATE,
     SUI_ACCUMULATOR_CREATE,
+    SUI_COIN_REGISTRY_CREATE,
 ];
 
 impl AbstractValue {

@@ -9,6 +9,7 @@
 //# init --accounts A --addresses test=0x0
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::regulated_coin1 {
     use sui::coin;
 
@@ -33,6 +34,7 @@ module test::regulated_coin1 {
     }
 }
 
+#[allow(deprecated_usage)]
 module test::regulated_coin2 {
     use sui::coin;
 

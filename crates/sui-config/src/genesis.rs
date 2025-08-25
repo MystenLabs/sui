@@ -28,7 +28,9 @@ use sui_types::{
     error::SuiResult,
     object::Object,
 };
-use sui_types::{SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use sui_types::{
+    SUI_BRIDGE_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+};
 use tracing::trace;
 
 #[derive(Clone, Debug)]
@@ -334,6 +336,12 @@ impl UnsignedGenesis {
 
     pub fn has_bridge_object(&self) -> bool {
         self.objects().get_object(&SUI_BRIDGE_OBJECT_ID).is_some()
+    }
+
+    pub fn has_coin_registry_object(&self) -> bool {
+        self.objects()
+            .get_object(&SUI_COIN_REGISTRY_OBJECT_ID)
+            .is_some()
     }
 
     pub fn coin_deny_list_state(&self) -> Option<PerTypeDenyList> {

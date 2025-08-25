@@ -8,6 +8,7 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::regulated_coin {
     use sui::coin::{Self, Coin};
     use sui::deny_list::DenyList;
