@@ -86,7 +86,7 @@ pub fn default_mutex_count() -> usize {
 }
 
 pub fn default_value_cache_size() -> usize {
-    1000
+    2000
 }
 
 pub(crate) fn apply_range_bounds(
