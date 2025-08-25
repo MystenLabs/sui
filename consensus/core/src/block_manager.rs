@@ -312,32 +312,13 @@ impl BlockManager {
             .cloned()
             .collect::<Vec<_>>();
 
-        tracing::info!(
-            "Checking ancestors for block {:?} round {} by author {}: ancestors={:?}", 
-            block_ref, 
-            block.round(), 
-            block.author(),
-            ancestors
-        );
-
         // make sure that we have all the required ancestors in store
-        let contains_results = dag_state.contains_blocks(ancestors.clone());
-        for (found, ancestor) in contains_results
+        for (found, ancestor) in dag_state
+            .contains_blocks(ancestors.clone())
             .into_iter()
             .zip(ancestors.iter())
         {
-            tracing::info!(
-                "Ancestor check for block {:?}: ancestor={:?} found={}", 
-                block_ref,
-                ancestor,
-                found
-            );
             if !found {
-                tracing::info!(
-                    "Missing ancestor detected: block {:?} missing ancestor {:?}",
-                    block_ref,
-                    ancestor
-                );
                 missing_ancestors.insert(*ancestor);
 
                 // mark the block as having missing ancestors
@@ -388,22 +369,11 @@ impl BlockManager {
                 .block_suspensions
                 .with_label_values(&[hostname])
                 .inc();
-            tracing::info!(
-                "Block {:?} SUSPENDED - missing {} ancestors: {:?}",
-                block_ref,
-                missing_ancestors.len(),
-                missing_ancestors
-            );
             self.suspended_blocks
                 .insert(block_ref, SuspendedBlock::new(block, missing_ancestors));
             return TryAcceptResult::Suspended(ancestors_to_fetch);
         }
 
-        tracing::info!(
-            "Block {:?} ACCEPTED - all {} ancestors found", 
-            block_ref,
-            ancestors.len()
-        );
         TryAcceptResult::Accepted(block)
     }
 
