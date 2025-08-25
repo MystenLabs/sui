@@ -12,7 +12,10 @@ use crate::{
 };
 
 use super::{
-    scalars::{digest::Digest, sui_address::SuiAddress, type_filter::TypeInput, uint53::UInt53},
+    scalars::{
+        digest::Digest, domain::Domain, sui_address::SuiAddress, type_filter::TypeInput,
+        uint53::UInt53,
+    },
     types::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
@@ -20,6 +23,7 @@ use super::{
         event::{filter::EventFilter, CEvent, Event},
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
+        name_service::name_to_address,
         object::{self, Object, ObjectKey, VersionFilter},
         object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
@@ -438,6 +442,21 @@ impl Query {
     /// Configuration for this RPC service.
     async fn service_config(&self) -> ServiceConfig {
         ServiceConfig
+    }
+
+    /// Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
+    async fn suins_name(
+        &self,
+        ctx: &Context<'_>,
+        address: Domain,
+        root_version: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError<object::Error>> {
+        let mut scope = self.scope(ctx)?;
+        if let Some(version) = root_version {
+            scope = scope.with_root_version(version.into());
+        }
+
+        name_to_address(ctx, &scope, &address).await
     }
 
     /// Fetch a transaction by its digest.
