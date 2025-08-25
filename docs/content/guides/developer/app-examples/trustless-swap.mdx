@@ -2,7 +2,7 @@
 title: Trustless Swap
 description: An app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 effort: large
-keywords: [ trustless, swap, atomic swaps, shared objects, composability, example app, example dapp, example swap, swap example, how to swap tokens  ]
+keywords: [ trustless, swap, atomic swaps, shared objects, composability, example app, example dApp, example swap, swap example, how to swap tokens  ]
 mdx:
   format: md
 ---
@@ -105,7 +105,7 @@ To tamper with the object would require unlocking it, which consumes the key. Co
 
 {@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#struct=Locked,Key noComments}
 
-- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a dynamic object field, so that it is still readable at its own ID off chain.
+- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a dynamic object field, so that it is still readable at its own ID off-chain.
 - The corresponding `Key` type only stores its own `id`.
 
 The lock and key are made single-use by the signatures of the `lock` and `unlock` functions. `lock` accepts any object of type `T: store` (the `store` ability is necessary for storing it inside a `Locked<T>`), and creates both the `Locked<T>` and its corresponding `Key`:
@@ -631,7 +631,7 @@ Before getting started, make sure you have:
 
 :::tip Additional resources
 
-- Tooling: [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript). For basic usage on how to interact with Sui with TypeScript.
+- Tooling: [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript). For basic usage on how to interact with Sui with TypeScript.
 - Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). To learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
 - Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp). This is used within this project to quickly scaffold a React-based Sui dApp.
 
@@ -1757,7 +1757,7 @@ Run your app and ensure you can:
 
 ### Create escrows
 
-To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
+To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key ID of the locked object to exchange, and the recipient of the escrow (locked object's owner).
 
 <details>
 

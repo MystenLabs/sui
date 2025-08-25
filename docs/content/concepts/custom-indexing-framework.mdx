@@ -39,8 +39,8 @@ The following diagram details the custom indexer architecture.
 Checkpoint data comes from various data sources, including:
 
 - **Remote stores** connect to public checkpoint stores like [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/). This is the most straightforward way to get started without running your own infrastructure.
-- **Local files** allow you to process checkpoint files dumped by a local Sui Full node, providing the lowest latency, but should be used for testing only as these files are not automatically cleaned up.
-- **RPC endpoints** enable direct connection to a Sui Full node RPC endpoint, allowing you to use a trusted data source that you control or to connect to networks (like Devnet) that lack a remote store.
+- **Local files** allow you to process checkpoint files dumped by a local Sui full node, providing the lowest latency, but should be used for testing only as these files are not automatically cleaned up.
+- **RPC endpoints** enable direct connection to a Sui full node RPC endpoint, allowing you to use a trusted data source that you control or to connect to networks (like Devnet) that lack a remote store.
 The indexing framework supports multiple data sources to maximize flexibility.
 
 ### Ingestion layer
@@ -88,4 +88,4 @@ Your indexer runs as one executable program with multiple coordinated background
 
 - [Pipeline Architecture](./custom-indexer/pipeline-architecture.mdx): The structure of the available indexer pipelines (sequential and concurrent) and the advantages of using one over the other.
 - [Life of a Transaction](./sui-architecture/transaction-lifecycle.mdx): The life of a transaction on the Sui network has some differences compared to those from other blockchains.
-- [Build Your First Custom Indexer](../guides/developer/advanced/custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data. This guide walks you through the process.
+- [Build Your First Custom Indexer](../guides/developer/advanced/custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui full node, and provides efficient assemblage of checkpoint data. This guide walks you through the process.

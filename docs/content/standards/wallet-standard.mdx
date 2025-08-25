@@ -1,7 +1,7 @@
 ---
 title: Wallet Standard
-description: The wallet standard defines how dApps can automatically discover and interact with wallets.
-keywords: [ mysten/wallet-standard, wallet standards, wallet standard, browser extensions, exposing accounts, wallet events, register in window, wallet best practices, efficient transaction execution, wallet data, managing wallets, wallet-standard ]
+description: The Wallet Standard defines how dApps can automatically discover and interact with wallets.
+keywords: [ mysten/wallet-standard, wallet standards, Wallet Standard, browser extensions, exposing accounts, wallet events, register in window, wallet best practices, efficient transaction execution, wallet data, managing wallets, wallet-standard ]
 ---
 
 Browser extension wallets built for Sui use the [Wallet standard](https://github.com/wallet-standard/wallet-standard/). This is a cross-chain standard that defines how dApps can automatically discover and interact with wallets.
@@ -303,7 +303,7 @@ Many wallets abstract the above flow into one feature: `sui:signAndExecuteTransa
 
 The wallet emits events on certain user actions that apps can listen to. These events allow your app to be responsive to user actions on their wallets.
 
-The wallet standard only defines the change event that can apply to chains, features, or accounts.
+The Wallet Standard only defines the change event that can apply to chains, features, or accounts.
 
 - `chains`: A change event on the chains means the user switched the wallet's active network, such as from Devnet to Testnet.
 - `features`: The user added or removed permission for your app to access certain wallet features.
