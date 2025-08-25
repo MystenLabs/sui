@@ -94,6 +94,7 @@ const concepts = [
 			},
 			'concepts/grpc-overview',
 			'concepts/graphql-rpc',
+			'concepts/archival-store',
 			'concepts/gaming'
 		],
 	},

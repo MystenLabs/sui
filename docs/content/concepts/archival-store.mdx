@@ -1,0 +1,101 @@
+---
+title: Archival Store and Service (Beta)
+description: Overview of the Archival Store and Service to access historical Sui network data.
+beta: testnet, mainnet
+keywords: [ grpc, g rpc, RPC, sui full node grpc, full node rpc, what is grpc, grpc on sui, graphql, graph ql, what is graphql, graphql rpc ]
+mdx:
+  format: md
+---
+
+The Archival Store and Service provide a scalable and consistent foundation for accessing historical data on Sui, beyond what Full nodes or Indexer databases typically retain. They are designed to power rich developer experiences across [gRPC](./grpc-overview.mdx) and [GraphQL](./graphql-rpc.mdx) APIs while keeping storage and operational complexity manageable.
+
+:::note
+
+GraphQL RPC integration with the Archival Service will happen after the GraphQL RPC and General-purpose Indexer beta launch. Until then, the upcoming GraphQL RPC beta will only be available as a hosted service from the Sui Foundation, and will connect directly to the Archival Store (Bigtable) operated by the Sui Foundation.
+
+:::
+
+<!-- Update the GraphQL link to the overall GraphQL + General-purpose Indexer concept doc -->
+
+## Overview
+
+- The Archival Store is a long-term storage system (e.g., [Bigtable](https://cloud.google.com/bigtable)) that holds checkpoint-indexed Sui data.
+- The Archival Service is a [gRPC API (LedgerService)](./grpc-overview.mdx) layer that exposes access to this store, enabling point lookups of historical data.
+
+Together, they help developers and data providers access older transactions, object versions, and checkpoints that Full nodes no longer retain.
+
+## When and why to use
+
+Both developers and RPC / data providers can benefit from the Archival Store and Service, though their goals and usage patterns differ.
+
+### For application developers
+
+- Access historical data for rendering UI features like transaction history, object lineage, and previous app states.
+- Avoid infrastructure overhead by relying on hosted archival services for long-term data.
+- Implement fallback mechanisms in apps such that they can query archival data if Full nodes or Indexer databases return insufficient retention.
+
+### For RPC / data providers
+
+- Operate a differentiated infrastructure service by offering historical data access to developers.
+- Use the Archival Service to extend the retention horizon of GraphQL or gRPC-based APIs.
+- Choose to run their own Archival Store and Service (using [Bigtable](https://cloud.google.com/bigtable) or custom backend) to maintain operational independence.
+
+## Access options
+
+### For developers
+
+You can access the Archival Service hosted by any participating provider. Sui Foundation offers a public good service based on a [Bigtable](https://cloud.google.com/bigtable)-based store, with strict rate limits:
+
+- Testnet: 
+- Mainnet:
+
+### For RPC / data providers
+
+You can operate the service and store yourself:
+
+- Deploy the Archival Service binary.
+- Maintain a store like [Bigtable](https://cloud.google.com/bigtable).
+- Use a ingestion mechanism to populate the store with checkpoints.
+
+Refer to [Populating the Archival Store](#populating-the-archival-store) and [Running the Archival Service](#running-the-archival-service).
+
+## Populating the Archival Store
+
+To keep the Archival Store updated, you must run an indexer pipeline. We provide an ingestion mechanism for [Bigtable](https://cloud.google.com/bigtable):
+
+- Tool: [sui-kv-store](https://github.com/MystenLabs/sui/tree/main/crates/sui-kvstore)
+- To initialize the Bigtable cluster, run the following script:
+```shell
+$ ./crates/sui-kvstore/src/bigtable/init.sh <name_of_bigtable_cluster>
+```
+- Run the ingestion daemon with:
+```shell
+$ cargo run --bin sui-kvstore <name_of_your_bigtable_cluster> ingestion <mainnet|testnet>
+```
+
+If you're using a different storage backend:
+
+- Build a compatible indexer using the [Custom Indexing Framework](./custom-indexing-framework.mdx).
+- Ensure it emits data in a structure compatible with the [gRPC API's](./grpc-overview.mdx) `LedgerService`.
+
+## Running the Archival Service
+
+The Archival Service implements the [gRPC API's](./grpc-overview.mdx) `LedgerService`. Any implementation must support this interface.
+
+- Reference implementation for Bigtable: [sui-kv-rpc](https://github.com/MystenLabs/sui/tree/main/crates/sui-kv-rpc).
+- The service can be deployed independently or colocated with other infrastructure.
+
+## Integration points
+
+### With gRPC APIs
+
+- Apps can fall back to querying the Archival Service directly when gRPC on Full nodes return retention-related errors.
+- This allows a graceful degradation model without requiring the app to maintain historical data.
+- You can access the Archival Service just like you would access [gRPC `LedgerService` APIs](./grpc-overview.mdx) on a Full node, by replacing the URL with the endpoint of the Archival Service.
+
+### With GraphQL RPC
+
+- With a planned integration after the upcoming beta release, [GraphQL RPC](./graphql-rpc.mdx) would be able to delegate historical lookups to the Archival Service.
+- This would enable cost-efficient setup of General-purpose Indexer database with limited retention.
+
+<!-- Update the GraphQL link to the overall GraphQL + General-purpose Indexer concept doc -->
