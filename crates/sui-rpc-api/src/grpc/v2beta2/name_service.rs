@@ -4,6 +4,7 @@
 use sui_name_service::Domain;
 use sui_name_service::NameRecord;
 use sui_name_service::NameServiceConfig;
+use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::Address;
 
 use crate::ErrorReason;
@@ -70,10 +71,8 @@ fn lookup_name(service: &RpcService, request: LookupNameRequest) -> Result<Looku
 
     let current_timestamp_ms = service.reader.inner().get_latest_checkpoint()?.timestamp_ms;
 
-    // Removing without checking vector len, since it is known (== 1 or 2 depending on whether
-    // it is a subdomain or not).
     let Some(record_object) = service.reader.inner().get_object(&record_id) else {
-        return Ok(LookupNameResponse { address: None });
+        return Err(RpcError::not_found());
     };
 
     let name_record = NameRecord::try_from(record_object)
@@ -105,9 +104,23 @@ fn lookup_name(service: &RpcService, request: LookupNameRequest) -> Result<Looku
 
     if is_valid {
         Ok(LookupNameResponse {
-            address: name_record
-                .target_address
-                .map(|address| address.to_string()),
+            record: Some(sui_rpc::proto::sui::rpc::v2beta2::NameRecord {
+                id: Some(record_id.to_canonical_string(true)),
+                name: Some(domain.to_string()),
+                registration_nft_id: Some(name_record.nft_id.bytes.to_canonical_string(true)),
+                expiration_timestamp: Some(timestamp_ms_to_proto(
+                    name_record.expiration_timestamp_ms,
+                )),
+                target_address: name_record
+                    .target_address
+                    .map(|address| address.to_string()),
+                data: name_record
+                    .data
+                    .contents
+                    .into_iter()
+                    .map(|entry| (entry.key, entry.value))
+                    .collect(),
+            }),
         })
     } else {
         Err(RpcError::new(
@@ -156,20 +169,23 @@ fn reverse_lookup_name(
 
     let domain_name = domain.to_string();
 
-    let resolved_address = lookup_name(
+    let maybe_record = lookup_name(
         service,
         LookupNameRequest {
             name: Some(domain_name.clone()),
         },
-    )?
-    .address;
+    )?;
 
     // If looking up the domain returns an empty result, we return an empty result.
-    if resolved_address.is_none() {
+    let Some(record) = maybe_record.record else {
+        return Err(RpcError::not_found());
+    };
+
+    if record.target_address() != address.to_string() {
         return Err(RpcError::not_found());
     }
 
     Ok(ReverseLookupNameResponse {
-        name: Some(domain_name),
+        record: Some(record),
     })
 }
