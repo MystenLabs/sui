@@ -140,7 +140,7 @@ Instead of the game being sent to the game admin, it is instantiated as a shared
 
 ## Multisig  {#multisig}
 
-Multisig tic-tac-toe uses the same Move code as the owned version of the game, but interacts with it differently. Instead of transferring the game to a third party admin account, the players create a 1-of-2 multisig account to act as the game admin, so that either player can sign on behalf of the "admin". This pattern offers a way to share a resource between up to ten accounts without relying on consensus.
+Multisig tic-tac-toe uses the same Move code as the owned version of the game, but interacts with it differently. Instead of transferring the game to a third party admin account, the players create a 1-of-2 multisig account to act as the game admin, so that either player can sign on behalf of the admin. This pattern offers a way to share a resource between up to ten accounts without relying on consensus.
 
 In this implementation of the game, the game is in a 1-of-2 multisig account that acts as the game admin. In this particular case, because there are only two players, the previous example is a more convenient use case. However, this example illustrates that in some cases, a multisig can replace shared objects, thus allowing transactions to bypass consensus when using such an implementation.
 
