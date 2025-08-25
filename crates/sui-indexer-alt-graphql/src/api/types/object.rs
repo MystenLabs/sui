@@ -45,7 +45,7 @@ use crate::{
 };
 
 use super::{
-    address::{Address, AddressableImpl},
+    address::Address,
     move_object::MoveObject,
     move_package::MovePackage,
     object_filter::{ObjectFilter, Validator as OFValidator},
@@ -180,8 +180,11 @@ pub(crate) type CVersion = JsonCursor<u64>;
 #[Object]
 impl Object {
     /// The Object's ID.
-    pub(crate) async fn address(&self, _ctx: &Context<'_>) -> SuiAddress {
-        AddressableImpl::from(&self.super_).address()
+    pub(crate) async fn address(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<SuiAddress, async_graphql::Error> {
+        self.super_.address(ctx).await
     }
 
     /// The version of this object that this content comes from.
@@ -319,7 +322,7 @@ impl Object {
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
-        AddressableImpl::from(&self.super_)
+        self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
     }
