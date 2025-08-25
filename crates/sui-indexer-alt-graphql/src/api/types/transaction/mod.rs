@@ -36,7 +36,7 @@ use super::{
     checkpoint::filter::checkpoint_bounds,
     epoch::Epoch,
     gas_input::GasInput,
-    transaction::filter::TransactionFilter,
+    transaction::filter::{tx_by_address, TransactionFilter},
     transaction_effects::{EffectsContents, TransactionEffects},
     user_signature::UserSignature,
 };
@@ -216,14 +216,27 @@ impl Transaction {
 
         let global_tx_hi = watermarks.high_watermark().transaction();
 
-        let tx_digest_keys = if let Some(cp_bounds) = checkpoint_bounds(
+        let cp_bounds = checkpoint_bounds(
             filter.after_checkpoint.map(u64::from),
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             reader_lo,
             scope.checkpoint_viewed_at(),
-        ) {
+        )
+        .context("Missing checkpoint bounds for filtered query")?;
+
+        let tx_digest_keys = if !filter.has_filters() {
             tx_unfiltered(ctx, &cp_bounds, &page, global_tx_hi).await?
+        } else if filter.has_address_filters() {
+            tx_by_address(
+                ctx,
+                &cp_bounds,
+                filter.affected_address,
+                filter.sender,
+                &page,
+                global_tx_hi,
+            )
+            .await?
         } else {
             return Ok(Connection::new(false, false));
         };

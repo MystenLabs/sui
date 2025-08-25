@@ -1,0 +1,313 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-19:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 21:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 23:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 25:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 27:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 29:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, line 31:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 33:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 35:
+//# run Test::M1::create --args 0 @A --sender A
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 37:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 11, line 39:
+//# run Test::M1::create --args 0 @A --sender B
+created: object(11,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 12, line 41:
+//# run Test::M1::create --args 0 @A --sender B
+created: object(12,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 43:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 14, lines 45-80:
+//# run-graphql --cursors 2 3
+Response: {
+  "data": {
+    "allTransactions": {
+      "edges": [
+        {
+          "cursor": "MA==",
+          "node": {
+            "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+            "sender": null
+          }
+        },
+        {
+          "cursor": "MQ==",
+          "node": {
+            "digest": "EVAvCxxEQuritZa5FmoTcpSWHmfaxpApYGSWt1GTENBC",
+            "sender": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            }
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "E1TNwiSgMqb53AKG3czxZCCx7phkJ5UbTFRGvBSEdPHN",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "24qUUTA6XcxGD7tz8msu7fbYpy1Mw34oht7rPB1TTZwv",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7hUVuaif2TEJByRMHJK3NRoqFSYCCyzgLXeNqYTVYHzj",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "EjEr7h8WjoewKhpRcrdx2KXjr1UtQ5TbT9NyT6kdDzPR",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "6FQdvnKAC3nU1oj8cE6i1vdfJ3vLYQr59tNrXd2rtiqW",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "BrzPz7Jz7kwKkZXCaHRqY56717bezqRG72fjULh4R2nB",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "2fR2FaFp6Bqv4ZZCyxnbkzy4m2twC1L1VEQc539LSn68",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "5UwEMYvknfcfinTEVkoPY3dscfb23heYZPJk1jKyBxt8",
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            }
+          }
+        },
+        {
+          "cursor": "MTA=",
+          "node": {
+            "digest": "FuE9rPYvy2WmvokAxQCNgYnXLYDVdPsujPQpcGcNdWTi",
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            }
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "startCursor": "MA==",
+        "endCursor": "MTA="
+      }
+    },
+    "transactionsByA": {
+      "edges": [
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "E1TNwiSgMqb53AKG3czxZCCx7phkJ5UbTFRGvBSEdPHN",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "24qUUTA6XcxGD7tz8msu7fbYpy1Mw34oht7rPB1TTZwv",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7hUVuaif2TEJByRMHJK3NRoqFSYCCyzgLXeNqYTVYHzj",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "EjEr7h8WjoewKhpRcrdx2KXjr1UtQ5TbT9NyT6kdDzPR",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "6FQdvnKAC3nU1oj8cE6i1vdfJ3vLYQr59tNrXd2rtiqW",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "BrzPz7Jz7kwKkZXCaHRqY56717bezqRG72fjULh4R2nB",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "2fR2FaFp6Bqv4ZZCyxnbkzy4m2twC1L1VEQc539LSn68",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "startCursor": "Mg==",
+        "endCursor": "OA=="
+      }
+    },
+    "transactionsByAPaginated": {
+      "edges": [
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "24qUUTA6XcxGD7tz8msu7fbYpy1Mw34oht7rPB1TTZwv",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7hUVuaif2TEJByRMHJK3NRoqFSYCCyzgLXeNqYTVYHzj",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true,
+        "startCursor": "Mw==",
+        "endCursor": "NA=="
+      }
+    },
+    "transactionsByAPaginatedBackward": {
+      "edges": [
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "E1TNwiSgMqb53AKG3czxZCCx7phkJ5UbTFRGvBSEdPHN",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false,
+        "startCursor": "Mg==",
+        "endCursor": "Mg=="
+      }
+    }
+  }
+}

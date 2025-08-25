@@ -1,0 +1,795 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 26-28:
+//# programmable --sender A --inputs 1000000 @B
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 30-32:
+//# programmable --sponsor A --sender B --inputs 2000000 @C
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 34-36:
+//# programmable --sender A --inputs 3000000 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 38-40:
+//# programmable --sender A --inputs 4000000 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 42-43:
+//# programmable --sender A --inputs @B --gas-payment 3,0 --gas-budget 3000000
+//> TransferObjects([Gas], Input(0))
+mutated: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 45-46:
+//# programmable --sponsor A --sender B --inputs @C --gas-payment 4,0 --gas-budget 4000000
+//> TransferObjects([Gas], Input(0))
+mutated: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 48:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, lines 50-78:
+//# run-graphql
+Response: {
+  "data": {
+    "affectsA": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000001"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000002"
+                  }
+                },
+                {
+                  "cursor": "Mg==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000003"
+                  }
+                },
+                {
+                  "cursor": "Mw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005"
+                  }
+                },
+                {
+                  "cursor": "NA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006"
+                  }
+                },
+                {
+                  "cursor": "NQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007"
+                  }
+                },
+                {
+                  "cursor": "Ng==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000008"
+                  }
+                },
+                {
+                  "cursor": "Nw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000009"
+                  }
+                },
+                {
+                  "cursor": "OA==",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000000b"
+                  }
+                },
+                {
+                  "cursor": "OQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000403"
+                  }
+                },
+                {
+                  "cursor": "MTA=",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+                  }
+                },
+                {
+                  "cursor": "MTE=",
+                  "node": {
+                    "address": "0x1033a3554adc684a1a217b27d8720b723f2aa3ce84b4e03c8f88ac580dd75345"
+                  }
+                },
+                {
+                  "cursor": "MTI=",
+                  "node": {
+                    "address": "0x119d1af2f7cbebead48f654cd94cf9fd5c508617675ce308287add388b9fda4c"
+                  }
+                },
+                {
+                  "cursor": "MTM=",
+                  "node": {
+                    "address": "0x1e1c106fec6a0207967dcce6f654a52b9b0c081e5ea94b390606a33f778e0c75"
+                  }
+                },
+                {
+                  "cursor": "MTQ=",
+                  "node": {
+                    "address": "0x26b931c881443eb552ee659f167790128c41d71e39fe6267135ea7d16899e6f4"
+                  }
+                },
+                {
+                  "cursor": "MTU=",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                },
+                {
+                  "cursor": "MTY=",
+                  "node": {
+                    "address": "0x43f1f56aa28238d0e24f78089b731305e0d026ddbe58369958062c6544e3a50e"
+                  }
+                },
+                {
+                  "cursor": "MTc=",
+                  "node": {
+                    "address": "0x5964ae5972aed54ad34bd60db56aef7e1777ca529e2f7a7de229cb0754ebdb52"
+                  }
+                },
+                {
+                  "cursor": "MTg=",
+                  "node": {
+                    "address": "0x5982ed2893a1795f82910f6e9d9085218408b3105b9e8fe1832a37986fd9f4af"
+                  }
+                },
+                {
+                  "cursor": "MTk=",
+                  "node": {
+                    "address": "0x63bb29e0637e716ae8acf944f1b683d8e30917877dbf77ad11851002c346e562"
+                  }
+                },
+                {
+                  "cursor": "MjA=",
+                  "node": {
+                    "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2"
+                  }
+                },
+                {
+                  "cursor": "MjE=",
+                  "node": {
+                    "address": "0x8543a99c643582c544db83973caf0df17b505820c92ba7a1ab2a3f267c5fac4a"
+                  }
+                },
+                {
+                  "cursor": "MjI=",
+                  "node": {
+                    "address": "0x8ac9f6625240e4f57c32ab2081b4904a6039e468484d37ef4f68e0a3f776ac50"
+                  }
+                },
+                {
+                  "cursor": "MjM=",
+                  "node": {
+                    "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7"
+                  }
+                },
+                {
+                  "cursor": "MjQ=",
+                  "node": {
+                    "address": "0xe5cd58b879fbc53629d767efcc2263e48dc6251e8780aa6ed909a8f0db110c52"
+                  }
+                },
+                {
+                  "cursor": "MjU=",
+                  "node": {
+                    "address": "0xe96df9b10f76b4d9d48e8a598da87fea3869f526fa3bf835b2749aacc525bfef"
+                  }
+                }
+              ]
+            }
+          },
+          "sender": null
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x420db061a91e04807f8ff7635f6c6be92c44e71dfb89f700437a3983a8078c3f"
+                  }
+                }
+              ]
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x2a1f71d24377af22853502ecd549cbf267137f7a80ad5e38d10921a30802c475"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                }
+              ]
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x8eb2bfb9e8881f945fc55b2483633d291735878d261c1cce164d7195cd6f1288"
+                  }
+                }
+              ]
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0xb618af8131f39d0606bcc59c382398443dbef6b23f7f8bb4cfab6722fea3c6e0"
+                  }
+                }
+              ]
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x8eb2bfb9e8881f945fc55b2483633d291735878d261c1cce164d7195cd6f1288"
+                  }
+                }
+              ]
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0xb618af8131f39d0606bcc59c382398443dbef6b23f7f8bb4cfab6722fea3c6e0"
+                  }
+                }
+              ]
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          }
+        }
+      ]
+    },
+    "affectsB": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000001"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000002"
+                  }
+                },
+                {
+                  "cursor": "Mg==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000003"
+                  }
+                },
+                {
+                  "cursor": "Mw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005"
+                  }
+                },
+                {
+                  "cursor": "NA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006"
+                  }
+                },
+                {
+                  "cursor": "NQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007"
+                  }
+                },
+                {
+                  "cursor": "Ng==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000008"
+                  }
+                },
+                {
+                  "cursor": "Nw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000009"
+                  }
+                },
+                {
+                  "cursor": "OA==",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000000b"
+                  }
+                },
+                {
+                  "cursor": "OQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000403"
+                  }
+                },
+                {
+                  "cursor": "MTA=",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+                  }
+                },
+                {
+                  "cursor": "MTE=",
+                  "node": {
+                    "address": "0x1033a3554adc684a1a217b27d8720b723f2aa3ce84b4e03c8f88ac580dd75345"
+                  }
+                },
+                {
+                  "cursor": "MTI=",
+                  "node": {
+                    "address": "0x119d1af2f7cbebead48f654cd94cf9fd5c508617675ce308287add388b9fda4c"
+                  }
+                },
+                {
+                  "cursor": "MTM=",
+                  "node": {
+                    "address": "0x1e1c106fec6a0207967dcce6f654a52b9b0c081e5ea94b390606a33f778e0c75"
+                  }
+                },
+                {
+                  "cursor": "MTQ=",
+                  "node": {
+                    "address": "0x26b931c881443eb552ee659f167790128c41d71e39fe6267135ea7d16899e6f4"
+                  }
+                },
+                {
+                  "cursor": "MTU=",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                },
+                {
+                  "cursor": "MTY=",
+                  "node": {
+                    "address": "0x43f1f56aa28238d0e24f78089b731305e0d026ddbe58369958062c6544e3a50e"
+                  }
+                },
+                {
+                  "cursor": "MTc=",
+                  "node": {
+                    "address": "0x5964ae5972aed54ad34bd60db56aef7e1777ca529e2f7a7de229cb0754ebdb52"
+                  }
+                },
+                {
+                  "cursor": "MTg=",
+                  "node": {
+                    "address": "0x5982ed2893a1795f82910f6e9d9085218408b3105b9e8fe1832a37986fd9f4af"
+                  }
+                },
+                {
+                  "cursor": "MTk=",
+                  "node": {
+                    "address": "0x63bb29e0637e716ae8acf944f1b683d8e30917877dbf77ad11851002c346e562"
+                  }
+                },
+                {
+                  "cursor": "MjA=",
+                  "node": {
+                    "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2"
+                  }
+                },
+                {
+                  "cursor": "MjE=",
+                  "node": {
+                    "address": "0x8543a99c643582c544db83973caf0df17b505820c92ba7a1ab2a3f267c5fac4a"
+                  }
+                },
+                {
+                  "cursor": "MjI=",
+                  "node": {
+                    "address": "0x8ac9f6625240e4f57c32ab2081b4904a6039e468484d37ef4f68e0a3f776ac50"
+                  }
+                },
+                {
+                  "cursor": "MjM=",
+                  "node": {
+                    "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7"
+                  }
+                },
+                {
+                  "cursor": "MjQ=",
+                  "node": {
+                    "address": "0xe5cd58b879fbc53629d767efcc2263e48dc6251e8780aa6ed909a8f0db110c52"
+                  }
+                },
+                {
+                  "cursor": "MjU=",
+                  "node": {
+                    "address": "0xe96df9b10f76b4d9d48e8a598da87fea3869f526fa3bf835b2749aacc525bfef"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x420db061a91e04807f8ff7635f6c6be92c44e71dfb89f700437a3983a8078c3f"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x2a1f71d24377af22853502ecd549cbf267137f7a80ad5e38d10921a30802c475"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x8eb2bfb9e8881f945fc55b2483633d291735878d261c1cce164d7195cd6f1288"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0xb618af8131f39d0606bcc59c382398443dbef6b23f7f8bb4cfab6722fea3c6e0"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "affectsC": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000001"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000002"
+                  }
+                },
+                {
+                  "cursor": "Mg==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000003"
+                  }
+                },
+                {
+                  "cursor": "Mw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005"
+                  }
+                },
+                {
+                  "cursor": "NA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006"
+                  }
+                },
+                {
+                  "cursor": "NQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007"
+                  }
+                },
+                {
+                  "cursor": "Ng==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000008"
+                  }
+                },
+                {
+                  "cursor": "Nw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000009"
+                  }
+                },
+                {
+                  "cursor": "OA==",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000000b"
+                  }
+                },
+                {
+                  "cursor": "OQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000403"
+                  }
+                },
+                {
+                  "cursor": "MTA=",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+                  }
+                },
+                {
+                  "cursor": "MTE=",
+                  "node": {
+                    "address": "0x1033a3554adc684a1a217b27d8720b723f2aa3ce84b4e03c8f88ac580dd75345"
+                  }
+                },
+                {
+                  "cursor": "MTI=",
+                  "node": {
+                    "address": "0x119d1af2f7cbebead48f654cd94cf9fd5c508617675ce308287add388b9fda4c"
+                  }
+                },
+                {
+                  "cursor": "MTM=",
+                  "node": {
+                    "address": "0x1e1c106fec6a0207967dcce6f654a52b9b0c081e5ea94b390606a33f778e0c75"
+                  }
+                },
+                {
+                  "cursor": "MTQ=",
+                  "node": {
+                    "address": "0x26b931c881443eb552ee659f167790128c41d71e39fe6267135ea7d16899e6f4"
+                  }
+                },
+                {
+                  "cursor": "MTU=",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                },
+                {
+                  "cursor": "MTY=",
+                  "node": {
+                    "address": "0x43f1f56aa28238d0e24f78089b731305e0d026ddbe58369958062c6544e3a50e"
+                  }
+                },
+                {
+                  "cursor": "MTc=",
+                  "node": {
+                    "address": "0x5964ae5972aed54ad34bd60db56aef7e1777ca529e2f7a7de229cb0754ebdb52"
+                  }
+                },
+                {
+                  "cursor": "MTg=",
+                  "node": {
+                    "address": "0x5982ed2893a1795f82910f6e9d9085218408b3105b9e8fe1832a37986fd9f4af"
+                  }
+                },
+                {
+                  "cursor": "MTk=",
+                  "node": {
+                    "address": "0x63bb29e0637e716ae8acf944f1b683d8e30917877dbf77ad11851002c346e562"
+                  }
+                },
+                {
+                  "cursor": "MjA=",
+                  "node": {
+                    "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2"
+                  }
+                },
+                {
+                  "cursor": "MjE=",
+                  "node": {
+                    "address": "0x8543a99c643582c544db83973caf0df17b505820c92ba7a1ab2a3f267c5fac4a"
+                  }
+                },
+                {
+                  "cursor": "MjI=",
+                  "node": {
+                    "address": "0x8ac9f6625240e4f57c32ab2081b4904a6039e468484d37ef4f68e0a3f776ac50"
+                  }
+                },
+                {
+                  "cursor": "MjM=",
+                  "node": {
+                    "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7"
+                  }
+                },
+                {
+                  "cursor": "MjQ=",
+                  "node": {
+                    "address": "0xe5cd58b879fbc53629d767efcc2263e48dc6251e8780aa6ed909a8f0db110c52"
+                  }
+                },
+                {
+                  "cursor": "MjU=",
+                  "node": {
+                    "address": "0xe96df9b10f76b4d9d48e8a598da87fea3869f526fa3bf835b2749aacc525bfef"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0x2a1f71d24377af22853502ecd549cbf267137f7a80ad5e38d10921a30802c475"
+                  }
+                },
+                {
+                  "cursor": "MQ==",
+                  "node": {
+                    "address": "0x3ecc40107a20f498d61d8b651c6829203fe0cd6947110fdb3ad1a9c3241d6c74"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "edges": [
+                {
+                  "cursor": "MA==",
+                  "node": {
+                    "address": "0xb618af8131f39d0606bcc59c382398443dbef6b23f7f8bb4cfab6722fea3c6e0"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
