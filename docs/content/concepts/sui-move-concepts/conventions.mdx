@@ -3,20 +3,20 @@ title: Move Conventions
 description: Recommended Move 2024 best practices for Sui development.
 ---
 
-This guide outlines recommended conventions and best practices for writing Move smart contracts on Sui. Following these guidelines helps create maintainable, secure, and composable code that aligns with ecosystem standards.
+This guide outlines recommended conventions and best practices for writing Move smart contracts on Sui. Following these guidelines helps create more maintainable, secure, and composable code that aligns with ecosystem standards.
 
-These conventions are recommendations, not strict rules. They represent patterns that have proven effective across many Sui projects and help ensure consistency across the ecosystem.
+While these conventions are recommendations rather than strict rules, they represent patterns that have proven effective across many Sui projects. They help create consistency across the ecosystem and make code easier to understand and maintain.
 
 ## Organization principles
 
+### Package
 
 A Sui package consists of:
+- a `sources` directory containing the Move code to be uploaded to the blockchain
+- a `Move.toml` manifest file that declares dependencies and other information about the package
+- a `Move.lock` file that the Sui Move toolchain automatically generates to lock the versions of the dependencies and track the different published and upgraded versions of the package that exist on the different networks
 
-- A `sources` directory containing the Move code uploaded on-chain.
-- A `Move.toml` manifest file that declares dependencies and package metadata.
-- A `Move.lock` file that the toolchain generates to lock dependency versions and track published and upgraded package addresses across networks.
-
-Always commit the `Move.lock` file (do not add it to `.gitignore`). Use [automated address management](https://docs.sui.io/concepts/sui-move-concepts/packages/automated-address-management) instead of the old `published-at` field in the manifest.
+For this reason, the `Move.lock` file should always be part of the package (don't add it to the `.gitignore` file). Use the [automated address management](https://docs.sui.io/concepts/sui-move-concepts/packages/automated-address-management) instead of the old `published-at` field in the manifest file.
 
 Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded on chain when you publish the package.
 
@@ -34,16 +34,13 @@ Move.lock
 Move.toml
 ```
 
-In `Move.toml`:  
-
-- Use PascalCase for package names (`name = "MyPackage"`).  
-- Use snake_case for the named address representing the package (`my_package = 0x0`).  
+In your package manifest, the package name should be in PascalCase: `name = "MyPackage"`. Ideally, the named address representing the package should be the same as the package name, but in snake_case: `my_package = 0x0`.
 
 ### Modules
 
-Modules are the main building blocks of Move code. Design modules around a single object or data structure. Variant structures should have their own module to reduce complexity.
+Modules are the main building blocks of your Move code. They are used to organize and encapsulate related functionality. Design your modules around one object or data structure. A variant structure should have its own module to avoid complexity and bugs.
 
-You no longer need brackets for module declarations. The compiler includes default `use` statements for common modules.
+Module declarations don't need to use brackets anymore and the compiler provides default `use` statements for widely used modules, so you don't need to declare all of them.
 
 ```move
 module conventions::wallet;
@@ -56,34 +53,43 @@ public struct Wallet has key, store {
 
 ### Body
 
-Use comments to divide your module into sections. Use `===` to mark section titles.
+Structure your code using comments to create sections for your Move code files. Structure your titles using `===` on either side of the title.
 
 ```move
 module conventions::comments;
 
 // === Imports ===
+
 // === Errors ===
+
 // === Constants ===
+
 // === Structs ===
+
 // === Events ===
+
 // === Method Aliases ===
-// === Public functions ===
-// === View functions ===
-// === Admin functions ===
-// === Package functions ===
-// === Private functions ===
-// === Test functions ===
+
+// === Public Functions ===
+
+// === View Functions ===
+
+// === Admin Functions ===
+
+// === Package Functions ===
+
+// === Private Functions ===
+
+// === Test Functions ===
 ```
 
-Here, "public functions" are the functions modifying state, "view functions" are often on-chain getters or off-chain helpers. The latter are not necessary because you can query objects to read their data. 
+Here, "public functions" are the functions modifying state, "view functions" are often on-chain getters or off-chain helpers. The latter are not necessary because you can query objects to read their data. The `init` function should be the first function in the module, if it exists.
 
-Other general guidelines include:
+Try to sort your functions by their purpose and according to the user flow to improve readability. You can also use explicit function names like `admin_set_fees` to make it clear what the function does.
 
-- Place the `init` function first if it exists.  
-- Group functions by purpose and in user-flow order.  
-- Use descriptive names like `admin_set_fees`.  
-- Keep test-only helpers inside the module; write actual tests in the `tests` directory.  
-- Group imports by dependency:  
+Ideally, test functions should only consist of `[test_only]` helpers for the actual tests that are located in the `tests` directory.
+
+Group imports by dependency, for example:
 
 ```move
 use std::string::String;
@@ -106,17 +112,25 @@ Constants should be uppercase and formatted as snake case. Errors are specific c
 ```move
 module conventions::constants;
 
+// correct non-error constant
 const MAX_NAME_LENGTH: u64 = 64;
-const EInvalidName: u64 = 0; // correct
-const E_INVALID_NAME: u64 = 0; // wrong
+
+// correct error constant
+const EInvalidName: u64 = 0;
+
+// wrong error constant
+const E_INVALID_NAME: u64 = 0;
 ```
 
 ### Structs
 
-- Declare abilities in this order: `key`, `copy`, `drop`, `store`.  
-- Avoid using `Potato` as a suffix (this signals missing abilities).  
-- Use positional fields for simple wrappers, dynamic field keys, or tuples.  
-- Use the `Event` suffix for event structs.  
+Always declare struct abilities in this order: `key`, `copy`, `drop`, `store`.
+
+Do not use 'potato' in the name of structs. The lack of abilities define it as a potato pattern.
+
+Structs support positional fields that can be used for simple wrappers, dynamic field keys, or as tuples.
+
+Use the `Event` suffix to name structs that emit events.
 
 ```move
 module conventions::request;
@@ -130,36 +144,51 @@ public struct Receipt<Data> has key, store {
     data: Data
 }
 
-public struct Request(); // correct
-public struct RequestPotato {} // wrong
+// right naming
+public struct Request();
+
+// wrong naming
+public struct RequestPotato {}
 ```
 
 ### CRUD function names
 
-Standard names:
+The following functions follow standard CRUD (Create, Read, Update, Delete) naming conventions:
 
-- `new` → Create an empty object  
-- `empty` → Create an empty struct  
-- `create` → Create an initialized object  
-- `add` / `remove` → Add or remove a value  
-- `exists` / `contains` → Check existence  
-- `borrow` / `borrow_mut` → Return a reference  
-- `property_name` / `property_name_mut` → Return a field  
-- `drop` → Drop a struct  
-- `destroy` / `destroy_empty` → Destroy an object  
-- `to_name` / `from_name` → Type transformations  
+- `new`: Creates an empty object.
+- `empty`: Creates an empty struct.
+- `create`: Creates an initialized object or struct.
+- `add`: Adds a value.
+- `remove`: Removes a value.
+- `exists`: Checks if a key exists.
+- `contains`: Checks if a collection contains a value.
+- `borrow`: Returns an immutable reference of a struct or object.
+- `borrow_mut`: Returns a mutable reference of a struct or object.
+- `property_name`: Returns an immutable reference or a copy of a field.
+- `property_name_mut`: Returns a mutable reference of a field.
+- `drop`: Drops a struct.
+- `destroy`: Destroys an object or data structure that has values with the **drop** ability.
+- `destroy_empty`: Destroys an empty object or data structure that has values with the **drop** ability.
+- `to_name`: Transforms a Type X to Type Y.
+- `from_name`: Transforms a Type Y to Type X.
 
 ### Generics
 
-Use either single letters (`T`, `U`) or descriptive names. Prioritize readability.
+Declare generics using single letter names or full names. By convention, developers use `T` and `U` for generic types, but you can use a more descriptive name if it is not confusing with other types. Always prioritize readability.
 
 ```move
+module conventions::generics;
+
+// single letter name
 public struct Receipt<T> has store { ... }
+
 // full name
 public struct Receipt<Data> has store { ... }
 ```
 
-## Code structure
+## Code Structure
+
+The following section covers common patterns and best practices specific to Move development on Sui, including object ownership models and function design principles.
 
 ### Shared objects
 
@@ -167,14 +196,17 @@ Library modules that share objects should provide two functions: one to instanti
 
 ```move
 module conventions::shop;
+
 public struct Shop has key {
     id: UID
 }
+
 public fun new(ctx: &mut TxContext): Shop {
     Shop {
         id: object::new(ctx)
     }
 }
+
 public fun share(shop: Shop) {
     transfer::share_object(shop);
 }
@@ -182,11 +214,13 @@ public fun share(shop: Shop) {
 
 ### Pure functions
 
-Keep core functions pure. Avoid `transfer::transfer` inside them, except for non-transferable objects.
+Keep your functions pure to maintain composability. Do not use `transfer::transfer` or `transfer::public_transfer` inside core functions, except in specific cases where the object is not transferable and shouldn't be modified.
 
 ```move
 module conventions::amm;
+
 use sui::coin::Coin;
+
 public struct Pool has key {
     id: UID
 }
@@ -210,17 +244,20 @@ public fun impure_add_liquidity<CoinX, CoinY, LpCoin>(pool: &mut Pool, coin_x: C
     let (lp_coin, coin_x, coin_y) = add_liquidity<CoinX, CoinY, LpCoin>(pool, coin_x, coin_y);
     transfer::public_transfer(coin_x, tx_context::sender(ctx));
     transfer::public_transfer(coin_y, tx_context::sender(ctx));
+
     lp_coin
 }
 ```
 
 ### Coin argument
 
-Pass coins by value with the exact amount needed. This improves readability for frontends.
+Pass the `Coin` object by value with the exact right amount directly to improve transaction readability from the frontend.
 
 ```move
 module conventions::amm;
+
 use sui::coin::Coin;
+
 public struct Pool has key {
     id: UID
 }
@@ -240,34 +277,41 @@ public fun exchange<CoinX, CoinY>(coin_in: &mut Coin<CoinX>, value: u64): Coin<C
 
 ### Access control
 
-Use capability objects instead of arrays of addresses. This makes code more composable.
+To maintain composability, use capability objects instead of arrays of addresses for access control.
 
 ```move
 module conventions::access_control;
+
 use sui::sui::SUI;
 use sui::balance::Balance;
 use sui::coin::{Self, Coin};
 use sui::table::{Self, Table};
+
 public struct Account has key, store {
     id: UID,
     balance: u64
 }
+
 public struct State has key {
     id: UID,
     // field not necessary as the state lives in the Account objects
     accounts: Table<address, u64>,
     balance: Balance<SUI>
 }
+
 // right -> with this function, another protocol can hold the `Account` on behalf of a user.
 public fun withdraw(state: &mut State, account: &mut Account, ctx: &mut TxContext): Coin<SUI> {
     let authorized_balance = account.balance;
+
     account.balance = 0;
+
     coin::take(&mut state.balance, authorized_balance, ctx)
 }
 
 // wrong -> this is less composable.
 public fun wrong_withdraw(state: &mut State, ctx: &mut TxContext): Coin<SUI> {
     let sender = tx_context::sender(ctx);
+
     let authorized_balance = table::borrow_mut(&mut state.accounts, sender);
     let value = *authorized_balance;
     *authorized_balance = 0;
@@ -275,31 +319,37 @@ public fun wrong_withdraw(state: &mut State, ctx: &mut TxContext): Coin<SUI> {
 }
 ```
 
-### Owned vs shared objects
+### Data storage in owned vs shared objects
 
-Use owned objects for one-to-one relationships. Use shared objects when multiple actors interact with the same state.
+If your dApp data has a one to one relationship, it's best to use owned objects.
 
 ```move
 module conventions::vesting_wallet;
+
 use sui::sui::SUI;
 use sui::coin::Coin;
 use sui::table::Table;
 use sui::balance::Balance;
+
 public struct OwnedWallet has key {
     id: UID,
     balance: Balance<SUI>
 }
+
 public struct SharedWallet has key {
     id: UID,
     balance: Balance<SUI>,
     accounts: Table<address, u64>
 }
+
+
 // A vesting wallet releases a certain amount of coin over a period of time.
 // If the entire balance belongs to one user and the wallet has no additional functionalities, it is best to store it in an owned object.
 public fun new(deposit: Coin<SUI>, ctx: &mut TxContext): OwnedWallet {
     // Implementation omitted.
     abort(0)
 }
+
 // If you wish to add extra functionality to a vesting wallet, it is best to share the object.
 // For example, if you wish the issuer of the wallet to be able to cancel the contract in the future.
 public fun new_shared(deposit: Coin<SUI>, ctx: &mut TxContext) {
@@ -311,18 +361,22 @@ public fun new_shared(deposit: Coin<SUI>, ctx: &mut TxContext) {
 
 ### Admin capability
 
-In admin-gated functions, place the capability as the first parameter. This improves autocomplete.
+In admin-gated functions, the first parameter should be the capability. It helps the autocomplete with user types.
 
 ```move
 module conventions::social_network;
+
 use std::string::String;
+
 public struct Account has key {
     id: UID,
     name: String
 }
+
 public struct Admin has key {
     id: UID,
 }
+
 // right -> cap.update(&mut account, b"jose".to_string());
 public fun update(_: &Admin, account: &mut Account, new_name: String) {
     // Implementation omitted.
@@ -338,11 +392,13 @@ public fun set(account: &mut Account, _: &Admin, new_name: String) {
 
 ## Documentation
 
+There is nothing more pleasant than a well-written and well-documented codebase. While some argue that clean code is self-documenting, well-documented code is self-explanatory.
+
 ### Comments
 
-- Use `///` for user-facing documentation.  
-- Use `//` for developer-only insights.  
-- Document struct fields and complex function params/returns.  
+Document your code by explaining functions and structs in simple terms using the `///` syntax (doc comment). If you want to add technical insights for developers that might use your code, use the `//` syntax (regular comment).
+
+Use field comments to describe the properties of your structs. In complex functions, you can also describe the parameters and return values.
 
 ```move
 module conventions::hero;
@@ -381,11 +437,6 @@ public fun start_battle(
 }
 ```
 
-
 ### README
 
-Add a `README.md` to the package root. Include:  
-
-- Description of the package  
-- Purpose of the package  
-- Usage instructions  
+Create a `README.md` file in the root of the package. Include a description of the package, the purpose of the package, and how to use it.
