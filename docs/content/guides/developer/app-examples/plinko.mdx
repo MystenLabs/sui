@@ -1,7 +1,7 @@
 ---
 title: Plinko
 description: Learn Sui through an example implementation of the popular casino game, Plinko.
-keywords: [ example dapp, example app, verifiable randomness functions, vrf, randomness, bls signatures, nfts, non-fungible tokens, example game, game dapp ]
+keywords: [ example dApp, example app, verifiable randomness functions, vrf, randomness, bls signatures, nfts, non-fungible tokens, example game, game dApp ]
 ---
 
 Plinko is an example implementation of the popular casino game. The Plinko game on Sui incorporates advanced cryptographic techniques to ensure fairness and transparency. Players drop Plinko balls onto a pegged board, where they randomly fall into slots representing different multipliers. This document details the game's mechanics, cryptographic features, and the methodology for calculating trace paths and verifying signatures.
@@ -550,7 +550,7 @@ public fun multiplier(house_data: &HouseData): vector<u64> {
 
 // === Public-Friend Functions ===
 
-/// Returns a reference to the house id.
+/// Returns a reference to the house ID.
 public(package) fun borrow(house_data: &HouseData): &UID {
     &house_data.id
 }
@@ -565,7 +565,7 @@ public(package) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SU
     &mut house_data.fees
 }
 
-/// Returns a mutable reference to the house id.
+/// Returns a mutable reference to the house ID.
 public(package) fun borrow_mut(house_data: &mut HouseData): &mut UID {
     &mut house_data.id
 }

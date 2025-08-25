@@ -27,7 +27,7 @@ A user-initiated sponsored transaction involves the following steps:
  1. The user sends `GasLessTransactionData` to the sponsor.
  1. The sponsor validates the transaction, constructs `TransactionData` with gas fees, and then signs `TransactionData`.
  1. The sponsor sends the signed `TransactionData` and the sponsor `Signature` back to the user.
- 1. The user verifies and then signs `TransactionData` and sends the dual-signed transaction to Sui network through a Full node or the sponsor.
+ 1. The user verifies and then signs `TransactionData` and sends the dual-signed transaction to Sui network through a full node or the sponsor.
 
 ### GasLessTransactionData
 
@@ -48,7 +48,7 @@ pub struct GasLessTransactionData {
 A sponsor-initiated sponsored transaction involves the following steps:
  1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. You can send the unsigned `TransactionData` via email, SMS, or an application interface.
  1. The user checks the transaction and signs it to generate the second `Signature` for the transaction.
- 1. The user submits the dual-signed transaction to a Sui Full node or sponsor to execute it.
+ 1. The user submits the dual-signed transaction to a Sui full node or sponsor to execute it.
 
 You can use a sponsor-initiated sponsored transaction as an advertiser, or to incentivize specific user actions without requiring the user to pay for gas fees.
 
@@ -61,7 +61,7 @@ To use a `GasData` object to sponsor the gas fees for a transaction, create a `G
  1. The user constructs `TransactionData` and signs it to generate a `Signature`.
  1. The user sends the `TransactionData` and the `Signature` to the sponsor.
  1. The sponsor confirms the `TransactionData` and then signs it.
- 1. The sponsor submits the dual-signed `TransactionData` to a Full node to execute the transaction.
+ 1. The sponsor submits the dual-signed `TransactionData` to a full node to execute the transaction.
 
 ## Create a Sui gas station
 
@@ -116,7 +116,7 @@ Use the API endpoint to receive dual-signed `SenderSignedData` and return the re
 pub fn submit_dual_signed_transaction(dual_signed_data: SenderSignedData) -> Result<(Transaction, CertifiedTransactionEffects), Error>;
 ```
 
-For user and sponsor-initiated transactions, users can submit the dual-signed transaction via either a sponsor or a Full node.
+For user and sponsor-initiated transactions, users can submit the dual-signed transaction via either a sponsor or a full node.
 
 ## Sponsored transaction data structure
 

@@ -1,7 +1,7 @@
 ---
 title: Blackjack
 description: Learn Sui using an example implementation of the popular casino game blackjack.
-keywords: [ public bls key, http requests, serverless functions, randomness, generate randomness, create game, game app, game dapp, example game ]
+keywords: [ public bls key, http requests, serverless functions, randomness, generate randomness, create game, game app, game dApp, example game ]
 ---
 
 The following documentation goes through an example implementation of the popular casino game blackjack on Sui. This guide walks through its components, providing a detailed look at the module's functions, structures, constants, and their significance in the overall gameplay mechanism.
@@ -72,8 +72,8 @@ The backend code is split in the following sub directories:
 | ----------- | ----------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
 | GET         | `/api/health`           | A simple healthcheck endpoint to check the API availability   | txDigest                                          |
 | POST        | `/api/games/{id}/deal`  | Executes the initial deal transaction after the game creation | txDigest                                          |
-| POST        | `/api/games/{id}/hit`   | Executes a hit move                                           | txDigest, id of corresponding HitRequest object   |
-| POST        | `/api/games/{id}/stand` | Executes a stand move                                         | txDigest, id of corresponding StandRequest object |
+| POST        | `/api/games/{id}/hit`   | Executes a hit move                                           | txDigest, ID of corresponding HitRequest object   |
+| POST        | `/api/games/{id}/stand` | Executes a stand move                                         | txDigest, ID of corresponding StandRequest object |
 
 ### Need of usage of waitForTransaction
 
@@ -83,11 +83,11 @@ An interesting aspect of developing a dApp on Sui, that is coupled to using a fu
 
 As an example, in the blackjack game, just after the create-game transaction that the user executes, the dealer executes the initial-deal transaction. This one accepts an argument and modifies the game object, meaning that you are using an object that was just created.
 
-To ensure that the game object is available in the Full node that the dealer is using, we need to call waitForTransaction after the create-game transaction.
+To ensure that the game object is available in the full node that the dealer is using, we need to call waitForTransaction after the create-game transaction.
 
 #### Hit and stand transactions
 
-In the same way, every time you re-fetch the game object in the frontend, make sure that the previous transaction that modified the game object is already available in the Full node.
+In the same way, every time you re-fetch the game object in the frontend, make sure that the previous transaction that modified the game object is already available in the full node.
 
 This leads to the need of exchanging the `txDigest` between the frontend and the backend, and use `waitForTransaction` on each write-after-write or read-after-write case.
 

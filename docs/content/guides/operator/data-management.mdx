@@ -1,31 +1,31 @@
 ---
 title: Data Management
-description: A high-level description of data management on the Sui network that you can use to optimize your Sui Full node configuration. 
+description: A high-level description of data management on the Sui network that you can use to optimize your Sui full node configuration. 
 keywords: [ data management, run data management, what is data management, full node data, full node data management, rpc, pruning, data pruning, pruning policies, object pruning, object history ]
 mdx:
   format: md
 ---
 
-Managing the data on your Sui Full node is critical to ensuring a healthy Sui network. This topic provides a high-level description of data management on Sui Full nodes that you can use to optimize your Full node configuration. For more information about Sui Full nodes, such as pruning policies and archival settings, see [Run a Sui Full Node](./sui-full-node.mdx).
+Managing the data on your Sui full node is critical to ensuring a healthy Sui network. This topic provides a high-level description of data management on Sui Full nodes that you can use to optimize your full node configuration. For more information about Sui full nodes, such as pruning policies and archival settings, see [Run a Sui Full Node](./sui-full-node.mdx).
 
-## Basic Sui Full node functionality
+## Basic Sui full node functionality
 
-The minimal version of a Sui Full node executes all of the transactions Sui validators commit. Sui Full nodes also orchestrate the submitting of new transactions to the system:
+The minimal version of a Sui full node executes all of the transactions Sui validators commit. Sui full nodes also orchestrate the submitting of new transactions to the system:
 
-![Basic Sui Full node functionality](./images/fn-basic-functionality.png "A diagram that shows the operations of a basic Sui Full node.")
+![Basic Sui full node functionality](./images/fn-basic-functionality.png "A diagram that shows the operations of a basic Sui full node.")
 
-The preceding image shows how data flows through a Full node:
+The preceding image shows how data flows through a full node:
 
-1. **`State sync` protocol:** A Sui Full node performs the following to achieve state synchronization:
-   - Retrieves the information about the committed checkpoints via the p2p gossip-like protocol
-   - Executes the transactions locally to verify that effects match the effects certified by the quorum of the validators
+1. **`State sync` protocol:** A Sui full node performs the following to achieve state synchronization:
+   - Retrieves the information about the committed checkpoints via the p2p gossip-like protocol.
+   - Executes the transactions locally to verify that effects match the effects certified by the quorum of the validators.
    - Updates the local state with the latest object values accordingly.
-2. **RPCs:** A Sui Full node exposes Sui RPC endpoints for querying the latest state of the system, including both the latest state metadata (such as, `sui_getProtocolConfig`), and the latest state object data (`sui_getObject)`.
-3. **Transaction submission:** Each Sui Full node orchestrates transaction submission to the quorum of the Sui Validators, and, optionally if configured, locally executes the finalized transactions (called fast path execution), which circumvents the wait for checkpoint synchronization.
+2. **RPCs:** A Sui full node exposes Sui RPC endpoints for querying the latest state of the system, including both the latest state metadata (such as, `sui_getProtocolConfig`), and the latest state object data (`sui_getObject)`.
+3. **Transaction submission:** Each Sui full node orchestrates transaction submission to the quorum of the Sui validators, and, optionally if configured, locally executes the finalized transactions (called fast path execution), which circumvents the wait for checkpoint synchronization.
 
-## Sui Full node data and RPC types
+## Sui full node data and RPC types
 
-A Sui Full Node stores multiple categories of data in its permanent store.
+A Sui full node stores multiple categories of data in its permanent store.
 
 :::info
 
@@ -33,15 +33,15 @@ The per-epoch Sui store is beyond the scope of this topic. Sui uses the per-epoc
 
 :::
 
-Sui Full nodes store the following types of data:
+Sui full nodes store the following types of data:
 
-1. **Transactions with associated effects and events:** Sui uses a unique transaction digest to retrieve information about a transaction, including its effects and emitted events. Sui Full nodes don't require the historic transaction information for basic Full node operations. To conserve drive space, you can enable pruning to remove this historical data.
+1. **Transactions with associated effects and events:** Sui uses a unique transaction digest to retrieve information about a transaction, including its effects and emitted events. Sui full nodes don't require the historic transaction information for basic full node operations. To conserve drive space, you can enable pruning to remove this historical data.
 2. **Checkpoints:** Sui groups committed transactions in checkpoints, and then uses those checkpoints to achieve state synchronization. Checkpoints keep transaction digests that contain additional integrity metadata.
 Sui Full nodes don't require data from checkpoints to  execute and submit transactions, so you can configure pruning for this data as well.
-3. **Objects:** Transactions that mutate objects create new object versions. Each object has a unique pair of `(objectId, version)` used to identify the object. Sui Full nodes don't require historic object versions to  execute and submit transactions, so you can configure your Full node to also prune this data. 
-4. **Indexing information:** A Full node default configuration is to post-process the committed transactions: it indexes the committed information to enable efficient aggregation and filtering queries. For example, the indexing can be useful for retrieving all the historic transactions of a given sender, or finding all the objects owned by an address. 
+3. **Objects:** Transactions that mutate objects create new object versions. Each object has a unique pair of `(objectId, version)` used to identify the object. Sui full nodes don't require historic object versions to  execute and submit transactions, so you can configure your full node to also prune this data. 
+4. **Indexing information:** A full node default configuration is to post-process the committed transactions: it indexes the committed information to enable efficient aggregation and filtering queries. For example, the indexing can be useful for retrieving all the historic transactions of a given sender, or finding all the objects owned by an address. 
 
-Sui Full nodes support more than 40 RPC types that includes the following categories:
+Sui full nodes support more than 40 RPC types that includes the following categories:
 
 * **General metadata**, such as `sui_getProtocolConfig` and `sui_getChainIdentier`. These requests don't depend on additional indexing and don't require historic data to process.
 * **Direct lookups**, such as `sui_getObject`, `sui_getEvents`. These requests don't depend on additional indexing, but require historic data in some cases, such as `sui_tryGetPastObject` and `sui_getTransactionBlock`.
@@ -57,9 +57,9 @@ Sui Full nodes support more than 40 RPC types that includes the following catego
 
 A Sui archive instance stores the full Sui transaction history since genesis in a database agnostic format. This includes information about transactions (with client authentication), effects, events, and checkpoints. As such, archival storage can be used for data auditing and for replaying historic transactions.
 
-A Full node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring archival fallback](./archives.mdx#set-up-archival-fallback) in the `fullnode.yaml` configuration file to point to the cloud bucket that stores the archive.
+A full node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring archival fallback](./archives.mdx#set-up-archival-fallback) in the `fullnode.yaml` configuration file to point to the cloud bucket that stores the archive.
 
-A Sui Full node that fails to retrieve checkpoints from its peers via state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a Full node to catch up with the rest of the system regardless of the pruning policies of its peers.
+A Sui full node that fails to retrieve checkpoints from its peers via state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
 ## Sui node pruning policies
 
@@ -77,11 +77,11 @@ Keeping some history (5 epochs) provides better RPC performance on full nodes as
 
 To learn more about transaction pruning policies, see [Transaction pruning](#transaction-pruning). To configure transaction pruning, specify the `num-epochs-to-retain-for-checkpoints: X` config option. The checkpoints, including their transactions, effects and events are pruned up to X epochs ago. We suggest setting transaction pruning to 2 epochs.
 
-## Sui Full node key-value store backup
+## Sui full node key-value store backup
 
-To enable historic data queries for the Sui Full nodes that prune old transactional data, Full node RPC implementation is configured to fallback for querying missing transactional data from a remote store.
+To enable historic data queries for the Sui full nodes that prune old transactional data, full node RPC implementation is configured to fallback for querying missing transactional data from a remote store.
 
-If the information about the transaction digest, effects, events, or checkpoints is not available locally, a Full node automatically retrieves the historical data from a cloud-based key-value store managed by Sui Foundation. The current key-value store implementation keeps historic transactional data only, but future releases might support retrieving the historic object versions.
+If the information about the transaction digest, effects, events, or checkpoints is not available locally, a full node automatically retrieves the historical data from a cloud-based key-value store managed by Sui Foundation. The current key-value store implementation keeps historic transactional data only, but future releases might support retrieving the historic object versions.
 
 ## Object pruning {#object-pruning}
 
@@ -111,7 +111,7 @@ authority-store-pruning-config:
   # It is therefore possible to have multiple versions of an object present 
   # in the database. This setting is recommended for Sui Full nodes as they might need to serve 
   # RPC requests that require looking up objects by ID and Version (rather than just latest
-  # version). However, if your Full node does not serve RPC requests you should then also enable  
+  # version). However, if your full node does not serve RPC requests you should then also enable.
   # aggressive pruning.
   num-epochs-to-retain: 1
   # Advanced setting: Maximum number of checkpoints to prune in a batch. The default
@@ -128,7 +128,7 @@ Sui periodically creates checkpoints. Each checkpoint contains the transactions 
 
 Sui performs transaction pruning in the background after checkpoints complete.
 
-You can enable transaction pruning for your Full node or Validator node by adding  `num-epochs-to-retain-for-checkpoints`
+You can enable transaction pruning for your full node or validator node by adding  `num-epochs-to-retain-for-checkpoints`
 to the `authority-store-pruning-config` config for the node:
 
 ```yaml
@@ -158,7 +158,7 @@ If you prune transactions, archival nodes can help ensure lagging peer nodes don
 
 ## Pruning policy examples
 
-Use the examples in this section to configure your Sui Full node. You can copy the examples, and then, optionally, modify the values as appropriate for your environment. 
+Use the examples in this section to configure your Sui full node. You can copy the examples, and then, optionally, modify the values as appropriate for your environment. 
 
 ### Validator and State Sync full node
 
@@ -192,9 +192,9 @@ authority-store-pruning-config:
 
 ### Full node with full object history but pruned transaction history
 
-This configuration manages the full object history while still pruning historic transactions. A Full node with this configuration can answer all historic and indexing queries (using the transaction query fallback for transactional data), including the ones that require historic objects such as the `showBalanceChanges` filter of `sui_getTransactionBlock()`.
+This configuration manages the full object history while still pruning historic transactions. A full node with this configuration can answer all historic and indexing queries (using the transaction query fallback for transactional data), including the ones that require historic objects such as the `showBalanceChanges` filter of `sui_getTransactionBlock()`.
 
-The main caveat is that the current setup enables **transaction pruner** to go ahead of **object pruner**. The object pruner might not be able to properly clean up the objects modified by the transactions that have been already pruned. You should closely monitor the disk space growth on a Full node with this configuration.
+The main caveat is that the current setup enables **transaction pruner** to go ahead of **object pruner**. The object pruner might not be able to properly clean up the objects modified by the transactions that have been already pruned. You should closely monitor the disk space growth on a full node with this configuration.
 
 In addition to the regular (pruned) snapshots, Mysten Labs also maintains special RocksDB snapshots with full history of object versions available for the operators using this configuration.
 

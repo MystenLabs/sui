@@ -17,7 +17,7 @@ The [Sui Full Node gRPC API](../references/fullnode-protocol.mdx) provides a fas
 
 ## What is gRPC?
 
-gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client/server development across multiple languages. With built-in support for code generation, you can scaffold clients in Typescript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
+gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client/server development across multiple languages. With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
 
 In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where you need to track events and transactions live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
 
@@ -30,7 +30,7 @@ Protocol buffers define the gRPC interface. You can find the relevant **beta** `
 | Service | Proto | Purpose |
 | --- | --- | --- |
 | `TransactionExecutionService` | `sui/rpc/v2beta2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use the service to send user actions to the network. |
-| `LedgerService` | `sui/rpc/v2beta2/ledger_service.proto` | Lookup specific checkpoints, transactions, objects and more from the current state and recent history of the Sui network. “History” here refers to the recent past - limited to what a Full node retains. |
+| `LedgerService` | `sui/rpc/v2beta2/ledger_service.proto` | Lookup specific checkpoints, transactions, objects and more from the current state and recent history of the Sui network. “History” here refers to the recent past - limited to what a full node retains. |
 | `LiveDataService` | `sui/rpc/v2beta2/live_data_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. Also supports dry-run simulations for transactions. |
 | `SubscriptionService` | `sui/rpc/v2beta2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
 | `MovePackageService` | `sui/rpc/v2beta2/move_package_service.proto` | Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
@@ -108,7 +108,7 @@ In many gRPC responses, the Sui API includes additional metadata in the form of 
 Here are the headers you might encounter:
 
 - `x-sui-chain-id`: The chain ID of the current network.
-- `x-sui-chain`: A human-readable name for the current network (such as "mainnet" or "testnet").
+- `x-sui-chain`: A human-readable name for the current network (such as "Mainnet" or "Testnet").
 - `x-sui-checkpoint-height`: The height of the latest checkpoint at the time of the response.
 - `x-sui-lowest-available-checkpoint`: The earliest checkpoint for which transaction and checkpoint data can still be queried.
 - `x-sui-lowest-available-checkpoint-objects`: The earliest checkpoint from which object data (input/output) is available.
@@ -138,7 +138,7 @@ Simplest way to experiment with gRPC is by using [grpcurl](https://github.com/fu
 
 :::note
 
-Your results might differ from the examples that follow, depending on the breadth, maturity, and data retention of the gRPC APIs available on the Sui Full node you use.
+Your results might differ from the examples that follow, depending on the breadth, maturity, and data retention of the gRPC APIs available on the Sui full node you use.
 
 :::
 
@@ -261,7 +261,7 @@ which should return something like:
 
 <TabItem value="typescript" label="TypeScript">
 
-This is an example to build a Typescript client for Sui gRPC API. If you want to use a different set of tools or modules that you’re comfortable with, you can adjust the instructions accordingly.
+This is an example to build a TypeScript client for Sui gRPC API. If you want to use a different set of tools or modules that you’re comfortable with, you can adjust the instructions accordingly.
 
 **Install dependencies**
 
@@ -550,7 +550,7 @@ python client.py
   - A: Only the top-level `read_mask` field is respected in batch requests like `BatchGetObjects`. Any [field masks](#field-masks) within individual `GetObjectRequest` items are ignored.
 
 - Q: Why does the API return fewer results than the requested `page_size`?
-  - A: Even if you request a specific `page_size`, the server might return fewer items. This could be due to Full node specific limits, filtered results, or reaching the end of available data.
+  - A: Even if you request a specific `page_size`, the server might return fewer items. This could be due to full node specific limits, filtered results, or reaching the end of available data.
 
 - Q: Why do some fields say `optional` if they're required?
   - A: In `proto3`, marking a field as `optional` gives the API the ability to detect [field presence](#field-presence) — that is, whether a field value is explicitly set or simply defaulted. This doesn't mean the field is optional in practice. You still need to follow the API contract to ensure the request is valid.

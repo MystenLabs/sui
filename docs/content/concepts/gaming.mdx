@@ -1,7 +1,7 @@
 ---
 title: Gaming on Sui
 description: Sui offers features like dynamic NFTs, kiosks, soulbound assets, and on-chain randomness, to provide builders with the tools to create immersive, transparent, and fair gaming experiences.
-keywords: [ gaming, game components, game features, game nfts, soulbound assets, create games on sui, build games on sui, sui object display, game economics, kiosk, sui kiosk, token economics ]
+keywords: [ gaming, game components, game features, game nfts, soulbound assets, create games on sui, build games on sui, sui Object Display, game economics, kiosk, sui kiosk, token economics ]
 mdx:
   format: md
 ---
@@ -110,14 +110,14 @@ The same pattern can be used to implement NFT assets that are transferable/burna
 
 ### Sui Object Display {#sui-object-display}
 
-The Sui Object Display standard is a tool that helps define how objects appear in apps and interfaces. It works like a template where you can insert data from an object to control how it's displayed. Use it to manage how different types of data are shown, even if the data itself is stored on chain while the display happens off chain (in apps or websites).
+The Sui Object Display standard is a tool that helps define how objects appear in apps and interfaces. It works like a template where you can insert data from an object to control how it's displayed. Use it to manage how different types of data are shown, even if the data itself is stored on chain while the display happens off-chain (in apps or websites).
 
 The Sui Object Display standard provides several key benefits and components:
 
 - Controlled representation: Manages how assets are displayed online without directly interacting with the underlying asset. You can make updates to the display independent of the assets and affect how all assets of type `<T>` are displayed.
 - Flexibility: No limits on the fields you can customize.
 - Enhancing asset information: Similar to enhancing ERC721 or ERC1155 NFTs with extra details, the Sui Object Display allows you to add specific details to your digital items, such as names, descriptions, images, and more.
-- Stored data and off-chain representation: Manages stored data based on metadata standards and controls how it's represented off chain.
+- Stored data and off-chain representation: Manages stored data based on metadata standards and controls how it's represented off-chain.
 - Dynamic display: Ensures a uniform presentation of shared attributes across all NFTs of type `<T>`, maintaining a consistent representation of common fields (such as image URLs derived from unique IDs) and a cohesive display format across the asset collection.
 
 There are a few limitations to be aware of. First, the current structure of Sui Object Display is per type, limiting its scope. Secondly, its structure does not allow for nested attributes or enums.
@@ -141,7 +141,7 @@ public struct Asset has key, store {
 }
 
 public struct Display has store {
-  "random_field": "The id is {id} and it expires at {expiration}"
+  "random_field": "The ID is {id} and it expires at {expiration}"
 }
 ```
 
@@ -150,7 +150,7 @@ The above `Display` as is defined, for the example `Asset` will become:
 ```jsx
 Display
 {
-  "random_field": "The id is 0x3301 and it expires at 123456789"
+  "random_field": "The ID is 0x3301 and it expires at 123456789"
 }
 ```
 
@@ -294,7 +294,7 @@ https://ludus.ambrus.studio/
 
 <TabItem label="Sui Coins" value="suicoins" >
 
-Sui Coins is the utility layer for tokens and NFTs on the Sui network, offering asset management tools that include token swaps, automated dollar-cost averaging, airdrops, an incinerator for deleting assets, zkSend for private transfers, and a merger tool to consolidate small balances. Sui Coins also features an open-source SuiCoins Terminal for integrating crypto swaps across platforms.
+Sui Coins is the utility layer for tokens and NFTs on the Sui network, offering asset management tools that include token swaps, automated dollar-cost averaging, airdrops, an incinerator for deleting assets, zkSend for private transfers, and a merger tool to consolidate small balances. Sui Coins also features an open source SuiCoins Terminal for integrating crypto swaps across platforms.
 
 https://www.suicoins.com/ 
 https://terminal.suicoins.com/

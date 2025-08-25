@@ -101,6 +101,7 @@
       { "source": "/concepts/sui-move-concepts/patterns/id-pointer", "destination": "https://move-book.com/storage/uid-and-id.html", "permanent": true },
       { "source": "/concepts/sui-move-concepts/patterns/transferrable-witness", "destination": "https://move-book.com/programmability/witness-pattern.html", "permanent": true },
       { "source": "/guides/developer/advanced/asset-tokenization", "destination": "/guides/developer/nft/asset-tokenization", "permanent": true },
+      { "source": "/guides/developer/sui-101/shared-owned", "destination": "/guides/developer/sui-101/object-ownership", "permanent": true },
       { "source": "/references/move/move-toml", "destination": "https://move-book.com/concepts/manifest.html", "permanent": true },
       { "source": "/standards/deepbook-pools", "destination": "/standards/deepbook", "permanent": true },
       { "source": "/standards/routing-a-swap", "destination": "/standards/deepbook", "permanent": true },
