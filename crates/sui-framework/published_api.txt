@@ -4882,6 +4882,12 @@ with_defining_ids
 with_original_ids
 	public fun
 	0x1::type_name
+defining_id
+	public fun
+	0x1::type_name
+original_id
+	public fun
+	0x1::type_name
 is_primitive
 	public fun
 	0x1::type_name

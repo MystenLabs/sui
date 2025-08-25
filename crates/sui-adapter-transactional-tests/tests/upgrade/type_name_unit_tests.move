@@ -63,10 +63,20 @@ module A2::m {
         assert!(og.address_string() == original_string, 0);
         assert!(og.module_string().into_bytes() == b"m", 1);
         assert!(dt_name(og.into_string().into_bytes()) == &name, 2);
+        assert!(
+            sui::address::from_ascii_bytes(og.address_string().as_bytes()) ==
+            type_name::original_id<$T>(),
+            3
+        );
 
-        assert!(def.address_string() == defining_string, 3);
-        assert!(def.module_string().into_bytes() == b"m", 4);
-        assert!(dt_name(def.into_string().into_bytes()) == &name, 5);
+        assert!(def.address_string() == defining_string, 4);
+        assert!(def.module_string().into_bytes() == b"m", 5);
+        assert!(dt_name(def.into_string().into_bytes()) == &name, 6);
+        assert!(
+            sui::address::from_ascii_bytes(def.address_string().as_bytes()) ==
+            type_name::defining_id<$T>(),
+            7
+        );
     }
 
     // peels the inner typename, assuming the pattern  of "tn<inner>", returning "inner"
@@ -114,13 +124,15 @@ module A2::m {
         let inner_s = inner_tn(cup_og.into_string().into_bytes());
         assert!(&inner_s == inner_og.into_string().into_bytes(), 200);
         assert!(leading_address(inner_s) == inner_og_address, 201);
+        assert!(leading_address(inner_s) == type_name::original_id<$Inner>(), 202);
 
 
         let cup_def = type_name::with_defining_ids<$T>();
         let inner_def = type_name::with_defining_ids<$Inner>();
         let inner_s = inner_tn(cup_def.into_string().into_bytes());
-        assert!(&inner_s == inner_def.into_string().into_bytes(), 202);
-        assert!(leading_address(inner_s) == inner_def_address, 203);
+        assert!(&inner_s == inner_def.into_string().into_bytes(), 203);
+        assert!(leading_address(inner_s) == inner_def_address, 204);
+        assert!(leading_address(inner_s) == type_name::defining_id<$Inner>(), 205);
     }
 
     // tests that type name is behaving correctly with regards to defining and original IDs for
