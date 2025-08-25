@@ -1,6 +1,11 @@
 import { sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 import http from 'k6/http';
+import { Counter } from 'k6/metrics';
+
+// Custom metrics for JSON-RPC errors
+const jsonRpcErrors = new Counter('jsonrpc_errors');
+const jsonRpcErrorsByCode = new Counter('jsonrpc_errors_by_code');
 
 // ================================
 // Configuration from envs
@@ -8,7 +13,7 @@ import http from 'k6/http';
 const CONFIG = {
 	endpoint: __ENV.ENDPOINT || 'http://localhost:9000',
 	concurrency: parseInt(__ENV.CONCURRENCY) || 1,
-	duration: __ENV.DURATION || '2s',
+	duration: __ENV.DURATION || '120s',
 	requestsFile: __ENV.REQUESTS_FILE || './requests.jsonl',
 	methodsToSkip: (__ENV.METHODS_TO_SKIP || '').split(',').filter((m) => m),
 };
@@ -20,7 +25,7 @@ export const options = {
 	scenarios: {
 		json_rpc_benchmark_ramping_vus: {
 			executor: 'ramping-vus',
-			startVUs: 1,
+			startVUs: 5,
 			stages: [
 				{ duration: '2s', target: CONFIG.concurrency },
 				{ duration: CONFIG.duration, target: CONFIG.concurrency },
@@ -34,6 +39,7 @@ export const options = {
 		// 	preAllocatedVUs: 10,
 		// 	timeUnit: '1s',
 		// 	maxVUs: 20,
+		// 	duration: CONFIG.duration,
 		// },
 	},
 	thresholds: {
@@ -127,12 +133,6 @@ function processPagination(request, response) {
 			paginationState.delete(methodKey);
 		}
 	}
-
-	// Apply stored cursor to request
-	const storedCursor = paginationState.get(methodKey);
-	if (storedCursor) {
-		updateParamsCursor(request.body, cursorIdx, storedCursor, method);
-	}
 }
 
 // ================================
@@ -210,6 +210,17 @@ export default function () {
 	if (isSuccess) {
 		try {
 			const responseBody = JSON.parse(response.body);
+			// Track JSON-RPC errors
+			if (responseBody.error) {
+				jsonRpcErrors.add(1, { method: method });
+				jsonRpcErrorsByCode.add(1, {
+					method: method,
+					error_code: responseBody.error.code.toString(),
+					error_message: responseBody.error.message
+				});
+				console.warn(`JSON-RPC Error for ${method}: ${responseBody.error.code} - ${responseBody.error.message}`);
+			}
+
 			processPagination({ method, body: requestBody }, responseBody);
 		} catch (e) {
 			console.warn(`Failed to parse response for method ${method}:`, e);
