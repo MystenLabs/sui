@@ -246,6 +246,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         root_path: PathBuf,
         manifest_string: String,
         lock_string_opt: Option<String>,
+        mode: DependencyMode,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
         let mut root_manifest = parse_source_manifest(toml_manifest)?;
@@ -332,15 +333,19 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
-        let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
-            .collect_graphs(
-                parent,
-                root_pkg_id,
-                root_pkg_name,
-                root_path.clone(),
-                DependencyMode::DevOnly,
-                root_manifest.dev_dependencies.clone(),
-            )?;
+        let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = if mode == DependencyMode::DevOnly {
+            self
+                .collect_graphs(
+                    parent,
+                    root_pkg_id,
+                    root_pkg_name,
+                    root_path.clone(),
+                    DependencyMode::DevOnly,
+                    root_manifest.dev_dependencies.clone(),
+                )?
+        } else {
+            (BTreeMap::new(), BTreeMap::new(), BTreeMap::new(), BTreeMap::new())
+        };
 
         // compute new digests and return early if the manifest and deps digests are unchanged
         let dev_dep_lock_files = dev_dep_graphs
@@ -563,7 +568,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 self.visited_dependencies
                     .push_front((resolved_pkg_id, d.clone()));
                 let (mut pkg_graph, modified) =
-                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string)?;
+                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string, mode)?;
                 self.visited_dependencies.pop_front();
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {

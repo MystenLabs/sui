@@ -41,6 +41,7 @@ use crate::{
     package_lock::PackageLock,
 };
 use move_compiler::linters::LintLevel;
+use crate::resolution::dependency_graph::DependencyMode;
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(about)]
@@ -195,6 +196,14 @@ impl From<LintLevel> for LintFlag {
 }
 
 impl BuildConfig {
+    pub fn get_dependency_mode(&self) -> DependencyMode {
+        if self.dev_mode || self.test_mode {
+            DependencyMode::DevOnly
+        } else {
+            DependencyMode::Always
+        }
+    }
+
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
     pub fn compile_package<W: Write>(self, path: &Path, writer: &mut W) -> Result<CompiledPackage> {
@@ -284,7 +293,7 @@ impl BuildConfig {
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
-        resolution::download_dependency_repos(manifest_string, lock_string, self, &path, writer)?;
+        resolution::download_dependency_repos(manifest_string, lock_string, self, &path, self.get_dependency_mode(), writer)?;
         Ok(())
     }
 
@@ -319,6 +328,7 @@ impl BuildConfig {
             path,
             manifest_string,
             lock_string,
+            self.get_dependency_mode()
         )?;
 
         if modified || install_dir_set {
