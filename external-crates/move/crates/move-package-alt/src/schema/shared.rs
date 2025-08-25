@@ -39,7 +39,7 @@ pub struct PublishedID(pub AccountAddress);
 pub struct OriginalID(pub AccountAddress);
 
 /// A pair of published-at and original-id; appears in various places
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PublishAddresses {
     pub published_at: PublishedID,
