@@ -158,6 +158,14 @@ impl MoveObject {
         Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
     }
 
+    /// The domain explicitly configured as the default SuiNS name for this address.
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<String>, RpcError<object::Error>> {
+        self.super_.default_suins_name(ctx).await
+    }
+
     /// Access a dynamic field on an object using its type and BCS-encoded name.
     pub(crate) async fn dynamic_field(
         &self,

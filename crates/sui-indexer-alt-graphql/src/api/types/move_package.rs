@@ -153,6 +153,14 @@ impl MovePackage {
         self.super_.balances(ctx, first, after, last, before).await
     }
 
+    /// The domain explicitly configured as the default SuiNS name for this address.
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<String>, RpcError<object::Error>> {
+        self.super_.default_suins_name(ctx).await
+    }
+
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
     /// name, followed by module bytes), in alphabetic order by module name.
     async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {

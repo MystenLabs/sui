@@ -89,6 +89,10 @@ type Address implements IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
@@ -636,6 +640,10 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	"""
 	contents: MoveValue
 	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
@@ -1179,6 +1187,10 @@ interface IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
 	Returns `null` when no checkpoint is set in scope (e.g. execution scope). If the address does not own any coins of a given type, a balance of zero is returned for that type.
@@ -1403,6 +1415,10 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	contents: MoveValue
 	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
@@ -1529,6 +1545,10 @@ type MovePackage implements IAddressable & IObject {
 	Total balance across coins owned by this address, grouped by coin type.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
 	"""
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
@@ -1796,6 +1816,10 @@ type Object implements IAddressable & IObject {
 	Total balance across coins owned by this address, grouped by coin type.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
@@ -2348,6 +2372,10 @@ type Query {
 	Configuration for this RPC service.
 	"""
 	serviceConfig: ServiceConfig!
+	"""
+	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
+	"""
+	suinsName(address: String!, rootVersion: UInt53): Address
 	"""
 	Fetch a transaction by its digest.
 	
