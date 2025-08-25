@@ -1,0 +1,61 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 17-60:
+//# publish --sender A
+events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [52, 5, 27, 26, 22, 176, 249, 50, 180, 56, 11, 112, 94, 112, 188, 180, 129, 91, 11, 17, 52, 211, 213, 78, 203, 246, 82, 163, 39, 37, 42, 152] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [52, 5, 27, 26, 22, 176, 249, 50, 180, 56, 11, 112, 94, 112, 188, 180, 129, 91, 11, 17, 52, 211, 213, 78, 203, 246, 82, 163, 39, 37, 42, 152, 1, 0, 1, 4, 100, 101, 101, 112, 56, 123, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 46, 100, 101, 101, 112, 125] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 15306400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 62-64:
+//# programmable --sender A --inputs 42u8 @A
+//> 0: test::mod::new(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 66:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 68-80:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Failed to parse format for display field \"deep\"",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "contents",
+        "display"
+      ],
+      "extensions": {
+        "chain": [
+          "Field access at offset 50 deeper than the maximum of 10"
+        ],
+        "code": "RESOURCE_EXHAUSTED"
+      }
+    }
+  ]
+}

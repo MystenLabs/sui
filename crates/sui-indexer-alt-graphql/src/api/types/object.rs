@@ -415,7 +415,7 @@ impl Object {
             return Ok(None);
         };
 
-        Ok(Some(BigInt::from(object.storage_rebate as u64)))
+        Ok(Some(BigInt::from(object.storage_rebate)))
     }
 }
 
