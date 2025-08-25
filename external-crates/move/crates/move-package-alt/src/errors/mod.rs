@@ -2,13 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod lockfile_error;
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::term;
 use codespan_reporting::term::Config;
 use codespan_reporting::term::termcolor::ColorChoice;
 use codespan_reporting::term::termcolor::StandardStream;
-pub use lockfile_error::LockfileError;
 
 mod located;
 pub use located::Location;
@@ -35,9 +33,6 @@ pub type PackageResult<T> = Result<T, PackageError>;
 /// The main error type for package-related operations
 #[derive(Error, Debug)]
 pub enum PackageError {
-    #[error(transparent)]
-    Codespan(#[from] codespan_reporting::files::Error),
-
     #[error(transparent)]
     Io(#[from] std::io::Error),
 

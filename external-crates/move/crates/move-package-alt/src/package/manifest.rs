@@ -19,14 +19,11 @@ use crate::{
 use super::*;
 use serde_spanned::Spanned;
 
-const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
-
 // TODO: replace this with something more strongly typed
 pub type Digest = String;
 
 pub struct Manifest {
     inner: ParsedManifest,
-    digest: Digest,
     file_handle: FileHandle,
 }
 
@@ -50,6 +47,11 @@ pub enum ManifestErrorKind {
 
     #[error("{}", .0.message())]
     ParseError(#[from] toml_edit::de::Error),
+
+    #[error(
+        "Dependency <TODO> must have a `git`, `local`, or `r` field in either the `[dependencies]` or the `[dep-replacements]` section"
+    )]
+    NoDepInfo,
 }
 
 pub type ManifestResult<T> = Result<T, ManifestError>;
@@ -63,7 +65,6 @@ impl Manifest {
 
         let result = Self {
             inner: parsed,
-            digest: compute_digest(file_handle.source()),
             file_handle,
         };
 
@@ -110,13 +111,6 @@ impl ManifestError {
         move |e| ManifestError {
             kind: Box::new(e.into()),
             location: ErrorLocation::WholeFile(path.as_ref().to_path_buf()),
-        }
-    }
-
-    pub(crate) fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
-        move |e| ManifestError {
-            kind: Box::new(e.into()),
-            location: ErrorLocation::AtLoc(loc.clone()),
         }
     }
 
