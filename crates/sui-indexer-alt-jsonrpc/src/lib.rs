@@ -330,6 +330,77 @@ pub async fn start_rpc(
     }))
 }
 
+pub async fn basic_rpc(
+    database_url: Option<Url>,
+    bigtable_instance: Option<String>,
+    db_args: DbArgs,
+    bigtable_args: BigtableArgs,
+    rpc_args: RpcArgs,
+    node_args: NodeArgs,
+    system_package_task_args: SystemPackageTaskArgs,
+    rpc_config: RpcConfig,
+    registry: &Registry,
+    cancel: CancellationToken,
+) -> anyhow::Result<RpcService> {
+    let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
+        .context("Failed to create RPC service")?;
+
+    let context = Context::new(
+        database_url,
+        bigtable_instance,
+        db_args,
+        bigtable_args,
+        rpc_config,
+        rpc.metrics(),
+        registry,
+        cancel.child_token(),
+    )
+    .await?;
+
+    let system_package_task = SystemPackageTask::new(
+        system_package_task_args,
+        context.pg_reader().clone(),
+        context.package_resolver().package_store().clone(),
+        cancel.child_token(),
+    );
+
+    rpc.add_module(Checkpoints(context.clone()))?;
+    rpc.add_module(Coins(context.clone()))?;
+    rpc.add_module(DynamicFields(context.clone()))?;
+    rpc.add_module(Governance(context.clone()))?;
+    rpc.add_module(MoveUtils(context.clone()))?;
+    rpc.add_module(NameService(context.clone()))?;
+    rpc.add_module(Objects(context.clone()))?;
+    rpc.add_module(QueryObjects(context.clone()))?;
+    rpc.add_module(QueryTransactions(context.clone()))?;
+    rpc.add_module(Transactions(context.clone()))?;
+
+    Ok(rpc)
+
+    // if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
+    //     rpc.add_module(DelegationCoins::new(
+    //         fullnode_rpc_url.clone(),
+    //         context.config().node.clone(),
+    //     )?)?;
+    //     rpc.add_module(DelegationGovernance::new(
+    //         fullnode_rpc_url.clone(),
+    //         context.config().node.clone(),
+    //     )?)?;
+    //     rpc.add_module(Write::new(fullnode_rpc_url, context.config().node.clone())?)?;
+    // } else {
+    //     warn!("No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added.");
+    // }
+    //
+    // let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
+    // let h_system_package_task = system_package_task.run();
+    //
+    // Ok(tokio::spawn(async move {
+    //     let _ = h_rpc.await;
+    //     cancel.cancel();
+    //     let _ = h_system_package_task.await;
+    // }))
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
