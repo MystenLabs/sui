@@ -550,7 +550,7 @@ public fun multiplier(house_data: &HouseData): vector<u64> {
 
 // === Public-Friend Functions ===
 
-/// Returns a reference to the house ID .
+/// Returns a reference to the house ID.
 public(package) fun borrow(house_data: &HouseData): &UID {
     &house_data.id
 }
@@ -565,7 +565,7 @@ public(package) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SU
     &mut house_data.fees
 }
 
-/// Returns a mutable reference to the house ID .
+/// Returns a mutable reference to the house ID.
 public(package) fun borrow_mut(house_data: &mut HouseData): &mut UID {
     &mut house_data.id
 }
