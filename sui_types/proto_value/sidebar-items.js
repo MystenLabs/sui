@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["URL_MODULE_NAME","URL_STRUCT_NAME"],"enum":["Error"],"struct":["ProtoVisitorBuilder"]};

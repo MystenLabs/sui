@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CommandArgumentError","ExecutionFailureStatus","ExecutionStatus","PackageUpgradeError","TypeArgumentError"],"struct":["CongestedObjects","MoveLocation","MoveLocationOpt"],"type":["CommandIndex"]};

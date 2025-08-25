@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_transaction_checks", 0, "WARNING! This should only be used for the dev-inspect …\nCheck package verification timeout\nCheck that the provided transaction is allowed to be …")

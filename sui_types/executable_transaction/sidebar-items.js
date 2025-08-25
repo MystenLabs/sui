@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CertificateProof"],"type":["ExecutableTransaction","TrustedExecutableTransaction","VerifiedExecutableTransaction"]};

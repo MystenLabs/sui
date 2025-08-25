@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["filter","inner_join","or_filter","query"],"mod":["commands","config","context_data","extensions","server","test_infra"]};
