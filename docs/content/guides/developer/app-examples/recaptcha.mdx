@@ -354,7 +354,7 @@ export default app;
 - Next, define a helper function named `stringToHex` that takes a string as an input and returns a hexadecimal string as an output. This function is used to convert the message to a hexadecimal format.
 - Finally, use some custom middlewares to handle not found and error cases, and export the app as a default module.
 
-That's it! You have implemented the backend for the reCAPTCHA. To run the app, you can use `node app.ts` or `ts-node app.ts` if you have TypeScript installed. You can also use a tool like `nodemon` to automatically restart the app when you make changes. To test the app, you can use a tool like Postman or curl to send requests to the app and see the responses.
+That's it. 🎉 You have implemented the backend for the reCAPTCHA. To run the app, you can use `node app.ts` or `ts-node app.ts` if you have TypeScript installed. You can also use a tool like `nodemon` to automatically restart the app when you make changes. To test the app, you can use a tool like Postman or curl to send requests to the app and see the responses.
 
 ## Frontend
 
@@ -535,4 +535,4 @@ export default App;
   - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `Transaction` object from `@mysten/sui` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransaction` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
   - A `ReCAPTCHA` component from `react-google-recaptcha` that renders the reCAPTCHA widget. You pass the site key and the `onChange` function as props to this component.
 
-That's it! You have implemented the frontend for the reCAPTCHA. To run the app, you can use `pnpm run dev`. To test the app, you can open the browser and go to the `localhost:5173` URL. You should see the app and can interact with the reCAPTCHA and the smart contract.
+That's it. 🎉 You have implemented the frontend for the reCAPTCHA. To run the app, you can use `pnpm run dev`. To test the app, you can open the browser and go to the `localhost:5173` URL. You should see the app and can interact with the reCAPTCHA and the smart contract.
