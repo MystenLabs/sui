@@ -13,7 +13,7 @@ use crate::{
     BuildConfig,
     source_package::parsed_manifest::{DependencyKind, GitInfo, OnChainInfo},
 };
-
+use crate::resolution::dependency_graph::DependencyMode;
 use self::dependency_graph::DependencyGraphBuilder;
 
 pub mod dependency_cache;
@@ -27,6 +27,7 @@ pub fn download_dependency_repos<Progress: Write>(
     lock_string: Option<String>,
     build_options: &BuildConfig,
     root_path: &Path,
+    mode: DependencyMode,
     progress_output: &mut Progress,
 ) -> Result<()> {
     let install_dir = build_options
@@ -46,6 +47,7 @@ pub fn download_dependency_repos<Progress: Write>(
         root_path.to_path_buf(),
         manifest_string,
         lock_string,
+        mode
     )?;
 
     for pkg_id in graph.topological_order() {
