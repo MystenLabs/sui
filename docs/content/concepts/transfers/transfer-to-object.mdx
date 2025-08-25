@@ -282,7 +282,7 @@ public fun transfer_account(account: Account, to: address, _ctx: &mut TxContext)
 }
 ```
 
-### Soul-bound objects {#soul-bound-example}
+### Soulbound objects {#soul-bound-example}
 
 Soulbound objects must always be returned to their original owner. In this example, receiving a `SoulBound` object produces a `ReturnReceipt` that must be destroyed by transferring the object back in the same transaction.
 
