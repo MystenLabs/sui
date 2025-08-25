@@ -436,25 +436,25 @@ paths = [
                                     Package {
                                         path: "crates/sui-framework/packages/deepbook",
                                         watch: Some(
-                                            0x000000000000000000000000000000000000000000000000000000000000dee9,
+                                            0xdee9,
                                         ),
                                     },
                                     Package {
                                         path: "crates/sui-framework/packages/move-stdlib",
                                         watch: Some(
-                                            0x0000000000000000000000000000000000000000000000000000000000000001,
+                                            0x1,
                                         ),
                                     },
                                     Package {
                                         path: "crates/sui-framework/packages/sui-framework",
                                         watch: Some(
-                                            0x0000000000000000000000000000000000000000000000000000000000000002,
+                                            0x2,
                                         ),
                                     },
                                     Package {
                                         path: "crates/sui-framework/packages/sui-system",
                                         watch: Some(
-                                            0x0000000000000000000000000000000000000000000000000000000000000003,
+                                            0x3,
                                         ),
                                     },
                                 ],
@@ -468,7 +468,7 @@ paths = [
                             Package {
                                 path: "home/user/some/upgradeable-package",
                                 watch: Some(
-                                    0x0000000000000000000000000000000000000000000000000000000000001234,
+                                    0x1234,
                                 ),
                             },
                             Package {
