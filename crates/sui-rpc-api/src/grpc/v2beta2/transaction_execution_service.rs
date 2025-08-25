@@ -197,10 +197,8 @@ pub async fn execute_transaction(
                 }
 
                 if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
-                    for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut()
-                    {
-                        let Ok(object_id) =
-                            unchanged_consensus_object.object_id().parse::<Address>()
+                    for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut() {
+                        let Ok(object_id) = unchanged_consensus_object.object_id().parse::<Address>()
                         else {
                             continue;
                         };
