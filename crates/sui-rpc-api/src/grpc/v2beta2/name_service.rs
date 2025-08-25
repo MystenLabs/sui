@@ -42,12 +42,10 @@ fn name_service_config(service: &RpcService) -> Result<NameServiceConfig> {
     match service.chain_id.chain() {
         sui_protocol_config::Chain::Mainnet => Ok(NameServiceConfig::mainnet()),
         sui_protocol_config::Chain::Testnet => Ok(NameServiceConfig::testnet()),
-        sui_protocol_config::Chain::Unknown => {
-            Err(RpcError::new(
-                tonic::Code::Unimplemented,
-                "SuiNS not configured for this network",
-            ))
-        }
+        sui_protocol_config::Chain::Unknown => Err(RpcError::new(
+            tonic::Code::Unimplemented,
+            "SuiNS not configured for this network",
+        )),
     }
 }
 
@@ -80,10 +78,13 @@ fn lookup_name(service: &RpcService, request: LookupNameRequest) -> Result<Looku
 
     let name_record = NameRecord::try_from(record_object)
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-    // Check if a particular record is valid and hasn't expired
-    let is_valid = if name_record.is_leaf_record() || domain.is_subdomain() {
-        // If a record is a leaf record or a subdomain we need to check its parent for expiration.
-        // As things are implemented today if one of these is true then both are.
+
+    let is_valid = if !name_record.is_leaf_record() {
+        // Handling SLD names & node subdomains is the same (we handle them as `node` records)
+        // We check their expiration, and if not expired, return the target address.
+        !name_record.is_node_expired(current_timestamp_ms)
+    } else {
+        // If a record is a leaf record we need to check its parent for expiration.
 
         // prepare the parent's field id.
         let parent_domain = domain.parent();
@@ -100,9 +101,6 @@ fn lookup_name(service: &RpcService, request: LookupNameRequest) -> Result<Looku
         } else {
             false
         }
-    } else {
-        // Otherwise this is a normal record and we only need to check if it hasn't expired
-        !name_record.is_node_expired(current_timestamp_ms)
     };
 
     if is_valid {
