@@ -19,6 +19,7 @@ use tokio::sync::OnceCell;
 use crate::{
     api::scalars::{
         base64::Base64,
+        big_int::BigInt,
         owner_kind::OwnerKind,
         sui_address::SuiAddress,
         type_filter::{TypeFilter, TypeInput},
@@ -300,6 +301,14 @@ impl DynamicField {
         ctx: &Context<'_>,
     ) -> Result<Option<Transaction>, RpcError<object::Error>> {
         self.super_.previous_transaction(ctx).await
+    }
+
+    /// The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+    pub(crate) async fn storage_rebate(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<BigInt>, RpcError<object::Error>> {
+        self.super_.storage_rebate(ctx).await
     }
 
     /// The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
