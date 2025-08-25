@@ -136,7 +136,7 @@ public struct RequestPotato {} // wrong
 
 ### CRUD function names
 
-Standard names:
+The following functions follow standard CRUD (Create, Read, Update, Delete) naming conventions:
 
 - `new` → Create an empty object  
 - `empty` → Create an empty struct  
@@ -154,6 +154,8 @@ Standard names:
 Use either single letters (`T`, `U`) or descriptive names. Prioritize readability.
 
 ```move
+module conventions::generics;
+// single letter name
 public struct Receipt<T> has store { ... }
 // full name
 public struct Receipt<Data> has store { ... }

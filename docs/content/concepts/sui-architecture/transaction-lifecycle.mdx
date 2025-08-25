@@ -140,10 +140,11 @@ If a transaction is caught at the epoch boundary, its certificate might become v
 
 ### Verifying finality
 
-If your wallet crashes, it can query the full node with `getTransactionBlock` after restarting:  
+Assume your wallet app crashed during the original transaction. If the app stores the signed transaction locally before sending it to the full node, which is best practice, then when the app restarts it tries to verify if the transaction has been finalized first. If it has, then no other steps are necessary. If it hasn't, then the app needs to resubmit the transaction.
 
-- If transaction details are returned, it is finalized.  
-- If `None`, the transaction may be dropped or not yet checkpointed. The safe option is to resubmit.  
+The wallet app can query the full node with the `getTransactionBlock` method. Assuming the full node is honest:
+- If the response contains transaction details, the transaction must have been finalized. It is either executed with `WaitForLocalExecution`, or executed as a checkpointed transaction.
+- If the response is `None`, it could mean the transaction was dropped in some step, or is already finalized but this full node does not know yet. In this scenario, the safer option is to resubmit the transaction.
 
 Before a transaction is locally executed, its effects are not reflected on the full node. The same idea applies to the coffee shop's full node. Your transaction was not submitted through this full node, hence it does not have a chance to locally execute it before it's included in a checkpoint. This full node must wait for the transaction to be checkpointed and state synced, which normally takes a few seconds. After the full node receives this transaction in a checkpoint, it is executed and has effects updated locally, for example the coffee shop's balance increases.
 
