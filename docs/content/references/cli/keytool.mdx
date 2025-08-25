@@ -1,7 +1,7 @@
 ---
 title: Sui Keytool CLI
 description: The Sui Keytool CLI has commands for managing and generating addresses, working with private keys, signatures, or zkLogin. 
-keywords: [ keytool cli, keytool reference, keytool, sui keytool, keytool help, how to use keytool, key tool ]
+keywords: [ Keytool cli, Keytool reference, Keytool, sui Keytool, Keytool help, how to use Keytool, key tool ]
 mdx:
   format: md
 ---
@@ -37,7 +37,7 @@ Commands:
   multi-sig-combine-partial-sig-legacy
   show                              	Read the content at the provided file path. The accepted format can be [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`)
                                         	or `type AuthorityKeyPair` (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag
-  sign                              	Create signature using the private key for the given address in sui keystore. Any signature commits to a [struct IntentMessage]
+  sign                              	Create signature using the private key for the given address in Sui Keystore. Any signature commits to a [struct IntentMessage]
                                         	consisting of the Base64 encoded of the BCS serialized transaction bytes itself and its intent. If intent is absent, default will be
                                         	used
   sign-kms                          	Creates a signature by leveraging AWS KMS. Pass in a key-id to leverage Amazon KMS to sign a message and the base64 pubkey. Generate
@@ -161,7 +161,7 @@ Each command has its own help section. For example `sui keytool sign –help` di
 $ sui keytool sign --help
 ```
 ```sh
-Create signature using the private key for the given address in sui keystore. Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded of the BCS serialized
+Create signature using the private key for the given address in Sui Keystore. Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded of the BCS serialized
 transaction bytes itself and its intent. If intent is absent, default will be used
 
 Usage: sui keytool sign [OPTIONS] --address <ADDRESS> --data <DATA>

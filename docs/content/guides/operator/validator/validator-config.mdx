@@ -1,6 +1,6 @@
 ---
 title: Validator Deployment & Configuration
-description: Learn how to set up, configure, and manage a Sui Validator node.
+description: Learn how to set up, configure, and manage a Sui validator node.
 keywords: [ sui validator node, validator nodes, validator node configuration, configure validator node, set up validator node, manage validator ]
 sidebar_position: 1
 sidebar_label: Deployment & Configuration
@@ -25,7 +25,7 @@ To run a Sui validator, you must set up and configure a Sui validator node. Spec
 
 ### Hardware requirements
 
-Suggested minimum hardware specifications to run a Sui Validator node:
+Suggested minimum hardware specifications to run a Sui validator node:
 
 - CPU: 24 physical cores (or 48 virtual cores)
 - Memory: 128 GB
@@ -36,7 +36,7 @@ Suggested minimum hardware specifications to run a Sui Validator node:
 
 To set up staking on your validator node:
 
-1. Call `request_add_validator_candidate` to become a candidate. This creates the on-chain validator info and initializes a staking pool for delegators to contribute to.
+1. Call `request_add_validator_candidate` to become a candidate. This creates the on-chain validator information and initializes a staking pool for delegators to contribute to.
 
 2. Acquire 30M SUI by staking to the validator staking pool created in the previous step. Call the `request_add_stake` with the address of the validator (this is not the same as the staking pool ID).
 

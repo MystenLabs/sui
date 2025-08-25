@@ -155,7 +155,7 @@ The MMORPG protocol is a sequential protocol, which allows an indefinite number 
 
 ### How was the ceremony performed?
 
-We sent invitations to 100+ people with diverse backgrounds and affiliations: Sui validators, cryptographers, web3 experts, world-renowned academicians, and business leaders. We planned the ceremony to take place on the dates September 12-18, 2023, but allowed participants to join when they wanted with no fixed slots.
+We sent invitations to 100+ people with diverse backgrounds and affiliations: Sui validators, cryptographers, Web3 experts, world-renowned academicians, and business leaders. We planned the ceremony to take place on the dates September 12-18, 2023, but allowed participants to join when they wanted with no fixed slots.
 
 Since the MPC is sequential, each contributor needed to wait till the previous contributor finished in order to receive the previous contribution, follow the MPC steps and produce their own contribution. Due to this structure, we provisioned a queue where participants waited, while those who joined before them finished. To authenticate participants, we sent a unique activation code to each of them. The activation code was the secret key of a signing key pair, which had a dual purpose: it allowed the coordination server to associate the participant's email with the contribution, and to verify the contribution with the corresponding public key.
 
@@ -304,11 +304,11 @@ The key differentiators that zkLogin brings to Sui are:
 
 1. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
 
-### How to verify a zkLogin signature off chain?
+### How to verify a zkLogin signature off-chain?
 
 The following options support a zkLogin signature over either transaction data or personal message using the JWK state on Sui and current epoch. 
 
-1. Use Sui Typescript SDK. This initializes a GraphQL client and calls the endpoint under the hood.
+1. Use Sui TypeScript SDK. This initializes a GraphQL client and calls the endpoint under the hood.
 
 1. Use the GraphQL endpoint directly: `https://sui-[network].mystenlabs.com/graphql`, changing `[network]` to the appropriate value. See the <a href="/references/sui-api/sui-graphql/reference/api/queries/verify-zklogin-signature" data-noBrokenLinkCheck="true">GraphQL documentation</a> for more details. This is recommended if you do not plan to run any servers or handle any JWK rotations. 
 

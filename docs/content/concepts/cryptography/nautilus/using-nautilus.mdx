@@ -41,7 +41,7 @@ Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the code 
 /move
   /enclave          # Utility functions for generating enclave config and registering the public key with an attestation document.
   /weather-example  # Entry point for on-chain logic as an example, which uses enclave functions to run your Nautilus application logic.
-  /twitter-example  # Entry point for onchain logic as another example, which uses enclave functions to run your Nautilus application logic. 
+  /twitter-example  # Entry point for on-chain logic as another example, which uses enclave functions to run your Nautilus application logic. 
 
 /src
   /aws              # AWS boilerplate; does not require modification.
@@ -84,7 +84,7 @@ Frontend code is not included in this guide. The Move call is demonstrated using
 
 1. Set up an AWS developer account and install the AWS CLI. For detailed instructions, see the [AWS Nitro Enclaves getting started guide](https://docs.aws.amazon.com/enclaves/latest/user/getting-started.html#launch-instance).
 
-1. Run the following script and follow the prompts. The script prompts you to enter some values - see the next step if you want to run this example as is. If the script completes successfully, it generates code locally that you need to commit. If you encounter issues, refer to the info box that follows, as instructions might vary depending on your AWS account settings.
+1. Run the following script and follow the prompts. The script prompts you to enter some values - see the next step if you want to run this example as is. If the script completes successfully, it generates code locally that you need to commit. If you encounter issues, refer to the information box that follows, as instructions might vary depending on your AWS account settings.
 
     ```sh
     $ export KEY_PAIR=<your-key-pair-name>
@@ -282,7 +282,7 @@ $ sui client publish
 # record ENCLAVE_PACKAGE_ID as env var from publish output
 $ ENCLAVE_PACKAGE_ID=0x3b009f952e11f0fa0612d0a8e07461fb69edc355d732e5d6e39267b1b4fd7138
 
-# deploy your dapp logic
+# deploy your dApp logic
 $ cd ../<APP>
 $ sui move build
 $ sui client publish
@@ -296,7 +296,7 @@ $ APP_PACKAGE_ID=0x097b551dec72f0c47e32e5f8114d0d12a98ab31762d21adff295f6d95d353
 # record the deployed enclave url, e.g. http://<PUBLIC_IP>:3000
 $ ENCLAVE_URL=<DEPLOYED_URL>
 
-# the module name and otw name used to create the dapp, defined in your Move code `fun init`
+# the module name and otw name used to create the dApp, defined in your Move code `fun init`
 $ MODULE_NAME=weather
 $ OTW_NAME=WEATHER
 
@@ -316,13 +316,13 @@ $ echo $ENCLAVE_URL
 # the two steps that follow (update pcrs, register enclave) can be reused if enclave server is updated
 # =======
 
-# this calls the update_pcrs onchain with the enclave cap and built PCRs, this can be reused to update PCRs if Rust server code is updated
+# this calls the update_pcrs on-chain with the enclave cap and built PCRs, this can be reused to update PCRs if Rust server code is updated
 $ sui client call --function update_pcrs --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID 0x$PCR0 0x$PCR1 0x$PCR2
 
 # optional, give it a name you like
 $ sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "weather enclave, updated 2025-05-13"
 
-# this script calls the get_attestation endpoint from your enclave url and use it to calls register_enclave onchain to register the public key, results in the created enclave object
+# this script calls the get_attestation endpoint from your enclave url and use it to calls register_enclave on-chain to register the public key, results in the created enclave object
 $ sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # record the created shared object ENCLAVE_OBJECT_ID as env var from register output

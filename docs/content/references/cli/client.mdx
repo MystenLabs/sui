@@ -34,7 +34,7 @@ Commands:
   new-address                 Generate new address and key pair with key pair scheme flag {ed25519 | secp256k1 | secp256r1} with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0
                                   for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be { word12 | word15 | word18 | word21 | word24} default to word12 if not specified
   new-env                     Add new Sui environment
-  object                      Get object info
+  object                      Get object information
   objects                     Obtain all objects owned by the address. It also accepts an address by its alias
   pay                         Pay coins to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts
   pay-all-sui                 Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas coin is required
@@ -438,8 +438,8 @@ $ sui client gas eloquent-amber
 ### Replay a transaction
 
 Use the `sui client replay-transaction --tx-digest <TRANSACTION-DIGEST>` to re-execute a transaction locally and show the transaction effects.
-This command will fetch the transaction dependencies from the Full node specified in the client env. For transactions that happened quite far in
-the past, it is advised to set the client Full node to one that has non-pruned chain data for that transaction.
+This command will fetch the transaction dependencies from the full node specified in the client env. For transactions that happened quite far in
+the past, it is advised to set the client full node to one that has non-pruned chain data for that transaction.
 This will also verify that the resulting effects from the locally executed transaction match the effects of the transaction stored on-chain.
 
 You can add additional flags `--gas-info` and `--ptb-info` to this command to see more information about the transaction.

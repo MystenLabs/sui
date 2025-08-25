@@ -81,7 +81,7 @@ The `nft_rental` module provides an API that facilitates lending or borrowing th
 
 ### Structs
 
-The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct has only the `drop` ability and acts as the extension key for the kiosk `Rentables` extension.
+The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct has only the `drop` ability and acts as the extension key for the Kiosk `Rentables` extension.
 
 ```move
 public struct Rentables has drop {}
@@ -126,7 +126,7 @@ public struct Rentable<T: key + store> has store {
   /// Initially undefined, is updated once someone rents it.
   start_date: Option<u64>,
   price_per_day: u64,
-  /// The kiosk id that the object was taken from.
+  /// The kiosk ID that the object was taken from.
   kiosk_id: ID,
 }
 ```
