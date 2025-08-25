@@ -736,7 +736,7 @@ fun stake_subsidy_with_safe_mode_testnet() {
     });
 
     // perform advance epoch
-    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(100000000000);
+    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(99_9999_999);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // check that the distribution counter is incremented
@@ -744,6 +744,262 @@ fun stake_subsidy_with_safe_mode_testnet() {
         assert_eq!(ctx.epoch(), 541);
         assert_eq!(system.epoch(), 541);
         assert_eq!(system.get_stake_subsidy_distribution_counter(), 541);
+    });
+
+    runner.finish();
+}
+
+#[test]
+// This test triggers both sui balance and pool token to fall short but no underflow happens.
+fun process_pending_stake_withdraw_no_underflow_in_safe_mode_1() {
+    // 4 validators, each with 100, 200, 300, 400 SUI
+    // safe mode epoch 1
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(200),
+            validator_builder::new().initial_stake(300),
+            validator_builder::new().initial_stake(400),
+        ])
+        .start_epoch(1) // safe mode epoch 1
+        .build();
+
+    // check initial stake of validator 1
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 100 * MIST_PER_SUI);
+    });
+
+    // staker 1 stakes 101 sui in safe mode
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 101);
+
+    // check stake of validator 1 including pending values
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pending_stake_amount(), 101 * MIST_PER_SUI);
+    });
+
+    // still safe mode, now epoch 2
+    runner.advance_epoch_safe_mode();
+
+    // staker 1 unstakes in safe mode
+    runner.set_sender(STAKER_ADDR_1).unstake(0);
+
+    // state invariants check
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pending_stake_amount(), 101 * MIST_PER_SUI);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 101 * MIST_PER_SUI);
+        assert_eq!(pool.pending_pool_token_withdraw_amount(), 101 * MIST_PER_SUI);
+    });
+
+    // epoch 3: exiting safe mode, no underflow
+    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(99_9999_999);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    // store Pool ID to query inactive validator later
+    let pool_id: ID;
+
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+        pool_id = object::id(pool);
+
+        assert_eq!(pool.pending_stake_amount(), 0 * MIST_PER_SUI);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 0 * MIST_PER_SUI);
+        assert_eq!(pool.pending_pool_token_withdraw_amount(), 0 * MIST_PER_SUI);
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 100 * MIST_PER_SUI);
+    });
+
+    // validator 1 withdraws its stake and gets back 100 SUI
+    runner.set_sender(VALIDATOR_ADDR_1).unstake(0);
+
+    // advance epoch to 4, no safe mode, no rewards
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // enforce invariant: sui_balance = 0
+    runner.system_tx!(|system, _| {
+        let pool = system
+            .validators()
+            .inactive_validator_by_pool_id(pool_id)
+            .get_staking_pool_ref();
+
+        assert_eq!(pool.sui_balance(), 0 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 0 * MIST_PER_SUI);
+    });
+
+    runner.finish();
+}
+
+#[test]
+// This test triggers pool token to fall short but no underflow happens.
+fun process_pending_stake_withdraw_no_underflow_in_safe_mode_2() {
+    // 4 validators, each with 100, 200, 300, 400 SUI
+    // safe mode epoch 1
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(200),
+            validator_builder::new().initial_stake(300),
+            validator_builder::new().initial_stake(400),
+        ])
+        .build();
+
+    // check initial stake of validator 1
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 100 * MIST_PER_SUI);
+    });
+
+    // Epoch 1:
+    let opts = runner
+        .advance_epoch_opts()
+        .protocol_version(65)
+        .computation_charge(100) // 100 SUI computation charge
+        .epoch_start_time(99_9999_999);
+
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.epoch(), 1);
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+
+        assert_eq!(pool.sui_balance(), 125 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 100 * MIST_PER_SUI);
+    });
+
+    // Epoch 2: entering safe mode
+    runner.advance_epoch_safe_mode();
+
+    // staker 1 stakes 100 sui in epoch 2
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
+
+    // Epoch 3: still in safe mode
+    runner.advance_epoch_safe_mode();
+
+    // Epoch 4: still in safe mode
+    runner.advance_epoch_safe_mode();
+
+    // Epoch 5: now out of safe mode
+    let opts = runner
+        .advance_epoch_opts()
+        .protocol_version(65)
+        .computation_charge(100) // 100 SUI computation charge
+        .epoch_start_time(99_9999_999);
+
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+        let exchange_rate = pool.exchange_rates()[5];
+        assert_eq!(exchange_rate.sui_amount(), 250 * MIST_PER_SUI);
+
+        // old pool token balance / old pool sui balance * (pool sui balance + pending stake)
+        // 100 / 150 * (150 + 100) = 166666666666
+        assert_eq!(exchange_rate.pool_token_amount(), 166666666666);
+        assert_eq!(pool.sui_balance(), 250 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 166666666666);
+    });
+
+    // staker 1 unstakes
+    runner.set_sender(STAKER_ADDR_1).owned_tx!<sui_system::staking_pool::StakedSui>(|stake| {
+        assert_eq!(stake.stake_activation_epoch(), 3);
+        runner.system_tx!(|system, ctx| {
+            system.request_withdraw_stake(stake, ctx);
+
+            // Pool's exchange rate for epoch 2 is missing because of safe mode
+            // So it fallbacks to epoch 1's exchange rate: PoolTokenExchangeRate {
+            //   sui_amount: 125000000000,
+            //   pool_token_amount: 100000000000
+            // }
+            // pending pool token to withdraw: 100 (principal) / 125 * 100 = 80
+            let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+
+            assert_eq!(pool.pending_pool_token_withdraw_amount(), 80 * MIST_PER_SUI);
+            // exchange rate for epoch 5: 1666...6: 250
+            // total withdraw: 80 * 250 / 166...6 = 120 sui
+            assert_eq!(pool.pending_stake_withdraw_amount(), 120 * MIST_PER_SUI); // 100 principal + 20 rewards
+        });
+    });
+
+    // Epoch 6:
+    let opts = runner
+        .advance_epoch_opts()
+        .protocol_version(65)
+        .computation_charge(100) // 100 SUI computation charge
+        .epoch_start_time(99_9999_999);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    // Validator unstakes
+    runner.set_sender(VALIDATOR_ADDR_1).unstake(0);
+
+    let pool_id: ID;
+
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+        pool_id = object::id(pool);
+
+        assert_eq!(pool.sui_balance(), 155 * MIST_PER_SUI);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 155 * MIST_PER_SUI);
+
+        // epoch 0's exchange rate: PoolTokenExchangeRate {
+        //   sui_amount: 100000000000,
+        //   pool_token_amount: 100000000000
+        // }
+        // pending pool token to withdraw: 100 (principal) / 100 * 100 = 100
+        // exchange rate for epoch 6: 155000000000: 86666666666
+        // total withdraw: min(100 * 155000000000 / 86666666666, pool.sui_balance()) = 155000000000
+        assert_eq!(pool.pending_stake_withdraw_amount(), 155 * MIST_PER_SUI); // 100 principal + 55 rewards
+        let exchange_rates = pool.exchange_rates();
+        let exchange_rate_epoch_0 = exchange_rates.borrow(0);
+        assert_eq!(exchange_rate_epoch_0.sui_amount(), 0);
+        assert_eq!(exchange_rate_epoch_0.pool_token_amount(), 0);
+        let exchange_rate_epoch_1 = exchange_rates.borrow(1);
+        assert_eq!(exchange_rate_epoch_1.sui_amount(), 125000000000);
+        assert_eq!(exchange_rate_epoch_1.pool_token_amount(), 100000000000);
+        assert!(!exchange_rates.contains(2));
+        assert!(!exchange_rates.contains(3));
+        assert!(!exchange_rates.contains(4));
+        let exchange_rate_epoch_5 = exchange_rates.borrow(5);
+        assert_eq!(exchange_rate_epoch_5.sui_amount(), 250000000000);
+        assert_eq!(exchange_rate_epoch_5.pool_token_amount(), 166666666666);
+        let exchange_rate_epoch_6 = exchange_rates.borrow(6);
+        assert_eq!(exchange_rate_epoch_6.sui_amount(), 155000000000);
+        assert_eq!(exchange_rate_epoch_6.pool_token_amount(), 86666666666);
+
+        // insufficient pool token balance
+        assert_eq!(pool.sui_balance(), 155000000000);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 155000000000);
+        assert_eq!(pool.pool_token_balance(), 86666666666);
+        assert_eq!(pool.pending_pool_token_withdraw_amount(), 100000000000);
+
+        assert!(pool.pool_token_balance() < pool.pending_pool_token_withdraw_amount());
+    });
+
+    // Epoch 7:
+    // No underflow should happen
+    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(99_9999_999);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    // Check that the validator is inactive and has no pending stake or pool token to withdraw
+    runner.system_tx!(|system, _| {
+        assert!(system.validators().is_inactive_validator(pool_id));
+
+        let validator = system.validators().inactive_validator_by_pool_id(pool_id);
+
+        assert_eq!(validator.pending_stake_amount(), 0);
+        assert_eq!(validator.pending_stake_withdraw_amount(), 0);
+        assert_eq!(validator.get_staking_pool_ref().pending_pool_token_withdraw_amount(), 0);
+        assert_eq!(validator.get_staking_pool_ref().sui_balance(), 0);
+        assert_eq!(validator.get_staking_pool_ref().pool_token_balance(), 0);
     });
 
     runner.finish();

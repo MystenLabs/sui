@@ -95,7 +95,7 @@ Response: {
           "bar": "bar is 42!",
           "baz": "baz is true?",
           "qu_": "x(hello) y(0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e), z(43)?!",
-          "quy": "quy is \n  type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quy\n  quz:   \n    type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quz\n    val: 43\n  val: Some(Address(0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e))."
+          "quy": "quy is \n  \u001b[1;90mtype\u001b[0m: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quy\n  \u001b[1;90mquz\u001b[0m:   \n    \u001b[1;90mtype\u001b[0m: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quz\n    \u001b[1;90mval\u001b[0m: 43\n  \u001b[1;90mval\u001b[0m: Some(Address(0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e))."
         },
         "error": null
       }
@@ -118,7 +118,7 @@ Response: {
           "bar": "bar is 42!",
           "baz": "baz is true?",
           "qu_": "x(hello) y(), z(43)?!",
-          "quy": "quy is \n  type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quy\n  quz:   \n    type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quz\n    val: 43\n  val: None."
+          "quy": "quy is \n  \u001b[1;90mtype\u001b[0m: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quy\n  \u001b[1;90mquz\u001b[0m:   \n    \u001b[1;90mtype\u001b[0m: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quz\n    \u001b[1;90mval\u001b[0m: 43\n  \u001b[1;90mval\u001b[0m: None."
         },
         "error": null
       }

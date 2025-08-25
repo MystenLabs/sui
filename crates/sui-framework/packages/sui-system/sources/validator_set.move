@@ -1387,6 +1387,11 @@ macro fun mul_div($a: u64, $b: u64, $c: u64): u64 {
 }
 
 #[test_only]
+public(package) fun inactive_validator_by_pool_id(self: &ValidatorSet, pool_id: ID): &Validator {
+    self.inactive_validators[pool_id].get_inner_validator_ref()
+}
+
+#[test_only]
 public fun find_for_testing(self: &ValidatorSet, validator_address: address): &Validator {
     self.get_candidate_or_active_validator(validator_address)
 }
