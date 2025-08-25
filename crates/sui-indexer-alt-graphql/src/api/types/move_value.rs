@@ -15,8 +15,8 @@ use crate::{
 use super::move_type::MoveType;
 
 pub(crate) struct MoveValue {
-    type_: MoveType,
-    native: Vec<u8>,
+    pub(crate) type_: MoveType,
+    pub(crate) native: Vec<u8>,
 }
 
 #[derive(thiserror::Error, Debug)]

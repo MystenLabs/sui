@@ -5,16 +5,17 @@ use async_graphql::{
     connection::{Connection, Edge},
     Context, Interface, Object,
 };
-use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::DynamicFieldType};
 
 use crate::{
     api::scalars::{owner_kind::OwnerKind, sui_address::SuiAddress},
-    error::RpcError,
+    error::{bad_user_input, RpcError},
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
+    dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
     object::{self, Object},
@@ -42,6 +43,7 @@ use super::{
 )]
 pub(crate) enum IAddressable {
     Address(Address),
+    DynamicField(DynamicField),
     MoveObject(MoveObject),
     MovePackage(MovePackage),
     Object(Object),
@@ -60,6 +62,38 @@ impl Address {
     /// The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
     pub(crate) async fn address(&self) -> SuiAddress {
         AddressableImpl::from(self).address()
+    }
+
+    /// Access a dynamic field on an object using its type and BCS-encoded name.
+    pub(crate) async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+        DynamicField::by_name(
+            ctx,
+            self.scope.clone(),
+            self.address.into(),
+            DynamicFieldType::DynamicField,
+            name,
+        )
+        .await
+    }
+
+    /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    pub(crate) async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+        DynamicField::by_name(
+            ctx,
+            self.scope.clone(),
+            self.address.into(),
+            DynamicFieldType::DynamicObject,
+            name,
+        )
+        .await
     }
 
     /// Objects owned by this address, optionally filtered by type.
@@ -100,6 +134,10 @@ impl AddressableImpl<'_> {
         before: Option<object::CLive>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+        if self.0.scope.root_version().is_some() {
+            return Err(bad_user_input(object::Error::RootVersionOwnership));
+        }
+
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IAddressable", "objects");
         let page = Page::from_params(limits, first, after, last, before)?;
