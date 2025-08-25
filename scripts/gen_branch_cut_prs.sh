@@ -27,7 +27,7 @@ SUI_VERSION=$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"/\1/p' ./Cargo.tom
 
 # Set up branch for changes.
 STAMP="$(date +%Y%m%d%H%M%S)"
-BRANCH="ebmifa/sui-v${SUI_VERSION}-bytecode-framework-snapshot-${STAMP}"
+BRANCH="${GITHUB_ACTOR}/sui-v${SUI_VERSION}-bytecode-framework-snapshot-${STAMP}"
 git checkout -b "$BRANCH"
 
 # Generate framework bytecode snapshot
@@ -77,7 +77,7 @@ sed -i -E "s/^(version = \")[0-9]+\.[0-9]+\.[0-9]+(\"$)/\1${NEW_SUI_VERSION}\2/"
 sed -i -E "s/(\"version\": \")([0-9]+\.[0-9]+\.[0-9]+)(\")/\1${NEW_SUI_VERSION}\3/" crates/sui-open-rpc/spec/openrpc.json
 
 # Cargo check to generate Cargo.lock changes
-cargo check
+cargo check || true
 
 # Staged all changes
 echo "Staging all changed files..."
