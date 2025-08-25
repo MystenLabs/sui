@@ -10,6 +10,11 @@ edition = "2021"
 name = "sui-indexer-alt"
 path = "src/main.rs"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(msim)',
+] }
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -38,6 +43,7 @@ sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-protocol-config.workspace = true
+sui-types.workspace = true
 sui-synthetic-ingestion = { workspace = true, optional = true }
 
 [dev-dependencies]

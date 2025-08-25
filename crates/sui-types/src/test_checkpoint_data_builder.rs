@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-
 use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag},
 };
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk_types::CheckpointTimestamp;
 use tap::Pipe;
 
+use crate::messages_checkpoint::CheckpointCommitment;
 use crate::{
     base_types::{
         dbg_addr, random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber,
@@ -109,6 +109,24 @@ impl TransactionBuilder {
             frozen_objects: BTreeSet::new(),
             shared_inputs: BTreeMap::new(),
             events: None,
+        }
+    }
+}
+
+pub struct AdvanceEpochConfig {
+    pub safe_mode: bool,
+    pub protocol_version: ProtocolVersion,
+    pub output_objects: Vec<Object>,
+    pub epoch_commitments: Vec<CheckpointCommitment>,
+}
+
+impl Default for AdvanceEpochConfig {
+    fn default() -> Self {
+        Self {
+            safe_mode: false,
+            protocol_version: ProtocolVersion::MAX,
+            output_objects: vec![],
+            epoch_commitments: vec![],
         }
     }
 }
@@ -610,20 +628,19 @@ impl TestCheckpointDataBuilder {
         }
     }
 
-    /// Like `advance_epoch_and_protocol_upgrade`, but default the protocol version to the maximum.
-    pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
-        self.advance_epoch_and_protocol_upgrade(safe_mode, ProtocolVersion::MAX)
-    }
-
     /// Creates a transaction that advances the epoch, adds it to the checkpoint, and then builds
     /// the checkpoint. This increments the stored checkpoint sequence number and epoch. If
     /// `safe_mode` is true, the epoch end transaction will not include the `SystemEpochInfoEvent`.
     /// The `protocol_version` is used to set the protocol that we are going to follow in the
     /// subsequent epoch.
-    pub fn advance_epoch_and_protocol_upgrade(
+    pub fn advance_epoch(
         &mut self,
-        safe_mode: bool,
-        protocol_version: ProtocolVersion,
+        AdvanceEpochConfig {
+            safe_mode,
+            protocol_version,
+            output_objects,
+            epoch_commitments,
+        }: AdvanceEpochConfig,
     ) -> CheckpointData {
         let (committee, _) = Committee::new_simple_test_committee();
         let tx_kind = EndOfEpochTransactionKind::new_change_epoch(
@@ -682,7 +699,7 @@ impl TestCheckpointDataBuilder {
                 effects: Default::default(),
                 events: transaction_events,
                 input_objects: vec![],
-                output_objects: vec![],
+                output_objects,
             });
 
         // Call build_checkpoint() to finalize the checkpoint and then populate the checkpoint with
@@ -691,7 +708,7 @@ impl TestCheckpointDataBuilder {
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: committee.voting_rights.clone(),
             next_epoch_protocol_version: protocol_version,
-            epoch_commitments: vec![],
+            epoch_commitments,
         };
         checkpoint.checkpoint_summary.end_of_epoch_data = Some(end_of_epoch_data);
         self.checkpoint_builder.epoch += 1;

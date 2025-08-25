@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
                 indexer_args,
                 client_args,
                 indexer_config,
-                true,
+                None,
                 metrics.registry(),
                 cancel.child_token(),
             )

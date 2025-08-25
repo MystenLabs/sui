@@ -3,7 +3,10 @@
 
 use std::{path::PathBuf, time::Instant};
 
+use crate::mock;
+use crate::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
 use prometheus::Registry;
+use sui_indexer_alt_framework::types::sui_system_state::SuiSystemState;
 use sui_indexer_alt_framework::{
     ingestion::ClientArgs,
     postgres::{reset_database, DbArgs},
@@ -13,8 +16,6 @@ use sui_indexer_alt_schema::MIGRATIONS;
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
 use tokio_util::sync::CancellationToken;
 use url::Url;
-
-use crate::{config::IndexerConfig, setup_indexer};
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct BenchmarkArgs {
@@ -69,7 +70,10 @@ pub async fn run_benchmark(
         indexer_args,
         client_args,
         indexer_config,
-        false, /* with_genesis */
+        Some(BootstrapGenesis {
+            stored_genesis: mock::stored_genesis(),
+            sui_system_state: SuiSystemState::V1(mock::sui_system_state_inner_v1()),
+        }),
         &Registry::new(),
         CancellationToken::new(),
     )
