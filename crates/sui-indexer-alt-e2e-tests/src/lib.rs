@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::HashMap,
+    fs,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::Path,
+    time::Duration,
+};
+
 use anyhow::{bail, ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
@@ -9,13 +17,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
-use std::path::Path;
-use std::{
-    collections::HashMap,
-    fs,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
@@ -126,6 +127,16 @@ pub struct OffchainCluster {
 
     /// This token controls the clean up of the cluster.
     cancel: CancellationToken,
+}
+
+pub struct OffchainClusterConfig {
+    pub indexer_args: IndexerArgs,
+    pub consistent_indexer_args: IndexerArgs,
+    pub indexer_config: IndexerConfig,
+    pub consistent_config: ConsistentConfig,
+    pub jsonrpc_config: JsonRpcConfig,
+    pub graphql_config: GraphQlConfig,
+    pub bootstrap_genesis: Option<BootstrapGenesis>,
 }
 
 impl FullCluster {
@@ -280,51 +291,6 @@ impl FullCluster {
     }
 }
 
-pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
-    let temp_dir = tempfile::tempdir()
-        .context("Failed to create data ingestion path")
-        .unwrap();
-    let client_args = ClientArgs {
-        local_ingestion_path: Some(temp_dir.path().to_owned()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
-    };
-    (client_args, temp_dir)
-}
-
-pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
-    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
-    let file_path = path.join(file_name);
-    let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
-    fs::write(file_path, blob.to_bytes())?;
-    Ok(())
-}
-
-pub struct OffchainClusterConfig {
-    pub indexer_args: IndexerArgs,
-    pub consistent_indexer_args: IndexerArgs,
-    pub indexer_config: IndexerConfig,
-    pub consistent_config: ConsistentConfig,
-    pub jsonrpc_config: JsonRpcConfig,
-    pub graphql_config: GraphQlConfig,
-    pub bootstrap_genesis: Option<BootstrapGenesis>,
-}
-
-impl Default for OffchainClusterConfig {
-    fn default() -> Self {
-        Self {
-            indexer_args: IndexerArgs::default(),
-            consistent_indexer_args: IndexerArgs::default(),
-            indexer_config: IndexerConfig::for_test(),
-            consistent_config: ConsistentConfig::for_test(),
-            jsonrpc_config: JsonRpcConfig::default(),
-            graphql_config: GraphQlConfig::default(),
-            bootstrap_genesis: None,
-        }
-    }
-}
 impl OffchainCluster {
     /// Construct a new off-chain cluster and spin up its constituent services.
     ///
@@ -695,6 +661,20 @@ impl OffchainCluster {
     }
 }
 
+impl Default for OffchainClusterConfig {
+    fn default() -> Self {
+        Self {
+            indexer_args: IndexerArgs::default(),
+            consistent_indexer_args: IndexerArgs::default(),
+            indexer_config: IndexerConfig::for_test(),
+            consistent_config: ConsistentConfig::for_test(),
+            jsonrpc_config: JsonRpcConfig::default(),
+            graphql_config: GraphQlConfig::default(),
+            bootstrap_genesis: None,
+        }
+    }
+}
+
 /// Returns the reference for the first address-owned object created in the effects, or an error if
 /// there is none.
 pub fn find_address_owned(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
@@ -745,4 +725,28 @@ pub fn find_address_mutated(fx: &TransactionEffects) -> anyhow::Result<ObjectRef
         .into_iter()
         .find_map(|(oref, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(oref))
         .context("Could not find mutated object")
+}
+
+/// Returns ClientArgs that use a temporary local ingestion path and the TempDir of that path.
+pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
+    let temp_dir = tempfile::tempdir()
+        .context("Failed to create data ingestion path")
+        .unwrap();
+    let client_args = ClientArgs {
+        local_ingestion_path: Some(temp_dir.path().to_owned()),
+        remote_store_url: None,
+        rpc_api_url: None,
+        rpc_username: None,
+        rpc_password: None,
+    };
+    (client_args, temp_dir)
+}
+
+/// Writes a checkpoint file to the given path.
+pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+    let file_path = path.join(file_name);
+    let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
+    fs::write(file_path, blob.to_bytes())?;
+    Ok(())
 }
