@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use jsonrpsee::core::Serialize;
+use reqwest::Client;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use serde_json::json;
 use std::time::Duration;
 use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
 use sui_indexer_alt::{mock, BootstrapGenesis};
@@ -217,14 +219,25 @@ async fn test_graphql<T: DeserializeOwned>(
         .wait_for_graphql(0, Duration::from_secs(10))
         .await?;
 
+    let query = json!({"query": query});
+    let client = Client::new();
+
+    let request = client.post(offchain.graphql_url()).json(&query);
+    let response = request.send().await?;
+
+    #[derive(Serialize, Deserialize)]
+    struct Response<T> {
+        data: Data<T>,
+    }
+
     #[derive(Serialize, Deserialize)]
     struct Data<T> {
         epoch: T,
     }
 
-    let data: Data<T> = offchain.query_graphql(query).await?;
+    let response = response.json::<Response<T>>().await?;
 
     offchain.stopped().await;
 
-    Ok(data.epoch)
+    Ok(response.data.epoch)
 }
