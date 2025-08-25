@@ -14705,6 +14705,7 @@ dependencies = [
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
+ "sui-name-service",
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
