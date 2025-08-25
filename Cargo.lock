@@ -14711,6 +14711,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-default-config",
+ "sui-display",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",

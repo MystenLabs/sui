@@ -597,6 +597,20 @@ ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. No
 scalar DateTime
 
 """
+A rendered JSON blob based on an on-chain template.
+"""
+type Display {
+	"""
+	If any fields failed to render, this will contain a mapping from failed field names to error messages. If all fields succeed, this will be `null`.
+	"""
+	errors: JSON
+	"""
+	Output for all successfully substituted display fields. Unsuccessful fields will be `null`, and will be accompanied by a field in `errors`, explaining the error.
+	"""
+	output: JSON
+}
+
+"""
 Dynamic fields are heterogenous fields that can be added or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
 
 There are two sub-types of dynamic fields:
@@ -1696,6 +1710,12 @@ type MoveValue {
 	"""
 	bcs: Base64
 	"""
+	A rendered JSON blob based on an on-chain template, substituted with data from this value.
+	
+	Returns `null` if the value's type does not have an associated `Display` template.
+	"""
+	display: Display
+	"""
 	Representation of a Move value in JSON, where:
 	
 	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
@@ -2423,6 +2443,14 @@ type ServiceConfig {
 	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
 	defaultPageSize(type: String!, field: String!): Int
+	"""
+	Maximum depth of nested field access supported in display outputs.
+	"""
+	maxDisplayFieldDepth: Int
+	"""
+	Maximum output size of a display output.
+	"""
+	maxDisplayOutputSize: Int
 	"""
 	Maximum budget in bytes to spend when outputting a structured `MoveValue`.
 	"""
