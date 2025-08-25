@@ -8,7 +8,7 @@ use crate::{
         find_module_name_for_package,
     },
     errors::FileHandle,
-    package::{EnvironmentName, layout::SourcePackageLayout, paths::PackagePath},
+    package::{EnvironmentName, paths::PackagePath},
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
         ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
@@ -23,7 +23,7 @@ use move_core_types::{
 use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 use toml::Value as TV;
 use tracing::debug;
@@ -97,24 +97,6 @@ pub fn try_load_legacy(
         .map(|parsed| (file_handle, parsed))
 }
 
-/// Tries to parse a legacy looking manifest.
-/// The parser converts this into a modern one on the fly -- and stores legacy information
-/// in the `LegacyData` struct.
-fn parse_legacy_manifest_from_file(
-    path: &PackagePath,
-    default_env: &Environment,
-) -> Result<ParsedManifest> {
-    let file_handle = FileHandle::new(path.manifest_path())?;
-
-    let parsed_legacy_package = parse_source_manifest(
-        parse_move_manifest_string(file_handle.source())?,
-        path,
-        default_env,
-    )?;
-
-    Ok(parsed_legacy_package)
-}
-
 fn parse_legacy_lockfile_addresses(
     path: &PackagePath,
 ) -> Result<BTreeMap<EnvironmentName, LegacyEnvironment>> {
@@ -175,14 +157,6 @@ fn parse_legacy_lockfile_addresses(
     Ok(publish_info)
 }
 
-fn resolve_move_manifest_path(path: &Path) -> PathBuf {
-    if path.is_file() {
-        path.into()
-    } else {
-        path.join(SourcePackageLayout::Manifest.path())
-    }
-}
-
 fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
     toml::from_str::<TV>(manifest_string).context("Unable to parse Move package manifest")
 }
@@ -214,7 +188,7 @@ fn parse_source_manifest(
                 .context("Error parsing '[package]' section of manifest")?
                 .unwrap();
 
-            let build = table
+            let _build = table
                 .remove(BUILD_NAME)
                 .map(parse_build_info)
                 .transpose()
@@ -227,7 +201,7 @@ fn parse_source_manifest(
                 .context("Error parsing '[dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let dev_dependencies = table
+            let _dev_dependencies = table
                 .remove(DEV_DEPENDENCY_NAME)
                 .map(parse_dependencies)
                 .transpose()
@@ -535,7 +509,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
         });
     }
 
-    let subst = table
+    let _subst = table
         .remove("addr_subst")
         .map(parse_substitution)
         .transpose()?;
@@ -589,7 +563,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
         }
 
         (None, None, None, Some(id)) => {
-            let Some(id) = id.as_str() else {
+            let Some(_id) = id.as_str() else {
                 bail!("ID not a string")
             };
 
@@ -675,13 +649,6 @@ fn parse_version(tval: TV) -> Result<LegacyVersion> {
             .parse::<u64>()
             .context("Invalid bugfix version")?,
     ))
-}
-
-fn parse_digest(tval: TV) -> Result<String> {
-    let digest_str = tval
-        .as_str()
-        .ok_or_else(|| format_err!("Invalid package digest"))?;
-    Ok(digest_str.to_string())
 }
 
 fn parse_dep_override(tval: TV) -> Result<bool> {
@@ -806,7 +773,7 @@ fn derive_modern_name(
 
     // If we have multiple, we cannot continue as this is not allowed.
     if zero_addresses.len() > 1 {
-        anyhow!(
+        bail!(
             "Multiple 0x0 addresses found. This is not allowed. Duplicate names found: {:?}",
             zero_addresses
         );

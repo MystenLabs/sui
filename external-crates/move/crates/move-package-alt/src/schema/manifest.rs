@@ -183,8 +183,6 @@ impl TryFrom<RField> for ExternalDependency {
 mod tests {
     use insta::assert_snapshot;
 
-    use crate::schema::{LocalDepInfo, OnChainDepInfo};
-
     use super::{
         DefaultDependency, ExternalDependency, ManifestDependencyInfo, ManifestGitDependency,
         ParsedManifest, ReplacementDependency,
@@ -195,7 +193,7 @@ mod tests {
         fn get_dep(&self, name: impl AsRef<str>) -> &DefaultDependency {
             self.dependencies
                 .iter()
-                .find(|(dep_name, dep)| dep_name.as_ref().as_str() == name.as_ref())
+                .find(|(dep_name, _)| dep_name.as_ref().as_str() == name.as_ref())
                 .unwrap()
                 .1
         }
@@ -210,7 +208,7 @@ mod tests {
                 .get(env.as_ref())
                 .expect("environment exists")
                 .iter()
-                .find(|(dep_name, dep)| dep_name.as_ref().as_str() == name.as_ref())
+                .find(|(dep_name, _)| dep_name.as_ref().as_str() == name.as_ref())
                 .unwrap()
                 .1
                 .as_ref()
@@ -226,25 +224,11 @@ mod tests {
             ext
         }
 
-        fn as_local(&self) -> &LocalDepInfo {
-            let Self::Local(loc) = self else {
-                panic!("expected local dependency")
-            };
-            loc
-        }
-
         fn as_git(&self) -> &ManifestGitDependency {
             let Self::Git(git) = self else {
                 panic!("expected git dependency")
             };
             git
-        }
-
-        fn as_onchain(&self) -> &OnChainDepInfo {
-            let Self::OnChain(onchain) = self else {
-                panic!("expected onchain dependency")
-            };
-            onchain
         }
     }
 
@@ -260,7 +244,7 @@ mod tests {
     /// Parsing a basic file using a number of features succeeds
     #[test]
     fn basic() {
-        let manifest: ParsedManifest = toml_edit::de::from_str(
+        let _: ParsedManifest = toml_edit::de::from_str(
             r#"
             [package]
             name = "example"

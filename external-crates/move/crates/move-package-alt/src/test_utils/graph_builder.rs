@@ -33,6 +33,8 @@
 //! [TestPackageGraph::add_package] and [TestPackageGraph::add_dep]. These take closures that
 //! customize the generated packages and deps respectively. See [tests::complex] for a complete example.
 
+#![allow(unused)]
+
 use std::{
     collections::BTreeMap,
     convert::identity,
@@ -126,7 +128,7 @@ impl TestPackageGraph {
     /// Add a dependency to the graph from `a` to `b` for each pair `("a", "b")` in `edges`. The
     /// dependencies will be local dependencies in the `[dependencies]` sections.
     pub fn add_deps(
-        mut self,
+        self,
         edges: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
     ) -> Self {
         edges.into_iter().fold(self, |graph, (source, target)| {
@@ -161,7 +163,7 @@ impl TestPackageGraph {
     /// builder.add_package("a", |a| a.publish(original, published_at))
     /// ```
     pub fn add_published(
-        mut self,
+        self,
         node: impl AsRef<str>,
         original_id: OriginalID,
         published_at: PublishedID,
@@ -316,12 +318,12 @@ impl TestPackageGraph {
 
         for (env, publication) in self.inner[node].pubs.iter() {
             let PubSpec {
-                chain_id,
                 addresses:
                     PublishAddresses {
                         original_id,
                         published_at,
                     },
+                ..
             } = publication;
 
             move_lock.push_str(&formatdoc!(

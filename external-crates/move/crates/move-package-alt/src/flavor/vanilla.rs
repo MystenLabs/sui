@@ -46,7 +46,7 @@ impl MoveFlavor for Vanilla {
     }
 
     fn system_dependencies(
-        environment: EnvironmentID,
+        _environment: EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency> {
         empty().collect()
     }
