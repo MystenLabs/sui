@@ -101,11 +101,7 @@ fn verify_signature(
                 [Some(multisig.committee().derive_address()), None]
             }
             sui_sdk_types::UserSignature::ZkLogin(z) => {
-                let id = z.inputs.public_identifier().map_err(|e| {
-                    FieldViolation::new("signature")
-                        .with_description(format!("invalid zklogin authenticator: {e}"))
-                        .with_reason(ErrorReason::FieldInvalid)
-                })?;
+                let id = z.inputs.public_identifier();
                 [
                     Some(id.derive_address_padded()),
                     Some(id.derive_address_unpadded()),
