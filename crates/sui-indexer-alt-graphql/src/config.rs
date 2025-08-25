@@ -124,6 +124,12 @@ pub struct Limits {
 
     /// Maximum budget in bytes to spend when outputting a structured Move value.
     pub max_move_value_bound: usize,
+
+    /// Maximum depth of nested field access supported in display outputs.
+    pub max_display_field_depth: usize,
+
+    /// Maximumm output size of a display output.
+    pub max_display_output_size: usize,
 }
 
 #[DefaultConfig]
@@ -147,6 +153,8 @@ pub struct LimitsLayer {
     pub max_type_nodes: Option<usize>,
     pub max_move_value_depth: Option<usize>,
     pub max_move_value_bound: Option<usize>,
+    pub max_display_field_depth: Option<usize>,
+    pub max_display_output_size: Option<usize>,
 }
 
 pub struct WatermarkConfig {
@@ -292,6 +300,12 @@ impl LimitsLayer {
             max_move_value_bound: self
                 .max_move_value_bound
                 .unwrap_or(base.max_move_value_bound),
+            max_display_field_depth: self
+                .max_display_field_depth
+                .unwrap_or(base.max_display_field_depth),
+            max_display_output_size: self
+                .max_display_output_size
+                .unwrap_or(base.max_display_output_size),
         }
     }
 }
@@ -335,6 +349,8 @@ impl From<Limits> for LimitsLayer {
             max_type_nodes: Some(value.max_type_nodes),
             max_move_value_depth: Some(value.max_move_value_depth),
             max_move_value_bound: Some(value.max_move_value_bound),
+            max_display_field_depth: Some(value.max_display_field_depth),
+            max_display_output_size: Some(value.max_display_output_size),
         }
     }
 }
@@ -400,6 +416,8 @@ impl Default for Limits {
             max_type_nodes,
             max_move_value_depth,
             max_move_value_bound: 1024 * 1024,
+            max_display_field_depth: 10,
+            max_display_output_size: 1024 * 1024,
         }
     }
 }

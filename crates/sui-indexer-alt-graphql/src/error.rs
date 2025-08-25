@@ -43,7 +43,7 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     RequestTimeout { kind: &'static str, limit: Duration },
 
     /// Expended some limit, such as node count, depth, etc, during query execution.
-    ResourceExhausted(Arc<dyn std::error::Error + Send + Sync + 'static>),
+    ResourceExhausted(Arc<anyhow::Error>),
 }
 
 impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
@@ -77,7 +77,9 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 let chain: Vec<_> = chain.map(|e| e.to_string()).collect();
                 top.to_string().extend_with(|_, ext| {
                     ext.set("code", code::INTERNAL_SERVER_ERROR);
-                    ext.set("chain", chain);
+                    if !chain.is_empty() {
+                        ext.set("chain", chain);
+                    }
                 })
             }
 
@@ -93,9 +95,24 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 )
             }
 
-            RpcError::ResourceExhausted(err) => err.to_string().extend_with(|_, ext| {
-                ext.set("code", code::RESOURCE_EXHAUSTED);
-            }),
+            RpcError::ResourceExhausted(err) => {
+                // Discard the root cause (which will be the main error message), and then capture
+                // the rest as a context chain.
+                let mut chain = err.chain();
+                let Some(top) = chain.next() else {
+                    return "Unknown error".extend_with(|_, ext| {
+                        ext.set("code", code::RESOURCE_EXHAUSTED);
+                    });
+                };
+
+                let chain: Vec<_> = chain.map(|e| e.to_string()).collect();
+                top.to_string().extend_with(|_, ext| {
+                    ext.set("code", code::RESOURCE_EXHAUSTED);
+                    if !chain.is_empty() {
+                        ext.set("chain", chain);
+                    }
+                })
+            }
         }
     }
 }
@@ -157,12 +174,11 @@ pub(crate) fn request_timeout(kind: &'static str, limit: Duration) -> RpcError {
 }
 
 /// Signal some resource has been consumed during query execution.
-pub(crate) fn resource_exhausted<R, E>(err: R) -> RpcError<E>
+pub(crate) fn resource_exhausted<E>(err: impl Into<anyhow::Error>) -> RpcError<E>
 where
-    R: std::error::Error + Send + Sync + 'static,
     E: std::error::Error + Send + Sync + 'static,
 {
-    RpcError::ResourceExhausted(Arc::new(err))
+    RpcError::ResourceExhausted(Arc::new(err.into()))
 }
 
 /// Upcast an `RpcError` with no user error type into an `RpcError<E>`.
