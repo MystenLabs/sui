@@ -337,7 +337,6 @@ impl TestPackageGraph {
             ));
         }
 
-        debug!("{move_lock}");
         move_lock
     }
 

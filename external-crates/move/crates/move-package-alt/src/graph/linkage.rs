@@ -11,6 +11,7 @@ use petgraph::{
     visit::EdgeRef,
 };
 use thiserror::Error;
+use tracing::debug;
 
 use crate::{flavor::MoveFlavor, schema::OriginalID};
 
@@ -111,7 +112,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
             // if this node is published, add it to its linkage
             if let Some(oid) = package_node.original_id() {
-                let old_entry = linkage.insert(oid, *node);
+                let old_entry = linkage.insert(oid.clone(), *node);
                 if old_entry.is_some() {
                     // this means a package depends on another package that has the same original
                     // id (but it's a different package since we already checked for cycles)
@@ -127,6 +128,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .remove(&root) // root package is first in topological order
             .expect("all linkages have been computed");
 
+        debug!("computed linkage: {root_linkage:?}");
         // Convert NodeIndex to PackageInfo
         Ok(root_linkage
             .into_iter()
@@ -151,7 +153,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 continue;
             };
 
-            let old = result.insert(oid, edge.target());
+            let old = result.insert(oid.clone(), edge.target());
             if old.is_some() {
                 return Err(LinkageError::ConflictingOverrides);
             }
