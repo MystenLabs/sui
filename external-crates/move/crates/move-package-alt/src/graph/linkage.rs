@@ -106,7 +106,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             for (original_id, nodes) in transitive_deps.into_iter() {
                 linkage.insert(
                     original_id.clone(),
-                    self.select_dep(node, original_id, nodes, &overrides)?,
+                    self.select_dep(original_id, nodes, &overrides)?,
                 );
             }
 
@@ -169,7 +169,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
     ///  - Otherwise return an error message
     fn select_dep(
         &self,
-        root: &NodeIndex,
         original_id: &OriginalID,
         nodes: Vec<&NodeIndex>,
         overrides: &BTreeMap<OriginalID, NodeIndex>,

@@ -37,7 +37,7 @@ impl PackagePath {
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
         let path = dir
             .canonicalize()
-            .map_err(|e| PackagePathError::InvalidDirectory { path: dir.clone() })?;
+            .map_err(|_| PackagePathError::InvalidDirectory { path: dir.clone() })?;
 
         if !dir.is_dir() {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });

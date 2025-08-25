@@ -122,7 +122,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
-        let mut lockfile = Self::load_lockfile(&package_path)?;
+        let lockfile = Self::load_lockfile(&package_path)?;
 
         // check that there is a consistent linkage
         let _linkage = graph.linkage()?;
@@ -362,7 +362,7 @@ pkg_b = { local = "../pkg_b" }"#,
         let (env, root_path) = setup_test_move_project().await;
         let pkg_path = root_path.join("packages").join("graph");
 
-        let mut root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
+        let root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
 
         let new_lockfile = root.lockfile().clone();
 
@@ -372,7 +372,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
     #[test(tokio::test)]
     async fn test_load_and_check_for_env() {
-        let (env, root_path) = setup_test_move_project().await;
+        let (_, root_path) = setup_test_move_project().await;
 
         let path = root_path.join("graph");
         // should fail as devnet does not exist in the manifest
@@ -416,13 +416,13 @@ pkg_b = { local = "../pkg_b" }"#,
         let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
             project.file(
                 "Move.toml",
-                (&basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id())),
+                &basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id()),
             )
         });
 
         pkg_git.change_file(
             "Move.toml",
-            (&basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id())),
+            &basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id()),
         );
         pkg_git_repo.commit();
         pkg_git.change_file(
@@ -431,7 +431,7 @@ pkg_b = { local = "../pkg_b" }"#,
         );
         pkg_git_repo.commit();
 
-        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
+        let (pkg_dep_on_git, _) = git::new_repo("pkg_dep_on_git", |project| {
             project.file(
                 "Move.toml",
                 &format!(

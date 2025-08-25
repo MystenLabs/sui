@@ -115,7 +115,6 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
         result.insert(self.package().name().clone(), self.node_to_addr(self.node));
 
         for edge in self.graph.inner.edges(self.node) {
-            let name = edge.weight().name.clone();
             let dep = Self {
                 graph: self.graph,
                 node: edge.target(),
@@ -228,7 +227,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// the unpublished ones in the package graph.
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
-        let mut linkage = self.linkage()?;
+        let linkage = self.linkage()?;
 
         // Populate ALL the linkage elements
         let mut result: Vec<PackageInfo<F>> = linkage.values().cloned().collect();
@@ -301,7 +300,7 @@ mod tests {
             .add_deps([("root", "a"), ("a", "b"), ("b", "c"), ("c", "d")])
             .build();
 
-        let mut graph = scenario.graph_for("root").await;
+        let graph = scenario.graph_for("root").await;
 
         let packages = packages_by_name(&graph);
 
@@ -334,7 +333,7 @@ mod tests {
             ])
             .build();
 
-        let mut graph = scenario.graph_for("root").await;
+        let graph = scenario.graph_for("root").await;
 
         let packages = packages_by_name(&graph);
 
