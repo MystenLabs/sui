@@ -152,10 +152,20 @@ impl Store for RocksDBStore {
     fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()> {
         fail_point!("consensus-store-before-write");
 
+        tracing::info!(
+            "DB write called with {} blocks",
+            write_batch.blocks.len()
+        );
+
         let mut batch = self.blocks.batch();
         for block in write_batch.blocks {
             let block_ref = block.reference();
-            tracing::info!("Writing block {block_ref:?}: {block:?}");
+            tracing::info!(
+                "DB writing block {:?} round {} with ancestors: {:?}",
+                block_ref,
+                block.round(),
+                block.ancestors()
+            );
             batch
                 .insert_batch(
                     &self.blocks,
@@ -209,7 +219,28 @@ impl Store for RocksDBStore {
         }
 
         batch.write()?;
-        tracing::info!("Committed");
+        
+        // After write, verify ancestors exist for invariant checking
+        // Note: This is expensive and should only be used for debugging
+        #[cfg(debug_assertions)]
+        {
+            for block in &write_batch.blocks {
+                for ancestor in block.ancestors() {
+                    if ancestor.round != 0 { // Skip genesis
+                        let exists = self.contains_blocks(&[*ancestor])?;
+                        if !exists[0] {
+                            tracing::error!(
+                                "INVARIANT VIOLATION: Written block {:?} but ancestor {:?} not found in storage!",
+                                block.reference(),
+                                ancestor
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        
+        tracing::info!("DB write COMPLETE");
         fail_point!("consensus-store-after-write");
         Ok(())
     }
@@ -238,11 +269,30 @@ impl Store for RocksDBStore {
     }
 
     fn contains_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>> {
-        let refs = refs
+        tracing::info!(
+            "DB contains_blocks called with {} refs: {:?}",
+            refs.len(),
+            refs
+        );
+        
+        let keys = refs
             .iter()
             .map(|r| (r.round, r.author, r.digest))
             .collect::<Vec<_>>();
-        let exist = self.blocks.multi_contains_keys(refs)?;
+        let exist = self.blocks.multi_contains_keys(keys)?;
+        
+        tracing::info!(
+            "DB contains_blocks returning: {:?}",
+            exist
+        );
+        
+        // Critical: verify the length matches
+        assert_eq!(
+            refs.len(), 
+            exist.len(), 
+            "contains_blocks must return same number of results as input!"
+        );
+        
         Ok(exist)
     }
 
@@ -251,6 +301,12 @@ impl Store for RocksDBStore {
         author: AuthorityIndex,
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        tracing::info!(
+            "DB scan_blocks_by_author called for author {} from round {}",
+            author,
+            start_round
+        );
+        
         let mut refs = vec![];
         for kv in self.digests_by_authorities.safe_range_iter((
             Included((author, start_round, BlockDigest::MIN)),
@@ -259,6 +315,13 @@ impl Store for RocksDBStore {
             let ((author, round, digest), _) = kv?;
             refs.push(BlockRef::new(round, author, digest));
         }
+        
+        tracing::info!(
+            "DB scan_blocks_by_author returning {} blocks, first={:?}, last={:?}",
+            refs.len(),
+            refs.first(),
+            refs.last()
+        );
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = Vec::with_capacity(refs.len());
         for (r, block) in refs.into_iter().zip(results.into_iter()) {
@@ -279,6 +342,14 @@ impl Store for RocksDBStore {
         before_round: Option<Round>,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
         let before_round = before_round.unwrap_or(Round::MAX);
+        
+        tracing::info!(
+            "DB scan_last_blocks_by_author called for author {} last {} rounds before round {}",
+            author,
+            num_of_rounds,
+            before_round
+        );
+        
         let mut refs = VecDeque::new();
         for kv in self
             .digests_by_authorities
@@ -291,6 +362,13 @@ impl Store for RocksDBStore {
             let ((author, round, digest), _) = kv?;
             refs.push_front(BlockRef::new(round, author, digest));
         }
+        
+        tracing::info!(
+            "DB scan_last_blocks_by_author returning {} blocks, first={:?}, last={:?}",
+            refs.len(),
+            refs.front(),
+            refs.back()
+        );
         let results = self.read_blocks(refs.as_slices().0)?;
         let mut blocks = vec![];
         for (r, block) in refs.into_iter().zip(results.into_iter()) {

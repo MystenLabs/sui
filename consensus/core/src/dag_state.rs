@@ -709,15 +709,35 @@ impl DagState {
         let mut exist = vec![false; block_refs.len()];
         let mut missing = Vec::new();
 
+        tracing::info!(
+            "contains_blocks called with {} refs: {:?}",
+            block_refs.len(),
+            block_refs
+        );
+
         for (index, block_ref) in block_refs.into_iter().enumerate() {
             let recent_refs = &self.recent_refs_by_authority[block_ref.author];
-            if recent_refs.contains(&block_ref) || self.genesis.contains_key(&block_ref) {
+            let in_cache = recent_refs.contains(&block_ref) || self.genesis.contains_key(&block_ref);
+            
+            tracing::info!(
+                "contains_blocks check: block_ref={:?} in_cache={} (recent_refs={}, genesis={})", 
+                block_ref,
+                in_cache,
+                recent_refs.contains(&block_ref),
+                self.genesis.contains_key(&block_ref)
+            );
+            
+            if in_cache {
                 exist[index] = true;
             } else if recent_refs.is_empty() || recent_refs.last().unwrap().round < block_ref.round
             {
                 // Optimization: recent_refs contain the most recent blocks known to this authority.
                 // If a block ref is not found there and has a higher round, it definitely is
                 // missing from this authority and there is no need to check disk.
+                tracing::info!(
+                    "Skipping storage check for block_ref={:?} (optimization: newer than cached rounds)",
+                    block_ref
+                );
                 exist[index] = false;
             } else {
                 missing.push((index, block_ref));
@@ -725,6 +745,10 @@ impl DagState {
         }
 
         if missing.is_empty() {
+            tracing::info!(
+                "contains_blocks: all blocks found in cache, returning: {:?}",
+                exist
+            );
             return exist;
         }
 
@@ -732,6 +756,13 @@ impl DagState {
             .iter()
             .map(|(_, block_ref)| *block_ref)
             .collect::<Vec<_>>();
+        
+        tracing::info!(
+            "Checking storage for {} missing blocks: {:?}", 
+            missing_refs.len(),
+            missing_refs
+        );
+        
         let store_results = self
             .store
             .contains_blocks(&missing_refs)
@@ -743,10 +774,20 @@ impl DagState {
             .with_label_values(&["contains_blocks"])
             .inc();
 
-        for ((index, _), result) in missing.into_iter().zip(store_results.into_iter()) {
+        for ((index, block_ref), result) in missing.into_iter().zip(store_results.into_iter()) {
+            tracing::info!(
+                "Storage check result: block_ref={:?} exists_in_storage={}", 
+                block_ref,
+                result
+            );
             exist[index] = result;
         }
 
+        tracing::info!(
+            "contains_blocks final results: {:?}",
+            exist
+        );
+        
         exist
     }
 
@@ -1044,6 +1085,24 @@ impl DagState {
             return;
         }
 
+        tracing::info!(
+            "FLUSH START: writing {} blocks, {} commits to storage",
+            pending_blocks.len(),
+            pending_commits.len()
+        );
+        
+        // Log each block being written with its ancestors
+        for block in &pending_blocks {
+            let ancestors = block.ancestors();
+            tracing::info!(
+                "Flushing block {:?} round {} with {} ancestors: {:?}",
+                block.reference(),
+                block.round(),
+                ancestors.len(),
+                ancestors
+            );
+        }
+        
         debug!(
             "Flushing {} blocks ({}), {} commits ({}), {} commit infos ({}), {} finalized commits ({}) to storage.",
             pending_blocks.len(),
@@ -1067,6 +1126,7 @@ impl DagState {
                 .map(|(commit_ref, _)| commit_ref.to_string())
                 .join(","),
         );
+        
         self.store
             .write(WriteBatch::new(
                 pending_blocks,
@@ -1074,7 +1134,12 @@ impl DagState {
                 pending_commit_info,
                 pending_finalized_commits,
             ))
-            .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
+            .unwrap_or_else(|e| {
+                tracing::error!("FLUSH FAILED: {}", e);
+                panic!("Failed to write to storage: {:?}", e)
+            });
+        
+        tracing::info!("FLUSH COMPLETE: all blocks written to storage");
         self.context
             .metrics
             .node_metrics
