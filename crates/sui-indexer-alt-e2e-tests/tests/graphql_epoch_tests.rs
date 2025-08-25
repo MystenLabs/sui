@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::encoding::{Base58, Encoding};
 use jsonrpsee::core::Serialize;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
@@ -156,8 +157,9 @@ async fn live_object_set_digest() -> Result<(), anyhow::Error> {
         live_object_set_digest: String,
     }
 
+    let expected_digest = [1u8; 32];
     let LiveObjectsSetDigestEpoch {
-        live_object_set_digest,
+        live_object_set_digest: actual_digest,
     } = test_graphql(
         LIVE_OBJECT_SET_DIGEST_QUERY,
         sui_system_state.clone(),
@@ -166,7 +168,7 @@ async fn live_object_set_digest() -> Result<(), anyhow::Error> {
             epoch_commitments: vec![CheckpointCommitment::ECMHLiveObjectSetDigest(
                 ECMHLiveObjectSetDigest {
                     // value is not expected to match live_object_set_digest output
-                    digest: Digest::new([1u8; 32]),
+                    digest: Digest::new(expected_digest),
                 },
             )],
             ..AdvanceEpochConfig::default()
@@ -174,10 +176,8 @@ async fn live_object_set_digest() -> Result<(), anyhow::Error> {
     )
     .await?;
 
-    assert_eq!(
-        live_object_set_digest,
-        "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
-    );
+    assert_eq!(actual_digest, Base58::encode(expected_digest));
+
     Ok(())
 }
 
