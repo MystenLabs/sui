@@ -122,9 +122,9 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let tx_type = if request.transaction.is_consensus_tx() {
-            TxType::SingleWriter
-        } else {
             TxType::SharedObject
+        } else {
+            TxType::SingleWriter
         };
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
@@ -152,7 +152,6 @@ where
                             .settlement_finality_latency
                             .with_label_values(&[tx_type.as_str()])
                             .observe(settlement_finality_latency);
-                        // Record the number of retries for successful transaction
                         // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
