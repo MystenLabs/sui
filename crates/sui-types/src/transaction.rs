@@ -125,10 +125,9 @@ pub enum ObjectArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
-    // Reserve the entire balance.
-    EntireBalance,
     // Reserve a specific amount of the balance.
     MaxAmountU64(u64),
+    // TODO: Add support for reserving the entire balance.
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -172,14 +171,6 @@ impl BalanceWithdrawArg {
     pub fn new_with_amount(amount: u64, balance_type: TypeInput) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
-            type_param: WithdrawTypeParam::Balance(balance_type),
-            withdraw_from: WithdrawFrom::Sender,
-        }
-    }
-
-    pub fn new_with_entire_balance(balance_type: TypeInput) -> Self {
-        Self {
-            reservation: Reservation::EntireBalance,
             type_param: WithdrawTypeParam::Balance(balance_type),
             withdraw_from: WithdrawFrom::Sender,
         }
@@ -2344,14 +2335,13 @@ impl TransactionDataAPI for TransactionDataV1 {
         // Accumulate all withdraws per account.
         let mut withdraw_map = BTreeMap::new();
         for withdraw in withdraws {
-            if let Reservation::MaxAmountU64(amount) = &withdraw.reservation {
-                // Reserving an amount of 0 is meaningless, and potentially
-                // add various edge cases, which is error prone.
-                if *amount == 0 {
-                    return Err(UserInputError::InvalidWithdrawReservation {
-                        error: "Balance withdraw reservation amount must be non-zero".to_string(),
-                    });
-                }
+            let Reservation::MaxAmountU64(amount) = &withdraw.reservation;
+            // Reserving an amount of 0 is meaningless, and potentially
+            // add various edge cases, which is error prone.
+            if *amount == 0 {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                });
             }
             let WithdrawFrom::Sender = withdraw.withdraw_from;
             let account_id =
@@ -2359,33 +2349,21 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
                         error: e.to_string(),
                     })?;
-            dbg!(&account_id, self.sender());
             let entry = withdraw_map.entry(account_id);
             match entry {
                 Entry::Vacant(vacant) => {
                     vacant.insert(withdraw.reservation);
                 }
-                Entry::Occupied(mut occupied) => match (occupied.get_mut(), withdraw.reservation) {
-                    (
-                        Reservation::MaxAmountU64(max_amount),
-                        Reservation::MaxAmountU64(cur_reservation),
-                    ) => {
-                        let new_amount = max_amount.checked_add(cur_reservation).ok_or(
-                            UserInputError::InvalidWithdrawReservation {
-                                error: "Balance withdraw reservation overflow".to_string(),
-                            },
-                        )?;
-                        occupied.insert(Reservation::MaxAmountU64(new_amount));
-                    }
-                    _ => {
-                        // For each account, if there is ever a reservation that reserves the entire balance,
-                        // then we cannot have any other reservation for that account.
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: "Reserving entire balance on an account is exclusive"
-                                .to_string(),
-                        });
-                    }
-                },
+                Entry::Occupied(mut occupied) => {
+                    let Reservation::MaxAmountU64(max_amount) = occupied.get_mut();
+                    let Reservation::MaxAmountU64(cur_reservation) = withdraw.reservation;
+                    let new_amount = max_amount.checked_add(cur_reservation).ok_or(
+                        UserInputError::InvalidWithdrawReservation {
+                            error: "Balance withdraw reservation overflow".to_string(),
+                        },
+                    )?;
+                    occupied.insert(Reservation::MaxAmountU64(new_amount));
+                }
             }
         }
 

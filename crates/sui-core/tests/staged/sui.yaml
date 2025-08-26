@@ -1007,8 +1007,6 @@ RandomnessStateUpdate:
 Reservation:
   ENUM:
     0:
-      EntireBalance: UNIT
-    1:
       MaxAmountU64:
         NEWTYPE: U64
 SenderSignedData:

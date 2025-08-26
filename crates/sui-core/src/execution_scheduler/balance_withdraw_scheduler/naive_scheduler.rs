@@ -95,15 +95,6 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                             break;
                         }
                     }
-                    Reservation::EntireBalance => {
-                        // When we want to reserve the entire balance,
-                        // we still need to ensure that the entire balance is not already reserved.
-                        if *entry == 0 {
-                            debug!("No more balance available for {:?}", object_id);
-                            success = false;
-                            break;
-                        }
-                    }
                 }
             }
             if success {
@@ -114,12 +105,6 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                     match reservation {
                         Reservation::MaxAmountU64(amount) => {
                             *balance -= amount;
-                        }
-                        Reservation::EntireBalance => {
-                            // We use 0 remaining balance to indicate that the entire balance is reserved.
-                            // This works because we require that all explicit withdraw reservations
-                            // use a non-zero amount.
-                            *balance = 0;
                         }
                     }
                 }

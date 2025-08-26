@@ -2273,7 +2273,6 @@ impl SuiCallArg {
             }
             CallArg::BalanceWithdraw(arg) => SuiCallArg::BalanceWithdraw(SuiBalanceWithdrawArg {
                 reservation: match arg.reservation {
-                    Reservation::EntireBalance => SuiReservation::EntireBalance,
                     Reservation::MaxAmountU64(amount) => SuiReservation::MaxAmountU64(amount),
                 },
                 type_param: match arg.type_param {
@@ -2363,7 +2362,6 @@ pub enum SuiObjectArg {
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SuiReservation {
-    EntireBalance,
     MaxAmountU64(
         #[schemars(with = "BigInt<u64>")]
         #[serde_as(as = "BigInt<u64>")]
