@@ -21,14 +21,6 @@ const __dirname = path.dirname(__filename);
 
 const SIDEBARS_PATH = fileURLToPath(new URL("./sidebars.js", import.meta.url));
 
-const mdxPass = [
-  "mdxJsxFlowElement",
-  "mdxJsxTextElement",
-  "mdxFlowExpression",
-  "mdxTextExpression",
-  "mdxjsEsm",
-];
-
 require("dotenv").config();
 
 /** @type {import('@docusaurus/types').Config} */
@@ -55,7 +47,7 @@ const config = {
     amplitudeKey: process.env.AMPLITUDE_KEY,
   },
 
-  onBrokenLinks: "warn",
+  onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
 
   markdown: {
