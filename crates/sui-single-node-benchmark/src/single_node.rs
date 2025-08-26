@@ -17,7 +17,7 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
+use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};

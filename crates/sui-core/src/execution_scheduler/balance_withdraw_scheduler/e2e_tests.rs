@@ -33,9 +33,7 @@ use crate::{
         test_authority_builder::TestAuthorityBuilder,
         AuthorityState, ExecutionEnv,
     },
-    execution_scheduler::{
-        ExecutionScheduler, ExecutionSchedulerAPI, ExecutionSchedulerWrapper, PendingCertificate,
-    },
+    execution_scheduler::{ExecutionScheduler, PendingCertificate},
 };
 
 struct TestEnv {
@@ -44,7 +42,7 @@ struct TestEnv {
     gas_object: Object,
     account_objects: Vec<ObjectID>,
     rx_ready_certificates: mpsc::UnboundedReceiver<PendingCertificate>,
-    scheduler: Arc<ExecutionSchedulerWrapper>,
+    scheduler: Arc<ExecutionScheduler>,
     state: Arc<AuthorityState>,
 }
 
@@ -69,15 +67,13 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         .with_starting_objects(&starting_objects)
         .build()
         .await;
-    let scheduler = Arc::new(ExecutionSchedulerWrapper::ExecutionScheduler(
-        ExecutionScheduler::new(
-            state.get_object_cache_reader().clone(),
-            state.get_child_object_resolver().clone(),
-            state.get_transaction_cache_reader().clone(),
-            tx_ready_certificates,
-            true,
-            state.metrics.clone(),
-        ),
+    let scheduler = Arc::new(ExecutionScheduler::new(
+        state.get_object_cache_reader().clone(),
+        state.get_child_object_resolver().clone(),
+        state.get_transaction_cache_reader().clone(),
+        tx_ready_certificates,
+        &state.epoch_store_for_testing(),
+        state.metrics.clone(),
     ));
     TestEnv {
         sender,

@@ -128,7 +128,7 @@ impl TransactionInputLoader {
     ///
     /// epoch_store is used to resolve the versions of any shared input objects.
     ///
-    /// This function panics if any inputs are not available, as TransactionManager should already
+    /// This function panics if any inputs are not available, as ExecutionScheduler should already
     /// have verified that the transaction is ready to be executed.
     ///
     /// The tx_digest is provided here to support the following optimization (not yet implemented):
