@@ -63,8 +63,12 @@ impl PackagePath {
         self.0.join("Move.lock")
     }
 
-    pub fn lockfile_by_env_path(&self, env: &str) -> PathBuf {
-        self.0.join(format!(".Move.{env}.lock"))
+    pub fn publications_path(&self) -> PathBuf {
+        self.0.join("Move.published")
+    }
+
+    pub fn publocal_path(&self) -> PathBuf {
+        self.0.join("Move.pub.local")
     }
 }
 
