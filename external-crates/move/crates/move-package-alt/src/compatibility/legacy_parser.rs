@@ -291,6 +291,8 @@ fn parse_source_manifest(
                     temporary_spanned(env.id().clone()),
                 )]),
 
+                local_environments: BTreeMap::new(),
+
                 legacy_data: Some(LegacyData {
                     legacy_name: metadata.legacy_name,
                     named_addresses: programmatic_addresses,

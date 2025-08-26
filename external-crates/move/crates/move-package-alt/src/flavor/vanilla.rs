@@ -7,8 +7,6 @@
 
 use std::{collections::BTreeMap, iter::empty};
 
-use serde::{Deserialize, Serialize};
-
 use crate::schema::{
     Environment, EnvironmentID, EnvironmentName, PackageName, ReplacementDependency,
 };
@@ -26,9 +24,6 @@ pub fn default_environment() -> Environment {
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
 #[derive(Debug)]
 pub struct Vanilla;
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum VanillaDep {}
 
 impl MoveFlavor for Vanilla {
     type PublishedMetadata = ();

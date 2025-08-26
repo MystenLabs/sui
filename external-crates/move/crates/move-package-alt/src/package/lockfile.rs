@@ -8,22 +8,21 @@ use tracing::debug;
 
 use crate::{
     errors::{FileHandle, PackageResult},
-    flavor::MoveFlavor,
-    schema::{PackageID, ParsedLockfile, Pin, Publication},
+    schema::{PackageID, ParsedLockfile, Pin},
 };
 
 use super::{EnvironmentName, paths::PackagePath};
 
 #[derive(Debug)]
-pub struct Lockfiles<F: MoveFlavor> {
-    main: ParsedLockfile<F>,
+pub struct Lockfiles {
+    main: ParsedLockfile,
     file: FileHandle,
 }
 
 // TODO: instead of a Lockfile module, we should maybe have a publication information module I think; the
 // in-memory pinned section is just the dependency graph
 
-impl<F: MoveFlavor> Lockfiles<F> {
+impl Lockfiles {
     /// Read `Move.lock` from `path`; returning [None] if it doesn't exist
     pub fn read_from_dir(path: &PackagePath) -> PackageResult<Option<Self>> {
         // Parse `Move.lock`
@@ -35,7 +34,7 @@ impl<F: MoveFlavor> Lockfiles<F> {
         };
 
         let file_id = FileHandle::new(lockfile_name)?;
-        let main: ParsedLockfile<F> = toml_edit::de::from_str(file_id.source())?;
+        let main: ParsedLockfile = toml_edit::de::from_str(file_id.source())?;
 
         Ok(Some(Lockfiles {
             main,
@@ -49,10 +48,5 @@ impl<F: MoveFlavor> Lockfiles<F> {
 
     pub fn file(&self) -> FileHandle {
         self.file
-    }
-
-    /// Return the published metadata for a specific environment.
-    pub fn published_for_env(&self, env: &EnvironmentName) -> Option<Publication<F>> {
-        self.main.published.get(env).cloned()
     }
 }
