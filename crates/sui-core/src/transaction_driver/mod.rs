@@ -22,7 +22,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
-use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
+use mysten_metrics::{monitored_future, TxType};
 use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
@@ -107,7 +107,11 @@ where
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
-        let is_single_writer_tx = !request.transaction.is_consensus_tx();
+        let tx_type = if request.transaction.is_consensus_tx() {
+            TxType::SingleWriter
+        } else {
+            TxType::SharedObject
+        };
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
@@ -125,18 +129,14 @@ where
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
-                    .drive_transaction_once(tx_digest, raw_request.clone(), &options)
+                    .drive_transaction_once(tx_digest, tx_type, raw_request.clone(), &options)
                     .await
                 {
                     Ok(resp) => {
                         let settlement_finality_latency = timer.elapsed().as_secs_f64();
                         self.metrics
                             .settlement_finality_latency
-                            .with_label_values(&[if is_single_writer_tx {
-                                TX_TYPE_SINGLE_WRITER_TX
-                            } else {
-                                TX_TYPE_SHARED_OBJ_TX
-                            }])
+                            .with_label_values(&[tx_type.as_str()])
                             .observe(settlement_finality_latency);
                         // Record the number of retries for successful transaction
                         self.metrics
@@ -190,6 +190,7 @@ where
     async fn drive_transaction_once(
         &self,
         tx_digest: &TransactionDigest,
+        tx_type: TxType,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
@@ -212,6 +213,7 @@ where
                 &auth_agg,
                 &self.client_monitor,
                 tx_digest,
+                tx_type,
                 name,
                 submit_txn_resp,
                 options,

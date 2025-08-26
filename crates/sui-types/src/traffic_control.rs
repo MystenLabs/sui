@@ -299,7 +299,7 @@ impl PolicyConfig {
         PolicyConfig {
             client_id_source: ClientIdSource::SocketAddr,
             spam_policy_type: PolicyType::FreqThreshold(FreqThresholdConfig {
-                client_threshold: 500,
+                client_threshold: 1000,
                 window_size_secs: 5,
                 update_interval_secs: 1,
                 ..FreqThresholdConfig::default()

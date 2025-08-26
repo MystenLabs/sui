@@ -11,6 +11,15 @@ Sui Docs uses the MDX format for its network documentation, which allows [JSX in
 
 The frontmatter at the top of MDX pages provides context for the current topic. The only frontmatter entry required at the time of riting is `title`. In addition to the standard frontmatter entries available, the following custom items are useful for certain topic types.
 
+### Format for pages
+
+Include the following in the frontmatter for pages that use the `{@include:}` and `{@inject:}` directives. This is not custom, but necessary for proper rendering of those pages.
+
+```yaml
+mdx:
+  format: md
+```
+
 ### beta
 
 Including the `beta` entry applies a box to the top of the topic that informa the reader of the beta status of the feature or service described. Possible values include `true` for a standard box, or a list of environments the feature or service is available in (`devnet`, `testnet`, `mainnet`) to include that information in the note.
@@ -37,6 +46,26 @@ description: A guide on how to do this thing in Sui.
 effort: medium
 ---
 ```
+
+## UnsafeLink
+
+Use the `Unsafelink` component to create a link that skips the link checker.
+
+### When to use
+
+The site is configured to throw an error when it comes across a broken link at build. Sometimes it's necessary to create a link to an auto-generated page, but this throws an error because the page does not exist when the link checker runs. Use this component to bypass that check.
+
+:::info
+
+The `onBrokenMarkdownLinks: "warn"` setting remains at `warn` so that starting the site locally is not blocked by broken links. This setting does not stop thrown errors at build.
+
+:::
+
+### How to use
+
+Instead of a markdon link or anchor tag, pass the `href` value to the `UnsafeLink` component.
+
+`<UnsafeLink href="link/to/path">Link title</UnsafeLink>`
 
 ## Custom admonition boxes
 

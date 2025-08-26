@@ -231,7 +231,7 @@ function buildFetchPath(specPath, docsDir, baseAbsPath, excludePaths = []) {
   } else if (specPath.startsWith("/")) {
     absPath = path.resolve(docsDir, "." + specPath);
   } else {
-    absPath = path.resolve(docsDir, specPath);
+    absPath = path.resolve(__dirname, "../../../..", specPath);
   }
 
   if (isExcludedPath(absPath, excludePaths)) {
