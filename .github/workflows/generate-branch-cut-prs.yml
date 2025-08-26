@@ -1,0 +1,28 @@
+name: Generate Sui Branch Cut PRs
+run-name: Generate Sui Branch Cut PRs
+
+on:
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: Generate PRs
+    runs-on: ubuntu-ghcloud
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+
+      - name: Create PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        shell: bash
+        run: |
+          ./scripts/gen_branch_cut_prs.sh

@@ -10,7 +10,7 @@ As the owner (of the address that owns) an address-owned objects, you can transf
 
 ## Creating address-owned objects
 
-You can use one of the following functions (defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move)) to create address-owned objects.
+Use these [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move) functions to create address-owned objects:
 
 ```move
 public fun transfer<T: key>(obj: T, recipient: address)
@@ -31,7 +31,10 @@ If the address owner of the object is a signature-derived address (an account ad
 
 ## When to use address-owned objects
 
-Use address-owned objects in cases where you want or need only a single owner for the object at any point in time. When designing, you should generally prefer address-owned objects over shared objects as address-owned objects whenever it is reasonable or possible to do so. Owned objects do not need to be sequenced through consensus, and are therefore less prone to throughput bottlenecks if the object is being used extensively.
+Use address-owned objects when you need:
+- Single ownership at any time
+- Better performance than shared objects
+- Avoidance of consensus sequencing
 
 ## Example
 

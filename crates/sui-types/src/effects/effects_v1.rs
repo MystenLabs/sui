@@ -295,6 +295,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .collect()
     }
 
+    fn written(&self) -> Vec<ObjectRef> {
+        unimplemented!("TransactionEffectsV1::written() never called in V1");
+    }
+
     fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
         // v1 did not have accumulator events
         vec![]

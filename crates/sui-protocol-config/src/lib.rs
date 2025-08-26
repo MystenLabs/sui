@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 94;
+const MAX_PROTOCOL_VERSION: u64 = 95;
 
 // Record history of protocol version allocations here:
 //
@@ -1464,6 +1464,7 @@ pub struct ProtocolConfig {
     hash_sha3_256_legacy_min_input_len_cost: Option<u64>,
     type_name_get_base_cost: Option<u64>,
     type_name_get_per_byte_cost: Option<u64>,
+    type_name_id_base_cost: Option<u64>,
 
     string_check_utf8_base_cost: Option<u64>,
     string_check_utf8_per_byte_cost: Option<u64>,
@@ -2649,6 +2650,7 @@ impl ProtocolConfig {
             hash_sha3_256_legacy_min_input_len_cost: None,
             type_name_get_base_cost: None,
             type_name_get_per_byte_cost: None,
+            type_name_id_base_cost: None,
             string_check_utf8_base_cost: None,
             string_check_utf8_per_byte_cost: None,
             string_is_char_boundary_base_cost: None,
@@ -3955,6 +3957,9 @@ impl ProtocolConfig {
 
                     // Enable party transfer on mainnet.
                     cfg.feature_flags.enable_party_transfer = true;
+                }
+                95 => {
+                    cfg.type_name_id_base_cost = Some(52);
                 }
                 // Use this template when making changes:
                 //

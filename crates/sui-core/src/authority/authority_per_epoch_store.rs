@@ -612,18 +612,19 @@ impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         tracing::warn!("AuthorityEpochTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size, KeyIndexing,
+            KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 2 * 1024;
+        let mutexes = default_mutex_count() * 2;
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
-        const VALUE_CACHE_SIZE: usize = 5000;
+        let value_cache_size = default_value_cache_size() * 2;
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
-        let lru_bloom_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
-        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
+        let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
+        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
         let pending_checkpoint_signatures_config = KeySpaceConfig::new()
             .disable_unload()
-            .with_value_cache_size(1000);
+            .with_value_cache_size(default_value_cache_size());
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let object_ref_indexing = KeyIndexing::Hash;
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
@@ -634,7 +635,7 @@ impl AuthorityEpochTables {
                 "signed_transactions".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     tx_digest_indexing.clone(),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     lru_bloom_config.clone(),
                     digest_prefix.clone(),
@@ -644,7 +645,7 @@ impl AuthorityEpochTables {
                 "owned_object_locked_transactions".to_string(),
                 ThConfig::new_with_config_indexing(
                     object_ref_indexing,
-                    MUTEXES * 2,
+                    mutexes * 2,
                     uniform_key,
                     bloom_config.clone(),
                 ),
@@ -653,7 +654,7 @@ impl AuthorityEpochTables {
                 "effects_signatures".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     tx_digest_indexing.clone(),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     lru_bloom_config.clone(),
                     digest_prefix.clone(),
@@ -663,7 +664,7 @@ impl AuthorityEpochTables {
                 "signed_effects_digests".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     tx_digest_indexing.clone(),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     bloom_config.clone(),
                     digest_prefix.clone(),
@@ -673,7 +674,7 @@ impl AuthorityEpochTables {
                 "transaction_cert_signatures".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     tx_digest_indexing.clone(),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     lru_bloom_config.clone(),
                     digest_prefix.clone(),
@@ -681,13 +682,13 @@ impl AuthorityEpochTables {
             ),
             (
                 "next_shared_object_versions_v2".to_string(),
-                ThConfig::new_with_config(32 + 8, MUTEXES, uniform_key, lru_only_config.clone()),
+                ThConfig::new_with_config(32 + 8, mutexes, uniform_key, lru_only_config.clone()),
             ),
             (
                 "consensus_message_processed".to_string(),
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::Hash,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     bloom_config.clone(),
                 ),
@@ -696,7 +697,7 @@ impl AuthorityEpochTables {
                 "pending_consensus_transactions".to_string(),
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::Hash,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
                 ),
@@ -717,7 +718,7 @@ impl AuthorityEpochTables {
                 "builder_digest_to_checkpoint".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     tx_digest_indexing.clone(),
-                    MUTEXES * 4,
+                    mutexes * 4,
                     uniform_key,
                     lru_bloom_config.clone(),
                     digest_prefix.clone(),
@@ -727,7 +728,7 @@ impl AuthorityEpochTables {
                 "transaction_key_to_digest".to_string(),
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::Hash,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
                 ),
@@ -736,7 +737,7 @@ impl AuthorityEpochTables {
                 "pending_checkpoint_signatures".to_string(),
                 ThConfig::new_with_config(
                     8 + 8,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
                     pending_checkpoint_signatures_config,
                 ),
@@ -745,22 +746,22 @@ impl AuthorityEpochTables {
                 "builder_checkpoint_summary_v2".to_string(),
                 ThConfig::new_with_config(
                     8,
-                    MUTEXES,
+                    mutexes,
                     sequence_key,
                     builder_checkpoint_summary_v2_config,
                 ),
             ),
             (
                 "state_hash_by_checkpoint".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, sequence_key, bloom_config.clone()),
+                ThConfig::new_with_config(8, mutexes, sequence_key, bloom_config.clone()),
             ),
             (
                 "running_root_accumulators".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, sequence_key, bloom_config.clone()),
+                ThConfig::new_with_config(8, mutexes, sequence_key, bloom_config.clone()),
             ),
             (
                 "authority_capabilities".to_string(),
-                ThConfig::new(104, MUTEXES, uniform_key),
+                ThConfig::new(104, mutexes, uniform_key),
             ),
             (
                 "authority_capabilities_v2".to_string(),
@@ -774,7 +775,7 @@ impl AuthorityEpochTables {
                 "executed_transactions_to_checkpoint".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     tx_digest_indexing.clone(),
-                    MUTEXES * 4,
+                    mutexes * 4,
                     uniform_key,
                     lru_bloom_config.clone(),
                     digest_prefix.clone(),
@@ -800,7 +801,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "deferred_transactions".to_string(),
-                ThConfig::new_with_indexing(KeyIndexing::Hash, MUTEXES, uniform_key),
+                ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
             ),
             (
                 "dkg_processed_messages_v2".to_string(),
@@ -832,15 +833,15 @@ impl AuthorityEpochTables {
             ),
             (
                 "congestion_control_object_debts".to_string(),
-                ThConfig::new_with_config(32, MUTEXES, uniform_key, lru_bloom_config.clone()),
+                ThConfig::new_with_config(32, mutexes, uniform_key, lru_bloom_config.clone()),
             ),
             (
                 "congestion_control_randomness_object_debts".to_string(),
-                ThConfig::new(32, MUTEXES, uniform_key),
+                ThConfig::new(32, mutexes, uniform_key),
             ),
             (
                 "execution_time_observations".to_string(),
-                ThConfig::new(8 + 4, MUTEXES, uniform_key),
+                ThConfig::new(8 + 4, mutexes, uniform_key),
             ),
         ];
         Self::open_tables_read_write(

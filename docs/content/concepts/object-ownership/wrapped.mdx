@@ -4,7 +4,7 @@ description: Wrapped objects are object data structures nested inside of another
 keywords: [ wrapped objects, wrapping objects, unwrapping objects, direct wrapping, wrap directly, wrap object directly, wrap object option, option wrap, vector wrap, wrap object vector ]
 ---
 
-In many programming languages, you organize data structures in layers by nesting complex data structures in another data structure. In Move, you can organize data structures by putting a field of `struct` type in another, like the following:
+You can nest structs to organize data structures in Move. This example shows a basic wrapper pattern:
 
 ```move
 public struct Foo has key {
@@ -42,7 +42,12 @@ There are a few ways to wrap a Sui object into another Sui object, and their use
 
 ### Direct wrapping
 
-If you put a Sui object type directly as a field in another Sui object type (as in the preceding example), it is called _direct wrapping_. The most important property achieved through direct wrapping is that the wrapped object cannot be unwrapped unless the wrapping object is destroyed. In the preceding example, to make `Bar` a standalone object again, unpack (and hence delete) the `Foo` object. Direct wrapping is the best way to implement object locking, which is to lock an object with constrained access. You can unlock it only through specific contract calls.
+**Direct wrapping** occurs when a Sui object type contains another Sui object type as a direct field. The most important properties achieved through direct wrapping are:
+
+- The wrapped object cannot be extracted without destroying the wrapper
+- Provides strong encapsulation guarantees
+- Ideal for implementing object locking patterns
+- Requires explicit contract calls to modify access
 
 The following example implementation of a trusted swap demonstrates how to use direct wrapping. Assume there is an NFT-style `Object` type that has `scarcity` and `style`. In this example, `scarcity` determines how rare the object is (presumably the more scarce the higher its market value), and `style` determines the object content/type or how it's rendered. If you own some of these objects and want to trade your objects with others, you want to make sure it's a fair trade. You are willing to trade an object only with another one that has identical `scarcity`, but want a different `style` (so that you can collect more styles).
 
@@ -161,6 +166,7 @@ To view a more complex example of how to use direct wrapping, see the [escrow](h
 
 When Sui object type `Bar` is directly wrapped into `Foo`, there is not much flexibility: a `Foo` object must have a `Bar` object in it, and to take out the `Bar` object you must destroy the `Foo` object. However, for more flexibility, the wrapping type might not always have the wrapped object in it, and the wrapped object might be replaced with a different object at some point.
 
+
 To demonstrate this use case, design a simple game character: A warrior with a sword and shield. A warrior might have a sword and shield, or might not have either. The warrior should be able to add a sword and shield, and replace the current ones at any time. To design this, define a `SimpleWarrior` type:
 
 ```move
@@ -221,7 +227,6 @@ To view a more complex example, see [hero](https://github.com/MystenLabs/sui/tre
 ### Wrapping through `vector`
 
 The concept of wrapping objects in a vector field of another Sui object is very similar to wrapping through `Option`: an object can contain 0, 1, or many of the wrapped objects of the same type.
-
 Wrapping through vector resembles:
 
 ```move

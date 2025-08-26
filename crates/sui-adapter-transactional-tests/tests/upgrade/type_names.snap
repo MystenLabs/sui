@@ -18,61 +18,61 @@ created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 7280800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 3, lines 32-62:
+task 3, lines 32-69:
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 10001600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 10875600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 4, line 64:
+task 4, line 71:
 //# run A2::m::canary --type-args A0::m::A --args true --sender A
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, line 66:
+task 5, line 73:
 //# run A2::m::canary --type-args A1::m::B --args true --sender A
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 68:
+task 6, line 75:
 //# run A2::m::canary --type-args A0::m::A --args false --sender A
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, line 70:
+task 7, line 77:
 //# run A2::m::canary --type-args A1::m::B --args false --sender A
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8, line 72:
+task 8, line 79:
 //# run A2::m::canary --type-args A0::m::EA --args true --sender A
 created: object(8,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9, line 74:
+task 9, line 81:
 //# run A2::m::canary --type-args A1::m::EB --args true --sender A
 created: object(9,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10, line 76:
+task 10, line 83:
 //# run A2::m::canary --type-args A0::m::EA --args false --sender A
 created: object(10,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 11, line 78:
+task 11, line 85:
 //# run A2::m::canary --type-args A1::m::EB --args false --sender A
 created: object(11,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12, line 80:
+task 12, line 87:
 //# view-object 4,0
 Owner: Account Address ( A )
 Version: 5
@@ -150,7 +150,7 @@ Contents: A0::m::Canary {
     ],
 }
 
-task 13, line 82:
+task 13, line 89:
 //# view-object 5,0
 Owner: Account Address ( A )
 Version: 6
@@ -228,7 +228,7 @@ Contents: A0::m::Canary {
     ],
 }
 
-task 14, line 84:
+task 14, line 91:
 //# view-object 6,0
 Owner: Account Address ( A )
 Version: 7
@@ -306,7 +306,7 @@ Contents: A0::m::Canary {
     ],
 }
 
-task 15, line 86:
+task 15, line 93:
 //# view-object 7,0
 Owner: Account Address ( A )
 Version: 8
@@ -384,7 +384,7 @@ Contents: A0::m::Canary {
     ],
 }
 
-task 16, line 88:
+task 16, line 95:
 //# view-object 8,0
 Owner: Account Address ( A )
 Version: 9
@@ -462,7 +462,7 @@ Contents: A0::m::Canary {
     ],
 }
 
-task 17, line 90:
+task 17, line 97:
 //# view-object 9,0
 Owner: Account Address ( A )
 Version: 10
@@ -540,7 +540,7 @@ Contents: A0::m::Canary {
     ],
 }
 
-task 18, line 92:
+task 18, line 99:
 //# view-object 10,0
 Owner: Account Address ( A )
 Version: 11
@@ -618,7 +618,7 @@ Contents: A0::m::Canary {
     ],
 }
 
-task 19, line 94:
+task 19, line 101:
 //# view-object 11,0
 Owner: Account Address ( A )
 Version: 12

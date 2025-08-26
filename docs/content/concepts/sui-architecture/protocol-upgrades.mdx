@@ -13,7 +13,7 @@ To solve this problem, Sui uses a process called protocol upgrades.
 
 An outline of the process used for protocol upgrades includes the following steps:
 
-1. A Sui developer codes the new feature, but restricts access to the feature using a "feature flag"  - a boolean config variable that is initially set to false.
+1. A Sui developer codes the new feature, but restricts access to the feature using a feature flag. A feature flag is a boolean config variable that is initially set to false.
 1. The value of the feature flag is retrieved from a struct called `ProtocolConfig`.
 1. The developer creates a new version of the `ProtocolConfig` struct where the new feature flag is set to true.
 1. A new release of the Sui validator software is built and released to validator and full node operators.
