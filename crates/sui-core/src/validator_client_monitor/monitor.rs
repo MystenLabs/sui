@@ -39,6 +39,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     cached_scores: RwLock<Option<HashMap<AuthorityName, f64>>>,
     last_consensus_scores: RwLock<Option<(u64, Vec<u64>)>>,
+    is_shared_object_tx: bool,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -49,6 +50,7 @@ where
         config: ValidatorClientMonitorConfig,
         metrics: Arc<ValidatorClientMetrics>,
         authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
+        is_shared_object_tx: bool,
     ) -> Arc<Self> {
         info!(
             "Validator client monitor starting with config: {:?}",
@@ -62,6 +64,7 @@ where
             authority_aggregator,
             cached_scores: RwLock::new(None),
             last_consensus_scores: RwLock::new(None),
+            is_shared_object_tx,
         });
 
         let monitor_clone = monitor.clone();
@@ -80,6 +83,7 @@ where
             ValidatorClientMonitorConfig::default(),
             Arc::new(ValidatorClientMetrics::new(&Registry::default())),
             Arc::new(ArcSwap::new(authority_aggregator)),
+            false,
         )
     }
 
@@ -175,12 +179,18 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
         let score_map = self.client_stats.read().get_all_validator_stats(committee);
 
+        let tx_type = if self.is_shared_object_tx {
+            "shared_object_tx"
+        } else {
+            "owned_object_tx"
+        };
+
         for (validator, score) in score_map.iter() {
-            debug!("Validator {}: score {}", validator, score);
+            debug!("Validator [{tx_type}] {}: score {}", validator, score);
             let display_name = authority_agg.get_display_name(validator);
             self.metrics
                 .performance_score
-                .with_label_values(&[&display_name])
+                .with_label_values(&[&display_name, tx_type])
                 .set(*score);
         }
 
@@ -202,21 +212,27 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::Finalize => "finalize",
         };
 
+        let tx_type = if self.is_shared_object_tx {
+            "shared_object_tx"
+        } else {
+            "owned_object_tx"
+        };
+
         match feedback.result {
             Ok(latency) => {
                 self.metrics
                     .observed_latency
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, tx_type])
                     .observe(latency.as_secs_f64());
                 self.metrics
                     .operation_success
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, tx_type])
                     .inc();
             }
             Err(()) => {
                 self.metrics
                     .operation_failure
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, tx_type])
                     .inc();
             }
         }
