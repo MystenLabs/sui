@@ -11,16 +11,16 @@ use move_package_alt::{
         Vanilla,
         vanilla::{self, default_environment},
     },
-    package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
+    package::{RootPackage, manifest::Manifest},
 };
 use std::{collections::BTreeMap, path::Path};
-use tracing::{debug, info};
+use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 /// Resolve the package contained in the same directory as [path], and snapshot a value based
 /// on the extension of [path]:
-///  - ".locked": the contents of the lockfile
 ///  - ".pinned": the contents of the pinned dependencies
+///  - ".graph_to_lockfile": TODO
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let _ = tracing_subscriber::fmt::fmt()
         .with_env_filter(EnvFilter::from_default_env())
@@ -72,21 +72,6 @@ impl Test<'_> {
                 Ok(s) => s,
                 Err(e) => e.to_string(),
             },
-            "locked" => {
-                // TODO: this needs to deal with ephemeral environments
-
-                info!(
-                    ".locked snapshot tests are deprecated; they should be migrated to schema::lockfile::test"
-                );
-                let dir = PackagePath::new(self.toml_path.parent().unwrap().to_path_buf()).unwrap();
-
-                let lockfile = Lockfiles::<Vanilla>::read_from_dir(&dir);
-
-                match lockfile {
-                    Ok(l) => l.unwrap().render_main_lockfile().to_string(),
-                    Err(e) => e.to_string(),
-                }
-            }
             "pinned" => match run_pinning_wrapper(self.toml_path) {
                 Ok(s) => s,
                 Err(e) => e.to_string(),
@@ -169,9 +154,6 @@ datatest_stable::harness!(
     run_test,
     "tests/data",
     r".*\.graph_to_lockfile$",
-    run_test,
-    "tests/data",
-    r".*\.locked$",
     run_test,
     "tests/data",
     r".*\.pinned$",
