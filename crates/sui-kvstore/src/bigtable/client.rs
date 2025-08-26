@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as _, Result};
 use async_trait::async_trait;
 use gcp_auth::{Token, TokenProvider};
 use http::{HeaderValue, Request, Response};
@@ -23,7 +23,6 @@ use sui_types::{
     messages_consensus::TimestampMs,
     object::Object,
     storage::{EpochInfo, ObjectKey},
-    transaction::Transaction,
 };
 use tonic::{
     body::BoxBody,
@@ -223,9 +222,9 @@ impl KeyValueStoreReader for BigTableClient {
                 }
             }
             result.push(TransactionData {
-                transaction: transaction.ok_or_else(|| anyhow!("transaction field is missing"))?,
-                effects: effects.ok_or_else(|| anyhow!("effects field is missing"))?,
-                events: events.ok_or_else(|| anyhow!("events field is missing"))?,
+                transaction: transaction.context("transaction field is missing")?,
+                effects: effects.context("effects field is missing")?,
+                events: events.context("events field is missing")?,
                 timestamp,
                 checkpoint_number,
             })
@@ -259,9 +258,9 @@ impl KeyValueStoreReader for BigTableClient {
                 }
             }
             let checkpoint = Checkpoint {
-                summary: summary.ok_or_else(|| anyhow!("summary field is missing"))?,
-                contents: contents.ok_or_else(|| anyhow!("contents field is missing"))?,
-                signatures: signatures.ok_or_else(|| anyhow!("signatures field is missing"))?,
+                summary: summary.context("summary field is missing")?,
+                contents: contents.context("contents field is missing")?,
+                signatures: signatures.context("signatures field is missing")?,
             };
             checkpoints.push(checkpoint);
         }
@@ -390,35 +389,33 @@ impl KeyValueStoreReader for BigTableClient {
             )
             .await?;
 
-        let mut results = vec![];
-        for row in response {
-            let mut tx: Option<Transaction> = None;
-            let mut transaction_events: Option<TransactionEvents> = None;
-            let mut timestamp_ms = 0;
-            for (column, value) in row {
-                match std::str::from_utf8(&column)? {
-                    TRANSACTION_COLUMN_QUALIFIER => tx = Some(bcs::from_bytes(&value)?),
-                    EVENTS_COLUMN_QUALIFIER => transaction_events = Some(bcs::from_bytes(&value)?),
-                    TIMESTAMP_COLUMN_QUALIFIER => timestamp_ms = bcs::from_bytes(&value)?,
-                    _ => error!("unexpected column {:?} in transactions table", column),
-                }
-            }
-            let digest = *tx
-                .ok_or_else(|| anyhow!("digest field is missing"))?
-                .digest();
-            let events = transaction_events
-                .ok_or_else(|| anyhow!("events field is missing"))?
-                .data;
-            results.push((
-                digest,
-                TransactionEventsData {
-                    events,
-                    timestamp_ms,
-                },
-            ));
-        }
+        transaction_digests
+            .iter()
+            .zip(response)
+            .map(|(&digest, row)| {
+                let mut transaction_events: Option<TransactionEvents> = None;
+                let mut timestamp_ms = 0;
 
-        Ok(results)
+                for (column, value) in row {
+                    match std::str::from_utf8(&column)? {
+                        EVENTS_COLUMN_QUALIFIER => {
+                            transaction_events = Some(bcs::from_bytes(&value)?)
+                        }
+                        TIMESTAMP_COLUMN_QUALIFIER => timestamp_ms = bcs::from_bytes(&value)?,
+                        _ => error!("unexpected column {:?} in transactions table", column),
+                    }
+                }
+
+                let events = transaction_events.context("events field is missing")?.data;
+                Ok((
+                    digest,
+                    TransactionEventsData {
+                        events,
+                        timestamp_ms,
+                    },
+                ))
+            })
+            .collect()
     }
 }
 

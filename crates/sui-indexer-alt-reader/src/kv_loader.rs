@@ -196,16 +196,14 @@ impl KvLoader {
                 .load_many(keys)
                 .await?
                 .into_iter()
-                .map(|(key, stored)| Ok((key.0, TransactionContents::Bigtable(stored))))
-                .collect::<Result<HashMap<TransactionDigest, TransactionContents>, Arc<Error>>>(
-                )?),
+                .map(|(key, stored)| (key.0, TransactionContents::Bigtable(stored)))
+                .collect()),
             Self::Pg(loader) => Ok(loader
                 .load_many(keys)
                 .await?
                 .into_iter()
-                .map(|(key, stored)| Ok((key.0, TransactionContents::Pg(stored))))
-                .collect::<Result<HashMap<TransactionDigest, TransactionContents>, Arc<Error>>>(
-                )?),
+                .map(|(key, stored)| (key.0, TransactionContents::Pg(stored)))
+                .collect()),
         }
     }
 }

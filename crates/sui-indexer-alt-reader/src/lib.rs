@@ -10,7 +10,6 @@ pub mod displays;
 pub mod epochs;
 pub mod error;
 pub mod events;
-
 pub mod full_node_client;
 pub mod kv_loader;
 pub(crate) mod metrics;
