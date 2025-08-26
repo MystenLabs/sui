@@ -62,7 +62,7 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
     --base main \
     --head "$BRANCH" \
     --title "$BODY" \
-    --reviewer "ebmifa" \
+    --reviewer "MystenLabs/mysten-pe" \
     --body "$BODY" \
     2>&1 | grep -Eo 'https://github.com/[^ ]+')
 
@@ -101,7 +101,7 @@ elif [[ "$PR_TYPE" == *version-bump* ]]; then
     --base main \
     --head "$BRANCH" \
     --title "$BODY" \
-    --reviewer "ebmifa" \
+    --reviewer "MystenLabs/mysten-pe" \
     --body "$BODY" \
     2>&1 | grep -Eo 'https://github.com/[^ ]+')
 
