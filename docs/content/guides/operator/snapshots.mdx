@@ -58,12 +58,12 @@ To restore from a RocksDB snapshot, follow these steps:
    ```
    - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
    - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
-   - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--network`: Network to download snapshot for. Defaults to `mainnet`.
    - `--path`: Path to snapshot directory on local filesystem.
    - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and a static Cloudflare R2 bucket is used.
    - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`. This cannot be used with `--no-sign-request`.
    - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported. This cannot be used with `--no-sign-request`.
-   - `--skip-indexes`: Skips downloading the very large `indexes/` dir, used by jsonrpc on the fullnode
+   - `--skip-indexes`: Skips downloading the very large `indexes/` dir, used by jsonrpc on the full node
 
    The following environment variables are used if `--no-sign-request` is not set:
    * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
@@ -98,7 +98,7 @@ The following steps can be used to restore a node from a Formal snapshot:
    - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
    - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
    - `--genesis`: The path to the location of the network's `genesis.blob`.
-   - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--network`: Network to download snapshot for. Defaults to `mainnet`.
    - `--path`: Path to snapshot directory on local filesystem.
    - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
    - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`. This cannot be used with `--no-sign-request`.

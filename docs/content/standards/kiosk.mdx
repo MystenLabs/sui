@@ -404,7 +404,7 @@ public fun mutable_borrow_example<T>(
 
 ### Mutable borrow with borrow_val
 
-You can use the PTB-friendly kiosk::borrow_val function. It allows you to take an asset and place it back in the same transaction. To make sure the asset is placed back into the kiosk, the function "obliges" the caller with a “Hot Potato”.
+Use the PTB-friendly `kiosk::borrow_val` function to take an asset and place it back in the same transaction. To make sure the asset is placed back into the kiosk, the function obliges the caller with a Hot Potato. See The Move Book for more information on the [Hot Potato pattern](https://move-book.com/programmability/hot-potato-pattern).
 
 ### Mutable borrow with `borrow_val` using programmable transaction blocks
 

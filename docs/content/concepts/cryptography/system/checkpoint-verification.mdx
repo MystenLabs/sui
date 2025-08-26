@@ -1,9 +1,9 @@
 ---
 title: Checkpoint Verification
-description: On the Sui network, checkpoints define the history of the blockchain. Checkpoint verification is how Full nodes and other clients guarantee their state is exactly the same as the Sui network.
+description: On the Sui network, checkpoints define the history of the blockchain. Checkpoint verification is how full nodes and other clients guarantee their state is exactly the same as the Sui network.
 ---
 
-On the Sui network, checkpoints define the history of the blockchain. They are quite similar to the concept of blocks used by traditional blockchains like Bitcoin or Ethereum. The Sui blockchain, however, forms checkpoints after transaction execution has already happened to provide a certified history of the chain, instead of being formed before execution.
+On the Sui network, checkpoints define the blockchain's history. Unlike traditional blockchains that create blocks before execution, Sui creates checkpoints after transaction execution to provide a certified record of chain history.
 
 Checkpoints contain:
 
@@ -11,11 +11,11 @@ Checkpoints contain:
 - A list of all the transaction digests (and the corresponding transaction effects digests) that are included in the checkpoint.
 - A set of signatures from a quorum (more than 2/3rds) of the validators that formed the committee at the time the checkpoint was created.
 
-Both validators and Full nodes consume checkpoints to remain synchronized with the network.
+Both validators and full nodes consume checkpoints to remain synchronized with the network.
 
-## Checkpoint verification
+## Verifying checkpoints
 
-For Full nodes and validators to trust a checkpoint, they must first verify it. Verification ensures that the checkpoint is a true checkpoint that the Sui validator committee created.
+For full nodes and validators to trust a checkpoint, they must first verify it. Verification ensures that the checkpoint is a true checkpoint that the Sui validator committee created.
 
 Checkpoint verification requires two interdependent pieces:
 
@@ -32,14 +32,14 @@ These pieces seem to create a circular dependency issue. The client needs to kno
 1. The client loads the initial committee from the genesis checkpoint.
 1. The client uses the state sync network or Sui archive to obtain the next checkpoint.
 1. The client verifies the signatures on the checkpoint using the current committee's public keys, and verifies that the checkpoint's previous checkpoint hash is equal to the hash of the previous checkpoint that the client validated.
-1. If the checkpoint is invalid, an error is raised.
+1. If the checkpoint is invalid, the client raises an error.
 1. Otherwise, the client checks if the checkpoint is the last one of the current epoch.
     - If so, load the next committee from it, and use that committee as the current committee.
     - If not, return to step 3 and continue.
 
 This allows the client to eventually verify all checkpoints up to the present time.
 
-## What do checkpoints commit to?
+## Checkpoint commitments
 
 After a client verifies a checkpoint, what can it do with that information?
 
