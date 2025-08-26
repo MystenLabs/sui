@@ -373,7 +373,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_events_for_transactions(
         &mut self,
         transaction_digests: &[TransactionDigest],
-    ) -> Result<Vec<TransactionEventsData>> {
+    ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>> {
         // Fetch just the events for the transaction.
         let response = self
             .multi_get(
@@ -409,11 +409,13 @@ impl KeyValueStoreReader for BigTableClient {
             let events = transaction_events
                 .ok_or_else(|| anyhow!("events field is missing"))?
                 .data;
-            results.push(TransactionEventsData {
+            results.push((
                 digest,
-                events,
-                timestamp_ms,
-            });
+                TransactionEventsData {
+                    events,
+                    timestamp_ms,
+                },
+            ));
         }
 
         Ok(results)

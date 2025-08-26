@@ -109,7 +109,7 @@ impl BigtableReader {
     pub(crate) async fn transactions_events(
         &self,
         keys: &[TransactionDigest],
-    ) -> Result<Vec<TransactionEventsData>, Error> {
+    ) -> anyhow::Result<Vec<(TransactionDigest, TransactionEventsData)>> {
         measure(
             "events",
             &keys,

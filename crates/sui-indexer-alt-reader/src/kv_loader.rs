@@ -306,14 +306,6 @@ impl TransactionEventsContents {
         }
     }
 
-    pub fn digest(&self) -> anyhow::Result<TransactionDigest> {
-        match self {
-            Self::Pg(stored) => TransactionDigest::try_from(stored.tx_digest.clone())
-                .context("Failed to deserialize transaction digest"),
-            Self::Bigtable(kv) => Ok(kv.digest),
-        }
-    }
-
     pub fn timestamp_ms(&self) -> u64 {
         match self {
             Self::Pg(stored) => stored.timestamp_ms as u64,

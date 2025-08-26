@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::dataloader::Loader;
-use diesel::{ExpressionMethods, QueryDsl, Queryable};
+use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
 use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
@@ -13,14 +13,14 @@ use sui_types::digests::TransactionDigest;
 
 use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
 
-/// Key for fetching transaction events contents (TranactionDigest, Events, TimestampMs) by digest.
+/// Key for fetching transaction events contents (Events, TimestampMs) by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionEventsKey(pub TransactionDigest);
 
 /// Partial transaction and events for when you only need transaction content for events
-#[derive(Debug, Clone, Queryable)]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = kv_transactions)]
 pub struct StoredTransactionEvents {
-    pub tx_digest: Vec<u8>,
     pub events: Vec<u8>,
     pub timestamp_ms: i64,
 }
@@ -28,12 +28,12 @@ pub struct StoredTransactionEvents {
 #[async_trait::async_trait]
 impl Loader<TransactionEventsKey> for PgReader {
     type Value = StoredTransactionEvents;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[TransactionEventsKey],
-    ) -> Result<HashMap<TransactionEventsKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<TransactionEventsKey, Self::Value>, Error> {
         use kv_transactions::dsl as t;
 
         if keys.is_empty() {
@@ -43,18 +43,16 @@ impl Loader<TransactionEventsKey> for PgReader {
         let mut conn = self.connect().await.map_err(Arc::new)?;
 
         let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
-        let transactions: Vec<StoredTransactionEvents> = conn
+        let transactions: Vec<(Vec<u8>, StoredTransactionEvents)> = conn
             .results(
                 t::kv_transactions
-                    .select((t::tx_digest, t::events, t::timestamp_ms))
+                    .select((t::tx_digest, StoredTransactionEvents::as_select()))
                     .filter(t::tx_digest.eq_any(digests)),
             )
-            .await
-            .map_err(Arc::new)?;
-
+            .await?;
         let digest_to_stored: HashMap<_, _> = transactions
             .into_iter()
-            .map(|stored| (stored.tx_digest.clone(), stored))
+            .map(|(tx_digest, stored)| (tx_digest.clone(), stored))
             .collect();
 
         Ok(keys
@@ -70,7 +68,7 @@ impl Loader<TransactionEventsKey> for PgReader {
 #[async_trait::async_trait]
 impl Loader<TransactionEventsKey> for BigtableReader {
     type Value = TransactionEventsData;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
@@ -85,7 +83,7 @@ impl Loader<TransactionEventsKey> for BigtableReader {
             .transactions_events(&digests)
             .await?
             .into_iter()
-            .map(|t| (TransactionEventsKey(t.digest), t))
+            .map(|(digest, events)| (TransactionEventsKey(digest), events))
             .collect())
     }
 }

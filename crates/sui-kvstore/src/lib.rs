@@ -45,7 +45,7 @@ pub trait KeyValueStoreReader {
     async fn get_events_for_transactions(
         &mut self,
         keys: &[TransactionDigest],
-    ) -> Result<Vec<TransactionEventsData>>;
+    ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
 }
 
 #[async_trait]
@@ -76,7 +76,6 @@ pub struct TransactionData {
 /// Partial transaction and events for when we only need transaction content for events
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEventsData {
-    pub digest: TransactionDigest,
     pub events: Vec<Event>,
     pub timestamp_ms: u64,
 }
