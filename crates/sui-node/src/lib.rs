@@ -2117,8 +2117,8 @@ impl SuiNode {
     }
 
     /// Get a short prefix of a digest for metric labels
-    fn get_digest_prefix(digest: impl std::fmt::Debug) -> String {
-        let digest_str = format!("{:?}", digest);
+    fn get_digest_prefix(digest: impl std::fmt::Display) -> String {
+        let digest_str = digest.to_string();
         if digest_str.len() >= 8 {
             digest_str[0..8].to_string()
         } else {
@@ -2286,10 +2286,10 @@ impl SuiNode {
                 error!(
                     checkpoint_seq = checkpoint_seq,
                     checkpoint_digest = ?checkpoint_digest,
-                    "Checkpoint fork detected! Node startup halted."
+                    "Checkpoint fork detected! Node startup halted. Sleeping indefinitely."
                 );
                 loop {
-                    std::thread::park();
+                    std::thread::sleep(std::time::Duration::from_secs(5));
                 }
             }
             ForkCrashBehavior::ReturnError => {
@@ -2334,10 +2334,10 @@ impl SuiNode {
                     tx_digest = ?tx_digest,
                     expected_effects_digest = ?expected_effects_digest,
                     actual_effects_digest = ?actual_effects_digest,
-                    "Transaction fork detected! Node startup halted."
+                    "Transaction fork detected! Node startup halted. Sleeping indefinitely."
                 );
                 loop {
-                    std::thread::park();
+                    std::thread::sleep(std::time::Duration::from_secs(5));
                 }
             }
             ForkCrashBehavior::ReturnError => {
