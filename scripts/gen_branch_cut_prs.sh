@@ -37,19 +37,16 @@ cargo run --bin sui-framework-snapshot
 echo "Staging all changed files..."
 git add -A .
 
-# Commit, push, and create PR.
+# Configure git user
 git config user.name "github-actions[bot]"
-git config user.email \
-  "41898282+github-actions[bot]@users.noreply.github.com"
-
-git commit -m "Sui v${SUI_VERSION} Framework Bytecode snapshot"
-git push -u origin "$BRANCH"
+git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
 # Generate PR body
-BODY=$(cat <<-EOF
-Sui v${SUI_VERSION} Framework Bytecode snapshot
-EOF
-)
+BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
+
+# Commit, push, and create PR.
+git commit -m "$BODY"
+git push -u origin "$BRANCH"
 
 PR_URL=$(gh pr create \
   --base main \
@@ -84,19 +81,11 @@ cargo check || true
 echo "Staging all changed files..."
 git add -A .
 
-# Commit, push, and create PR.
-git config user.name "github-actions[bot]"
-git config user.email \
-  "41898282+github-actions[bot]@users.noreply.github.com"
-
-git commit -m "Sui v${NEW_SUI_VERSION} Version Bump"
-git push -u origin "$BRANCH"
-
 # Generate PR body
-BODY=$(cat <<-EOF
-Sui v${NEW_SUI_VERSION} Version Bump
-EOF
-)
+BODY="Sui v${NEW_SUI_VERSION} Version Bump"
+
+git commit -m "$BODY"
+git push -u origin "$BRANCH"
 
 PR_URL=$(gh pr create \
   --base main \
