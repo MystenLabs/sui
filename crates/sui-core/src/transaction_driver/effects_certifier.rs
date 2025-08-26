@@ -332,8 +332,7 @@ impl EffectsCertifier {
         // but do not have a local reason to reject the transaction. The validator could have
         // accepted the transaction during voting, or the reason has been lost.
         let mut reason_not_found_aggregator = StatusAggregator::<()>::new(committee.clone());
-        // Collect responses from validators which observed the transaction getting executed,
-        // and executed the transaction using fast path.
+        // Collect responses from validators which observed the transaction getting executed using fast path.
         let mut fast_path_aggregator = StatusAggregator::<()>::new(committee.clone());
 
         // Every validator returns at most one WaitForEffectsResponse.
