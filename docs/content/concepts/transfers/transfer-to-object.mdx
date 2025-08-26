@@ -288,7 +288,7 @@ public fun transfer_account(account: Account, to: address, _ctx: &mut TxContext)
 
 ### Soul-bound objects {#soul-bound-example}
 
-The ability to control the rules about how and when an object can be received, and how and when it can be transferred allows us to define a type of "soul-bound" object that can be used by value in a transaction, but it must always stay in the same place, or be returned to the same object.
+The ability to control the rules about how and when an object can be received, and how and when it can be transferred allows us to define a type of _soul-bound_ object that can be used by value in a transaction, but it must always stay in the same place, or be returned to the same object.
 
 You can implement a simple version of this with the following module where the `get_object` function receives the soul-bound object and creates a receipt that must be destroyed in the transaction in order for it to execute successfully. However, in order to destroy the receipt, the object that was received must be transferred back to the object it was received from in the transaction using the `return_object` function.
 
