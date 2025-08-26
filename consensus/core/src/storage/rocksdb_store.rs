@@ -95,6 +95,7 @@ impl RocksDBStore {
         let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
         let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
         let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
+        let uniform_prefix = KeyType::uniform(1);
         let u32_prefix = KeyType::prefix_uniform(3, 0);
         let u64_prefix = KeyType::prefix_uniform(6, 0);
         let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
@@ -132,7 +133,7 @@ impl RocksDBStore {
             ),
             (
                 Self::COMMIT_INFO_CF.to_string(),
-                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
+                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, uniform_prefix.clone()),
             ),
             (
                 Self::FINALIZED_COMMITS_CF.to_string(),
