@@ -299,7 +299,7 @@ pub(crate) fn is_connection(field: &MetaField) -> bool {
 /// let events: Vec<Event> = /* ... */;
 /// let results = ordered_items_with_limits(
 ///     &page,
-///     events.into_iter(),
+///     events,
 ///     |e| (e.tx_sequence_number, e.sequence_number)
 /// );
 /// ```

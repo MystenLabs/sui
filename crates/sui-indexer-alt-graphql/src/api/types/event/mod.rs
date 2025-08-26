@@ -183,7 +183,7 @@ impl Event {
                 .filter(|e| matches_cursor_bounds(e, &page))
                 .collect();
 
-        let results = ordered_results_with_limits(&page, events.into_iter(), |e| {
+        let results = ordered_results_with_limits(&page, events, |e| {
             (e.tx_sequence_number, e.sequence_number)
         });
 
