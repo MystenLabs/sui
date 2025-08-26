@@ -34,15 +34,15 @@ toml.workspace = true
 toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+git2 = "0.20.2"
+heck.workspace = true
+url.workspace = true
+walkdir.workspace = true
 
 [dev-dependencies]
-git2 = "0.20.2"
 datatest-stable.workspace = true
 insta.workspace = true
 test-log.workspace = true
-url.workspace = true
-walkdir.workspace = true
-heck.workspace = true
 
 [[bin]]
 name = "mock-resolver"

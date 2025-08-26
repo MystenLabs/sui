@@ -6,6 +6,7 @@ use std::{
     path::PathBuf,
 };
 
+use move_core_types::account_address::AccountAddress;
 use move_package_alt::{
     dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
     errors::{FileHandle, PackageResult},
@@ -61,12 +62,34 @@ impl SuiFlavor {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct SuiPublishedMetadata {
+    /// the version of the toolchain that was used to build this package for publication, used for
+    /// source verification. Formatted the same way as `sui --version`
+    pub toolchain_version: String,
+
+    /// The flavor that was used to compile this package for publication, used for source verification
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flavor: Option<String>, // TODO: should probably be an appropriately serialized `BuildConfig`
+
+    /// The edition that was used to compile this package for publication, used for source verification
+    pub edition: String,
+
+    /// The modes field of the `BuildConfig`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modes: Vec<String>,
+
+    /// The upgrade capability associated with the package
+    pub upgrade_capability: AccountAddress,
+}
+
 impl MoveFlavor for SuiFlavor {
     fn name() -> String {
         "sui".to_string()
     }
 
-    type PublishedMetadata = (); // TODO
+    type PublishedMetadata = SuiPublishedMetadata;
 
     type AddressInfo = (); // TODO
 
