@@ -19,7 +19,6 @@ use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
-use sui_framework::BuiltInFramework;
 use sui_framework_snapshot::load_bytecode_snapshot;
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::blob::{Blob, BlobEncoding};
@@ -77,13 +76,10 @@ pub struct AdvanceEpochConfig {
     pub create_bridge_state: bool,
     /// Controls whether to create bridge committee.
     pub create_bridge_committee: bool,
-    /// Controls whether to include system packages in the epoch change transaction.
-    /// When enabled, includes framework packages (Move stdlib, Sui framework,
-    /// Sui system, DeepBook, and Bridge packages) in the change epoch transaction.
-    pub include_system_packages: bool,
     /// When specified, loads system packages from a framework snapshot for the given
-    /// protocol version. When None, uses the current built-in framework packages.
+    /// protocol version and includes them in the epoch change transaction.
     /// This provides test stability as snapshot packages don't change when the framework is updated.
+    /// If None, no system packages are included in the epoch change transaction.
     pub system_packages_snapshot: Option<u64>,
 }
 
@@ -290,28 +286,19 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let gas_cost_summary = self.checkpoint_builder.epoch_rolling_gas_cost_summary();
         let epoch_start_timestamp_ms = self.store.get_clock().timestamp_ms();
 
-        let next_epoch_system_package_bytes = if config.include_system_packages {
-            let packages: Vec<_> = match config.system_packages_snapshot {
-                Some(snapshot_version) => match load_bytecode_snapshot(snapshot_version) {
-                    Ok(snapshot_packages) => snapshot_packages,
-                    Err(e) => {
-                        panic!(
-                            "Failed to load bytecode snapshot for version {}: {}",
-                            snapshot_version, e
-                        );
-                    }
-                },
-                None => BuiltInFramework::iter_system_packages().cloned().collect(),
+        let next_epoch_system_package_bytes = if let Some(snapshot_version) =
+            config.system_packages_snapshot
+        {
+            let packages = match load_bytecode_snapshot(snapshot_version) {
+                Ok(snapshot_packages) => snapshot_packages,
+                Err(e) => {
+                    panic!("Failed to load bytecode snapshot for version {snapshot_version}: {e}");
+                }
             };
 
             packages
                 .into_iter()
-                .map(|pkg| {
-                    let version = SequenceNumber::from(1u64);
-                    let modules = pkg.bytes;
-                    let deps = pkg.dependencies;
-                    (version, modules, deps)
-                })
+                .map(|pkg| (SequenceNumber::from(1u64), pkg.bytes, pkg.dependencies))
                 .collect()
         } else {
             vec![]

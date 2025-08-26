@@ -4,7 +4,7 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 processed 4 tasks
 
 task 1, line 6:
-//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee --include-system-packages --system-packages-snapshot=70
+//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee --system-packages-snapshot=70
 Epoch advanced: 1
 
 task 2, line 8:
