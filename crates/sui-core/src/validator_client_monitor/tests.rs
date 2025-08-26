@@ -860,7 +860,7 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone());
+        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone(), false);
 
         // Record stats for all initial validators
         for validator in &initial_validators {
@@ -934,7 +934,7 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone());
+        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone(), false);
 
         // Record stats for initial validators
         for validator in &initial_validators {

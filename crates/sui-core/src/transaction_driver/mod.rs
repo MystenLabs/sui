@@ -55,7 +55,8 @@ pub struct TransactionDriver<A: Clone> {
     metrics: Arc<TransactionDriverMetrics>,
     submitter: TransactionSubmitter,
     certifier: EffectsCertifier,
-    client_monitor: Arc<ValidatorClientMonitor<A>>,
+    client_monitor_owned_object_txes: Arc<ValidatorClientMonitor<A>>,
+    client_monitor_shared_object_txes: Arc<ValidatorClientMonitor<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -75,8 +76,18 @@ where
         let monitor_config = node_config
             .and_then(|nc| nc.validator_client_monitor_config.clone())
             .unwrap_or_default();
-        let client_monitor =
-            ValidatorClientMonitor::new(monitor_config, client_metrics, shared_swap.clone());
+        let client_monitor_owned_object_txes = ValidatorClientMonitor::new(
+            monitor_config.clone(),
+            client_metrics.clone(),
+            shared_swap.clone(),
+            false,
+        );
+        let client_monitor_shared_object_txes = ValidatorClientMonitor::new(
+            monitor_config.clone(),
+            client_metrics.clone(),
+            shared_swap.clone(),
+            true,
+        );
 
         let driver = Arc::new(Self {
             authority_aggregator: shared_swap,
@@ -84,7 +95,8 @@ where
             metrics: metrics.clone(),
             submitter: TransactionSubmitter::new(metrics.clone()),
             certifier: EffectsCertifier::new(metrics),
-            client_monitor,
+            client_monitor_owned_object_txes,
+            client_monitor_shared_object_txes,
         });
 
         driver.enable_reconfig(reconfig_observer);
@@ -201,15 +213,15 @@ where
         let start_time = Instant::now();
         let auth_agg = self.authority_aggregator.load();
 
+        let client_monitor = if is_single_writer_tx {
+            &self.client_monitor_owned_object_txes
+        } else {
+            &self.client_monitor_shared_object_txes
+        };
+
         let (name, submit_txn_resp) = self
             .submitter
-            .submit_transaction(
-                &auth_agg,
-                &self.client_monitor,
-                tx_digest,
-                raw_request,
-                options,
-            )
+            .submit_transaction(&auth_agg, client_monitor, tx_digest, raw_request, options)
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
@@ -217,7 +229,7 @@ where
             .certifier
             .get_certified_finalized_effects(
                 &auth_agg,
-                &self.client_monitor,
+                client_monitor,
                 tx_digest,
                 tx_type,
                 name,
@@ -229,13 +241,12 @@ where
 
         // Record end-to-end latency for successful transaction
         let end_to_end_latency = start_time.elapsed();
-        self.client_monitor
-            .record_interaction_result(OperationFeedback {
-                authority_name: name,
-                display_name: auth_agg.get_display_name(&name),
-                operation: OperationType::Finalize,
-                result: Ok(end_to_end_latency),
-            });
+        client_monitor.record_interaction_result(OperationFeedback {
+            authority_name: name,
+            display_name: auth_agg.get_display_name(&name),
+            operation: OperationType::Finalize,
+            result: Ok(end_to_end_latency),
+        });
 
         Ok(result)
     }
