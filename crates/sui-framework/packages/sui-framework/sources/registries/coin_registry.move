@@ -6,21 +6,13 @@
 /// metadata for all coin types in the Sui ecosystem, including their
 /// supply information, regulatory status, and metadata capabilities.
 module sui::coin_registry;
+
 use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::Supply;
-use sui::dynamic_object_field;
+use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata};
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
-
-// Allows calling `.add_dof(object, name, value)` on `UID`
-use fun dynamic_object_field::add as UID.add_dof;
-// Allows calling `.borrow_dof(object, name)` on `UID`
-use fun dynamic_object_field::borrow as UID.borrow_dof;
-// Allows calling `.borrow_dof_mut(object, name)` on `UID`
-use fun dynamic_object_field::borrow_mut as UID.borrow_dof_mut;
-// Allows calling `.exists_dof(object, name)` on `UID`
-use fun dynamic_object_field::exists_ as UID.exists_dof;
 
 /// No CoinData found for this coin type.
 const ECoinDataNotFound: u64 = 0;
@@ -30,8 +22,16 @@ const EMetadataCapAlreadyClaimed: u64 = 1;
 const ENotSystemAddress: u64 = 2;
 /// CoinData for this coin type already exists
 const ECoinDataAlreadyExists: u64 = 3;
+/// Attempt to set the deny list state permissionlessly while it has already been set.
+const EDenyListStateAlreadySet: u64 = 4;
+/// Tries to delete legacy metadata without having claimed the management capability.
+const EMetadataCapNotClaimed: u64 = 5;
+///
+const ECannotUpdateManagedMetadata: u64 = 6;
 
-/// Variant identifier for regulated coins in the deny list
+/// Incremental identifier for regulated coin versions in the deny list.
+/// 0 here matches DenyCapV2 world.
+/// TODO: Fix wording here.
 const REGULATED_COIN_VARIANT: u8 = 0;
 
 /// System object found at address 0xc that stores coin data for all
@@ -60,7 +60,7 @@ public struct MetadataCap<phantom T> has key, store { id: UID }
 /// CoinData object that stores comprehensive information about a coin type.
 /// This includes metadata like name, symbol, and description, as well as
 /// supply and regulatory status information.
-public struct CoinData<phantom T> has key, store {
+public struct CoinData<phantom T> has key {
     id: UID,
     /// Number of decimal places the coin uses for display purposes
     decimals: u8,
@@ -73,6 +73,8 @@ public struct CoinData<phantom T> has key, store {
     /// URL for the token's icon/logo
     icon_url: String,
     /// Current supply state of the coin (fixed supply or unknown)
+    /// Note: We're using `Option` because `SupplyState` does not have drop,
+    /// meaning we cannot swap out its value at a later state.
     supply: Option<SupplyState<T>>,
     /// Regulatory status of the coin (regulated with deny cap or unknown)
     regulated: RegulatedState,
@@ -88,7 +90,10 @@ public struct CoinData<phantom T> has key, store {
 /// or unknown (supply not yet registered in the registry).
 public enum SupplyState<phantom T> has store {
     /// Coin has a fixed supply with the given Supply object
-    Fixed(Supply<T>),
+    Frozen(Supply<T>),
+    /// Coin has a supply that can ONLY decrease.
+    /// TODO: Public burn function OR capability? :)
+    Deflationary(Supply<T>),
     /// Supply information is not yet known or registered
     Unknown,
 }
@@ -98,7 +103,10 @@ public enum SupplyState<phantom T> has store {
 public enum RegulatedState has copy, drop, store {
     /// Coin is regulated with a deny cap for address restrictions
     Regulated { cap: ID, variant: u8 },
-    /// Coin is not regulated or regulatory status is unknown
+    /// The coin has been created without deny list
+    Unregulated,
+    /// Coin is not regulated or regulatory status is unknown.
+    /// This is the result of a legacy migration for that coin (from `coin.move` constructors)
     Unknown,
 }
 
@@ -108,18 +116,101 @@ public struct InitCoinData<phantom T> {
     data: CoinData<T>,
 }
 
-/// Return the ID of the system coin registry object located at address 0xc.
-public fun coin_registry_id(): ID {
-    @0xc.to_id()
+// 1. Entrypoint for creating currency [done]
+// 2. Entrypoint for creating regulated currency [done]
+// 3. Claim capability (using treasury cap) [done]
+// 3. Migrate existing CoinMetadada -> Registry Metadata
+// 4.
+public fun register_currency<T: drop>(
+    otw: T,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &mut TxContext,
+): (TreasuryCap<T>, MetadataCap<T>, InitCoinData<T>) {
+    // Make sure there's only one instance of the type T
+    assert!(sui::types::is_one_time_witness(&otw));
+
+    let treasury_cap = coin::new_treasury_cap(otw, ctx);
+
+    let mut metadata = CoinData<T> {
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        supply: option::some(SupplyState::Unknown),
+        regulated: RegulatedState::Unregulated,
+        treasury_cap_id: option::some(object::id(&treasury_cap)),
+        metadata_cap_id: option::none(),
+        extra_fields: vec_map::empty(),
+    };
+
+    let metadata_cap = metadata.claim_cap(&treasury_cap, ctx);
+
+    (treasury_cap, metadata_cap, InitCoinData { data: metadata })
 }
 
-/// Get the ID of the registry object.
-public fun id(registry: &CoinRegistry): ID {
-    registry.id.to_inner()
+/// Allows converting an `OTW` coin into a regulated coin.
+public fun make_regulated<T>(
+    init: &mut InitCoinData<T>,
+    allow_global_pause: bool,
+    ctx: &mut TxContext,
+): DenyCapV2<T> {
+    assert!(init.data.regulated == RegulatedState::Unregulated);
+    let deny_cap = coin::new_deny_cap_v2<T>(allow_global_pause, ctx);
+
+    init.inner_mut().regulated =
+        RegulatedState::Regulated {
+            cap: object::id(&deny_cap),
+            variant: REGULATED_COIN_VARIANT,
+        };
+
+    deny_cap
+}
+
+/// Claim a MetadataCap for a coin type. This is only allowed from the owner of `TreasuryCap`, and only once.
+/// Aborts if the metadata capability has already been claimed.
+public fun claim_cap<T>(
+    data: &mut CoinData<T>,
+    _: &TreasuryCap<T>,
+    ctx: &mut TxContext,
+): MetadataCap<T> {
+    assert!(!data.meta_data_cap_claimed(), EMetadataCapAlreadyClaimed);
+    let id = object::new(ctx);
+    let metadata_cap_id = id.to_inner();
+
+    data.metadata_cap_id.fill(metadata_cap_id);
+
+    MetadataCap { id }
+}
+
+/// Freeze the supply by destroying the TreasuryCap and storing it in the CoinData.
+public fun freeze_supply<T>(data: &mut CoinData<T>, cap: TreasuryCap<T>) {
+    match (data.supply.swap(SupplyState::Frozen(cap.into_supply()))) {
+        // Impossible: We cannot fix a supply or make a supply deflationary twice.
+        SupplyState::Frozen(_supply) | SupplyState::Deflationary(_supply) => abort,
+        // We replaced "unknown" with fixed supply.
+        SupplyState::Unknown => (),
+    };
+}
+
+/// Make the supply "deflatinary" by destroying the TreasuryCap and taking control of the
+/// supply through the CoinData.
+public fun make_deflationary<T>(data: &mut CoinData<T>, cap: TreasuryCap<T>) {
+    match (data.supply.swap(SupplyState::Deflationary(cap.into_supply()))) {
+        // Impossible: We cannot fix a supply or make a supply deflationary twice.
+        SupplyState::Frozen(_supply) | SupplyState::Deflationary(_supply) => abort,
+        // We replaced "unknown" with frozen supply.
+        SupplyState::Unknown => (),
+    };
 }
 
 /// Transfer the InitCoinData to the registry to complete coin registration.
-/// This function is called after `create_currency_v2` to register the coin data
+/// This function is called after `register_currency` to register the coin data
 /// in the central registry.
 public fun transfer_to_registry<T>(init: InitCoinData<T>) {
     let InitCoinData { data } = init;
@@ -130,59 +221,131 @@ public fun transfer_to_registry<T>(init: InitCoinData<T>) {
     );
 }
 
-/// Enables CoinData to be registered in the `CoinRegistry` object
-/// via TTO (Transfer To Object) pattern.
-public fun migrate_receiving<T>(
+/// The second step in the "otw" initialization of coin metadata, that takes in the `CoinData<T>` that was
+/// transferred from init, and transforms it in to a "derived address" shared object.
+public fun finalize_registration<T>(
     registry: &mut CoinRegistry,
     coin_data: Receiving<CoinData<T>>,
+    ctx: &mut TxContext,
 ) {
-    let received_data = transfer::public_receive(&mut registry.id, coin_data);
-    registry.register_coin_data(received_data);
+    // 1. Consume CoinData
+    // 2. Re-create it with a "derived" address.
+    let CoinData {
+        id,
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        supply,
+        regulated,
+        treasury_cap_id,
+        metadata_cap_id,
+        extra_fields,
+    } = transfer::receive(&mut registry.id, coin_data);
+
+    id.delete();
+
+    // Now, create the shared version of the coin data.
+    transfer::share_object(CoinData {
+        // TODO: Replace this with `derived_object::claim()`
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        supply,
+        regulated,
+        treasury_cap_id,
+        metadata_cap_id,
+        extra_fields,
+    })
+}
+
+/// Get mutable reference to the coin data from InitCoinData.
+/// This function is package-private and should only be called by the coin module.
+public fun inner_mut<T>(init: &mut InitCoinData<T>): &mut CoinData<T> {
+    &mut init.data
 }
 
 // === CoinData Setters  ===
 
 /// Enables a metadata cap holder to update a coin's name.
-public fun set_name<T>(
-    registry: &mut CoinRegistry,
-    _: &MetadataCap<T>,
-    name: String,
-) {
-    registry.data_mut<T>().name = name;
+public fun set_name<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, name: String) {
+    data.name = name;
 }
 
 /// Enables a metadata cap holder to update a coin's symbol.
-public fun set_symbol<T>(
-    registry: &mut CoinRegistry,
-    _: &MetadataCap<T>,
-    symbol: String,
-) {
-    registry.data_mut<T>().symbol = symbol;
+/// TODO: Should we kill this? :)
+public fun set_symbol<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, symbol: String) {
+    data.symbol = symbol;
 }
 
 /// Enables a metadata cap holder to update a coin's description.
-public fun set_description<T>(
-    registry: &mut CoinRegistry,
-    _: &MetadataCap<T>,
-    description: String,
-) {
-    registry.data_mut<T>().description = description;
+public fun set_description<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, description: String) {
+    data.description = description;
 }
 
 /// Enables a metadata cap holder to update a coin's icon URL.
-public fun set_icon_url<T>(
-    registry: &mut CoinRegistry,
-    _: &MetadataCap<T>,
-    icon_url: String,
-) {
-    registry.data_mut<T>().icon_url = icon_url;
+public fun set_icon_url<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, icon_url: String) {
+    data.icon_url = icon_url;
 }
 
-/// Get immutable reference to the coin data for type T.
-/// Aborts if no coin data exists for this type.
-public fun data<T>(registry: &CoinRegistry): &CoinData<T> {
-    assert!(registry.exists<T>(), ECoinDataNotFound);
-    registry.id.borrow_dof(CoinDataKey<T>())
+/// Register the treasury cap ID for a coin type at a later point.
+public fun set_treasury_cap_id<T>(data: &mut CoinData<T>, cap: &TreasuryCap<T>) {
+    data.treasury_cap_id.fill(object::id(cap));
+}
+
+// == Migrations from legacy coin flows ==
+
+/// TODO: Register legacy coin metadata to the registry --
+/// This should:
+/// 1. Take the old metadata
+/// 2. Create a `CoinData<T>` object with a derived address (and share it!)
+public fun migrate_legacy_metadata<T>(registry: &mut CoinRegistry, v1: &CoinMetadata<T>) {
+    abort
+}
+
+/// TODO: Allow coin metadata to be updated from legacy as described in our docs.
+public fun update_from_legacy_metadata<T>(data: &mut CoinData<T>, v1: &CoinMetadata<T>) {
+    assert!(!data.meta_data_cap_claimed(), ECannotUpdateManagedMetadata);
+    abort
+}
+
+/// Delete the legacy `CoinMetadata` object if the metadata cap for the new registry
+/// has already been claimed.
+///
+/// This function is only callable after there's "proof" that the author of the coin
+/// can manage the metadata using the registry system (so having a metadata cap claimed).
+public fun delete_migrated_legacy_metadata<T>(data: &mut CoinData<T>, v1: CoinMetadata<T>) {
+    assert!(data.meta_data_cap_claimed(), EMetadataCapNotClaimed);
+    v1.destroy_metadata();
+}
+
+/// Allow migrating the regulated state by access to `RegulatedCoinMetadata` frozen object.
+/// This is a permissionless operation.
+public fun migrate_regulated_state_by_metadata<T>(
+    data: &mut CoinData<T>,
+    metadata: &RegulatedCoinMetadata<T>,
+) {
+    // Only allow if this hasn't been migrated before.
+    assert!(data.regulated == RegulatedState::Unknown, EDenyListStateAlreadySet);
+    data.regulated =
+        RegulatedState::Regulated {
+            cap: metadata.deny_cap_id(),
+            variant: REGULATED_COIN_VARIANT,
+        };
+}
+
+/// Allow migrating the regulated state by a `DenyCapV2` object.
+/// This is a permissioned operation.
+public fun migrate_regulated_state_by_cap<T>(data: &mut CoinData<T>, cap: &DenyCapV2<T>) {
+    data.regulated =
+        RegulatedState::Regulated {
+            cap: object::id(cap),
+            variant: REGULATED_COIN_VARIANT,
+        };
 }
 
 // === Public getters  ===
@@ -210,29 +373,37 @@ public fun meta_data_cap_claimed<T>(coin_data: &CoinData<T>): bool {
 }
 
 /// Get the treasury cap ID for this coin type, if registered.
-public fun treasury_cap<T>(coin_data: &CoinData<T>): Option<ID> {
+public fun treasury_cap_id<T>(coin_data: &CoinData<T>): Option<ID> {
     coin_data.treasury_cap_id
 }
 
 /// Get the deny cap ID for this coin type, if it's a regulated coin.
-public fun deny_cap<T>(coin_data: &CoinData<T>): Option<ID> {
+public fun deny_cap_id<T>(coin_data: &CoinData<T>): Option<ID> {
     match (coin_data.regulated) {
         RegulatedState::Regulated { cap, .. } => option::some(cap),
+        RegulatedState::Unregulated => option::none(),
         RegulatedState::Unknown => option::none(),
     }
 }
 
-/// Check if the supply has been registered for this coin type.
-public fun supply_registered<T>(coin_data: &CoinData<T>): bool {
+public fun is_frozen<T>(coin_data: &CoinData<T>): bool {
     match (coin_data.supply.borrow()) {
-        SupplyState::Fixed(_) => true,
-        SupplyState::Unknown => false,
+        SupplyState::Frozen(_) => true,
+        _ => false,
+    }
+}
+
+public fun is_deflationary<T>(coin_data: &CoinData<T>): bool {
+    match (coin_data.supply.borrow()) {
+        SupplyState::Deflationary(_) => true,
+        _ => false,
     }
 }
 
 /// Check if coin data exists for the given type T in the registry.
 public fun exists<T>(registry: &CoinRegistry): bool {
-    registry.id.exists_dof(CoinDataKey<T>())
+    // TODO: `use derived_object::exists()`
+    abort
 }
 
 /// Get immutable reference to the coin data from InitCoinData.
@@ -240,203 +411,9 @@ public fun inner<T>(init: &InitCoinData<T>): &CoinData<T> {
     &init.data
 }
 
-// === Internal registration functions  ===
-
-/// Register the supply for a coin type in the registry.
-/// This function is package-private and should only be called by the coin module.
-/// Aborts if no coin data exists for this type or if supply is already registered.
-public(package) fun register_supply<T>(
-    registry: &mut CoinRegistry,
-    supply: Supply<T>,
-) {
-    assert!(registry.exists<T>(), ECoinDataNotFound);
-    registry.data_mut<T>().treasury_cap_id.extract();
-    match (registry.data_mut<T>().supply.swap(SupplyState::Fixed(supply))) {
-        SupplyState::Fixed(_supply) => abort ,
-        SupplyState::Unknown => (),
-    };
-}
-
-/// Register a coin type as regulated with the given deny cap ID.
-/// This function is package-private and should only be called by the coin module.
-/// Aborts if no coin data exists for this type.
-public(package) fun register_regulated<T>(
-    registry: &mut CoinRegistry,
-    deny_cap_id: ID,
-) {
-    assert!(registry.exists<T>(), ECoinDataNotFound);
-    registry.data_mut<T>().regulated =
-        RegulatedState::Regulated {
-            cap: deny_cap_id,
-            variant: REGULATED_COIN_VARIANT,
-        };
-}
-
-/// Register the treasury cap ID for a coin type.
-/// This function is package-private and should only be called by the coin module.
-public(package) fun register_treasury_cap<T>(
-    registry: &mut CoinRegistry,
-    cap_id: &ID,
-) {
-    registry.data_mut<T>().treasury_cap_id.fill(*cap_id);
-}
-
-/// Set the decimals for a coin data object.
-/// This function is package-private and should only be called by the coin module.
-public(package) fun set_decimals<T>(data: &mut CoinData<T>, decimals: u8) {
-    data.decimals = decimals;
-}
-
-/// Set the supply for a coin data object.
-/// This function is package-private and should only be called by the coin module.
-/// Aborts if supply is already set.
-public(package) fun set_supply<T>(data: &mut CoinData<T>, supply: Supply<T>) {
-    match (data.supply.swap(SupplyState::Fixed(supply))) {
-        SupplyState::Fixed(_supply) => abort ,
-        SupplyState::Unknown => (),
-    };
-}
-
-/// Set a coin as regulated with the given deny cap ID.
-/// This function is package-private and should only be called by the coin module.
-public(package) fun set_regulated<T>(data: &mut CoinData<T>, deny_cap_id: ID) {
-    data.regulated =
-        RegulatedState::Regulated {
-            cap: deny_cap_id,
-            variant: REGULATED_COIN_VARIANT,
-        };
-}
-
-/// Get mutable reference to the coin data for type T.
-/// This function is package-private and should only be called by the coin module.
-/// Aborts if no coin data exists for this type.
-public(package) fun data_mut<T>(registry: &mut CoinRegistry): &mut CoinData<T> {
-    assert!(registry.exists<T>(), ECoinDataNotFound);
-    registry.id.borrow_dof_mut(CoinDataKey<T>())
-}
-
-/// Register coin data for a new coin type in the registry.
-/// This function is package-private and should only be called by the coin module.
-/// Aborts if coin data already exists for this type.
-public(package) fun register_coin_data<T>(
-    registry: &mut CoinRegistry,
-    data: CoinData<T>,
-) {
-    assert!(!registry.exists<T>(), ECoinDataAlreadyExists);
-
-    registry.id.add_dof(CoinDataKey<T>(), data);
-}
-
-/// Get mutable reference to the coin data from InitCoinData.
-/// This function is package-private and should only be called by the coin module.
-public(package) fun inner_mut<T>(init: &mut InitCoinData<T>): &mut CoinData<T> {
-    &mut init.data
-}
-
-/// Create an InitCoinData object with the specified parameters.
-/// This function is package-private and should only be called by the coin module.
-public(package) fun create_coin_data_init<T>(
-    decimals: u8,
-    name: String,
-    symbol: String,
-    description: String,
-    icon_url: String,
-    supply: Option<Supply<T>>,
-    treasury_cap_id: Option<ID>,
-    metadata_cap_id: Option<ID>,
-    deny_cap_id: Option<ID>,
-    ctx: &mut TxContext,
-): InitCoinData<T> {
-    InitCoinData {
-        data: create_coin_data(
-            decimals,
-            name,
-            symbol,
-            description,
-            icon_url,
-            supply,
-            treasury_cap_id,
-            metadata_cap_id,
-            deny_cap_id,
-            ctx,
-        ),
-    }
-}
-
-/// Create a new CoinData object with the specified parameters.
-/// This function is package-private and should only be called by the coin module.
-public(package) fun create_coin_data<T>(
-    decimals: u8,
-    name: String,
-    symbol: String,
-    description: String,
-    icon_url: String,
-    supply: Option<Supply<T>>,
-    treasury_cap_id: Option<ID>,
-    metadata_cap_id: Option<ID>,
-    deny_cap_id: Option<ID>,
-    ctx: &mut TxContext,
-): CoinData<T> {
-    let supply = supply
-        .map!(|supply| SupplyState::Fixed(supply))
-        .or!(option::some(SupplyState::Unknown));
-
-    let regulated_state = deny_cap_id
-        .map!(
-            |cap| RegulatedState::Regulated {
-                cap,
-                variant: REGULATED_COIN_VARIANT,
-            },
-        )
-        .destroy_or!(RegulatedState::Unknown);
-
-    CoinData {
-        id: object::new(ctx),
-        decimals,
-        name,
-        symbol,
-        description,
-        icon_url,
-        supply,
-        regulated: regulated_state,
-        treasury_cap_id,
-        metadata_cap_id,
-        extra_fields: vec_map::empty(),
-    }
-}
-
-/// Create an empty CoinData object for testing purposes.
-/// This function is package-private and should only be called by the coin module.
-public(package) fun empty<T>(ctx: &mut TxContext): CoinData<T> {
-    CoinData {
-        id: object::new(ctx),
-        decimals: 0,
-        name: b"".to_string(),
-        symbol: b"".to_string(),
-        description: b"".to_string(),
-        icon_url: b"".to_string(),
-        regulated: RegulatedState::Unknown,
-        supply: option::some(SupplyState::Unknown),
-        treasury_cap_id: option::none(),
-        metadata_cap_id: option::none(),
-        extra_fields: vec_map::empty(),
-    }
-}
-
-/// Create a MetadataCap for a coin type.
-/// This function is package-private and should only be called by the coin module.
-/// Aborts if the metadata capability has already been claimed.
-public(package) fun create_cap<T>(
-    data: &mut CoinData<T>,
-    ctx: &mut TxContext,
-): MetadataCap<T> {
-    assert!(!data.meta_data_cap_claimed(), EMetadataCapAlreadyClaimed);
-    let id = object::new(ctx);
-    let metadata_cap_id = id.to_inner();
-
-    data.metadata_cap_id.fill(metadata_cap_id);
-
-    MetadataCap { id }
+/// Return the ID of the system coin registry object located at address 0xc.
+public fun coin_registry_id(): ID {
+    @0xc.to_id()
 }
 
 #[allow(unused_function)]
@@ -454,9 +431,7 @@ fun create(ctx: &TxContext) {
 #[test_only]
 /// Create a coin data registry for testing purposes.
 /// This function is test-only and should only be used in tests.
-public fun create_coin_data_registry_for_testing(
-    ctx: &mut TxContext,
-): CoinRegistry {
+public fun create_coin_data_registry_for_testing(ctx: &mut TxContext): CoinRegistry {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
     CoinRegistry {
