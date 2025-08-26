@@ -27,15 +27,3 @@ deps = { bar = "bar" }
 source = { root = true }
 manifest_digest = "cb4a8948faa586ccc1694d80e25941a5227d8b9e"
 deps = { baz = "baz" }
-
-[published.mainnet]
-published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-chain-id = "35834a8a"
-toolchain-version = "1.45"
-
-[published.testnet]
-published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-chain-id = "4c78adac"
-toolchain-version = "1.45"

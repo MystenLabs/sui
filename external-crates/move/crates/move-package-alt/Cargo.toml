@@ -22,6 +22,7 @@ move-core-types.workspace = true
 once_cell.workspace = true
 path-clean.workspace = true
 petgraph.workspace = true
+pretty_assertions.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true

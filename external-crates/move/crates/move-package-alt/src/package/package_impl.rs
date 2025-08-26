@@ -13,12 +13,12 @@ use crate::compatibility::legacy::LegacyData;
 use crate::compatibility::legacy_parser::try_load_legacy;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
-use crate::schema::{ParsedManifest, ReplacementDependency};
+use crate::schema::{ParsedManifest, ParsedPubs, ReplacementDependency};
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{lockfile::Lockfiles, manifest::Digest},
+    package::manifest::Digest,
     schema::{
         Environment, OriginalID, PackageMetadata, PackageName, PublishAddresses, PublishedID,
     },
@@ -109,7 +109,7 @@ impl<F: MoveFlavor> Package<F> {
         // try to load the address from the modern lockfile
         //   - if it fails, look in the legacy data
         //   - if that fails, use a dummy address
-        let address = Self::get_addrs(&path, env.name()).or_else(|| {
+        let address = Self::get_addrs(&path, env.name())?.or_else(|| {
             manifest
                 .legacy_data
                 .as_ref()
@@ -236,20 +236,27 @@ impl<F: MoveFlavor> Package<F> {
         &self.metadata
     }
 
-    /// Read the publication for the given environment from the package lockfile.
-    /// This does no validation of the lockfile - it just returns None if the lockfile doesn't
-    /// parse. We assume the lockfile is loaded elsewhere
-    // TODO: this should read from the pubfiles instead
-    fn get_addrs(path: &PackagePath, env: &EnvironmentName) -> Option<PublishAddresses> {
-        // Note: we're currently rereading the lockfile here because we're going to switch this to
-        // reading the pubfile in a future PR
-        let result = Lockfiles::<F>::read_from_dir(path)
-            .unwrap_or(None)
-            .and_then(|lockfile| lockfile.published_for_env(env))
-            .map(|publish| publish.addresses);
+    /// Read the publication for the given environment from the package pubfile.
+    fn get_addrs(
+        path: &PackagePath,
+        env: &EnvironmentName,
+    ) -> PackageResult<Option<PublishAddresses>> {
+        let pubfile = path.publications_path();
 
-        debug!("getting addrs for {path:?}:\n{result:?}");
-        result
+        let Ok(file) = FileHandle::new(path.publications_path()) else {
+            debug!("unable to load {pubfile:?}");
+            return Ok(None);
+        };
+
+        debug!("parsing\n---\n{}\n---", file.source());
+        let parsed = toml_edit::de::from_str::<ParsedPubs<F>>(file.source())?;
+
+        let Some(publish) = parsed.published.get(env) else {
+            debug!("no entry for {env:?} in {pubfile:?}");
+            return Ok(None);
+        };
+
+        Ok(Some(publish.addresses.clone()))
     }
 
     /// Compute the direct dependencies for the given environment by combining the default
