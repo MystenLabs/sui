@@ -2798,7 +2798,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
     <b>let</b> <b>mut</b> adjusted_staking_reward_amounts = vector[];
     <b>let</b> <b>mut</b> adjusted_storage_fund_reward_amounts = vector[];
     <b>let</b> length = validators.length();
-    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.size();
+    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.length();
     length.do!(|i| {
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &validators[i];
         // Integer divisions will truncate the results. Because of this, we expect that at the end

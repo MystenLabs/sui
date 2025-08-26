@@ -9,6 +9,7 @@ use std::{
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
+use mysten_metrics::TxType;
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
@@ -56,12 +57,13 @@ impl EffectsCertifier {
         Self { metrics }
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "error", skip_all, err)]
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
+        tx_type: TxType,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
         submit_txn_resp: SubmitTxResponse,
@@ -97,6 +99,7 @@ impl EffectsCertifier {
                 authority_aggregator,
                 client_monitor,
                 tx_digest,
+                tx_type,
                 consensus_position,
                 options,
             ),
@@ -188,6 +191,7 @@ impl EffectsCertifier {
         }
     }
 
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx_digest, consensus_position = ?consensus_position, ret_effects_digest = tracing::field::Empty))]
     async fn get_full_effects<A>(
         &self,
         client: Arc<SafeClient<A>>,
@@ -217,6 +221,8 @@ impl EffectsCertifier {
                     details,
                 } => {
                     if let Some(details) = details {
+                        tracing::Span::current()
+                            .record("ret_effects_digest", format!("{:?}", effects_digest));
                         Ok((effects_digest, details))
                     } else {
                         tracing::debug!("Execution data not found, retrying...");
@@ -238,18 +244,23 @@ impl EffectsCertifier {
         }
     }
 
+    #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(consensus_position = ?consensus_position))]
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
+        tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        self.metrics.certified_effects_ack_attempts.inc();
+        self.metrics
+            .certified_effects_ack_attempts
+            .with_label_values(&[tx_type.as_str()])
+            .inc();
         let timer = tokio::time::Instant::now();
         let clients = authority_aggregator
             .authority_clients
@@ -285,7 +296,7 @@ impl EffectsCertifier {
                 )
                 .await
                 {
-                    Ok(result) => result,
+                    Ok(result) => (name, result),
                     Err(_) => {
                         client_monitor.record_interaction_result(OperationFeedback {
                             authority_name: name,
@@ -342,9 +353,13 @@ impl EffectsCertifier {
                             }
                         }
                         // Record success and latency
-                        self.metrics.certified_effects_ack_successes.inc();
+                        self.metrics
+                            .certified_effects_ack_successes
+                            .with_label_values(&[tx_type.as_str()])
+                            .inc();
                         self.metrics
                             .certified_effects_ack_latency
+                            .with_label_values(&[tx_type.as_str()])
                             .observe(timer.elapsed().as_secs_f64());
                         return Ok(effects_digest);
                     }
@@ -494,6 +509,7 @@ impl EffectsCertifier {
         }
     }
 
+    #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(validator_display_name = ?display_name))]
     async fn wait_for_acknowledgment_rpc<A>(
         &self,
         name: AuthorityName,
@@ -502,7 +518,7 @@ impl EffectsCertifier {
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         raw_request: &RawWaitForEffectsRequest,
         options: &SubmitTransactionOptions,
-    ) -> (AuthorityName, Result<WaitForEffectsResponse, SuiError>)
+    ) -> Result<WaitForEffectsResponse, SuiError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
@@ -524,7 +540,7 @@ impl EffectsCertifier {
                         operation: OperationType::Effects,
                         result: Ok(latency),
                     });
-                    return (name, Ok(response));
+                    return Ok(response);
                 }
                 Err(e) => {
                     client_monitor.record_interaction_result(OperationFeedback {
@@ -534,7 +550,7 @@ impl EffectsCertifier {
                         result: Err(()),
                     });
                     if !matches!(e, SuiError::RpcError(_, _)) {
-                        return (name, Err(e));
+                        return Err(e);
                     }
                     tracing::trace!(
                         ?name,
@@ -545,7 +561,7 @@ impl EffectsCertifier {
             };
             sleep(delay).await;
         }
-        (name, Err(SuiError::TimeoutError))
+        Err(SuiError::TimeoutError)
     }
 
     /// Creates the final full response.

@@ -14,7 +14,7 @@ public struct X()
 fun add_zero() {
     let mut ctx = tx_context::dummy();
     let mut dl = deny_list::new_for_testing(&mut ctx);
-    let ty = type_name::into_string(type_name::get_with_original_ids<X>()).into_bytes();
+    let ty = type_name::into_string(type_name::with_original_ids<X>()).into_bytes();
     dl.v1_add(1, ty, deny_list::reserved_addresses()[0]); // should error
     abort 0 // should not be reached
 }
@@ -23,7 +23,7 @@ fun add_zero() {
 fun remove_zero() {
     let mut ctx = tx_context::dummy();
     let mut dl = deny_list::new_for_testing(&mut ctx);
-    let ty = type_name::into_string(type_name::get_with_original_ids<X>()).into_bytes();
+    let ty = type_name::into_string(type_name::with_original_ids<X>()).into_bytes();
     dl.v1_add(1, ty, deny_list::reserved_addresses()[1]); // should error
     abort 0 // should not be reached
 }
@@ -34,7 +34,7 @@ fun contains_zero() {
     deny_list::create_for_test(scenario.ctx());
     scenario.next_tx(@0);
     let dl: deny_list::DenyList = scenario.take_shared();
-    let ty = type_name::into_string(type_name::get_with_original_ids<X>()).into_bytes();
+    let ty = type_name::into_string(type_name::with_original_ids<X>()).into_bytes();
     let reserved = deny_list::reserved_addresses();
     let mut i = 0;
     let n = reserved.length();

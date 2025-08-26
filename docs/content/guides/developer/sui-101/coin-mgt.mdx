@@ -1,7 +1,7 @@
 ---
 title: Coin Management
 description: Because Sui uses coins as owned objects for transactions, you need to explicitly manage them in your programmable transaction block development.
-keywords: [ owned objects, address-owned objects, parallel transactions, coins, coin management, typescript, rust, typescript sdk, rust sdk, gas smashing, concurrency, generic coins, coin<sui>, ]
+keywords: [ owned objects, address-owned objects, parallel transactions, coins, coin management, typescript, rust, typescript SDK, rust SDK, gas smashing, concurrency, generic coins, coin<sui>, ]
 ---
 
 A key concept when programming on Sui is that of owned objects. Address-owned objects are important in that they allow for highly parallelizable transactions. And they also logically map to assets or resources that someone exclusively owns. Coins are a typical case of owned object usage, with cash being a real-life reference. The owned objects paradigm, however, and particularly as related to coins, is somewhat of a divergence from other blockchains which have a concept of balance. In other words, in other systems, especially account based systems, coins are held in a single location (field) which can be thought of as a balance in a bank account.
@@ -36,6 +36,6 @@ If you merge all `Coin<Sui>` into a single one, you would need to sequentially s
 
 So when you require heavy concurrency, you should first split a coin into as many coins as the number of transactions to execute concurrently. Alternatively, you could provide multiple and different coins (gas smashing) to the different transactions. It is critically important that the set of coins you use in the different transactions has no intersection at all.
 
-The possible pitfalls in dealing with heavy concurrency are many. Concurrency in transaction execution is not the only performance bottleneck. In creating and submitting a transaction, several round trips with a Full node might be required to discover and fetch the right objects, and to dry run a transaction. Those round trips might affect performance significantly.
+The possible pitfalls in dealing with heavy concurrency are many. Concurrency in transaction execution is not the only performance bottleneck. In creating and submitting a transaction, several round trips with a full node might be required to discover and fetch the right objects, and to dry run a transaction. Those round trips might affect performance significantly.
 
 Concurrency is a difficult subject and is beyond the scope of this documentation. You must take maximum care when dealing with coin management in the face of concurrency, and the right strategy is often tied to the specific scenario, rather than universally available.

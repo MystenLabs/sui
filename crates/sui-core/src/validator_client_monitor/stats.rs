@@ -184,11 +184,7 @@ impl ClientObservedStats {
     ///
     /// Returns a map of all tracked validators to their scores.
     /// Score is 0 if the validator is excluded or has no stats.
-    pub fn get_all_validator_stats(
-        &self,
-        committee: &Committee,
-        _display_names: &HashMap<AuthorityName, String>,
-    ) -> HashMap<AuthorityName, f64> {
+    pub fn get_all_validator_stats(&self, committee: &Committee) -> HashMap<AuthorityName, f64> {
         committee
             .names()
             .map(|validator| {

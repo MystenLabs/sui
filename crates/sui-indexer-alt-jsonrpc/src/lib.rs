@@ -289,7 +289,7 @@ pub async fn start_rpc(
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
         context.pg_reader().clone(),
-        context.package_resolver().clone(),
+        context.package_resolver().package_store().clone(),
         cancel.child_token(),
     );
 

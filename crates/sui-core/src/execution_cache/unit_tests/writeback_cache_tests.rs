@@ -860,8 +860,7 @@ async fn test_write_transaction_outputs_is_sync() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "should be empty due to revert_state_update")]
-async fn test_missing_reverts_panic() {
+async fn test_revert_unnecessary() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1]);
@@ -872,43 +871,14 @@ async fn test_missing_reverts_panic() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "attempt to revert committed transaction")]
-async fn test_revert_committed_tx_panics() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1]);
-        let tx1 = s.do_tx().await;
-        s.commit(tx1).await.unwrap();
-        s.cache().revert_state_update(&tx1);
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_revert_unexecuted_tx() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1]);
-        let tx1 = s.do_tx().await;
-        s.commit(tx1).await.unwrap();
-        let random_digest = TransactionDigest::random();
-        // must not panic - pending_consensus_transactions is a super set of
-        // executed but un-checkpointed transactions
-        s.cache().revert_state_update(&random_digest);
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_revert_state_update_created() {
+async fn test_clear_state_update_created() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         // newly created object
         s.with_created(&[1]);
-        let tx1 = s.do_tx().await;
+        s.do_tx().await;
         s.assert_live(&[1]);
 
-        s.cache().revert_state_update(&tx1);
         s.clear_state_end_of_epoch();
 
         s.assert_not_exists(&[1]);
@@ -917,7 +887,7 @@ async fn test_revert_state_update_created() {
 }
 
 #[tokio::test]
-async fn test_revert_state_update_mutated() {
+async fn test_clear_state_update_mutated() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         let v1 = {
@@ -928,29 +898,27 @@ async fn test_revert_state_update_mutated() {
         };
 
         s.with_mutated(&[1]);
-        let tx = s.do_tx().await;
+        s.do_tx().await;
 
-        s.cache().revert_state_update(&tx);
         s.clear_state_end_of_epoch();
 
-        let version_after_revert = s.cache().get_object(&s.obj_id(1)).unwrap().version();
-        assert_eq!(v1, version_after_revert);
+        let version_after_clear = s.cache().get_object(&s.obj_id(1)).unwrap().version();
+        assert_eq!(v1, version_after_clear);
     })
     .await;
 }
 
 #[tokio::test]
-async fn test_invalidate_package_cache_on_revert() {
+async fn test_invalidate_package_cache_on_clear() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1]);
         s.with_packages(&[2]);
-        let tx1 = s.do_tx().await;
+        s.do_tx().await;
 
         s.assert_live(&[1]);
         s.assert_packages(&[2]);
 
-        s.cache().revert_state_update(&tx1);
         s.clear_state_end_of_epoch();
 
         assert!(s

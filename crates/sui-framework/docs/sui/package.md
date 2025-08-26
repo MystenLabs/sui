@@ -344,11 +344,11 @@ but multiple per package (!).
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="../sui/package.md#sui_package_Publisher">Publisher</a> {
     <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
-    <b>let</b> type_name = type_name::get_with_original_ids&lt;OTW&gt;();
+    <b>let</b> type_name = type_name::with_original_ids&lt;OTW&gt;();
     <a href="../sui/package.md#sui_package_Publisher">Publisher</a> {
         id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/package.md#sui_package">package</a>: type_name.get_address(),
-        module_name: type_name.get_module(),
+        <a href="../sui/package.md#sui_package">package</a>: type_name.address_string(),
+        module_name: type_name.module_string(),
     }
 }
 </code></pre>
@@ -428,7 +428,7 @@ Check whether type belongs to the same package as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>): bool {
-    type_name::get_with_original_ids&lt;T&gt;().get_address() == self.<a href="../sui/package.md#sui_package">package</a>
+    type_name::with_original_ids&lt;T&gt;().address_string() == self.<a href="../sui/package.md#sui_package">package</a>
 }
 </code></pre>
 
@@ -453,8 +453,8 @@ Check whether a type belongs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>): bool {
-    <b>let</b> type_name = type_name::get_with_original_ids&lt;T&gt;();
-    (type_name.get_address() == self.<a href="../sui/package.md#sui_package">package</a>) && (type_name.get_module() == self.module_name)
+    <b>let</b> type_name = type_name::with_original_ids&lt;T&gt;();
+    (type_name.address_string() == self.<a href="../sui/package.md#sui_package">package</a>) && (type_name.module_string() == self.module_name)
 }
 </code></pre>
 

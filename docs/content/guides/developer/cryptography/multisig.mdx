@@ -2,6 +2,8 @@
 title: Multisig Authentication
 description: Guide on how to create a multisig transaction and then submit it against a local network using the Sui CLI.
 keywords: [ multisig, multi-sig, multisig auth, multi-sig auth, multi signatures, multiple signatures, multisig transaction, multi-sig transaction ]
+mdx:
+  format: md
 ---
 
 The following steps demonstrate how to create a multisig transaction and then submit it against a network using the [Sui CLI](/references/cli.mdx). A transaction can be the transfer of an object, the publish or upgrade of a package, the payment of SUI, and so on.
@@ -38,7 +40,7 @@ The console displays a response to each successful call that is similar to the f
 
 ```sh
 ╭──────────────────────────────────────────────────╮
-│ Created new keypair and saved it to keystore.    │
+│ Created new key pair and saved it to keystore.    │
 ├────────────────┬─────────────────────────────────┤
 │ alias          │ <ALIAS>                         │
 │ address        │ <SUI-ADDRESS>                   │
@@ -397,6 +399,6 @@ Transaction Digest: 7mBWUxT6HUVDa8bii3PZJc7nhWqefTLNTsGbHYnx7ZA4
 ## Related links
 
 - [Multisig](../../../concepts/cryptography/transaction-auth/multisig.mdx): Definition of multisig transactions on the Sui network and how to use it with CLI.
-- [Multisig Typescript SDK](https://sdk.mystenlabs.com/typescript/cryptography/multisig): How to create multisig addresses and sign transactions using the Sui SDK.
+- [Multisig TypeScript SDK](https://sdk.mystenlabs.com/typescript/cryptography/multisig): How to create multisig addresses and sign transactions using the Sui SDK.
 - [SDK documentation](https://sdk.mystenlabs.com/typescript/cryptography/multisig): See the Sui TypeScript SDK documentation to learn how to use the library with multisig transactions.
 - [Sui CLI](../../../references/cli.mdx): Interact with the Sui network, its features, and the Move programming language from a command line.
