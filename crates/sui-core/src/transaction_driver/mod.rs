@@ -153,7 +153,6 @@ where
                             .with_label_values(&[tx_type.as_str()])
                             .observe(settlement_finality_latency);
                         // Record the number of retries for successful transaction
-                        // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
                             .with_label_values(&["success"])
