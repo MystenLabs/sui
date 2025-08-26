@@ -734,6 +734,21 @@ type ExecutionError {
 }
 
 """
+The execution result of a transaction, including the transaction effects and any gRPC errors.
+"""
+type ExecutionResult {
+	"""
+	The effects of the transaction execution, if successful.
+	"""
+	effects: TransactionEffects
+	"""
+	Errors that occurred during execution (e.g., network errors, validation failures).
+	These are distinct from execution failures within the transaction itself.
+	"""
+	errors: [String!]
+}
+
+"""
 The execution status of this transaction: success or failure.
 """
 enum ExecutionStatus {
@@ -1304,7 +1319,7 @@ type Mutation {
 	
 	There may be a delay between transaction finality and when GraphQL requests (including the request that issued the transaction) reflect its effects. As a result, queries that depend on indexing the state of the chain (e.g. contents of output objects, address-level balance information at the time of the transaction), must wait for indexing to catch up by polling for the transaction digest using `Query.transaction`.
 	"""
-	executeTransaction(transaction: TransactionExecutionInput!, signatures: [String!]!): String!
+	executeTransaction(transaction: TransactionExecutionInput!, signatures: [String!]!): ExecutionResult!
 }
 
 """
