@@ -2506,7 +2506,7 @@
             },
             {
               "name": "read_mask",
-              "description": "Mask specifying which fields to read.\nIf no mask is specified, defaults to `object_id,version,digest`.",
+              "description": "Mask specifying which fields to read.\nIf no mask is specified, defaults to `digest`.",
               "label": "optional",
               "type": "FieldMask",
               "longType": "google.protobuf.FieldMask",
@@ -2578,7 +2578,7 @@
             },
             {
               "name": "read_mask",
-              "description": "Mask specifying which fields to read.\nIf no mask is specified, defaults to `object_id,version,digest`.",
+              "description": "Mask specifying which fields to read.\nIf no mask is specified, defaults to `sequence_number,digest`.",
               "label": "optional",
               "type": "FieldMask",
               "longType": "google.protobuf.FieldMask",
@@ -4973,7 +4973,7 @@
             },
             {
               "name": "read_mask",
-              "description": "",
+              "description": "Mask specifying which fields to read.\nIf no mask is specified, defaults to `parent,field_id`.",
               "label": "optional",
               "type": "FieldMask",
               "longType": "google.protobuf.FieldMask",
@@ -5069,7 +5069,7 @@
             },
             {
               "name": "read_mask",
-              "description": "",
+              "description": "Mask specifying which fields to read.\nIf no mask is specified, defaults to `object_id,version,object_type`.",
               "label": "optional",
               "type": "FieldMask",
               "longType": "google.protobuf.FieldMask",
@@ -5201,7 +5201,7 @@
             },
             {
               "name": "read_mask",
-              "description": "",
+              "description": "Mask specifying which fields to read.",
               "label": "optional",
               "type": "FieldMask",
               "longType": "google.protobuf.FieldMask",
@@ -7703,7 +7703,7 @@
           "methods": [
             {
               "name": "ExecuteTransaction",
-              "description": "",
+              "description": "TODO move simulate transaction here for GA release\nrpc SimulateTransaction(SimulateTransactionRequest) returns (SimulateTransactionResponse);",
               "requestType": "ExecuteTransactionRequest",
               "requestLongType": "ExecuteTransactionRequest",
               "requestFullType": "sui.rpc.v2beta2.ExecuteTransactionRequest",
@@ -8244,6 +8244,269 @@
         }
       ],
       "services": []
+    },
+    {
+      "name": "sui/rpc/v2beta2/name_service.proto",
+      "description": "",
+      "package": "sui.rpc.v2beta2",
+      "hasEnums": false,
+      "hasExtensions": false,
+      "hasMessages": true,
+      "hasServices": true,
+      "enums": [],
+      "extensions": [],
+      "messages": [
+        {
+          "name": "LookupNameRequest",
+          "longName": "LookupNameRequest",
+          "fullName": "sui.rpc.v2beta2.LookupNameRequest",
+          "description": "",
+          "hasExtensions": false,
+          "hasFields": true,
+          "hasOneofs": true,
+          "extensions": [],
+          "fields": [
+            {
+              "name": "name",
+              "description": "Required. The SuiNS name to lookup.\n\nSupports both `@name` as well as `name.sui` formats.",
+              "label": "optional",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_name",
+              "defaultValue": ""
+            }
+          ]
+        },
+        {
+          "name": "LookupNameResponse",
+          "longName": "LookupNameResponse",
+          "fullName": "sui.rpc.v2beta2.LookupNameResponse",
+          "description": "",
+          "hasExtensions": false,
+          "hasFields": true,
+          "hasOneofs": true,
+          "extensions": [],
+          "fields": [
+            {
+              "name": "record",
+              "description": "The record for the requested name",
+              "label": "optional",
+              "type": "NameRecord",
+              "longType": "NameRecord",
+              "fullType": "sui.rpc.v2beta2.NameRecord",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_record",
+              "defaultValue": ""
+            }
+          ]
+        },
+        {
+          "name": "NameRecord",
+          "longName": "NameRecord",
+          "fullName": "sui.rpc.v2beta2.NameRecord",
+          "description": "",
+          "hasExtensions": false,
+          "hasFields": true,
+          "hasOneofs": true,
+          "extensions": [],
+          "fields": [
+            {
+              "name": "id",
+              "description": "Id of this record.\n\nNote that records are stored on chain as dynamic fields of the type\n`Field\u003cDomain,NameRecord\u003e`.",
+              "label": "optional",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_id",
+              "defaultValue": ""
+            },
+            {
+              "name": "name",
+              "description": "The SuiNS name of this record",
+              "label": "optional",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_name",
+              "defaultValue": ""
+            },
+            {
+              "name": "registration_nft_id",
+              "description": "The ID of the `RegistrationNFT` assigned to this record.\n\nThe owner of the corrisponding `RegistrationNFT` has the rights to\nbe able to change and adjust the `target_address` of this domain.\n\nIt is possible that the ID changes if the record expires and is\npurchased by someone else.",
+              "label": "optional",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_registration_nft_id",
+              "defaultValue": ""
+            },
+            {
+              "name": "expiration_timestamp",
+              "description": "Timestamp when the record expires.\n\nThis is either the expiration of the record itself or the expiration of\nthis record's parent if this is a leaf record.",
+              "label": "optional",
+              "type": "Timestamp",
+              "longType": "google.protobuf.Timestamp",
+              "fullType": "google.protobuf.Timestamp",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_expiration_timestamp",
+              "defaultValue": ""
+            },
+            {
+              "name": "target_address",
+              "description": "The target address that this name points to",
+              "label": "optional",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_target_address",
+              "defaultValue": ""
+            },
+            {
+              "name": "data",
+              "description": "Additional data which may be stored in a record",
+              "label": "repeated",
+              "type": "DataEntry",
+              "longType": "NameRecord.DataEntry",
+              "fullType": "sui.rpc.v2beta2.NameRecord.DataEntry",
+              "ismap": true,
+              "isoneof": false,
+              "oneofdecl": "",
+              "defaultValue": ""
+            }
+          ]
+        },
+        {
+          "name": "DataEntry",
+          "longName": "NameRecord.DataEntry",
+          "fullName": "sui.rpc.v2beta2.NameRecord.DataEntry",
+          "description": "",
+          "hasExtensions": false,
+          "hasFields": true,
+          "hasOneofs": false,
+          "extensions": [],
+          "fields": [
+            {
+              "name": "key",
+              "description": "",
+              "label": "",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": false,
+              "oneofdecl": "",
+              "defaultValue": ""
+            },
+            {
+              "name": "value",
+              "description": "",
+              "label": "",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": false,
+              "oneofdecl": "",
+              "defaultValue": ""
+            }
+          ]
+        },
+        {
+          "name": "ReverseLookupNameRequest",
+          "longName": "ReverseLookupNameRequest",
+          "fullName": "sui.rpc.v2beta2.ReverseLookupNameRequest",
+          "description": "",
+          "hasExtensions": false,
+          "hasFields": true,
+          "hasOneofs": true,
+          "extensions": [],
+          "fields": [
+            {
+              "name": "address",
+              "description": "Required. The address to perform a reverse lookup for.",
+              "label": "optional",
+              "type": "string",
+              "longType": "string",
+              "fullType": "string",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_address",
+              "defaultValue": ""
+            }
+          ]
+        },
+        {
+          "name": "ReverseLookupNameResponse",
+          "longName": "ReverseLookupNameResponse",
+          "fullName": "sui.rpc.v2beta2.ReverseLookupNameResponse",
+          "description": "",
+          "hasExtensions": false,
+          "hasFields": true,
+          "hasOneofs": true,
+          "extensions": [],
+          "fields": [
+            {
+              "name": "record",
+              "description": "The record for the SuiNS name linked to the requested address",
+              "label": "optional",
+              "type": "NameRecord",
+              "longType": "NameRecord",
+              "fullType": "sui.rpc.v2beta2.NameRecord",
+              "ismap": false,
+              "isoneof": true,
+              "oneofdecl": "_record",
+              "defaultValue": ""
+            }
+          ]
+        }
+      ],
+      "services": [
+        {
+          "name": "NameService",
+          "longName": "NameService",
+          "fullName": "sui.rpc.v2beta2.NameService",
+          "description": "",
+          "methods": [
+            {
+              "name": "LookupName",
+              "description": "",
+              "requestType": "LookupNameRequest",
+              "requestLongType": "LookupNameRequest",
+              "requestFullType": "sui.rpc.v2beta2.LookupNameRequest",
+              "requestStreaming": false,
+              "responseType": "LookupNameResponse",
+              "responseLongType": "LookupNameResponse",
+              "responseFullType": "sui.rpc.v2beta2.LookupNameResponse",
+              "responseStreaming": false
+            },
+            {
+              "name": "ReverseLookupName",
+              "description": "",
+              "requestType": "ReverseLookupNameRequest",
+              "requestLongType": "ReverseLookupNameRequest",
+              "requestFullType": "sui.rpc.v2beta2.ReverseLookupNameRequest",
+              "requestStreaming": false,
+              "responseType": "ReverseLookupNameResponse",
+              "responseLongType": "ReverseLookupNameResponse",
+              "responseFullType": "sui.rpc.v2beta2.ReverseLookupNameResponse",
+              "responseStreaming": false
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "sui/rpc/v2beta2/input.proto",
