@@ -73,7 +73,9 @@ Other limited resources per transaction that you should consider are:
 <summary>
 Complete list of `ProtocolConfig` limits.
 </summary>
-{@inject: crates/sui-protocol-config/src/lib.rs#struct=ProtocolConfig}
+
+{@inject: ../../../../../crates/sui-protocol-config/src/lib.rs#struct=ProtocolConfig}
+
 </details>
 
 For many use cases this attack is not an issue, like when selecting a raffle winner, or lottery numbers, as the code running is independent of the randomness. However, in the cases where this attack can be problematic, consider using one of the following approaches:
@@ -94,7 +96,9 @@ It's also important to gracefully handle the case in which the second step is ne
 <summary>
 Example implementation.
 </summary>
-{@inject: examples/move/random/random_nft/sources/example.move#reveal_alternative2_step1,reveal_alternative2_step2}
+
+{@inject: ../../../../../examples/move/random/random_nft/sources/example.move#fun=reveal_alternative2_step1,reveal_alternative2_step2}
+
 </details>
 
 ### Option 2: Resource usage
