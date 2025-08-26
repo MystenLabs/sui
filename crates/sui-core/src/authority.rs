@@ -2074,6 +2074,19 @@ impl AuthorityState {
                 &mut None,
             );
 
+        // Fork a transaction during execution (user transactions only)
+        if let None = self.config.fork_recovery {
+            if !certificate.data().intent_message().value.is_system_tx() {
+                let original_effects_digest = effects.digest().to_string();
+                effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                info!(
+                    ?original_effects_digest,
+                    new_effects_digest = ?effects.digest(),
+                    "Captured forked effects digest for transaction"
+                );
+            }
+        }
+
         if let Some(expected_effects_digest) = expected_effects_digest {
             if effects.digest() != expected_effects_digest {
                 // We dont want to mask the original error, so we log it and continue.
@@ -2127,19 +2140,6 @@ impl AuthorityState {
                     tx_digest,
                     expected_effects_digest,
                     effects.digest()
-                );
-            }
-        }
-
-        // Fork a transaction during execution (user transactions only)
-        if let None = self.config.fork_recovery {
-            if !certificate.data().intent_message().value.is_system_tx() {
-                let original_effects_digest = effects.digest().to_string();
-                effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
-                info!(
-                    ?original_effects_digest,
-                    new_effects_digest = ?effects.digest(),
-                    "Captured forked effects digest for transaction"
                 );
             }
         }
