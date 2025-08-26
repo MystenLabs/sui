@@ -1,9 +1,7 @@
 ---
 title: Checkpoint Verification
-description: On the Sui network, checkpoints define the history of the blockchain. Checkpoint verification is how full nodes and other clients guarantee their state matches the Sui network.
+description: On the Sui network, checkpoints define the blockchain's history. Unlike traditional blockchains that create blocks before execution, Sui creates checkpoints after transaction execution to provide a certified record of chain history.
 ---
-
-On the Sui network, checkpoints define the blockchain history. Unlike traditional blockchains that create blocks before execution, Sui creates checkpoints after transaction execution to provide a certified record of chain history.
 
 Checkpoints contain:
 
@@ -20,16 +18,16 @@ Full nodes and validators verify a checkpoint to trust it. This verification con
 Checkpoint verification requires two interdependent steps:
 
 1. A client that has the public keys of the validator committee can check the signatures on the checkpoint. Checkpoints are signed by the aggregated BLS signatures of a quorum of the committee. If the signatures are valid, the client knows the checkpoint was created by the validator committee and not another party.  
-2. By validating checkpoints, the client can learn the composition of the committee. The final checkpoint of each epoch contains the validator committee, including the public keys, of the next epoch.  
+1. By validating checkpoints, the client can learn the composition of the committee. The final checkpoint of each epoch contains the validator committee, including the public keys, of the next epoch.  
 
 This process creates an apparent circular dependency. The client needs to know the committee to verify checkpoints, but also learns the committee through checkpoint validation. The process is bootstrapped from the genesis checkpoint, the earliest checkpoint in a Sui network. The genesis checkpoint contains the initial validator committee, which allows the client to verify all checkpoints in history by following this process:
 
 1. Obtain the genesis checkpoint from a trusted source.  
-2. Load the initial committee from the genesis checkpoint.  
-3. Use the state sync network or Sui archive to obtain the next checkpoint.  
-4. Verify the checkpoint signatures using the current committee's public keys, and confirm that the checkpoint’s previous hash matches the last validated checkpoint hash.  
-5. If the checkpoint is invalid, raise an error.  
-6. If valid, check whether the checkpoint is the last in the current epoch:  
+1. Load the initial committee from the genesis checkpoint.  
+1. Use the state sync network or Sui archive to obtain the next checkpoint.  
+1. Verify the checkpoint signatures using the current committee's public keys, and confirm that the checkpoint’s previous hash matches the last validated checkpoint hash.  
+1. If the checkpoint is invalid, raise an error.  
+1. If valid, check whether the checkpoint is the last in the current epoch:  
    - If so, load the next committee and use it as the current committee.  
    - If not, return to step 3 and continue.  
 

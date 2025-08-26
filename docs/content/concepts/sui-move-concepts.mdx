@@ -42,7 +42,7 @@ Move on Sui addresses the scaling issue by not having global storage, or its rel
 
 In Move on Diem, there is a 16-byte `address` type used to represent account addresses in global storage. A 16 byte address is sufficient for the Move on Diem security model.
 
-Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the "sender") that is accessible from the transaction context, and each object stores its `address` wrapped in its `id: UID` field. 
+Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the sender) that is accessible from the transaction context, and each object stores its `address` wrapped in its `id: UID` field. 
 
 See [Address](https://move-book.com/reference/primitive-types/address.html) in The Move Book for an overview on addresses and refer to <a href="/references/framework/sui-framework/object" data-noBrokenLinkCheck='true'>object.move</a> in the Sui Framework for implementation details.
 
