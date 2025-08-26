@@ -10,8 +10,15 @@
 set -euo pipefail
 set -x
 
+# check required params
+if [[ $# -ne 1 ]]; then
+  echo "USAGE: gen_branch_cut_prs.sh <snapshot|version-bump>"
+  exit 1
+fi
+PR_TYPE=$1
+
 # Ensure required binaries are available
-for cmd in gh git; do
+for cmd in gh git cargo; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "Error: required command '$cmd' not found in PATH." >&2
     exit 1
@@ -25,76 +32,82 @@ fi
 
 # Get current main version
 SUI_VERSION=$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"/\1/p' ./Cargo.toml)
-
-# Set up branch for changes.
 STAMP="$(date +%Y%m%d%H%M%S)"
-BRANCH="${GITHUB_ACTOR}/sui-v${SUI_VERSION}-bytecode-framework-snapshot-${STAMP}"
-git checkout -b "$BRANCH"
 
-# Generate framework bytecode snapshot
-cargo run --bin sui-framework-snapshot
+if [[ "$PR_TYPE" == *snapshot* ]]; then
+  echo "Generating framework bytecode snapshot..."
+  # Set up branch for changes.
+  BRANCH="${GITHUB_ACTOR}/sui-v${SUI_VERSION}-bytecode-framework-snapshot-${STAMP}"
+  git checkout -b "$BRANCH"
 
-# Staged all changes
-echo "Staging all changed files..."
-git add -A .
+  # Generate framework bytecode snapshot
+  cargo run --bin sui-framework-snapshot
 
-# Configure git user
-git config user.name "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+  # Staged all changes
+  echo "Staging all changed files..."
+  git add -A .
 
-# Generate PR body
-BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
+  # Configure git user
+  git config user.name "github-actions[bot]"
+  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-# Commit, push, and create PR.
-git commit -m "$BODY"
-git push -u origin "$BRANCH"
+  # Generate PR body
+  BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
 
-PR_URL=$(gh pr create \
-  --base main \
-  --head "$BRANCH" \
-  --title "Sui v${SUI_VERSION} Framework Bytecode snapshot" \
-  --reviewer "ebmifa" \
-  --body "$BODY" \
-  2>&1 | grep -Eo 'https://github.com/[^ ]+')
+  # Commit, push, and create PR.
+  git commit -m "$BODY"
+  git push -u origin "$BRANCH"
 
-echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
+  PR_URL=$(gh pr create \
+    --base main \
+    --head "$BRANCH" \
+    --title "Sui v${SUI_VERSION} Framework Bytecode snapshot" \
+    --reviewer "ebmifa" \
+    --body "$BODY" \
+    2>&1 | grep -Eo 'https://github.com/[^ ]+')
 
-# Setting the PR to auto merge
-gh pr merge --auto --squash --delete-branch "$BRANCH"
+  echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
 
-# Generate the version bump PR
-# Bump main branhch version
-IFS=. read -r major minor patch <<<"$SUI_VERSION"; NEW_SUI_VERSION="$major.$((minor+1)).$patch"
+  # Setting the PR to auto merge
+  gh pr merge --auto --squash --delete-branch "$BRANCH"
 
-# Setup new branch for staging
-BRANCH="${GITHUB_ACTOR}/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
-git checkout main && git fetch origin
-git reset --hard origin/main && git clean -fd
-git checkout -b "$BRANCH"
+elif [[ "$PR_TYPE" == *version-bump* ]]; then
+  # Generate the version bump PR
+  echo "Generating version bump..."
+  # Bump main branhch version
+  IFS=. read -r major minor patch <<<"$SUI_VERSION"; NEW_SUI_VERSION="$major.$((minor+1)).$patch"
 
-# Update the version in Cargo.toml and openrpc.json
-sed -i -E "s/^(version = \")[0-9]+\.[0-9]+\.[0-9]+(\"$)/\1${NEW_SUI_VERSION}\2/" Cargo.toml
-sed -i -E "s/(\"version\": \")([0-9]+\.[0-9]+\.[0-9]+)(\")/\1${NEW_SUI_VERSION}\3/" crates/sui-open-rpc/spec/openrpc.json
+  # Setup new branch for staging
+  BRANCH="${GITHUB_ACTOR}/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
+  git checkout -b "$BRANCH"
 
-# Cargo check to generate Cargo.lock changes
-cargo check || true
+  # Update the version in Cargo.toml and openrpc.json
+  sed -i -E "s/^(version = \")[0-9]+\.[0-9]+\.[0-9]+(\"$)/\1${NEW_SUI_VERSION}\2/" Cargo.toml
+  sed -i -E "s/(\"version\": \")([0-9]+\.[0-9]+\.[0-9]+)(\")/\1${NEW_SUI_VERSION}\3/" crates/sui-open-rpc/spec/openrpc.json
 
-# Staged all changes
-echo "Staging all changed files..."
-git add -A .
+  # Cargo check to generate Cargo.lock changes
+  cargo check || true
 
-# Generate PR body
-BODY="Sui v${NEW_SUI_VERSION} Version Bump"
+  # Staged all changes
+  echo "Staging all changed files..."
+  git add -A .
 
-git commit -m "$BODY"
-git push -u origin "$BRANCH"
+  # Generate PR body
+  BODY="Sui v${NEW_SUI_VERSION} Version Bump"
 
-PR_URL=$(gh pr create \
-  --base main \
-  --head "$BRANCH" \
-  --title "Sui v${NEW_SUI_VERSION} Version Bump" \
-  --reviewer "ebmifa" \
-  --body "$BODY" \
-  2>&1 | grep -Eo 'https://github.com/[^ ]+')
+  git commit -m "$BODY"
+  git push -u origin "$BRANCH"
 
-echo "Pull request for Sui v${NEW_SUI_VERSION} Version Bump created: $PR_URL"
+  PR_URL=$(gh pr create \
+    --base main \
+    --head "$BRANCH" \
+    --title "Sui v${NEW_SUI_VERSION} Version Bump" \
+    --reviewer "ebmifa" \
+    --body "$BODY" \
+    2>&1 | grep -Eo 'https://github.com/[^ ]+')
+
+  echo "Pull request for Sui v${NEW_SUI_VERSION} Version Bump created: $PR_URL"
+else
+  echo "Invalid argument. Use 'snapshot' or 'version-bump'."
+  exit 1
+fi
