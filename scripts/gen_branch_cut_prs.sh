@@ -7,6 +7,7 @@
 #   cargo run --bin sui-framework-snapshot
 # 2. Generate a version bump PR
 
+set -euo pipefail
 set -x
 
 # Ensure required binaries are available
@@ -67,7 +68,8 @@ IFS=. read -r major minor patch <<<"$SUI_VERSION"; NEW_SUI_VERSION="$major.$((mi
 
 # Setup new branch for staging
 BRANCH="${GITHUB_ACTOR}/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
-git checkout main && git pull origin main
+git checkout main && git fetch origin
+git reset --hard origin/main && git clean -fd
 git checkout -b "$BRANCH"
 
 # Update the version in Cargo.toml and openrpc.json
