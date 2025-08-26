@@ -11,7 +11,7 @@ pub struct ExecutionResult {
     /// The effects of the transaction execution, if successful.
     pub effects: Option<TransactionEffects>,
 
-    /// Errors that occurred during execution (e.g., network errors, validation failures).
+    /// errors that occurred during execution (e.g., network errors, validation failures).
     /// These are distinct from execution failures within the transaction itself.
     pub errors: Option<Vec<String>>,
 }
