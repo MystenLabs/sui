@@ -3,6 +3,7 @@
 
 use crate::validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMetrics};
 use mysten_common::decay_moving_average::DecayMovingAverage;
+use mysten_metrics::TxType;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -116,6 +117,7 @@ impl ClientObservedStats {
         &mut self,
         feedback: OperationFeedback,
         metrics: &ValidatorClientMetrics,
+        tx_type: TxType,
     ) {
         let validator_stats = self
             .validator_stats
@@ -141,7 +143,7 @@ impl ClientObservedStats {
 
         metrics
             .consecutive_failures
-            .with_label_values(&[&feedback.display_name])
+            .with_label_values(&[&feedback.display_name, tx_type.as_str()])
             .set(validator_stats.consecutive_failures as i64);
 
         if let Ok(latency) = feedback.result {

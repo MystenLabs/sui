@@ -8,6 +8,7 @@ use crate::validator_client_monitor::{
     metrics::ValidatorClientMetrics, OperationFeedback, OperationType,
 };
 use arc_swap::ArcSwap;
+use mysten_metrics::TxType;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
@@ -39,7 +40,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     cached_scores: RwLock<Option<HashMap<AuthorityName, f64>>>,
     last_consensus_scores: RwLock<Option<(u64, Vec<u64>)>>,
-    is_shared_object_tx: bool,
+    tx_type: TxType,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -50,7 +51,7 @@ where
         config: ValidatorClientMonitorConfig,
         metrics: Arc<ValidatorClientMetrics>,
         authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
-        is_shared_object_tx: bool,
+        tx_type: TxType,
     ) -> Arc<Self> {
         info!(
             "Validator client monitor starting with config: {:?}",
@@ -64,7 +65,7 @@ where
             authority_aggregator,
             cached_scores: RwLock::new(None),
             last_consensus_scores: RwLock::new(None),
-            is_shared_object_tx,
+            tx_type,
         });
 
         let monitor_clone = monitor.clone();
@@ -83,7 +84,7 @@ where
             ValidatorClientMonitorConfig::default(),
             Arc::new(ValidatorClientMetrics::new(&Registry::default())),
             Arc::new(ArcSwap::new(authority_aggregator)),
-            false,
+            TxType::SingleWriter,
         )
     }
 
@@ -179,11 +180,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
         let score_map = self.client_stats.read().get_all_validator_stats(committee);
 
-        let tx_type = if self.is_shared_object_tx {
-            "shared_object_tx"
-        } else {
-            "owned_object_tx"
-        };
+        let tx_type = self.tx_type.as_str();
 
         for (validator, score) in score_map.iter() {
             debug!("Validator [{tx_type}] {}: score {}", validator, score);
@@ -212,11 +209,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::Finalize => "finalize",
         };
 
-        let tx_type = if self.is_shared_object_tx {
-            "shared_object_tx"
-        } else {
-            "owned_object_tx"
-        };
+        let tx_type = self.tx_type.as_str();
 
         match feedback.result {
             Ok(latency) => {
@@ -238,7 +231,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         }
 
         let mut client_stats = self.client_stats.write();
-        client_stats.record_interaction_result(feedback, &self.metrics);
+        client_stats.record_interaction_result(feedback, &self.metrics, self.tx_type);
     }
 
     pub fn set_last_consensus_scores(&self, commit_index: u64, last_consensus_scores: Vec<u64>) {
