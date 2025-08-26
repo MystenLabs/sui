@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::Bcs;
 use sui_rpc::proto::sui::rpc::v2beta2::CommandOutput;
 use sui_rpc::proto::sui::rpc::v2beta2::CommandResult;
 use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2beta2::Object;
 use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
@@ -192,18 +193,18 @@ pub fn simulate_transaction(
                     }
 
                     if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
-                        for unchanged_shared_object in
+                        for unchanged_consensus_object in
                             effects.unchanged_consensus_objects.iter_mut()
                         {
                             let Ok(object_id) =
-                                unchanged_shared_object.object_id().parse::<ObjectID>()
+                                unchanged_consensus_object.object_id().parse::<ObjectID>()
                             else {
                                 continue;
                             };
 
                             if let Some(object) = input_objects.iter().find(|o| o.id() == object_id)
                             {
-                                unchanged_shared_object.object_type =
+                                unchanged_consensus_object.object_type =
                                     Some(match object.struct_tag() {
                                         Some(struct_tag) => struct_tag.to_canonical_string(true),
                                         None => "package".to_owned(),
@@ -229,6 +230,26 @@ pub fn simulate_transaction(
         message.transaction = submask
             .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
             .map(|mask| Transaction::merge_from(transaction, &mask));
+
+        message.input_objects = submask
+            .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD)
+            .map(|mask| {
+                input_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        message.output_objects = submask
+            .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD)
+            .map(|mask| {
+                output_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
 
         Some(message)
     } else {

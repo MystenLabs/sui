@@ -285,7 +285,7 @@ fun test_system_messages() {
         addr,
         false,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[333],
     );
 

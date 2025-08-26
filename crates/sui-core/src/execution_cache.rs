@@ -636,7 +636,6 @@ pub trait ExecutionCacheReconfigAPI: Send + Sync {
     fn insert_genesis_object(&self, object: Object);
     fn bulk_insert_genesis_objects(&self, objects: &[Object]);
 
-    fn revert_state_update(&self, digest: &TransactionDigest);
     fn set_epoch_start_configuration(&self, epoch_start_config: &EpochStartConfiguration);
 
     fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]);
@@ -825,10 +824,6 @@ macro_rules! implement_passthrough_traits {
 
             fn bulk_insert_genesis_objects(&self, objects: &[Object]) {
                 self.bulk_insert_genesis_objects_impl(objects)
-            }
-
-            fn revert_state_update(&self, digest: &TransactionDigest) {
-                self.revert_state_update_impl(digest)
             }
 
             fn set_epoch_start_configuration(&self, epoch_start_config: &EpochStartConfiguration) {

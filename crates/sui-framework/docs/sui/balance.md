@@ -448,7 +448,10 @@ and nowhere else.
 
 <pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance_value">value</a>: u64, ctx: &TxContext): <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt; {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/balance.md#sui_balance_ENotSystemAddress">ENotSystemAddress</a>);
-    <b>assert</b>!(<a href="../std/type_name.md#std_type_name_get">std::type_name::get</a>&lt;T&gt;().into_string().into_bytes() == <a href="../sui/balance.md#sui_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>, <a href="../sui/balance.md#sui_balance_ENotSUI">ENotSUI</a>);
+    <b>assert</b>!(
+        <a href="../std/type_name.md#std_type_name_with_defining_ids">std::type_name::with_defining_ids</a>&lt;T&gt;().into_string().into_bytes() == <a href="../sui/balance.md#sui_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>,
+        <a href="../sui/balance.md#sui_balance_ENotSUI">ENotSUI</a>,
+    );
     <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a> }
 }
 </code></pre>
@@ -477,7 +480,10 @@ and nowhere else.
 
 <pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/balance.md#sui_balance_ENotSystemAddress">ENotSystemAddress</a>);
-    <b>assert</b>!(<a href="../std/type_name.md#std_type_name_get">std::type_name::get</a>&lt;T&gt;().into_string().into_bytes() == <a href="../sui/balance.md#sui_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>, <a href="../sui/balance.md#sui_balance_ENotSUI">ENotSUI</a>);
+    <b>assert</b>!(
+        <a href="../std/type_name.md#std_type_name_with_defining_ids">std::type_name::with_defining_ids</a>&lt;T&gt;().into_string().into_bytes() == <a href="../sui/balance.md#sui_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>,
+        <a href="../sui/balance.md#sui_balance_ENotSUI">ENotSUI</a>,
+    );
     <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a>: _ } = self;
 }
 </code></pre>

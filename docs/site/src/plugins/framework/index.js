@@ -4,7 +4,7 @@
 // Plugin copies files from specified directories into the
 // references/framework directory. Formats the nav listing
 // and processes files so they still work in the crates/.../docs
-// directory on github. Source files are created via cargo docs.
+// directory on GitHub. Source files are created via cargo docs.
 
 import path from "path";
 import fs from "fs";
@@ -21,12 +21,10 @@ const STDLIB_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/std",
 );
-/*
-** Deprecated **
-const DEEPBOOK_PATH = path.join(
-  __dirname,
-  "../../../../../crates/sui-framework/docs/deepbook",
-);*/
+// const DEEPBOOK_PATH = path.join(
+//   __dirname,
+//   "../../../../../crates/sui-framework/docs/deepbook",
+// );
 const SUISYS_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/sui_system",
@@ -35,6 +33,17 @@ const DOCS_PATH = path.join(
   __dirname,
   "../../../../content/references/framework",
 );
+
+// prefix helper for the first path segment only
+const prefixRootDir = (seg) => `sui_${seg}`;
+
+// map of crate dir -> prefixed dir, used to rewrite hrefs in HTML
+const CRATE_PREFIX_MAP = {
+  bridge: "sui_bridge",
+  sui: "sui_sui",
+  std: "sui_std",
+  sui_system: "sui_sui_system",
+};
 
 const frameworkPlugin = (context, options) => {
   return {
@@ -52,9 +61,9 @@ const frameworkPlugin = (context, options) => {
       } else {
         fs.mkdirSync(DOCS_PATH);
       }
+
       const recurseFiles = (dirPath, files = []) => {
         const f = fs.readdirSync(dirPath, { withFileTypes: true });
-        // Copy md files from provided directory.
         f.forEach((file) => {
           const fp = path.join(dirPath, file.name);
           if (file.isDirectory()) {
@@ -63,34 +72,32 @@ const frameworkPlugin = (context, options) => {
             files.push(fp);
           }
         });
-
         return files;
       };
 
       const bridgeFiles = recurseFiles(BRIDGE_PATH);
       const frameworkFiles = recurseFiles(FRAMEWORK_PATH);
       const stdlibFiles = recurseFiles(STDLIB_PATH);
-      //const deepbookFiles = recurseFiles(DEEPBOOK_PATH);
+      // const deepbookFiles = recurseFiles(DEEPBOOK_PATH);
       const suisysFiles = recurseFiles(SUISYS_PATH);
+
       const allFiles = [
         bridgeFiles,
         frameworkFiles,
         stdlibFiles,
-        //deepbookFiles,
+        // deepbookFiles,
         suisysFiles,
       ];
+
       allFiles.forEach((theseFiles) => {
-        theseFiles.forEach((file) => {
-          const markdown = fs.readFileSync(file, "utf8");
-          // .md extension in links messes up routing.
-          // Removing here so linking still works in github crates/docs.
-          // Remove the backticks from title.
-          // Remove code blocks without pre's. Render automatically adds
-          // pre element that messes up formatting.
-          // Remove empty code blocks because it looks lame.
-          // Replace named anchor tags for titles with id'd title.
-          // Replace remaining named anchor tags with ids and scroll margin
-          // inline. Necessary for mdx to process correctly.
+        theseFiles.forEach((absFile) => {
+          const markdown = fs.readFileSync(absFile, "utf8");
+
+          // Remove .md in <a href="..."> links so routing works on GitHub and site
+          // Fix front-matter title/sidebar_label
+          // Normalize code blocks
+          // Transform legacy named anchors to id'ed headings
+          // Rewrite internal crate links to the new prefixed dirs
           let reMarkdown = markdown
             .replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`)
             .replace(
@@ -103,30 +110,45 @@ const frameworkPlugin = (context, options) => {
               /<a name="([^"]+)"><\/a>\n\n(#+) (.+) `([^`]+)`/g,
               `$2 $3 \`$4\` {#$1}`,
             )
-            .replace(/<a name=/g, "<a style='scroll-margin-top:80px' id=");
-          const filename = file.replace(/.*\/docs\/(.*)$/, `$1`);
-          const parts = filename.split("/");
-          const fileWrite = path.join(DOCS_PATH, filename);
-          let newDir = DOCS_PATH;
+            .replace(/<a name=/g, "<a style='scroll-margin-top:80px' id=")
+            // *** NEW: rewrite crate-relative links to the prefixed dirs ***
+            .replace(
+              /href=(["'])(\.\.\/)(bridge|sui|std|sui_system)\/([^"']*)\1/g,
+              (_m, q, up, seg, tail) => `href=${q}${up}${CRATE_PREFIX_MAP[seg]}/${tail}${q}`,
+            )
+            // also handle single quotes just in case
+            .replace(
+              /href='(\.\.\/)(bridge|sui|std|sui_system)\//g,
+              (m, up, seg) => `href='${up}${CRATE_PREFIX_MAP[seg]}/"`.replace(/"$/, "'"),
+            );
 
-          // Should work for nested docs, but is currently flat tree.
+          // relative filename under crates/*/docs
+          const filename = absFile.replace(/.*\/docs\/(.*)$/, `$1`);
+          const parts = filename.split("/"); // e.g. ["bridge","foo.md"]
+          const [root, ...rest] = parts;
+
+          // write to /content/references/framework/sui_<root>/...rest
+          const targetRel = [prefixRootDir(root), ...rest].join("/");
+          const fileWrite = path.join(DOCS_PATH, targetRel);
+
+          // Create directories along the way; prefix the FIRST segment only
+          let newDir = DOCS_PATH;
           parts.forEach((part, i) => {
             if (part.match(/\.md$/)) {
-              // Autogenerated content has a problem when the parent directory
-              // is same name as file
-              if (part.replace(/\.md/, "") === parts[i - 1]) {
-                const slug = fileWrite.replace(
-                  /^.*?\/content\/(.*)\.md$/,
-                  `$1`,
-                );
+              // No longer needed: the parent dir won't equal the filename after prefix.
+              // But keep slug injection in case future nested dirs mirror filenames.
+              if (part.replace(/\.md$/, "") === parts[i - 1]) {
+                const slug = fileWrite.replace(/^.*?\/content\/(.*)\.md$/, `$1`);
                 reMarkdown = reMarkdown.replace(
                   /sidebar_label/,
                   `slug: /${slug}\nsidebar_label`,
                 );
               }
             } else {
-              // Capitalize lib name for nav.
-              let styledPart = part
+              const onDiskPart = i === 0 ? prefixRootDir(part) : part;
+
+              // Human label from the original segment (without prefix)
+              const styledPart = part
                 .split("-")
                 .map(
                   (word) =>
@@ -134,22 +156,19 @@ const frameworkPlugin = (context, options) => {
                 )
                 .join(" ");
 
-              newDir = path.join(newDir, part);
+              newDir = path.join(newDir, onDiskPart);
 
               if (!fs.existsSync(newDir)) {
-                fs.mkdirSync(newDir);
-                // Create file that handles nav label. Only run once at dir create.
+                fs.mkdirSync(newDir, { recursive: true });
+
+                // Category file label shows the original name, but slug uses the prefixed path
                 const catfile = path.join(newDir, "_category_.json");
+                const slug = path.join("/references/framework", i === 0 ? onDiskPart : onDiskPart);
                 fs.writeFile(
                   catfile,
                   JSON.stringify({
-                    label: styledPart,
-                    link: {
-                      type: "generated-index",
-                      slug: path.join("/references/framework", part),
-                      description: `Documentation for the modules in the sui/crates/sui-framework/packages/${part} crate. Select a module from the list to see its details.`,
-                    },
-                  }),
+                    label: styledPart},
+                    ),
                   "utf8",
                   (err) => {
                     if (err) {
@@ -157,13 +176,15 @@ const frameworkPlugin = (context, options) => {
                         "An error occurred creating category file:",
                         err,
                       );
-                      return;
                     }
                   },
                 );
               }
             }
           });
+
+          // Ensure parent dir exists before writing file
+          fs.mkdirSync(path.dirname(fileWrite), { recursive: true });
 
           fs.writeFileSync(fileWrite, reMarkdown, "utf8", (err) => {
             if (err) {

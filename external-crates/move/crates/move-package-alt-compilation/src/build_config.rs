@@ -4,12 +4,15 @@
 
 use std::path::PathBuf;
 
+use clap::ArgAction;
+use clap::Parser;
+use serde::{Deserialize, Serialize};
+
+use move_compiler::editions::{Edition, Flavor};
 use move_package_alt::schema::EnvironmentName;
+use move_symbol_pool::Symbol;
 
 use super::lint_flag::LintFlag;
-use clap::Parser;
-use move_compiler::editions::{Edition, Flavor};
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(about)]
@@ -58,9 +61,6 @@ pub struct BuildConfig {
     #[clap(flatten)]
     pub lint_flag: LintFlag,
 
-    // /// Additional dependencies to be automatically included in every package
-    // #[clap(skip)]
-    // pub implicit_dependencies: Dependencies,
     /// Forces use of lock file without checking if it needs to be updated
     /// (regenerates it only if it doesn't exist)
     #[clap(skip)]
@@ -77,4 +77,19 @@ pub struct BuildConfig {
     /// Compile in 'test' mode. Code in the 'tests' directory will be used too.
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
+
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annotations during compilation.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        value_parser = parse_symbol,
+        action = ArgAction::Append,
+        global = true
+    )]
+    pub modes: Vec<Symbol>,
+}
+
+fn parse_symbol(s: &str) -> Result<Symbol, String> {
+    Ok(Symbol::from(s))
 }

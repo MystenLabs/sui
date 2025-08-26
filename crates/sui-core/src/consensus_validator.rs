@@ -14,7 +14,7 @@ use sui_types::{
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{debug, info, warn};
+use tracing::{info, instrument, warn};
 
 use crate::{
     authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
@@ -151,6 +151,7 @@ impl SuiTxValidator {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all, fields(block_ref = ?block_ref))]
     fn vote_transactions(
         &self,
         block_ref: &BlockRef,
@@ -168,7 +169,6 @@ impl SuiTxValidator {
             };
 
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
-                debug!("Failed to vote transaction: {:?}", error);
                 result.push(i as TransactionIndex);
 
                 // Cache the rejection vote reason (error) for the transaction
@@ -186,6 +186,7 @@ impl SuiTxValidator {
         result
     }
 
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.digest()))]
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -496,12 +497,12 @@ mod tests {
 
     #[sim_test]
     async fn reject_checkpoint_signature_v2_when_flag_disabled() {
-        // Build a single-validator network and authority with protocol version < 92 (flag disabled)
+        // Build a single-validator network and authority with protocol version < 93 (flag disabled)
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
 
         let disabled_cfg =
-            ProtocolConfig::get_for_version(ProtocolVersion::new(91), Chain::Unknown);
+            ProtocolConfig::get_for_version(ProtocolVersion::new(92), Chain::Unknown);
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
             .with_protocol_config(disabled_cfg)
@@ -551,11 +552,11 @@ mod tests {
 
     #[sim_test]
     async fn accept_checkpoint_signature_v2_when_flag_enabled() {
-        // Build a single-validator network and authority with protocol version >= 92 (flag enabled)
+        // Build a single-validator network and authority with protocol version >= 93 (flag enabled)
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
 
-        let enabled_cfg = ProtocolConfig::get_for_version(ProtocolVersion::new(92), Chain::Unknown);
+        let enabled_cfg = ProtocolConfig::get_for_version(ProtocolVersion::new(93), Chain::Unknown);
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
             .with_protocol_config(enabled_cfg)

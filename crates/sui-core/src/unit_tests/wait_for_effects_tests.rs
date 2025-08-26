@@ -557,9 +557,13 @@ async fn test_wait_for_effects_expired() {
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
+    let block_round = 3;
     let tx_position = ConsensusPosition {
         epoch: EpochId::MIN,
-        block: BlockRef::MIN,
+        block: BlockRef {
+            round: block_round,
+            ..BlockRef::MIN
+        },
         index: TransactionIndex::MIN,
     };
 
@@ -574,12 +578,18 @@ async fn test_wait_for_effects_expired() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store
-            .consensus_tx_status_cache
-            .as_ref()
-            .unwrap()
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
+        let cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
+
+        // Initialize the last committed leader round.
+        cache
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + block_round)
             .await;
+
+        // Update that will actually trigger expiration using the leader round, CONSENSUS_STATUS_RETENTION_ROUNDS + block_round
+        cache
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + block_round + 1)
+            .await;
+
         tokio::time::sleep(Duration::from_millis(100)).await;
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         state_clone

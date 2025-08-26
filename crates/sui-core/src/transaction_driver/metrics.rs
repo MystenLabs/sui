@@ -25,9 +25,9 @@ pub struct TransactionDriverMetrics {
     pub(crate) expiration_acks: IntCounter,
     pub(crate) effects_digest_mismatches: IntCounter,
     pub(crate) transaction_retries: HistogramVec,
-    pub(crate) certified_effects_ack_latency: Histogram,
-    pub(crate) certified_effects_ack_attempts: IntCounter,
-    pub(crate) certified_effects_ack_successes: IntCounter,
+    pub(crate) certified_effects_ack_latency: HistogramVec,
+    pub(crate) certified_effects_ack_attempts: IntCounterVec,
+    pub(crate) certified_effects_ack_successes: IntCounterVec,
     pub(crate) validator_selections: IntCounterVec,
 }
 
@@ -110,22 +110,25 @@ impl TransactionDriverMetrics {
                 registry,
             )
             .unwrap(),
-            certified_effects_ack_latency: register_histogram_with_registry!(
+            certified_effects_ack_latency: register_histogram_vec_with_registry!(
                 "transaction_driver_certified_effects_ack_latency",
                 "Latency in seconds for getting certified effects acknowledgment",
+                &["tx_type"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            certified_effects_ack_attempts: register_int_counter_with_registry!(
+            certified_effects_ack_attempts: register_int_counter_vec_with_registry!(
                 "transaction_driver_certified_effects_ack_attempts",
                 "Total number of transactions that went through certified effects ack process",
+                &["tx_type"],
                 registry,
             )
             .unwrap(),
-            certified_effects_ack_successes: register_int_counter_with_registry!(
+            certified_effects_ack_successes: register_int_counter_vec_with_registry!(
                 "transaction_driver_certified_effects_ack_successes",
                 "Number of successful certified effects acknowledgments",
+                &["tx_type"],
                 registry,
             )
             .unwrap(),

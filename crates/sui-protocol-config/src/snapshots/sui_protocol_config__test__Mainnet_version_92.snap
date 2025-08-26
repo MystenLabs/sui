@@ -32,7 +32,6 @@ feature_flags:
   simple_conservation_checks: true
   loaded_child_object_format_type: true
   receive_objects: true
-  consensus_checkpoint_signature_key_includes_digest: true
   random_beacon: true
   bridge: true
   enable_effects_v2: true
@@ -108,7 +107,6 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
-  per_command_shared_object_transfer_rules: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

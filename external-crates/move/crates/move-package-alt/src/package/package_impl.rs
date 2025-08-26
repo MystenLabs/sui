@@ -11,7 +11,7 @@ use super::manifest::{Manifest, ManifestError, ManifestErrorKind};
 use super::paths::PackagePath;
 use crate::dependency::FetchedDependency;
 use crate::errors::{FileHandle, Location};
-use crate::schema::{ImplicitDepMode, ReplacementDependency};
+use crate::schema::ReplacementDependency;
 use crate::{
     compatibility::{
         legacy::LegacyData,
@@ -26,7 +26,7 @@ use crate::{
         PublishedID,
     },
 };
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_core_types::account_address::AccountAddress;
 use std::sync::{LazyLock, Mutex};
 
 // TODO: is this the right way to handle this?
@@ -116,9 +116,11 @@ impl<F: MoveFlavor> Package<F> {
 
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
 
-            debug!("adding implicit dependencies");
-            let implicit_deps =
-                Self::implicit_deps(env, manifest.parsed().package.implicit_deps.clone())?;
+            debug!("adding system dependencies");
+            let system_dependencies = Self::system_dependencies(
+                env,
+                manifest.parsed().package.system_dependencies.clone(),
+            )?;
 
             // TODO: We should error if there environment is not supported!
             debug!("combining [dependencies] with [dep-replacements] for {env:?}");
@@ -130,7 +132,7 @@ impl<F: MoveFlavor> Package<F> {
                     .get(env.name())
                     .unwrap_or(&BTreeMap::new()),
                 &manifest.dependencies(),
-                &implicit_deps,
+                &system_dependencies,
             )?;
 
             debug!("pinning dependencies");
@@ -158,15 +160,15 @@ impl<F: MoveFlavor> Package<F> {
         // Here, that means that we're working on legacy package, so we can throw its errors.
         let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
 
-        let implicit_deps =
-            Self::implicit_deps(env, legacy_manifest.metadata.implicit_deps.clone())?;
+        let system_dependencies =
+            Self::system_dependencies(env, legacy_manifest.metadata.system_dependencies.clone())?;
 
         let combined_deps = CombinedDependency::combine_deps(
             &legacy_manifest.file_handle,
             env,
             &BTreeMap::new(),
             &legacy_manifest.deps,
-            &implicit_deps,
+            &system_dependencies,
         )?;
 
         let deps = PinnedDependencyInfo::pin::<F>(&source, combined_deps, env.id()).await?;
@@ -271,42 +273,38 @@ impl<F: MoveFlavor> Package<F> {
         &self.metadata
     }
 
-    /// Return the implicit deps depending on the implicit dep mode.
-    fn implicit_deps(
+    /// Return system dependencies depending on the manifest setup.
+    fn system_dependencies(
         env: &Environment,
-        implicit_dep_mode: ImplicitDepMode,
+        system_dependencies: Option<Vec<String>>,
     ) -> PackageResult<BTreeMap<PackageName, ReplacementDependency>> {
-        match implicit_dep_mode {
-            // For enabled state, we need to pick the deps based on whether there is
-            // a specfiied
-            ImplicitDepMode::Enabled(specified_deps) => {
-                let deps = F::implicit_deps(env.id().to_string());
+        if let Some(system_dependencies) = system_dependencies {
+            // Only include the specified system dependencies.
+            let all_flavor_deps = F::system_dependencies(env.id().to_string());
 
-                if let Some(specified_deps) = specified_deps {
-                    // If a list of deps is specified, we need to make sure
-                    // that all of the deps are valid in the implicit deps list, or warn.
-                    for dep in &specified_deps {
-                        if !deps.contains_key(&Identifier::new(dep.as_str())?) {
-                            return Err(PackageError::Generic(format!(
-                                "The implicit dependency `{}` does not exist in the implicit deps list.",
-                                dep
-                            )));
-                        }
-                    }
+            let mut result = BTreeMap::new();
 
-                    // If we have a "specified" list of deps, we need to filter the implicit deps to only support
-                    // the ones that are in the specified list.
-                    Ok(deps
-                        .into_iter()
-                        .filter(|(name, _)| specified_deps.contains(&name.to_string()))
-                        .collect())
+            for dep in &system_dependencies {
+                let name = PackageName::new(dep.clone())?;
+                if let Some(dep) = all_flavor_deps.get(&name) {
+                    result.insert(name, dep.clone());
                 } else {
-                    Ok(deps)
+                    return Err(PackageError::Generic(format!(
+                        "Invalid system dependency `{}`; the allowed system dependencies are: [{}]",
+                        dep,
+                        all_flavor_deps
+                            .keys()
+                            .map(|k| k.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )));
                 }
             }
-            ImplicitDepMode::Disabled => Ok(BTreeMap::new()),
-            ImplicitDepMode::Testing => todo!(),
+            return Ok(result);
         }
+
+        // If no system dependencies are specified, we include the default system dependencies.
+        Ok(F::default_system_dependencies(env.id().to_string()))
     }
 
     /// Validate the manifest contents, after deserialization.
@@ -348,6 +346,8 @@ impl<F: MoveFlavor> Package<F> {
 
 #[cfg(test)]
 mod tests {
+    use move_command_line_common::testing::insta::assert_snapshot;
+
     use super::*;
 
     #[derive(Debug)]
@@ -366,8 +366,8 @@ mod tests {
             BTreeMap::new()
         }
 
-        // Our test flavor has "foo" and "bar" accessible.
-        fn implicit_deps(_: String) -> BTreeMap<PackageName, ReplacementDependency> {
+        // Our test flavor has `[foo, bar, baz]` system dependencies.
+        fn system_dependencies(_: String) -> BTreeMap<PackageName, ReplacementDependency> {
             let mut deps = BTreeMap::new();
             deps.insert(
                 new_package_name("foo"),
@@ -385,17 +385,39 @@ mod tests {
                     use_environment: None,
                 },
             );
+
+            deps.insert(
+                new_package_name("baz"),
+                ReplacementDependency {
+                    dependency: None,
+                    addresses: None,
+                    use_environment: None,
+                },
+            );
+
             deps
+        }
+
+        // In this flavor, only `[foo, bar]` are enabled by default.
+        fn default_system_dependencies(
+            environment: EnvironmentID,
+        ) -> BTreeMap<PackageName, ReplacementDependency> {
+            let default_deps = [new_package_name("foo"), new_package_name("bar")];
+
+            Self::system_dependencies(environment)
+                .into_iter()
+                .filter(|(name, _)| default_deps.contains(name))
+                .collect()
         }
     }
 
     #[test]
-    /// We enable ALL implicit-deps.
-    fn test_all_implicit_deps() {
+    /// We enable the default system deps.
+    fn test_default_system_dependencies() {
         let env = test_environment();
-        let implicit_deps = ImplicitDepMode::Enabled(None);
+        let implicit_deps = None;
 
-        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
         let dep_keys: Vec<_> = deps.keys().cloned().collect();
 
         assert_eq!(dep_keys.len(), 2);
@@ -404,12 +426,12 @@ mod tests {
     }
 
     #[test]
-    /// We enable implicit-deps, but specifying which ones we want.
-    fn test_explicit_implicit_deps() {
+    /// We enable system deps, but specifying which ones we want.
+    fn test_explicit_system_deps() {
         let env = test_environment();
-        let implicit_deps = ImplicitDepMode::Enabled(Some(vec!["foo".to_string()]));
+        let implicit_deps = Some(vec!["foo".to_string()]);
 
-        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
         let dep_keys: Vec<_> = deps.keys().cloned().collect();
 
         assert_eq!(dep_keys.len(), 1);
@@ -418,33 +440,37 @@ mod tests {
     }
 
     #[test]
-    fn test_explicit_implicit_deps_with_invalid_names() {
+    /// Test that we can also "add" deps that are not in the default list of the flavor.
+    fn test_explicit_deps_with_more_than_default_names() {
         let env = test_environment();
-        let implicit_deps =
-            ImplicitDepMode::Enabled(Some(vec!["ignore".to_string(), "foo".to_string()]));
+        let implicit_deps = Some(vec!["foo".to_string(), "baz".to_string()]);
 
-        assert!(Package::<TestFlavor>::implicit_deps(&env, implicit_deps).is_err());
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
+        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+
+        assert_eq!(dep_keys.len(), 2);
+        assert!(dep_keys.contains(&new_package_name("foo")));
+        assert!(dep_keys.contains(&new_package_name("baz")));
     }
 
     #[test]
-    /// We disable implicit deps.
-    fn test_no_implicit_deps() {
+    fn test_explicit_system_deps_with_invalid_names() {
         let env = test_environment();
-        let implicit_deps = ImplicitDepMode::Disabled;
+        let implicit_deps = Some(vec!["ignore".to_string(), "foo".to_string()]);
 
-        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
-
-        assert_eq!(deps.len(), 0);
+        assert_snapshot!(
+            Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap_err(),
+            @"Invalid system dependency `ignore`; the allowed system dependencies are: [bar, baz, foo]"
+        );
     }
 
     #[test]
-    /// We disable implicit deps by providing empty array
-    ///
-    fn test_empty_implicit_deps() {
+    /// We disable system dependencies altogether.
+    fn test_no_system_deps() {
         let env = test_environment();
-        let implicit_deps = ImplicitDepMode::Enabled(Some(vec![]));
+        let implicit_deps = Some(vec![]);
 
-        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
 
         assert_eq!(deps.len(), 0);
     }

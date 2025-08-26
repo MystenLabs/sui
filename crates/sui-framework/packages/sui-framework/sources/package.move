@@ -137,12 +137,12 @@ public struct UpgradeReceipt {
 public fun claim<OTW: drop>(otw: OTW, ctx: &mut TxContext): Publisher {
     assert!(types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
-    let type_name = type_name::get_with_original_ids<OTW>();
+    let type_name = type_name::with_original_ids<OTW>();
 
     Publisher {
         id: object::new(ctx),
-        package: type_name.get_address(),
-        module_name: type_name.get_module(),
+        package: type_name.address_string(),
+        module_name: type_name.module_string(),
     }
 }
 
@@ -163,14 +163,14 @@ public fun burn_publisher(self: Publisher) {
 
 /// Check whether type belongs to the same package as the publisher object.
 public fun from_package<T>(self: &Publisher): bool {
-    type_name::get_with_original_ids<T>().get_address() == self.package
+    type_name::with_original_ids<T>().address_string() == self.package
 }
 
 /// Check whether a type belongs to the same module as the publisher object.
 public fun from_module<T>(self: &Publisher): bool {
-    let type_name = type_name::get_with_original_ids<T>();
+    let type_name = type_name::with_original_ids<T>();
 
-    (type_name.get_address() == self.package) && (type_name.get_module() == self.module_name)
+    (type_name.address_string() == self.package) && (type_name.module_string() == self.module_name)
 }
 
 /// Read the name of the module.
@@ -311,12 +311,12 @@ public fun commit_upgrade(cap: &mut UpgradeCap, receipt: UpgradeReceipt) {
 #[test_only]
 /// Test-only function to claim a Publisher object bypassing OTW check.
 public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
-    let type_name = type_name::get_with_original_ids<OTW>();
+    let type_name = type_name::with_original_ids<OTW>();
 
     Publisher {
         id: object::new(ctx),
-        package: type_name.get_address(),
-        module_name: type_name.get_module(),
+        package: type_name.address_string(),
+        module_name: type_name.module_string(),
     }
 }
 

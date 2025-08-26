@@ -28,7 +28,7 @@ You can also use one of the [future-oriented interfaces](#future-data-access-int
 
 ### JSON-RPC
 
-You can currently get real-time or historical data from a Sui Full node. Retention period for historical data depends on the [pruning strategy](/guides/operator/data-management.mdx#sui-full-node-pruning-policies) that node operators implement, though currently the default configuration for all Full nodes is to implicitly fall back on a [Sui Foundation-managed key-value store for historical transaction data](/guides/operator/data-management.mdx#sui-full-node-key-value-store-backup).
+You can currently get real-time or historical data from a Sui full node. Retention period for historical data depends on the [pruning strategy](/guides/operator/data-management.mdx#sui-full-node-pruning-policies) that node operators implement, though currently the default configuration for all full nodes is to implicitly fall back on a [Sui Foundation-managed key-value store for historical transaction data](/guides/operator/data-management.mdx#sui-full-node-key-value-store-backup).
 
 :::caution
 
@@ -84,7 +84,7 @@ The target times indicated below are tentative and subject to updates based on p
 
 ### Indexer 2.0
 
-As mentioned, Indexer 2.0 will include a performant and scalable implementation of the indexer framework. The underlying framework uses the Full node RPCs to ingest the data, initially using the current generally available JSON-RPC, and later using the gRPC API.
+As mentioned, Indexer 2.0 will include a performant and scalable implementation of the indexer framework. The underlying framework uses the full node RPCs to ingest the data, initially using the current generally available JSON-RPC, and later using the gRPC API.
 
 Indexer 2.0 will be declarative such that you can seamlessly configure it to load different kinds of Sui network data into Postgres relational tables in parallel. This change is being implemented to improve the performance of the data ingestion into the Postgres database. In addition, you can configure pruning for different tables in the Postgres database, allowing you to tune it for the desired combination of performance and cost characteristics.
 
@@ -129,13 +129,13 @@ You can use the high-level criteria mentioned in the following table to determin
 | -------- | ------- | ------- |
 | Type of application or data consumer. | Ideal for Web3 exchanges, DeFi market maker apps, other DeFi protocols or apps with ultra low-latency needs. | Ideal for webapp builders or builders with slightly relaxed latency needs. |
 | Query patterns. | Okay to read data from different endpoints separately and combine on the client-side; faster serialization, parsing, and validation due to binary format. | Allows easier decoupling of the client with the ability to combine data from different tables in a single request; returns consistent data from different tables across similar checkpoints, including for paginated results. |
-| Retention period requirements. | Default retention period will be two weeks with actual configuration dependent on the Full node operator and their needs and goals; see history-related note after the table. | Default retention period in Postgres database will be four weeks with actual configuration depending on your or a RPC provider or Data indexer operator's needs; see history-related note after the table. |
+| Retention period requirements. | Default retention period will be two weeks with actual configuration dependent on the full node operator and their needs and goals; see history-related note after the table. | Default retention period in Postgres database will be four weeks with actual configuration depending on your or a RPC provider or data indexer operator's needs; see history-related note after the table. |
 | Streaming needs. | Will include a streaming or subscription API before beta release. | Subscription API is planned but will be available after GA. |
-| Incremental costs. | Little to no incremental costs if already using Full node JSON-RPC. | Somewhat significant incremental costs if already using Full node JSON-RPC and if retention period and query patterns differences are insignificant. |
+| Incremental costs. | Little to no incremental costs if already using full node JSON-RPC. | Somewhat significant incremental costs if already using full node JSON-RPC and if retention period and query patterns differences are insignificant. |
 
 :::info
 
-This table only mentions the default retention period for both options. The expectation is that it's reasonable for a Full node operator, RPC provider, or data indexer operator to configure that to a few times higher without significantly impacting the performance. Also by default, GraphQL RPC Server can directly connect to a archival key-value store for historical data beyond the retention period configured for the underlying Postgres database. Whereas in comparison, gRPC API will not have such direct connectivity to an archival key-value store.
+This table only mentions the default retention period for both options. The expectation is that it's reasonable for a full node operator, RPC provider, or data indexer operator to configure that to a few times higher without significantly impacting the performance. Also by default, GraphQL RPC Server can directly connect to a archival key-value store for historical data beyond the retention period configured for the underlying Postgres database. Whereas in comparison, gRPC API doesn't have such direct connectivity to an archival key-value store.
 
 Relevant guidelines will be provided before each option's respective GA release. Those will include recommendations for how to access historical data beyond the configured retention period for your interface of choice.
 

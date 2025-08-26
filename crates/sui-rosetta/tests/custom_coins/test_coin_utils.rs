@@ -26,11 +26,11 @@ use sui_types::transaction::{
     Command, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
 };
 use sui_types::{Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID};
-use test_cluster::TestClusterBuilder;
 
 use tracing::debug;
 
 const DEFAULT_GAS_BUDGET: u64 = 900_000_000;
+pub const TEST_COIN_DECIMALS: u64 = 6;
 
 pub struct GasRet {
     pub object: ObjectRef,
@@ -121,7 +121,7 @@ pub async fn select_gas(
     Err(anyhow!("Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InitRet {
     pub owner: SuiAddress,
     pub treasury_cap: ObjectRef,
@@ -256,56 +256,4 @@ pub async fn mint(
         .await?;
 
     Ok(res)
-}
-
-#[tokio::test]
-async fn test_mint() {
-    const COIN1_BALANCE: u64 = 100_000_000;
-    const COIN2_BALANCE: u64 = 200_000_000;
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
-    let keystore = &test_cluster.wallet.config.keystore;
-
-    let sender = test_cluster.get_address_0();
-    let init_ret = init_package(
-        &client,
-        keystore,
-        sender,
-        Path::new("tests/custom_coins/test_coin"),
-    )
-    .await
-    .unwrap();
-
-    let address1 = test_cluster.get_address_1();
-    let address2 = test_cluster.get_address_2();
-    let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
-
-    let mint_res = mint(&client, keystore, init_ret, balances_to)
-        .await
-        .unwrap();
-    let coins = mint_res
-        .object_changes
-        .unwrap()
-        .into_iter()
-        .filter_map(|change| {
-            if let ObjectChange::Created {
-                object_type, owner, ..
-            } = change
-            {
-                Some((object_type, owner))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-    let coin1 = coins
-        .iter()
-        .find(|coin| coin.1.get_address_owner_address().unwrap() == address1)
-        .unwrap();
-    let coin2 = coins
-        .iter()
-        .find(|coin| coin.1.get_address_owner_address().unwrap() == address2)
-        .unwrap();
-    assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
-    assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
 }

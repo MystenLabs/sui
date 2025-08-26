@@ -1,22 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, TransactionIndex};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use std::collections::BTreeMap;
 use sui_types::committee::EpochId;
 use sui_types::error::SuiError;
 use sui_types::messages_consensus::ConsensusPosition;
 use tracing::trace;
 
+use crate::authority::consensus_tx_status_cache::CONSENSUS_STATUS_RETENTION_ROUNDS;
+
 #[cfg(test)]
 use consensus_types::block::Round;
-
-/// The number of consensus rounds to retain the reject vote reason information before garbage collection.
-/// Assuming a max round rate of 15/sec, this allows status updates to be valid within a window of ~25-30 seconds.
-const DEFAULT_RETENTION_ROUNDS: u32 = 400;
 
 /// A cache that maintains rejection reasons (SuiError) when validators cast reject votes for transactions
 /// during the Mysticeti consensus fast path voting process.
@@ -45,7 +44,7 @@ impl TransactionRejectReasonCache {
     pub fn new(retention_rounds: Option<u32>, epoch: EpochId) -> Self {
         Self {
             cache: Default::default(),
-            retention_rounds: retention_rounds.unwrap_or(DEFAULT_RETENTION_ROUNDS),
+            retention_rounds: retention_rounds.unwrap_or(CONSENSUS_STATUS_RETENTION_ROUNDS),
             epoch,
         }
     }

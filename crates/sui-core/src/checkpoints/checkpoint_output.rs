@@ -132,6 +132,10 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
 
         if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {
             // close_epoch is ok if called multiple times
+            info!(
+                "Closing epoch at sequence {checkpoint_seq} at timestamp {checkpoint_timestamp}. next_reconfiguration_timestamp_ms {}",
+                self.next_reconfiguration_timestamp_ms
+            );
             self.sender.close_epoch(epoch_store);
         }
         Ok(())

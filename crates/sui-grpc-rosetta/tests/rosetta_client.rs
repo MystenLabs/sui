@@ -24,12 +24,16 @@ use sui_grpc_rosetta::types::{
 use sui_grpc_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
+use sui_rpc::client::Client as GrpcClient;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;
 
-pub async fn start_rosetta_test_server(client: SuiClient) -> (RosettaClient, Vec<JoinHandle<()>>) {
-    let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client);
+pub async fn start_rosetta_test_server(
+    client: SuiClient,
+    grpc_client: GrpcClient,
+) -> (RosettaClient, Vec<JoinHandle<()>>) {
+    let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client, grpc_client);
     let offline_server = RosettaOfflineServer::new(SuiEnv::LocalNet);
     let local_ip = local_ip_utils::localhost_for_testing();
     let port = local_ip_utils::get_available_port(&local_ip);

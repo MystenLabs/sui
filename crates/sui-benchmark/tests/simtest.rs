@@ -539,7 +539,7 @@ mod test {
             max_deferral_rounds = if rng.gen_bool(0.5) {
                 rng.gen_range(0..20) // Short deferral round (testing cancellation)
             } else {
-                rng.gen_range(1000..10000) // Large deferral round (testing liveness)
+                rng.gen_range(500..1000) // Large deferral round (testing liveness)
             };
             if rng.gen_bool(0.5) {
                 allow_overage_factor = rng.gen_range(1..100);
@@ -686,6 +686,7 @@ mod test {
         let test_cluster = Arc::new(
             TestClusterBuilder::new()
                 .set_network_config(network_config)
+                .disable_fullnode_pruning()
                 .build()
                 .await,
         );
@@ -1058,7 +1059,6 @@ mod test {
             })
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
-            .disable_fullnode_pruning()
             .build()
             .await
             .into()
@@ -1073,6 +1073,7 @@ mod test {
                 "SIM_STRESS_TEST_NUM_VALIDATORS",
                 default_num_validators,
             ))
+            .disable_fullnode_pruning()
             .with_synthetic_execution_time_injection();
         if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
             eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
