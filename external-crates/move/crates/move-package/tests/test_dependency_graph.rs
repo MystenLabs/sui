@@ -52,6 +52,7 @@ fn no_dep_graph() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -176,6 +177,7 @@ fn always_deps() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -214,6 +216,42 @@ fn always_deps_from_lock() {
             Symbol::from("C"),
         ]),
     );
+}
+
+#[test]
+fn always_dep_when_similar_dev_dep() {
+    let pkg = one_dep_same_than_dev_dep();
+
+    let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
+        /* force_lock_file */ false,
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
+            &DependencyKind::default(),
+            pkg,
+            manifest_string,
+            /* lock_string_opt */ None,
+            DependencyMode::Always,
+        )
+        .expect("Creating DependencyGraph");
+
+    let r = Symbol::from("Root");
+    let other_dep = Symbol::from("OtherDep");
+
+    let deps = |pkg, mode| {
+        graph
+            .immediate_dependencies(pkg, mode)
+            .map(|(pkg, _, _)| pkg)
+            .collect::<BTreeSet<_>>()
+    };
+
+    assert_eq!(deps(r, DependencyMode::Always), BTreeSet::from([other_dep]));
 }
 
 #[test]
@@ -576,7 +614,7 @@ fn merge_overlapping_different_deps() {
 }
 
 #[test]
-fn immediate_dependencies() {
+fn immediate_dependencies_always() {
     let pkg = dev_dep_test_package();
 
     let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
@@ -594,6 +632,7 @@ fn immediate_dependencies() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -616,6 +655,56 @@ fn immediate_dependencies() {
     assert_eq!(deps(c, DependencyMode::Always), BTreeSet::from([]));
     assert_eq!(deps(d, DependencyMode::Always), BTreeSet::from([]));
 
+    assert_eq!(deps(r, DependencyMode::DevOnly), BTreeSet::from([a, c]));
+    assert_eq!(deps(a, DependencyMode::DevOnly), BTreeSet::from([b]));
+    assert_eq!(deps(b, DependencyMode::DevOnly), BTreeSet::from([]));
+    assert_eq!(deps(c, DependencyMode::DevOnly), BTreeSet::from([]));
+    assert_eq!(deps(d, DependencyMode::DevOnly), BTreeSet::from([]));
+}
+
+#[test]
+fn immediate_dependencies_dev() {
+    let pkg = dev_dep_test_package();
+
+    let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
+        /* force_lock_file */ false,
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
+            &DependencyKind::default(),
+            pkg,
+            manifest_string,
+            /* lock_string_opt */ None,
+            DependencyMode::DevOnly,
+        )
+        .expect("Creating DependencyGraph");
+
+    let r = Symbol::from("Root");
+    let a = Symbol::from("A");
+    let b = Symbol::from("B");
+    let c = Symbol::from("C");
+    let d = Symbol::from("D");
+
+    let deps = |pkg, mode| {
+        graph
+            .immediate_dependencies(pkg, mode)
+            .map(|(pkg, _, _)| pkg)
+            .collect::<BTreeSet<_>>()
+    };
+
+    // All the dependencies are DevOnly due to mode passed as DependencyGraphInfo::new in collect_graphs.
+    assert_eq!(deps(r, DependencyMode::Always), BTreeSet::from([]));
+    assert_eq!(deps(a, DependencyMode::Always), BTreeSet::from([]));
+    assert_eq!(deps(b, DependencyMode::Always), BTreeSet::from([]));
+    assert_eq!(deps(c, DependencyMode::Always), BTreeSet::from([]));
+    assert_eq!(deps(d, DependencyMode::Always), BTreeSet::from([]));
+
     assert_eq!(deps(r, DependencyMode::DevOnly), BTreeSet::from([a, b, c]));
     assert_eq!(deps(a, DependencyMode::DevOnly), BTreeSet::from([b, d]));
     assert_eq!(deps(b, DependencyMode::DevOnly), BTreeSet::from([c]));
@@ -631,6 +720,12 @@ fn no_dep_test_package() -> PathBuf {
 
 fn one_dep_test_package() -> PathBuf {
     [".", "tests", "test_sources", "one_dep"]
+        .into_iter()
+        .collect()
+}
+
+fn one_dep_same_than_dev_dep() -> PathBuf {
+    [".", "tests", "test_sources", "one_dep_same_than_dev_dep"]
         .into_iter()
         .collect()
 }

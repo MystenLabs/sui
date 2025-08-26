@@ -35,13 +35,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::resolution::dependency_graph::DependencyMode;
 use crate::{
     compilation::{build_plan::BuildPlan, compiled_package::CompiledPackage, model_builder},
     lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
 use move_compiler::linters::LintLevel;
-use crate::resolution::dependency_graph::DependencyMode;
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(about)]
@@ -293,7 +293,14 @@ impl BuildConfig {
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
-        resolution::download_dependency_repos(manifest_string, lock_string, self, &path, self.get_dependency_mode(), writer)?;
+        resolution::download_dependency_repos(
+            manifest_string,
+            lock_string,
+            self,
+            &path,
+            self.get_dependency_mode(),
+            writer,
+        )?;
         Ok(())
     }
 
@@ -328,7 +335,7 @@ impl BuildConfig {
             path,
             manifest_string,
             lock_string,
-            self.get_dependency_mode()
+            self.get_dependency_mode(),
         )?;
 
         if modified || install_dir_set {

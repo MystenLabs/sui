@@ -325,7 +325,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_pkg_id,
                 root_pkg_name,
                 root_path.clone(),
-                DependencyMode::Always,
+                mode,
                 root_manifest.dependencies.clone(),
             )?;
         let dep_lock_files = always_dep_graphs
@@ -333,19 +333,24 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
-        let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = if mode == DependencyMode::DevOnly {
-            self
-                .collect_graphs(
+        let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) =
+            if mode == DependencyMode::DevOnly {
+                self.collect_graphs(
                     parent,
                     root_pkg_id,
                     root_pkg_name,
                     root_path.clone(),
-                    DependencyMode::DevOnly,
+                    mode,
                     root_manifest.dev_dependencies.clone(),
                 )?
-        } else {
-            (BTreeMap::new(), BTreeMap::new(), BTreeMap::new(), BTreeMap::new())
-        };
+            } else {
+                (
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                )
+            };
 
         // compute new digests and return early if the manifest and deps digests are unchanged
         let dev_dep_lock_files = dev_dep_graphs

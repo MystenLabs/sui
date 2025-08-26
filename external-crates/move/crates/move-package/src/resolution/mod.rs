@@ -9,12 +9,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use self::dependency_graph::DependencyGraphBuilder;
+use crate::resolution::dependency_graph::DependencyMode;
 use crate::{
     BuildConfig,
     source_package::parsed_manifest::{DependencyKind, GitInfo, OnChainInfo},
 };
-use crate::resolution::dependency_graph::DependencyMode;
-use self::dependency_graph::DependencyGraphBuilder;
 
 pub mod dependency_cache;
 pub mod dependency_graph;
@@ -47,7 +47,7 @@ pub fn download_dependency_repos<Progress: Write>(
         root_path.to_path_buf(),
         manifest_string,
         lock_string,
-        mode
+        mode,
     )?;
 
     for pkg_id in graph.topological_order() {
