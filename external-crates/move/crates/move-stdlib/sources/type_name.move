@@ -47,6 +47,13 @@ public native fun with_defining_ids<T>(): TypeName;
 /// the package, even if the type in question was introduced in a later upgrade).
 public native fun with_original_ids<T>(): TypeName;
 
+/// Like `with_defining_ids`, this accesses the package ID that original defined the type `T`.
+public native fun defining_id<T>(): address;
+
+/// Like `with_original_ids`, this accesses the original ID of the package that defines type `T`,
+/// even if the type was introduced in a later version of the package.
+public native fun original_id<T>(): address;
+
 /// Returns true iff the TypeName represents a primitive type, i.e. one of
 /// u8, u16, u32, u64, u128, u256, bool, address, vector.
 public fun is_primitive(self: &TypeName): bool {

@@ -8,7 +8,7 @@ Every transaction on Sui has a gas fee that must be paid for successful executio
 
 ## Smashing gas
 
-Gas smashing happens automatically when you provide multiple coins to cover gas fees. During execution, Sui combines all provided gas coins into a single coin, regardless of their amounts or the specified gas budget (as long as the budget is within the allowed range).  
+Gas smashing happens automatically in a transaction if you provide multiple coins to pay for the gas fee. When Sui executes a transaction, Sui combines, or _smashes_, all of the coins you provide to pay for the gas into a single coin. The smashing occurs regardless of coin amounts or the gas budget provided with the transaction (as long as it is within the minimum and maximum gas budgets). Sui deducts the gas fee from the single coin regardless of the execution status of the transaction. In particular, this means that even if the transaction fails to execute for some reason (such as an execution error) the coins that you provided as gas coins remain smashed after the transaction's execution.
 
 Key points:  
 - The transaction deducts gas from the smashed coin whether execution succeeds or fails.  

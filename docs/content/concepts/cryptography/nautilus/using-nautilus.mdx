@@ -1,47 +1,48 @@
 ---
 title: Using Nautilus
-description: Details on how to use Nautilus using the provided reproducible build template.
+description: Details on how to use Nautilus with the reproducible build template
 mdx:
   format: md
 ---
-The [Nautilus framework](https://github.com/MystenLabs/nautilus) helps you deploy an AWS Nitro Enclave with all the necessary scaffolding, such as reproducible builds, signature formatting, and HTTPS traffic forwarding, so you can focus on implementing the off-chain computation logic inside the enclave.
 
-In addition, the framework provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. These are the steps you take to use Nautilus in your dApp:
+The [Nautilus framework](https://github.com/MystenLabs/nautilus) helps you deploy an AWS Nitro Enclave with scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the off-chain computation logic inside the enclave.
 
-1. Implement the enclave in Rust with the desired computation logic.
-2. Deploy a Move smart contract that stores the expected platform configuration registers (PCRs) and allows updates by the contract deployer.
-3. Deploy the enclave instance on AWS and register it on chain using its attestation document.
-4. Upload signed responses from the registered enclave, verify them on chain, and consume the results in your smart contract.
+The framework also provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. To use Nautilus in your dApp:
+
+1. Implement the enclave in Rust with the desired computation logic.  
+2. Deploy a Move smart contract that stores the expected platform configuration registers (PCRs) and allows updates by the contract deployer.  
+3. Deploy the enclave instance on AWS and register it on-chain using its attestation document.  
+4. Upload signed responses from the registered enclave, verify them on-chain, and consume the results in your smart contract.  
 
 ## Purpose of this guide
 
 This guide walks you through the following steps:
 
-1. Writing and deploying a basic Nautilus off-chain instance using AWS Nitro Enclaves. The example instance runs a server that fetches weather data for a specific location.
-2. Writing a Move smart contract that registers the enclave by verifying its attestation and public key, then verifies the Nautilus response (signature and payload) on chain and mints an NFT containing the location and temperature data.
+1. Write and deploy a basic Nautilus off-chain instance using AWS Nitro Enclaves. The example instance runs a server that fetches weather data for a specific location.  
+2. Write a Move smart contract that registers the enclave by verifying its attestation and public key, then verifies the Nautilus response (signature and payload) on chain and mints an NFT with the location and temperature data.  
 
-The setup script performs the following actions:
+The setup script performs these actions:
 
-- Launches a preconfigured EC2 instance and allocates a Nitro Enclave.
-- Builds the Rust-based template application into an enclave image format (EIF) binary and runs it inside the enclave.
-- Configures required HTTP domains so the enclave can access external APIs via the parent EC2 instance (as the enclave itself has no internet access).
-- Exposes three endpoints to allow client-side communication with the enclave.
+- Launches a preconfigured EC2 instance and allocates a Nitro Enclave.  
+- Builds the Rust-based template application into an enclave image format (EIF) binary and runs it inside the enclave.  
+- Configures required HTTP domains so the enclave can access external APIs via the parent EC2 instance (as the enclave itself has no internet access).  
+- Exposes three endpoints to allow client-side communication with the enclave.  
 
-When the enclave starts, it generates a fresh enclave key pair and exposes the following three endpoints:
+When the enclave starts, it generates a fresh key pair and exposes the following endpoints:
 
-- `health_check`: Probes all allowed domains inside the enclave. This logic is built into the template and does not require modification.
-- `get_attestation`: Returns a signed attestation document over the enclave public key. Use this during on-chain registration. This logic is built into the template and doesn't require modification.
-- `process_data`: Fetches weather data from an external API, signs it with the enclave key, and returns the result. This logic is customizable and you must implement it.
+- `health_check`: Probes allowed domains inside the enclave. This logic is built into the template and does not require modification.  
+- `get_attestation`: Returns a signed attestation document over the enclave public key. Use this during on-chain registration. This logic is built into the template and does not require modification.  
+- `process_data`: Fetches weather data from an external API, signs it with the enclave key, and returns the result. You must implement this customizable logic.  
 
-## Code structure   
+## Code structure
 
-Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the code structure and related usage instructions that follow.
+Refer to the [GitHub repository](https://github.com/MystenLabs/nautilus) for the latest structure and related instructions.
 
-```sh
+```sh title="Repository structure"
 /move
-  /enclave          # Utility functions for generating enclave config and registering the public key with an attestation document.
-  /weather-example  # Entry point for on-chain logic as an example, which uses enclave functions to run your Nautilus application logic.
-  /twitter-example  # Entry point for on-chain logic as another example, which uses enclave functions to run your Nautilus application logic. 
+  /enclave          # Utility functions for enclave config and public key registration
+  /weather-example  # Example on-chain logic using enclave functions
+  /twitter-example  # Alternative example on-chain logic
 
 /src
   /aws              # AWS boilerplate; does not require modification.
@@ -51,33 +52,31 @@ Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the code 
     /src
       /apps
         /weather-example    # Example directory. Replace with your own application logic as needed.
-          mod.rs            # The process_data endpoints and related artifacts to fetch weather data. Replace this with your off-chain computation logic.
-          allowed_endpoints.yaml  # This file lists all endpoints the enclave is allowed to access. By default, the enclave has no internet access unless the parent EC2 instance explicitly forwards traffic. During the configuration step, this file is used to generate the necessary code to enable limited traffic forwarding from the enclave. 
-        /twitter-example    # Another example directory with similar parts as for above example. 
-    run.sh           # Runs the Rust server inside the enclave after configuring domains and the traffic forwarder. Do not modify.
+          mod.rs            # Defines the process_data endpoint and related logic. Replace with your off-chain computation logic.
+          allowed_endpoints.yaml  # Lists all endpoints the enclave can access. By default, the enclave has no internet access. During configuration, this file generates code for traffic forwarding.
+        /twitter-example    # Another example directory with similar structure. 
+    run.sh           # Runs the Rust server inside the enclave. Do not modify.
     common.rs        # Common code for retrieving attestation. Do not modify. 
 ```
 
 Key implementation files:
-- `allowed_endpoints.yaml`: Defines external API access permissions.
-- `mod.rs`: Contains application-specific computation logic.
-- `run.sh`: Handles server startup and configuration.
-- `common.rs`: Manages retrieving attestation.
 
-For the latest structure, always refer to the [GitHub repository](https://github.com/MystenLabs/nautilus).
+- `allowed_endpoints.yaml`: Defines external API access permissions.  
+- `mod.rs`: Contains application-specific computation logic.  
+- `run.sh`: Handles server startup and configuration.  
+- `common.rs`: Manages retrieving attestation.  
 
 To create your own Nautilus app:
 
-- Add a new directory under `move/my_app` for your Move modules.
-- Add a corresponding directory under `src/nautilus-server/src/apps/my_app` for your Rust server logic.
-- Use the existing app directories as references.
-- Build your frontend logic to interact with the deployed Move contract and enclave-hosted Rust server.
-- The rest of the template can remain largely unmodified, streamlining development while giving you full control over app-specific logic.
+- Add a directory under `move/my_app` for your Move modules.  
+- Add a directory under `src/nautilus-server/src/apps/my_app` for your Rust server logic.  
+- Use existing app directories as references.  
+- Build frontend logic to interact with the deployed Move contract and enclave-hosted Rust server.  
+
+Most of the template can remain unmodified, which streamlines development while giving you full control over app-specific logic.
 
 :::info
-
 Frontend code is not included in this guide. The Move call is demonstrated using the CLI.
-
 :::
 
 ## Run the example enclave
