@@ -595,7 +595,7 @@ mod tests {
         let page: Page<JsonCursor<TestCursor>> =
             Page::from_params(&limits, None, None, None, None).unwrap();
         let items: Vec<TestItem> = vec![];
-        let result = ordered_results_with_limits(&page, items.into_iter(), |item| {
+        let result = ordered_results_with_limits(&page, items, |item| {
             (item.tx_sequence_number, item.ev_sequence_number)
         });
         assert_eq!(result, vec![]);
@@ -631,7 +631,7 @@ mod tests {
                 ev_sequence_number: 1,
             },
         ];
-        let result = ordered_results_with_limits(&page, items.into_iter(), |item| {
+        let result = ordered_results_with_limits(&page, items, |item| {
             (item.tx_sequence_number, item.ev_sequence_number)
         });
         assert_eq!(
@@ -687,7 +687,7 @@ mod tests {
                 ev_sequence_number: 1,
             },
         ];
-        let result = ordered_results_with_limits(&page, items.into_iter(), |item| {
+        let result = ordered_results_with_limits(&page, items, |item| {
             (item.tx_sequence_number, item.ev_sequence_number)
         });
         assert_eq!(

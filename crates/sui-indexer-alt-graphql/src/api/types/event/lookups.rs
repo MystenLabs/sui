@@ -1,16 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{dataloader::DataLoader, Context};
-use sui_indexer_alt_reader::{
-    kv_loader::{KvLoader, TransactionEventsContents},
-    pg_reader::PgReader,
-    tx_digests::TxDigestKey,
-};
-use sui_indexer_alt_schema::transactions::StoredTxDigest;
+use sui_indexer_alt_reader::{kv_loader::KvLoader, pg_reader::PgReader, tx_digests::TxDigestKey};
 use sui_types::{digests::TransactionDigest, event::Event as NativeEvent};
 
 use crate::api::types::event::Event;
