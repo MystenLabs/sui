@@ -46,10 +46,8 @@ impl<A: Clone> RequestRetrier<A> {
             preferred_validators_num
         );
 
-        let selected_validators = client_monitor.select_shuffled_preferred_validators_consensus(
-            &auth_agg.committee,
-            preferred_validators_num,
-        );
+        let selected_validators = client_monitor
+            .select_shuffled_preferred_validators(&auth_agg.committee, preferred_validators_num);
         let remaining_clients = selected_validators
             .into_iter()
             .map(|name| (name, auth_agg.authority_clients[&name].clone()))
