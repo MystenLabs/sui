@@ -78,19 +78,18 @@ Complete list of `ProtocolConfig` limits.
 
 </details>
 
-For many use cases this attack is not an issue, like when selecting a raffle winner, or lottery numbers, as the code running is independent of the randomness. However, in the cases where this attack can be problematic, consider using one of the following approaches:
+For many use cases, like when selecting a raffle winner or lottery numbers, this attack is not an issue as the code running is independent of the randomness. However, in other use cases where this attack can be problematic, consider using one of the following approaches:
 
 ### Option 1: Divide logic
 
 Split the logic into two functions that different transactions must call.
 
-The `tx1` transaction calls the first function, which fetches a random value and stores it in an object that is unreadable by other commands in `tx1`. For example, by transferring the object to the caller or by storing the transaction digest and checking that it's different on read.
+1. The first transaction, `tx1`, calls the first function, which fetches a random value and stores it in an object that is unreadable by other commands in `tx1`. For example, the function might transfer the object to the caller or store the transaction digest and check that it's different on read.
 
-The `tx2` transaction calls a second function, which reads the stored value and completes the operation.
-`tx2` might fail, but now the random value is fixed and cannot be modified using repeated calls.
+2. The second transaction, `tx2`, calls a second function, which reads the stored value and completes the operation. `tx2` might fail, but now the random value is fixed and cannot be modified using repeated calls.
 It's important that the inputs to the second function are fixed and cannot be modified after `tx1`, otherwise an attacker can modify them after seeing the randomness committed by `tx1`.
 
-It's also important to gracefully handle the case in which the second step is never completed. You could accomplish this, for example, by charging a fee in the first step.
+Gracefully handle the case in which the second step is never completed. You could accomplish this, for example, by charging a fee in the first step.
 
 <details>
 <summary>
@@ -105,8 +104,8 @@ Example implementation.
 
 Write the function so the main processing path does the heavy work, while early-exit paths return quickly. Keep the following in mind:
 
-  - External functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
-  - Use [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) to profile the costs of a transaction.
+  - Both external or native functions can change in the future, potentially resulting in different costs compared to when you conducted your tests.
+  - Use [`profile-transaction`](../../../references/cli/client.mdx#profile-a-transaction) to benchmark the costs of a transaction.
   - UIDs generated and deleted on the same transaction do not count towards the limit. 
 
 ## Use (non-public) `entry` functions
