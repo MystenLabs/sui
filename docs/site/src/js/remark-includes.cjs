@@ -307,6 +307,19 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function captureBalanced(sub, open = '{', close = '}') {
+  let depth = 0;
+  for (let i = 0; i < sub.length; i++) {
+    const ch = sub[i];
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) return sub.slice(0, i + 1);
+    }
+  }
+  return null;
+}
+
 // ---------- Docs-tag extraction ----------
 
 function extractDocsTagBlock(fullText, markerWithHash) {
@@ -614,15 +627,28 @@ async function processInject(
           "Module not found. If code is formatted correctly, consider using code comments instead.";
       }
     } else if (getMarkerName(marker, "#enum=")) {
-      const enums = getMarkerName(marker, "#enum=").split(",");
-      let out = [];
-      for (let e of enums) {
+      const enums = getMarkerName(marker, "#enum=").split(",").map(s => s.trim()).filter(Boolean);
+      const out = [];
+      for (const e of enums) {
+        // Match optional keywords: export / declare / const (TS) OR pub (Rust)
         const re = new RegExp(
-          `^( *)(export)? enum \\b${escapeRegex(e)}\\b\\s*\\{[\\s\\S]*?\\}`,
+          `^( *)(?:export\\s+)?(?:declare\\s+)?(?:const\\s+)?(?:pub\\s+)?enum\\s+${escapeRegex(e)}\\s*\\{`,
           "m",
         );
         const m = re.exec(fileContent);
-        if (m) out.push(utils.removeLeadingSpaces(m[0]));
+        if (m) {
+          const start = m.index;
+          const sub = fileContent.slice(start);
+          const openIdx = sub.indexOf("{");
+          if (openIdx !== -1) {
+            const block = captureBalanced(sub.slice(openIdx));
+            if (block) {
+              out.push(
+                utils.removeLeadingSpaces(sub.slice(0, openIdx) + block)
+              );
+            }
+          }
+        }
       }
       fileContent = out.join("\n").trim();
     } else if (getMarkerName(marker, "#type=")) {

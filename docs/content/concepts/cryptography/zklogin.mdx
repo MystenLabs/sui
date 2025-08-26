@@ -1,29 +1,29 @@
 ---
 title: zkLogin
-description: zkLogin is a Sui primitive that enables you to send transactions from a Sui address using an OAuth credential, without publicly linking the two.
+description: zkLogin is a Sui primitive that enables you to send transactions from a Sui address using an OAuth credential without publicly linking the two.
 mdx:
   format: md
 ---
 
-zkLogin is a Sui primitive that provides the ability for you to send transactions from a Sui address using an OAuth credential, without publicly linking the two.
+zkLogin is a Sui primitive that lets you send transactions from a Sui address using an OAuth credential, without publicly linking the two.
 
-zkLogin is designed with the following goals in mind:
+zkLogin is designed with the following goals:
 
-- **Streamlined onboarding:** zkLogin enables you to transact on Sui using the familiar OAuth login flow, eliminating the friction of handling cryptographic keys or remembering mnemonics.
-- **Self-custody:** A zkLogin transaction requires user approval via the standard OAuth login process--the OAuth provider cannot transact on the user's behalf.
-- **Security:** zkLogin is a two-factor authentication scheme; sending a transaction requires both a credential from a recent OAuth login and a salt not managed by the OAuth provider. An attacker who compromises an OAuth account cannot transact from the user's corresponding Sui address unless they separately compromise the salt.
-- **Privacy:** Zero-knowledge proofs prevent third parties from linking a Sui address with its corresponding OAuth identifier.
-- **Optional verified identity:** A user can opt in to verify the OAuth identifier that was used to derive a particular Sui address. This serves as the foundation for a verifiable on-chain identity layer.
-- **Accessibility:** zkLogin is one of several native Sui signature schemes thanks to Sui's [cryptography agility](./transaction-auth/signatures.mdx). It integrates with other Sui primitives, like sponsored transactions and multisig.
-- **Rigorousness:** The code for zkLogin has been independently [audited](https://github.com/sui-foundation/security-audits/blob/main/docs/zksecurity_zklogin-circuits.pdf) by two firms specializing in zero knowledge. The public zkLogin ceremony for creating the common reference string attracted contributions from more than 100 participants.
+- **Streamlined onboarding:** zkLogin enables you to transact on Sui using the familiar OAuth login flow, removing the need to handle cryptographic keys or remember mnemonics.  
+- **Self-custody:** A zkLogin transaction requires user approval via the standard OAuth login process. The OAuth provider cannot transact on the user’s behalf.  
+- **Security:** zkLogin is a two-factor authentication scheme. Sending a transaction requires both a credential from a recent OAuth login and a salt not managed by the OAuth provider. An attacker who compromises an OAuth account cannot transact from the user’s Sui address unless they also compromise the salt.  
+- **Privacy:** Zero-knowledge proofs prevent third parties from linking a Sui address with its corresponding OAuth identifier.  
+- **Optional verified identity:** A user can opt in to verify the OAuth identifier used to derive a particular Sui address. This creates the foundation for a verifiable on-chain identity layer.  
+- **Accessibility:** zkLogin is one of several native Sui signature schemes thanks to [Sui’s cryptography agility](./transaction-auth/signatures.mdx). It integrates with other Sui primitives, such as sponsored transactions and multisig.  
+- **Rigor:** The code for zkLogin has been independently [audited](https://github.com/sui-foundation/security-audits/blob/main/docs/zksecurity_zklogin-circuits.pdf) by two firms specializing in zero knowledge. The public zkLogin ceremony for creating the common reference string included contributions from more than 100 participants.  
 
-Are you a builder who wants to integrate zkLogin into your application or wallet? Dive into the [zkLogin Integration Guide](../../guides/developer/cryptography/zklogin-integration.mdx).
+If you are a builder who wants to integrate zkLogin into your application or wallet, see the [zkLogin integration guide](../../guides/developer/cryptography/zklogin-integration.mdx).  
 
-If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies a zkLogin transaction, see [this section](#how-zklogin-works).
+To learn how zkLogin works, including how the zero-knowledge proof is generated and how Sui verifies a zkLogin transaction, see [how zkLogin works](#how-zklogin-works).  
 
-If you are curious about the security model and the privacy considerations of zkLogin, visit this [page](#security-and-privacy).
+For information about the security model and privacy considerations of zkLogin, see [security and privacy](#security-and-privacy).  
 
-More questions? See [the FAQ section](#faq).
+For common questions, see the [FAQ section](#faq).  
 
 ## OpenID providers
 
@@ -31,31 +31,35 @@ More questions? See [the FAQ section](#faq).
 
 ## How zkLogin works {#how-zklogin-works}
 
-In rough sketches, the zkLogin protocol relies on the following:
+At a high level, the zkLogin protocol works as follows:
 
-1. A JWT is a signed payload from OAuth providers, including a user-defined field named nonce. zkLogin leverages [the OpenID Connect OAuth flow](https://openid.net/developers/how-connect-works/) by defining the nonce as a public key and an expiry epoch.
-1. The wallet stores an ephemeral KeyPair, where the ephemeral public key is defined in the nonce. The ephemeral private key signs transactions for a brief session, eliminating the need for user memorization.
-   The Groth16 zero-knowledge proof is generated based on the JWT, concealing privacy-sensitive fields.
-1. A transaction is submitted on-chain with the ephemeral signature and the ZK proof. Sui authorities execute the transaction after verifying the ephemeral signature and the proof.
-1. Instead of deriving the Sui address based on a public key, the zkLogin address is derived from `sub` (that uniquely identifies the user per provider), `iss` (identifies the provider), `aud` (identifies the application) and `user_salt` (a value that unlinks the OAuth identifier with the on-chain address).
+1. A JWT is a signed payload from OAuth providers that includes a user-defined field named nonce. zkLogin uses [the OpenID Connect OAuth flow](https://openid.net/developers/how-connect-works/) by defining the nonce as a public key and an expiry epoch.  
+2. The wallet stores an ephemeral key pair, where the ephemeral public key is defined in the nonce. The ephemeral private key signs transactions for a short session. The Groth16 zero-knowledge proof is generated from the JWT, which conceals sensitive fields.  
+3. A transaction is submitted on chain with the ephemeral signature and the zero-knowledge proof. Sui authorities execute the transaction after verifying the ephemeral signature and the proof.  
+4. Instead of deriving the Sui address based on a public key, the zkLogin address is derived from `sub` (user identifier), `iss` (provider), `aud` (application), and `user_salt` (a value that unlinks the OAuth identifier from the on-chain address).  
 
 ## The complete zkLogin flow
 
-![1](images/zklogin-flow.png 'zkLogin Complete Flow')
+![zkLogin flow diagram](images/zklogin-flow.png 'zkLogin complete flow')
 
-(Step 0) We use Groth16 for our protocol's zkSNARK instantiation, requiring a singular generation of a structured common reference string (CRS) linked to the circuit. A ceremony is conducted to generate the CRS, which is used to produce the proving key in the ZK Proving Service, the verifying key in Sui Authority. See [the Ceremony section](#ceremony) for more details.
+(Step 0) zkLogin uses Groth16 for zkSNARK instantiation, which requires a common reference string (CRS) linked to the circuit. A ceremony generates the CRS, which is used to produce the proving key in the proving service and the verifying key in Sui authorities. See [ceremony](#ceremony) for details.  
 
-(Step 1-3) The user begins by logging into an OpenID Provider (OP) to obtain a JWT containing a defined nonce. In particular, the user generates an _ephemeral_ KeyPair `(eph_sk, eph_pk)` and embed `eph_pk`, along with expiry times (`max_epoch`) and randomness (`jwt_randomness`), into the nonce (see [definition](#notations)). After the user completes the OAuth login flow, an JWT can be found in the redirect URL in the application.
+(Step 1-3) The user logs in to an OpenID provider (OP) to obtain a JWT containing a nonce. The user generates an ephemeral key pair `(eph_sk, eph_pk)` and embeds `eph_pk`, expiry times (`max_epoch`), and randomness (`jwt_randomness`) into the nonce. After login, the JWT appears in the redirect URL in the application.  
 
-(Step 4-5) The application frontend then sends the JWT to a salt service. The salt service returns the unique `user_salt` based on `iss, aud, sub` upon validation of the JWT.
+(Step 4-5) The application frontend sends the JWT to a salt service. The service returns the unique `user_salt` based on `iss`, `aud`, and `sub`.  
 
-(Step 6-7) The user sends the ZK proving service the JWT, user salt, ephemeral public key, jwt randomness, key claim name (i.e. `sub`). The proving service generates a Zero-Knowledge Proof that takes these as private inputs and does the following: (a) Checks the nonce is derived correctly [as defined](#notations) (b) Checks that key claim value matches the corresponding field in the JWT, (c) Verifies the RSA signature from OP on the JWT, and (d) the address is consistent with the key claim value and user salt.
+(Step 6-7) The user sends the JWT, user salt, ephemeral public key, JWT randomness, and key claim name (for example, `sub`) to the proving service. The proving service generates a zero-knowledge proof that:  
+- Confirms the nonce is derived correctly.  
+- Confirms the key claim value matches the corresponding JWT field.  
+- Verifies the RSA signature from the provider on the JWT.  
+- Confirms the address is consistent with the key claim and user salt.  
 
-(Step 8): The application computes the user address based on iss, aud, sub, aud. This step can be done independently as long as the application has a valid JWT.
+(Step 8) The application computes the user address based on `iss`, `aud`, and `sub`.  
 
-(Step 9-10) A transaction is signed using the ephemeral private key to generate an ephemeral signature. Finally, the user submits the transaction along with the ephemeral signature, ZK proof and other inputs to Sui.
+(Step 9-10) The user signs the transaction with the ephemeral private key and submits it with the ephemeral signature, ZK proof, and other inputs to Sui.  
 
-(After Step 10) After submitted on chain, Sui Authorities verify the ZK proof against the provider JWKs from storage (agreed upon in consensus) and also the ephemeral signature.
+(After Step 10) Sui authorities verify the ZK proof against the provider’s JWKs (stored by consensus) and the ephemeral signature.  
+
 
 ## Entities
 

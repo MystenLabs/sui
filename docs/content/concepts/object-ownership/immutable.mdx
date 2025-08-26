@@ -6,17 +6,17 @@ mdx:
   format: md
 ---
 
-Objects in Sui can have different types of ownership, with two broad categories: immutable objects and mutable objects. An immutable object is an object that can't be mutated, transferred, or deleted. Immutable objects have no owner, so anyone can use them.
+Objects in Sui have different ownership types, with two main categories: immutable objects and mutable objects. An immutable object cannot be mutated, transferred, or deleted. These objects have no owner and are freely accessible to everyone.
 
 ## Create immutable object
 
-To convert an object into an immutable object, call the `public_freeze_object` function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
+To make an object immutable, call the `public_freeze_object` function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
 ```move
 public native fun public_freeze_object<T: key>(obj: T);
 ```
 
-This call makes the specified object immutable. This is a non-reversible operation. You should freeze an object only when you are certain that you don't need to mutate it.
+This call permanently makes the object immutable. The operation cannot be reversed. Only freeze objects when you're certain they'll never need modification.
 
 You can see this function's use in one of the [color_object example module](https://github.com/MystenLabs/sui/blob/main/examples/move/color_object/sources/example.move) tests. The test creates a new (owned) `ColorObject`, then calls `public_freeze_object` to turn it into an immutable object.
 
@@ -30,7 +30,7 @@ You can see this function's use in one of the [color_object example module](http
 };
 ```
 
-In the preceding test, you must already own a `ColorObject` to pass it in. At the end of this call, this object is frozen and can never be mutated. It is also no longer owned by anyone.
+In this test, you must own a `ColorObject` initially. After freezing, the object becomes immutable and ownerless.
 
 The `transfer::public_freeze_object` function requires that you pass the object by value. If you are allowed to pass the object by a mutable reference, you could still mutate the object after the `public_freeze_object` call. This contradicts the fact that it should have become immutable.
 
@@ -50,7 +50,7 @@ This function creates a new `ColorObject` and immediately makes it immutable bef
 After an object becomes immutable, the rules of who can use this object in Sui Move calls change:
 You can only pass an immutable object as a read-only, immutable reference to Sui Move entry functions as `&T`.
 
-Anyone can use immutable objects.
+All network participants can access immutable objects.
 
 Consider a function that copies the value of one object to another:
 
@@ -102,7 +102,7 @@ scenario.next_tx(sender2);
 
 To show that this object is indeed not owned by anyone, start the next transaction with `sender2`. Note that it used `take_immutable` and succeeded. This means that any sender can take an immutable object. To return the object, call the `return_immutable` function.
 
-To examine whether this object is immutable, add a function that tries to mutate a `ColorObject`:
+To verify immutability, create a function attempting to modify a `ColorObject`:
 
 ```move
 public fun update(
@@ -169,7 +169,7 @@ $ sui client object $OBJECT
 The response includes:
 
 ```sh
-Owner: Immutable
+Owner: Immutable  // This field shows the object's immutable status
 ```
 
 If you try to mutate it:
