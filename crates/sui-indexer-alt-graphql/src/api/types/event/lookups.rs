@@ -17,105 +17,71 @@ use crate::api::types::event::Event;
 use crate::error::RpcError;
 use crate::scope::Scope;
 
-/// Helper struct to manage event lookups by transaction sequence numbers
-pub(crate) struct EventLookup {
-    sequence_to_digest: HashMap<TxDigestKey, StoredTxDigest>,
-    digest_to_events: HashMap<TransactionDigest, TransactionEventsContents>,
-}
+pub(crate) async fn events_from_sequence_numbers(
+    scope: &Scope,
+    ctx: &Context<'_>,
+    tx_sequence_numbers: &[u64],
+) -> Result<Vec<Event>, RpcError> {
+    let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+    let kv_loader: &KvLoader = ctx.data()?;
 
-impl EventLookup {
-    /// Loads transaction events by:
-    /// 1. Fetching transaction digests from PostgreSQL using tx_sequence_numbers
-    /// 2. Retrieves corresponding events from kv store using digests in batches
-    ///
-    /// Resulting EventLookup is a helper used to retrieve events for transactions.
-    pub(crate) async fn from_sequence_numbers(
-        ctx: &Context<'_>,
-        tx_sequence_numbers: &[u64],
-    ) -> Result<Self, RpcError> {
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let kv_loader: &KvLoader = ctx.data()?;
+    let tx_digest_keys: Vec<TxDigestKey> = tx_sequence_numbers
+        .iter()
+        .map(|r| TxDigestKey(*r))
+        .collect();
 
-        let tx_digest_keys: Vec<TxDigestKey> = tx_sequence_numbers
-            .iter()
-            .map(|r| TxDigestKey(*r))
-            .collect();
+    let sequence_to_digest = pg_loader
+        .load_many(tx_digest_keys)
+        .await
+        .context("Failed to load transaction digests")?;
 
-        let sequence_to_digest = pg_loader
-            .load_many(tx_digest_keys)
-            .await
-            .context("Failed to load transaction digests")?;
+    let transaction_digests: Vec<TransactionDigest> = sequence_to_digest
+        .values()
+        .map(|stored| TransactionDigest::try_from(stored.tx_digest.clone()))
+        .collect::<Result<_, _>>()
+        .context("Failed to deserialize transaction digests")?;
 
-        let transaction_digests: Vec<TransactionDigest> = sequence_to_digest
-            .values()
-            .map(|stored| TransactionDigest::try_from(stored.tx_digest.clone()))
-            .collect::<Result<_, _>>()
-            .context("Failed to deserialize transaction digests")?;
+    let digest_to_events = kv_loader
+        .load_many_transaction_events(transaction_digests)
+        .await
+        .context("Failed to load transaction events")?;
 
-        let digest_to_events = kv_loader
-            .load_many_transaction_events(transaction_digests)
-            .await
-            .context("Failed to load transaction events")?;
-        Ok(Self {
-            sequence_to_digest,
-            digest_to_events,
+    let events: Vec<Event> = tx_sequence_numbers
+        .iter()
+        .map(|tx_seq_num| {
+            let key = TxDigestKey(*tx_seq_num);
+            let stored_tx_digest = sequence_to_digest
+                .get(&key)
+                .context("Failed to get transaction digest")?;
+
+            let tx_digest = TransactionDigest::try_from(stored_tx_digest.tx_digest.clone())
+                .context("Failed to deserialize transaction digest")?;
+
+            let contents = digest_to_events
+                .get(&tx_digest)
+                .context("Failed to get events")?;
+
+            let native_events: Vec<NativeEvent> = contents.events()?;
+
+            Ok::<Vec<Event>, RpcError>(
+                native_events
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, native)| Event {
+                        scope: scope.clone(),
+                        native,
+                        transaction_digest: tx_digest,
+                        sequence_number: idx as u64,
+                        timestamp_ms: contents.timestamp_ms(),
+                        tx_sequence_number: *tx_seq_num,
+                    })
+                    .collect(),
+            )
         })
-    }
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect();
 
-    pub(crate) fn events_from_tx_sequence_numbers(
-        &self,
-        scope: &Scope,
-        tx_sequence_numbers: &[u64],
-    ) -> Result<Vec<Event>, RpcError> {
-        let mut events: Vec<Event> = tx_sequence_numbers
-            .iter()
-            .map(|tx_seq_num| self.events_from_tx_sequence_number(scope, *tx_seq_num))
-            .collect::<Result<Vec<_>, RpcError>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-        // Ensure events are sorted by transaction sequence number and then sequence number.
-        events.sort_by(|a, b| {
-            (a.tx_sequence_number, a.sequence_number)
-                .cmp(&(b.tx_sequence_number, b.sequence_number))
-        });
-        Ok(events)
-    }
-
-    fn events_from_tx_sequence_number(
-        &self,
-        scope: &Scope,
-        tx_sequence_number: u64,
-    ) -> Result<Vec<Event>, RpcError> {
-        let key = TxDigestKey(tx_sequence_number);
-        let stored_tx_digest = self
-            .sequence_to_digest
-            .get(&key)
-            .context("Failed to get transaction digest")?;
-
-        let tx_digest = TransactionDigest::try_from(stored_tx_digest.tx_digest.clone())
-            .context("Failed to deserialize transaction digest")?;
-
-        let contents = self
-            .digest_to_events
-            .get(&tx_digest)
-            .context("Failed to get events")?;
-
-        let native_events: Vec<NativeEvent> = contents.events()?;
-
-        native_events
-            .into_iter()
-            .enumerate()
-            .map(|(idx, native)| {
-                Ok(Event {
-                    scope: scope.clone(),
-                    native,
-                    transaction_digest: contents.digest()?,
-                    sequence_number: idx as u64,
-                    timestamp_ms: contents.timestamp_ms(),
-                    tx_sequence_number,
-                })
-            })
-            .collect()
-    }
+    Ok(events)
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
     error::RpcError,
-    pagination::Page,
+    pagination::{ordered_results_with_limits, Page},
     scope::Scope,
     task::watermark::Watermarks,
 };
@@ -47,7 +47,7 @@ pub(crate) type CEvent = JsonCursor<EventCursor>;
 #[derive(QueryableByName)]
 struct TxSequenceNumber(#[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64);
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct Event {
     pub(crate) scope: Scope,
     pub(crate) native: NativeEvent,
@@ -176,11 +176,18 @@ impl Event {
             .unique()
             .collect();
 
-        let ev_lookup =
-            lookups::EventLookup::from_sequence_numbers(ctx, &tx_sequence_numbers).await?;
-        let events = tx_events(&scope, &tx_sequence_numbers, &ev_lookup, &page)?;
+        let events: Vec<Event> =
+            lookups::events_from_sequence_numbers(&scope, ctx, &tx_sequence_numbers)
+                .await?
+                .into_iter()
+                .filter(|e| matches_cursor_bounds(e, &page))
+                .collect();
 
-        let (has_prev, has_next, edges) = page.paginate_results(events, |e| {
+        let results = ordered_results_with_limits(&page, events.into_iter(), |e| {
+            (e.tx_sequence_number, e.sequence_number)
+        });
+
+        let (has_prev, has_next, edges) = page.paginate_results(results, |e| {
             JsonCursor::new(EventCursor {
                 tx_sequence_number: e.tx_sequence_number,
                 ev_sequence_number: e.sequence_number,
@@ -196,29 +203,6 @@ impl Event {
         }
 
         Ok(c)
-    }
-}
-
-/// The events in transactions filtered by cursor bounds inclusively.
-fn tx_events(
-    scope: &Scope,
-    tx_sequence_numbers: &[u64],
-    ev_lookup: &lookups::EventLookup,
-    page: &Page<CEvent>,
-) -> Result<Vec<Event>, RpcError> {
-    let events = ev_lookup
-        .events_from_tx_sequence_numbers(scope, tx_sequence_numbers)?
-        .into_iter()
-        .filter(|e| matches_cursor_bounds(e, page));
-
-    if page.is_from_front() {
-        Ok(events.take(page.limit_with_overhead()).collect())
-    } else {
-        // Graphql cursor syntax expects events to be in ascending order,
-        // so we take the last N events and reorder them in ascending order.
-        let mut events: Vec<Event> = events.rev().take(page.limit_with_overhead()).collect();
-        events.reverse();
-        Ok(events)
     }
 }
 
