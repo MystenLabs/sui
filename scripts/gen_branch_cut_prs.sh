@@ -7,7 +7,7 @@
 #   cargo run --bin sui-framework-snapshot
 # 2. Generate a version bump PR
 
-set -Eeuo pipefail
+set -x
 
 # Ensure required binaries are available
 for cmd in gh git; do
@@ -44,8 +44,6 @@ git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 # Generate PR body
 BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
 
-set -x
-
 # Commit, push, and create PR.
 git commit -m "$BODY"
 git push -u origin "$BRANCH"
@@ -60,41 +58,41 @@ PR_URL=$(gh pr create \
 
 echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
 
-# # Setting the PR to auto merge
-# gh pr merge --auto --squash --delete-branch "$BRANCH"
+# Setting the PR to auto merge
+gh pr merge --auto --squash --delete-branch "$BRANCH"
 
-# # Generate the version bump PR
-# # Bump main branhch version
-# IFS=. read -r major minor patch <<<"$SUI_VERSION"; NEW_SUI_VERSION="$major.$((minor+1)).$patch"
+# Generate the version bump PR
+# Bump main branhch version
+IFS=. read -r major minor patch <<<"$SUI_VERSION"; NEW_SUI_VERSION="$major.$((minor+1)).$patch"
 
-# # Setup new branch for staging
-# BRANCH="${GITHUB_ACTOR}/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
-# git checkout main && git pull origin main
-# git checkout -b "$BRANCH"
+# Setup new branch for staging
+BRANCH="${GITHUB_ACTOR}/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
+git checkout main && git pull origin main
+git checkout -b "$BRANCH"
 
-# # Update the version in Cargo.toml and openrpc.json
-# sed -i -E "s/^(version = \")[0-9]+\.[0-9]+\.[0-9]+(\"$)/\1${NEW_SUI_VERSION}\2/" Cargo.toml
-# sed -i -E "s/(\"version\": \")([0-9]+\.[0-9]+\.[0-9]+)(\")/\1${NEW_SUI_VERSION}\3/" crates/sui-open-rpc/spec/openrpc.json
+# Update the version in Cargo.toml and openrpc.json
+sed -i -E "s/^(version = \")[0-9]+\.[0-9]+\.[0-9]+(\"$)/\1${NEW_SUI_VERSION}\2/" Cargo.toml
+sed -i -E "s/(\"version\": \")([0-9]+\.[0-9]+\.[0-9]+)(\")/\1${NEW_SUI_VERSION}\3/" crates/sui-open-rpc/spec/openrpc.json
 
-# # Cargo check to generate Cargo.lock changes
-# cargo check || true
+# Cargo check to generate Cargo.lock changes
+cargo check || true
 
-# # Staged all changes
-# echo "Staging all changed files..."
-# git add -A .
+# Staged all changes
+echo "Staging all changed files..."
+git add -A .
 
-# # Generate PR body
-# BODY="Sui v${NEW_SUI_VERSION} Version Bump"
+# Generate PR body
+BODY="Sui v${NEW_SUI_VERSION} Version Bump"
 
-# git commit -m "$BODY"
-# git push -u origin "$BRANCH"
+git commit -m "$BODY"
+git push -u origin "$BRANCH"
 
-# PR_URL=$(gh pr create \
-#   --base main \
-#   --head "$BRANCH" \
-#   --title "Sui v${NEW_SUI_VERSION} Version Bump" \
-#   --reviewer "MystenLabs/mysten-pe" \
-#   --body "$BODY" \
-#   2>&1 | grep -Eo 'https://github.com/[^ ]+')
+PR_URL=$(gh pr create \
+  --base main \
+  --head "$BRANCH" \
+  --title "Sui v${NEW_SUI_VERSION} Version Bump" \
+  --reviewer "ebmifa" \
+  --body "$BODY" \
+  2>&1 | grep -Eo 'https://github.com/[^ ]+')
 
-# echo "Pull request for Sui v${NEW_SUI_VERSION} Version Bump created: $PR_URL"
+echo "Pull request for Sui v${NEW_SUI_VERSION} Version Bump created: $PR_URL"
