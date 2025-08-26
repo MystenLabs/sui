@@ -30,6 +30,10 @@ if [[ -z "${GITHUB_ACTOR:-}" ]]; then
   GITHUB_ACTOR="$(whoami 2>/dev/null || echo github-actions[bot])"
 fi
 
+# Configure git user
+git config user.name "github-actions[bot]"
+git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
 # Get current main version
 SUI_VERSION=$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"/\1/p' ./Cargo.toml)
 STAMP="$(date +%Y%m%d%H%M%S)"
@@ -47,10 +51,6 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
   echo "Staging all changed files..."
   git add -A .
 
-  # Configure git user
-  git config user.name "github-actions[bot]"
-  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
   # Generate PR body
   BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
 
@@ -61,15 +61,14 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
   PR_URL=$(gh pr create \
     --base main \
     --head "$BRANCH" \
-    --title "Sui v${SUI_VERSION} Framework Bytecode snapshot" \
+    --title "$BODY" \
     --reviewer "ebmifa" \
     --body "$BODY" \
     2>&1 | grep -Eo 'https://github.com/[^ ]+')
 
-  echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
-
   # Setting the PR to auto merge
   gh pr merge --auto --squash --delete-branch "$BRANCH"
+  echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
 
 elif [[ "$PR_TYPE" == *version-bump* ]]; then
   # Generate the version bump PR
@@ -101,7 +100,7 @@ elif [[ "$PR_TYPE" == *version-bump* ]]; then
   PR_URL=$(gh pr create \
     --base main \
     --head "$BRANCH" \
-    --title "Sui v${NEW_SUI_VERSION} Version Bump" \
+    --title "$BODY" \
     --reviewer "ebmifa" \
     --body "$BODY" \
     2>&1 | grep -Eo 'https://github.com/[^ ]+')
