@@ -15,6 +15,7 @@ mod client_stats_tests {
 
     use super::*;
     use crate::validator_client_monitor::metrics::ValidatorClientMetrics;
+    use mysten_metrics::TxType;
     use prometheus::Registry;
 
     /// Helper to create test validator names
@@ -49,7 +50,7 @@ mod client_stats_tests {
             result: Ok(Duration::from_millis(100)),
         };
 
-        stats.record_interaction_result(feedback, &metrics);
+        stats.record_interaction_result(feedback, &metrics, TxType::SingleWriter);
 
         // Check validator stats were created and updated
         let validator_stats = stats.validator_stats.get(&validator).unwrap();
@@ -85,7 +86,7 @@ mod client_stats_tests {
                 operation: OperationType::Submit,
                 result: Err(()),
             };
-            stats.record_interaction_result(feedback, &metrics);
+            stats.record_interaction_result(feedback, &metrics, TxType::SingleWriter);
 
             let validator_stats = stats.validator_stats.get(&validator).unwrap();
             assert_eq!(validator_stats.consecutive_failures, i + 1);
@@ -124,6 +125,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(50)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -141,6 +143,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(200)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -153,6 +156,7 @@ mod client_stats_tests {
                 result: Err(()),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Create a committee with both validators
@@ -197,6 +201,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(50)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -210,6 +215,7 @@ mod client_stats_tests {
                     result: Err(()),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -251,6 +257,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(100)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -364,6 +371,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(100)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Create a committee with the validator
@@ -396,6 +404,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(100)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         let initial_reliability = stats
@@ -415,6 +424,7 @@ mod client_stats_tests {
                 result: Err(()),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         let new_reliability = stats
@@ -444,6 +454,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(100)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Check global max is 100ms
@@ -463,6 +474,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(50)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Max should decay towards 50ms
@@ -483,6 +495,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(200)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Max should jump to 200ms
@@ -511,6 +524,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(100)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Both should start at 100ms
@@ -541,6 +555,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(50)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Validator latency should decay faster (factor 0.1)
@@ -610,6 +625,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(latency)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -632,6 +648,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(latency)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -651,6 +668,8 @@ mod client_stats_tests {
 
 #[cfg(test)]
 mod client_monitor_tests {
+    use mysten_metrics::TxType;
+
     use crate::{
         authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
         test_authority_clients::MockAuthorityApi,
@@ -860,7 +879,12 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone(), false);
+        let monitor = ValidatorClientMonitor::new(
+            config,
+            metrics,
+            auth_agg_swap.clone(),
+            TxType::SingleWriter,
+        );
 
         // Record stats for all initial validators
         for validator in &initial_validators {
@@ -934,7 +958,12 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone(), false);
+        let monitor = ValidatorClientMonitor::new(
+            config,
+            metrics,
+            auth_agg_swap.clone(),
+            TxType::SingleWriter,
+        );
 
         // Record stats for initial validators
         for validator in &initial_validators {

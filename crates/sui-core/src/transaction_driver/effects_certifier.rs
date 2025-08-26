@@ -41,7 +41,6 @@ use crate::{
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
-use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 
 #[cfg(test)]
 #[path = "unit_tests/effects_certifier_tests.rs"]
@@ -69,7 +68,6 @@ impl EffectsCertifier {
         mut current_target: AuthorityName,
         submit_txn_resp: SubmitTxResponse,
         options: &SubmitTransactionOptions,
-        is_single_writer_tx: bool,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -164,11 +162,7 @@ impl EffectsCertifier {
                         }
                         self.metrics
                             .certified_finalized_effects_latency
-                            .with_label_values(&[if is_single_writer_tx {
-                                TX_TYPE_SINGLE_WRITER_TX
-                            } else {
-                                TX_TYPE_SHARED_OBJ_TX
-                            }])
+                            .with_label_values(&[tx_type.as_str()])
                             .observe(start_time.elapsed().as_secs_f64());
                         return Ok(
                             self.get_quorum_transaction_response(effects_digest, executed_data)
@@ -267,10 +261,6 @@ impl EffectsCertifier {
         tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
-<<<<<<< HEAD
-=======
-        is_single_writer_tx: bool,
->>>>>>> f078109f0b ([refactor] measure number of transactions that got mfp executed)
         submitted_tx_to_validator: AuthorityName,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
@@ -347,12 +337,8 @@ impl EffectsCertifier {
         // but do not have a local reason to reject the transaction. The validator could have
         // accepted the transaction during voting, or the reason has been lost.
         let mut reason_not_found_aggregator = StatusAggregator::<()>::new(committee.clone());
-<<<<<<< HEAD
-        // Collect responses from validators which observed the transaction getting executed using fast path.
-=======
         // Collect responses from validators which observed the transaction getting executed,
         // and executed the transaction using fast path.
->>>>>>> f078109f0b ([refactor] measure number of transactions that got mfp executed)
         let mut fast_path_aggregator = StatusAggregator::<()>::new(committee.clone());
 
         // Every validator returns at most one WaitForEffectsResponse.
@@ -369,15 +355,11 @@ impl EffectsCertifier {
                     aggregator.insert(name, ());
 
                     if fast_path {
-<<<<<<< HEAD
                         if tx_type != TxType::SingleWriter {
                             tracing::warn!("Fast path is only supported for single writer transactions, tx_digest={tx_digest}, name={name}");
                         } else {
                             fast_path_aggregator.insert(name, ());
                         }
-=======
-                        fast_path_aggregator.insert(name, ());
->>>>>>> f078109f0b ([refactor] measure number of transactions that got mfp executed)
                     }
 
                     if aggregator.reached_quorum_threshold() {
@@ -408,20 +390,8 @@ impl EffectsCertifier {
                                 authority_aggregator.get_display_name(&submitted_tx_to_validator);
 
                             self.metrics
-<<<<<<< HEAD
                                 .transaction_fastpath_acked
                                 .with_label_values(&[&display_name])
-=======
-                                .transaction_fast_path_acked
-                                .with_label_values(&[
-                                    &display_name,
-                                    if is_single_writer_tx {
-                                        TX_TYPE_SINGLE_WRITER_TX
-                                    } else {
-                                        TX_TYPE_SHARED_OBJ_TX
-                                    },
-                                ])
->>>>>>> f078109f0b ([refactor] measure number of transactions that got mfp executed)
                                 .inc();
                         }
 

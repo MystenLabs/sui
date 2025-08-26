@@ -80,13 +80,13 @@ where
             monitor_config.clone(),
             client_metrics.clone(),
             shared_swap.clone(),
-            false,
+            TxType::SingleWriter,
         );
         let client_monitor_shared_object_txes = ValidatorClientMonitor::new(
             monitor_config.clone(),
             client_metrics.clone(),
             shared_swap.clone(),
-            true,
+            TxType::SharedObject,
         );
 
         let driver = Arc::new(Self {
@@ -143,7 +143,7 @@ where
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
-                    .drive_transaction_once(tx_digest, tx_type, raw_request.clone(), &options, false)
+                    .drive_transaction_once(tx_digest, tx_type, raw_request.clone(), &options)
                     .await
                 {
                     Ok(resp) => {
@@ -153,15 +153,15 @@ where
                             .with_label_values(&[tx_type.as_str()])
                             .observe(settlement_finality_latency);
                         // Record the number of retries for successful transaction
-                    // Record the number of retries for successful transaction
-                    self.metrics
-                        .transaction_retries
-                        .with_label_values(&["success"])
-                        .observe(attempts as f64);
-                    return Ok(resp);
-                }
-                Err(e) => {
-                    if !e.is_retriable() {
+                        // Record the number of retries for successful transaction
+                        self.metrics
+                            .transaction_retries
+                            .with_label_values(&["success"])
+                            .observe(attempts as f64);
+                        return Ok(resp);
+                    }
+                    Err(e) => {
+                        if !e.is_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
@@ -208,12 +208,11 @@ where
         tx_type: TxType,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-        is_single_writer_tx: bool,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let start_time = Instant::now();
         let auth_agg = self.authority_aggregator.load();
 
-        let client_monitor = if is_single_writer_tx {
+        let client_monitor = if tx_type == TxType::SingleWriter {
             &self.client_monitor_owned_object_txes
         } else {
             &self.client_monitor_shared_object_txes
@@ -235,7 +234,6 @@ where
                 name,
                 submit_txn_resp,
                 options,
-                is_single_writer_tx,
             )
             .await?;
 
