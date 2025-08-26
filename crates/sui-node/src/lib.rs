@@ -494,7 +494,8 @@ impl SuiNode {
             &checkpoint_metrics,
             is_validator,
             config.fork_recovery.as_ref(),
-        )?;
+        )
+        .await?;
 
         let mut pruner_db = None;
         if config
@@ -2102,8 +2103,8 @@ impl SuiNode {
     }
 
     /// Get a short prefix of a digest for metric labels
-    fn get_digest_prefix(digest: impl std::fmt::Debug) -> String {
-        let digest_str = format!("{:?}", digest);
+    fn get_digest_prefix(digest: impl std::fmt::Display) -> String {
+        let digest_str = digest.to_string();
         if digest_str.len() >= 8 {
             digest_str[0..8].to_string()
         } else {
@@ -2114,7 +2115,7 @@ impl SuiNode {
     /// Check for previously detected forks and handle them appropriately.
     /// For validators with fork recovery config, clear the fork if it matches the recovery config.
     /// For all other cases, block node startup if a fork is detected.
-    fn check_and_recover_forks(
+    async fn check_and_recover_forks(
         checkpoint_store: &CheckpointStore,
         checkpoint_metrics: &CheckpointMetrics,
         is_validator: bool,
@@ -2144,7 +2145,8 @@ impl SuiNode {
                 checkpoint_digest,
                 checkpoint_metrics,
                 fork_recovery,
-            )?;
+            )
+            .await?;
         }
         if let Some((tx_digest, expected_effects, actual_effects)) = checkpoint_store
             .get_transaction_fork_detected()
@@ -2159,7 +2161,8 @@ impl SuiNode {
                 actual_effects,
                 checkpoint_metrics,
                 fork_recovery,
-            )?;
+            )
+            .await?;
         }
 
         Ok(())
@@ -2247,7 +2250,7 @@ impl SuiNode {
             .as_secs()
     }
 
-    fn handle_checkpoint_fork(
+    async fn handle_checkpoint_fork(
         checkpoint_seq: u64,
         checkpoint_digest: CheckpointDigest,
         checkpoint_metrics: &CheckpointMetrics,
@@ -2271,11 +2274,10 @@ impl SuiNode {
                 error!(
                     checkpoint_seq = checkpoint_seq,
                     checkpoint_digest = ?checkpoint_digest,
-                    "Checkpoint fork detected! Node startup halted."
+                    "Checkpoint fork detected! Node startup halted. Sleeping indefinitely."
                 );
-                loop {
-                    std::thread::park();
-                }
+                futures::future::pending::<()>().await;
+                unreachable!("pending() should never return");
             }
             ForkCrashBehavior::ReturnError => {
                 error!(
@@ -2292,7 +2294,7 @@ impl SuiNode {
         }
     }
 
-    fn handle_transaction_fork(
+    async fn handle_transaction_fork(
         tx_digest: TransactionDigest,
         expected_effects_digest: TransactionEffectsDigest,
         actual_effects_digest: TransactionEffectsDigest,
@@ -2319,11 +2321,10 @@ impl SuiNode {
                     tx_digest = ?tx_digest,
                     expected_effects_digest = ?expected_effects_digest,
                     actual_effects_digest = ?actual_effects_digest,
-                    "Transaction fork detected! Node startup halted."
+                    "Transaction fork detected! Node startup halted. Sleeping indefinitely."
                 );
-                loop {
-                    std::thread::park();
-                }
+                futures::future::pending::<()>().await;
+                unreachable!("pending() should never return");
             }
             ForkCrashBehavior::ReturnError => {
                 error!(
@@ -2690,7 +2691,8 @@ mod tests {
             &checkpoint_metrics,
             true,
             Some(&fork_recovery),
-        );
+        )
+        .await;
         assert!(r.is_err());
         assert!(r
             .unwrap_err()
@@ -2709,7 +2711,8 @@ mod tests {
             &checkpoint_metrics,
             true,
             Some(&fork_recovery_with_override),
-        );
+        )
+        .await;
         assert!(r.is_ok());
         assert!(checkpoint_store
             .get_checkpoint_fork_detected()
@@ -2734,7 +2737,8 @@ mod tests {
             &checkpoint_metrics,
             true,
             Some(&fork_recovery),
-        );
+        )
+        .await;
         assert!(r.is_err());
         assert!(r
             .unwrap_err()
@@ -2753,7 +2757,8 @@ mod tests {
             &checkpoint_metrics,
             true,
             Some(&fork_recovery_with_override),
-        );
+        )
+        .await;
         assert!(r.is_ok());
         assert!(checkpoint_store
             .get_transaction_fork_detected()
