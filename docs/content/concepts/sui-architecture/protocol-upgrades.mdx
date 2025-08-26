@@ -22,7 +22,7 @@ The process for protocol upgrades includes these steps:
 1. If enough validators vote to switch to the new protocol version, the new version takes effect at the beginning of the next epoch.  
 1. The new feature becomes active.  
 
-Full nodes follow a similar process but do not participate in voting. They follow the actions recorded by validators.  
+Full node operators follow a similar process but do not participate in voting. They follow the actions recorded by validators.  
 
 When validators switch to a new protocol version, they record the new version number in the special end-of-epoch transaction. Full nodes execute this transaction as they replay the chain history, allowing them to switch to the new protocol version at the correct time.  
 
