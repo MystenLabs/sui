@@ -105,6 +105,7 @@ After the checkpoint 1002 is committed, you can safely read data up to 1003.
 ### Scenario 2: Pruning enabled
 
 Pruning is enabled for pipelines configured with a retention policy. For example, if your table is growing too large and you want to keep only the last four checkpoints, then `retention = 4`. This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi_inclusive` and the configured retention. A separate pruning task is responsible for pruning data between `[pruner_hi, reader_lo]`.
+
 ```sh
 [998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
  🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✗      ✗

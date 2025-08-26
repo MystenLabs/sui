@@ -5,7 +5,6 @@ description: Party objects are owned by a specified party at the time of transfe
 
 A party object is an object that is transferred using the `sui::transfer::party_transfer` or `sui::transfer::public_party_transfer` function. It is accessible to the `Party` to which it is transferred.
 
-The name party object refers to the idea of a dining party at a restaurant or a party of adventurers.  
 
 Party objects combine some properties of address-owned objects and shared objects. Like address-owned objects, they can be owned by a single address. Like shared objects, they are versioned by consensus. Unlike shared objects, they can be transferred to and from other ownership types and wrapped.
 
@@ -32,7 +31,7 @@ A party object's ownership can change over its lifetime. For example, by adding 
 
 You can specify party objects as input to a transaction in the same way as shared objects. Sui validators ensure that the sender of the transaction can access the object. The validator might abort a transaction at execution time if the owner of an input party object has changed due to an earlier, conflicting transaction.
 
-Party objects whose owning address corresponds to an object ID are not supported for access through the [Transfer to object](../transfers/transfer-to-object.mdx) mechanism.
+Party objects whose owning address corresponds to an object ID are not supported for access through the [transfer to object](../transfers/transfer-to-object.mdx) mechanism.
 
 ## When to use party objects
 
