@@ -1896,10 +1896,7 @@ fn compile_bytecode(
             Bytecode::ImmBorrowLoc(function_frame.get_local(&v_)?)
         }
         IRBytecode_::MutBorrowField(name, tys, sp!(_, field_)) => {
-            let qualified_struct_name = QualifiedDatatypeIdent {
-                module: ModuleName::module_self(),
-                name,
-            };
+            let qualified_struct_name = context.resolve_datatype_name(&name)?;
             let sh_idx = context.datatype_handle_index(qualified_struct_name)?;
             let (def_idx, _, field_offset) = context.field(sh_idx, field_)?;
 
@@ -1918,10 +1915,7 @@ fn compile_bytecode(
             }
         }
         IRBytecode_::ImmBorrowField(name, tys, sp!(_, field_)) => {
-            let qualified_struct_name = QualifiedDatatypeIdent {
-                module: ModuleName::module_self(),
-                name,
-            };
+            let qualified_struct_name = context.resolve_datatype_name(&name)?;
             let sh_idx = context.datatype_handle_index(qualified_struct_name)?;
             let (def_idx, _, field_offset) = context.field(sh_idx, field_)?;
 

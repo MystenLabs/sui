@@ -14,7 +14,7 @@ use move_binary_format::{
         IdentifierIndex, ModuleHandle, ModuleHandleIndex, Signature, SignatureIndex,
         SignatureToken, StructDefInstantiation, StructDefInstantiationIndex, StructDefinitionIndex,
         TableIndex, VariantHandle, VariantHandleIndex, VariantInstantiationHandle,
-        VariantInstantiationHandleIndex,
+        VariantInstantiationHandleIndex, TypeSignature,
     },
 };
 use move_bytecode_source_map::source_map::SourceMap;
@@ -29,6 +29,7 @@ use move_ir_types::{
     },
     location::Loc,
 };
+use core::str;
 use std::{clone::Clone, collections::HashMap, hash::Hash};
 
 macro_rules! get_or_add_item_macro {
@@ -75,12 +76,16 @@ pub struct CompiledDependencyView<'a> {
     identifiers: &'a [Identifier],
     address_identifiers: &'a [AccountAddress],
     signature_pool: &'a [Signature],
+
+    field_pool: HashMap<(&'a IdentStr, &'a IdentStr, &'a IdentStr), (StructDefinitionIndex, IdentifierIndex, TypeSignature, usize)>,
 }
 
 impl<'a> CompiledDependencyView<'a> {
     pub fn new(dep: &'a CompiledModule) -> Result<Self> {
         let mut structs = HashMap::new();
         let mut functions = HashMap::new();
+
+        let mut field_pool = HashMap::new();
 
         let self_handle = dep.self_handle_idx();
 
@@ -91,6 +96,27 @@ impl<'a> CompiledDependencyView<'a> {
             // get_or_add_item gets the proper struct handle index, as `dep.datatype_handles()` is
             // properly ordered
             get_or_add_item(&mut structs, (mname, sname))?;
+        }
+
+        // ISSUE: struct_defs is empty in this moment :(
+        for (sdef_idx, sdef) in dep.struct_defs().iter().enumerate() {
+            let sh = dep.datatype_handle_at(sdef.struct_handle);
+            let mhandle = dep.module_handle_at(sh.module);
+            let mname = dep.identifier_at(mhandle.name);
+            let sname = dep.identifier_at(sh.name);
+
+            for (i, field) in sdef.fields().unwrap().iter().enumerate() {
+                let field_name = field.name;
+                let field_signature = field.signature.clone();
+                let field_idx = i;
+
+                let fname = dep.identifier_at(field.name);
+                
+                let key = (mname, sname, fname);
+                let value = (StructDefinitionIndex(sdef_idx as u16), field_name, field_signature, field_idx);
+
+                field_pool.insert(key, value);
+            }
         }
 
         // keep only functions defined in the current module
@@ -108,6 +134,7 @@ impl<'a> CompiledDependencyView<'a> {
         Ok(Self {
             structs,
             functions,
+            field_pool,
             module_pool: dep.module_handles(),
             datatype_pool: dep.datatype_handles(),
             function_pool: dep.function_handles(),
@@ -154,6 +181,20 @@ impl<'a> CompiledDependencyView<'a> {
                 ident_str(name.0.as_str()).ok()?,
             ))
             .and_then(|idx| self.datatype_pool.get(*idx as usize))
+    }
+
+    fn field_handle(
+        &self,
+        module: &ModuleName,
+        datatype: &DatatypeName,
+        field: &Field_,
+    ) -> Option<(StructDefinitionIndex, IdentifierIndex, TypeSignature, usize)> {
+        self.field_pool
+            .get(&(
+                ident_str(module.0.as_str()).ok()?,
+                ident_str(datatype.0.as_str()).ok()?,
+                ident_str(field.0.as_str()).ok()?,
+            )).cloned()
     }
 
     fn function_signature(&self, name: &FunctionName) -> Option<FunctionSignature> {
@@ -594,15 +635,56 @@ impl<'a> Context<'a> {
     }
 
     /// Get the field index, fails if it is not bound.
+    /// Now supports looking up fields from dependency modules.
     pub fn field(
-        &self,
+        &mut self,
         s: DatatypeHandleIndex,
         f: Field_,
     ) -> Result<(StructDefinitionIndex, SignatureToken, usize)> {
         match self.fields.get(&(s, f.clone())) {
-            None => bail!("Unbound field {}", f),
             Some((sd_idx, token, decl_order)) => Ok((*sd_idx, token.clone(), *decl_order)),
+            None => {
+                self.populate_dependency_field_info(s, &f)?;
+                match self.fields.get(&(s, f.clone())) {
+                    Some((sd_idx, token, decl_order)) => Ok((*sd_idx, token.clone(), *decl_order)),
+                    None => bail!("Unbound field {}", f),
+                }
+            }
         }
+    }
+
+    fn populate_dependency_field_info(&mut self, s: DatatypeHandleIndex, f: &Field_) -> Result<()> {
+        let qualified_struct = self.find_struct_by_handle_index(s);
+
+        if let Some(qualified_struct) = qualified_struct {
+            if qualified_struct.module == ModuleName::module_self() {
+                bail!("Field '{}' not found in current module struct", f);
+            }
+
+            let module_ident = *self.module_ident(&qualified_struct.module)?;
+            let dep = self.dependency(&module_ident)?;
+            
+            let fh = dep.field_handle(&module_ident.name, &qualified_struct.name, f) ;
+            if let Some((sd_idx, _, sig, order)) = fh {
+                self.declare_field(s, sd_idx, f.clone(), sig.0, order);
+            } else {
+                bail!("Field '{}' not found in dependency struct '{}::{}'", f, module_ident.name, qualified_struct.name);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Helper method to find the qualified struct name by its handle index
+    fn find_struct_by_handle_index(&self, s: DatatypeHandleIndex) -> Option<QualifiedDatatypeIdent> {
+        for (qualified_name, handle) in &self.structs {
+            if let Some(&index) = self.datatype_handles.get(handle) {
+                if index == s.0 as u16 {
+                    return Some(qualified_name.clone());
+                }
+            }
+        }
+        None
     }
 
     pub fn variant(
@@ -862,9 +944,25 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Given an identifier, find the struct handle index.
-    /// Creates the handle and adds it to the pool if it it is the *first* time it looks
-    /// up the struct in a dependency.
+    /// Resolves a DatatypeName to a QualifiedDatatypeIdent by checking current module first,
+    /// then looking through properly imported modules (those with registered aliases)
+    pub fn resolve_datatype_name(&self, name: &DatatypeName) -> Result<QualifiedDatatypeIdent> {
+        if self.struct_defs.contains_key(name) {
+            return Ok(QualifiedDatatypeIdent {
+                module: ModuleName::module_self(),
+                name: name.clone(),
+            });
+        }
+
+        for skey in self.structs.keys() {
+            if &skey.name == name {
+                return Ok(skey.clone());
+            }
+        }
+
+        bail!("Unbound struct {}", name)
+    }
+
     pub fn datatype_handle_index(
         &mut self,
         s: QualifiedDatatypeIdent,
