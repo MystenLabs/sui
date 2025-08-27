@@ -84,7 +84,7 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                 });
                 debug!("Starting balance for {:?}: {:?}", object_id, entry);
 
-                if *entry < *reservation {
+                if *entry < *reservation as u128 {
                     debug!(
                         "Insufficient balance for {:?}. Requested: {:?}, Available: {:?}",
                         object_id, reservation, entry
@@ -98,7 +98,7 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                 for (object_id, reservation) in withdraw.reservations {
                     // unwrap safe because we always initialize each account in the above loop.
                     let balance = cur_balances.get_mut(&object_id).unwrap();
-                    *balance -= reservation;
+                    *balance -= reservation as u128;
                 }
                 let _ = sender.send(ScheduleResult {
                     tx_digest: withdraw.tx_digest,

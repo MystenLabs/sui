@@ -20,7 +20,7 @@ pub(crate) trait AccountBalanceRead: Send + Sync {
         // Version of the accumulator root object, used to
         // bound the version when we look for child account objects.
         accumulator_version: SequenceNumber,
-    ) -> u64;
+    ) -> u128;
 }
 
 impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
@@ -28,7 +28,7 @@ impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
         &self,
         account_id: &ObjectID,
         accumulator_version: SequenceNumber,
-    ) -> u64 {
+    ) -> u128 {
         let value: U128 =
             AccumulatorValue::load_by_id(self.as_ref(), Some(accumulator_version), *account_id)
                 // Expect is safe because at this point we should know that we are dealing with a Balance<T>
@@ -36,7 +36,7 @@ impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
                 .expect("read cannot fail")
                 .unwrap_or(U128 { value: 0 });
 
-        std::cmp::min(value.value, u64::MAX as u128) as u64
+        value.value
     }
 }
 
@@ -50,14 +50,14 @@ pub(crate) struct MockBalanceRead {
 #[cfg(test)]
 struct MockBalanceReadInner {
     cur_version: SequenceNumber,
-    balances: BTreeMap<ObjectID, BTreeMap<SequenceNumber, u64>>,
+    balances: BTreeMap<ObjectID, BTreeMap<SequenceNumber, u128>>,
 }
 
 #[cfg(test)]
 impl MockBalanceRead {
     pub(crate) fn new(
         init_version: SequenceNumber,
-        init_balances: BTreeMap<ObjectID, u64>,
+        init_balances: BTreeMap<ObjectID, u128>,
     ) -> Self {
         let balances = init_balances
             .iter()
@@ -91,7 +91,7 @@ impl MockBalanceReadInner {
             self.balances
                 .entry(account_id)
                 .or_default()
-                .insert(new_accumulator_version, new_balance as u64);
+                .insert(new_accumulator_version, new_balance as u128);
         }
     }
 
@@ -99,7 +99,7 @@ impl MockBalanceReadInner {
         &self,
         account_id: &ObjectID,
         accumulator_version: SequenceNumber,
-    ) -> u64 {
+    ) -> u128 {
         let Some(account_balances) = self.balances.get(account_id) else {
             return 0;
         };
@@ -120,7 +120,7 @@ impl AccountBalanceRead for MockBalanceRead {
         &self,
         account_id: &ObjectID,
         accumulator_version: SequenceNumber,
-    ) -> u64 {
+    ) -> u128 {
         let inner = self.inner.read();
         inner.get_account_balance(account_id, accumulator_version)
     }

@@ -23,7 +23,7 @@ struct TestScheduler {
 }
 
 impl TestScheduler {
-    fn new(init_version: SequenceNumber, init_balances: BTreeMap<ObjectID, u64>) -> Self {
+    fn new(init_version: SequenceNumber, init_balances: BTreeMap<ObjectID, u128>) -> Self {
         let mock_read = Arc::new(MockBalanceRead::new(init_version, init_balances));
         let scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version);
         Self {
