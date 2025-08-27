@@ -24,6 +24,7 @@ move-bytecode-utils.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
 sui-framework.workspace = true
+sui-framework-snapshot.workspace = true
 sui-keys.workspace = true
 sui-protocol-config.workspace = true
 sui-storage.workspace = true

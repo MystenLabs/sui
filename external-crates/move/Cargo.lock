@@ -2621,11 +2621,13 @@ dependencies = [
  "move-model-2",
  "move-package-alt",
  "move-symbol-pool",
+ "once_cell",
  "petgraph",
  "serde",
  "serde_yaml",
  "tempfile",
  "tokio",
+ "toml_edit 0.22.24",
  "tracing",
  "vfs",
 ]

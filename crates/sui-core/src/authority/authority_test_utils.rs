@@ -4,7 +4,7 @@
 
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::ExecutionSchedulerAPI;
+
 use core::default::Default;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;

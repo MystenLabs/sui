@@ -7,7 +7,12 @@ mdx:
 
 Nautilus is a framework for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on chain through smart contract-based verification.
 
-Nautilus is designed for hybrid decentralized applications (dApps) that require private data handling, complex computation, or integration with external (Web2) systems. It ensures that off-chain computations are tamper resistant, isolated, and cryptographically verifiable. 
+Nautilus supports hybrid decentralized applications (dApps) that require:
+- Private data handling
+- Complex computations
+- Integration with external (Web2) systems
+
+The framework ensures computations are tamper-resistant, isolated, and cryptographically verifiable.
 
 It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.com/ec2/nitro/nitro-enclaves/). Developers can verify AWS-signed enclave attestations on chain using Sui smart contracts written in Move. Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the reproducible build template.
 
@@ -15,8 +20,8 @@ It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.c
 
 A Nautilus application consists of two components:
 
-- Off-chain server: Runs inside a TEE, like AWS Nitro Enclaves, and performs the actual computation, such as processing user input or executing a scheduled task.
-- On-chain smart contract: Written in Move, this contract receives the output and verifies the TEE's attestation before trusting or acting on the data.
+- **Off-chain server:** Runs inside a TEE (like AWS Nitro Enclaves) and handles computations like user input processing or scheduled tasks.
+- **On-chain smart contract**: Written in Move, verifies TEE attestations before executing transactions.
 
 :::info
 
@@ -44,7 +49,7 @@ You can adapt and extend it to fit your specific use case.
 
 Nautilus supports several Web3 use cases for trustworthy and verifiable off-chain computation. Some examples include:
 
-- **Trusted oracles:** Nautilus could ensure that oracles fetch and process off-chain data in a tamper-resistant manner before providing results to a smart contract. The source of external data could be a Web2 service (like weather, sports, betting, asset prices, and so on) or a decentralized storage platform like [Walrus](https://walrus.xyz).
+- **Trusted oracles**: Process off-chain data from Web2 services (weather, sports, financial data) or decentralized storage platforms like [Walrus](https://walrus.xyz) in a tamper-resistant way.
 - **AI agents:** Nautilus is ideal for securely running AI models for inference or to execute agentic workflows to produce actionable outcomes, while providing data and model provenance on chain.
 - **DePIN solutions:** DePIN (Decentralized Physical Infrastructure) can leverage Nautilus for private data computation in IoT and supply chain networks.
 - **Fraud prevention in multi-party systems:** Decentralized exchanges (DEXs) could use Nautilus for order matching and settlement, or layer-2 solutions could prevent collision and fraud by securely running computations between untrusted parties.

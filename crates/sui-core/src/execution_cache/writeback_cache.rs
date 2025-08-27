@@ -557,7 +557,7 @@ impl WritebackCache {
         // object_by_id_cache. Otherwise, a surprising bug can occur:
         //
         // 1. A thread executing TX1 can write object (O,1) to the dirty set and then pause.
-        // 2. TX2, which reads (O,1) can begin executing, because TransactionManager immediately
+        // 2. TX2, which reads (O,1) can begin executing, because ExecutionScheduler immediately
         //    schedules transactions if their inputs are available. It does not matter that TX1
         //    hasn't finished executing yet.
         // 3. TX2 can write (O,2) to both the dirty set and the object_by_id_cache.

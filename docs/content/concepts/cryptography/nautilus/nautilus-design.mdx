@@ -7,18 +7,16 @@ description: Overview of the design aspects of Nautilus, including its trust mod
 
 ## dApp developer actions
 
-1. Create a Nautilus off-chain server with a reproducible build. You have the option of using the [provided template](https://github.com/MystenLabs/nautilus).
-2. Publish the server code to a public repository (such as GitHub) to ensure transparency and verifiability.
-3. Register the instance’s platform configuration registers (PCRs) using a Sui smart contract.
+1. Create a Nautilus off-chain server with a reproducible build using the [provided template](https://github.com/MystenLabs/nautilus).
+2. Publish the server code to a public repository like GitHub to ensure transparency and verifiability.
+3. Register the instance's platform configuration registers (PCRs) - measurements of the trusted computing base - using a Sui smart contract.
 4. Deploy the server to an AWS Nitro Enclave.
-5. Register the deployed enclave using a Sui smart contract and the attestation document. This step also includes registering the enclave’s public key, which is an ephemeral key securely generated within the enclave for signing the enclave responses.
+5. Register the deployed enclave using a Sui smart contract and attestation document, including the enclave's ephemeral public key for signing responses.
 
 To reduce the trusted computing base, you should route access to the enclave through backend services that handle load balancing, rate limiting, and other related aspects.
 
 :::tip
-
-Verifying an attestation document on chain is a relatively expensive operation that you should perform only during enclave registration. After registration, use the enclave key to more efficiently verify messages from the enclave.
-
+Verify attestation documents on-chain only during enclave registration due to high gas costs. After registration, use the enclave key for more efficient message verification.
 :::
 
 ## dApp user / client actions

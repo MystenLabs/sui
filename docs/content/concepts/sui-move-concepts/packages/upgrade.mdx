@@ -272,7 +272,8 @@ When your package is ready, you publish it:
 $ sui client publish
 ```
 
-And receive the response:
+<details>
+<summary>Output</summary>
 
 ```sh
 INCLUDING DEPENDENCY Sui
@@ -424,6 +425,8 @@ Transaction Digest: GPSpH264CjQPaXQPpMHpkzyGidZnQFvd1yUH5s9ncesi
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+</details>
+
 The result includes an **Object changes** section with two pieces of information you need for upgrading, an `UpgradeCap` ID and your package ID.
 
 You can identify the different objects using the `Object.objectType` value in the response. The `UpgradeCap` entry has a value of `String("0x2::package::UpgradeCap")` and the `objectType` for the package reads `String("<PACKAGE-ID>::sui_package::<MODULE-NAME>")`
@@ -488,7 +491,10 @@ Run `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` 
 $ sui client upgrade --upgrade-capability <UPGRADE-CAP-ID>
 ```
 
-The console alerts you if the new package doesn't satisfy [requirements](#requirements), otherwise the compiler publishes the upgraded package to the network and returns its result:
+The console alerts you if the new package doesn't satisfy [requirements](#requirements), otherwise the compiler publishes the upgraded package to the network and returns its result.
+
+<details>
+<summary>Output</summary>
 
 ```sh
 Transaction Digest: 3NnJGryz2k2BJzjpndDVqVcdZmmefNMB8SJ9bCEQct22
@@ -638,6 +644,8 @@ Transaction Digest: 3NnJGryz2k2BJzjpndDVqVcdZmmefNMB8SJ9bCEQct22
 │  └──                                                                                              │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
+
+</details>
 
 The result provides a new ID for the upgraded package.
 

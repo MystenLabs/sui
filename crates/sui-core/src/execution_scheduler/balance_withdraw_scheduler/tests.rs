@@ -12,7 +12,6 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
-    transaction::Reservation,
 };
 use tokio::sync::oneshot;
 use tokio::time::timeout;
@@ -65,7 +64,7 @@ async fn test_basic_sufficient_balance() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account, 50)]),
     };
 
     let receivers = test
@@ -86,7 +85,7 @@ async fn test_basic_insufficient_balance() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(150))]),
+        reservations: BTreeMap::from([(account, 150)]),
     };
 
     let receivers = test
@@ -118,7 +117,7 @@ async fn test_already_executed() {
     // Since we're at v3, scheduling for v0, v1, or v2 should return AlreadyExecuted
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account, 50)]),
     };
 
     let receivers = test
@@ -133,7 +132,7 @@ async fn test_already_executed() {
     // Also test v1
     let withdraw2 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(30))]),
+        reservations: BTreeMap::from([(account, 30)]),
     };
 
     let receivers = test
@@ -164,11 +163,11 @@ async fn test_already_executed_multiple_transactions() {
     // Try to schedule multiple withdraws for the old version
     let withdraw1 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account1, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account1, 50)]),
     };
     let withdraw2 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account2, Reservation::MaxAmountU64(100))]),
+        reservations: BTreeMap::from([(account2, 100)]),
     };
 
     let receivers = test
@@ -202,7 +201,7 @@ async fn test_already_executed_after_out_of_order_settlement() {
     // Try to schedule for v0, which should be already executed
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account, 50)]),
     };
 
     let receivers = test
@@ -217,7 +216,7 @@ async fn test_already_executed_after_out_of_order_settlement() {
     // Also try v1, which should also be already executed
     let withdraw2 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(30))]),
+        reservations: BTreeMap::from([(account, 30)]),
     };
 
     let receivers = test
@@ -245,7 +244,7 @@ async fn test_not_already_executed_exact_version() {
     // Schedule for the exact current version (next_version) should work normally
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(40))]),
+        reservations: BTreeMap::from([(account, 40)]),
     };
 
     let receivers = test
@@ -277,7 +276,7 @@ async fn test_already_executed_with_sequential_settlements() {
     // Now v0, v1, and v2 should all return AlreadyExecuted
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(10))]),
+        reservations: BTreeMap::from([(account, 10)]),
     };
 
     let receivers = test
@@ -298,7 +297,7 @@ async fn test_basic_settlement() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account, 50)]),
     };
 
     let receivers = test
@@ -338,7 +337,7 @@ async fn test_out_of_order_settlements() {
 
     let withdraw1 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account, 50)]),
     };
     let receivers = test
         .scheduler
@@ -351,7 +350,7 @@ async fn test_out_of_order_settlements() {
 
     let withdraw2 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(80))]),
+        reservations: BTreeMap::from([(account, 80)]),
     };
     let receivers = test
         .scheduler
@@ -373,26 +372,17 @@ async fn test_multi_accounts() {
         BTreeMap::from([(account1, 100), (account2, 100)]),
     );
 
-    let reservations1 = BTreeMap::from([
-        (account1, Reservation::MaxAmountU64(50)),
-        (account2, Reservation::MaxAmountU64(50)),
-    ]);
+    let reservations1 = BTreeMap::from([(account1, 50), (account2, 50)]);
     let withdraw1 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: reservations1,
     };
-    let reservations2 = BTreeMap::from([
-        (account1, Reservation::MaxAmountU64(50)),
-        (account2, Reservation::MaxAmountU64(60)),
-    ]);
+    let reservations2 = BTreeMap::from([(account1, 50), (account2, 60)]);
     let withdraw2 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: reservations2,
     };
-    let reservations3 = BTreeMap::from([
-        (account1, Reservation::MaxAmountU64(50)),
-        (account2, Reservation::MaxAmountU64(50)),
-    ]);
+    let reservations3 = BTreeMap::from([(account1, 50), (account2, 50)]);
     let withdraw3 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: reservations3,
@@ -421,7 +411,7 @@ async fn test_multi_settlements() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account, 50)]),
     };
 
     let receivers = test
@@ -479,7 +469,7 @@ async fn test_settlement_far_ahead_of_schedule() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(100))]),
+        reservations: BTreeMap::from([(account, 100)]),
     };
     let receivers = test
         .scheduler
@@ -501,7 +491,7 @@ async fn test_settlement_far_ahead_of_schedule() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        reservations: BTreeMap::from([(account, 50)]),
     };
 
     let receivers = test
@@ -510,74 +500,6 @@ async fn test_settlement_far_ahead_of_schedule() {
     wait_for_results(
         receivers,
         BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::AlreadyExecuted)]),
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_withdraw_entire_balance() {
-    let init_version = SequenceNumber::from_u64(0);
-    let next_version = init_version.next();
-    let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
-
-    let withdraws1 = vec![
-        TxBalanceWithdraw {
-            tx_digest: TransactionDigest::random(),
-            reservations: BTreeMap::from([(account, Reservation::EntireBalance)]),
-        },
-        TxBalanceWithdraw {
-            tx_digest: TransactionDigest::random(),
-            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
-        },
-        TxBalanceWithdraw {
-            tx_digest: TransactionDigest::random(),
-            reservations: BTreeMap::from([(account, Reservation::EntireBalance)]),
-        },
-    ];
-
-    let receivers1 = test
-        .scheduler
-        .schedule_withdraws(init_version, withdraws1.clone());
-
-    let withdraws2 = vec![
-        TxBalanceWithdraw {
-            tx_digest: TransactionDigest::random(),
-            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(100))]),
-        },
-        TxBalanceWithdraw {
-            tx_digest: TransactionDigest::random(),
-            reservations: BTreeMap::from([(account, Reservation::EntireBalance)]),
-        },
-        TxBalanceWithdraw {
-            tx_digest: TransactionDigest::random(),
-            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(1))]),
-        },
-    ];
-
-    let receivers2 = test
-        .scheduler
-        .schedule_withdraws(next_version, withdraws2.clone());
-
-    test.settle_balance_changes(BTreeMap::new());
-
-    wait_for_results(
-        receivers1,
-        BTreeMap::from([
-            (withdraws1[0].tx_digest, ScheduleStatus::SufficientBalance),
-            (withdraws1[1].tx_digest, ScheduleStatus::InsufficientBalance),
-            (withdraws1[2].tx_digest, ScheduleStatus::InsufficientBalance),
-        ]),
-    )
-    .await;
-
-    wait_for_results(
-        receivers2,
-        BTreeMap::from([
-            (withdraws2[0].tx_digest, ScheduleStatus::SufficientBalance),
-            (withdraws2[1].tx_digest, ScheduleStatus::InsufficientBalance),
-            (withdraws2[2].tx_digest, ScheduleStatus::InsufficientBalance),
-        ]),
     )
     .await;
 }
@@ -615,16 +537,7 @@ async fn stress_test() {
             .collect::<Vec<_>>();
         let reservations = account_ids
             .iter()
-            .map(|account_id| {
-                (
-                    *account_id,
-                    if rng.gen_bool(0.8) {
-                        Reservation::MaxAmountU64(rng.gen_range(1..10))
-                    } else {
-                        Reservation::EntireBalance
-                    },
-                )
-            })
+            .map(|account_id| (*account_id, rng.gen_range(1..10)))
             .collect::<BTreeMap<_, _>>();
         cur_reservations.push(TxBalanceWithdraw {
             tx_digest: TransactionDigest::random(),

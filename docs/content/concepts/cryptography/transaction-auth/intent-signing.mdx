@@ -2,6 +2,8 @@
 title: Intent Signing
 description: Intent signing provides a compact domain separator to data signed by both user and authority signatures. Data that each signature commits to is called an intent message, which all signatures on Sui must include. 
 keywords: [ intent, signing, intent signatures, intent message, domain separators, compact structs, signing standard, compact domain separator, user signatures, authority signatures, proof of possession, generate proof of possession ]
+mdx:
+  format: md
 ---
 
 In Sui, an intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message, instead of the message itself.
@@ -41,7 +43,9 @@ pub struct Intent {
 }
 ```
 
-To see a detailed definition for each field, see each enum definition [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs).
+For detailed field definitions, see the enum definitions in the source code:
+
+{@inject: ../../../../../crates/shared-crypto/src/intent.rs#enum=IntentScope,IntentVersion,AppId,HashingIntentScope}
 
 The serialization of an `Intent` is a 3-byte array where each field is represented by a byte.
 
