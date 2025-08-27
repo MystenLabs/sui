@@ -31,6 +31,7 @@
 
 use std::{path::Path, sync::Arc};
 
+use anyhow::Context;
 use config::{PipelineLayer, ServiceConfig};
 use db::config::DbConfig;
 use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
@@ -48,11 +49,14 @@ use sui_indexer_alt_framework::{
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::metrics::ColumnFamilyStatsCollector;
+
 pub mod args;
 pub mod config;
 mod db;
 mod handlers;
 mod indexer;
+mod metrics;
 mod rpc;
 pub(crate) mod schema;
 mod store;
@@ -89,6 +93,7 @@ pub async fn start_service(
                 object_by_type,
             },
         rpc,
+        db_metrics,
     } = config;
 
     let committer = committer.finish(CommitterConfig::default());
@@ -104,6 +109,27 @@ pub async fn start_service(
         cancel.child_token(),
     )
     .await?;
+
+    let cf_names = vec![
+        "balances".to_string(),
+        "object_by_owner".to_string(),
+        "object_by_type".to_string(),
+        "$watermark".to_string(),
+    ];
+
+    // Register the rocksdb column family stats collector
+    registry
+        .register(Box::new(ColumnFamilyStatsCollector::new(
+            Some("rocksdb"),
+            indexer.store().db().clone(),
+            cf_names.clone(),
+        )))
+        .context("Failed to register rocksdb column family stats collector")?;
+
+    tracing::info!(
+        "Periodic metrics reporting enabled for column families: {:?}",
+        cf_names
+    );
 
     let state = State {
         store: indexer.store().clone(),

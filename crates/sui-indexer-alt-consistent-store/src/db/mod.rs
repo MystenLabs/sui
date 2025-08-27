@@ -213,6 +213,15 @@ impl Db {
         })
     }
 
+    /// Access the underlying RocksDB database for metrics collection.
+    pub(crate) fn db<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&rocksdb::DB) -> R,
+    {
+        let i = self.0.read().expect("poisoned");
+        f(i.borrow_db())
+    }
+
     /// Point look-up at `checkpoint` for the given `key`, in the column family `cf`.
     ///
     /// Fails if the database does not have a snapshot at `checkpoint`.
