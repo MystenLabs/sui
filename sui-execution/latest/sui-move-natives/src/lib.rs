@@ -1345,6 +1345,42 @@ macro_rules! make_native {
     };
 }
 
+#[macro_export]
+macro_rules! get_extension {
+    ($context: expr, $ext: ty) => {
+        $context.extensions().get::<$ext>()
+    };
+    ($context: expr) => {
+        $context.extensions().get()
+    };
+}
+
+#[macro_export]
+macro_rules! get_extension_mut {
+    ($context: expr, $ext: ty) => {
+        $context.extensions_mut().get_mut::<$ext>()
+    };
+    ($context: expr) => {
+        $context.extensions_mut().get_mut()
+    };
+}
+
+#[macro_export]
+macro_rules! charge_cache_or_load_gas {
+    ($context:ident, $cache_info:expr) => {
+        match $cache_info {
+            crate::object_runtime::object_store::CacheInfo::Cached => (),
+            crate::object_runtime::object_store::CacheInfo::Loaded(size) => {
+                let config = get_extension!($context, ObjectRuntime)?.protocol_config;
+                if config.object_runtime_charge_cache_load_gas() {
+                    let cost = size * config.obj_access_cost_read_per_byte() as usize;
+                    native_charge_gas_early_exit!($context, InternalGas::new(cost as u64));
+                }
+            }
+        }
+    };
+}
+
 pub(crate) fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
 }

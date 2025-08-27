@@ -785,6 +785,10 @@ struct FeatureFlags {
     // Use abstract size in the object runtime instead the legacy value size.
     #[serde(skip_serializing_if = "is_false")]
     abstract_size_in_object_runtime: bool,
+
+    // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    object_runtime_charge_cache_load_gas: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2192,6 +2196,10 @@ impl ProtocolConfig {
 
     pub fn abstract_size_in_object_runtime(&self) -> bool {
         self.feature_flags.abstract_size_in_object_runtime
+    }
+
+    pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
+        self.feature_flags.object_runtime_charge_cache_load_gas
     }
 }
 
