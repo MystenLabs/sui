@@ -2,17 +2,19 @@
 title: Custom Indexer and Walrus
 description: Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Integrating a custom Sui Indexer with Walrus can provide novel user experiences.
 keywords: [ walrus, indexer, custom indexer, custom indexer framework, blob, sequential pipeline, blog ]
+mdx:
+  format: md
 ---
 
 :::tip
 
-This topic examines how to use a custom indexer with Walrus. For a more in-depth look at creating a custom indexer, see [Build Your First Custom Indexer](../custom-indexer.mdx). 
+This topic examines how to use a custom indexer with [Walrus](https://www.walrus.xyz/). For a more in-depth look at creating a custom indexer, see [Build Your First Custom Indexer](../custom-indexer.mdx). 
 
 :::
 
 You can use the [custom indexer framework](/concepts/custom-indexing-framework) to provide additional functionality on top of the Walrus protocol. Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs. 
 
-Walrus is a content-addressable storage protocol, where data is identified and retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Consequently, if different users upload the same content, then Walrus reuses the existing blob rather than creating a new one. 
+Walrus is a content-addressable storage protocol, where data is identified and retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one. 
 
 For uniqueness, each blob uploaded to Walrus also creates a corresponding [`Blob` NFT object on Sui](https://docs.wal.app/dev-guide/sui-struct.html#blob-and-storage-objects) with a unique ID. Furthermore, the associated `Blob` object can optionally have a `Metadata` [dynamic field](../../../../concepts/dynamic-fields.mdx) (key-value extensions to on-chain objects that extend an object's data at runtime). If set, this dynamic field acts as [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes). 
 
@@ -110,7 +112,7 @@ database on `publisher`, yielding a result like the following. The service then 
 
 ## Additional considerations
 
-All Walrus blobs have a lifetime associated with them, so you also need to track changes to expiration. Whenever the `Metadata` dynamic field changes, the parent Sui `Blob` object should also appear in output changes. You can determine the lifetime of the blob from the `Blob` object contents. However, lifetime changes to the blob typically occur on the `Blob` object itself. Because updates to the parent object don't affect the child dynamic field - unless the child dynamic field is directly modified - these lifetime changes remain invisible to the current indexing setup. There are a few ways to address this:
+All Walrus blobs have a lifetime associated with them, so you also need to track changes to expiration. Whenever the `Metadata` dynamic field changes, the parent Sui `Blob` object should also appear in output changes. You can determine the lifetime of the blob from the `Blob` object contents. However, lifetime changes to the blob typically occur on the `Blob` object itself. Because updates to the parent object don't affect the child dynamic field (unless the child dynamic field is directly modified) these lifetime changes remain invisible to the current indexing setup. There are a few ways to address this:
 
 - Watch all `Blob` object changes.
 - Watch all `BlobCertified` events.
