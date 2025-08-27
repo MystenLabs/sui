@@ -54,7 +54,7 @@ impl Build {
             println!();
         }
 
-        root_pkg.save_to_disk();
+        root_pkg.save_to_disk()?;
         Ok(())
     }
 }

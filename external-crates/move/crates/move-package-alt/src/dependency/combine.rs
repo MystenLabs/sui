@@ -8,7 +8,7 @@ use serde_spanned::Spanned;
 
 use crate::{
     errors::FileHandle,
-    package::manifest::ManifestResult,
+    package::manifest::{ManifestError, ManifestErrorKind, ManifestResult},
     schema::{
         DefaultDependency, Environment, EnvironmentName, ManifestDependencyInfo, PackageName,
         ReplacementDependency,
@@ -100,7 +100,7 @@ impl CombinedDependency {
         replacement: ReplacementDependency,
     ) -> ManifestResult<Self> {
         let Some(dep) = replacement.dependency else {
-            return Err(todo!());
+            return Err(ManifestError::with_file(file)(ManifestErrorKind::NoDepInfo));
         };
 
         Ok(Self(Dependency {

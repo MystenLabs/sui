@@ -41,22 +41,6 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         }
     }
 
-    /// Loads the package graph for `env`. It checks whether the
-    /// resolution graph in the lockfile is up-to-date (i.e., whether any of the
-    /// manifests digests are out of date). If the resolution graph is up-to-date, it is returned.
-    /// Otherwise a new resolution graph is constructed by traversing (only) the manifest files.
-    pub async fn load(
-        &self,
-        path: &PackagePath,
-        env: &Environment,
-    ) -> PackageResult<PackageGraph<F>> {
-        let lockfile = self.load_from_lockfile(path, env).await?;
-        match lockfile {
-            Some(result) => Ok(result),
-            None => self.load_from_manifests(path, env).await,
-        }
-    }
-
     /// Load a [PackageGraph] from the lockfile at `path`. Returns [None] if the contents of the
     /// lockfile are out of date (i.e. if the lockfile doesn't exist or the manifest digests don't
     /// match).

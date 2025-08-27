@@ -6,7 +6,7 @@ use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 
 use move_package_alt::{
-    dependency::{CombinedDependency, DependencySet, PinnedDependencyInfo},
+    dependency::{CombinedDependency, PinnedDependencyInfo},
     flavor::{
         Vanilla,
         vanilla::{self, default_environment},
@@ -130,7 +130,6 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
         &manifest.dependencies(),
         &BTreeMap::new(),
     )?;
-    let mut output = DependencySet::<PinnedDependencyInfo>::new();
     debug!("{deps:?}");
 
     add_bindir();
@@ -138,11 +137,8 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let pinned = PinnedDependencyInfo::pin::<Vanilla>(&source, deps.clone(), env.id())
         .await
         .map_err(|e| e.to_string())?;
-    for (name, dep) in pinned {
-        output.insert(env.name().to_string(), name, dep);
-    }
 
-    Ok(format!("{output:#?}"))
+    Ok(format!("{pinned:#?}"))
 }
 
 fn run_pinning_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

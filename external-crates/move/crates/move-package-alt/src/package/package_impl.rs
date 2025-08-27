@@ -211,6 +211,15 @@ impl<F: MoveFlavor> Package<F> {
         None
     }
 
+    /// Additional flavor-specific information that was recorded when this package was published
+    /// (in the `Move.published` file).
+    ///
+    /// Note that this may be None even if `self.published_at` is not None in the case of a legacy
+    /// package.
+    pub fn publication(&self) -> Option<&F::PackageMetadata> {
+        self.publication.as_ref()
+    }
+
     /// Tries to get the `published-at` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
     pub fn published_at(&self) -> Option<&PublishedID> {

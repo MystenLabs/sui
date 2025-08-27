@@ -89,7 +89,7 @@ impl TryFrom<bool> for ConstTrue {
 }
 
 impl From<ConstTrue> for bool {
-    fn from(value: ConstTrue) -> Self {
+    fn from(_: ConstTrue) -> Self {
         true
     }
 }
