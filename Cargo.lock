@@ -12558,6 +12558,7 @@ dependencies = [
  "sui-config",
  "sui-execution",
  "sui-framework",
+ "sui-framework-snapshot",
  "sui-genesis-builder",
  "sui-keys",
  "sui-protocol-config",
