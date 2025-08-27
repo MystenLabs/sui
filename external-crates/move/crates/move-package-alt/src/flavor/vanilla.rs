@@ -7,6 +7,8 @@
 
 use std::{collections::BTreeMap, iter::empty};
 
+use serde::{Deserialize, Serialize};
+
 use crate::schema::{
     Environment, EnvironmentID, EnvironmentName, PackageName, ReplacementDependency,
 };
@@ -25,8 +27,21 @@ pub fn default_environment() -> Environment {
 #[derive(Debug)]
 pub struct Vanilla;
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct PublishedMetadata {
+    #[serde(default)]
+    build_config: Option<SavedBuildConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SavedBuildConfig {
+    edition: String,
+    flavor: String,
+}
+
 impl MoveFlavor for Vanilla {
-    type PublishedMetadata = ();
+    type PublishedMetadata = PublishedMetadata;
     type PackageMetadata = ();
     type AddressInfo = ();
 
