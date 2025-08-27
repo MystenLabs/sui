@@ -213,6 +213,9 @@ pub fn simulate_transaction(
                         }
                     }
 
+                    // Try to render clever error info
+                    crate::ledger_service::render_clever_error(service, &mut effects);
+
                     effects
                 })
         };
