@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::Registry;
+use prometheus::{register_histogram_with_registry, Histogram, Registry};
+use std::sync::Arc;
+use std::time::Instant;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2beta2::{
     ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
@@ -14,23 +16,51 @@ use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
 use sui_sdk_types::Digest;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
+use tokio::sync::RwLock;
+use tokio::time::{sleep, Duration};
+use tracing::error;
 
 mod get_checkpoint;
 mod get_epoch;
 mod get_object;
 mod get_transaction;
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+struct KvRpcServerMetrics {
+    kv_req_latency_ms: Histogram,
+}
+
+impl KvRpcServerMetrics {
+    pub(crate) fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            kv_req_latency_ms: register_histogram_with_registry!(
+                "kv_req_latency_ms",
+                "some description",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct KvRpcServer {
     chain_id: ChainIdentifier,
     client: BigTableClient,
+    metrics: Arc<KvRpcServerMetrics>,
     server_version: Option<ServerVersion>,
+    checkpoint_bucket: Option<String>,
+    cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
 }
 
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
         app_profile_id: Option<String>,
+        checkpoint_bucket: Option<String>,
         server_version: Option<ServerVersion>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -49,11 +79,38 @@ impl KvRpcServer {
             .pop()
             .expect("failed to fetch genesis checkpoint from the KV store");
         let chain_id = ChainIdentifier::from(genesis.summary.digest());
-        Ok(Self {
+        let cache = Arc::new(RwLock::new(None));
+
+        let server = Self {
             chain_id,
             client,
             server_version,
-        })
+            checkpoint_bucket,
+            cache,
+            metrics: KvRpcServerMetrics::new(registry),
+        };
+
+        let server_clone = server.clone();
+        tokio::spawn(async move {
+            loop {
+                match get_service_info(
+                    server_clone.client.clone(),
+                    server_clone.chain_id,
+                    server_clone.server_version.clone(),
+                )
+                .await
+                {
+                    Ok(info) => {
+                        let mut cache = server_clone.cache.write().await;
+                        *cache = Some(info);
+                    }
+                    Err(e) => error!("Failed to update service info cache: {:?}", e),
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        });
+
+        Ok(server)
     }
 }
 
@@ -63,14 +120,21 @@ impl LedgerService for KvRpcServer {
         &self,
         _: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
-        get_service_info(
+        {
+            let cache = self.cache.read().await;
+            if let Some(cached_info) = cache.as_ref() {
+                return Ok(tonic::Response::new(cached_info.clone()));
+            }
+        }
+        // If no cache available, fetch directly and update cache
+        let info = get_service_info(
             self.client.clone(),
             self.chain_id,
             self.server_version.clone(),
         )
         .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
+        .map_err(Into::<tonic::Status>::into)?;
+        Ok(tonic::Response::new(info))
     }
 
     async fn get_object(
@@ -97,10 +161,15 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetTransactionRequest>,
     ) -> Result<tonic::Response<GetTransactionResponse>, tonic::Status> {
-        get_transaction::get_transaction(self.client.clone(), request.into_inner())
+        let start = Instant::now();
+        let response = get_transaction::get_transaction(self.client.clone(), request.into_inner())
             .await
             .map(tonic::Response::new)
-            .map_err(Into::into)
+            .map_err(Into::into);
+        self.metrics
+            .kv_req_latency_ms
+            .observe(start.elapsed().as_secs_f64());
+        response
     }
 
     async fn batch_get_transactions(
@@ -117,10 +186,14 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
-        get_checkpoint::get_checkpoint(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_checkpoint::get_checkpoint(
+            self.client.clone(),
+            request.into_inner(),
+            self.checkpoint_bucket.clone(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_epoch(

@@ -32,13 +32,15 @@ struct App {
     tls_key: String,
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
+    #[clap(long = "checkpoint-bucket")]
+    checkpoint_bucket: Option<String>,
 }
 
 async fn health_check() -> &'static str {
     "OK"
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 64)]
 async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
     let app = App::parse();
@@ -52,12 +54,19 @@ async fn main() -> Result<()> {
     let server = KvRpcServer::new(
         app.instance_id,
         app.app_profile_id,
+        app.checkpoint_bucket,
         server_version,
         &registry,
     )
     .await?;
     let addr = app.address.parse()?;
-    let mut builder = Server::builder();
+    let mut builder = Server::builder()
+        .http2_keepalive_interval(Some(std::time::Duration::from_secs(10)))
+        .http2_keepalive_timeout(Some(std::time::Duration::from_secs(20)))
+        .http2_adaptive_window(Some(true))
+        .initial_stream_window_size(1024 * 1024)
+        .initial_connection_window_size(2 * 1024 * 1024)
+        .max_concurrent_streams(1000);
     if !app.tls_cert.is_empty() && !app.tls_key.is_empty() {
         let identity =
             Identity::from_pem(std::fs::read(app.tls_cert)?, std::fs::read(app.tls_key)?);
