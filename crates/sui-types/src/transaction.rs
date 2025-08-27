@@ -9,8 +9,7 @@ use crate::balance::Balance;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
-    RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
+    AuthorityStrongQuorumSignInfo, DefaultHash, EmptySignInfo, RandomnessRound, Signature, Signer,
 };
 use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
@@ -3027,14 +3026,7 @@ impl VerifiedTransaction {
     pub fn new_system_transaction(system_transaction: TransactionKind) -> Self {
         system_transaction
             .pipe(TransactionData::new_system_transaction)
-            .pipe(|data| {
-                SenderSignedData::new_from_sender_signature(
-                    data,
-                    Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
-                        .unwrap()
-                        .into(),
-                )
-            })
+            .pipe(|data| SenderSignedData::new(data, Vec::new()))
             .pipe(Transaction::new)
             .pipe(Self::new_from_verified)
     }
