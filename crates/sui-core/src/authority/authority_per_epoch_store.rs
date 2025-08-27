@@ -3174,7 +3174,7 @@ impl AuthorityPerEpochStore {
         mut indirect_state_observer: IndirectStateObserver,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
-        // Split transactions into different types for processing.
+        // TODO(commit-handler-rewrite): Split transactions into different types for processing.
         let verified_transactions: Vec<_> = transactions
             .into_iter()
             .filter_map(|transaction| {
@@ -3211,7 +3211,8 @@ impl AuthorityPerEpochStore {
 
         let mut output = ConsensusCommitOutput::new(consensus_commit_info.round);
 
-        // Load transactions deferred from previous commits.
+        // TODO(commit-handler-rewrite): Load transactions deferred from previous commits, compute
+        // the digest set of all such transactions.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self
             .load_deferred_transactions_for_up_to_consensus_round(
                 &mut output,
@@ -3247,6 +3248,7 @@ impl AuthorityPerEpochStore {
                     + previously_deferred_tx_digests.len(),
             );
 
+        // TODO(commit-handler-rewrite): load randomness manager, get random round
         let mut randomness_manager = self.randomness_manager.get().map(|rm| {
             rm.try_lock()
                 .expect("should only ever be called from the commit handler thread")
@@ -3283,6 +3285,7 @@ impl AuthorityPerEpochStore {
             None
         };
 
+        // TODO(commit-handler-rewrite): load all deferred randomness-using txns
         // We should load any previously-deferred randomness-using tx:
         // - if DKG is failed, so we can ignore them
         // - if randomness is being generated, so we can process them
@@ -3294,6 +3297,7 @@ impl AuthorityPerEpochStore {
             )?;
         }
 
+        // TODO(commit-handler-rewrite): deferred transactions have higher priority than new txns (if gas price is equal)
         // Add ConsensusRound deferred tx back into the sequence.
         for tx in deferred_txs
             .into_iter()
@@ -3310,6 +3314,8 @@ impl AuthorityPerEpochStore {
         }
         sequenced_transactions.extend(current_commit_sequenced_consensus_transactions);
         sequenced_randomness_transactions.extend(current_commit_sequenced_randomness_transactions);
+
+        // TODO(commit-handler-rewrite): compute checkpoint roots (this should be done at the end)
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.
         let mut roots: BTreeSet<_> = system_transactions
@@ -3336,6 +3342,7 @@ impl AuthorityPerEpochStore {
             })
             .collect();
 
+        // TODO(commit-handler-rewrite): reorder transactions by gas price
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
             self.protocol_config.consensus_transaction_ordering(),
@@ -3345,7 +3352,7 @@ impl AuthorityPerEpochStore {
             self.protocol_config.consensus_transaction_ordering(),
         );
 
-        // Process new execution time observations for use by congestion control.
+        // TODO(commit-handler-rewrite): [ssm] Process new execution time observations for use by congestion control.
         let mut execution_time_estimator = self
             .execution_time_estimator
             .try_lock()
@@ -3386,6 +3393,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        // TODO(commit-handler-rewrite): initialize congestion trackers
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different PendingCheckpoints.
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::from_protocol_config(
@@ -3441,6 +3449,7 @@ impl AuthorityPerEpochStore {
             )
             .await?;
 
+        // TODO(commit-handler-rewrite): create accumulator settlement transactions
         if self.accumulators_enabled() {
             // We insert settlement transactions to the end of the certificate queues.
             // This is important for shared object version assignment to work correctly.
@@ -3463,6 +3472,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        // TODO(commit-handler-rewrite): add the consensus commit prologue transaction and root
         // Add the consensus commit prologue transaction to the beginning of `verified_non_randomness_certificates`.
         let consensus_commit_prologue_root = self.add_consensus_commit_prologue_transaction(
             &mut output,
@@ -3472,6 +3482,7 @@ impl AuthorityPerEpochStore {
             &cancelled_txns,
         )?;
 
+        // TODO(commit-handler-rewrite): assign shared object versions
         let assigned_versions = self.process_consensus_transaction_shared_object_versions(
             cache_reader,
             verified_non_randomness_transactions.iter(),
@@ -3480,18 +3491,23 @@ impl AuthorityPerEpochStore {
             &mut output,
         )?;
 
+        // TODO(commit-handler-rewrite): [ssm] check if epoch is over
         let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
             &mut output,
             &end_of_publish_transactions,
         )?;
 
+        // TODO(commit-handler-rewrite): store all user signatures for use by checkpoint builder
         self.process_user_signatures(
             verified_non_randomness_transactions
                 .iter()
                 .chain(verified_randomness_transactions.iter()),
         );
+
+        // TODO(commit-handler-rewrite): record consensus_stats
         output.record_consensus_commit_stats(consensus_stats.clone());
 
+        // TODO(commit-handler-rewrite): record execution time observations for next epoch
         // If this is the final round, record execution time observations for storage in the
         // end-of-epoch tx.
         if final_round {
@@ -3505,7 +3521,7 @@ impl AuthorityPerEpochStore {
             drop(execution_time_estimator); // make sure this is not used after `take_observations`
         }
 
-        // Create pending checkpoints if we are still accepting tx.
+        // TODO(commit-handler-rewrite): check tx acceptance state
         let should_accept_tx = if let Some(lock) = &lock {
             lock.should_accept_tx()
         } else {
@@ -3515,6 +3531,8 @@ impl AuthorityPerEpochStore {
             // above, we know we won't be transitioning state for this commit.
             self.get_reconfig_state_read_lock_guard().should_accept_tx()
         };
+
+        // TODO(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
         let make_checkpoint = should_accept_tx || final_round;
         if make_checkpoint {
             let checkpoint_height =
@@ -3541,6 +3559,8 @@ impl AuthorityPerEpochStore {
                     randomness_round,
                 ));
             }
+
+            // TODO(commit-handler-rewrite): [ssm] write pending randomness checkpoint if we have a new randomness round, OR dkg failed while there are pending randomness txns
 
             // Determine whether to write pending checkpoint for user tx with randomness.
             // - If randomness is not generated for this commit, we will skip the
@@ -3575,6 +3595,7 @@ impl AuthorityPerEpochStore {
         }
 
         {
+            // TODO(commit-handler-rewrite): propogate deferral deletion to consensus output cache
             let mut deferred_transactions =
                 self.consensus_output_cache.deferred_transactions.lock();
             for deleted_deferred_key in output.get_deleted_deferred_txn_keys() {
@@ -3582,10 +3603,12 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        // TODO(commit-handler-rewrite): send consensus output to quarantine
         self.consensus_quarantine
             .write()
             .push_consensus_output(output, self)?;
 
+        // TODO(commit-handler-rewrite): notify checkpoint service
         // Only after batch is written, notify checkpoint service to start building any new
         // pending checkpoints.
         if make_checkpoint {
@@ -3596,7 +3619,7 @@ impl AuthorityPerEpochStore {
             checkpoint_service.notify_checkpoint()?;
         }
 
-        // Once commit processing is recorded, kick off randomness generation.
+        // TODO(commit-handler-rewrite): Once commit processing is recorded, kick off randomness generation.
         if let Some(randomness_round) = randomness_round {
             let epoch = self.epoch();
             randomness_manager
@@ -3605,8 +3628,10 @@ impl AuthorityPerEpochStore {
                 .generate_randomness(epoch, randomness_round);
         }
 
+        // TODO(commit-handler-rewrite): notify waiters that consensus transactions have been processed
         self.process_notifications(&notifications, &end_of_publish_transactions);
 
+        // TODO(commit-handler-rewrite): log end of epoch
         if final_round {
             info!(
                 epoch=?self.epoch(),
@@ -3878,6 +3903,7 @@ impl AuthorityPerEpochStore {
         let mut verified_randomness_certificates =
             VecDeque::with_capacity(randomness_transactions.len() + 1);
 
+        // TODO(commit-handler-rewrite): add randomness state update transaction
         if let Some(round) = randomness_round {
             verified_randomness_certificates
                 .push_back(Schedulable::RandomnessStateUpdate(self.epoch(), round));
@@ -3888,6 +3914,7 @@ impl AuthorityPerEpochStore {
             .map(Either::Left)
             .chain(randomness_transactions.iter().map(Either::Right))
         {
+            // TODO(commit-handler-rewrite): use correct congestion tracker for randomness vs non-randomness
             let (tx, execution_cost, verified_certificates) = match entry {
                 Either::Left(tx) => (
                     tx,
@@ -3925,6 +3952,7 @@ impl AuthorityPerEpochStore {
                     verified_certificates.push_back(Schedulable::Transaction(cert));
                 }
                 ConsensusCertificateResult::Deferred(deferral_key) => {
+                    // TODO(commit-handler-rewrite): record_consensus_message_processed() must be called for deferred txns
                     // Note: record_consensus_message_processed() must be called for this
                     // cert even though we are not processing it now!
                     deferred_txns
@@ -3938,18 +3966,25 @@ impl AuthorityPerEpochStore {
                     }
                 }
                 ConsensusCertificateResult::Cancelled((cert, reason)) => {
+                    // TODO(commit-handler-rewrite): cancelled txns must be recorded as processed, and scheduled for execution
                     notifications.push(key.clone());
                     assert!(cancelled_txns.insert(*cert.digest(), reason).is_none());
                     verified_certificates.push_back(Schedulable::Transaction(cert));
                 }
                 ConsensusCertificateResult::RandomnessConsensusMessage => {
+                    // TODO(commit-handler-rewrite): randomness messages must be recorded as processed
                     randomness_state_updated = true;
                     notifications.push(key.clone());
                 }
-                ConsensusCertificateResult::ConsensusMessage => notifications.push(key.clone()),
+                ConsensusCertificateResult::ConsensusMessage => {
+                    // TODO(commit-handler-rewrite): consensus messages must be recorded as processed
+                    notifications.push(key.clone());
+                }
                 ConsensusCertificateResult::IgnoredSystem => {
+                    // TODO(commit-handler-rewrite): commit prologue should not be added to roots after tx processing is closed
                     filter_roots = true;
                 }
+                // TODO(commit-handler-rewrite): ignored external transactions must not be recorded as processed.
                 // Note: ignored external transactions must not be recorded as processed. Otherwise
                 // they may not get reverted after restart during epoch change.
                 ConsensusCertificateResult::Ignored => {
@@ -3972,6 +4007,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        // TODO(commit-handler-rewrite): add deferred transactions to consensus output
         let mut total_deferred_txns = 0;
         {
             let mut deferred_transactions =
@@ -3983,6 +4019,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        // TODO(commit-handler-rewrite): update metrics
         authority_metrics
             .consensus_handler_deferred_transactions
             .inc_by(total_deferred_txns as u64);
@@ -3998,6 +4035,7 @@ impl AuthorityPerEpochStore {
             .with_label_values(&["randomness_commit"])
             .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
 
+        // TODO(commit-handler-rewrite): gather object debts, send them to ExecutionTimeObserver
         let object_debts =
             shared_object_congestion_tracker.accumulated_debts(consensus_commit_info);
         let randomness_object_debts = shared_object_using_randomness_congestion_tracker
@@ -4013,9 +4051,11 @@ impl AuthorityPerEpochStore {
                 info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
             }
         }
+        // TODO(commit-handler-rewrite): commit object debts to output
         output.set_congestion_control_object_debts(object_debts);
         output.set_congestion_control_randomness_object_debts(randomness_object_debts);
 
+        // TODO(commit-handler-rewrite): [ssm] advance randomness state if needed
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
                 randomness_manager
@@ -4086,6 +4126,7 @@ impl AuthorityPerEpochStore {
                         authority.concise(),
                     );
                     let mut l = self.get_reconfig_state_write_lock_guard();
+                    // TODO(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
                     l.close_all_certs();
                     output.store_reconfig_state(l.clone());
                     // Holding this lock until end of process_consensus_transactions_and_commit_boundary() where we write batch to DB
@@ -4114,6 +4155,7 @@ impl AuthorityPerEpochStore {
                 .is_reject_all_certs()
         };
 
+        // TODO(commit-handler-rewrite): [ssm] if we are rejecting all certs, AND there are no deferred transactions to process, transition to RejectAllTx
         if !is_reject_all_certs || !self.deferred_transactions_empty() || commit_has_deferred_txns {
             // Don't end epoch until all deferred transactions are processed.
             if is_reject_all_certs {
@@ -4163,6 +4205,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
             }) => {
+                // TODO(commit-handler-rewrite): ignore certs from wrong epoch
                 if certificate.epoch() != self.epoch() {
                     // Epoch has changed after this certificate was sequenced, ignore it.
                     debug!(
@@ -4196,6 +4239,7 @@ impl AuthorityPerEpochStore {
                     | ConsensusTransactionKind::CheckpointSignatureV2(info),
                 ..
             }) => {
+                // TODO(commit-handler-rewrite): [ssm] notify checkpoint signatures
                 // We usually call notify_checkpoint_signature in SuiTxValidator, but that step can
                 // be skipped when a batch is already part of a certificate, so we must also
                 // notify here.
@@ -4213,6 +4257,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
                 ..
             }) => {
+                // TODO(commit-handler-rewrite): [ssm] can ignore capabilities v1 in rewrite
                 let authority = capabilities.authority;
                 if self
                     .get_reconfig_state_read_lock_guard()
@@ -4235,6 +4280,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
                 ..
             }) => {
+                // TODO(commit-handler-rewrite): [ssm] record authority capabilities, only if should_accept_consensus_certs()
                 let authority = capabilities.authority;
                 if self
                     .get_reconfig_state_read_lock_guard()
@@ -4257,6 +4303,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::NewJWKFetched(authority, jwk_id, jwk),
                 ..
             }) => {
+                // TODO(commit-handler-rewrite): [ssm] record jwk votes, only if should_accept_consensus_certs()
                 if self
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
@@ -4287,6 +4334,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, bytes),
                 ..
             }) => {
+                // TODO(commit-handler-rewrite): [ssm] process dkg message if should_accept_tx()
                 if self.get_reconfig_state_read_lock_guard().should_accept_tx() {
                     if let Some(randomness_manager) = randomness_manager.as_mut() {
                         debug!(
@@ -4320,6 +4368,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, bytes),
                 ..
             }) => {
+                // TODO(commit-handler-rewrite): [ssm] process dkg confirmation if should_accept_tx()
                 if self.get_reconfig_state_read_lock_guard().should_accept_tx() {
                     if let Some(randomness_manager) = randomness_manager.as_mut() {
                         debug!(
@@ -4364,7 +4413,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::UserTransaction(tx),
                 ..
             }) => {
-                // Ignore consensus certified user transaction if Mysticeti fastpath is not enabled.
+                // TODO(commit-handler-rewrite): ignore mfp user transaction if mfp is disabled
                 if !self.protocol_config().mysticeti_fastpath() {
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
@@ -4427,6 +4476,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_user_transaction");
 
+        // TODO(commit-handler-rewrite): ignore transactions sent by validators that have already sent EOP
         if self.has_received_end_of_publish_from(block_author)?
             && !previously_deferred_tx_digests.contains_key(transaction.digest())
         {
@@ -4444,6 +4494,7 @@ impl AuthorityPerEpochStore {
             "Processing consensus transactions from user (CertifiedTransaction and UserTransaction)",
         );
 
+        // TODO(commit-handler-rewrite): ignore txns due to !should_accept_consensus_certs(), unless they were previously deferred
         if !self
             .get_reconfig_state_read_lock_guard()
             .should_accept_consensus_certs()
@@ -4456,6 +4507,7 @@ impl AuthorityPerEpochStore {
             return Ok(ConsensusCertificateResult::Ignored);
         }
 
+        // TODO(commit-handler-rewrite): check if transaction should be deferred
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             &transaction,
@@ -4481,13 +4533,14 @@ impl AuthorityPerEpochStore {
 
             let deferral_result = match deferral_reason {
                 DeferralReason::RandomnessNotReady => {
-                    // Always defer transaction due to randomness not ready.
+                    // TODO(commit-handler-rewrite): Always defer transaction due to randomness not ready.
                     ConsensusCertificateResult::Deferred(deferral_key)
                 }
                 DeferralReason::SharedObjectCongestion(congested_objects) => {
                     authority_metrics
                         .consensus_handler_congested_transactions
                         .inc();
+                    // TODO(commit-handler-rewrite): when deferral limit is exceeded, cancel the transaction
                     if transaction_deferral_within_limit(
                         &deferral_key,
                         self.protocol_config()
@@ -4514,6 +4567,7 @@ impl AuthorityPerEpochStore {
             return Ok(deferral_result);
         }
 
+        // TODO(commit-handler-rewrite): cancel randomness-using txns if DKG failed
         if dkg_failed
             && self.randomness_state_enabled()
             && transaction.transaction_data().uses_randomness()
@@ -4528,6 +4582,7 @@ impl AuthorityPerEpochStore {
             )));
         }
 
+        // TODO(commit-handler-rewrite): update object execution cost for all scheduled transactions
         // This certificate will be scheduled. Update object execution cost.
         shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &transaction);
 

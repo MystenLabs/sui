@@ -630,6 +630,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
+        // TODO(commit-handler-rewrite): Update last_committed_round stats
         if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
         {
             consensus_tx_status_cache
@@ -640,6 +641,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
         }
 
+        // TODO(commit-handler-rewrite): this will be unconditionally enabled in the rewrite
         let commit_info = if self
             .epoch_store
             .protocol_config()
@@ -658,6 +660,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .stateless_commit_info(self.epoch_store.protocol_config(), &consensus_commit)
         };
 
+        // TODO(commit-handler-rewrite): already not needed
         // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
         // more than one leader per round so we are not in danger of ignoring any commits.
         assert!(commit_info.round >= last_committed_round);
@@ -671,6 +674,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
             return;
         }
+
+        // TODO(commit-handler-rewrite): gather commit metadata
 
         /* (transaction, serialized length) */
         let epoch = self.epoch_store.epoch();
@@ -710,6 +715,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             "Received consensus output"
         );
 
+        // TODO(commit-handler-rewrite): update stats & ExecutionIndices
         let execution_index = ExecutionIndices {
             last_committed_round: commit_info.round,
             sub_dag_index: commit_sub_dag_index,
@@ -723,6 +729,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // Note that consensus commit batch may contain no transactions, but we still need to record the current
         // round and subdag index in the last_consensus_stats, so that it won't be re-executed in the future.
         self.last_consensus_stats.index = execution_index;
+
+        // TODO(commit-handler-rewrite): load and activate previous round's jwks
 
         // Load all jwks that became active in the previous round, and commit them in this round.
         // We want to delay one round because none of the transactions in the previous round could
@@ -751,6 +759,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ));
         }
 
+        // TODO(commit-handler-rewrite): update low scoring authorities
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
             self.epoch_store.committee(),
@@ -762,11 +771,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .consensus_bad_nodes_stake_threshold(),
         );
 
+        // TODO(commit-handler-rewrite): update metrics
         self.metrics
             .consensus_committed_subdags
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
+        // TODO(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
         {
             let span = trace_span!("ConsensusHandler::HandleCommit::process_consensus_txns");
             let _guard = span.enter();
@@ -831,6 +842,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
+        // TODO(commit-handler-rewrite): update per validator metrics
         for (i, authority) in self.committee.authorities() {
             let hostname = &authority.hostname;
             self.metrics
@@ -847,6 +859,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 );
         }
 
+        // TODO(commit-handler-rewrite): de-duplicate and create SequencedConsensusTransaction
         let mut all_transactions = Vec::new();
         {
             // We need a set here as well, since the processed_cache is a LRU cache and can drop
@@ -910,10 +923,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .await
             .expect("Unrecoverable error in consensus handler");
 
+        // TODO(commit-handler-rewrite): update throughput calculator
         // update the calculated throughput
         self.throughput_calculator
             .add_transactions(timestamp, executable_transactions.len() as u64);
 
+        // TODO(commit-handler-rewrite): fail points
         fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
             let key = [commit_sub_dag_index, self.epoch_store.epoch()];
             if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
@@ -923,13 +938,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         fail_point!("crash"); // for tests that produce random crashes
 
+        // TODO(commit-handler-rewrite): enqueue transactions
         self.transaction_manager_sender.send(
             executable_transactions,
             assigned_versions,
             SchedulingSource::NonFastPath,
         );
 
-        // Check if we should send EndOfPublish after processing consensus commit
+        // TODO(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
         self.send_end_of_publish_if_needed().await;
     }
 
