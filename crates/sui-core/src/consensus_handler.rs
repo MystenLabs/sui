@@ -605,6 +605,11 @@ impl<C> ConsensusHandler<C> {
     }
 }
 
+#[derive(Default)]
+struct CommitHandlerState {
+    authenticator_state_update_transactions: Vec<VerifiedExecutableTransaction>,
+}
+
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// Called during startup to allow us to observe commits we previously processed, for crash recovery.
     /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
@@ -618,8 +623,116 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .observe_commit(self.epoch_store.protocol_config(), &consensus_commit);
     }
 
+    #[instrument(level = "debug", skip_all, fields(epoch = self.epoch_store.epoch(), round = consensus_commit.leader_round()))]
+    async fn handle_consensus_commit_v2(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        // This may block until one of two conditions happens:
+        // - Number of uncommitted transactions in the writeback cache goes below the
+        //   backpressure threshold.
+        // - The highest executed checkpoint catches up to the highest certified checkpoint.
+        self.backpressure_subscriber.await_no_backpressure().await;
+
+        let epoch = self.epoch_store.epoch();
+
+        let _scope = monitored_scope("ConsensusCommitHandler::handle_consensus_commit");
+
+        let last_committed_round = self.last_consensus_stats.index.last_committed_round;
+
+        // DONE(commit-handler-rewrite): Update last_committed_round stats
+        if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
+        {
+            consensus_tx_status_cache
+                .update_last_committed_leader_round(last_committed_round as u32)
+                .await;
+        }
+        if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
+            tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
+        }
+
+        // DONE(commit-handler-rewrite): this will be unconditionally enabled in the rewrite
+        let commit_info = self
+            .additional_consensus_state
+            .observe_commit(self.epoch_store.protocol_config(), &consensus_commit);
+        info!(
+            "estimated commit rate: {:?}",
+            commit_info.estimated_commit_period()
+        );
+
+        // DONE(commit-handler-rewrite): already not needed
+
+        // DONE(commit-handler-rewrite): gather commit metadata
+        let (timestamp, leader_author, commit_sub_dag_index) =
+            self.gather_commit_metadata(&consensus_commit);
+
+        info!(
+            %consensus_commit,
+            "Received consensus output"
+        );
+
+        let mut state = CommitHandlerState::default();
+
+        // DONE(commit-handler-rewrite): load and activate previous round's jwks
+        self.create_authenticator_state_update(&mut state, &consensus_commit);
+
+        // DONE(commit-handler-rewrite): update low scoring authorities
+        update_low_scoring_authorities(
+            self.low_scoring_authorities.clone(),
+            self.epoch_store.committee(),
+            &self.committee,
+            consensus_commit.reputation_score_sorted_desc(),
+            &self.metrics,
+            self.epoch_store
+                .protocol_config()
+                .consensus_bad_nodes_stake_threshold(),
+        );
+
+        self.process_consensus_txns(&consensus_commit);
+    }
+
+    fn gather_commit_metadata(
+        &self,
+        consensus_commit: &impl ConsensusCommitAPI,
+    ) -> (u64, AuthorityIndex, u64) {
+        let timestamp = consensus_commit.commit_timestamp_ms();
+        let leader_author = consensus_commit.leader_author_index();
+        let commit_sub_dag_index = consensus_commit.commit_sub_dag_index();
+
+        let system_time_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+        let consensus_timestamp_bias_ms = system_time_ms - (timestamp as i64);
+        let consensus_timestamp_bias_seconds = consensus_timestamp_bias_ms as f64 / 1000.0;
+        self.metrics
+            .consensus_timestamp_bias
+            .observe(consensus_timestamp_bias_seconds);
+
+        let epoch_start = self
+            .epoch_store
+            .epoch_start_config()
+            .epoch_start_timestamp_ms();
+        let timestamp = if timestamp < epoch_start {
+            error!(
+                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}"
+            );
+            epoch_start
+        } else {
+            timestamp
+        };
+
+        (timestamp, leader_author, commit_sub_dag_index)
+    }
+
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        let use_old_commit_handler =
+            once_cell::sync::Lazy::new(|| std::env::var("USE_OLD_COMMIT_HANDLER").is_ok());
+
+        if !use_old_commit_handler.get() {
+            self.handle_consensus_commit_v2(consensus_commit).await;
+            return;
+        }
+
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
         //   backpressure threshold.
@@ -745,8 +858,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .expect("Unrecoverable error in consensus handler");
 
         if !new_jwks.is_empty() {
-            let authenticator_state_update_transaction =
-                self.authenticator_state_update_transaction(commit_info.round, new_jwks);
+            let authenticator_state_update_transaction = authenticator_state_update_transaction(
+                &*self.epoch_store,
+                commit_info.round,
+                new_jwks,
+            );
             debug!(
                 "adding AuthenticatorStateUpdate({:?}) tx: {:?}",
                 authenticator_state_update_transaction.digest(),
@@ -778,69 +894,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .inc();
 
         // TODO(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
-        {
-            let span = trace_span!("ConsensusHandler::HandleCommit::process_consensus_txns");
-            let _guard = span.enter();
-            for (block, parsed_transactions) in consensus_commit.transactions() {
-                let author = block.author.value();
-                // TODO: consider only messages within 1~3 rounds of the leader?
-                self.last_consensus_stats.stats.inc_num_messages(author);
-                for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
-                    let position = ConsensusPosition {
-                        epoch,
-                        block,
-                        index: tx_index as TransactionIndex,
-                    };
-                    if parsed.rejected {
-                        // TODO(fastpath): Add metrics for rejected transactions.
-                        if parsed.transaction.kind.is_user_transaction() {
-                            self.epoch_store
-                                .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                        }
-                        // Skip executing rejected transactions.
-                        // TODO(fastpath): Handle unlocking.
-                        continue;
-                    }
-                    if parsed.transaction.kind.is_user_transaction() {
-                        self.epoch_store
-                            .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
-                    }
-                    let kind = classify(&parsed.transaction);
-                    self.metrics
-                        .consensus_handler_processed
-                        .with_label_values(&[kind])
-                        .inc();
-                    self.metrics
-                        .consensus_handler_transaction_sizes
-                        .with_label_values(&[kind])
-                        .observe(parsed.serialized_len as f64);
-                    // MFPTransaction exists only when mysticeti_fastpath is enabled in protocol config.
-                    if matches!(
-                        &parsed.transaction.kind,
-                        ConsensusTransactionKind::CertifiedTransaction(_)
-                            | ConsensusTransactionKind::MFPTransaction(_)
-                    ) {
-                        self.last_consensus_stats
-                            .stats
-                            .inc_num_user_transactions(author);
-                    }
-                    if let ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) =
-                        &parsed.transaction.kind
-                    {
-                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
-                        debug_fatal!(
-                            "BUG: saw deprecated RandomnessStateUpdate tx for commit round {}, randomness round {}",
-                            commit_info.round,
-                            randomness_round
-                        );
-                    } else {
-                        let transaction =
-                            SequencedConsensusTransactionKind::External(parsed.transaction);
-                        transactions.push((transaction, author as u32));
-                    }
-                }
-            }
-        }
+        transactions.extend(self.process_consensus_txns(&consensus_commit));
 
         // TODO(commit-handler-rewrite): update per validator metrics
         for (i, authority) in self.committee.authorities() {
@@ -947,6 +1001,111 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         // TODO(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
         self.send_end_of_publish_if_needed().await;
+    }
+
+    fn create_authenticator_state_update(
+        &self,
+        commit_state: &mut CommitHandlerState,
+        consensus_commit: &impl ConsensusCommitAPI,
+    ) {
+        // Load all jwks that became active in the previous round, and commit them in this round.
+        // We want to delay one round because none of the transactions in the previous round could
+        // have been authenticated with the jwks that became active in that round.
+        //
+        // Because of this delay, jwks that become active in the last round of the epoch will
+        // never be committed. That is ok, because in the new epoch, the validators should
+        // immediately re-submit these jwks, and they can become active then.
+        let new_jwks = self
+            .epoch_store
+            .get_new_jwks(consensus_commit.leader_round())
+            .expect("Unrecoverable error in consensus handler");
+
+        if !new_jwks.is_empty() {
+            let authenticator_state_update_transaction = authenticator_state_update_transaction(
+                &self.epoch_store,
+                consensus_commit.leader_round(),
+                new_jwks,
+            );
+            debug!(
+                "adding AuthenticatorStateUpdate({:?}) tx: {:?}",
+                authenticator_state_update_transaction.digest(),
+                authenticator_state_update_transaction,
+            );
+
+            commit_state
+                .authenticator_state_update_transactions
+                .push(authenticator_state_update_transaction);
+        }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    fn process_consensus_txns(
+        &self,
+        state: &mut CommitHandlerState,
+        consensus_commit: &impl ConsensusCommitAPI,
+    ) -> Vec<(SequencedConsensusTransactionKind, u32)> {
+        let mut transactions = Vec::new();
+        let epoch = self.epoch_store.epoch();
+        for (block, parsed_transactions) in consensus_commit.transactions() {
+            let author = block.author.value();
+            // TODO: consider only messages within 1~3 rounds of the leader?
+            self.last_consensus_stats.stats.inc_num_messages(author);
+            for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
+                let position = ConsensusPosition {
+                    epoch,
+                    block,
+                    index: tx_index as TransactionIndex,
+                };
+                if parsed.rejected {
+                    // TODO(fastpath): Add metrics for rejected transactions.
+                    if parsed.transaction.kind.is_mfp_transaction() {
+                        self.epoch_store
+                            .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                    }
+                    // Skip executing rejected transactions.
+                    // TODO(fastpath): Handle unlocking.
+                    continue;
+                }
+                if parsed.transaction.kind.is_mfp_transaction() {
+                    self.epoch_store
+                        .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                }
+                let kind = classify(&parsed.transaction);
+                self.metrics
+                    .consensus_handler_processed
+                    .with_label_values(&[kind])
+                    .inc();
+                self.metrics
+                    .consensus_handler_transaction_sizes
+                    .with_label_values(&[kind])
+                    .observe(parsed.serialized_len as f64);
+                // UserTransaction exists only when mysticeti_fastpath is enabled in protocol config.
+                if matches!(
+                    &parsed.transaction.kind,
+                    ConsensusTransactionKind::CertifiedTransaction(_)
+                        | ConsensusTransactionKind::UserTransaction(_)
+                ) {
+                    self.last_consensus_stats
+                        .stats
+                        .inc_num_user_transactions(author);
+                }
+                if let ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) =
+                    &parsed.transaction.kind
+                {
+                    // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
+                    debug_fatal!(
+                            "BUG: saw deprecated RandomnessStateUpdate tx for commit round {}, randomness round {}",
+                            commit_info.round,
+                            randomness_round
+                        );
+                } else {
+                    let transaction =
+                        SequencedConsensusTransactionKind::External(parsed.transaction);
+                    transactions.push((transaction, author as u32));
+                }
+            }
+        }
+        transactions
     }
 
     async fn send_end_of_publish_if_needed(&self) {
@@ -1079,31 +1238,26 @@ impl MysticetiConsensusHandler {
     }
 }
 
-impl<C> ConsensusHandler<C> {
-    fn authenticator_state_update_transaction(
-        &self,
-        round: u64,
-        mut new_active_jwks: Vec<ActiveJwk>,
-    ) -> VerifiedExecutableTransaction {
-        new_active_jwks.sort();
+fn authenticator_state_update_transaction(
+    epoch_store: &AuthorityPerEpochStore,
+    round: u64,
+    mut new_active_jwks: Vec<ActiveJwk>,
+) -> VerifiedExecutableTransaction {
+    let epoch = epoch_store.epoch();
+    new_active_jwks.sort();
 
-        info!("creating authenticator state update transaction");
-        assert!(self.epoch_store.authenticator_state_enabled());
-        let transaction = VerifiedTransaction::new_authenticator_state_update(
-            self.epoch(),
-            round,
-            new_active_jwks,
-            self.epoch_store
-                .epoch_start_config()
-                .authenticator_obj_initial_shared_version()
-                .expect("authenticator state obj must exist"),
-        );
-        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
-    }
-
-    fn epoch(&self) -> EpochId {
-        self.epoch_store.epoch()
-    }
+    info!("creating authenticator state update transaction");
+    assert!(epoch_store.authenticator_state_enabled());
+    let transaction = VerifiedTransaction::new_authenticator_state_update(
+        epoch,
+        round,
+        new_active_jwks,
+        epoch_store
+            .epoch_start_config()
+            .authenticator_obj_initial_shared_version()
+            .expect("authenticator state obj must exist"),
+    );
+    VerifiedExecutableTransaction::new_system(transaction, epoch)
 }
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
