@@ -217,7 +217,7 @@ impl GitTree {
             // git checkout
             self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
                 .await?;
-        } else if tree_path.exists() && self.path_in_repo().to_string_lossy() == "." {
+        } else if tree_path.exists() && path_in_repo == "." {
             // there are cases when a "local" dependency is first sparse checked out rather than
             // the package with its root folders, so this makes sure that we still can check out
             // the root folder
