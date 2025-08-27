@@ -165,7 +165,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         // Spin up the new mysticeti consensus handler to listen for committed sub dags, before starting authority.
         let consensus_block_handler = ConsensusBlockHandler::new(
             epoch_store.clone(),
-            consensus_handler.transaction_manager_sender().clone(),
+            consensus_handler.execution_scheduler_sender().clone(),
             consensus_handler_initializer.backpressure_subscriber(),
             consensus_handler_initializer.metrics().clone(),
         );
