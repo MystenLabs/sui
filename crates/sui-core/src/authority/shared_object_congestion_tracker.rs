@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::base_types::{ObjectID, TransactionDigest};
-use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::Round;
 use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
@@ -176,10 +175,10 @@ impl SharedObjectCongestionTracker {
         initial_object_debts: impl IntoIterator<Item = (ObjectID, u64)>,
         protocol_config: &ProtocolConfig,
         for_randomness: bool,
-    ) -> SuiResult<Self> {
+    ) -> Self {
         let max_accumulated_txn_cost_per_object_in_commit =
             protocol_config.max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option();
-        Ok(Self::new(
+        Self::new(
             initial_object_debts,
             protocol_config.per_object_congestion_control_mode(),
             for_randomness,
@@ -198,7 +197,7 @@ impl SharedObjectCongestionTracker {
             protocol_config
                 .allowed_txn_cost_overage_burst_per_object_in_commit_as_option()
                 .unwrap_or(0),
-        ))
+        )
     }
 
     // Given a list of shared input objects, returns the starting cost of a transaction that operates on

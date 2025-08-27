@@ -383,7 +383,7 @@ impl ConsensusAdapter {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transactions: &[ConsensusTransaction],
     ) -> (impl Future<Output = ()>, usize, usize, usize, usize) {
-        if transactions.iter().any(|tx| tx.is_user_transaction()) {
+        if transactions.iter().any(|tx| tx.is_mfp_transaction()) {
             // UserTransactions are generally sent to just one validator and should
             // be submitted to consensus without delay.
             return (tokio::time::sleep(Duration::ZERO), 0, 0, 0, 0);
@@ -1000,7 +1000,7 @@ impl ConsensusAdapter {
         let consensus_keys: Vec<_> = transactions
             .iter()
             .filter_map(|t| {
-                if t.is_user_transaction() {
+                if t.is_mfp_transaction() {
                     // UserTransaction is not inserted into the pending consensus transactions table.
                     // Also UserTransaction shares the same key as CertifiedTransaction, so removing
                     // the key here can have unexpected effects.
@@ -1054,7 +1054,7 @@ impl ConsensusAdapter {
     ) -> (Vec<ConsensusPosition>, BlockStatusReceiver) {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
-        let is_dkg = !transactions.is_empty() && transactions[0].kind.is_dkg();
+        let is_dkg = !transactions.is_empty() && transactions[0].is_dkg();
 
         let (consensus_positions, status_waiter) = loop {
             let span = debug_span!("client_submit");
