@@ -438,4 +438,37 @@ mod tests {
         scenario.graph_for("root").await.linkage().unwrap();
         scenario.graph_for("a").await.linkage().unwrap();
     }
+
+    /// This is a situation where an overridden dependency introduces a transitive dependency which
+    /// then causes a conflict. This is a regression test.
+    ///
+    /// `root` has a dependency on `a` which depends on `b` which depends on `c1`.
+    /// `a` also has a direct override dependency on `c2`.
+    ///
+    /// `c1` has a dependency on `d1` and `c2` has a dependency on `d2`. The conflict between `d1`
+    /// and `d2` should not require an override in `a` because the dependency on `d1` only comes
+    /// through `c1` which is already overriddent to `c2`. In other workds no linked package has a
+    /// dependency on `d1`
+    ///
+    /// Therefore linkage for both `a` and `root` should succeed
+    #[test(tokio::test)]
+    async fn test_overridden_override() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_published("c1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("c2", OriginalID::from(1), PublishedID::from(2))
+            .add_published("d1", OriginalID::from(2), PublishedID::from(1))
+            .add_published("d2", OriginalID::from(2), PublishedID::from(2))
+            .add_deps([
+                ("root", "a"),
+                ("a", "b"),
+                ("b", "c1"),
+                ("c1", "d1"),
+                ("c2", "d2"),
+            ])
+            .add_dep("a", "c2", |dep| dep.set_override())
+            .build();
+
+        scenario.graph_for("root").await.linkage().unwrap();
+        scenario.graph_for("a").await.linkage().unwrap();
+    }
 }
