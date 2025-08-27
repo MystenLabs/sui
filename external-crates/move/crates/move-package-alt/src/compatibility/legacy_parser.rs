@@ -752,7 +752,10 @@ fn get_manifest_address_info(
     if published_at.is_some()
         && (original_id.is_none() || original_id.is_some_and(|id| id == AccountAddress::ZERO))
     {
-        bail!("If `published-at` is defined in Move.toml, `original-id` must also be defined.");
+        bail!(
+            "If `published-at` is defined in Move.toml, the [addresses] section must contain a \
+            nonzero named address for the package."
+        );
     }
 
     let Some(original_id) = original_id else {
@@ -816,6 +819,7 @@ fn derive_modern_name(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use insta::assert_snapshot;
 
     #[test]
     fn test_get_manifest_address_info() {
@@ -851,9 +855,7 @@ mod tests {
         let published_at = Some("0x2".to_string());
         let result = get_manifest_address_info(original_id, published_at);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains(
-            "If `published-at` is defined in Move.toml, `original-id` must also be defined."
-        ));
+        assert_snapshot!(result.unwrap_err().to_string(), @"If `published-at` is defined in Move.toml, the [addresses] section must contain a nonzero named address for the package.");
     }
 
     #[test]
