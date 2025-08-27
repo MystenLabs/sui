@@ -781,6 +781,10 @@ struct FeatureFlags {
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
+
+    // Use abstract size in the object runtime instead the legacy value size.
+    #[serde(skip_serializing_if = "is_false")]
+    abstract_size_in_object_runtime: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2184,6 +2188,10 @@ impl ProtocolConfig {
     pub fn consensus_checkpoint_signature_key_includes_digest(&self) -> bool {
         self.feature_flags
             .consensus_checkpoint_signature_key_includes_digest
+    }
+
+    pub fn abstract_size_in_object_runtime(&self) -> bool {
+        self.feature_flags.abstract_size_in_object_runtime
     }
 }
 

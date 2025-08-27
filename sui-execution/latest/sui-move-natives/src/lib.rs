@@ -51,7 +51,7 @@ use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A,
-    gas_algebra::InternalGas,
+    gas_algebra::{AbstractMemorySize, InternalGas},
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value as R,
@@ -66,6 +66,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     values::{Struct, Value},
+    views::{SizeConfig, ValueView},
 };
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -1346,4 +1347,16 @@ macro_rules! make_native {
 
 pub(crate) fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
+}
+
+pub(crate) fn abstract_size(protocol_config: &ProtocolConfig, v: &Value) -> AbstractMemorySize {
+    if protocol_config.abstract_size_in_object_runtime() {
+        v.abstract_memory_size(&SizeConfig {
+            include_vector_size: true,
+            traverse_references: false,
+        })
+    } else {
+        // TODO: Remove this (with glee!) in the next execution version cut.
+        v.legacy_size()
+    }
 }
