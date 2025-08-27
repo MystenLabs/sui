@@ -1325,7 +1325,7 @@ impl ValidatorService {
                     return Ok(WaitForEffectsResponse::Executed {
                         effects_digest: effects.digest(),
                         details,
-                        fast_path: true,
+                        fast_path: current_status == Some(ConsensusTxStatus::FastpathCertified),
                     });
                 }
             }

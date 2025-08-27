@@ -349,12 +349,11 @@ impl EffectsCertifier {
                     aggregator.insert(name, ());
 
                     if fast_path {
-                        debug_assert_eq!(
-                            tx_type,
-                            TxType::SingleWriter,
-                            "fast path is only supported for single writer transactions, tx_digest={tx_digest}",
-                        );
-                        fast_path_aggregator.insert(name, ());
+                        if tx_type != TxType::SingleWriter {
+                            tracing::warn!("Fast path is only supported for single writer transactions, tx_digest={tx_digest}, name={name}");
+                        } else {
+                            fast_path_aggregator.insert(name, ());
+                        }
                     }
 
                     if aggregator.reached_quorum_threshold() {
