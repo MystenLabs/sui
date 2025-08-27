@@ -32,6 +32,8 @@ struct App {
     tls_key: String,
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
+    #[clap(long = "checkpoint-bucket")]
+    checkpoint_bucket: Option<String>,
 }
 
 async fn health_check() -> &'static str {
@@ -52,6 +54,7 @@ async fn main() -> Result<()> {
     let server = KvRpcServer::new(
         app.instance_id,
         app.app_profile_id,
+        app.checkpoint_bucket,
         server_version,
         &registry,
     )
