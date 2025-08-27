@@ -213,6 +213,26 @@ impl Db {
         })
     }
 
+    /// Get the names of all column families in the database.
+    pub(crate) fn column_family_names(&self) -> Vec<String> {
+        // Return the known column families from the schema plus the watermark CF
+        vec![
+            "balances".to_string(),
+            "object_by_owner".to_string(),
+            "object_by_type".to_string(),
+            WATERMARK_CF.to_string(),
+        ]
+    }
+
+    /// Access the underlying RocksDB database for metrics collection.
+    pub(crate) fn db<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&rocksdb::DB) -> R,
+    {
+        let i = self.0.read().expect("poisoned");
+        f(i.borrow_db())
+    }
+
     /// Point look-up at `checkpoint` for the given `key`, in the column family `cf`.
     ///
     /// Fails if the database does not have a snapshot at `checkpoint`.

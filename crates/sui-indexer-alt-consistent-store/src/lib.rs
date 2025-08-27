@@ -35,6 +35,7 @@ use config::{PipelineLayer, ServiceConfig};
 use db::config::DbConfig;
 use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
 use indexer::Indexer;
+use metrics::ConsistentStoreMetrics;
 use prometheus::Registry;
 use rpc::{state::State, RpcArgs, RpcService};
 use schema::Schema;
@@ -53,6 +54,7 @@ pub mod config;
 mod db;
 mod handlers;
 mod indexer;
+mod metrics;
 mod rpc;
 pub(crate) mod schema;
 mod store;
@@ -93,6 +95,9 @@ pub async fn start_service(
 
     let committer = committer.finish(CommitterConfig::default());
 
+    // Initialize the consistent store metrics
+    let metrics = ConsistentStoreMetrics::new(registry);
+
     let mut indexer: Indexer<Schema> = Indexer::new(
         path,
         indexer_args,
@@ -104,6 +109,27 @@ pub async fn start_service(
         cancel.child_token(),
     )
     .await?;
+
+    // Start periodic metrics reporting for RocksDB column families
+    let cf_names = vec![
+        "balances".to_string(),
+        "object_by_owner".to_string(),
+        "object_by_type".to_string(),
+        "$watermark".to_string(),
+    ];
+
+    // Start periodic metrics reporting for RocksDB column families
+    metrics::start_periodic_metrics_reporting_consistent_store(
+        indexer.store().db().clone(),
+        cf_names.clone(),
+        cancel.child_token(),
+        Arc::new(metrics),
+    );
+
+    tracing::info!(
+        "Periodic metrics reporting enabled for column families: {:?}",
+        cf_names
+    );
 
     let state = State {
         store: indexer.store().clone(),
