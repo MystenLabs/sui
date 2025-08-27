@@ -71,6 +71,10 @@ impl ReconfigState {
     pub fn should_accept_tx(&self) -> bool {
         !matches!(self.status, ReconfigCertStatus::RejectAllTx)
     }
+
+    pub fn is_reject_all_tx(&self) -> bool {
+        matches!(self.status, ReconfigCertStatus::RejectAllTx)
+    }
 }
 
 pub trait ReconfigurationInitiator {
