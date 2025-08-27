@@ -42,7 +42,7 @@ use std::{
 };
 
 use heck::CamelCase;
-use indoc::formatdoc;
+use indoc::{formatdoc, indoc};
 use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
@@ -316,6 +316,14 @@ impl TestPackageGraph {
     fn format_lockfile(&self, node: NodeIndex) -> String {
         let mut move_lock = String::new();
 
+        move_lock.push_str(indoc!(
+            r#"
+            [move]
+            version = 4
+
+            "#
+        ));
+
         for (env, publication) in self.inner[node].pubs.iter() {
             let PubSpec {
                 addresses:
@@ -551,9 +559,15 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("a/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("a/Move.lock"), @r###"
+        [move]
+        version = 4
+        "###);
 
-        assert_snapshot!(graph.read_file("b/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("b/Move.lock"), @r###"
+        [move]
+        version = 4
+        "###);
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -621,6 +635,9 @@ mod tests {
         "###);
 
         assert_snapshot!(graph.read_file("c/Move.lock"), @r###"
+        [move]
+        version = 4
+
         [published._test_env]
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
         original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
