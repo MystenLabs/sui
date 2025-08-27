@@ -174,6 +174,9 @@ fn transaction_to_response(
             }
         }
 
+        // Try to render clever error info
+        render_clever_error(service, &mut effects);
+
         message.effects = Some(effects);
     }
 
@@ -218,4 +221,61 @@ fn transaction_to_response(
     }
 
     message
+}
+
+pub(crate) fn render_clever_error(service: &RpcService, effects: &mut TransactionEffects) {
+    use sui_rpc::proto::sui::rpc::v2beta2::clever_error;
+    use sui_rpc::proto::sui::rpc::v2beta2::execution_error::ErrorDetails;
+    use sui_rpc::proto::sui::rpc::v2beta2::CleverError;
+    use sui_rpc::proto::sui::rpc::v2beta2::MoveAbort;
+
+    let Some(move_abort) = effects
+        .status
+        .as_mut()
+        .and_then(|status| status.error.as_mut())
+        .and_then(|error| match &mut error.error_details {
+            Some(ErrorDetails::Abort(move_abort)) => Some(move_abort),
+            _ => None,
+        })
+    else {
+        return;
+    };
+
+    fn render(service: &RpcService, move_abort: &MoveAbort) -> Option<CleverError> {
+        let location = move_abort.location.as_ref()?;
+        let abort_code = move_abort.abort_code();
+        let package_id = location.package().parse::<sui_sdk_types::Address>().ok()?;
+        let module = location.module();
+
+        let package = {
+            let object = service.reader.inner().get_object(&package_id.into())?;
+            sui_package_resolver::Package::read_from_object(&object).ok()?
+        };
+
+        let clever_error = package.resolve_clever_error(module, abort_code)?;
+
+        let mut clever_error_message = CleverError::default();
+
+        match clever_error.error_info {
+            sui_package_resolver::ErrorConstants::None => {}
+            sui_package_resolver::ErrorConstants::Rendered {
+                identifier,
+                constant,
+            } => {
+                clever_error_message.constant_name = Some(identifier);
+                clever_error_message.value = Some(clever_error::Value::Rendered(constant));
+            }
+            sui_package_resolver::ErrorConstants::Raw { identifier, bytes } => {
+                clever_error_message.constant_name = Some(identifier);
+                clever_error_message.value = Some(clever_error::Value::Raw(bytes.into()));
+            }
+        }
+
+        clever_error_message.error_code = clever_error.error_code.map(Into::into);
+        clever_error_message.line_number = Some(clever_error.source_line_number.into());
+
+        Some(clever_error_message)
+    }
+
+    move_abort.clever_error = render(service, move_abort);
 }
