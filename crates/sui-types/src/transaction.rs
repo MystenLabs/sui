@@ -125,9 +125,11 @@ pub enum ObjectArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
+    // Reserve the entire balance.
+    // This is not yet supported.
+    EntireBalance,
     // Reserve a specific amount of the balance.
     MaxAmountU64(u64),
-    // TODO: Add support for reserving the entire balance.
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -2179,10 +2181,11 @@ pub trait TransactionDataAPI {
         &self,
     ) -> UserInputResult<(Vec<ObjectRef>, Vec<ObjectID>, Vec<ObjectRef>)>;
 
-    /// Processes balance withdraws and returns a map from balance account object ID to total reservation.
-    /// This method aggregates all withdraw operations for the same account by merging their reservations.
-    /// Each account object ID is derived from the type parameter of each withdraw operation.
-    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>>;
+    /// Processes balance withdraws and returns a map from balance account object ID to total
+    /// reserved amount. This method aggregates all withdraw operations for the same account by
+    /// merging their reservations. Each account object ID is derived from the type parameter of
+    /// each withdraw operation.
+    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, u64>>;
 
     // A cheap way to quickly check if the transaction has balance withdraws.
     fn has_balance_withdraws(&self) -> bool;
@@ -2310,7 +2313,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok((move_objects, packages, receiving_objects))
     }
 
-    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>> {
+    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, u64>> {
         let mut withdraws = Vec::new();
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.
@@ -2335,10 +2338,17 @@ impl TransactionDataAPI for TransactionDataV1 {
         // Accumulate all withdraws per account.
         let mut withdraw_map = BTreeMap::new();
         for withdraw in withdraws {
-            let Reservation::MaxAmountU64(amount) = &withdraw.reservation;
+            let reserved_amount = match &withdraw.reservation {
+                Reservation::MaxAmountU64(amount) => *amount,
+                Reservation::EntireBalance => {
+                    return Err(UserInputError::InvalidWithdrawReservation {
+                        error: "Reserving the entire balance is not supported".to_string(),
+                    });
+                }
+            };
             // Reserving an amount of 0 is meaningless, and potentially
             // add various edge cases, which is error prone.
-            if *amount == 0 {
+            if reserved_amount == 0 {
                 return Err(UserInputError::InvalidWithdrawReservation {
                     error: "Balance withdraw reservation amount must be non-zero".to_string(),
                 });
@@ -2352,17 +2362,16 @@ impl TransactionDataAPI for TransactionDataV1 {
             let entry = withdraw_map.entry(account_id);
             match entry {
                 Entry::Vacant(vacant) => {
-                    vacant.insert(withdraw.reservation);
+                    vacant.insert(reserved_amount);
                 }
                 Entry::Occupied(mut occupied) => {
-                    let Reservation::MaxAmountU64(max_amount) = occupied.get_mut();
-                    let Reservation::MaxAmountU64(cur_reservation) = withdraw.reservation;
-                    let new_amount = max_amount.checked_add(cur_reservation).ok_or(
+                    let current_amount = *occupied.get();
+                    let new_amount = current_amount.checked_add(reserved_amount).ok_or(
                         UserInputError::InvalidWithdrawReservation {
                             error: "Balance withdraw reservation overflow".to_string(),
                         },
                     )?;
-                    occupied.insert(Reservation::MaxAmountU64(new_amount));
+                    occupied.insert(new_amount);
                 }
             }
         }
