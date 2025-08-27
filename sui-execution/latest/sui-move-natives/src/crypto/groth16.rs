@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{get_extension, object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -47,7 +47,7 @@ pub fn prepare_verifying_key_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_prepare_verifying_key_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>()?;
+        let cost_table: &NativesCostTable = get_extension!(context)?;
         (
             cost_table.groth16_prepare_verifying_key_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -135,7 +135,7 @@ pub fn verify_groth16_proof_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_verify_groth16_proof_internal_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>()?;
+        let cost_table: &NativesCostTable = get_extension!(context)?;
         (
             cost_table
                 .groth16_verify_groth16_proof_internal_cost_params
@@ -185,9 +185,7 @@ pub fn verify_groth16_proof_internal(
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
             context.charge_gas(crypto_invalid_arguments_cost);
-            let cost = if context
-                .extensions()
-                .get::<ObjectRuntime>()?
+            let cost = if get_extension!(context, ObjectRuntime)?
                 .protocol_config
                 .native_charging_v2()
             {
