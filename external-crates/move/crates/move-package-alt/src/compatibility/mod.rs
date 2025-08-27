@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, bail};
 use move_core_types::account_address::AccountAddress;
 use regex::Regex;
+use tracing::debug;
 
 use crate::package::layout::SourcePackageLayout;
 use crate::package::paths::PackagePath;
@@ -54,6 +55,11 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Package
             names.extend(module_names);
         }
     }
+
+    debug!(
+        "Parsed source for finding module names for package. Names are: {:?}",
+        names
+    );
 
     if names.len() > 1 {
         bail!("Multiple module names found in the package.");

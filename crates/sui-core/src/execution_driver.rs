@@ -49,7 +49,7 @@ pub async fn execution_process(
                     _executing_guard = pending_cert.executing_guard;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
-                    // has been dropped by TransactionManager.
+                    // has been dropped by ExecutionScheduler.
                     info!("No more certificate will be received. Exiting executor ...");
                     return;
                 };

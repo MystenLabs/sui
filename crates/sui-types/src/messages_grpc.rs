@@ -293,6 +293,8 @@ pub struct RawExecutedStatus {
     pub effects_digest: Bytes,
     #[prost(message, optional, tag = "2")]
     pub details: Option<RawExecutedData>,
+    #[prost(bool, tag = "3")]
+    pub fast_path: bool,
 }
 
 #[derive(Clone, prost::Message)]
