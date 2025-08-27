@@ -81,7 +81,7 @@ impl MoveFlavor for SuiFlavor {
         "sui".to_string()
     }
 
-    type PublishedMetadata = (); // TODO
+    type PublishedMetadata = PublishedMetadata;
 
     type AddressInfo = (); // TODO
 

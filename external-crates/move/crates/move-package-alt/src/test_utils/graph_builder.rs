@@ -200,14 +200,14 @@ impl TestPackageGraph {
             let dir = PathBuf::from(package_id.as_str());
 
             let manifest = &self.format_manifest(*node);
-            let lockfile = &self.format_lockfile(*node);
+            let pubfile = &self.format_pubfile(*node);
 
             debug!("Generated test manifest for {package_id}:\n\n{manifest}");
-            debug!("Generated test lockfile for {package_id}:\n\n{lockfile}");
+            debug!("Generated test pubfile for {package_id}:\n\n{pubfile}");
 
             project = project
                 .file(dir.join("Move.toml"), manifest)
-                .file(dir.join("Move.lock"), lockfile);
+                .file(dir.join("Move.published"), pubfile);
         }
 
         Scenario {
@@ -309,20 +309,9 @@ impl TestPackageGraph {
     }
 
     /// Return the contents of a `Move.lock` file for the package represented by
-    /// `node`. The lock file will not contain a `pinned` section, only the `published` section
-    ///
-    /// For publications with no published-at and original-id fields, we generate them sequentially
-    /// starting from 1000 (and set them to the same value)
-    fn format_lockfile(&self, node: NodeIndex) -> String {
+    /// `node`.
+    fn format_pubfile(&self, node: NodeIndex) -> String {
         let mut move_lock = String::new();
-
-        move_lock.push_str(indoc!(
-            r#"
-            [move]
-            version = 4
-
-            "#
-        ));
 
         for (env, publication) in self.inner[node].pubs.iter() {
             let PubSpec {
@@ -337,11 +326,9 @@ impl TestPackageGraph {
             move_lock.push_str(&formatdoc!(
                 r#"
                     [published.{env}]
+                    chain-id = "{DEFAULT_ENV_ID}"
                     published-at = "{published_at}"
                     original-id = "{original_id}"
-                    chain-id = "{DEFAULT_ENV_ID}"
-                    toolchain-version = "test-0.0.0"
-                    build-config = {{}}
 
                     "#,
             ));
@@ -559,15 +546,9 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("a/Move.lock"), @r###"
-        [move]
-        version = 4
-        "###);
+        assert_snapshot!(graph.read_file("a/Move.published"), @"");
 
-        assert_snapshot!(graph.read_file("b/Move.lock"), @r###"
-        [move]
-        version = 4
-        "###);
+        assert_snapshot!(graph.read_file("b/Move.published"), @"");
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -634,16 +615,11 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("c/Move.lock"), @r###"
-        [move]
-        version = 4
-
+        assert_snapshot!(graph.read_file("c/Move.published"), @r###"
         [published._test_env]
+        chain-id = "_test_env_id"
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
         original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
-        chain-id = "_test_env_id"
-        toolchain-version = "test-0.0.0"
-        build-config = {}
         "###);
     }
 

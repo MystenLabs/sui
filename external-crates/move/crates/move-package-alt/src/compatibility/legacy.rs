@@ -4,14 +4,14 @@ use crate::{package::EnvironmentName, schema::PublishAddresses};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LegacyEnvironment {
     pub chain_id: String,
     pub addresses: PublishAddresses,
     pub version: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LegacyData {
     /// The old-style name of this package, taken from the `package.name` field of the manifest.
     /// This differs from the modern name because it is not used in the source to refer to the

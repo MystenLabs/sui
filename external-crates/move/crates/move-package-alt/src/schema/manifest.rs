@@ -1,28 +1,32 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use serde::{Deserialize, Deserializer, de};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
 use crate::compatibility::legacy::LegacyData;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
+    toml_format::RenderToml,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
 /// names in the `[environments]` table of the manifest
 pub type EnvironmentID = String;
 
-// Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
-// writing these files should use [toml_edit] to set / preserve the formatting, since these are
-// user-editable files
-#[derive(Debug, Deserialize)]
+// Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
+// tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
+// implement [Serialize] and provide [render_as_toml], primarily for generating tests
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
+
+    #[serde(default)]
+    pub local_environments: BTreeMap<EnvironmentName, EnvironmentName>,
 
     #[serde(default)]
     pub dependencies: BTreeMap<Spanned<PackageName>, DefaultDependency>,
@@ -39,7 +43,7 @@ pub struct ParsedManifest {
 }
 
 /// The `[package]` section of a manifest
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
@@ -53,7 +57,7 @@ pub struct PackageMetadata {
 }
 
 /// An entry in the `[dependencies]` section of a manifest
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct DefaultDependency {
     #[serde(flatten)]
@@ -67,7 +71,7 @@ pub struct DefaultDependency {
 }
 
 /// An entry in the `[dep-replacements]` section of a manifest
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
 pub struct ReplacementDependency {
@@ -86,7 +90,7 @@ pub struct ReplacementDependency {
 ///
 /// There are additional general fields in the manifest format (like `override` or `rename-from`);
 /// these are in the [ManifestDependency] or [ManifestDependencyReplacement] types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ManifestDependencyInfo {
     Git(ManifestGitDependency),
     External(ExternalDependency),
@@ -96,7 +100,7 @@ pub enum ManifestDependencyInfo {
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
 /// dependencies are resolved by external resolvers.
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
@@ -107,7 +111,7 @@ pub struct ExternalDependency {
 }
 
 /// A `{git = "..."}` dependency in a manifest
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ManifestGitDependency {
     /// The repository containing the dependency
     #[serde(rename = "git")]
@@ -123,9 +127,15 @@ pub struct ManifestGitDependency {
 }
 
 /// Convenience type for serializing/deserializing external deps
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
+}
+
+impl RenderToml for ParsedManifest {
+    fn render_as_toml(&self) -> String {
+        todo!()
+    }
 }
 
 impl<'de> Deserialize<'de> for ManifestDependencyInfo {
@@ -176,6 +186,14 @@ impl TryFrom<RField> for ExternalDependency {
             .expect("iterator of length 1 structure is nonempty");
 
         Ok(Self { resolver, data })
+    }
+}
+
+impl From<ExternalDependency> for RField {
+    fn from(value: ExternalDependency) -> Self {
+        Self {
+            r: BTreeMap::from([(value.resolver, value.data)]),
+        }
     }
 }
 
@@ -569,7 +587,7 @@ mod tests {
           |
         6 |             [unknown]
           |              ^^^^^^^
-        unknown field `unknown`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
+        unknown field `unknown`, expected one of `package`, `environments`, `local-environments`, `dependencies`, `dep-replacements`
         "###);
     }
 
@@ -928,7 +946,7 @@ mod tests {
           |
         6 |             [addresses]
           |              ^^^^^^^^^
-        unknown field `addresses`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
+        unknown field `addresses`, expected one of `package`, `environments`, `local-environments`, `dependencies`, `dep-replacements`
         "###);
     }
 }
