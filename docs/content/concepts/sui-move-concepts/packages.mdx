@@ -1,30 +1,34 @@
 ---
 title: Packages
-description: A Move package on Sui includes one or more modules that define that package's interaction with on-chain objects. Upgrading on-chain packages provides a way to improve your code or add features without affecting packages that use your published modules.
+description: A Move package on Sui includes one or more modules that define that package's interaction with on-chain objects. Upgrading packages lets you improve code or add features without breaking packages that depend on them.
 mdx:
   format: md
 ---
 
-A Move package on Sui includes one or more modules that define that package's interaction with on-chain objects. You develop the logic for those modules using Move, which you then compile into an object. Finally, you publish your package object onto a Sui network. On chain, anyone can view your package contents and the logic it employs to manipulate other on-chain objects using a Sui network explorer.
+A Move package on Sui includes one or more modules that define the package's interaction with on-chain objects. You develop the logic for those modules in Move, compile them into an object, and publish that package object to a Sui network. On-chain, anyone can view a package’s contents and see how its logic manipulates objects using a Sui Explorer.
 
 ## Packages are immutable
 
-After you publish a package object on chain to a network, it lives there forever. You cannot directly change the code of an on-chain package object. After a package object appears on chain, other packages can use the modules that the original package provides. Bad actors aside, imagine if someone changed the logic in their on-chain package to correct unintentional behavior that was overlooked during development. This would cause a ripple effect, changing the logic of every package that uses that module to perform in ways the developers might have never intended.
+After you publish a package object to a network, it lives there permanently. You cannot directly change the code of an on-chain package. Once published, other packages can import and use the modules it provides.  
+
+If developers could modify on-chain packages after publication, downstream behavior could change in unexpected ways. For example, a developer fixing an overlooked bug could unintentionally change the execution of every dependent package.
 
 ## Upgrading packages
 
-While you can't manipulate on-chain packages directly, you do have the ability to upgrade them. Upgrading on-chain packages provides a way to improve your code or add features without affecting packages that use the original package. When you upgrade a package, you're creating a new object on chain instead of modifying the original package. See [Upgrading Packages](./packages/upgrade.mdx) to learn more about the process.
+Although you cannot edit a published package directly, you can **upgrade** it. Upgrading creates a new package object on-chain, leaving the original intact. This lets you add features or fix issues without breaking existing dependencies.  
 
-## Using Sui Client CLI to upgrade packages
+See [Upgrading packages](./packages/upgrade.mdx) for details on the process.
 
-The [Sui Client CLI](/references/cli/client.mdx) `upgrade` command offers an approachable way to upgrade packages when the CLI active address owns the `UpgradeCap` object associated with those packages.
+## Using the Sui Client CLI
 
-Using the Sui CLI is useful to get started with upgrades, or in the early stages of package development, but protecting the ability to upgrade a package on chain using a single key can pose a security risk for several reasons:
+The [Sui Client CLI](/references/cli/client.mdx) provides an approachable way to upgrade packages. If the CLI’s active address owns the `UpgradeCap` for a package, you can use the `upgrade` command to perform an upgrade.
+
+This workflow is convenient when you’re starting development or iterating quickly. However, protecting package upgrades with a single private key poses security risks:
 
 {@include: ../../snippets/upgrade-single-key-risk.mdx}
 
 ### Making packages immutable
 
-You can make a package _immutable_ when it goes live to mitigate the single-key risk using the Move `sui::package::make_immutable` function to destroy its `UpgradeCap`. Making the package immutable, however, prevents future bug fixes and new features, which might not be practical or desired.
+You can call the Move function `sui::package::make_immutable` to destroy a package’s `UpgradeCap` and make the package permanently immutable. This eliminates single-key risk but also prevents all future bug fixes and feature additions.
 
-To protect your package from single-key risk on chain, see [Custom Upgrade Policies](./packages/custom-policies.mdx).
+For a more flexible approach, use [custom upgrade policies](./packages/custom-policies.mdx) to protect `UpgradeCap` access without giving up the ability to upgrade.
