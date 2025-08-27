@@ -609,6 +609,7 @@ impl ValidatorService {
                 let executed_resp = SubmitTxResponse::Executed {
                     effects_digest,
                     details: Some(executed_data),
+                    fast_path: false,
                 };
                 let executed_resp = executed_resp.try_into()?;
                 return Ok((tonic::Response::new(executed_resp), Weight::zero()));
@@ -644,6 +645,7 @@ impl ValidatorService {
                         let executed_resp = SubmitTxResponse::Executed {
                             effects_digest,
                             details: Some(executed_data),
+                            fast_path: false,
                         };
                         let executed_resp = executed_resp.try_into()?;
                         return Ok((tonic::Response::new(executed_resp), Weight::zero()));
@@ -1224,6 +1226,7 @@ impl ValidatorService {
                 Ok(WaitForEffectsResponse::Executed {
                     effects_digest: effects.digest(),
                     details,
+                    fast_path: false,
                 })
             }
 
@@ -1322,6 +1325,7 @@ impl ValidatorService {
                     return Ok(WaitForEffectsResponse::Executed {
                         effects_digest: effects.digest(),
                         details,
+                        fast_path: current_status == Some(ConsensusTxStatus::FastpathCertified),
                     });
                 }
             }
