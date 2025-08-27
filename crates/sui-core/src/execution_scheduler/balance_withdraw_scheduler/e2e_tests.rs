@@ -87,16 +87,12 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
 }
 
 impl TestEnv {
-    fn create_transactions(&self, amounts: Vec<Option<u64>>) -> Vec<VerifiedExecutableTransaction> {
+    fn create_transactions(&self, amounts: Vec<u64>) -> Vec<VerifiedExecutableTransaction> {
         amounts
             .into_iter()
             .enumerate()
             .map(|(idx, amount)| {
-                let withdraw = if let Some(amount) = amount {
-                    BalanceWithdrawArg::new_with_amount(amount, GAS::type_tag().into())
-                } else {
-                    BalanceWithdrawArg::new_with_entire_balance(GAS::type_tag().into())
-                };
+                let withdraw = BalanceWithdrawArg::new_with_amount(amount, GAS::type_tag().into());
                 let mut ptb = ProgrammableTransactionBuilder::new();
                 ptb.balance_withdraw(withdraw).unwrap();
                 let tx_data = TestTransactionBuilder::new(
@@ -203,7 +199,7 @@ impl TestEnv {
 async fn test_withdraw_schedule_e2e() {
     telemetry_subscribers::init_for_testing();
     let mut test_env = create_test_env(BTreeMap::from([(GAS::type_tag(), 1000)])).await;
-    let transactions: Vec<_> = test_env.create_transactions(vec![Some(400), Some(600), Some(1)]);
+    let transactions: Vec<_> = test_env.create_transactions(vec![400, 600, 1]);
     test_env.enqueue_transactions(transactions.clone());
     test_env
         .expect_withdraw_results(BTreeMap::from([
@@ -222,7 +218,7 @@ async fn test_withdraw_schedule_e2e() {
         ]))
         .await;
 
-    let transactions: Vec<_> = test_env.create_transactions(vec![Some(500), Some(500)]);
+    let transactions: Vec<_> = test_env.create_transactions(vec![500, 500]);
     let next_version = test_env.get_accumulator_version().next();
     test_env.enqueue_transactions_with_version(transactions.clone(), next_version);
     assert!(test_env.receive_certificate().await.is_none());
@@ -243,7 +239,7 @@ async fn test_withdraw_schedule_e2e() {
 
     test_env.settle_balances(BTreeMap::from([(test_env.account_objects[0], -500)]));
 
-    let transactions = test_env.create_transactions(vec![None]);
+    let transactions = test_env.create_transactions(vec![501]);
 
     test_env.enqueue_transactions(transactions.clone());
 
