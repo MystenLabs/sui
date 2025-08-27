@@ -56,6 +56,7 @@ const config = {
   },
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
+    require.resolve('./src/plugins/framework'),
     [
       "posthog-docusaurus",
       {
@@ -135,7 +136,6 @@ const config = {
       };
     },
     path.resolve(__dirname, `./src/plugins/descriptions`),
-    path.resolve(__dirname, `./src/plugins/framework`),
     path.resolve(__dirname, `./src/plugins/askcookbook`),
     path.resolve(__dirname, `./src/plugins/protocol`),
   ],
