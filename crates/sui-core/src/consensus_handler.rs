@@ -685,7 +685,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .consensus_bad_nodes_stake_threshold(),
         );
 
-        self.process_consensus_txns(&consensus_commit);
+        // DONE(commit-handler-rewrite): update metrics
+        self.metrics
+            .consensus_committed_subdags
+            .with_label_values(&[&leader_author.to_string()])
+            .inc();
+
+        // DONE(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
+        let transactions = self.process_consensus_txns(&consensus_commit);
     }
 
     fn gather_commit_metadata(
