@@ -113,8 +113,7 @@ impl BuildConfig {
         BuildPlan::create(root_pkg, self)?.compile(writer, |compiler| compiler)
     }
 
-    /// Compile the package at `path` or the containing Move package. Exit process on warning or
-    /// failure.
+    /// Migrate the package at `path`.
     pub async fn migrate_package<F: MoveFlavor, W: Write, R: BufRead>(
         mut self,
         path: &Path,
@@ -122,7 +121,7 @@ impl BuildConfig {
         writer: &mut W,
         reader: &mut R,
     ) -> PackageResult<()> {
-        // we set test and dev mode to migrate all the code
+        // we set test to migrate all the code
         self.test_mode = true;
         let root_pkg = RootPackage::<F>::load(path, env).await?;
         let build_plan = BuildPlan::create(root_pkg, &self)?;

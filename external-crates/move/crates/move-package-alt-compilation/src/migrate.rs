@@ -147,6 +147,7 @@ impl<F: MoveFlavor, W: Write, R: BufRead> MigrationContext<'_, F, W, R> {
     }
 }
 
+/// Migrate a legacy package to Move 2024 edition, if possible.
 pub fn migrate<F: MoveFlavor, W: Write, R: BufRead>(
     build_plan: BuildPlan<F>,
     writer: &mut W,

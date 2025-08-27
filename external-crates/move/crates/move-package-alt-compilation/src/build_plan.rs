@@ -159,6 +159,7 @@ impl<F: MoveFlavor> BuildPlan<F> {
         Ok(())
     }
 
+    /// Migrate the package from legacy to Move 2024 edition, if possible.
     pub fn migrate<W: Write>(&self, writer: &mut W) -> anyhow::Result<Option<Migration>> {
         let root_name = Symbol::from(self.root_pkg.name().to_string());
         let (files, res) = build_for_driver(
@@ -195,6 +196,7 @@ impl<F: MoveFlavor> BuildPlan<F> {
         Ok(migration)
     }
 
+    /// Rewrite the edition field in Move.toml to the given edition.
     pub fn record_package_edition(&self, edition: Edition) -> anyhow::Result<()> {
         let move_toml_path = self.root_pkg.path().manifest_path();
         let mut toml = std::fs::read_to_string(move_toml_path.clone())?
@@ -205,6 +207,7 @@ impl<F: MoveFlavor> BuildPlan<F> {
         Ok(())
     }
 
+    /// Get the path to the root package.
     pub fn root_package_path(&self) -> &Path {
         self.root_pkg.path().path()
     }
