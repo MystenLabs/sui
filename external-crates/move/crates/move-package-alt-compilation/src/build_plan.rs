@@ -4,15 +4,22 @@
 
 use std::{collections::BTreeSet, io::Write, path::Path};
 
+use toml_edit::{DocumentMut, value};
 use vfs::VfsPath;
 
 use crate::{
-    build_config::BuildConfig, compilation::build_all, compiled_package::CompiledPackage, shared,
+    build_config::BuildConfig,
+    compilation::{build_all, build_for_driver},
+    compiled_package::CompiledPackage,
+    layout::CompiledPackageLayout,
+    shared,
 };
+
 use move_compiler::{
     Compiler,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::report_diagnostics_to_buffer_with_env_color,
+    diagnostics::{Migration, report_diagnostics_to_buffer_with_env_color},
+    editions::Edition,
     shared::{SaveFlag, SaveHook, files::MappedFiles},
 };
 use move_package_alt::{
@@ -21,6 +28,10 @@ use move_package_alt::{
     package::RootPackage,
     schema::PackageName,
 };
+use move_symbol_pool::Symbol;
+
+const EDITION_NAME: &str = "edition";
+const PACKAGE_NAME: &str = "package";
 
 #[derive(Debug)]
 pub struct BuildPlan<F: MoveFlavor> {
@@ -42,16 +53,6 @@ impl<F: MoveFlavor> BuildPlan<F> {
         assert!(self.compiler_vfs_root.is_none());
         self.compiler_vfs_root = Some(vfs_root);
         self
-    }
-
-    // TODO do we need this?
-    pub fn root_crate_edition_defined(&self) -> bool {
-        false
-        // self.resolution_graph.package_table[&self.root]
-        //     .source_package
-        //     .package
-        //     .edition
-        //     .is_some()
     }
 
     /// Compilation results in the process exit upon warning/failure
@@ -88,9 +89,10 @@ impl<F: MoveFlavor> BuildPlan<F> {
         let project_root = self.root_pkg.package_path().path();
         let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
 
-        println!("Project root: {}", project_root.display());
-        println!("Sorted deps to keep: {:?}", sorted_deps);
-        self.clean(project_root, sorted_deps)?;
+        self.clean(
+            &project_root.join(CompiledPackageLayout::Root.path()),
+            sorted_deps,
+        )?;
 
         Ok(compiled)
     }
@@ -139,8 +141,6 @@ impl<F: MoveFlavor> BuildPlan<F> {
         // Compute the actual build directory based on install_dir configuration
         let build_root = shared::get_build_output_path(project_root, &self.build_config);
 
-        println!("Build root to clean: {}", build_root.display());
-
         // Skip cleaning if the build directory doesn't exist yet
         if !build_root.exists() {
             return Ok(());
@@ -157,5 +157,58 @@ impl<F: MoveFlavor> BuildPlan<F> {
             }
         }
         Ok(())
+    }
+
+    /// Migrate the package from legacy to Move 2024 edition, if possible.
+    pub fn migrate<W: Write>(&self, writer: &mut W) -> anyhow::Result<Option<Migration>> {
+        let root_name = Symbol::from(self.root_pkg.name().to_string());
+        let (files, res) = build_for_driver(
+            writer,
+            None,
+            &self.build_config,
+            &self.root_pkg,
+            |compiler| compiler.generate_migration_patch(&root_name),
+        )?;
+        let migration = match res {
+            Ok(migration) => migration,
+            Err(diags) => {
+                let diags_buf = report_diagnostics_to_buffer_with_env_color(&files, diags);
+                writeln!(
+                    writer,
+                    "Unable to generate migration patch due to compilation errors.\n\
+                    Please fix the errors in your current edition before attempting to migrate."
+                )?;
+                if let Err(err) = writer.write_all(&diags_buf) {
+                    anyhow::bail!("Cannot output compiler diagnostics: {}", err);
+                }
+                anyhow::bail!("Compilation error");
+            }
+        };
+
+        let project_root = self.root_pkg.package_path().path();
+        let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
+
+        self.clean(
+            &project_root.join(CompiledPackageLayout::Root.path()),
+            sorted_deps,
+        )?;
+
+        Ok(migration)
+    }
+
+    /// Rewrite the edition field in Move.toml to the given edition.
+    pub fn record_package_edition(&self, edition: Edition) -> anyhow::Result<()> {
+        let move_toml_path = self.root_pkg.path().manifest_path();
+        let mut toml = std::fs::read_to_string(move_toml_path.clone())?
+            .parse::<DocumentMut>()
+            .expect("Failed to read TOML file to update edition");
+        toml[PACKAGE_NAME][EDITION_NAME] = value(edition.to_string());
+        std::fs::write(move_toml_path, toml.to_string())?;
+        Ok(())
+    }
+
+    /// Get the path to the root package.
+    pub fn root_package_path(&self) -> &Path {
+        self.root_pkg.path().path()
     }
 }
