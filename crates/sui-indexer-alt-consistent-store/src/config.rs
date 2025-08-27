@@ -28,6 +28,9 @@ pub struct ServiceConfig {
 
     /// Configuration for the read side of the service.
     pub rpc: RpcConfig,
+
+    /// Configuration for the periodic reporting of RocksDB properties.
+    pub db_metrics: DbMetricsConfig,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
@@ -77,6 +80,12 @@ pub struct CommitterLayer {
 pub struct RpcConfig {
     /// Configuration for paginated endpoints in the RPC service.
     pub pagination: PaginationConfig,
+}
+
+#[DefaultConfig]
+#[serde(deny_unknown_fields)]
+pub struct DbMetricsConfig {
+    pub interval_ms: u64,
 }
 
 impl ServiceConfig {
@@ -174,6 +183,14 @@ impl Default for ConsistencyConfig {
             snapshots: 15000,
             stride: 1,
             buffer_size: 5000,
+        }
+    }
+}
+
+impl Default for DbMetricsConfig {
+    fn default() -> Self {
+        Self {
+            interval_ms: 30 * 1000,
         }
     }
 }

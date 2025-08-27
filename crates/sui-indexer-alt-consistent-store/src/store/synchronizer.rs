@@ -102,21 +102,13 @@ impl Synchronizer {
         let post_snap = Arc::new(Barrier::new(self.last_watermarks.len()));
 
         // Calculate the first checkpoint we will have data for, across all pipelines.
-        // If first_checkpoint is provided, prioritize it over watermarks from existing pipelines.
-        let init_checkpoint = if self.first_checkpoint > 0 {
-            // If first_checkpoint is provided and greater than 0, use it as the starting point
-            self.first_checkpoint
-        } else {
-            // Otherwise, use the highest checkpoint across all pipelines
-            let Some(max_checkpoint) = self
-                .last_watermarks
-                .values()
-                .map(|w| w.map_or(self.first_checkpoint, |w| w.checkpoint_hi_inclusive))
-                .max()
-            else {
-                bail!("No pipelines registered with the synchronizer");
-            };
-            max_checkpoint
+        let Some(init_checkpoint) = self
+            .last_watermarks
+            .values()
+            .map(|w| w.map_or(self.first_checkpoint, |w| w.checkpoint_hi_inclusive))
+            .max()
+        else {
+            bail!("No pipelines registered with the synchronizer");
         };
 
         // The next snapshot should be taken at the next stride boundary after that initial
