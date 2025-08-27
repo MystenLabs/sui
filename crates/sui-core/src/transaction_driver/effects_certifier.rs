@@ -349,6 +349,11 @@ impl EffectsCertifier {
                     aggregator.insert(name, ());
 
                     if fast_path {
+                        debug_assert_eq!(
+                            tx_type,
+                            TxType::SingleWriter,
+                            "fast path is only supported for single writer transactions, tx_digest={tx_digest}",
+                        );
                         fast_path_aggregator.insert(name, ());
                     }
 
@@ -380,8 +385,8 @@ impl EffectsCertifier {
                                 authority_aggregator.get_display_name(&submitted_tx_to_validator);
 
                             self.metrics
-                                .transaction_fast_path_acked
-                                .with_label_values(&[&display_name, tx_type.as_str()])
+                                .transaction_fastpath_acked
+                                .with_label_values(&[&display_name])
                                 .inc();
                         }
 
