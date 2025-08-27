@@ -61,6 +61,7 @@ use crate::{
     execution_cache::ObjectCacheRead,
     execution_scheduler::{ExecutionScheduler, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
+    traffic_controller::policies::TrafficTally,
 };
 
 pub struct ConsensusHandlerInitializer {
@@ -134,6 +135,7 @@ impl ConsensusHandlerInitializer {
             self.state.metrics.clone(),
             self.throughput_calculator.clone(),
             self.backpressure_manager.subscribe(),
+            self.state.clone(),
         )
     }
 
@@ -544,6 +546,8 @@ pub struct ConsensusHandler<C> {
     additional_consensus_state: AdditionalConsensusState,
 
     backpressure_subscriber: BackpressureSubscriber,
+
+    state: Arc<AuthorityState>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -560,6 +564,7 @@ impl<C> ConsensusHandler<C> {
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
+        state: Arc<AuthorityState>,
     ) -> Self {
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
@@ -592,6 +597,7 @@ impl<C> ConsensusHandler<C> {
                 commit_rate_estimate_window_size,
             ),
             backpressure_subscriber,
+            state,
         }
     }
 
@@ -638,6 +644,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
         if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
             tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
+        }
+        if let Some(submitted_cache) = self.epoch_store.submitted_transaction_cache.as_ref() {
+            submitted_cache.update_last_committed_round(last_committed_round as u32);
         }
 
         let commit_info = if self
@@ -782,6 +791,38 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         block,
                         index: tx_index as TransactionIndex,
                     };
+
+                    // Transaction has appeared in consensus output, we can increment the submission count
+                    // for this tx for DoS protection.
+                    if let Some(submitted_cache) = &self.epoch_store.submitted_transaction_cache {
+                        if let ConsensusTransactionKind::UserTransaction(tx) =
+                            &parsed.transaction.kind
+                        {
+                            let digest = tx.digest();
+                            if let Some((spam_weight, submitter_client_addr)) =
+                                submitted_cache.increment_submission_count(digest)
+                            {
+                                if let Some(ref traffic_controller) = self.state.traffic_controller
+                                {
+                                    debug!(
+                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to traffic controller",
+                                    );
+
+                                    traffic_controller.tally(TrafficTally::new(
+                                        submitter_client_addr,
+                                        None,
+                                        None,
+                                        spam_weight,
+                                    ));
+                                } else {
+                                    warn!(
+                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} (traffic controller not configured)",
+                                    );
+                                }
+                            }
+                        }
+                    }
+
                     if parsed.rejected {
                         if parsed.transaction.kind.is_user_transaction() {
                             self.epoch_store
@@ -951,7 +992,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let end_of_publish = ConsensusTransaction::new_end_of_publish(self.epoch_store.name);
         if let Err(err) =
             self.consensus_adapter
-                .submit(end_of_publish, None, &self.epoch_store, None)
+                .submit(end_of_publish, None, &self.epoch_store, None, None)
         {
             warn!(
                 "Error when sending EndOfPublish message from ConsensusHandler: {:?}",
@@ -1629,6 +1670,7 @@ mod tests {
             metrics,
             Arc::new(throughput_calculator),
             backpressure_manager.subscribe(),
+            state.clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -2120,6 +2162,7 @@ mod tests {
             metrics,
             Arc::new(throughput),
             backpressure.subscribe(),
+            state.clone(),
         );
 
         handler.handle_consensus_commit(commit).await;
