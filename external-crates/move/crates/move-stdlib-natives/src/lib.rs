@@ -66,6 +66,7 @@ impl GasParameters {
                     base: 0.into(),
                     per_byte: 0.into(),
                 },
+                id: type_name::IdGasParameters::new(Some(0)),
             },
             signer: signer::GasParameters {
                 borrow_address: signer::BorrowAddressGasParameters { base: 0.into() },
@@ -167,3 +168,15 @@ pub fn all_natives(
 
     make_table_from_iter(move_std_addr, natives)
 }
+
+macro_rules! inner_gas_params {
+    ($gas_params:expr) => {{
+        $gas_params.0.as_ref().ok_or_else(|| {
+            move_binary_format::errors::PartialVMError::new(
+                move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("native function gas parameters not specified".to_string())
+        })
+    }};
+}
+pub(crate) use inner_gas_params;

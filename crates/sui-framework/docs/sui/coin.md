@@ -959,7 +959,7 @@ See <code><a href="../sui/coin.md#sui_coin_create_regulated_currency_v2">create_
 ): <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; {
     <b>let</b> <a href="../sui/coin.md#sui_coin_DenyCap">DenyCap</a> { id } = cap;
     id.delete();
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.migrate_v1_to_v2(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx);
     <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a> {
         id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
@@ -1080,7 +1080,7 @@ address will be unable to receive objects of this coin type.
     addr: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_add(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
 }
 </code></pre>
@@ -1113,7 +1113,7 @@ next epoch.
     addr: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_remove(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
 }
 </code></pre>
@@ -1144,7 +1144,7 @@ in the current epoch will be unable to receive objects of this coin type.
     addr: <b>address</b>,
     ctx: &TxContext,
 ): bool {
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_contains_current_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
 }
 </code></pre>
@@ -1172,7 +1172,7 @@ start of the next epoch, the address will be unable to receive objects of this c
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList, addr: <b>address</b>): bool {
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_contains_next_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr)
 }
 </code></pre>
@@ -1205,7 +1205,7 @@ addresses will be unable to receive objects of this coin type.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(deny_cap.allow_global_pause, <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>);
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_enable_global_pause(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
 }
 </code></pre>
@@ -1238,7 +1238,7 @@ type will still be paused until the start of the next epoch.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(deny_cap.allow_global_pause, <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>);
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_disable_global_pause(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
 }
 </code></pre>
@@ -1267,7 +1267,7 @@ Check if the global pause is enabled for the given coin type in the current epoc
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList,
     ctx: &TxContext,
 ): bool {
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_is_global_pause_enabled_current_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
 }
 </code></pre>
@@ -1293,7 +1293,7 @@ Check if the global pause is enabled for the given coin type in the next epoch.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList): bool {
-    <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_is_global_pause_enabled_next_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty)
 }
 </code></pre>

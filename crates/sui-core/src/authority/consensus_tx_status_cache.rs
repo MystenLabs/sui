@@ -60,7 +60,7 @@ struct Inner {
 }
 
 impl ConsensusTxStatusCache {
-    pub fn new(consensus_gc_depth: Round) -> Self {
+    pub(crate) fn new(consensus_gc_depth: Round) -> Self {
         assert!(
             consensus_gc_depth < CONSENSUS_STATUS_RETENTION_ROUNDS,
             "{} vs {}",
@@ -77,7 +77,7 @@ impl ConsensusTxStatusCache {
         }
     }
 
-    pub fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
+    pub(crate) fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
             if pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= last_committed_leader_round {
                 // Ignore stale status updates.
@@ -145,7 +145,7 @@ impl ConsensusTxStatusCache {
 
     /// Given a known previous status provided by `old_status`, this function will return a new
     /// status once the transaction status has changed, or if the consensus position has expired.
-    pub async fn notify_read_transaction_status_change(
+    pub(crate) async fn notify_read_transaction_status_change(
         &self,
         consensus_position: ConsensusPosition,
         old_status: Option<ConsensusTxStatus>,
@@ -191,7 +191,10 @@ impl ConsensusTxStatusCache {
         }
     }
 
-    pub async fn update_last_committed_leader_round(&self, last_committed_leader_round: u32) {
+    pub(crate) async fn update_last_committed_leader_round(
+        &self,
+        last_committed_leader_round: u32,
+    ) {
         debug!(
             "Updating last committed leader round: {}",
             last_committed_leader_round
@@ -246,17 +249,16 @@ impl ConsensusTxStatusCache {
         let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
     }
 
-    pub fn get_last_committed_leader_round(&self) -> Option<u32> {
+    pub(crate) fn get_last_committed_leader_round(&self) -> Option<u32> {
         *self.last_committed_leader_round_rx.borrow()
     }
 
-    #[cfg(test)]
-    pub fn get_num_fastpath_certified(&self) -> usize {
+    pub(crate) fn get_num_fastpath_certified(&self) -> usize {
         self.inner.read().fastpath_certified.len()
     }
 
     /// Returns true if the position is too far ahead of the last committed round.
-    pub fn check_position_too_ahead(&self, position: &ConsensusPosition) -> SuiResult<()> {
+    pub(crate) fn check_position_too_ahead(&self, position: &ConsensusPosition) -> SuiResult<()> {
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
             if position.block.round
                 > last_committed_leader_round + CONSENSUS_STATUS_RETENTION_ROUNDS
@@ -271,7 +273,7 @@ impl ConsensusTxStatusCache {
     }
 
     #[cfg(test)]
-    pub fn get_transaction_status(
+    pub(crate) fn get_transaction_status(
         &self,
         position: &ConsensusPosition,
     ) -> Option<ConsensusTxStatus> {

@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// **********************************
+//
+// This file is deprecated.
+//
+// See src/js/remark-includes
+//
+// **********************************
+
 const fs = require("fs");
 const path = require("path");
 const https = require("https");

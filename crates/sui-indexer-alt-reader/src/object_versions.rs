@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Context as _;
 use async_graphql::dataloader::Loader;
@@ -12,7 +9,7 @@ use diesel::sql_types::{Array, BigInt, Bytea};
 use sui_indexer_alt_schema::objects::StoredObjVersion;
 use sui_types::base_types::ObjectID;
 
-use crate::{error::Error as ReadError, pg_reader::PgReader};
+use crate::{error::Error, pg_reader::PgReader};
 
 /// Key for fetching the latest version of an object. If the object has been deleted or wrapped,
 /// the latest version will return the version it was deleted/wrapped at.
@@ -32,13 +29,6 @@ pub struct CheckpointBoundedObjectVersionKey(pub ObjectID, pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VersionedObjectVersionKey(pub ObjectID, pub u64);
 
-#[derive(thiserror::Error, Debug, Clone)]
-#[error(transparent)]
-pub enum Error {
-    Deserialization(#[from] Arc<anyhow::Error>),
-    Read(#[from] Arc<ReadError>),
-}
-
 #[async_trait::async_trait]
 impl Loader<LatestObjectVersionKey> for PgReader {
     type Value = StoredObjVersion;
@@ -47,12 +37,12 @@ impl Loader<LatestObjectVersionKey> for PgReader {
     async fn load(
         &self,
         keys: &[LatestObjectVersionKey],
-    ) -> Result<HashMap<LatestObjectVersionKey, StoredObjVersion>, Self::Error> {
+    ) -> Result<HashMap<LatestObjectVersionKey, StoredObjVersion>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
         let query = diesel::sql_query(
@@ -83,7 +73,7 @@ impl Loader<LatestObjectVersionKey> for PgReader {
         )
         .bind::<Array<Bytea>, _>(ids);
 
-        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await.map_err(Arc::new)?;
+        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await?;
         let id_to_stored: HashMap<_, _> = obj_versions
             .into_iter()
             .map(|stored| (stored.object_id.clone(), stored))
@@ -107,12 +97,12 @@ impl Loader<VersionBoundedObjectVersionKey> for PgReader {
     async fn load(
         &self,
         keys: &[VersionBoundedObjectVersionKey],
-    ) -> Result<HashMap<VersionBoundedObjectVersionKey, StoredObjVersion>, Self::Error> {
+    ) -> Result<HashMap<VersionBoundedObjectVersionKey, StoredObjVersion>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
         let versions: Vec<_> = keys.iter().map(|k| k.1 as i64).collect();
@@ -148,15 +138,14 @@ impl Loader<VersionBoundedObjectVersionKey> for PgReader {
         .bind::<Array<Bytea>, _>(ids)
         .bind::<Array<BigInt>, _>(versions);
 
-        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await.map_err(Arc::new)?;
+        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await?;
 
         // A single data loader request may contain multiple keys for the same object ID. Store
         // them in an ordered map, so that we can find the latest version for each key.
         let mut key_to_stored = BTreeMap::new();
         for obj_version in obj_versions {
             let id = ObjectID::from_bytes(&obj_version.object_id)
-                .context("Failed to deserialize ObjectID")
-                .map_err(Arc::new)?;
+                .context("Failed to deserialize ObjectID")?;
 
             let version = obj_version.object_version as u64;
 
@@ -181,12 +170,12 @@ impl Loader<CheckpointBoundedObjectVersionKey> for PgReader {
     async fn load(
         &self,
         keys: &[CheckpointBoundedObjectVersionKey],
-    ) -> Result<HashMap<CheckpointBoundedObjectVersionKey, StoredObjVersion>, Self::Error> {
+    ) -> Result<HashMap<CheckpointBoundedObjectVersionKey, StoredObjVersion>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
         let cps: Vec<_> = keys.iter().map(|k| k.1 as i64).collect();
@@ -223,15 +212,14 @@ impl Loader<CheckpointBoundedObjectVersionKey> for PgReader {
         .bind::<Array<Bytea>, _>(ids)
         .bind::<Array<BigInt>, _>(cps);
 
-        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await.map_err(Arc::new)?;
+        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await?;
 
         // A single data loader request may contain multiple keys for the same object ID. Store
         // them in an ordered map, so that we can find the latest version for each key.
         let mut key_to_stored = BTreeMap::new();
         for obj_version in obj_versions {
             let id = ObjectID::from_bytes(&obj_version.object_id)
-                .context("Failed to deserialize ObjectID")
-                .map_err(Arc::new)?;
+                .context("Failed to deserialize ObjectID")?;
 
             let cp_sequence_number = obj_version.cp_sequence_number as u64;
 
@@ -264,7 +252,7 @@ impl Loader<VersionedObjectVersionKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
         let versions: Vec<_> = keys.iter().map(|k| k.1 as i64).collect();
@@ -298,7 +286,7 @@ impl Loader<VersionedObjectVersionKey> for PgReader {
         .bind::<Array<Bytea>, _>(ids)
         .bind::<Array<BigInt>, _>(versions);
 
-        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await.map_err(Arc::new)?;
+        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await?;
         let key_to_stored: HashMap<_, _> = obj_versions
             .iter()
             .map(|stored| {

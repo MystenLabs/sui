@@ -83,7 +83,7 @@ module conventions::comments;
 // === Test Functions ===
 ```
 
-Here, "public functions" are the functions modifying state, "view functions" are often on-chain getters or off-chain helpers. The latter are not necessary because you can query objects to read their data. The `init` function should be the first function in the module, if it exists.
+Here, public functions are the functions modifying state and view functions are often on-chain getters or off-chain helpers. The latter are not necessary because you can query objects to read their data. The `init` function should be the first function in the module, if it exists.
 
 Try to sort your functions by their purpose and according to the user flow to improve readability. You can also use explicit function names like `admin_set_fees` to make it clear what the function does.
 

@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use std::{convert::Infallible, str::FromStr, sync::Arc};
 
@@ -18,8 +17,6 @@ pub(super) trait StatusCode {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(super) enum RpcError<E = Infallible> {
-    Unimplemented,
-
     /// Checkpoint requested is not in the available range.
     NotInRange(u64),
 
@@ -60,8 +57,6 @@ where
 {
     fn from(err: RpcError<E>) -> Self {
         match err {
-            RpcError::Unimplemented => Status::unimplemented("Not implemented yet"),
-
             RpcError::NotInRange(checkpoint) => Status::out_of_range(format!(
                 "Checkpoint {checkpoint} not in the consistent range"
             )),

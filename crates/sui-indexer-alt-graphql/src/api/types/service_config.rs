@@ -171,4 +171,10 @@ impl ServiceConfig {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_move_value_depth))
     }
+
+    /// Maximum budget in bytes to spend when outputting a structured `MoveValue`.
+    async fn max_move_value_bound(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_move_value_bound))
+    }
 }

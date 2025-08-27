@@ -3314,8 +3314,8 @@ async fn test_transfer_sui_with_amount() {
 }
 
 #[tokio::test]
-async fn test_store_revert_transfer_sui() {
-    // This test checks the correctness of revert_state_update in SuiDataStore.
+async fn test_clear_cache_reverts_transfer_sui() {
+    // This test checks that transfers are reverted after cache is cleared
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3344,7 +3344,6 @@ async fn test_store_revert_transfer_sui() {
     let cache = authority_state.get_object_cache_reader();
     let tx_cache = authority_state.get_transaction_cache_reader();
     let reconfig_api = authority_state.get_reconfig_api();
-    reconfig_api.revert_state_update(&tx_digest);
     reconfig_api
         .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
@@ -3371,7 +3370,7 @@ fn build_and_commit(
 }
 
 #[tokio::test]
-async fn test_store_revert_wrap_move_call() {
+async fn test_clear_cache_reverts_wrap_move_call() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3416,7 +3415,6 @@ async fn test_store_revert_wrap_move_call() {
     );
 
     let wrap_cert = init_certified_transaction(wrap_txn, &authority_state);
-    let wrap_digest = *wrap_cert.digest();
 
     let wrap_effects = authority_state
         .wait_for_certificate_execution(&wrap_cert, &authority_state.epoch_store_for_testing())
@@ -3432,7 +3430,6 @@ async fn test_store_revert_wrap_move_call() {
 
     let cache = &authority_state.get_object_cache_reader();
     let reconfig_api = authority_state.get_reconfig_api();
-    reconfig_api.revert_state_update(&wrap_digest);
     reconfig_api
         .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
@@ -3449,7 +3446,7 @@ async fn test_store_revert_wrap_move_call() {
 }
 
 #[tokio::test]
-async fn test_store_revert_unwrap_move_call() {
+async fn test_clear_cache_reverts_unwrap_move_call() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3515,7 +3512,6 @@ async fn test_store_revert_unwrap_move_call() {
     );
 
     let unwrap_cert = init_certified_transaction(unwrap_txn, &authority_state);
-    let unwrap_digest = *unwrap_cert.digest();
 
     let unwrap_effects = authority_state
         .wait_for_certificate_execution(&unwrap_cert, &authority_state.epoch_store_for_testing())
@@ -3531,7 +3527,6 @@ async fn test_store_revert_unwrap_move_call() {
     let cache = &authority_state.get_object_cache_reader();
     let reconfig_api = authority_state.get_reconfig_api();
 
-    reconfig_api.revert_state_update(&unwrap_digest);
     reconfig_api
         .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
@@ -3723,7 +3718,7 @@ async fn test_dynamic_object_field_address_name_parsing() {
 }
 
 #[tokio::test]
-async fn test_store_revert_add_ofield() {
+async fn test_clear_cache_removes_added_ofield() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3788,7 +3783,6 @@ async fn test_store_revert_add_ofield() {
     );
 
     let add_cert = init_certified_transaction(add_txn, &authority_state);
-    let add_digest = *add_cert.digest();
 
     let add_effects = authority_state
         .wait_for_certificate_execution(&add_cert, &authority_state.epoch_store_for_testing())
@@ -3815,8 +3809,6 @@ async fn test_store_revert_add_ofield() {
     assert_eq!(inner.version(), inner_v1.1);
     assert_eq!(inner.owner, Owner::ObjectOwner(field_v0.0.into()));
 
-    reconfig_api.revert_state_update(&add_digest);
-
     reconfig_api
         .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
@@ -3832,7 +3824,7 @@ async fn test_store_revert_add_ofield() {
 }
 
 #[tokio::test]
-async fn test_store_revert_remove_ofield() {
+async fn test_clear_cache_reverts_removed_ofield() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3914,7 +3906,6 @@ async fn test_store_revert_remove_ofield() {
     );
 
     let remove_ofield_cert = init_certified_transaction(remove_ofield_txn, &authority_state);
-    let remove_ofield_digest = *remove_ofield_cert.digest();
 
     let remove_effects = authority_state
         .wait_for_certificate_execution(
@@ -3938,7 +3929,6 @@ async fn test_store_revert_remove_ofield() {
     assert_eq!(inner.owner, Owner::AddressOwner(sender));
     assert_eq!(inner.version(), inner_v2.1);
 
-    reconfig_api.revert_state_update(&remove_ofield_digest);
     reconfig_api
         .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 

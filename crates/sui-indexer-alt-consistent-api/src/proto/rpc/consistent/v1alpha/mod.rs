@@ -8,6 +8,10 @@ include!("../../../generated/sui.rpc.consistent.v1alpha.rs");
 pub const FILE_DESCRIPTOR_SET: &[u8] =
     include_bytes!("../../../generated/sui.rpc.consistent.v1alpha.fds.bin");
 
+/// Metadata name used in requests to set the checkpoint to make the request at, and in responses
+/// to indicate the checkpoint at which the response was generated.
+pub const CHECKPOINT_METADATA: &str = "x-sui-checkpoint";
+
 #[cfg(test)]
 mod tests {
     use super::FILE_DESCRIPTOR_SET;

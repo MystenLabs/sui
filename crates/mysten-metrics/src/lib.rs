@@ -35,6 +35,21 @@ pub use guards::*;
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TxType {
+    SingleWriter,
+    SharedObject,
+}
+
+impl TxType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TxType::SingleWriter => TX_TYPE_SINGLE_WRITER_TX,
+            TxType::SharedObject => TX_TYPE_SHARED_OBJ_TX,
+        }
+    }
+}
+
 /// Used when latency is most definitely sub-second.
 pub const SUBSECOND_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3,

@@ -148,6 +148,11 @@ impl<C> Page<C> {
         self.limit as usize
     }
 
+    /// Returns the limit + 2 for has_previous_page and has_next_page pagination calculations
+    pub(crate) fn limit_with_overhead(&self) -> usize {
+        self.limit() + 2
+    }
+
     pub(crate) fn is_from_front(&self) -> bool {
         matches!(self.end, End::Front)
     }

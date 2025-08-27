@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use anyhow::Context;
 use bincode::{Decode, Encode};
@@ -276,7 +275,7 @@ mod tests {
         map.insert(0x0000_0007, 70, &mut batch).unwrap();
         map.insert(0x0000_0009, 90, &mut batch).unwrap();
         db.write("batch", wm(0), batch).unwrap();
-        db.snapshot(0);
+        db.take_snapshot(wm(0));
 
         let mut batch = rocksdb::WriteBatch::default();
         map.insert(0x0000_0000, 0, &mut batch).unwrap();
@@ -287,7 +286,7 @@ mod tests {
         map.insert(0x0001_0000, 1, &mut batch).unwrap();
         map.insert(0x0001_0002, 21, &mut batch).unwrap();
         db.write("batch", wm(1), batch).unwrap();
-        db.snapshot(1);
+        db.take_snapshot(wm(1));
 
         (d, map)
     }

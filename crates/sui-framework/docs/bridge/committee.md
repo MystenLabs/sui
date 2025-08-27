@@ -569,7 +569,7 @@ title: Module `bridge::committee`
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> new_members = vec_map::empty();
     <b>let</b> <b>mut</b> stake_participation_percentage = 0;
-    <b>while</b> (i &lt; self.member_registrations.size()) {
+    <b>while</b> (i &lt; self.member_registrations.length()) {
         // retrieve registration
         <b>let</b> (_, registration) = self.member_registrations.get_entry_by_idx(i);
         // Find validator stake amount from system state
@@ -633,7 +633,7 @@ title: Module `bridge::committee`
     <b>while</b> (list_idx &lt; list_len) {
         <b>let</b> target_address = &eth_addresses[list_idx];
         <b>let</b> <b>mut</b> found = <b>false</b>;
-        <b>while</b> (member_idx &lt; self.members.size()) {
+        <b>while</b> (member_idx &lt; self.members.length()) {
             <b>let</b> (pub_key, member) = self.members.get_entry_by_idx_mut(member_idx);
             <b>let</b> eth_address = <a href="../bridge/crypto.md#bridge_crypto_ecdsa_pub_key_to_eth_address">crypto::ecdsa_pub_key_to_eth_address</a>(pub_key);
             <b>if</b> (*target_address == eth_address) {
@@ -706,7 +706,7 @@ title: Module `bridge::committee`
     ctx: &TxContext,
 ) {
     <b>let</b> <b>mut</b> idx = 0;
-    <b>while</b> (idx &lt; self.members.size()) {
+    <b>while</b> (idx &lt; self.members.length()) {
         <b>let</b> (_, member) = self.members.get_entry_by_idx_mut(idx);
         <b>if</b> (member.sui_address == ctx.sender()) {
             member.http_rest_url = new_url;
@@ -742,7 +742,7 @@ title: Module `bridge::committee`
 
 
 <pre><code><b>fun</b> <a href="../bridge/committee.md#bridge_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>, bridge_pubkey_bytes: vector&lt;u8&gt;) {
-    <b>let</b> <b>mut</b> count = self.member_registrations.size();
+    <b>let</b> <b>mut</b> count = self.member_registrations.length();
     // bridge_pubkey_bytes must be found once and once only
     <b>let</b> <b>mut</b> bridge_key_found = <b>false</b>;
     <b>while</b> (count &gt; 0) {

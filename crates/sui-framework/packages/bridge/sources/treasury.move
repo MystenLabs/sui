@@ -95,8 +95,8 @@ public(package) fun register_foreign_token<T>(
 ) {
     // Make sure TreasuryCap has not been minted before.
     assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
-    let type_name = type_name::get<T>();
-    let address_bytes = hex::decode(ascii::into_bytes(type_name::get_address(&type_name)));
+    let type_name = type_name::with_defining_ids<T>();
+    let address_bytes = hex::decode(ascii::into_bytes(type_name::address_string(&type_name)));
     let coin_address = address::from_bytes(address_bytes);
     // Make sure upgrade cap is for the Coin package
     // FIXME: add test
@@ -170,12 +170,12 @@ public(package) fun create(ctx: &mut TxContext): BridgeTreasury {
 }
 
 public(package) fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>) {
-    let treasury = &mut self.treasuries[type_name::get<T>()];
+    let treasury = &mut self.treasuries[type_name::with_defining_ids<T>()];
     coin::burn(treasury, token);
 }
 
 public(package) fun mint<T>(self: &mut BridgeTreasury, amount: u64, ctx: &mut TxContext): Coin<T> {
-    let treasury = &mut self.treasuries[type_name::get<T>()];
+    let treasury = &mut self.treasuries[type_name::with_defining_ids<T>()];
     coin::mint(treasury, amount, ctx)
 }
 
@@ -198,7 +198,7 @@ public(package) fun update_asset_notional_price(
 }
 
 fun get_token_metadata<T>(self: &BridgeTreasury): BridgeTokenMetadata {
-    let coin_type = type_name::get<T>();
+    let coin_type = type_name::with_defining_ids<T>();
     let metadata = self.supported_tokens.try_get(&coin_type);
     assert!(metadata.is_some(), EUnsupportedTokenType);
     metadata.destroy_some()
@@ -234,7 +234,7 @@ public fun setup_for_testing(treasury: &mut BridgeTreasury) {
     treasury
         .supported_tokens
         .insert(
-            type_name::get<BTC>(),
+            type_name::with_defining_ids<BTC>(),
             BridgeTokenMetadata {
                 id: 1,
                 decimal_multiplier: 100_000_000,
@@ -245,7 +245,7 @@ public fun setup_for_testing(treasury: &mut BridgeTreasury) {
     treasury
         .supported_tokens
         .insert(
-            type_name::get<ETH>(),
+            type_name::with_defining_ids<ETH>(),
             BridgeTokenMetadata {
                 id: 2,
                 decimal_multiplier: 100_000_000,
@@ -256,7 +256,7 @@ public fun setup_for_testing(treasury: &mut BridgeTreasury) {
     treasury
         .supported_tokens
         .insert(
-            type_name::get<USDC>(),
+            type_name::with_defining_ids<USDC>(),
             BridgeTokenMetadata {
                 id: 3,
                 decimal_multiplier: 1_000_000,
@@ -267,7 +267,7 @@ public fun setup_for_testing(treasury: &mut BridgeTreasury) {
     treasury
         .supported_tokens
         .insert(
-            type_name::get<USDT>(),
+            type_name::with_defining_ids<USDT>(),
             BridgeTokenMetadata {
                 id: 4,
                 decimal_multiplier: 1_000_000,
@@ -276,10 +276,10 @@ public fun setup_for_testing(treasury: &mut BridgeTreasury) {
             },
         );
 
-    treasury.id_token_type_map.insert(1, type_name::get<BTC>());
-    treasury.id_token_type_map.insert(2, type_name::get<ETH>());
-    treasury.id_token_type_map.insert(3, type_name::get<USDC>());
-    treasury.id_token_type_map.insert(4, type_name::get<USDT>());
+    treasury.id_token_type_map.insert(1, type_name::with_defining_ids<BTC>());
+    treasury.id_token_type_map.insert(2, type_name::with_defining_ids<ETH>());
+    treasury.id_token_type_map.insert(3, type_name::with_defining_ids<USDC>());
+    treasury.id_token_type_map.insert(4, type_name::with_defining_ids<USDT>());
 }
 
 #[test_only]

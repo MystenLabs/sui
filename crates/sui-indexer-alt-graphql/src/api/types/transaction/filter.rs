@@ -1,10 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::InputObject;
-use std::ops::RangeInclusive;
+use anyhow::Context as _;
+use std::ops::{Range, RangeInclusive};
+
+use async_graphql::{Context, InputObject};
+use diesel::prelude::QueryableByName;
+use diesel::sql_types::BigInt;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_sql_macro::query;
 
 use crate::api::scalars::uint53::UInt53;
+use crate::error::RpcError;
 use crate::intersect;
 
 #[derive(InputObject, Debug, Default, Clone)]
@@ -17,6 +24,14 @@ pub(crate) struct TransactionFilter {
 
     /// Limit to transaction that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
+}
+
+#[derive(QueryableByName)]
+struct TxBounds {
+    #[diesel(sql_type = BigInt, column_name = "tx_lo")]
+    tx_lo: i64,
+    #[diesel(sql_type = BigInt, column_name = "tx_hi")]
+    tx_hi: i64,
 }
 
 impl TransactionFilter {
@@ -37,226 +52,73 @@ impl TransactionFilter {
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
         })
     }
-
-    /// The bounds on checkpoint sequence number, imposed by filters, and transaction checkpoint filters. The
-    /// outermost bounds are determined by the lowest checkpoint that is safe to read from (reader_lo) and
-    /// the highest checkpoint that has been processed based on the context's watermark(checkpoint_viewed_at).
-    ///
-    /// ```ignore
-    ///     reader_lo                                                     checkpoint_viewed_at
-    ///     [-----------------------------------------------------------------]
-    /// ```
-    ///
-    /// The bounds are further tightened by the filters if they are present.
-    ///
-    /// ```ignore
-    ///    filter.after_checkpoint                         filter.before_checkpoint
-    ///         [------------[--------------------------]------------]
-    ///                         filter.at_checkpoint
-    /// ```
-    ///
-    /// The bounds can be used to derive transaction sequence numbers to query for.
-    pub(crate) fn checkpoint_bounds(
-        &self,
-        reader_lo: u64,
-        checkpoint_viewed_at: u64,
-    ) -> Option<RangeInclusive<u64>> {
-        let cp_after = self.after_checkpoint.map(u64::from);
-        let cp_at = self.at_checkpoint.map(u64::from);
-        let cp_before = self.before_checkpoint.map(u64::from);
-
-        let cp_after_inclusive = match cp_after.map(|x| x.checked_add(1)) {
-            Some(Some(after)) => Some(after),
-            Some(None) => return None,
-            None => None,
-        };
-        // Inclusive checkpoint sequence number lower bound. If are no upper lower bound filters,
-        // we will use the smallest checkpoint available from the database, retrieved from
-        // the watermark.
-        //
-        // SAFETY: we can unwrap because of`Some(reader_lo)`
-        let cp_lo = max_option([cp_after_inclusive, cp_at, Some(reader_lo)]).unwrap();
-
-        let cp_before_inclusive = match cp_before.map(|x| x.checked_sub(1)) {
-            Some(Some(before)) => Some(before),
-            Some(None) => return None,
-            None => None,
-        };
-
-        // Inclusive checkpoint sequence upperbound. If are no upper bound filters,
-        // we will use `checkpoint_viewed_at`.
-        //
-        // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)`
-        let cp_hi = min_option([cp_before_inclusive, cp_at, Some(checkpoint_viewed_at)]).unwrap();
-
-        cp_hi
-            .checked_sub(cp_lo)
-            .map(|_| RangeInclusive::new(cp_lo, cp_hi))
-    }
 }
 
-/// Determines the maximum value in an arbitrary number of Option<impl Ord>.
-fn max_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
-    xs.into_iter().flatten().max()
-}
+/// The tx_sequence_numbers within checkpoint bounds
+/// The checkpoint lower and upper bounds are used to determine the inclusive lower (tx_lo) and exclusive
+/// upper (tx_hi) bounds of the sequence of tx_sequence_numbers to use in queries.
+///
+/// tx_lo: The cp_sequence_number of the checkpoint at the start of the bounds.
+/// tx_hi: The tx_lo of the checkpoint directly after the cp_bounds.end(). If it does not exist
+///      at cp_bounds.end(), fallback to the maximum tx_sequence_number in the context's watermark
+///      (global_tx_hi).
+///
+/// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
+/// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
+/// `hi_inclusive`).
+pub(crate) async fn tx_bounds(
+    ctx: &Context<'_>,
+    cp_bounds: &RangeInclusive<u64>,
+    global_tx_hi: u64,
+) -> Result<Range<u64>, RpcError> {
+    let pg_reader: &PgReader = ctx.data()?;
+    let query = query!(
+        r#"
+        WITH
+        tx_lo AS (
+            SELECT 
+                tx_lo 
+            FROM 
+                cp_sequence_numbers 
+            WHERE 
+                cp_sequence_number = {BigInt}
+            LIMIT 1
+        ),
 
-/// Determines the minimum value in an arbitrary number of Option<impl Ord>.
-fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
-    xs.into_iter().flatten().min()
-}
+        -- tx_hi is the tx_lo of the checkpoint directly after the cp_bounds.end()
+        tx_hi AS (
+            SELECT 
+                tx_lo AS tx_hi
+            FROM 
+                cp_sequence_numbers 
+            WHERE 
+                cp_sequence_number = {BigInt} + 1 
+            LIMIT 1
+        )
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        SELECT
+            (SELECT tx_lo FROM tx_lo) AS "tx_lo",
+            -- If we cannot get the tx_hi from the checkpoint directly after the cp_bounds.end() we use global tx_hi.
+            COALESCE((SELECT tx_hi FROM tx_hi), {BigInt}) AS "tx_hi";"#,
+        *cp_bounds.start() as i64,
+        *cp_bounds.end() as i64,
+        global_tx_hi as i64
+    );
 
-    #[test]
-    fn test_checkpoint_bounds_no_filters() {
-        assert_eq!(
-            TransactionFilter::default()
-                .checkpoint_bounds(5, 200)
-                .unwrap(),
-            5..=200
-        );
-    }
+    let mut conn = pg_reader
+        .connect()
+        .await
+        .context("Failed to connect to database")?;
 
-    #[test]
-    fn test_checkpoint_bounds_after_checkpoint() {
-        assert_eq!(
-            TransactionFilter {
-                after_checkpoint: Some(UInt53::from(10)),
-                ..Default::default()
-            }
-            .checkpoint_bounds(5, 200)
-            .unwrap(),
-            11..=200
-        );
-    }
+    let results: Vec<TxBounds> = conn
+        .results(query)
+        .await
+        .context("Failed to execute query")?;
 
-    #[test]
-    fn test_checkpoint_bounds_before_checkpoint() {
-        assert_eq!(
-            TransactionFilter {
-                before_checkpoint: Some(UInt53::from(100)),
-                ..Default::default()
-            }
-            .checkpoint_bounds(5, 200)
-            .unwrap(),
-            5..=99
-        );
-    }
+    let (tx_lo, tx_hi) = results
+        .first()
+        .context("No valid checkpoints found")
+        .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
 
-    #[test]
-    fn test_checkpoint_bounds_at_checkpoint() {
-        assert_eq!(
-            TransactionFilter {
-                at_checkpoint: Some(UInt53::from(50)),
-                ..Default::default()
-            }
-            .checkpoint_bounds(5, 200)
-            .unwrap(),
-            50..=50
-        );
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_combined_filters() {
-        assert_eq!(
-            TransactionFilter {
-                after_checkpoint: Some(UInt53::from(10)),
-                before_checkpoint: Some(UInt53::from(100)),
-                ..Default::default()
-            }
-            .checkpoint_bounds(5, 200)
-            .unwrap(),
-            11..=99
-        );
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_at_checkpoint_precedence() {
-        assert_eq!(
-            TransactionFilter {
-                after_checkpoint: Some(UInt53::from(10)),
-                at_checkpoint: Some(UInt53::from(50)),
-                before_checkpoint: Some(UInt53::from(100)),
-            }
-            .checkpoint_bounds(5, 200)
-            .unwrap(),
-            50..=50
-        );
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_boundary_equal() {
-        assert_eq!(
-            TransactionFilter::default()
-                .checkpoint_bounds(100, 100)
-                .unwrap(),
-            100..=100
-        );
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_reader_lo_override() {
-        assert_eq!(
-            TransactionFilter {
-                after_checkpoint: Some(UInt53::from(10)),
-                ..Default::default()
-            }
-            .checkpoint_bounds(50, 200)
-            .unwrap(),
-            50..=200
-        );
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_viewed_at_override() {
-        assert_eq!(
-            TransactionFilter {
-                before_checkpoint: Some(UInt53::from(100)),
-                ..Default::default()
-            }
-            .checkpoint_bounds(5, 80)
-            .unwrap(),
-            5..=80
-        );
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_overflow() {
-        assert!(TransactionFilter {
-            after_checkpoint: Some(UInt53::from(u64::MAX)),
-            ..Default::default()
-        }
-        .checkpoint_bounds(5, 200)
-        .is_none());
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_underflow() {
-        assert!(TransactionFilter {
-            before_checkpoint: Some(UInt53::from(0)),
-            ..Default::default()
-        }
-        .checkpoint_bounds(5, 200)
-        .is_none());
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_invalid_range() {
-        assert!(TransactionFilter {
-            after_checkpoint: Some(UInt53::from(100)),
-            before_checkpoint: Some(UInt53::from(50)),
-            ..Default::default()
-        }
-        .checkpoint_bounds(5, 200)
-        .is_none());
-    }
-
-    #[test]
-    fn test_checkpoint_bounds_reader_lo_greater() {
-        assert!(TransactionFilter::default()
-            .checkpoint_bounds(100, 50)
-            .is_none());
-    }
+    Ok(tx_lo..tx_hi)
 }

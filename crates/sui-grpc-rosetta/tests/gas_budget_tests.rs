@@ -17,6 +17,7 @@ use sui_grpc_rosetta::types::{
     TransactionIdentifierResponse,
 };
 use sui_keys::keystore::AccountKeystore;
+use sui_rpc::client::Client as GrpcClient;
 use sui_types::crypto::SuiSignature;
 use test_cluster::TestClusterBuilder;
 
@@ -54,7 +55,8 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let grpc_client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), grpc_client).await;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
