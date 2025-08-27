@@ -112,16 +112,16 @@ public enum RegulatedState has copy, drop, store {
 
 /// Hot potato pattern object to enforce registration after "create_currency" data creation.
 /// This object must be transferred to the registry to complete the coin registration process.
-public struct InitCoinData<phantom T> {
+public struct CurrencyBuilder<phantom T> {
     data: CoinData<T>,
+    is_otw: bool,
 }
 
 // 1. Entrypoint for creating currency [done]
 // 2. Entrypoint for creating regulated currency [done]
 // 3. Claim capability (using treasury cap) [done]
 // 3. Migrate existing CoinMetadada -> Registry Metadata
-// 4.
-public fun register_currency<T: drop>(
+public fun new_currency<T: drop>(
     otw: T,
     decimals: u8,
     symbol: String,
@@ -129,13 +129,13 @@ public fun register_currency<T: drop>(
     description: String,
     icon_url: String,
     ctx: &mut TxContext,
-): (TreasuryCap<T>, MetadataCap<T>, InitCoinData<T>) {
-    // Make sure there's only one instance of the type T
+): (CurrencyBuilder<T>, TreasuryCap<T>) {
+    // Make sure there's only one instance of the type T, using an OTW check.
     assert!(sui::types::is_one_time_witness(&otw));
 
-    let treasury_cap = coin::new_treasury_cap(otw, ctx);
+    let treasury_cap = coin::new_treasury_cap(ctx);
 
-    let mut metadata = CoinData<T> {
+    let metadata = CoinData<T> {
         id: object::new(ctx),
         decimals,
         name,
@@ -149,14 +149,47 @@ public fun register_currency<T: drop>(
         extra_fields: vec_map::empty(),
     };
 
-    let metadata_cap = metadata.claim_cap(&treasury_cap, ctx);
+    (CurrencyBuilder { data: metadata, is_otw: true }, treasury_cap)
+}
 
-    (treasury_cap, metadata_cap, InitCoinData { data: metadata })
+/// Create a currency dynamically.
+/// TODO: Add verifier rule, as this needs to only be callable by the module that defines `T`.
+public fun new_dynamic_currency<T: /* internal */ key>(
+    registry: &mut CoinRegistry,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &mut TxContext,
+): (CurrencyBuilder<T>, TreasuryCap<T>) {
+    // Unlike OTW creation, the guarantee on not having duplicate currencies come from the
+    // coin registry.
+    assert!(!registry.exists<T>());
+
+    let treasury_cap = coin::new_treasury_cap(ctx);
+
+    let metadata = CoinData<T> {
+        // TODO: use `derived_object::claim(&mut registry.id, CoinKey<T>())`
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        supply: option::some(SupplyState::Unknown),
+        regulated: RegulatedState::Unregulated,
+        treasury_cap_id: option::some(object::id(&treasury_cap)),
+        metadata_cap_id: option::none(),
+        extra_fields: vec_map::empty(),
+    };
+
+    (CurrencyBuilder { data: metadata, is_otw: false }, treasury_cap)
 }
 
 /// Allows converting an `OTW` coin into a regulated coin.
 public fun make_regulated<T>(
-    init: &mut InitCoinData<T>,
+    init: &mut CurrencyBuilder<T>,
     allow_global_pause: bool,
     ctx: &mut TxContext,
 ): DenyCapV2<T> {
@@ -179,7 +212,7 @@ public fun claim_cap<T>(
     _: &TreasuryCap<T>,
     ctx: &mut TxContext,
 ): MetadataCap<T> {
-    assert!(!data.meta_data_cap_claimed(), EMetadataCapAlreadyClaimed);
+    assert!(!data.metadata_cap_claimed(), EMetadataCapAlreadyClaimed);
     let id = object::new(ctx);
     let metadata_cap_id = id.to_inner();
 
@@ -209,16 +242,16 @@ public fun make_deflationary<T>(data: &mut CoinData<T>, cap: TreasuryCap<T>) {
     };
 }
 
-/// Transfer the InitCoinData to the registry to complete coin registration.
-/// This function is called after `register_currency` to register the coin data
-/// in the central registry.
-public fun transfer_to_registry<T>(init: InitCoinData<T>) {
-    let InitCoinData { data } = init;
+public fun finalize<T>(builder: CurrencyBuilder<T>, ctx: &mut TxContext): MetadataCap<T> {
+    let CurrencyBuilder { mut data, is_otw } = builder;
 
-    transfer::transfer(
-        data,
-        coin_registry_id().to_address(),
-    );
+    let id = object::new(ctx);
+    data.metadata_cap_id.fill(id.to_inner());
+
+    if (is_otw) transfer::transfer(data, coin_registry_id().to_address())
+    else transfer::share_object(data);
+
+    MetadataCap<T> { id }
 }
 
 /// The second step in the "otw" initialization of coin metadata, that takes in the `CoinData<T>` that was
@@ -263,9 +296,9 @@ public fun finalize_registration<T>(
     })
 }
 
-/// Get mutable reference to the coin data from InitCoinData.
+/// Get mutable reference to the coin data from CurrencyBuilder.
 /// This function is package-private and should only be called by the coin module.
-public fun inner_mut<T>(init: &mut InitCoinData<T>): &mut CoinData<T> {
+public fun inner_mut<T>(init: &mut CurrencyBuilder<T>): &mut CoinData<T> {
     &mut init.data
 }
 
@@ -309,7 +342,7 @@ public fun migrate_legacy_metadata<T>(registry: &mut CoinRegistry, v1: &CoinMeta
 
 /// TODO: Allow coin metadata to be updated from legacy as described in our docs.
 public fun update_from_legacy_metadata<T>(data: &mut CoinData<T>, v1: &CoinMetadata<T>) {
-    assert!(!data.meta_data_cap_claimed(), ECannotUpdateManagedMetadata);
+    assert!(!data.metadata_cap_claimed(), ECannotUpdateManagedMetadata);
     abort
 }
 
@@ -319,7 +352,7 @@ public fun update_from_legacy_metadata<T>(data: &mut CoinData<T>, v1: &CoinMetad
 /// This function is only callable after there's "proof" that the author of the coin
 /// can manage the metadata using the registry system (so having a metadata cap claimed).
 public fun delete_migrated_legacy_metadata<T>(data: &mut CoinData<T>, v1: CoinMetadata<T>) {
-    assert!(data.meta_data_cap_claimed(), EMetadataCapNotClaimed);
+    assert!(data.metadata_cap_claimed(), EMetadataCapNotClaimed);
     v1.destroy_metadata();
 }
 
@@ -368,7 +401,7 @@ public fun description<T>(coin_data: &CoinData<T>): String {
 public fun icon_url<T>(coin_data: &CoinData<T>): String { coin_data.icon_url }
 
 /// Check if the metadata capability has been claimed for this coin type.
-public fun meta_data_cap_claimed<T>(coin_data: &CoinData<T>): bool {
+public fun metadata_cap_claimed<T>(coin_data: &CoinData<T>): bool {
     coin_data.metadata_cap_id.is_some()
 }
 
@@ -406,8 +439,8 @@ public fun exists<T>(registry: &CoinRegistry): bool {
     abort
 }
 
-/// Get immutable reference to the coin data from InitCoinData.
-public fun inner<T>(init: &InitCoinData<T>): &CoinData<T> {
+/// Get immutable reference to the coin data from CurrencyBuilder.
+public fun inner<T>(init: &CurrencyBuilder<T>): &CoinData<T> {
     &init.data
 }
 
@@ -440,9 +473,9 @@ public fun create_coin_data_registry_for_testing(ctx: &mut TxContext): CoinRegis
 }
 
 #[test_only]
-/// Unwrap InitCoinData for testing purposes.
+/// Unwrap CurrencyBuilder for testing purposes.
 /// This function is test-only and should only be used in tests.
-public fun unwrap_for_testing<T>(init: InitCoinData<T>): CoinData<T> {
-    let InitCoinData { data } = init;
+public fun unwrap_for_testing<T>(init: CurrencyBuilder<T>): CoinData<T> {
+    let CurrencyBuilder { data, .. } = init;
     data
 }
