@@ -171,7 +171,7 @@ $ touch diesel.toml
 
 Update and save the file with the following code:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/diesel.toml}
+{@inject: examples/rust/basic-sui-indexer/diesel.toml}
 
 ###substep Create database table using Diesel migrations
 
@@ -196,7 +196,7 @@ You should now have a `migrations` folder in your project. There should be a sub
 
 Open `up.sql` and replace its contents with the following code (using the actual folder name):
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql}
+{@inject: examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql}
 
 :::tip
 
@@ -210,7 +210,7 @@ For a production environment, however, `BYTEA` is strongly recommended. It offer
 
 Save `up.sql`, then open `down.sql` to edit. Replace the contents of the file with the following code and save it:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql}
+{@inject: examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql}
 
 ###substep Apply migration and generate Rust schema
 
@@ -260,7 +260,7 @@ $ touch ./src/handlers.rs
 
 Open the file and define a concrete struct to implement the `Processor` and `Handler` traits:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/handlers.rs#struct=TransactionDigestHandler}
+{@inject: examples/rust/basic-sui-indexer/src/handlers.rs#struct=TransactionDigestHandler}
 
 Save the file but keep it open as the next steps add to its code.
 
