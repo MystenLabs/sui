@@ -509,10 +509,10 @@ public(package) fun new_deny_cap_v2<T>(
     }
 }
 
-public(package) fun new_treasury_cap<T: drop>(otw: T, ctx: &mut TxContext): TreasuryCap<T> {
+public(package) fun new_treasury_cap<T>(ctx: &mut TxContext): TreasuryCap<T> {
     TreasuryCap {
         id: object::new(ctx),
-        total_supply: balance::create_supply(otw),
+        total_supply: balance::create_supply_internal(),
     }
 }
 
