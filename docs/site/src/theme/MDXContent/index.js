@@ -31,6 +31,7 @@ export default function MDXContent({ children }) {
     ProtocolConfig,
     YTCarousel,
     BrowserOnly,
+    UnsafeLink,
   };
   return <MDXProvider components={suiComponents}>{children}</MDXProvider>;
 }
