@@ -93,13 +93,13 @@ pub struct DefinitionMap<Value>(HashMap<IntraPackageKey, Value>);
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct VirtualTableKey {
     pub package_key: OriginalId,
-    pub inner_pkg_key: IntraPackageKey,
+    pub(crate) inner_pkg_key: IntraPackageKey,
 }
 
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub struct IntraPackageKey {
-    pub module_name: IdentifierKey,
-    pub member_name: IdentifierKey,
+    pub(crate) module_name: IdentifierKey,
+    pub(crate) member_name: IdentifierKey,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1047,7 +1047,7 @@ impl VirtualTableKey {
         }
     }
 
-    pub fn from_parts(
+    pub(crate) fn from_parts(
         package_key: OriginalId,
         module_name: IdentifierKey,
         member_name: IdentifierKey,
