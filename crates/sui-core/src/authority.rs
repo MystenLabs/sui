@@ -2798,20 +2798,28 @@ impl AuthorityState {
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
                 TOTAL_FAILING_STAKE.with_borrow_mut(|total_stake| {
-                    let should_fork = if full_halt {
-                        // For partial fork, fork enough nodes to cause true split brain
-                        *total_stake <= committee.validity_threshold()
-                    } else {
-                        // For partial fork, only fork up to but not including validity threshold
-                        *total_stake + cur_stake < committee.validity_threshold()
-                    };
+                    let already_forked = forked_validators
+                        .lock()
+                        .ok()
+                        .map(|set| set.contains(&self.name))
+                        .unwrap_or(false);
 
-                    if should_fork {
-                        *total_stake += cur_stake;
+                    if !already_forked {
+                        let should_fork = if full_halt {
+                            // For full halt, fork enough nodes to reach validity threshold
+                            *total_stake <= committee.validity_threshold()
+                        } else {
+                            // For partial fork, stay strictly below validity threshold
+                            *total_stake + cur_stake < committee.validity_threshold()
+                        };
 
-                        if let Ok(mut external_set) = forked_validators.lock() {
-                            external_set.insert(self.name);
-                            info!("forked_validators: {:?}", external_set);
+                        if should_fork {
+                            *total_stake += cur_stake;
+
+                            if let Ok(mut external_set) = forked_validators.lock() {
+                                external_set.insert(self.name);
+                                info!("forked_validators: {:?}", external_set);
+                            }
                         }
                     }
 
@@ -2839,7 +2847,6 @@ impl AuthorityState {
                                         ?original_effects_digest,
                                         "Captured forked effects digest for transaction"
                                     );
-                                    info!("cp_exec failing tx");
                                     effects.gas_cost_summary_mut_for_testing().computation_cost +=
                                         1;
                                 }
