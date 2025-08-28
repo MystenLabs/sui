@@ -735,7 +735,7 @@ impl ConsensusTransaction {
             || matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 
-    pub fn is_user_transaction(&self) -> bool {
+    pub fn is_mfp_transaction(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 
