@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "digests": [
+    {
+      "path": "repo/foo.txt",
+      "digest": "foo_digest"
+    },
+    {
+      "path": "buck-out/bar.txt",
+      "digest": "bar_digest"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+load("@prelude//android:min_sdk_version.bzl", "get_min_sdk_version_constraint_value_name", "get_min_sdk_version_range")
+
+native.constraint_setting(
+    name = "maybe_build_only_native_code",
+    visibility = ["PUBLIC"],
+)
+
+native.constraint_value(
+    name = "build_only_native_code",
+    constraint_setting = ":maybe_build_only_native_code",
+    visibility = ["PUBLIC"],
+)
+
+native.constraint_setting(
+    name = "maybe_merge_native_libraries",
+    visibility = ["PUBLIC"],
+)
+
+native.constraint_value(
+    name = "merge_native_libraries",
+    constraint_setting = ":maybe_merge_native_libraries",
+    visibility = ["PUBLIC"],
+)
+
+native.filegroup(
+    name = "files",
+    srcs = glob(
+        ["**"],
+    ),
+    visibility = ["PUBLIC"],
+)
+
+native.constraint_setting(
+    name = "min_sdk_version",
+    visibility = ["PUBLIC"],
+)
+
+[
+    native.constraint_value(
+        name = get_min_sdk_version_constraint_value_name(min_sdk),
+        constraint_setting = ":min_sdk_version",
+    )
+    for min_sdk in get_min_sdk_version_range()
+]

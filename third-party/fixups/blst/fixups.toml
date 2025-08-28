@@ -1,0 +1,61 @@
+features = ["std"]
+buildscript = []
+
+# TODO all platforms
+[[platform_fixup.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.buildscript.cxx_library]
+name = "libblst-sys-x64_64-linux"
+srcs = [
+    "blst/src/server.c",
+    "blst/build/assembly.S",
+    "blst/build/elf/sha256-x86_64.s",
+    "blst/build/elf/add_mod_384-x86_64.s",
+    "blst/build/elf/add_mod_384x384-x86_64.s",
+    "blst/build/elf/add_mod_256-x86_64.s",
+    "blst/build/elf/ct_inverse_mod_256-x86_64.s",
+    "blst/build/elf/div3w-x86_64.s",
+    "blst/build/elf/ct_is_square_mod_384-x86_64.s",
+
+]
+headers = [
+    "blst/src/**/*.h",
+    "blst/src/**/*.hpp",
+    "blst/bindings/*.h",
+    "blst/bindings/*.hpp",
+]
+include_paths = [
+    "blst/src",
+]
+compiler_flags = [
+    "-mno-avx",
+    "-fno-builtin",
+    "-Wno-unused-function",
+    "-Wno-unused-command-line-argument",
+    "-Wno-error",
+]
+[[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.buildscript.cxx_library]
+name = "libblst-sys-aarch64-macos"
+srcs = [
+    "blst/build/mach-o/*arm*",
+    "blst/src/server.c",
+    "blst/build/assembly.S",
+]
+headers = [
+    "blst/src/**/*.h",
+    "blst/src/**/*.hpp",
+    "blst/bindings/*.h",
+    "blst/bindings/*.hpp",
+]
+include_paths = [
+    "blst/src",
+]
+compiler_flags = [
+    "-mno-avx",
+    "-fno-builtin",
+    "-Wno-unused-function",
+    "-Wno-unused-command-line-argument",
+    "-Wno-error",
+]
+# [env]
+# SCRATCH_LIMIT = "46080"

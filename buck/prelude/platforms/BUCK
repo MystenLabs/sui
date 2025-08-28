@@ -1,0 +1,79 @@
+# Used by open source projects to provide a simple platform setting
+
+load(":defs.bzl", "execution_platform", "host_configuration")
+
+prelude = native
+
+execution_platform(
+    name="default",
+    cpu_configuration=host_configuration.cpu,
+    os_configuration=host_configuration.os,
+    use_windows_path_separators=host_info().os.is_windows,
+)
+
+prelude.constraint_setting(
+    name="runs_remote",
+)
+
+prelude.constraint_value(
+    name="may_run_remote",
+    constraint_setting=":runs_remote",
+    visibility=["PUBLIC"],
+)
+
+prelude.constraint_setting(
+    name="runs_local",
+    visibility=["PUBLIC"],
+)
+
+prelude.constraint_value(
+    name="may_run_local",
+    constraint_setting=":runs_local",
+    visibility=["PUBLIC"],
+)
+
+prelude.constraint_setting(
+    name="runs_only",
+)
+
+prelude.constraint_value(
+    name="runs_only_local",
+    constraint_setting=":runs_only",
+    visibility=["PUBLIC"],
+)
+
+prelude.constraint_value(
+    name="runs_only_remote",
+    constraint_setting=":runs_only",
+    visibility=["PUBLIC"],
+)
+
+prelude.constraint_setting(
+    name="fat_platform_marker",
+)
+
+prelude.constraint_value(
+    name="fat_platform_enabled",
+    constraint_setting=":fat_platform_marker",
+    visibility=["PUBLIC"],
+)
+
+# This is mostly here for a rule type to add a dependency on it to mark all
+# instances of that rule type as incompatible with a fat platform. Ideally,
+# toolchains could affect the target compatibility of their users directly but
+# toolchains are currently all exec deps and so cannot do that. We'd like
+# buck2 to support a form of dep that inherited its users execution platform
+# so that toolchains could basically get visibility and affect both target and
+# execution configuration, but that's not implemented yet.
+export_file(
+    name="fat_platform_incompatible",
+    # @oss-disable: src = "TARGETS.v2",
+    src="BUCK",  # @oss-enable
+    target_compatible_with=select(
+        {
+            ":fat_platform_enabled": ["config//:none"],
+            "DEFAULT": [],
+        }
+    ),
+    visibility=["PUBLIC"],
+)
