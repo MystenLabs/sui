@@ -124,11 +124,17 @@ impl IdentifierInterner {
         }
     }
 
-    pub(crate) fn get_or_intern_identifier(&self, ident: &Identifier) -> PartialVMResult<IdentifierKey> {
+    pub(crate) fn get_or_intern_identifier(
+        &self,
+        ident: &Identifier,
+    ) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident.borrow_str())
     }
 
-    pub(crate) fn get_or_intern_ident_str(&self, ident_str: &IdentStr) -> PartialVMResult<IdentifierKey> {
+    pub(crate) fn get_or_intern_ident_str(
+        &self,
+        ident_str: &IdentStr,
+    ) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
