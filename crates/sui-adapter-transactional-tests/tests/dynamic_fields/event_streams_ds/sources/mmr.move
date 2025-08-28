@@ -117,3 +117,22 @@ fun test_mmr_addition() {
     let y = hash_two_to_one_via_bcs(x, x);
     assert!(mmr.digest_vec[2] == y);
 }
+
+#[test]
+fun test_mmr_digest_compat_with_rust() {
+    let mut mmr = init_mmr();
+    let count = 8;
+
+    let mut i = 0;
+    while (i < count) {
+        let fixed_new_val = vector[98, 108, 111, 99, 107, 49 + i];
+        add_to_mmr(fixed_new_val, &mut mmr);
+        i = i + 1;
+    };
+
+    assert!(mmr.digest_vec.length() == 4);
+    assert!(mmr.digest_vec[0].is_empty());
+    assert!(mmr.digest_vec[1].is_empty());
+    assert!(mmr.digest_vec[2].is_empty());
+    assert!(mmr.digest_vec[3] == x"85718f77efd6444907af1d47bbf32d3ebffb616f70df03f6649770aba142d689");
+}
