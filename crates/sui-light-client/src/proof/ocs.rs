@@ -6,8 +6,8 @@ use fastcrypto::merkle::{MerkleNonInclusionProof, MerkleProof, MerkleTree, Node}
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
-use sui_types::digests::{CheckpointArtifactsDigest, ObjectDigest};
-use sui_types::messages_checkpoint::CheckpointArtifacts;
+use sui_types::digests::{CheckpointArtifactsDigest, Digest, ObjectDigest};
+use sui_types::messages_checkpoint::{CheckpointArtifactDigests, CheckpointArtifacts};
 use sui_types::{
     base_types::ObjectID, full_checkpoint_content::CheckpointData,
     messages_checkpoint::VerifiedCheckpoint,
@@ -69,7 +69,9 @@ pub struct ModifiedObjectTree {
 impl ModifiedObjectTree {
     pub fn new(artifacts: &CheckpointArtifacts) -> Self {
         let mut object_pos_map = HashMap::new();
-        let object_ref_vec = &artifacts.latest_object_states.contents;
+        let object_ref_vec = artifacts
+            .object_states()
+            .expect("CheckpointArtifacts should contain object states");
 
         // A sanity check to ensure the object IDs are in increasing order.
         object_ref_vec.windows(2).for_each(|window| {
@@ -91,7 +93,7 @@ impl ModifiedObjectTree {
         let tree = MerkleTree::<Blake2b256>::build_from_unserialized(object_ref_vec.iter())
             .expect("Failed to build Merkle tree");
         ModifiedObjectTree {
-            contents: object_ref_vec.clone(),
+            contents: object_ref_vec.to_vec(),
             object_pos_map,
             tree,
         }
@@ -130,6 +132,7 @@ impl ModifiedObjectTree {
         Ok(OCSInclusionProof {
             merkle_proof: proof,
             leaf_index: *index,
+            tree_root: Digest::new(self.tree.root().bytes()),
         })
     }
 
@@ -151,6 +154,7 @@ impl ModifiedObjectTree {
             .map_err(|e| ProofError::GeneralError(e.to_string()))?;
         Ok(OCSNonInclusionProof {
             non_inclusion_proof,
+            tree_root: Digest::new(self.tree.root().bytes()),
         })
     }
 }
@@ -159,17 +163,35 @@ impl ModifiedObjectTree {
 pub struct OCSInclusionProof {
     pub merkle_proof: MerkleProof<Blake2b256>,
     pub leaf_index: usize,
+    pub tree_root: Digest,
 }
 
 impl OCSInclusionProof {
-    pub fn verify(&self, target: &OCSTarget, root: &CheckpointArtifactsDigest) -> ProofResult<()> {
+    pub fn verify(
+        &self,
+        target: &OCSTarget,
+        artifacts_digest: &CheckpointArtifactsDigest,
+    ) -> ProofResult<()> {
         if target.target_type != OCSTargetType::Inclusion {
             return Err(ProofError::MismatchedTargetAndProofType);
         }
 
+        let checkpoint_artifact_digests = CheckpointArtifactDigests {
+            digests: vec![self.tree_root],
+        };
+
+        if checkpoint_artifact_digests
+            .digest()
+            .map_err(|e| ProofError::GeneralError(e.to_string()))?
+            != *artifacts_digest
+        {
+            return Err(ProofError::InvalidProof);
+        }
+
+        // Use the stored tree root for verification
         self.merkle_proof
             .verify_proof_with_unserialized_leaf(
-                &Node::from(root.into_inner()),
+                &Node::from(self.tree_root.into_inner()),
                 &target.object_ref,
                 self.leaf_index,
             )
@@ -180,16 +202,33 @@ impl OCSInclusionProof {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OCSNonInclusionProof {
     pub non_inclusion_proof: MerkleNonInclusionProof<ObjectRef, Blake2b256>,
+    pub tree_root: Digest,
 }
 
 impl OCSNonInclusionProof {
-    pub fn verify(&self, target: &OCSTarget, root: &CheckpointArtifactsDigest) -> ProofResult<()> {
+    pub fn verify(
+        &self,
+        target: &OCSTarget,
+        artifacts_digest: &CheckpointArtifactsDigest,
+    ) -> ProofResult<()> {
         if target.target_type != OCSTargetType::NonInclusion {
             return Err(ProofError::MismatchedTargetAndProofType);
         }
 
+        let checkpoint_artifact_digests = CheckpointArtifactDigests {
+            digests: vec![self.tree_root],
+        };
+
+        if checkpoint_artifact_digests
+            .digest()
+            .map_err(|e| ProofError::GeneralError(e.to_string()))?
+            != *artifacts_digest
+        {
+            return Err(ProofError::InvalidProof);
+        }
+
         self.non_inclusion_proof
-            .verify_proof(&Node::from(root.into_inner()), &target.object_ref)
+            .verify_proof(&Node::from(self.tree_root.into_inner()), &target.object_ref)
             .map_err(|_| ProofError::InvalidProof)
     }
 }

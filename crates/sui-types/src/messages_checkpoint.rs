@@ -24,8 +24,8 @@ use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
-use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
+use fastcrypto::hash::{Blake2b256, HashFunction};
 use fastcrypto::merkle::MerkleTree;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
@@ -34,7 +34,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -124,61 +124,107 @@ impl Default for ECMHLiveObjectSetDigest {
     }
 }
 
-/// A sorted list of object checkpoint states (by object ID).
-#[derive(Debug)]
-pub struct ObjectCheckpointStates {
-    pub contents: Vec<ObjectRef>,
-}
-
-impl ObjectCheckpointStates {
-    fn new(contents: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>) -> Self {
-        Self {
-            contents: contents
-                .into_iter()
-                .map(|(id, (seq, digest))| (id, seq, digest))
-                .collect::<Vec<_>>(),
-        }
-    }
-
-    /// Compute the Merkle root of the object checkpoint states.
-    /// Assumes that the object checkpoint states are sorted by object ID.
-    pub fn digest(&self) -> SuiResult<ObjectCheckpointStatesDigest> {
-        let tree = MerkleTree::<Blake2b256>::build_from_unserialized(self.contents.iter())
-            .map_err(|e| SuiError::GenericAuthorityError {
-                error: format!("Failed to build Merkle tree: {}", e),
-            })?;
-        let root = tree.root().bytes();
-        Ok(ObjectCheckpointStatesDigest::from(root))
-    }
-}
-
-#[derive(Debug)]
-pub struct ObjectCheckpointStatesDigest {
-    pub digest: Digest,
-}
-
-impl From<[u8; 32]> for ObjectCheckpointStatesDigest {
-    fn from(digest: [u8; 32]) -> Self {
-        Self {
-            digest: Digest::new(digest),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct CheckpointArtifacts {
-    pub latest_object_states: ObjectCheckpointStates,
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CheckpointArtifact {
+    ObjectStates(Vec<ObjectRef>),
     // Add more.. e.g., execution digests, events, etc.
 }
 
-impl CheckpointArtifacts {
-    pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
-        let latest_object_states_digest = self.latest_object_states.digest()?;
+impl CheckpointArtifact {
+    pub fn digest(&self) -> SuiResult<Digest> {
+        match self {
+            Self::ObjectStates(object_states) => {
+                let tree = MerkleTree::<Blake2b256>::build_from_unserialized(object_states.iter())
+                    .map_err(|e| SuiError::GenericAuthorityError {
+                        error: format!("Failed to build Merkle tree: {}", e),
+                    })?;
+                let root = tree.root().bytes();
+                Ok(Digest::new(root))
+            }
+        }
+    }
+}
 
-        // When there are more artifacts, we can hash them all into a single digest.
-        Ok(CheckpointArtifactsDigest::from(
-            latest_object_states_digest.digest.into_inner(),
+#[derive(Debug, Default)]
+pub struct CheckpointArtifacts {
+    artifacts: BTreeSet<CheckpointArtifact>,
+}
+
+#[derive(Debug)]
+pub struct CheckpointArtifactDigests {
+    pub digests: Vec<Digest>,
+}
+
+impl TryFrom<CheckpointArtifacts> for CheckpointArtifactDigests {
+    type Error = SuiError;
+
+    fn try_from(artifacts: CheckpointArtifacts) -> Result<Self, Self::Error> {
+        // Already sorted by BTreeSet!
+        let digests = artifacts
+            .artifacts
+            .iter()
+            .map(|a| a.digest())
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { digests })
+    }
+}
+
+impl TryFrom<&CheckpointArtifacts> for CheckpointArtifactDigests {
+    type Error = SuiError;
+
+    fn try_from(artifacts: &CheckpointArtifacts) -> Result<Self, Self::Error> {
+        // Already sorted by BTreeSet!
+        let digests = artifacts
+            .artifacts
+            .iter()
+            .map(|a| a.digest())
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { digests })
+    }
+}
+
+impl CheckpointArtifactDigests {
+    pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
+        let bytes = bcs::to_bytes(&self.digests)
+            .map_err(|e| SuiError::from(format!("BCS error: {}", e)))?;
+        Ok(CheckpointArtifactsDigest::new(
+            Blake2b256::digest(&bytes).into(),
         ))
+    }
+}
+
+impl CheckpointArtifacts {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add_object_states(
+        &mut self,
+        object_states: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
+    ) {
+        self.artifacts.insert(CheckpointArtifact::ObjectStates(
+            object_states
+                .into_iter()
+                .map(|(id, (seq, digest))| (id, seq, digest))
+                .collect::<Vec<_>>(),
+        ));
+    }
+
+    /// Get the object states if present
+    pub fn object_states(&self) -> SuiResult<&[ObjectRef]> {
+        self.artifacts
+            .iter()
+            .find(|artifact| matches!(artifact, CheckpointArtifact::ObjectStates(_)))
+            .map(|artifact| match artifact {
+                CheckpointArtifact::ObjectStates(states) => states.as_slice(),
+            })
+            .ok_or(SuiError::GenericAuthorityError {
+                error: "Object states not found in checkpoint artifacts".to_string(),
+            })
+    }
+
+    pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
+        CheckpointArtifactDigests::try_from(self)?.digest()
     }
 }
 
@@ -186,15 +232,14 @@ impl From<&[&TransactionEffects]> for CheckpointArtifacts {
     fn from(effects: &[&TransactionEffects]) -> Self {
         let mut latest_object_states = BTreeMap::new();
         for e in effects {
-            // TODO: Update after Mark's PR is merged.
-            for ((id, seq, digest), _) in e.mutated() {
+            for (id, seq, digest) in e.written() {
                 latest_object_states.insert(id, (seq, digest));
             }
         }
 
-        Self {
-            latest_object_states: ObjectCheckpointStates::new(latest_object_states),
-        }
+        let mut artifacts = CheckpointArtifacts::new();
+        artifacts.add_object_states(latest_object_states);
+        artifacts
     }
 }
 

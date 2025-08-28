@@ -21,7 +21,7 @@ use sui_types::{
 
 // Note: Once checkpoint artifacts are live, we can just read an actual checkpoint file.
 // Until then, we use the artifacts.chk file (generated on a localnet with artifacts enabled).
-const CHECKPOINT_FILE: &str = "test_files/artifacts.chk";
+const CHECKPOINT_FILE: &str = "test_files/cp_with_artifacts.chk";
 
 fn load_checkpoint(file_path: &str) -> CheckpointData {
     let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
