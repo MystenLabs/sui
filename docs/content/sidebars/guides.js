@@ -142,6 +142,7 @@ const guides = [
 					},*/
 					'guides/developer/advanced/move-2024-migration',
 					'guides/developer/advanced/custom-indexer',
+					'guides/developer/advanced/custom-indexer/indexer-walrus',
 					'guides/developer/advanced/randomness-onchain',
 					'guides/developer/getting-started/graphql-rpc',
 					'guides/developer/advanced/graphql-migration',
