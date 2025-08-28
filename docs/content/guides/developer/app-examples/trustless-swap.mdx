@@ -59,7 +59,7 @@ To begin, create a new folder on your system titled `trading` that holds all you
 
 In this part of the guide, you write the Move contracts that perform the trustless swaps. The guide describes how to create the package from scratch, but you can use a fork or copy of the example code in the Sui repo to follow along instead. See [Write a Move Package](../first-app/write-package.mdx) to learn more about package structure and how to use the Sui CLI to scaffold a new project.
 
-### Move.toml
+### `Move.toml`
 
 To begin writing your smart contracts, create an `escrow` folder in your `contracts` folder (if using recommended directory names). Create a file inside the folder named `Move.toml` and copy the following code into it. This is the package manifest file. If you want to learn more about the structure of the file, see [Package Manifest](https://move-book.com/concepts/manifest.html) in The Move Book.
 
@@ -71,7 +71,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 {@inject:  ../../../../../examples/trading/contracts/escrow/Move.toml}
 
-### Locked and Key
+### `Locked` and `Key`
 
 With your manifest file in place, it's time to start creating the Move assets for this project. In your `escrow` folder, at the same level as your `Move.toml` file, create a `sources` folder. This is the common file structure of a package in Move. Create a new file inside `sources` titled `lock.move`. This file contains the logic that locks the object involved in a trade. The complete source code for this file follows and the sections that come after detail its components.
 
@@ -149,7 +149,7 @@ Together, they ensure that a lock and key cannot have existed before the lock op
 
 :::
 
-### Testing Locked and Key
+### Testing `Locked` and `Key`
 
 Move's type system guarantees that a given `Key` cannot be re-used (because `unlock` accepts it by value), but there are some properties that need to be confirmed with tests:
 
@@ -204,7 +204,7 @@ You might notice that the Move compiler creates a `build` subfolder inside `escr
 
 :::
 
-### The Escrow protocol {#escrow}
+### The `Escrow` protocol {#escrow}
 
 Create a new file in your `escrow` folder titled `shared.move`. The code in this file creates the shared `Escrow` object and completes the trading logic. The complete source code for this file follows and the sections that come after detail its components.
 

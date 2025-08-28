@@ -40,7 +40,7 @@ Amount: <COIN-AMOUNT>
 ...
 ```
 
-## DenyList
+## `DenyList`
 
 The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCapV2` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
 
@@ -62,8 +62,8 @@ Tokens reuse the `TreasuryCap` defined in the `sui::coin` module and therefore h
 
 Coin-like functions perform the minting and burning of tokens. Both require the `TreasuryCap`:
 
-- `token::mint` - mint a token
-- `token::burn` - burn a token
+- `token::mint`: Mint a token
+- `token::burn`: Burn a token
 
 See [Closed-Loop Token](../../standards/closed-loop-token.mdx) standard for complete details of working with tokens.
 

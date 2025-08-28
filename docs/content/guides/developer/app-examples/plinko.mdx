@@ -53,7 +53,7 @@ sequenceDiagram
 
 Follow the comments in each module's code to understand the logic each creates.
 
-### plinko::plinko
+### `plinko::plinko`
 
 The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, and dynamic object fields, to create on-chain Plinko games.
 
@@ -361,7 +361,7 @@ Include utilities like:
 
 - `internal_start_game`: A core utility that facilitates the creation of a new game, ensuring compliance with stake limits, house balance sufficiency, and the generation of a unique game ID.
 
-### plinko::house_data
+### `plinko::house_data`
 
 The `plinko::house_data` module in the Plinko game is designed to manage the game's treasury and configurations. It's responsible for storing the house funds, setting the game parameters (like maximum and minimum stakes), and handling game fees. It also stores the house public key for verifying game outcomes. The module provides functions to adjust game settings, manage the house funds, and ensure the integrity and fairness of the game through cryptographic verification.
 
@@ -633,7 +633,7 @@ Provide read-only and mutable access to house data properties, enabling operatio
 
 - `init_for_testing`: A utility function facilitating module testing by initializing house data within a test environment.
 
-### plinko::counter_nft
+### `plinko::counter_nft`
 
 The `plinko::counter_nft` module introduces a unique, non-transferable Counter NFT. This Counter object is pivotal for generating a distinct VRF input for each round of the game, thereby ensuring the randomness and fairness of game outcomes. It includes functionalities to create, increment, and destroy these Counter objects. Each Counter is tied to a unique game round and increments its count with each use, providing a fresh input for the game's randomness mechanism.
 

@@ -62,7 +62,7 @@ Total Score = (IS + ES) * VM
 
 There are several modules that create the backend logic for the example.
 
-### dashboard.move
+### `dashboard.move`
 
 The `dashboard.move` module defines the `Dashboard` struct that groups services.
 
@@ -106,7 +106,7 @@ See [Object Ownership Basics](../sui-101/object-ownership.mdx) for more informat
 
 :::
 
-### review.move
+### `review.move`
 
 This module defines the `Review` struct.
 
@@ -149,7 +149,7 @@ In addition to the content of a review, all the elements that are required to co
 A `Review` is a [shared object](../../../concepts/object-ownership/shared.mdx), so anyone can cast a vote on a review and update its `total_score` field.
 After `total_score` is updated, the [`update_top_reviews`](#casting-votes) function can be called to update the `top_reviews` field of the `Service` object.
 
-### service.move
+### `service.move`
 
 This module defines the `Service` struct that service owners manage.
 
