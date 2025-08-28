@@ -124,6 +124,7 @@ impl IdentifierInterner {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_or_intern_identifier(
         &self,
         ident: &Identifier,
@@ -131,6 +132,7 @@ impl IdentifierInterner {
         self.get_or_intern_str_internal(ident.borrow_str())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_or_intern_ident_str(
         &self,
         ident_str: &IdentStr,
