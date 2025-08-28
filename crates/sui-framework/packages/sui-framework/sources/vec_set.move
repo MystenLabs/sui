@@ -69,10 +69,9 @@ public fun into_keys<K: copy + drop>(self: VecSet<K>): vector<K> {
 /// Construct a new `VecSet` from a vector of keys.
 /// The keys are stored in insertion order (the original `keys` ordering)
 /// and are *not* sorted.
-public fun from_keys<K: copy + drop>(mut keys: vector<K>): VecSet<K> {
-    keys.reverse();
+public fun from_keys<K: copy + drop>(keys: vector<K>): VecSet<K> {
     let mut set = empty();
-    while (keys.length() != 0) set.insert(keys.pop_back());
+    keys.do!(|key| set.insert(key));
     set
 }
 
