@@ -243,7 +243,8 @@ pub struct ForkRecoveryConfig {
     pub transaction_overrides: BTreeMap<String, String>,
 
     /// Map of checkpoint sequence number to checkpoint digest overrides
-    /// Used to repoint checkpoints to correct versions after a fork
+    /// On node start, if we have a locally computed checkpoint with a
+    /// digest mismatch with this table, we will clear any associated local state.
     #[serde(default)]
     pub checkpoint_overrides: BTreeMap<u64, String>,
 

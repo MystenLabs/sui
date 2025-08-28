@@ -830,15 +830,12 @@ pub struct ForkRecoveryState {
     /// Transaction digest to effects digest overrides
     transaction_overrides:
         parking_lot::RwLock<HashMap<TransactionDigest, TransactionEffectsDigest>>,
-    /// Checkpoint sequence to checkpoint digest overrides
-    checkpoint_overrides: parking_lot::RwLock<HashMap<CheckpointSequenceNumber, CheckpointDigest>>,
 }
 
 impl Default for ForkRecoveryState {
     fn default() -> Self {
         Self {
             transaction_overrides: parking_lot::RwLock::new(HashMap::new()),
-            checkpoint_overrides: parking_lot::RwLock::new(HashMap::new()),
         }
     }
 }
@@ -861,21 +858,8 @@ impl ForkRecoveryState {
             transaction_overrides.insert(tx_digest, effects_digest);
         }
 
-        let mut checkpoint_overrides = HashMap::new();
-        for (seq_num, checkpoint_digest_str) in &config.checkpoint_overrides {
-            let checkpoint_digest =
-                CheckpointDigest::from_str(checkpoint_digest_str).map_err(|_| {
-                    SuiError::Unknown(format!(
-                        "Invalid checkpoint digest: {}",
-                        checkpoint_digest_str
-                    ))
-                })?;
-            checkpoint_overrides.insert(*seq_num, checkpoint_digest);
-        }
-
         Ok(Self {
             transaction_overrides: parking_lot::RwLock::new(transaction_overrides),
-            checkpoint_overrides: parking_lot::RwLock::new(checkpoint_overrides),
         })
     }
 
@@ -884,13 +868,6 @@ impl ForkRecoveryState {
         tx_digest: &TransactionDigest,
     ) -> Option<TransactionEffectsDigest> {
         self.transaction_overrides.read().get(tx_digest).copied()
-    }
-
-    pub fn get_checkpoint_override(
-        &self,
-        seq_num: &CheckpointSequenceNumber,
-    ) -> Option<CheckpointDigest> {
-        self.checkpoint_overrides.read().get(seq_num).copied()
     }
 }
 
