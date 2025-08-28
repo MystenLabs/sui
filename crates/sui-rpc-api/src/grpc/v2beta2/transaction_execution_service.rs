@@ -35,7 +35,7 @@ impl TransactionExecutionService for RpcService {
             .as_ref()
             .ok_or_else(|| tonic::Status::unimplemented("no transaction executor"))?;
 
-        execute_transaction(executor, request.into_inner())
+        execute_transaction(self, executor, request.into_inner())
             .await
             .map(tonic::Response::new)
             .map_err(Into::into)
@@ -44,8 +44,9 @@ impl TransactionExecutionService for RpcService {
 
 pub const EXECUTE_TRANSACTION_READ_MASK_DEFAULT: &str = "finality";
 
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(service, executor))]
 pub async fn execute_transaction(
+    service: &RpcService,
     executor: &std::sync::Arc<dyn TransactionExecutor>,
     request: ExecuteTransactionRequest,
 ) -> Result<ExecuteTransactionResponse, RpcError> {
@@ -218,6 +219,9 @@ pub async fn execute_transaction(
                         }
                     }
                 }
+
+                // Try to render clever error info
+                crate::ledger_service::render_clever_error(service, &mut effects);
 
                 effects
             });

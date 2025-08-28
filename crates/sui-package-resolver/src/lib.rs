@@ -614,60 +614,9 @@ impl<S: PackageStore> Resolver<S> {
         module_id: ModuleId,
         abort_code: u64,
     ) -> Option<CleverError> {
-        let bitset = ErrorBitset::from_u64(abort_code)?;
+        let _bitset = ErrorBitset::from_u64(abort_code)?;
         let package = self.package_store.fetch(*module_id.address()).await.ok()?;
-        let module = package.module(module_id.name().as_str()).ok()?.bytecode();
-        let source_line_number = bitset.line_number()?;
-        let error_code = bitset.error_code();
-
-        // We only have a line number in our clever error, so return early.
-        if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
-            return Some(CleverError {
-                module_id,
-                error_info: ErrorConstants::None,
-                source_line_number,
-                error_code,
-            });
-        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
-            return None;
-        }
-
-        let error_identifier_constant = module
-            .constant_pool()
-            .get(bitset.identifier_index()? as usize)?;
-        let error_value_constant = module
-            .constant_pool()
-            .get(bitset.constant_index()? as usize)?;
-
-        if !matches!(&error_identifier_constant.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
-        {
-            return None;
-        };
-
-        let error_identifier = bcs::from_bytes::<Vec<u8>>(&error_identifier_constant.data)
-            .ok()
-            .and_then(|x| String::from_utf8(x).ok())?;
-        let bytes = error_value_constant.data.clone();
-
-        let rendered = try_render_constant(error_value_constant);
-
-        let error_info = match rendered {
-            RenderResult::NotRendered => ErrorConstants::Raw {
-                identifier: error_identifier,
-                bytes,
-            },
-            RenderResult::AsString(s) | RenderResult::AsValue(s) => ErrorConstants::Rendered {
-                identifier: error_identifier,
-                constant: s,
-            },
-        };
-
-        Some(CleverError {
-            module_id,
-            error_info,
-            source_line_number,
-            error_code,
-        })
+        package.resolve_clever_error(module_id.name().as_str(), abort_code)
     }
 }
 
@@ -816,6 +765,63 @@ impl Package {
             .get(&runtime_id)
             .ok_or_else(|| Error::LinkageNotFound(runtime_id))
             .copied()
+    }
+
+    pub fn resolve_clever_error(&self, module_name: &str, abort_code: u64) -> Option<CleverError> {
+        let bitset = ErrorBitset::from_u64(abort_code)?;
+        let module = self.module(module_name).ok()?.bytecode();
+        let module_id = ModuleId::new(self.runtime_id, Identifier::new(module_name).ok()?);
+        let source_line_number = bitset.line_number()?;
+        let error_code = bitset.error_code();
+
+        // We only have a line number in our clever error, so return early.
+        if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
+            return Some(CleverError {
+                module_id,
+                error_info: ErrorConstants::None,
+                source_line_number,
+                error_code,
+            });
+        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
+            return None;
+        }
+
+        let error_identifier_constant = module
+            .constant_pool()
+            .get(bitset.identifier_index()? as usize)?;
+        let error_value_constant = module
+            .constant_pool()
+            .get(bitset.constant_index()? as usize)?;
+
+        if !matches!(&error_identifier_constant.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
+        {
+            return None;
+        };
+
+        let error_identifier = bcs::from_bytes::<Vec<u8>>(&error_identifier_constant.data)
+            .ok()
+            .and_then(|x| String::from_utf8(x).ok())?;
+        let bytes = error_value_constant.data.clone();
+
+        let rendered = try_render_constant(error_value_constant);
+
+        let error_info = match rendered {
+            RenderResult::NotRendered => ErrorConstants::Raw {
+                identifier: error_identifier,
+                bytes,
+            },
+            RenderResult::AsString(s) | RenderResult::AsValue(s) => ErrorConstants::Rendered {
+                identifier: error_identifier,
+                constant: s,
+            },
+        };
+
+        Some(CleverError {
+            module_id,
+            error_info,
+            source_line_number,
+            error_code,
+        })
     }
 }
 

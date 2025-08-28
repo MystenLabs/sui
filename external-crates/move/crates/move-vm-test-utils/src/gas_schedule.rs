@@ -26,10 +26,9 @@ use move_core_types::{
     u256,
     vm_status::StatusCode,
 };
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
-    views::{TypeView, ValueView},
+    views::{SizeConfig, TypeView, ValueView},
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -58,6 +57,12 @@ pub const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
 
 /// For exists checks on data that doesn't exists this is the multiplier that is used.
 pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100);
+
+/// Default size config for gas metering when running Move unit tests.
+const MOVE_TEST_SIZE_CONFIG: SizeConfig = SizeConfig {
+    traverse_references: false,
+    include_vector_size: false,
+};
 
 /// The cost tables, keyed by the serialized form of the bytecode instruction.  We use the
 /// serialized form as opposed to the instruction enum itself as the key since this will be the
@@ -111,7 +116,6 @@ pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
     charge: bool,
-    profiler: Option<GasProfiler>,
 }
 
 impl<'a> GasStatus<'a> {
@@ -124,7 +128,6 @@ impl<'a> GasStatus<'a> {
             gas_left: gas_left.to_unit(),
             cost_table,
             charge: true,
-            profiler: None,
         }
     }
 
@@ -137,7 +140,6 @@ impl<'a> GasStatus<'a> {
             gas_left: InternalGas::new(0),
             cost_table: &ZERO_COST_SCHEDULE,
             charge: false,
-            profiler: None,
         }
     }
 
@@ -323,15 +325,24 @@ impl GasMeter for GasStatus<'_> {
     }
 
     fn charge_copy_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::COPY_LOC, val.legacy_abstract_memory_size())
+        self.charge_instr_with_size(
+            Opcodes::COPY_LOC,
+            val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
+        )
     }
 
     fn charge_move_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::MOVE_LOC, val.legacy_abstract_memory_size())
+        self.charge_instr_with_size(
+            Opcodes::MOVE_LOC,
+            val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
+        )
     }
 
     fn charge_store_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::ST_LOC, val.legacy_abstract_memory_size())
+        self.charge_instr_with_size(
+            Opcodes::ST_LOC,
+            val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
+        )
     }
 
     fn charge_pack(
@@ -347,7 +358,7 @@ impl GasMeter for GasStatus<'_> {
                 Opcodes::PACK
             },
             args.fold(field_count, |acc, val| {
-                acc + val.legacy_abstract_memory_size()
+                acc + val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG)
             }),
         )
     }
@@ -365,17 +376,23 @@ impl GasMeter for GasStatus<'_> {
                 Opcodes::UNPACK
             },
             args.fold(field_count, |acc, val| {
-                acc + val.legacy_abstract_memory_size()
+                acc + val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG)
             }),
         )
     }
 
     fn charge_variant_switch(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::VARIANT_SWITCH, val.legacy_abstract_memory_size())
+        self.charge_instr_with_size(
+            Opcodes::VARIANT_SWITCH,
+            val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
+        )
     }
 
     fn charge_read_ref(&mut self, ref_val: impl ValueView) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::READ_REF, ref_val.legacy_abstract_memory_size())
+        self.charge_instr_with_size(
+            Opcodes::READ_REF,
+            ref_val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
+        )
     }
 
     fn charge_write_ref(
@@ -383,20 +400,25 @@ impl GasMeter for GasStatus<'_> {
         new_val: impl ValueView,
         _old_val: impl ValueView,
     ) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::WRITE_REF, new_val.legacy_abstract_memory_size())
+        self.charge_instr_with_size(
+            Opcodes::WRITE_REF,
+            new_val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
+        )
     }
 
     fn charge_eq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
         self.charge_instr_with_size(
             Opcodes::EQ,
-            lhs.legacy_abstract_memory_size() + rhs.legacy_abstract_memory_size(),
+            lhs.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG)
+                + rhs.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
         )
     }
 
     fn charge_neq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
         self.charge_instr_with_size(
             Opcodes::NEQ,
-            lhs.legacy_abstract_memory_size() + rhs.legacy_abstract_memory_size(),
+            lhs.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG)
+                + rhs.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
         )
     }
 
@@ -432,7 +454,10 @@ impl GasMeter for GasStatus<'_> {
         _ty: impl TypeView,
         val: impl ValueView,
     ) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::VEC_PUSH_BACK, val.legacy_abstract_memory_size())
+        self.charge_instr_with_size(
+            Opcodes::VEC_PUSH_BACK,
+            val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG),
+        )
     }
 
     fn charge_vec_pop_back(
@@ -469,14 +494,6 @@ impl GasMeter for GasStatus<'_> {
     /// Returns the gas left
     fn remaining_gas(&self) -> InternalGas {
         self.gas_left
-    }
-
-    fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
-        self.profiler.as_mut()
-    }
-
-    fn set_profiler(&mut self, profiler: GasProfiler) {
-        self.profiler = Some(profiler);
     }
 }
 

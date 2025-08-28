@@ -243,6 +243,7 @@ mod checked {
             temporary_store
                 .check_ownership_invariants(
                     &transaction_signer,
+                    &sponsor,
                     &mut gas_charger,
                     &mutable_inputs,
                     is_epoch_change,
@@ -1026,7 +1027,6 @@ mod checked {
             let new_vm = new_move_vm(
                 all_natives(/* silent */ true, protocol_config),
                 protocol_config,
-                /* enable_profiler */ None,
             )
             .expect("Failed to create new MoveVM");
             process_system_packages(
