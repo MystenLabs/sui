@@ -4,7 +4,7 @@
 use crate::base_types::{
     random_object_ref, ExecutionData, ExecutionDigests, FullObjectRef, VerifiedExecutionData,
 };
-use crate::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use crate::base_types::{ObjectID, SequenceNumber};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
@@ -129,7 +129,7 @@ impl Default for ECMHLiveObjectSetDigest {
 /// that is included in the checkpoint summary.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CheckpointArtifact {
-    ObjectStates(Vec<ObjectRef>),
+    ObjectStates(BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>),
     // In the future, we can add more artifacts e.g., execution digests, events, etc.
 }
 
@@ -137,10 +137,14 @@ impl CheckpointArtifact {
     pub fn digest(&self) -> SuiResult<Digest> {
         match self {
             Self::ObjectStates(object_states) => {
-                let tree = MerkleTree::<Blake2b256>::build_from_unserialized(object_states.iter())
-                    .map_err(|e| SuiError::GenericAuthorityError {
-                        error: format!("Failed to build Merkle tree: {}", e),
-                    })?;
+                let tree = MerkleTree::<Blake2b256>::build_from_unserialized(
+                    object_states
+                        .iter()
+                        .map(|(id, (seq, digest))| (id, seq, digest)),
+                )
+                .map_err(|e| SuiError::GenericAuthorityError {
+                    error: format!("Failed to build Merkle tree: {}", e),
+                })?;
                 let root = tree.root().bytes();
                 Ok(Digest::new(root))
             }
@@ -148,7 +152,7 @@ impl CheckpointArtifact {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CheckpointArtifacts {
     artifacts: BTreeSet<CheckpointArtifact>,
 }
@@ -183,29 +187,19 @@ impl CheckpointArtifactDigests {
 }
 
 impl CheckpointArtifacts {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn add_object_states(
-        &mut self,
-        object_states: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
-    ) {
-        self.artifacts.insert(CheckpointArtifact::ObjectStates(
-            object_states
-                .into_iter()
-                .map(|(id, (seq, digest))| (id, seq, digest))
-                .collect::<Vec<_>>(),
-        ));
+    pub fn new(object_states: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>) -> Self {
+        CheckpointArtifacts {
+            artifacts: BTreeSet::from([CheckpointArtifact::ObjectStates(object_states)]),
+        }
     }
 
     /// Get the object states if present
-    pub fn object_states(&self) -> SuiResult<&[ObjectRef]> {
+    pub fn object_states(&self) -> SuiResult<&BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>> {
         self.artifacts
             .iter()
             .find(|artifact| matches!(artifact, CheckpointArtifact::ObjectStates(_)))
             .map(|artifact| match artifact {
-                CheckpointArtifact::ObjectStates(states) => states.as_slice(),
+                CheckpointArtifact::ObjectStates(states) => states,
             })
             .ok_or(SuiError::GenericAuthorityError {
                 error: "Object states not found in checkpoint artifacts".to_string(),
@@ -222,13 +216,16 @@ impl From<&[&TransactionEffects]> for CheckpointArtifacts {
         let mut latest_object_states = BTreeMap::new();
         for e in effects {
             for (id, seq, digest) in e.written() {
-                latest_object_states.insert(id, (seq, digest));
+                if let Some((old_seq, _)) = latest_object_states.insert(id, (seq, digest)) {
+                    assert!(
+                        old_seq < seq,
+                        "Object states should be monotonically increasing"
+                    );
+                }
             }
         }
 
-        let mut artifacts = CheckpointArtifacts::new();
-        artifacts.add_object_states(latest_object_states);
-        artifacts
+        CheckpointArtifacts::new(latest_object_states)
     }
 }
 

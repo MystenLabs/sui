@@ -69,9 +69,15 @@ pub struct ModifiedObjectTree {
 impl ModifiedObjectTree {
     pub fn new(artifacts: &CheckpointArtifacts) -> Self {
         let mut object_pos_map = HashMap::new();
-        let object_ref_vec = artifacts
+        let object_states_map = artifacts
             .object_states()
             .expect("CheckpointArtifacts should contain object states");
+
+        // Convert BTreeMap to Vec<ObjectRef> for compatibility
+        let object_ref_vec: Vec<ObjectRef> = object_states_map
+            .iter()
+            .map(|(id, (seq, digest))| (*id, *seq, *digest))
+            .collect();
 
         // A sanity check to ensure the object IDs are in increasing order.
         object_ref_vec.windows(2).for_each(|window| {
@@ -84,7 +90,7 @@ impl ModifiedObjectTree {
             }
         });
 
-        for (i, id) in object_ref_vec.iter().map(|(id, _, _)| id).enumerate() {
+        for (i, (id, _, _)) in object_ref_vec.iter().enumerate() {
             let ret = object_pos_map.insert(*id, i);
             if ret.is_some() {
                 panic!("Object ID {} appears more than once", id);
@@ -93,7 +99,7 @@ impl ModifiedObjectTree {
         let tree = MerkleTree::<Blake2b256>::build_from_unserialized(object_ref_vec.iter())
             .expect("Failed to build Merkle tree");
         ModifiedObjectTree {
-            contents: object_ref_vec.to_vec(),
+            contents: object_ref_vec,
             object_pos_map,
             tree,
         }
