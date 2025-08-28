@@ -36,7 +36,7 @@ use super::{
     epoch::Epoch,
     gas_input::GasInput,
     transaction::filter::{tx_bounds, TransactionFilter},
-    transaction_effects::{EffectsContents, TransactionEffects},
+    transaction_effects::{EffectsContents, EffectsDataSource, TransactionEffects},
     user_signature::UserSignature,
 };
 
@@ -322,7 +322,14 @@ impl TransactionContents {
 
 impl From<TransactionEffects> for Transaction {
     fn from(fx: TransactionEffects) -> Self {
-        let EffectsContents { scope, contents } = fx.contents;
+        let EffectsContents { scope, data_source } = fx.contents;
+
+        // Extract stored contents from the data source
+        let contents = match data_source {
+            EffectsDataSource::Stored { contents, .. } => contents,
+            // TODO: Implement DataSource for Transaction type.
+            EffectsDataSource::ExecutedTransaction { .. } => None,
+        };
 
         Self {
             digest: fx.digest,

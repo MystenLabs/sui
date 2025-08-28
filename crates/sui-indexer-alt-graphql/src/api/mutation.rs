@@ -6,15 +6,18 @@ use async_graphql::{Context, Object, Result};
 use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer_alt_reader::full_node_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::full_node_client::FullNodeClient;
-
-use sui_types::signature::GenericSignature;
-use sui_types::transaction::TransactionData;
+use sui_types::{
+    effects::TransactionEffectsAPI, signature::GenericSignature, transaction::TransactionData,
+};
 
 use crate::{
     api::types::{
-        execution_result::ExecutionResult, transaction_execution_input::TransactionExecutionInput,
+        execution_result::ExecutionResult,
+        transaction_effects::{EffectsContents, EffectsDataSource, TransactionEffects},
+        transaction_execution_input::TransactionExecutionInput,
     },
     error::RpcError,
+    scope::Scope,
 };
 
 pub struct Mutation;
@@ -61,14 +64,31 @@ impl Mutation {
 
         // Execute transaction - capture gRPC errors for ExecutionResult.errors
         match full_node_client
-            .execute_transaction(tx_data, parsed_signatures)
+            .execute_transaction(tx_data.clone(), parsed_signatures)
             .await
         {
-            // TODO: Implement effects for ExecutionResult
-            Ok(_response) => Ok(ExecutionResult {
-                effects: None,
-                errors: None,
-            }),
+            Ok(response) => {
+                let scope = Scope::new(ctx)?;
+                let transaction_digest = response.effects.transaction_digest();
+                let contents = EffectsContents {
+                    scope,
+                    data_source: EffectsDataSource::ExecutedTransaction {
+                        native: Box::new(response.effects.clone()),
+                        events: response.events.map(|events| events.data),
+                        transaction_data: Box::new(tx_data),
+                    },
+                };
+
+                let effects = TransactionEffects {
+                    digest: *transaction_digest,
+                    contents,
+                };
+
+                Ok(ExecutionResult {
+                    effects: Some(effects),
+                    errors: None,
+                })
+            }
             Err(GrpcExecutionError(status)) => Ok(ExecutionResult {
                 effects: None,
                 errors: Some(vec![status.to_string()]),

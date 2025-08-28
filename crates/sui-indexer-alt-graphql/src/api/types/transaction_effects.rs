@@ -18,7 +18,8 @@ use sui_indexer_alt_reader::{
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
 use sui_types::{
     digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
+    execution_status::ExecutionStatus as NativeExecutionStatus, message_envelope::Message,
+    transaction::TransactionDataAPI,
 };
 
 use crate::{
@@ -60,7 +61,23 @@ pub(crate) struct TransactionEffects {
 #[derive(Clone)]
 pub(crate) struct EffectsContents {
     pub(crate) scope: Scope,
-    pub(crate) contents: Option<Arc<NativeTransactionContents>>,
+    pub(crate) data_source: EffectsDataSource,
+}
+
+#[derive(Clone)]
+pub(crate) enum EffectsDataSource {
+    /// Transaction indexed and stored in KV store
+    Stored {
+        native: Option<Box<sui_types::effects::TransactionEffects>>,
+        contents: Option<Arc<NativeTransactionContents>>,
+    },
+
+    /// Transaction just executed via gRPC, not yet indexed
+    ExecutedTransaction {
+        native: Box<sui_types::effects::TransactionEffects>,
+        events: Option<Vec<sui_types::event::Event>>,
+        transaction_data: Box<sui_types::transaction::TransactionData>,
+    },
 }
 
 type CObjectChange = JsonCursor<usize>;
@@ -94,20 +111,17 @@ impl TransactionEffects {
 impl EffectsContents {
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self) -> Option<Checkpoint> {
-        let Some(content) = &self.contents else {
-            return None;
-        };
+        let content = self.stored_contents()?;
 
         Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
     }
 
     /// Whether the transaction executed successfully or not.
     async fn status(&self) -> Result<Option<ExecutionStatus>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
 
-        let effects = content.effects()?;
         let status = match effects.status() {
             NativeExecutionStatus::Success => ExecutionStatus::Success,
             NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
@@ -118,38 +132,28 @@ impl EffectsContents {
 
     /// The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
     async fn lamport_version(&self) -> Result<Option<UInt53>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
 
-        let effects = content.effects()?;
         Ok(Some(UInt53::from(effects.lamport_version().value())))
     }
 
     /// Rich execution error information for failed transactions.
     async fn execution_error(&self) -> Result<Option<ExecutionError>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
 
-        let effects = content.effects()?;
         let status = effects.status();
-
-        // Extract programmable transaction if available
-        let programmable_tx = content
-            .data()
-            .ok()
-            .and_then(|tx_data| match tx_data.into_kind() {
-                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => Some(tx),
-                _ => None,
-            });
+        let programmable_tx = self.programmable_transaction();
 
         ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref()).await
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(content) = self.stored_contents() else {
             return Ok(None);
         };
 
@@ -158,11 +162,9 @@ impl EffectsContents {
 
     /// The epoch this transaction was finalized in.
     async fn epoch(&self) -> Result<Option<Epoch>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
-
-        let effects = content.effects()?;
         Ok(Some(Epoch::with_id(
             self.scope.clone(),
             effects.executed_epoch(),
@@ -178,32 +180,28 @@ impl EffectsContents {
         last: Option<u64>,
         before: Option<CEvent>,
     ) -> Result<Option<Connection<String, Event>>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(Some(Connection::new(false, false)));
-        };
-
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("TransactionEffects", "events");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let events = content.events()?;
-        let cursors = page.paginate_indices(events.len());
+        // Get events length - return empty connection if data not loaded yet
+        let Some(events_len) = self.events_len()? else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        let cursors = page.paginate_indices(events_len);
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
 
-        let transaction_digest = content.digest()?;
-        let timestamp_ms = content.timestamp_ms();
-
+        // Process events from either data source
         for edge in cursors.edges {
-            let event = Event {
-                scope: self.scope.clone(),
-                native: events[*edge.cursor].clone(),
-                transaction_digest,
-                sequence_number: *edge.cursor as u64,
-                timestamp_ms,
-            };
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), event));
+            if let Some(event) = Event::from_effects_data_source(
+                self.scope.clone(),
+                &self.data_source,
+                *edge.cursor,
+            )? {
+                conn.edges
+                    .push(Edge::new(edge.cursor.encode_cursor(), event));
+            }
         }
 
         Ok(Some(conn))
@@ -218,7 +216,7 @@ impl EffectsContents {
         last: Option<u64>,
         before: Option<CBalanceChange>,
     ) -> Result<Option<Connection<String, BalanceChange>>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(content) = self.stored_contents() else {
             return Ok(Some(Connection::new(false, false)));
         };
 
@@ -262,20 +260,27 @@ impl EffectsContents {
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
     async fn effects_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
+        let bytes = match &self.data_source {
+            EffectsDataSource::Stored {
+                contents: Some(content),
+                ..
+            } => content.raw_effects()?,
+            EffectsDataSource::ExecutedTransaction { native, .. } => {
+                bcs::to_bytes(native.as_ref()).context("Error serializing transaction effects")?
+            }
+            _ => return Ok(None),
         };
 
-        Ok(Some(Base64(content.raw_effects()?)))
+        Ok(Some(Base64(bytes)))
     }
 
     /// A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
     async fn effects_digest(&self) -> Result<Option<String>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
 
-        Ok(Some(Base58::encode(content.effects_digest()?)))
+        Ok(Some(Base58::encode(effects.digest())))
     }
 
     /// The before and after state of objects that were modified by this transaction.
@@ -291,11 +296,11 @@ impl EffectsContents {
         let limits = pagination.limits("TransactionEffects", "objectChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
 
-        let object_changes = content.effects()?.object_changes();
+        let object_changes = effects.object_changes();
         let cursors = page.paginate_indices(object_changes.len());
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
@@ -313,12 +318,10 @@ impl EffectsContents {
 
     /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
     async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
-
-        let effects = content.effects()?;
-        Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
+        Ok(Some(GasEffects::from_effects(self.scope.clone(), effects)))
     }
 
     /// The unchanged consensus-managed objects that were referenced by this transaction.
@@ -335,11 +338,14 @@ impl EffectsContents {
         let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
+            return Ok(None);
+        };
+        let Some(content) = self.stored_contents() else {
             return Ok(None);
         };
 
-        let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
+        let unchanged_consensus_objects = effects.unchanged_consensus_objects();
         let cursors = page.paginate_indices(unchanged_consensus_objects.len());
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
@@ -371,11 +377,9 @@ impl EffectsContents {
         let limits = pagination.limits("TransactionEffects", "dependencies");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(content) = &self.contents else {
+        let Some(effects) = self.native() else {
             return Ok(None);
         };
-
-        let effects = content.effects()?;
         let dependencies = effects.dependencies();
         let cursors = page.paginate_indices(dependencies.len());
 
@@ -405,7 +409,10 @@ impl TransactionEffects {
             .fetch(ctx, digest.into())
             .await?;
 
-        let Some(tx) = &contents.contents else {
+        let EffectsDataSource::Stored {
+            contents: Some(tx), ..
+        } = &contents.data_source
+        else {
             return Ok(None);
         };
 
@@ -420,19 +427,90 @@ impl EffectsContents {
     fn empty(scope: Scope) -> Self {
         Self {
             scope,
-            contents: None,
+            data_source: EffectsDataSource::Stored {
+                native: None, // No dummy data - explicitly None until loaded
+                contents: None,
+            },
+        }
+    }
+
+    /// Helper method like old GraphQL's native() - returns effects from any source
+    fn native(&self) -> Option<&sui_types::effects::TransactionEffects> {
+        match &self.data_source {
+            EffectsDataSource::Stored {
+                native: Some(n), ..
+            } => Some(n.as_ref()),
+            EffectsDataSource::Stored { native: None, .. } => None,
+            EffectsDataSource::ExecutedTransaction { native, .. } => Some(native.as_ref()),
+        }
+    }
+
+    /// Helper method to get stored contents only (returns None for fresh execution)
+    fn stored_contents(&self) -> Option<&Arc<NativeTransactionContents>> {
+        match &self.data_source {
+            EffectsDataSource::Stored { contents, .. } => contents.as_ref(),
+            EffectsDataSource::ExecutedTransaction { .. } => None,
+        }
+    }
+
+    /// Helper method to get events length from any data source
+    fn events_len(&self) -> Result<Option<usize>, RpcError> {
+        match &self.data_source {
+            EffectsDataSource::Stored {
+                contents: Some(content),
+                ..
+            } => Ok(Some(content.events()?.len())),
+            EffectsDataSource::Stored { contents: None, .. } => Ok(None), // Data not loaded yet
+            EffectsDataSource::ExecutedTransaction {
+                events: Some(events),
+                ..
+            } => Ok(Some(events.len())),
+            EffectsDataSource::ExecutedTransaction { events: None, .. } => Ok(Some(0)), // No events emitted
+        }
+    }
+
+    /// Helper method to extract programmable transaction from any data source
+    fn programmable_transaction(&self) -> Option<sui_types::transaction::ProgrammableTransaction> {
+        match &self.data_source {
+            EffectsDataSource::Stored {
+                contents: Some(content),
+                ..
+            } => content
+                .data()
+                .ok()
+                .and_then(|tx_data| match tx_data.into_kind() {
+                    sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => {
+                        Some(tx)
+                    }
+                    _ => None,
+                }),
+            EffectsDataSource::ExecutedTransaction {
+                transaction_data, ..
+            } => match transaction_data.as_ref().kind() {
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => {
+                    Some(tx.clone())
+                }
+                _ => None,
+            },
+            _ => None,
         }
     }
 
     /// Attempt to fill the contents. If the contents are already filled, returns a clone,
     /// otherwise attempts to fetch from the store. The resulting value may still have an empty
     /// contents field, because it could not be found in the store.
+    ///
+    /// Returns self unchanged for all data source types except `Stored` without contents.
     pub(crate) async fn fetch(
         &self,
         ctx: &Context<'_>,
         digest: TransactionDigest,
     ) -> Result<Self, RpcError> {
-        if self.contents.is_some() {
+        // Only fetch if we have Stored data without contents
+        if !matches!(
+            &self.data_source,
+            EffectsDataSource::Stored { contents: None, .. }
+        ) {
             return Ok(self.clone());
         }
 
@@ -450,9 +528,13 @@ impl EffectsContents {
             return Ok(self.clone());
         }
 
+        let effects = transaction.effects()?;
         Ok(Self {
             scope: self.scope.clone(),
-            contents: Some(Arc::new(transaction)),
+            data_source: EffectsDataSource::Stored {
+                native: Some(Box::new(effects)),
+                contents: Some(Arc::new(transaction)),
+            },
         })
     }
 }
@@ -461,9 +543,18 @@ impl From<Transaction> for TransactionEffects {
     fn from(tx: Transaction) -> Self {
         let TransactionContents { scope, contents } = tx.contents;
 
+        // TODO: Handle ExecutedTransaction for Transaction type.
+        let native = match contents {
+            Some(ref content) => content.effects().ok().map(Box::new),
+            None => None,
+        };
+
         Self {
             digest: tx.digest,
-            contents: EffectsContents { scope, contents },
+            contents: EffectsContents {
+                scope,
+                data_source: EffectsDataSource::Stored { native, contents },
+            },
         }
     }
 }

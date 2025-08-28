@@ -5,7 +5,7 @@ use anyhow::Context as _;
 use async_graphql::Object;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress, digests::TransactionDigest,
-    event::Event as NativeEvent,
+    effects::TransactionEffectsAPI, event::Event as NativeEvent,
 };
 
 use crate::{
@@ -13,6 +13,8 @@ use crate::{
     error::RpcError,
     scope::Scope,
 };
+
+use super::transaction_effects::EffectsDataSource;
 
 use super::{
     address::Address, move_type::MoveType, move_value::MoveValue, transaction::Transaction,
@@ -28,6 +30,45 @@ pub(crate) struct Event {
     pub(crate) sequence_number: u64,
     /// Timestamp when the transaction containing this event was finalized (checkpoint time)
     pub(crate) timestamp_ms: u64,
+}
+
+impl Event {
+    /// Create an Event from EffectsDataSource at the given index
+    pub(crate) fn from_effects_data_source(
+        scope: Scope,
+        data_source: &EffectsDataSource,
+        event_index: usize,
+    ) -> Result<Option<Self>, RpcError> {
+        match data_source {
+            EffectsDataSource::Stored {
+                contents: Some(content),
+                ..
+            } => {
+                let events = content.events()?;
+                Ok(Some(Event {
+                    scope,
+                    native: events[event_index].clone(),
+                    transaction_digest: content.digest()?,
+                    sequence_number: event_index as u64,
+                    timestamp_ms: content.timestamp_ms(),
+                }))
+            }
+            EffectsDataSource::ExecutedTransaction {
+                events: Some(events),
+                native,
+                ..
+            } => {
+                Ok(Some(Event {
+                    scope,
+                    native: events[event_index].clone(),
+                    transaction_digest: *native.as_ref().transaction_digest(),
+                    sequence_number: event_index as u64,
+                    timestamp_ms: 0, // ExecutedTransaction doesn't have timestamp yet
+                }))
+            }
+            _ => Ok(None), // No events available
+        }
+    }
 }
 
 // TODO(DVX-1200): Support sendingModule - MoveModule

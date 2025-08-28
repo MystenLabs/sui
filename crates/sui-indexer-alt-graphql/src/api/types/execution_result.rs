@@ -9,7 +9,6 @@ use super::transaction_effects::TransactionEffects;
 #[derive(Clone, SimpleObject)]
 pub struct ExecutionResult {
     /// The effects of the transaction execution, if successful.
-    /// TODO: Implement data source abstraction to populate this field from TransactionEffects.
     pub effects: Option<TransactionEffects>,
 
     /// errors that occurred during execution (e.g., network errors, validation failures).
