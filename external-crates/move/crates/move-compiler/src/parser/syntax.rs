@@ -4824,7 +4824,7 @@ fn parse_file_def(
 ) -> Result<(), Box<Diagnostic>> {
     let mut attributes = parse_attributes(context)?;
     match context.tokens.peek() {
-        Tok::Spec | Tok::Module => {
+        Tok::Spec | Tok::Module | Tok::Extend => {
             loop {
                 let doc = match_doc_comments(context);
                 let (module, next_mod_attributes) = parse_module(doc, attributes, context)?;

@@ -13,7 +13,7 @@ use move_ir_types::location::Loc;
 use std::{collections::BTreeSet, fmt};
 
 // This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
-pub const TOK_COUNT: usize = 77;
+pub const TOK_COUNT: usize = 78;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
@@ -952,7 +952,6 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
         "fun" => Tok::Fun,
         "friend" => Tok::Friend,
         "if" => Tok::If,
-        "invariant" if !edition.supports(FeatureGate::Move2024Keywords) => Tok::Invariant,
         "let" => Tok::Let,
         "loop" => Tok::Loop,
         "module" => Tok::Module,
@@ -960,23 +959,20 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
         "native" => Tok::Native,
         "public" => Tok::Public,
         "return" => Tok::Return,
-        "spec" if !edition.supports(FeatureGate::Move2024Keywords) => Tok::Spec,
         "struct" => Tok::Struct,
         "true" => Tok::True,
         "use" => Tok::Use,
         "while" => Tok::While,
-        _ if edition.supports(FeatureGate::Move2024Keywords) => match name {
-            "mut" => Tok::Mut,
-            "enum" => Tok::Enum,
-            "type" => Tok::Type,
-            "match" => Tok::Match,
-            "for" => Tok::For,
-            _ => Tok::Identifier,
-        },
-        _ if edition.supports(FeatureGate::ModuleExtension) => match name {
-            "extend" => Tok::Extend,
-            _ => Tok::Identifier,
-        },
+        // Feature-gated keywords
+        "invariant" if !edition.supports(FeatureGate::Move2024Keywords) => Tok::Invariant,
+        "spec" if !edition.supports(FeatureGate::Move2024Keywords) => Tok::Spec,
+        "mut" if edition.supports(FeatureGate::Move2024Keywords) => Tok::Mut,
+        "enum" if edition.supports(FeatureGate::Move2024Keywords) => Tok::Enum,
+        "type" if edition.supports(FeatureGate::Move2024Keywords) => Tok::Type,
+        "match" if edition.supports(FeatureGate::Move2024Keywords) => Tok::Match,
+        "for" if edition.supports(FeatureGate::Move2024Keywords) => Tok::For,
+        "extend" if edition.supports(FeatureGate::ModuleExtension) => Tok::Extend,
+        // Other toekns
         _ => Tok::Identifier,
     }
 }
