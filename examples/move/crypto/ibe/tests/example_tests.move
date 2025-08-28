@@ -7,11 +7,8 @@ module ibe::tests;
 use ibe::example;
 use sui::bcs;
 use sui::bls12381;
-
-#[test_only]
 use std::hash::sha2_256;
-#[test_only]
-use sui::test_utils::assert_eq;
+use std::unit_test::assert_eq;
 
 // This test emulates drand based timelock encryption (using quicknet).
 #[test]
@@ -63,7 +60,7 @@ fun test_try_substract_and_modulo() {
     assert!(option::is_some(&res), 0);
     let bigger_minus_order = *option::borrow(&res);
     let expected: vector<u8> = x"1824b159acc5056f998c4fefecbc4ff55884b7fa0003480200000001fffffff4";
-    assert_eq(bigger_minus_order, expected);
+    assert_eq!(bigger_minus_order, expected);
 
     let larger: vector<u8> = x"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6";
     let expected: vector<u8> = x"1824b159acc5056f998c4fefecbc4ff55884b7fa0003480200000001fffffff4";

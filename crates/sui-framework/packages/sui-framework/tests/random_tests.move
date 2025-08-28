@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[test_only]
-#[allow(unused_use)]
+#[test_only, allow(unused_use)]
 module sui::random_tests;
 
+use std::unit_test::assert_eq;
 use sui::bcs;
 use sui::random::{Self, Random};
 use sui::test_scenario;
-use sui::test_utils::assert_eq;
 
 // TODO: add a test from https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf ?
 
@@ -537,14 +536,13 @@ fun random_tests_in_range() {
     };
 
     // in range with min=max should return min
-    assert_eq(gen.generate_u32_in_range(123, 123), 123);
+    assert_eq!(gen.generate_u32_in_range(123, 123), 123);
 
     test_scenario::return_shared(random_state);
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = random::EInvalidRange)]
+#[test, expected_failure(abort_code = random::EInvalidRange)]
 fun random_tests_invalid_range() {
     let mut scenario = test_scenario::begin(@0x0);
 
@@ -595,8 +593,7 @@ fun random_tests_update_after_epoch_change() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
+#[test, expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
 fun random_tests_duplicate() {
     let mut scenario = test_scenario::begin(@0x0);
     random::create_for_testing(scenario.ctx());
@@ -618,8 +615,7 @@ fun random_tests_duplicate() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
+#[test, expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
 fun random_tests_out_of_order() {
     let mut scenario = test_scenario::begin(@0x0);
     random::create_for_testing(scenario.ctx());
