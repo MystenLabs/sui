@@ -9,7 +9,7 @@ use crate::{
     context::Context,
     symbols::{
         Symbols,
-        compilation::{CompiledPkgInfo, PrecomputedPkgInfo, get_compiled_pkg},
+        compilation::{CachedPackages, CompiledPkgInfo, get_compiled_pkg},
         cursor::{ChainInfo, CursorContext},
         runner::SymbolicatorRunner,
     },
@@ -23,7 +23,7 @@ use lsp_types::{
 };
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -84,7 +84,7 @@ pub fn on_code_action_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     implicit_deps: Dependencies,
 ) {
     let response = Response::new_ok(
@@ -108,7 +108,7 @@ fn access_chain_autofix_actions(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     implicit_deps: Dependencies,
 ) -> Vec<CodeAction> {
     let mut code_actions = vec![];
