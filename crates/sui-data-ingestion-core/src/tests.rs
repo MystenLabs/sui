@@ -148,7 +148,6 @@ fn mock_checkpoint_data_bytes(seq_number: CheckpointSequenceNumber) -> Vec<u8> {
         None,
         0,
         Vec::new(),
-        Vec::new(),
     );
 
     let sign_infos: Vec<_> = keys

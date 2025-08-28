@@ -948,7 +948,6 @@ pub async fn download_formal_snapshot(
                 );
                 progress_bar.finish_with_message("Verification complete");
             }
-            _ => return Err(anyhow!("Expected ECMHLiveObjectSetDigest")),
         };
     } else {
         m.println(

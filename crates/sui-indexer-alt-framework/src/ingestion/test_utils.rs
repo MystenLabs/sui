@@ -34,7 +34,6 @@ pub(crate) fn test_checkpoint_data(cp: u64) -> Vec<u8> {
         None,
         0,
         Vec::new(),
-        Vec::new(),
     );
 
     let sign_infos: Vec<_> = keys
