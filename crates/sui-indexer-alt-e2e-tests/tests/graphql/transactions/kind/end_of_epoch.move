@@ -3,7 +3,7 @@
 
 //# init --protocol-version 70 --simulator
 
-//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee --include-system-packages
+//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee --system-packages-snapshot=70
 
 //# create-checkpoint
 

@@ -11,7 +11,10 @@ const filePath = path.resolve(
 
 let content = fs.readFileSync(filePath, "utf8");
 
-content = content.replace(/\[(`Query`)\]\(.*query\.mdx\)/g, "$1");
+content = content.replace(
+  /\[(<code[^>]*><b>Query<\/b><\/code>)\]\([^)]*query\.mdx\)/,
+  "$1",
+);
 
 fs.writeFileSync(filePath, content, "utf8");
 

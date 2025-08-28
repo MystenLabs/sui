@@ -17,7 +17,7 @@ use move_vm_types::{
     natives::function::NativeResult,
     pop_arg,
     values::{Value, Vector, VectorRef},
-    views::ValueView,
+    views::{SizeConfig, ValueView},
 };
 use std::{collections::VecDeque, sync::Arc};
 
@@ -119,7 +119,13 @@ pub fn native_push_back(
 
     if gas_params.legacy_per_abstract_memory_unit != 0.into() {
         let cost = gas_params.legacy_per_abstract_memory_unit
-            * std::cmp::max(e.legacy_abstract_memory_size(), 1.into());
+            * std::cmp::max(
+                e.abstract_memory_size(&SizeConfig {
+                    traverse_references: false,
+                    include_vector_size: false,
+                }),
+                1.into(),
+            );
         native_charge_gas_early_exit!(context, cost);
     }
 

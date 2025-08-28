@@ -533,26 +533,30 @@ impl TemporaryStore<'_> {
     pub fn check_ownership_invariants(
         &self,
         sender: &SuiAddress,
+        sponsor: &Option<SuiAddress>,
         gas_charger: &mut GasCharger,
         mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().iter().map(|g| &g.0).collect();
+        let gas_owner = sponsor.as_ref().unwrap_or(sender);
+
         // mark input objects as authenticated
         let mut authenticated_for_mutation: HashSet<_> = self
             .input_objects
             .iter()
             .filter_map(|(id, obj)| {
-                if gas_objs.contains(id) {
-                    // gas could be owned by either the sender (common case) or sponsor
-                    // (if this is a sponsored tx, which we do not know inside this function).
-                    // Either way, no object ownership chain should be rooted in a gas object
-                    // thus, consider object authenticated, but don't add it to authenticated_objs
-                    return None;
-                }
                 match &obj.owner {
                     Owner::AddressOwner(a) => {
-                        assert!(sender == a, "Input object must be owned by sender");
+                        if gas_objs.contains(id) {
+                            // gas object must be owned by sender or sponsor
+                            assert!(
+                                a == gas_owner,
+                                "Gas object must be owned by sender or sponsor"
+                            );
+                        } else {
+                            assert!(sender == a, "Input object must be owned by sender");
+                        }
                         Some(id)
                     }
                     Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => Some(id),
@@ -582,56 +586,74 @@ impl TemporaryStore<'_> {
                 mutable_inputs.contains(id)
             })
             .copied()
+            // Add any object IDs created during execution to the authenticated set
+            .chain(self.execution_results.created_object_ids.iter().copied())
             .collect();
 
-        // check all modified objects are authenticated (excluding gas objects)
+        // Add sender and sponsor (if present) to authenticated set
+        authenticated_for_mutation.insert((*sender).into());
+        if let Some(sponsor) = sponsor {
+            authenticated_for_mutation.insert((*sponsor).into());
+        }
+
+        // check all modified objects are authenticated
         let mut objects_to_authenticate = self
             .execution_results
             .modified_objects
             .iter()
-            .filter(|id| !gas_objs.contains(id))
             .copied()
             .collect::<Vec<_>>();
-        // Map from an ObjectID to the ObjectID that covers it.
+
         while let Some(to_authenticate) = objects_to_authenticate.pop() {
             if authenticated_for_mutation.contains(&to_authenticate) {
-                // object has been authenticated
+                // object has already been authenticated
                 continue;
             }
-            let wrapped_parent = self.wrapped_object_containers.get(&to_authenticate);
-            let parent = if let Some(container_id) = wrapped_parent {
-                // If the object is wrapped, then the container must be authenticated.
-                // For example, the ID is for a wrapped table or bag.
+
+            let parent = if let Some(container_id) =
+                self.wrapped_object_containers.get(&to_authenticate)
+            {
+                // It's a wrapped object, so check that the container is authenticated
                 *container_id
             } else {
+                // It's non-wrapped, so check the owner -- we can load the object from the
+                // store.
                 let Some(old_obj) = self.store.get_object(&to_authenticate) else {
                     panic!(
-                        "
-                        Failed to load object {to_authenticate:?}. \n\
-                        If it cannot be loaded, \
-                        we would expect it to be in the wrapped object map: {:?}",
+                        "Failed to load object {to_authenticate:?}.\n \
+                         If it cannot be loaded, we would expect it to be in the wrapped object map: {:#?}",
                         &self.wrapped_object_containers
                     )
                 };
+
                 match &old_obj.owner {
+                    // We mutated a dynamic field, we can continue to trace this back to verify
+                    // proper ownership.
                     Owner::ObjectOwner(parent) => ObjectID::from(*parent),
-                    Owner::AddressOwner(parent) => {
+                    // We mutated an address owned or sequenced address owned object -- one of two cases apply:
+                    // 1) the object is owned by an object or address in the authenticated set,
+                    // 2) the object is owned by some other address, in which case we should
+                    //    continue to trace this back.
+                    Owner::AddressOwner(parent)
+                    | Owner::ConsensusAddressOwner { owner: parent, .. } => {
                         // For Receiving<_> objects, the address owner is actually an object.
                         // If it was actually an address, we should have caught it as an input and
                         // it would already have been in authenticated_for_mutation
                         ObjectID::from(*parent)
                     }
-                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusAddressOwner { .. } => {
+                    // We mutated a shared object -- we checked if this object was in the
+                    // authenticated set at the top of this loop and it wasn't so this is a failure.
+                    owner @ Owner::Shared { .. } => {
                         panic!(
                             "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
-                        Potentially covering objects in: {authenticated_for_mutation:#?}",
-                        )
+                             Potentially covering objects in: {authenticated_for_mutation:#?}"
+                        );
                     }
                     Owner::Immutable => {
                         assert!(
                             is_epoch_change,
                             "Immutable objects cannot be written, except for \
-                            Sui Framework/Move stdlib upgrades at epoch change boundaries"
+                             Sui Framework/Move stdlib upgrades at epoch change boundaries"
                         );
                         // Note: this assumes that the only immutable objects an epoch change
                         // tx can update are system packages,
@@ -644,7 +666,8 @@ impl TemporaryStore<'_> {
                     }
                 }
             };
-            // we now assume the object is authenticated and must check the parent
+
+            // we now assume the object is authenticated and check the parent
             authenticated_for_mutation.insert(to_authenticate);
             objects_to_authenticate.push(parent);
         }

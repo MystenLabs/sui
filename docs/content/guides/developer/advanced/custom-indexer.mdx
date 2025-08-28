@@ -98,8 +98,8 @@ $ cd simple-sui-indexer
 ##step Configure dependencies
 
 Replace your `Cargo.toml` code with the following configuration and save.
- 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/Cargo.toml}
+
+{@inject: examples/rust/basic-sui-indexer/Cargo.toml}
 
 The manifest now includes the following dependencies:
 
@@ -108,7 +108,7 @@ The manifest now includes the following dependencies:
 - `tokio`: Async runtime required by the framework.
 - `clap`: Command-line argument parsing for configuration.
 - `anyhow`: Error handling and async-trait for trait implementations.
-- `dotenvy`: Ingest `.env` file that stores your PostgreSQL URL. 
+- `dotenvy`: Ingest `.env` file that stores your PostgreSQL URL.
 
 ##step Create database
 
@@ -134,7 +134,7 @@ You can now set a variable to your database URL as it's used in following comman
 
 ```sh
 $ PSQL_URL=postgres://username@localhost:5432/sui_indexer
-``` 
+```
 
 You can now test your connection with the following command:
 
@@ -171,7 +171,7 @@ $ touch diesel.toml
 
 Update and save the file with the following code:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/diesel.toml}
+{@inject: examples/rust/basic-sui-indexer/diesel.toml}
 
 ###substep Create database table using Diesel migrations
 
@@ -192,11 +192,11 @@ Use the `diesel migration` command at the root of your project to then generate 
 $ diesel migration generate transaction_digests
 ```
 
-You should now have a `migrations` folder in your project. There should be a subdirectory in this folder with the name format `YYYY-MM-DD-HHMMSS_transaction_digests`. This folder should contain the `up.sql` and `down.sql` files. 
+You should now have a `migrations` folder in your project. There should be a subdirectory in this folder with the name format `YYYY-MM-DD-HHMMSS_transaction_digests`. This folder should contain the `up.sql` and `down.sql` files.
 
 Open `up.sql` and replace its contents with the following code (using the actual folder name):
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql}
+{@inject: examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql}
 
 :::tip
 
@@ -210,7 +210,7 @@ For a production environment, however, `BYTEA` is strongly recommended. It offer
 
 Save `up.sql`, then open `down.sql` to edit. Replace the contents of the file with the following code and save it:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql}
+{@inject: examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql}
 
 ###substep Apply migration and generate Rust schema
 
@@ -228,7 +228,7 @@ $ diesel print-schema --database-url $PSQL_URL > src/schema.rs
 
 Your `src/schema.rs` file should now look like the following:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/schema.rs}
+{@inject: examples/rust/basic-sui-indexer/src/schema.rs}
 
 After running the previous commands, your project is set up for the next steps:
 
@@ -242,7 +242,7 @@ The Diesel's migration system evolves the database schema over time in a structu
 
 To simplify writes to Diesel, you can define a struct that represents a record on the `transaction_digests` table.
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/models.rs}
+{@inject: examples/rust/basic-sui-indexer/src/models.rs}
 
 Key annotations:
 
@@ -252,7 +252,7 @@ Key annotations:
 
 ##step Define the Handler struct in handler.rs
 
-Create a `handlers.rs` file in your `src` directory. 
+Create a `handlers.rs` file in your `src` directory.
 
 ```sh
 $ touch ./src/handlers.rs
@@ -260,7 +260,7 @@ $ touch ./src/handlers.rs
 
 Open the file and define a concrete struct to implement the `Processor` and `Handler` traits:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/handlers.rs#struct=TransactionDigestHandler}
+{@inject: examples/rust/basic-sui-indexer/src/handlers.rs#struct=TransactionDigestHandler}
 
 Save the file but keep it open as the next steps add to its code.
 
@@ -270,11 +270,11 @@ The `Processor` trait defines how to extract and transform data from checkpoints
 
 Add the necessary dependencies at the top of the file.
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/handlers.rs#processordeps}
+{@inject: examples/rust/basic-sui-indexer/src/handlers.rs#processordeps}
 
 After the `TransactionDigestHandler` struct, add the `Processor` code:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/handlers.rs#processor}
+{@inject: examples/rust/basic-sui-indexer/src/handlers.rs#processor}
 
 Key concepts:
 
@@ -292,7 +292,7 @@ Processor trait definition
   
 </summary>
   
-{@inject: ../../../../../crates/sui-indexer-alt-framework/src/pipeline/processor.rs#trait=Processor}
+{@inject: crates/sui-indexer-alt-framework/src/pipeline/processor.rs#trait=Processor}
   
 </details>
 
@@ -300,11 +300,11 @@ Processor trait definition
 
 The `Handler` trait defines how to commit data to the database. Append the `Handler` dependencies to bottom of the dependency list you created in the previous step.
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/handlers.rs#handlerdeps}
+{@inject: examples/rust/basic-sui-indexer/src/handlers.rs#handlerdeps}
 
 Add the logic for `Handler` after the `Processor` code. The complete code is available at the end of this step.
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/handlers.rs#handler}
+{@inject: examples/rust/basic-sui-indexer/src/handlers.rs#handler}
 
 How sequential batching works:
 
@@ -330,7 +330,7 @@ Complete `handler.rs` file
   
 </summary>
   
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/handlers.rs}
+{@inject: examples/rust/basic-sui-indexer/src/handlers.rs}
   
 </details>
 
@@ -342,7 +342,7 @@ Handler trait definition
   
 </summary>
   
-{@inject: ../../../../../crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#trait=Handler}
+{@inject: crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#trait=Handler}
   
 </details>
 
@@ -380,7 +380,7 @@ After running the command for your environment, make sure the `.env` file exists
 
 Now, to tie everything together in the main function, open your `main.rs` file. Replace the default code with the following and save the file:
 
-{@inject: ../../../../../examples/rust/basic-sui-indexer/src/main.rs}
+{@inject: examples/rust/basic-sui-indexer/src/main.rs}
 
 Key components explained:
 
@@ -407,7 +407,7 @@ Allow incoming network requests if your operating system requests it for the `ba
 
 :::
 
-If successful, your console informs you that the indexer is running. 
+If successful, your console informs you that the indexer is running.
 
 ##step Verify results
 
@@ -433,7 +433,7 @@ $ SELECT * FROM transaction_digests LIMIT 5;
 
 To confirm your data is accurate, copy any transaction digest from your database and verify it on SuiScan: [https://suiscan.xyz/testnet/home](https://suiscan.xyz/testnet/home)
 
-You've built a working custom indexer 🎉 
+You've built a working custom indexer 🎉
 
 The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
 

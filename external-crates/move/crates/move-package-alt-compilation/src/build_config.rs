@@ -2,21 +2,37 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::{
+    io::{BufRead, Write},
+    path::{Path, PathBuf},
+};
 
 use clap::ArgAction;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 use move_compiler::editions::{Edition, Flavor};
+use move_model_2::source_model;
 use move_package_alt::schema::EnvironmentName;
 use move_symbol_pool::Symbol;
+
+use move_package_alt::{
+    errors::PackageResult, flavor::MoveFlavor, package::RootPackage, schema::Environment,
+};
+
+use crate::{
+    build_plan::BuildPlan, compiled_package::CompiledPackage, migrate::migrate, model_builder,
+};
 
 use super::lint_flag::LintFlag;
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(about)]
 pub struct BuildConfig {
+    /// Compile in 'test' mode and include the code in the 'tests' directory.
+    #[clap(name = "test-mode", long = "test", global = true)]
+    pub test_mode: bool,
+
     /// Generate documentation for packages
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
@@ -61,6 +77,17 @@ pub struct BuildConfig {
     #[clap(flatten)]
     pub lint_flag: LintFlag,
 
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annodations during compiltaion.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        value_parser = parse_symbol,
+        action = ArgAction::Append,
+        global = true
+    )]
+    pub modes: Vec<Symbol>,
+
     /// Forces use of lock file without checking if it needs to be updated
     /// (regenerates it only if it doesn't exist)
     #[clap(skip)]
@@ -73,21 +100,53 @@ pub struct BuildConfig {
         help = "Environment to use for building packages"
     )]
     pub environment: Option<EnvironmentName>,
+}
 
-    /// Compile in 'test' mode. Code in the 'tests' directory will be used too.
-    #[clap(name = "test-mode", long = "test", global = true)]
-    pub test_mode: bool,
+impl BuildConfig {
+    pub async fn compile<F: MoveFlavor, W: Write>(
+        &self,
+        path: &Path,
+        env: &Environment,
+        writer: &mut W,
+    ) -> PackageResult<CompiledPackage> {
+        let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+        BuildPlan::create(root_pkg, self)?.compile(writer, |compiler| compiler)
+    }
 
-    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
-    /// annotations during compilation.
-    #[arg(
-        long = "mode",
-        value_name = "MODE",
-        value_parser = parse_symbol,
-        action = ArgAction::Append,
-        global = true
-    )]
-    pub modes: Vec<Symbol>,
+    /// Migrate the package at `path`.
+    pub async fn migrate_package<F: MoveFlavor, W: Write, R: BufRead>(
+        mut self,
+        path: &Path,
+        env: Environment,
+        writer: &mut W,
+        reader: &mut R,
+    ) -> PackageResult<()> {
+        // we set test to migrate all the code
+        self.test_mode = true;
+        let root_pkg = RootPackage::<F>::load(path, env).await?;
+        let build_plan = BuildPlan::create(root_pkg, &self)?;
+
+        migrate(build_plan, writer, reader)?;
+        Ok(())
+    }
+
+    pub async fn move_model_from_path<F: MoveFlavor, W: Write>(
+        &self,
+        path: &Path,
+        env: Environment,
+        writer: &mut W,
+    ) -> PackageResult<source_model::Model> {
+        let root_pkg = RootPackage::<F>::load(path, env).await?;
+        self.move_model_from_root_pkg(root_pkg, writer).await
+    }
+
+    pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write>(
+        &self,
+        root_pkg: RootPackage<F>,
+        writer: &mut W,
+    ) -> PackageResult<source_model::Model> {
+        model_builder::build(writer, root_pkg, self)
+    }
 }
 
 fn parse_symbol(s: &str) -> Result<Symbol, String> {

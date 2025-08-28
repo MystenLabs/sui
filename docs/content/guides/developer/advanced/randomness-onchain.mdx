@@ -1,6 +1,9 @@
 ---
 title: On-Chain Randomness
 description: Randomness is a valuable tool to simulate chance on chain, but can also expose flaws in your logic. Understanding the vulnerabilities and accounting for them can mitigate the threat exposure for your smart contracts.
+keywords: [ raffle, randomness, random, RandomGenerator, ProtocolConfig, PTB, dice ]
+mdx:
+  format: md
 ---
 
 Generating pseudo-random values in Move is similar to solutions in other languages. A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types, for example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)`, or,
@@ -12,9 +15,9 @@ entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
 }
 ```
 
-`Random` has a reserved address `0x8`. See <a href="/references/framework/sui-framework/random" data-noBrokenLinkCheck='true'>random.move</a> for the Move APIs for accessing randomness on Sui.
+`Random` has a reserved address `0x8`. See <UnsafeLink href="/references/framework/sui-framework/random">random.move</UnsafeLink> for the Move APIs for accessing randomness on Sui.
 
-:::note
+:::info
 
 Although `Random` is a shared object, it is inaccessible for mutable operations, and any transaction attempting to modify it fails.
 
@@ -64,32 +67,51 @@ Other limited resources per transaction that you should consider are:
 - The number of new objects.
 - The number of objects that can be used (including dynamic fields).
 - Number of events emitted.
-- Number of UIDs generated, or deleted, or transferred.
-- For a complete list of the current limits defined in the Protocol Config, see [this](https://github.com/MystenLabs/sui/blob/main/crates/sui-protocol-config/src/lib.rs#L731).
+- Number of UIDs generated, deleted, or transferred.
 
+<details>
+<summary>
+Complete list of `ProtocolConfig` limits.
+</summary>
 
+{@inject: crates/sui-protocol-config/src/lib.rs#struct=ProtocolConfig}
 
-For many use cases this attack is not an issue, like when selecting a raffle winner, or lottery numbers, as the code running is independent of the randomness.
-However, in the cases where it can be problematic, you can consider one of the following:
+</details>
 
-- Use two steps:
-Split the logic to two functions that must be called by different transactions.
-The first function, called by transaction `tx1`, fetches a random value and stores it in an object that is unreadable by other commands in `tx1` (for example, by transferring the object to the caller, or, by storing the tx digest and checking it is different on read).
-A second function, called by transaction `tx2`, reads the stored value and completes the operation.
-`tx2` might indeed fail, but now the random value is fixed and cannot be modified using repeated calls.
-It is important that the inputs to the second function are fixed and cannot be modified after `tx1` (otherwise an attacker can modify them after seeing the randomness committed by `tx1`).
-Also, it is important to gracefully handle the case in which the second step is never completed (for example, charge a fee in the first step).
-See [this](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft/sources/example.move#L117-L142) for example implementation.
-- Write the function in a way that the happy flow consumes more resources than the unhappy one. Keep the following in mind:
-  - External functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
-  - [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) can be used to profile the costs of a transaction.
-  - UIDs generated and deleted on the same transaction do not count towards the limit. 
+For many use cases, like when selecting a raffle winner or lottery numbers, this attack is not an issue as the code running is independent of the randomness. However, in other use cases where this attack can be problematic, consider using one of the following approaches:
 
+### Option 1: Divide logic
 
+Split the logic into two functions that different transactions must call.
+
+1. The first transaction, `tx1`, calls the first function, which fetches a random value and stores it in an object that is unreadable by other commands in `tx1`. For example, the function might transfer the object to the caller or store the transaction digest and check that it's different on read.
+
+2. The second transaction, `tx2`, calls a second function, which reads the stored value and completes the operation. `tx2` might fail, but now the random value is fixed and cannot be modified using repeated calls.
+It's important that the inputs to the second function are fixed and cannot be modified after `tx1`, otherwise an attacker can modify them after seeing the randomness committed by `tx1`.
+
+Gracefully handle the case in which the second step is never completed. You could accomplish this, for example, by charging a fee in the first step.
+
+<details>
+<summary>
+Example implementation.
+</summary>
+
+{@inject: examples/move/random/random_nft/sources/example.move#fun=reveal_alternative2_step1,reveal_alternative2_step2}
+
+</details>
+
+### Option 2: Resource usage
+
+Write the function so the main processing path does the heavy work, while early-exit paths return quickly. Keep the following in mind:
+
+  - Both external or native functions can change in the future, potentially resulting in different costs compared to when you conducted your tests.
+  - Use [`profile-transaction`](../../../references/cli/client.mdx#profile-a-transaction) to benchmark the costs of a transaction.
+  - UIDs generated and deleted on the same transaction do not count towards the limit on generated or deleted UIDs. 
 
 ## Use (non-public) `entry` functions
 
 While composition is very powerful for smart contracts, it opens the door to attacks on functions that use randomness.
+
 Consider for example a betting game that uses randomness for rolling dice:
 
 ```move
@@ -137,7 +159,7 @@ public fun attack(guess: u8, r: &Random, ctx: &mut TxContext): Ticket {
 }
 ```
 
-The attacker can now call `attack` with a guess, and **always** revert the fee transfer if the guess is incorrect.
+The attacker can now call `attack` with a guess, and always revert the fee transfer if the guess is incorrect.
 
 To protect against composition attacks, define your function as a private `entry` function so functions from other modules cannot call it.
 
@@ -160,9 +182,8 @@ public fun attack(t: Ticket): Ticket {
 ```
 
 and send a PTB with commands `play_dice(...), attack(Result(0))` where `Result(0)` is the output of the first command.
-As before, the attack takes advantage of the atomic nature of PTBs and always reverts the _entire transaction_ if the
-guess was incorrect, without paying the fee. Sending multiple transactions can repeat the attack, each one executed with
-different randomness and reverted if the guess is incorrect.
+
+As before, the attack takes advantage of the atomic nature of PTBs and always reverts the entire transaction if the guess was incorrect, without paying the fee. Sending multiple transactions can repeat the attack, each one executed with different randomness and reverted if the guess is incorrect.
 
 :::tip
 
@@ -196,6 +217,6 @@ tx.moveCall({
 ## Related Links
 
 - [Sui Framework Reference](../../../references/framework): The Sui framework libraries include Move modules that provide the logic for Sui and its standards. A Rust process creates the documentation for the modules directly from comments in the code.
-  - <a href="/references/framework/sui-framework/random" data-noBrokenLinkCheck="true">random.move</a>: Documentation for the `random` module.
+  - <UnsafeLink href="/references/framework/sui-framework/random">random.move</UnsafeLink>: Documentation for the `random` module.
 - [Raffle example](https://github.com/MystenLabs/sui/blob/main/examples/move/random/raffles): GitHub repo containing a raffle smart contract demonstrating randomness.
-- [Sui Client CLI](../../../references/cli/client): Sui provides command line tools to interact with the network, its features, and the Move programming language. Individual command groups are referred to as Sui Client CLI, Sui Keytool CLI, Sui Move CLI, and Sui Validator CLI.
+- [Sui Client CLI](/references/cli/client): Sui provides command line tools to interact with the network, its features, and the Move programming language. Individual command groups are referred to as Sui Client CLI, Sui Keytool CLI, Sui Move CLI, and Sui Validator CLI.

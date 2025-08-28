@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use sui_types::{base_types::SequenceNumber, transaction::Reservation};
+use sui_types::base_types::SequenceNumber;
 use tokio::sync::watch;
 use tracing::debug;
 
@@ -84,26 +84,13 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                 });
                 debug!("Starting balance for {:?}: {:?}", object_id, entry);
 
-                match reservation {
-                    Reservation::MaxAmountU64(amount) => {
-                        if *entry < *amount {
-                            debug!(
-                                "Insufficient balance for {:?}. Requested: {:?}, Available: {:?}",
-                                object_id, amount, entry
-                            );
-                            success = false;
-                            break;
-                        }
-                    }
-                    Reservation::EntireBalance => {
-                        // When we want to reserve the entire balance,
-                        // we still need to ensure that the entire balance is not already reserved.
-                        if *entry == 0 {
-                            debug!("No more balance available for {:?}", object_id);
-                            success = false;
-                            break;
-                        }
-                    }
+                if *entry < *reservation {
+                    debug!(
+                        "Insufficient balance for {:?}. Requested: {:?}, Available: {:?}",
+                        object_id, reservation, entry
+                    );
+                    success = false;
+                    break;
                 }
             }
             if success {
@@ -111,17 +98,7 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                 for (object_id, reservation) in withdraw.reservations {
                     // unwrap safe because we always initialize each account in the above loop.
                     let balance = cur_balances.get_mut(&object_id).unwrap();
-                    match reservation {
-                        Reservation::MaxAmountU64(amount) => {
-                            *balance -= amount;
-                        }
-                        Reservation::EntireBalance => {
-                            // We use 0 remaining balance to indicate that the entire balance is reserved.
-                            // This works because we require that all explicit withdraw reservations
-                            // use a non-zero amount.
-                            *balance = 0;
-                        }
-                    }
+                    *balance -= reservation;
                 }
                 let _ = sender.send(ScheduleResult {
                     tx_digest: withdraw.tx_digest,

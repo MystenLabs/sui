@@ -4918,7 +4918,7 @@ impl ExecutionComponents {
         _expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
         let silent = true;
-        let executor = sui_execution::executor(protocol_config, silent, None)
+        let executor = sui_execution::executor(protocol_config, silent)
             .expect("Creating an executor should not fail here");
 
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
