@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+#[allow(deprecated_usage)] // TODO: update tests to not use deprecated governance
 module bridge::committee_test;
 
 use bridge::chain_ids;
