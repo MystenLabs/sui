@@ -1127,10 +1127,10 @@ impl ValidatorService {
                             .wait_for_certificate_execution(&certificate, epoch_store)
                             .await?
                     }
-                    ConsensusTransactionKind::UserTransaction(tx) => {
+                    ConsensusTransactionKind::MFPTransaction(tx) => {
                         self.state.await_transaction_effects(*tx.digest(), epoch_store).await?
                     }
-                    _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
+                    _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or MFPTransaction"),
                 };
                 let events = if include_events && effects.events_digest().is_some() {
                     Some(self.state.get_transaction_events(effects.transaction_digest())?)

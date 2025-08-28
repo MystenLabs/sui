@@ -99,10 +99,10 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
 
-                ConsensusTransactionKind::UserTransaction(_tx) => {
+                ConsensusTransactionKind::MFPTransaction(_tx) => {
                     if !epoch_store.protocol_config().mysticeti_fastpath() {
                         return Err(SuiError::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
+                            "ConsensusTransactionKind::MFPTransaction is unsupported".to_string(),
                         ));
                     }
                     // TODO(fastpath): move deterministic verifications of user transactions here,
@@ -164,7 +164,7 @@ impl SuiTxValidator {
 
         let mut result = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
-            let ConsensusTransactionKind::UserTransaction(tx) = tx else {
+            let ConsensusTransactionKind::MFPTransaction(tx) = tx else {
                 continue;
             };
 

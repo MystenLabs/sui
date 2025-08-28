@@ -805,11 +805,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .consensus_handler_transaction_sizes
                         .with_label_values(&[kind])
                         .observe(parsed.serialized_len as f64);
-                    // UserTransaction exists only when mysticeti_fastpath is enabled in protocol config.
+                    // MFPTransaction exists only when mysticeti_fastpath is enabled in protocol config.
                     if matches!(
                         &parsed.transaction.kind,
                         ConsensusTransactionKind::CertifiedTransaction(_)
-                            | ConsensusTransactionKind::UserTransaction(_)
+                            | ConsensusTransactionKind::MFPTransaction(_)
                     ) {
                         self.last_consensus_stats
                             .stats
@@ -1118,7 +1118,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => "randomness_dkg_confirmation",
-        ConsensusTransactionKind::UserTransaction(tx) => {
+        ConsensusTransactionKind::MFPTransaction(tx) => {
             if tx.is_consensus_tx() {
                 "shared_user_transaction"
             } else {
@@ -1229,7 +1229,7 @@ impl SequencedConsensusTransactionKind {
         match self {
             SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
                 ConsensusTransactionKind::CertifiedTransaction(txn) => Some(*txn.digest()),
-                ConsensusTransactionKind::UserTransaction(txn) => Some(*txn.digest()),
+                ConsensusTransactionKind::MFPTransaction(txn) => Some(*txn.digest()),
                 _ => None,
             },
             SequencedConsensusTransactionKind::System(txn) => Some(*txn.digest()),
@@ -1294,7 +1294,7 @@ impl SequencedConsensusTransaction {
                 ..
             }) => cert.transaction_data().uses_randomness(),
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(txn),
+                kind: ConsensusTransactionKind::MFPTransaction(txn),
                 ..
             }) => txn.transaction_data().uses_randomness(),
             _ => false,
@@ -1308,7 +1308,7 @@ impl SequencedConsensusTransaction {
                 ..
             }) if certificate.is_consensus_tx() => Some(certificate.data()),
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(txn),
+                kind: ConsensusTransactionKind::MFPTransaction(txn),
                 ..
             }) if txn.is_consensus_tx() => Some(txn.data()),
             SequencedConsensusTransactionKind::System(txn) if txn.is_consensus_tx() => {
@@ -1421,7 +1421,7 @@ impl ConsensusBlockHandler {
                 } else {
                     "certified"
                 };
-                if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind {
+                if let ConsensusTransactionKind::MFPTransaction(tx) = &parsed.transaction.kind {
                     debug!(
                         "User Transaction in position: {:} with digest {:} is {:}",
                         position,
@@ -1451,7 +1451,7 @@ impl ConsensusBlockHandler {
                     .with_label_values(&["certified"])
                     .inc();
 
-                if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
+                if let ConsensusTransactionKind::MFPTransaction(tx) = parsed.transaction.kind {
                     if tx.is_consensus_tx() {
                         continue;
                     }
@@ -2158,7 +2158,7 @@ mod tests {
                 ConsensusTransactionKind::CertifiedTransaction(txn) => {
                     format!("certified({})", txn.transaction_data().gas_price())
                 }
-                ConsensusTransactionKind::UserTransaction(txn) => {
+                ConsensusTransactionKind::MFPTransaction(txn) => {
                     format!("user({})", txn.transaction_data().gas_price())
                 }
                 _ => unreachable!(),

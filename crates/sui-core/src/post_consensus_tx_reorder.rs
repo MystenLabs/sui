@@ -39,7 +39,7 @@ impl PostConsensusTxReorder {
                     }) => cert.gas_price(),
                     SequencedConsensusTransactionKind::External(ConsensusTransaction {
                         tracking_id: _,
-                        kind: ConsensusTransactionKind::UserTransaction(txn),
+                        kind: ConsensusTransactionKind::MFPTransaction(txn),
                     }) => txn.transaction_data().gas_price(),
                     // Non-user transactions are considered to have gas price of MAX u64 and are
                     // put to the beginning.

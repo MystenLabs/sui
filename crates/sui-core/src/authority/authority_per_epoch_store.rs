@@ -2402,8 +2402,8 @@ impl AuthorityPerEpochStore {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
         let key_value_pairs = transactions.iter().filter_map(|tx| {
-            if tx.is_user_transaction() {
-                // UserTransaction does not need to be resubmitted on recovery.
+            if tx.is_mfp_transaction() {
+                // MFPTransaction does not need to be resubmitted on recovery.
                 None
             } else {
                 debug!("Inserting pending consensus transaction: {:?}", tx.key());
@@ -3021,7 +3021,7 @@ impl AuthorityPerEpochStore {
             trace!(
                 consensus_index=?transaction.consensus_index.transaction_index,
                 tracking_id=?transaction.transaction.get_tracking_id(),
-                "handle_consensus_transaction UserTransaction [skip]",
+                "handle_consensus_transaction MFPTransaction [skip]",
             );
             skipped_consensus_txns.inc();
             return None;
@@ -3033,7 +3033,7 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_tx),
+                kind: ConsensusTransactionKind::MFPTransaction(_tx),
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -4361,7 +4361,7 @@ impl AuthorityPerEpochStore {
             }
 
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(tx),
+                kind: ConsensusTransactionKind::MFPTransaction(tx),
                 ..
             }) => {
                 // Ignore consensus certified user transaction if Mysticeti fastpath is not enabled.
@@ -4441,7 +4441,7 @@ impl AuthorityPerEpochStore {
         debug!(
             ?tracking_id,
             tx_digest = ?transaction.digest(),
-            "Processing consensus transactions from user (CertifiedTransaction and UserTransaction)",
+            "Processing consensus transactions from user (CertifiedTransaction and MFPTransaction)",
         );
 
         if !self
