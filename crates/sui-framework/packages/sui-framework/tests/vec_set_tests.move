@@ -30,7 +30,7 @@ fun smoke() {
         m.insert(k);
     });
     assert!(!m.is_empty());
-    assert_eq!(m.size(), 10);
+    assert_eq!(m.length(), 10);
     // make sure the elements are as expected in all of the getter APIs we expose
     10u64.do!(|i| {
         let k = i + 2;
@@ -52,7 +52,7 @@ fun test_keys() {
     m.insert(2);
     m.insert(3);
 
-    assert_eq!(m.size(), 3);
+    assert_eq!(m.length(), 3);
     assert_eq!(*m.keys(), vector[1, 2, 3]);
 }
 

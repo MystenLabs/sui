@@ -56,12 +56,12 @@ fun remove_entry_by_idx() {
     let (key, val) = m.remove_entry_by_idx(0);
     assert_eq!(key, 5);
     assert_eq!(val, 50);
-    assert_eq!(m.size(), 2);
+    assert_eq!(m.length(), 2);
 
     let (key, val) = m.remove_entry_by_idx(1);
     assert_eq!(key, 7);
     assert_eq!(val, 70);
-    assert_eq!(m.size(), 1);
+    assert_eq!(m.length(), 1);
 }
 
 #[test, expected_failure(abort_code = vec_map::EMapNotEmpty)]
@@ -87,7 +87,7 @@ fun smoke() {
         m.insert(k, v);
     });
     assert!(!m.is_empty());
-    assert_eq!(vec_map::size(&m), 10);
+    assert_eq!(m.length(), 10);
     // make sure the elements are as expected in all of the getter APIs we expose
     10u64.do!(|i| {
         let k = i + 2;
