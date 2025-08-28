@@ -416,7 +416,7 @@ pub enum ConsensusTransactionKind {
 
     CapabilityNotificationV2(AuthorityCapabilitiesV2),
 
-    UserTransaction(Box<Transaction>),
+    MFPTransaction(Box<Transaction>),
 
     ExecutionTimeObservation(ExecutionTimeObservation),
     // V2: dedup by authority + sequence + digest
@@ -433,7 +433,7 @@ impl ConsensusTransactionKind {
     }
 
     pub fn is_user_transaction(&self) -> bool {
-        matches!(self, ConsensusTransactionKind::UserTransaction(_))
+        matches!(self, ConsensusTransactionKind::MFPTransaction(_))
     }
 }
 
@@ -549,7 +549,7 @@ impl ConsensusTransaction {
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(tx)),
+            kind: ConsensusTransactionKind::MFPTransaction(Box::new(tx)),
         }
     }
 
@@ -718,10 +718,10 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgConfirmation(*authority)
             }
-            ConsensusTransactionKind::UserTransaction(tx) => {
+            ConsensusTransactionKind::MFPTransaction(tx) => {
                 // Use the same key format as ConsensusTransactionKind::CertifiedTransaction,
                 // because existing usages of ConsensusTransactionKey should not differentiate
-                // between CertifiedTransaction and UserTransaction.
+                // between CertifiedTransaction and MFPTransaction.
                 ConsensusTransactionKey::Certificate(*tx.digest())
             }
             ConsensusTransactionKind::ExecutionTimeObservation(msg) => {
@@ -732,11 +732,11 @@ impl ConsensusTransaction {
 
     pub fn is_executable_transaction(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
-            || matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+            || matches!(self.kind, ConsensusTransactionKind::MFPTransaction(_))
     }
 
-    pub fn is_user_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    pub fn is_mfp_transaction(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::MFPTransaction(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {

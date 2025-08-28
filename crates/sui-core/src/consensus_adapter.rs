@@ -381,8 +381,8 @@ impl ConsensusAdapter {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transactions: &[ConsensusTransaction],
     ) -> (impl Future<Output = ()>, usize, usize, usize, usize) {
-        if transactions.iter().any(|tx| tx.is_user_transaction()) {
-            // UserTransactions are generally sent to just one validator and should
+        if transactions.iter().any(|tx| tx.is_mfp_transaction()) {
+            // MFPTransactions are generally sent to just one validator and should
             // be submitted to consensus without delay.
             return (tokio::time::sleep(Duration::ZERO), 0, 0, 0, 0);
         }
@@ -394,7 +394,7 @@ impl ConsensusAdapter {
                 ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     Some((certificate.digest(), certificate.gas_price()))
                 }
-                ConsensusTransactionKind::UserTransaction(transaction) => Some((
+                ConsensusTransactionKind::MFPTransaction(transaction) => Some((
                     transaction.digest(),
                     transaction.data().transaction_data().gas_price(),
                 )),
@@ -642,7 +642,7 @@ impl ConsensusAdapter {
                     ),
                     SuiError::InvalidTxKindInSoftBundle
                 );
-                // TODO(fastpath): support batch of UserTransaction.
+                // TODO(fastpath): support batch of MFPTransaction.
             }
         }
 
@@ -730,7 +730,7 @@ impl ConsensusAdapter {
 
         // Current code path ensures:
         // - If transactions.len() > 1, it is a soft bundle. Otherwise transactions should have been submitted individually.
-        // - If is_soft_bundle, then all transactions are of UserTransaction kind.
+        // - If is_soft_bundle, then all transactions are of MFPTransaction kind.
         // - If not is_soft_bundle, then transactions must contain exactly 1 tx, and transactions[0] can be of any kind.
         let is_soft_bundle = transactions.len() > 1;
 
@@ -923,9 +923,9 @@ impl ConsensusAdapter {
         let consensus_keys: Vec<_> = transactions
             .iter()
             .filter_map(|t| {
-                if t.is_user_transaction() {
-                    // UserTransaction is not inserted into the pending consensus transactions table.
-                    // Also UserTransaction shares the same key as CertifiedTransaction, so removing
+                if t.is_mfp_transaction() {
+                    // MFPTransaction is not inserted into the pending consensus transactions table.
+                    // Also MFPTransaction shares the same key as CertifiedTransaction, so removing
                     // the key here can have unexpected effects.
                     None
                 } else {
@@ -944,7 +944,7 @@ impl ConsensusAdapter {
             )
             || matches!(
                 transactions[0].kind,
-                ConsensusTransactionKind::UserTransaction(_)
+                ConsensusTransactionKind::MFPTransaction(_)
             );
         if is_user_tx && epoch_store.should_send_end_of_publish() {
             // sending message outside of any locks scope

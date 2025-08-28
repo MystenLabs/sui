@@ -102,7 +102,7 @@ impl MockConsensusClient {
                         );
                     }
                 }
-                ConsensusTransactionKind::UserTransaction(tx) => {
+                ConsensusTransactionKind::MFPTransaction(tx) => {
                     if tx.is_consensus_tx() {
                         validator.execution_scheduler().enqueue(
                             vec![(
