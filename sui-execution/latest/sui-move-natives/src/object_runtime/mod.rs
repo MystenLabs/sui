@@ -91,8 +91,10 @@ pub struct RuntimeResults {
 #[derive(Default)]
 pub(crate) struct ObjectRuntimeState {
     pub(crate) input_objects: BTreeMap<ObjectID, Owner>,
-    // new ids from object::new
+    // new ids from object::new. This does not contain any new-and-subsequently-deleted ids
     new_ids: Set<ObjectID>,
+    // contains all ids generated in the txn including any new-and-subsequently-deleted ids
+    generated_ids: Set<ObjectID>,
     // ids passed to object::delete
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
@@ -188,6 +190,7 @@ impl<'a> ObjectRuntime<'a> {
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
                 new_ids: Set::new(),
+                generated_ids: Set::new(),
                 deleted_ids: Set::new(),
                 transfers: IndexMap::new(),
                 events: vec![],
@@ -226,6 +229,7 @@ impl<'a> ObjectRuntime<'a> {
         let was_present = self.state.deleted_ids.shift_remove(&id);
         if !was_present {
             // mark the id as new
+            self.state.generated_ids.insert(id);
             self.state.new_ids.insert(id);
         }
         Ok(())
@@ -304,8 +308,9 @@ impl<'a> ObjectRuntime<'a> {
             }
         } else if is_framework_obj {
             // framework objects are always created when they are transferred, but the id is
-            // hard-coded so it is not yet in new_ids
+            // hard-coded so it is not yet in new_ids or generated_ids
             self.state.new_ids.insert(id);
+            self.state.generated_ids.insert(id);
             TransferResult::New
         } else {
             TransferResult::OwnerChanged
@@ -574,6 +579,12 @@ impl<'a> ObjectRuntime<'a> {
         self.state.settlement_input_sui += input_sui;
         self.state.settlement_output_sui += output_sui;
     }
+
+    /// Return the set of all object IDs that were created during this transaction, including any
+    /// object IDs that were created and then deleted during the transaction.
+    pub fn generated_object_ids(&self) -> BTreeSet<ObjectID> {
+        self.state.generated_ids.iter().cloned().collect()
+    }
 }
 
 pub fn max_event_error(max_events: u64) -> PartialVMError {
@@ -615,6 +626,7 @@ impl ObjectRuntimeState {
         let ObjectRuntimeState {
             input_objects: _,
             new_ids,
+            generated_ids,
             deleted_ids,
             transfers,
             events: user_events,
@@ -624,6 +636,9 @@ impl ObjectRuntimeState {
             settlement_input_sui,
             settlement_output_sui,
         } = self;
+
+        // The set of new ids is a a subset of the generated ids.
+        debug_assert!(new_ids.is_subset(&generated_ids));
 
         // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
