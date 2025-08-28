@@ -686,7 +686,6 @@ fn compute_pre_compiled_dep_data(
         if let Some(new_pre_compiled_modules) = new_pre_compiled_modules_opt {
             pre_compiled_modules.extend(
                 new_pre_compiled_modules
-                    .clone()
                     .iter()
                     .map(|(k, v)| (*k, v.clone())),
             );
