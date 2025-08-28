@@ -97,7 +97,8 @@ pub enum ProofContents {
     CommitteeProof(CommitteeProof),
 
     /// Used by ObjectCheckpointStatesTarget.
-    ObjectCheckpointStateProof(OCSProof),
+    /// Boxed to reduce size of enum (clippy).
+    ObjectCheckpointStateProof(Box<OCSProof>),
 }
 
 impl ProofVerifier for Proof {
@@ -139,7 +140,7 @@ impl ProofContentsVerifier for ProofContents {
         match self {
             ProofContents::TransactionProof(proof) => proof.verify(targets, summary),
             ProofContents::CommitteeProof(proof) => proof.verify(targets, summary),
-            ProofContents::ObjectCheckpointStateProof(proof) => proof.verify(targets, summary),
+            ProofContents::ObjectCheckpointStateProof(proof) => (*proof).verify(targets, summary),
         }
     }
 }

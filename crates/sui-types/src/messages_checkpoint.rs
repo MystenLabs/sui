@@ -124,10 +124,13 @@ impl Default for ECMHLiveObjectSetDigest {
     }
 }
 
+/// CheckpointArtifact is a type that represents various artifacts of a checkpoint.
+/// We hash all the artifacts together to get the checkpoint artifacts digest
+/// that is included in the checkpoint summary.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CheckpointArtifact {
     ObjectStates(Vec<ObjectRef>),
-    // Add more.. e.g., execution digests, events, etc.
+    // In the future, we can add more artifacts e.g., execution digests, events, etc.
 }
 
 impl CheckpointArtifact {
@@ -153,20 +156,6 @@ pub struct CheckpointArtifacts {
 #[derive(Debug)]
 pub struct CheckpointArtifactDigests {
     pub digests: Vec<Digest>,
-}
-
-impl TryFrom<CheckpointArtifacts> for CheckpointArtifactDigests {
-    type Error = SuiError;
-
-    fn try_from(artifacts: CheckpointArtifacts) -> Result<Self, Self::Error> {
-        // Already sorted by BTreeSet!
-        let digests = artifacts
-            .artifacts
-            .iter()
-            .map(|a| a.digest())
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self { digests })
-    }
 }
 
 impl TryFrom<&CheckpointArtifacts> for CheckpointArtifactDigests {
@@ -445,17 +434,17 @@ impl CheckpointSummary {
         }
     }
 
-    pub fn checkpoint_artifacts_digest(&self) -> Result<&CheckpointArtifactsDigest> {
-        let digest = self.checkpoint_commitments.iter().find_map(|c| match c {
-            CheckpointCommitment::CheckpointArtifactsDigest(digest) => Some(digest),
-            _ => None,
-        });
-        if digest.is_none() {
-            return Err(anyhow::anyhow!(
-                "Checkpoint artifacts digest not found in checkpoint commitments"
-            ));
-        }
-        Ok(digest.unwrap())
+    pub fn checkpoint_artifacts_digest(&self) -> SuiResult<&CheckpointArtifactsDigest> {
+        self.checkpoint_commitments
+            .iter()
+            .find_map(|c| match c {
+                CheckpointCommitment::CheckpointArtifactsDigest(digest) => Some(digest),
+                _ => None,
+            })
+            .ok_or(SuiError::GenericAuthorityError {
+                error: "Checkpoint artifacts digest not found in checkpoint commitments"
+                    .to_string(),
+            })
     }
 }
 

@@ -5565,15 +5565,7 @@
         }
       },
       "CheckpointArtifactsDigest": {
-        "type": "object",
-        "required": [
-          "digest"
-        ],
-        "properties": {
-          "digest": {
-            "$ref": "#/components/schemas/Digest"
-          }
-        }
+        "$ref": "#/components/schemas/Digest"
       },
       "CheckpointCommitment": {
         "oneOf": [

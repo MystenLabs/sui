@@ -270,8 +270,8 @@ impl ProofBuilder for OCSTarget {
                 Ok(Proof {
                     targets: ProofTarget::ObjectCheckpointState(self.clone()),
                     checkpoint_summary: checkpoint.checkpoint_summary.clone(),
-                    proof_contents: ProofContents::ObjectCheckpointStateProof(OCSProof::Inclusion(
-                        proof,
+                    proof_contents: ProofContents::ObjectCheckpointStateProof(Box::new(
+                        OCSProof::Inclusion(proof),
                     )),
                 })
             }
@@ -280,9 +280,9 @@ impl ProofBuilder for OCSTarget {
                 Ok(Proof {
                     targets: ProofTarget::ObjectCheckpointState(self.clone()),
                     checkpoint_summary: checkpoint.checkpoint_summary.clone(),
-                    proof_contents: ProofContents::ObjectCheckpointStateProof(
+                    proof_contents: ProofContents::ObjectCheckpointStateProof(Box::new(
                         OCSProof::NonInclusion(proof),
-                    ),
+                    )),
                 })
             }
         }
