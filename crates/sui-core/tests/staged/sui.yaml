@@ -127,9 +127,8 @@ ChangeEpoch:
             - SEQ:
                 TYPENAME: ObjectID
 CheckpointArtifactsDigest:
-  STRUCT:
-    - digest:
-        TYPENAME: Digest
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 CheckpointCommitment:
   ENUM:
     0:
