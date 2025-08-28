@@ -160,6 +160,7 @@ impl From<Error> for ErrorObjectOwned {
                         )
                     }
                     QuorumDriverError::TimeoutBeforeFinality
+                    | QuorumDriverError::TimeoutBeforeFinalityWithErrors { .. }
                     | QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { .. } => {
                         ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
                     }

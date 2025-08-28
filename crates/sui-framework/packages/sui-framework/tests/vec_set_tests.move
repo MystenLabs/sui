@@ -33,7 +33,7 @@ fun smoke() {
         i = i + 1;
     };
     assert!(!m.is_empty());
-    assert!(m.size() == 10);
+    assert!(m.length() == 10);
     let mut i = 0;
     // make sure the elements are as expected in all of the getter APIs we expose
     while (i < 10) {
@@ -59,7 +59,7 @@ fun test_keys() {
     m.insert(2);
     m.insert(3);
 
-    assert!(m.size() == 3);
+    assert!(m.length() == 3);
     assert!(m.keys() == &vector[1, 2, 3]);
 }
 

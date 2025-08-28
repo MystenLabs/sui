@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use sui_types::{base_types::ObjectID, digests::TransactionDigest, transaction::Reservation};
+use sui_types::{base_types::ObjectID, digests::TransactionDigest};
 
 mod balance_read;
 mod naive_scheduler;
@@ -51,5 +51,5 @@ pub struct BalanceSettlement {
 #[derive(Clone, Debug)]
 pub(crate) struct TxBalanceWithdraw {
     pub tx_digest: TransactionDigest,
-    pub reservations: BTreeMap<ObjectID, Reservation>,
+    pub reservations: BTreeMap<ObjectID, u64>,
 }

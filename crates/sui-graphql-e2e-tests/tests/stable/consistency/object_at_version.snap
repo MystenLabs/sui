@@ -279,7 +279,7 @@ Response: {
 }
 
 task 32, lines 292-312:
-//# run-graphql --cursors bcs(@{obj_1_0},6)
+//# run-graphql --cursors bcs(bcs(@{obj_1_0}),6)
 Response: {
   "data": null,
   "errors": [

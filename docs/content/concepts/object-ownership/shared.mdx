@@ -4,11 +4,11 @@ description: Anyone can access shared objects on the Sui network, so care must b
 keywords: [ shared objects, sharing objects, objects that are shared, public objects, accessing shared objects, accessing public objects ]
 ---
 
-A shared object is an object that is shared using the `sui::transfer::share_object` function and is accessible to everyone. Unlike owned objects, anyone can access shared ones on the network. Extended functionality and accessibility of this kind of objects requires additional effort by securing access, if needed.
+Use the `sui::transfer::share_object` function to create a shared object, making it publicly accessible on the network. Extended functionality and accessibility of shared objects requires additional effort by securing access, if needed.
 
 Shared objects require the `key` ability.
 
-## Example
+## Usage example
 
 The following example creates a shop to sell digital donuts. Everyone needs access to the shop to purchase donuts from it, so the example creates the shop as a shared object using `sui::transfer::share_object`.
 

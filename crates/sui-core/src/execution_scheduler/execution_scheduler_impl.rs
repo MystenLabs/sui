@@ -20,7 +20,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 use sui_config::node::AuthorityOverloadConfig;
@@ -36,7 +36,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{debug, error};
 
-use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
+use super::{overload_tracker::OverloadTracker, PendingCertificate};
 
 #[derive(Clone)]
 pub struct ExecutionScheduler {
@@ -84,10 +84,11 @@ impl ExecutionScheduler {
         child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
-        balance_accumulator_enabled: bool,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
+        let balance_accumulator_enabled = epoch_store.accumulators_enabled();
         let balance_withdraw_scheduler = if balance_accumulator_enabled {
             let starting_accumulator_version = object_cache_read
                 .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
@@ -214,7 +215,6 @@ impl ExecutionScheduler {
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
             execution_env,
-            waiting_input_objects: BTreeSet::new(),
             stats: PendingCertificateStats {
                 enqueue_time,
                 ready_time: Some(Instant::now()),
@@ -398,8 +398,8 @@ impl ExecutionScheduler {
     }
 }
 
-impl ExecutionSchedulerAPI for ExecutionScheduler {
-    fn enqueue(
+impl ExecutionScheduler {
+    pub fn enqueue(
         &self,
         certs: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -438,7 +438,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         self.schedule_settlement_transactions(settlement_txns, epoch_store);
     }
 
-    fn enqueue_transactions(
+    pub fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -498,14 +498,14 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .inc_by(already_executed_certs_num);
     }
 
-    fn settle_balances(&self, settlement: BalanceSettlement) {
+    pub fn settle_balances(&self, settlement: BalanceSettlement) {
         self.balance_withdraw_scheduler
             .as_ref()
             .expect("Balance withdraw scheduler must be enabled if there are settlements")
             .settle_balances(settlement);
     }
 
-    fn check_execution_overload(
+    pub fn check_execution_overload(
         &self,
         overload_config: &AuthorityOverloadConfig,
         tx_data: &SenderSignedData,
@@ -515,7 +515,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .check_execution_overload(overload_config, tx_data, inflight_queue_len)
     }
 
-    fn num_pending_certificates(&self) -> usize {
+    pub fn num_pending_certificates(&self) -> usize {
         (self
             .metrics
             .transaction_manager_num_pending_certificates
@@ -527,7 +527,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
     }
 
     #[cfg(test)]
-    fn check_empty_for_testing(&self) {
+    pub fn check_empty_for_testing(&self) {
         assert_eq!(self.num_pending_certificates(), 0);
     }
 }
@@ -556,33 +556,25 @@ mod test {
 
     use crate::authority::ExecutionEnv;
     use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
-    use crate::execution_scheduler::{
-        ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource,
-    };
+    use crate::execution_scheduler::SchedulingSource;
 
     use super::{ExecutionScheduler, PendingCertificate};
 
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     fn make_execution_scheduler(
         state: &AuthorityState,
-    ) -> (
-        ExecutionSchedulerWrapper,
-        UnboundedReceiver<PendingCertificate>,
-    ) {
+    ) -> (ExecutionScheduler, UnboundedReceiver<PendingCertificate>) {
         // Create a new execution scheduler instead of reusing the authority's, to examine
         // execution_scheduler output from rx_ready_certificates.
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        // Do not call ExecutionSchedulerWrapper::new() here, because we want to always
-        // construct an ExecutionScheduler in the tests here, not TransactionManager.
-        let execution_scheduler =
-            ExecutionSchedulerWrapper::ExecutionScheduler(ExecutionScheduler::new(
-                state.get_object_cache_reader().clone(),
-                state.get_child_object_resolver().clone(),
-                state.get_transaction_cache_reader().clone(),
-                tx_ready_certificates,
-                false,
-                state.metrics.clone(),
-            ));
+        let execution_scheduler = ExecutionScheduler::new(
+            state.get_object_cache_reader().clone(),
+            state.get_child_object_resolver().clone(),
+            state.get_transaction_cache_reader().clone(),
+            tx_ready_certificates,
+            &state.epoch_store_for_testing(),
+            state.metrics.clone(),
+        );
 
         (execution_scheduler, rx_ready_certificates)
     }

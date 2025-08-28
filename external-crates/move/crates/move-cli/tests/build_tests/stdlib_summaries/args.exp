@@ -3017,9 +3017,35 @@ functions:
             name: type_name
           name: TypeName
           type_arguments: []
-  is_primitive:
+  defining_id:
     source_index: 2
     index: 2
+    doc: " Like `with_defining_ids`, this accesses the package ID that original defined the type `T`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters: []
+    return_:
+      - address
+  original_id:
+    source_index: 3
+    index: 3
+    doc: " Like `with_original_ids`, this accesses the original ID of the package that defines type `T`,\n even if the type was introduced in a later version of the package."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters: []
+    return_:
+      - address
+  is_primitive:
+    source_index: 4
+    index: 4
     doc: " Returns true iff the TypeName represents a primitive type, i.e. one of\n u8, u16, u32, u64, u128, u256, bool, address, vector."
     attributes: []
     visibility: Public
@@ -3039,8 +3065,8 @@ functions:
     return_:
       - bool
   as_string:
-    source_index: 3
-    index: 3
+    source_index: 5
+    index: 5
     doc: " Get the String representation of `self`"
     attributes: []
     visibility: Public
@@ -3067,8 +3093,8 @@ functions:
               name: String
               type_arguments: []
   address_string:
-    source_index: 4
-    index: 4
+    source_index: 6
+    index: 6
     doc: " Get Address string (Base16 encoded), first part of the TypeName.\n Aborts if given a primitive type."
     attributes: []
     visibility: Public
@@ -3093,8 +3119,8 @@ functions:
           name: String
           type_arguments: []
   module_string:
-    source_index: 5
-    index: 5
+    source_index: 7
+    index: 7
     doc: " Get name of the module.\n Aborts if given a primitive type."
     attributes: []
     visibility: Public
@@ -3119,8 +3145,8 @@ functions:
           name: String
           type_arguments: []
   into_string:
-    source_index: 6
-    index: 6
+    source_index: 8
+    index: 8
     doc: " Convert `self` into its inner String"
     attributes: []
     visibility: Public
@@ -3143,8 +3169,8 @@ functions:
           name: String
           type_arguments: []
   get:
-    source_index: 7
-    index: 7
+    source_index: 9
+    index: 9
     doc: ~
     attributes:
       - Parameterized:
@@ -3166,8 +3192,8 @@ functions:
           name: TypeName
           type_arguments: []
   get_with_original_ids:
-    source_index: 8
-    index: 8
+    source_index: 10
+    index: 10
     doc: ~
     attributes:
       - Parameterized:
@@ -3189,8 +3215,8 @@ functions:
           name: TypeName
           type_arguments: []
   borrow_string:
-    source_index: 9
-    index: 9
+    source_index: 11
+    index: 11
     doc: ~
     attributes:
       - Parameterized:
@@ -3222,8 +3248,8 @@ functions:
               name: String
               type_arguments: []
   get_address:
-    source_index: 10
-    index: 10
+    source_index: 12
+    index: 12
     doc: ~
     attributes:
       - Parameterized:
@@ -3253,8 +3279,8 @@ functions:
           name: String
           type_arguments: []
   get_module:
-    source_index: 11
-    index: 11
+    source_index: 13
+    index: 13
     doc: ~
     attributes:
       - Parameterized:

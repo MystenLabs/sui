@@ -14,7 +14,7 @@ use sui_types::utils::to_sender_signed_transaction;
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::ExecutionEnv;
-use crate::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
+use crate::execution_scheduler::SchedulingSource;
 use crate::transaction_outputs::TransactionOutputs;
 
 #[tokio::test]

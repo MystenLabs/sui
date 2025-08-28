@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
+use anyhow::Context as _;
 use async_graphql::Object;
 use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
-use sui_types::object::Owner as NativeOwner;
+use sui_types::{object::Owner as NativeOwner, TypeTag};
 
-use crate::{api::scalars::big_int::BigInt, scope::Scope};
+use crate::{api::scalars::big_int::BigInt, error::RpcError, scope::Scope};
 
-use super::address::Address;
+use super::{address::Address, move_type::MoveType};
 
 #[derive(Clone)]
 pub(crate) struct BalanceChange {
@@ -33,11 +36,11 @@ impl BalanceChange {
         }
     }
 
-    // TODO(DVX-1169): Update to MoveType output when available.
     /// The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
-    async fn coin_type(&self) -> Option<String> {
+    async fn coin_type(&self) -> Result<Option<MoveType>, RpcError> {
         let StoredBalanceChange::V1 { coin_type, .. } = &self.stored;
-        Some(coin_type.clone())
+        let type_ = TypeTag::from_str(coin_type).context("Failed to parse coin type")?;
+        Ok(Some(MoveType::from_native(type_, self.scope.clone())))
     }
 
     /// The signed balance change.

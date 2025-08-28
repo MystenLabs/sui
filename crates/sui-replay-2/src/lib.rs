@@ -1,40 +1,49 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::artifacts::{Artifact, ArtifactManager};
-use crate::build::BuildCmdConfig;
-use crate::data_store::DataStore;
-use crate::displays::Pretty;
-use crate::replay_txn::replay_transaction;
+use crate::{
+    artifacts::{Artifact, ArtifactManager},
+    build::BuildCmdConfig,
+    data_stores::{
+        data_store::DataStore, file_system_store::FileSystemStore, in_memory_store::InMemoryStore,
+        read_through_store::ReadThroughStore,
+    },
+    displays::Pretty,
+    replay_interface::{ReadDataStore, SetupStore, StoreSummary},
+    replay_txn::replay_transaction,
+};
 use anyhow::{anyhow, bail};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use similar::{ChangeTag, TextDiff};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_types::effects::TransactionEffects;
-use sui_types::supported_protocol_versions::Chain;
+use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
 
 pub mod artifacts;
 pub mod build;
-pub mod data_store;
+#[path = "data-stores/mod.rs"]
+pub mod data_stores;
 pub mod displays;
 pub mod execution;
-pub mod gql_queries;
 pub mod replay_interface;
 pub mod replay_txn;
 pub mod tracing;
 
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
+const MAINNET_GQL_URL: &str = "https://public-rpc.sui-mainnet.mystenlabs.com/graphql";
+const TESTNET_GQL_URL: &str = "https://public-rpc.sui-testnet.mystenlabs.com/graphql";
 
-/// Arguments to the replay tool.
-/// It allows to replay a single transaction by digest or
-/// a file containing multiple digests, one per line.
-/// This may evolve to something very different in time and
-/// it's not meant to be stable.
-/// The options available are very convenient for the current
-/// development cycle.
+// Arguments to the replay tool.
+// It allows to replay a single transaction by digest or
+// a file containing multiple digests, one per line.
+// This may evolve to something very different in time and
+// it's not meant to be stable.
+// The options available are very convenient for the current
+// development cycle.
 #[derive(Parser, Clone, Debug)]
 #[clap(
     name = "Sui Replay Tool",
@@ -56,13 +65,13 @@ pub enum Commands {
     Build(BuildCmdConfig),
 }
 
-/// Arguments for the (implicit) replay command.
+/// Arguments for replay
 #[derive(Parser, Clone, Debug)]
 pub struct ReplayConfig {
     /// Transaction digest to replay.
     #[arg(long, short)]
     pub digest: Option<String>,
-    /// File containing a list of digest, one per line.
+    /// File containing a list of digests, one per line.
     #[arg(long)]
     pub digests_path: Option<PathBuf>,
     /// RPC of the fullnode used to replay the transaction.
@@ -72,12 +81,12 @@ pub struct ReplayConfig {
     /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
     #[arg(long = "trace", default_value = "false")]
     pub trace: bool,
-    /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
-    #[arg(long, default_value = "false")]
-    pub terminate_early: bool,
     /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
     #[arg(long, short)]
     pub output_dir: Option<PathBuf>,
+    /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
+    #[arg(long, default_value = "false")]
+    pub terminate_early: bool,
     /// Show transaction effects.
     #[arg(long, short, default_value = "false")]
     pub show_effects: bool,
@@ -85,6 +94,29 @@ pub struct ReplayConfig {
     /// should be overwritten or an error raised if they already exist.
     #[arg(long, default_value = "false")]
     pub overwrite_existing: bool,
+    /// Print a summary of data store usage after the replay completes.
+    #[arg(long, short = 'v', default_value = "false")]
+    pub verbose: bool,
+    /// Select which data store mode to use.
+    /// Options:
+    /// - gql-only: remote GraphQL only
+    /// - fs-then-gql: FileSystem primary with GraphQL fallback
+    /// - fs-only: FileSystem only
+    /// - inmem-fs-gql: InMemory -> FileSystem -> GraphQL (default)
+    #[arg(long = "store-mode", value_enum, default_value_t = StoreMode::GqlOnly)]
+    pub store_mode: StoreMode,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum StoreMode {
+    #[value(name = "gql-only")]
+    GqlOnly,
+    #[value(name = "fs-then-gql")]
+    FsThenGql,
+    #[value(name = "fs-only")]
+    FsOnly,
+    #[value(name = "inmem-fs-gql")]
+    InmemFsGql,
 }
 
 /// Enum around rpc gql endpoints.
@@ -105,6 +137,25 @@ impl Node {
             Node::Testnet => Chain::Testnet,
             // Node::Devnet => Chain::Unknown,
             Node::Custom(_) => Chain::Unknown,
+        }
+    }
+
+    pub fn rpc_url(&self) -> &str {
+        match self {
+            Node::Mainnet => MAINNET_GQL_URL,
+            Node::Testnet => TESTNET_GQL_URL,
+            // Node::Devnet => "",
+            Node::Custom(url) => url.as_str(),
+        }
+    }
+
+    pub fn node_dir(&self) -> &str {
+        match self {
+            Node::Mainnet => "mainnet",
+            Node::Testnet => "testnet",
+            // Node::Devnet => "devnet",
+            // TODO: custom provides a URL which has to be translated to a valid directory name
+            Node::Custom(_) => "custom",
         }
     }
 }
@@ -132,6 +183,8 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
         output_dir,
         show_effects: _,
         overwrite_existing,
+        verbose,
+        store_mode,
     } = config;
 
     let output_root_dir = if let Some(dir) = output_dir {
@@ -177,16 +230,94 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
 
     ::tracing::debug!("Binary version: {version}");
 
-    // `DataStore` implements `TransactionStore`, `EpochStore` and `ObjectStore`
-    let data_store = DataStore::new(node.clone(), version)
-        .map_err(|e| anyhow!("Failed to create data store: {:?}", e))?;
+    // Build the selected data store and run replay
+    match store_mode {
+        StoreMode::GqlOnly => {
+            let gql_store = DataStore::new(node.clone(), version)
+                .map_err(|e| anyhow!("Failed to create data store: {:?}", e))?;
+            run_replay(
+                &gql_store,
+                &output_root_dir,
+                &digests,
+                *overwrite_existing,
+                *trace,
+                *verbose,
+                terminate_early,
+            )
+            .await?;
+        }
+        StoreMode::FsThenGql => {
+            let fs_store = FileSystemStore::new(node.clone())
+                .map_err(|e| anyhow!("Failed to create file system store: {:?}", e))?;
+            let gql_store = DataStore::new(node.clone(), version)
+                .map_err(|e| anyhow!("Failed to create data store: {:?}", e))?;
+            let store = ReadThroughStore::new(fs_store, gql_store);
+            run_replay(
+                &store,
+                &output_root_dir,
+                &digests,
+                *overwrite_existing,
+                *trace,
+                *verbose,
+                terminate_early,
+            )
+            .await?;
+        }
+        StoreMode::FsOnly => {
+            let fs_store = FileSystemStore::new(node.clone())
+                .map_err(|e| anyhow!("Failed to create file system store: {:?}", e))?;
+            run_replay(
+                &fs_store,
+                &output_root_dir,
+                &digests,
+                *overwrite_existing,
+                *trace,
+                *verbose,
+                terminate_early,
+            )
+            .await?;
+        }
+        StoreMode::InmemFsGql => {
+            let fs_store = FileSystemStore::new(node.clone())
+                .map_err(|e| anyhow!("Failed to create file system store: {:?}", e))?;
+            let gql_store = DataStore::new(node.clone(), version)
+                .map_err(|e| anyhow!("Failed to create data store: {:?}", e))?;
+            let secondary_store = ReadThroughStore::new(fs_store, gql_store);
+            let in_memory_store = InMemoryStore::new(node.clone());
+            let store = ReadThroughStore::new(in_memory_store, secondary_store);
+            run_replay(
+                &store,
+                &output_root_dir,
+                &digests,
+                *overwrite_existing,
+                *trace,
+                *verbose,
+                terminate_early,
+            )
+            .await?;
+        }
+    }
 
-    // load and replay transactions
+    Ok(output_root_dir)
+}
+
+async fn run_replay<S>(
+    data_store: &S,
+    output_root_dir: &Path,
+    digests: &[String],
+    overwrite_existing: bool,
+    trace: bool,
+    verbose: bool,
+    terminate_early: bool,
+) -> anyhow::Result<()>
+where
+    S: ReadDataStore + StoreSummary + SetupStore,
+{
+    data_store.setup(None)?;
     for tx_digest in digests {
-        let tx_dir = output_root_dir.join(&tx_digest);
-        let artifact_manager =
-            ArtifactManager::new(&tx_dir, *overwrite_existing /* overrides_allowed */)?;
-        match replay_transaction(&artifact_manager, &tx_digest, &data_store, *trace).await {
+        let tx_dir = output_root_dir.join(tx_digest);
+        let artifact_manager = ArtifactManager::new(&tx_dir, overwrite_existing)?;
+        match replay_transaction(&artifact_manager, tx_digest, data_store, trace).await {
             Err(e) if terminate_early => {
                 ::tracing::error!("Error while replaying transaction {}: {:?}", tx_digest, e);
                 bail!("Replay terminated due to error: {}", e);
@@ -200,7 +331,14 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
         }
     }
 
-    Ok(output_root_dir)
+    if verbose {
+        let mut out = std::io::stdout().lock();
+        let _ = writeln!(out, "\nData store summary:");
+        if let Err(e) = data_store.summary(&mut out) {
+            ::tracing::warn!("Failed to write data store summary: {:?}", e);
+        }
+    }
+    Ok(())
 }
 
 pub fn print_effects_or_fork<W: Write>(

@@ -188,7 +188,7 @@ public(package) fun try_create_next_committee(
     let mut new_members = vec_map::empty();
     let mut stake_participation_percentage = 0;
 
-    while (i < self.member_registrations.size()) {
+    while (i < self.member_registrations.length()) {
         // retrieve registration
         let (_, registration) = self.member_registrations.get_entry_by_idx(i);
         // Find validator stake amount from system state
@@ -242,7 +242,7 @@ public(package) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blo
         let target_address = &eth_addresses[list_idx];
         let mut found = false;
 
-        while (member_idx < self.members.size()) {
+        while (member_idx < self.members.length()) {
             let (pub_key, member) = self.members.get_entry_by_idx_mut(member_idx);
             let eth_address = crypto::ecdsa_pub_key_to_eth_address(pub_key);
 
@@ -279,7 +279,7 @@ public(package) fun update_node_url(
     ctx: &TxContext,
 ) {
     let mut idx = 0;
-    while (idx < self.members.size()) {
+    while (idx < self.members.length()) {
         let (_, member) = self.members.get_entry_by_idx_mut(idx);
         if (member.sui_address == ctx.sender()) {
             member.http_rest_url = new_url;
@@ -299,7 +299,7 @@ public(package) fun update_node_url(
 // in consequence, an end of epoch transaction to fail (safe mode run).
 // This check will ensure the creation of the committee is correct.
 fun check_uniqueness_bridge_keys(self: &BridgeCommittee, bridge_pubkey_bytes: vector<u8>) {
-    let mut count = self.member_registrations.size();
+    let mut count = self.member_registrations.length();
     // bridge_pubkey_bytes must be found once and once only
     let mut bridge_key_found = false;
     while (count > 0) {

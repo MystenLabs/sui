@@ -94,6 +94,7 @@ const concepts = [
 			},
 			'concepts/grpc-overview',
 			'concepts/graphql-rpc',
+			'concepts/archival-store',
 			'concepts/gaming'
 		],
 	},
@@ -198,4 +199,4 @@ const concepts = [
 	},
 	'concepts/research-papers',
 ];
-module.exports = concepts;
+export default concepts;

@@ -8,12 +8,9 @@ use std::{
     time::Duration,
 };
 
+use crate::authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv};
 use crate::{
     authority::AuthorityState, authority_client::AuthorityAPI, transaction_driver::SubmitTxResponse,
-};
-use crate::{
-    authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv},
-    execution_scheduler::ExecutionSchedulerAPI,
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;

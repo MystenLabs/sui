@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeSet, HashMap};
 
 use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
@@ -21,25 +18,24 @@ pub struct TransactionKey(pub TransactionDigest);
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for PgReader {
     type Value = StoredTransaction;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[TransactionKey],
-    ) -> Result<HashMap<TransactionKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<TransactionKey, Self::Value>, Error> {
         use kv_transactions::dsl as t;
 
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
         let transactions: Vec<StoredTransaction> = conn
             .results(t::kv_transactions.filter(t::tx_digest.eq_any(digests)))
-            .await
-            .map_err(Arc::new)?;
+            .await?;
 
         let digest_to_stored: HashMap<_, _> = transactions
             .into_iter()
@@ -59,12 +55,12 @@ impl Loader<TransactionKey> for PgReader {
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for BigtableReader {
     type Value = TransactionData;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[TransactionKey],
-    ) -> Result<HashMap<TransactionKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<TransactionKey, Self::Value>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }

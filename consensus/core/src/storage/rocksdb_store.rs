@@ -90,8 +90,10 @@ impl RocksDBStore {
     #[cfg(tidehunter)]
     pub fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
-        use typed_store::tidehunter_util::{KeyIndexing, KeySpaceConfig, KeyType, ThConfig};
-        const MUTEXES: usize = 1024;
+        use typed_store::tidehunter_util::{
+            default_mutex_count, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+        };
+        let mutexes = default_mutex_count();
         let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
         let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
         let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
@@ -103,7 +105,7 @@ impl RocksDBStore {
                 Self::BLOCKS_CF.to_string(),
                 ThConfig::new_with_config_indexing(
                     index_index_digest_key.clone(),
-                    MUTEXES,
+                    mutexes,
                     u32_prefix.clone(),
                     override_dirty_keys_config.clone(),
                 ),
@@ -112,31 +114,31 @@ impl RocksDBStore {
                 Self::DIGESTS_BY_AUTHORITIES_CF.to_string(),
                 ThConfig::new_with_config_indexing(
                     index_index_digest_key.clone(),
-                    MUTEXES,
+                    mutexes,
                     u64_prefix.clone(),
                     override_dirty_keys_config.clone(),
                 ),
             ),
             (
                 Self::COMMITS_CF.to_string(),
-                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
             ),
             (
                 Self::COMMIT_VOTES_CF.to_string(),
                 ThConfig::new_with_config_indexing(
                     commit_vote_key,
-                    MUTEXES,
+                    mutexes,
                     u32_prefix.clone(),
                     override_dirty_keys_config.clone(),
                 ),
             ),
             (
                 Self::COMMIT_INFO_CF.to_string(),
-                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
             ),
             (
                 Self::FINALIZED_COMMITS_CF.to_string(),
-                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
             ),
         ];
         Self::open_tables_read_write(
