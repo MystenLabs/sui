@@ -175,7 +175,7 @@ where
                     .await
                     .unwrap_or_else(|_| {
                         // Timeout occurred, return with latest retriable error if available
-                        Err(TransactionDriverError::TimeOutWithLastRetriableError {
+                        Err(TransactionDriverError::TimeoutWithLastRetriableError {
                             last_error: latest_retriable_error.map(Box::new),
                             attempts,
                             timeout: duration,

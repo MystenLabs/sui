@@ -228,7 +228,7 @@ pub struct RawSubmitTxRequest {
 
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxResponse {
-    // Results for each transaction in the request
+    // Results corresponding to each transaction in the request.
     #[prost(message, repeated, tag = "1")]
     pub results: Vec<RawSubmitTxResult>,
 }

@@ -36,7 +36,8 @@ impl SubmitTxRequest {
     }
 }
 
-pub enum SubmitTxResponse {
+#[derive(Clone)]
+pub enum SubmitTxResult {
     Submitted {
         consensus_position: ConsensusPosition,
     },
@@ -50,7 +51,7 @@ pub enum SubmitTxResponse {
     },
 }
 
-impl fmt::Debug for SubmitTxResponse {
+impl fmt::Debug for SubmitTxResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Submitted { consensus_position } => f
@@ -70,26 +71,41 @@ impl fmt::Debug for SubmitTxResponse {
     }
 }
 
-impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
+impl TryFrom<SubmitTxResult> for RawSubmitTxResult {
     type Error = SuiError;
 
-    fn try_from(value: RawSubmitTxResponse) -> Result<Self, Self::Error> {
-        // TODO(fastpath): handle multiple transactions.
-        if value.results.len() != 1 {
-            return Err(SuiError::GrpcMessageDeserializeError {
-                type_info: "RawSubmitTxResponse.results".to_string(),
-                error: format!("Expected exactly 1 result, got {}", value.results.len()),
-            });
-        }
+    fn try_from(value: SubmitTxResult) -> Result<Self, Self::Error> {
+        let inner = match value {
+            SubmitTxResult::Submitted { consensus_position } => {
+                let consensus_position = consensus_position.into_raw()?;
+                RawValidatorSubmitStatus::Submitted(consensus_position)
+            }
+            SubmitTxResult::Executed {
+                effects_digest,
+                details,
+                fast_path,
+            } => {
+                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
+                RawValidatorSubmitStatus::Executed(raw_executed)
+            }
+        };
+        Ok(RawSubmitTxResult { inner: Some(inner) })
+    }
+}
 
-        let result = value.results.into_iter().next().unwrap();
-        match result.inner {
-            Some(RawValidatorSubmitStatus::Submitted(consensus_position)) => Ok(Self::Submitted {
-                consensus_position: consensus_position.as_ref().try_into()?,
-            }),
+impl TryFrom<RawSubmitTxResult> for SubmitTxResult {
+    type Error = SuiError;
+
+    fn try_from(value: RawSubmitTxResult) -> Result<Self, Self::Error> {
+        match value.inner {
+            Some(RawValidatorSubmitStatus::Submitted(consensus_position)) => {
+                Ok(SubmitTxResult::Submitted {
+                    consensus_position: consensus_position.as_ref().try_into()?,
+                })
+            }
             Some(RawValidatorSubmitStatus::Executed(executed)) => {
                 let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
-                Ok(Self::Executed {
+                Ok(SubmitTxResult::Executed {
                     effects_digest,
                     details,
                     fast_path,
@@ -103,27 +119,30 @@ impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
     }
 }
 
-impl TryFrom<SubmitTxResponse> for RawSubmitTxResponse {
+#[derive(Clone, Debug)]
+pub struct SubmitTxResponse {
+    pub results: Vec<SubmitTxResult>,
+}
+
+impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
     type Error = SuiError;
 
-    fn try_from(value: SubmitTxResponse) -> Result<Self, Self::Error> {
-        let inner = match value {
-            SubmitTxResponse::Submitted { consensus_position } => {
-                let consensus_position = consensus_position.into_raw()?;
-                RawValidatorSubmitStatus::Submitted(consensus_position)
-            }
-            SubmitTxResponse::Executed {
-                effects_digest,
-                details,
-                fast_path,
-            } => {
-                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
-                RawValidatorSubmitStatus::Executed(raw_executed)
-            }
-        };
-        Ok(RawSubmitTxResponse {
-            results: vec![RawSubmitTxResult { inner: Some(inner) }],
-        })
+    fn try_from(value: RawSubmitTxResponse) -> Result<Self, Self::Error> {
+        // TODO(fastpath): handle multiple transactions.
+        if value.results.len() != 1 {
+            return Err(SuiError::GrpcMessageDeserializeError {
+                type_info: "RawSubmitTxResponse.results".to_string(),
+                error: format!("Expected exactly 1 result, got {}", value.results.len()),
+            });
+        }
+
+        let results = value
+            .results
+            .into_iter()
+            .map(|result| result.try_into())
+            .collect::<Result<Vec<SubmitTxResult>, SuiError>>()?;
+
+        Ok(Self { results })
     }
 }
 
