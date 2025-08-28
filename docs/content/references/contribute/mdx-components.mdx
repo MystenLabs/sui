@@ -189,7 +189,15 @@ Use `{@inject:}` to keep docs synchronized with live source code, as it prevents
 
 :::caution 
 
+#### Considerations
+
+The effective use of `{@inject}` often requires code comments in the source file. You might need to balance the granularity of your documentation with the amount of comment chatter your documentation efforts might create.
+
+When including sections of code, understand that the code might change from what you reference during document creation to what a reader eventually consumes. Assume other processes will update the accompanying content, but be mindful of the possibility of changing code when considering the level of detail in your instruction. You can take comfort in the knowledge that the code is always valid, though.
+
+:::caution
 You **cannot** use `{@inject:}` within the snippet file for an `{@include:}` directive. You must use the `<CodeFromFile>` component instead.
+:::
 
 ```
 <CodeFromFile
