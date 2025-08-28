@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
     error::RpcError,
-    pagination::{ordered_results_with_limits, Page},
+    pagination::Page,
     scope::Scope,
     task::watermark::Watermarks,
 };
@@ -30,11 +30,12 @@ pub(crate) mod filter;
 mod lookups;
 
 use super::{
-    address::Address, checkpoint::filter::checkpoint_bounds, move_type::MoveType,
-    move_value::MoveValue, transaction::filter::tx_bounds, transaction::Transaction,
+    address::Address, checkpoint::filter::checkpoint_bounds, event::filter::pg_tx_bounds,
+    move_type::MoveType, move_value::MoveValue, transaction::filter::tx_bounds,
+    transaction::Transaction,
 };
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
 pub(crate) struct EventCursor {
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
@@ -57,8 +58,6 @@ pub(crate) struct Event {
     pub(crate) sequence_number: u64,
     /// Timestamp when the transaction containing this event was finalized (checkpoint time)
     pub(crate) timestamp_ms: u64,
-    /// The transaction sequence number this event belongs to
-    pub(crate) tx_sequence_number: u64,
 }
 
 // TODO(DVX-1200): Support sendingModule - MoveModule
@@ -126,14 +125,15 @@ impl Event {
         let reader_lo = 0;
         let global_tx_hi = watermarks.high_watermark().transaction();
 
-        let cp_bounds = checkpoint_bounds(
+        let Some(cp_bounds) = checkpoint_bounds(
             filter.after_checkpoint.map(u64::from),
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             reader_lo,
             scope.checkpoint_viewed_at(),
-        )
-        .context("Failed to calculate checkpoint bounds")?;
+        ) else {
+            return Ok(Connection::new(false, false));
+        };
 
         let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
         let pg_tx_bounds = pg_tx_bounds(&page, tx_bounds);
@@ -176,57 +176,20 @@ impl Event {
             .unique()
             .collect();
 
-        let events: Vec<Event> =
-            lookups::events_from_sequence_numbers(&scope, ctx, &tx_sequence_numbers)
-                .await?
-                .into_iter()
-                .filter(|e| matches_cursor_bounds(e, &page))
-                .collect();
+        let events =
+            lookups::events_from_sequence_numbers(&scope, ctx, &page, &tx_sequence_numbers).await?;
 
-        let results = ordered_results_with_limits(&page, events, |e| {
-            (e.tx_sequence_number, e.sequence_number)
-        });
-
-        let (has_prev, has_next, edges) = page.paginate_results(results, |e| {
-            JsonCursor::new(EventCursor {
-                tx_sequence_number: e.tx_sequence_number,
-                ev_sequence_number: e.sequence_number,
-            })
-        });
+        let (has_prev, has_next, edges) =
+            page.paginate_results(events, |(cursor, _)| JsonCursor::new(*cursor));
 
         // Set pagination state
         c.has_previous_page = has_prev;
         c.has_next_page = has_next;
 
-        for (cursor, event) in edges {
+        for (cursor, (_, event)) in edges {
             c.edges.push(Edge::new(cursor.encode_cursor(), event));
         }
 
         Ok(c)
     }
-}
-
-fn matches_cursor_bounds(event: &Event, page: &Page<CEvent>) -> bool {
-    let event_cursor = EventCursor {
-        tx_sequence_number: event.tx_sequence_number,
-        ev_sequence_number: event.sequence_number,
-    };
-
-    page.after().is_none_or(|after| event_cursor >= **after)
-        && page.before().is_none_or(|before| event_cursor <= **before)
-}
-
-/// The transaction sequence number bounds with pagination cursors applied inclusively.
-fn pg_tx_bounds(page: &Page<CEvent>, tx_bounds: std::ops::Range<u64>) -> std::ops::Range<u64> {
-    let pg_lo = page
-        .after()
-        .map(|c| c.tx_sequence_number)
-        .map_or(tx_bounds.start, |tx_lo| tx_lo.max(tx_bounds.start));
-
-    let pg_hi = page
-        .before()
-        .map(|c| c.tx_sequence_number.saturating_add(1))
-        .map_or(tx_bounds.end, |tx_hi| tx_hi.min(tx_bounds.end));
-
-    pg_lo..pg_hi
 }

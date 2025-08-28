@@ -133,6 +133,11 @@ fragment E on Event {
       ...E
     }
   }
+  eventsBetweenInvalidCursors: events(first: 10, after: "@{cursor_1}", before: "@{cursor_0}") {
+    nodes {
+      ...E
+    }
+  }
 }
 
 fragment E on Event {

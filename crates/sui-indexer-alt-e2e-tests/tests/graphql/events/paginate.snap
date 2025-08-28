@@ -224,7 +224,7 @@ Response: {
   }
 }
 
-task 10, lines 124-144:
+task 10, lines 124-149:
 //# run-graphql --cursors {"t":2,"e":0} {"t":4,"e":9}
 Response: {
   "data": {
@@ -249,11 +249,14 @@ Response: {
           }
         }
       ]
+    },
+    "eventsBetweenInvalidCursors": {
+      "nodes": []
     }
   }
 }
 
-task 11, lines 147-162:
+task 11, lines 152-167:
 //# run-graphql --cursors {"t":2,"e":0}
 Response: {
   "data": {
@@ -277,7 +280,7 @@ Response: {
   }
 }
 
-task 12, lines 164-179:
+task 12, lines 169-184:
 //# run-graphql --cursors {"t":3,"e":0}
 Response: {
   "data": {
@@ -301,7 +304,7 @@ Response: {
   }
 }
 
-task 13, lines 181-196:
+task 13, lines 186-201:
 //# run-graphql --cursors {"t":3,"e":1}
 Response: {
   "data": {

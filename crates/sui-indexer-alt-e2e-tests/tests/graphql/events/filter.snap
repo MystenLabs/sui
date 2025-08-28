@@ -63,23 +63,286 @@ Checkpoint created: 4
 task 11, lines 70-120:
 //# run-graphql
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Failed to calculate checkpoint bounds",
-      "locations": [
+  "data": {
+    "allEvents": {
+      "nodes": [
         {
-          "line": 33,
-          "column": 3
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "A6wMvYNyPat1jApgX5g6tavfA7DZEPSS3Nmi6xfdtLJp",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6i82DbNJrFkcRdq5RoVApjWxedQf6c4Dc84EsNRSZkaa",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "HozsBtCyo4KDxpsD9K2oxY4NpxWCbuwMissw7Uy1xRd9",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "HozsBtCyo4KDxpsD9K2oxY4NpxWCbuwMissw7Uy1xRd9",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
         }
-      ],
-      "path": [
-        "eventsAtCheckpoint100NonExistent"
-      ],
-      "extensions": {
-        "chain": [],
-        "code": "INTERNAL_SERVER_ERROR"
-      }
+      ]
+    },
+    "eventsAfterCheckpoint3": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsBeforeCheckpoint4": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "A6wMvYNyPat1jApgX5g6tavfA7DZEPSS3Nmi6xfdtLJp",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAtCheckpoint4": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAfterCheckpoint0": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "A6wMvYNyPat1jApgX5g6tavfA7DZEPSS3Nmi6xfdtLJp",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6i82DbNJrFkcRdq5RoVApjWxedQf6c4Dc84EsNRSZkaa",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "HozsBtCyo4KDxpsD9K2oxY4NpxWCbuwMissw7Uy1xRd9",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "HozsBtCyo4KDxpsD9K2oxY4NpxWCbuwMissw7Uy1xRd9",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsBeforeCheckpoint100": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "A6wMvYNyPat1jApgX5g6tavfA7DZEPSS3Nmi6xfdtLJp",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6i82DbNJrFkcRdq5RoVApjWxedQf6c4Dc84EsNRSZkaa",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "HozsBtCyo4KDxpsD9K2oxY4NpxWCbuwMissw7Uy1xRd9",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "HozsBtCyo4KDxpsD9K2oxY4NpxWCbuwMissw7Uy1xRd9",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "AZ9f5AtQRLhodnRhtugAN3GVErosFmKvXzTWZsvvxYyE",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAtCheckpoint100NonExistent": {
+      "nodes": []
     }
-  ]
+  }
 }

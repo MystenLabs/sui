@@ -84,7 +84,7 @@ module test::events_test {
       ...E
     }
   }
-  eventsAtCheckpoint4: events(last: 50, filter: {beforeCheckpoint: 4}) {
+  eventsAtCheckpoint4: events(last: 50, filter: {atCheckpoint: 4}) {
     nodes {
       ...E
     }

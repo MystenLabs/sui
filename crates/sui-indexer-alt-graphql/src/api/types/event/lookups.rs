@@ -1,22 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{dataloader::DataLoader, Context};
+use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_indexer_alt_reader::{kv_loader::KvLoader, pg_reader::PgReader, tx_digests::TxDigestKey};
+use sui_indexer_alt_schema::transactions::StoredTxDigest;
 use sui_types::{digests::TransactionDigest, event::Event as NativeEvent};
 
-use crate::api::types::event::Event;
 use crate::error::RpcError;
+use crate::pagination::Page;
 use crate::scope::Scope;
 
+use super::{filter::tx_ev_bounds, CEvent, Event, EventCursor};
+
+///
+/// Returns a page of Event cursors and Events emitted from transactions with cursors and limits with overhead applied by:
+/// 1. Mapping transaction sequence numbers to transaction digests.
+/// 2. Loading native events based on the transaction digests from kv store.
+/// 3. Iterating through the transaction sequence numbers, checking for cursor bounds while
+///     building a Vector of events until the page.limit_with_overhead() is reached.
+/// 4. Ordering ASC as expected by the GraphQL schema and paginate_results().
+///
+/// Note: tx_sequence_numbers are ordered ASC or DESC depending on the page direction, while events in
+///     each transactions are returned in ASC sequence number from the store.
+///
 pub(crate) async fn events_from_sequence_numbers(
     scope: &Scope,
     ctx: &Context<'_>,
+    page: &Page<CEvent>,
     tx_sequence_numbers: &[u64],
-) -> Result<Vec<Event>, RpcError> {
+) -> Result<Vec<(EventCursor, Event)>, RpcError> {
     let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
     let kv_loader: &KvLoader = ctx.data()?;
 
@@ -41,42 +58,71 @@ pub(crate) async fn events_from_sequence_numbers(
         .await
         .context("Failed to load transaction events")?;
 
-    let events: Vec<Event> = tx_sequence_numbers
-        .iter()
-        .map(|tx_seq_num| {
-            let key = TxDigestKey(*tx_seq_num);
-            let stored_tx_digest = sequence_to_digest
-                .get(&key)
-                .context("Failed to get transaction digest")?;
+    let mut results = tx_events_paginated(
+        scope,
+        page,
+        tx_sequence_numbers,
+        &sequence_to_digest,
+        &digest_to_events,
+    )?;
 
-            let tx_digest = TransactionDigest::try_from(stored_tx_digest.tx_digest.clone())
-                .context("Failed to deserialize transaction digest")?;
+    if !page.is_from_front() {
+        results.reverse();
+    }
 
-            let contents = digest_to_events
-                .get(&tx_digest)
-                .context("Failed to get events")?;
+    Ok(results)
+}
 
-            let native_events: Vec<NativeEvent> = contents.events()?;
+/// A page of Events emitted from transactions with cursors and limits with overhead applied.
+fn tx_events_paginated(
+    scope: &Scope,
+    page: &Page<CEvent>,
+    tx_sequence_numbers: &[u64],
+    sequence_to_digest: &HashMap<TxDigestKey, StoredTxDigest>,
+    digest_to_events: &HashMap<TransactionDigest, TransactionEventsContents>,
+) -> Result<Vec<(EventCursor, Event)>, RpcError> {
+    let mut results = Vec::new();
+    let mut count = 0;
+    let limit = page.limit_with_overhead();
 
-            Ok::<Vec<Event>, RpcError>(
-                native_events
-                    .into_iter()
-                    .enumerate()
-                    .map(|(idx, native)| Event {
-                        scope: scope.clone(),
-                        native,
-                        transaction_digest: tx_digest,
-                        sequence_number: idx as u64,
-                        timestamp_ms: contents.timestamp_ms(),
-                        tx_sequence_number: *tx_seq_num,
-                    })
-                    .collect(),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect();
+    for &tx_seq_num in tx_sequence_numbers {
+        let key = TxDigestKey(tx_seq_num);
+        let stored_tx_digest = sequence_to_digest
+            .get(&key)
+            .context("Failed to get transaction digest")?;
 
-    Ok(events)
+        let tx_digest = TransactionDigest::try_from(stored_tx_digest.tx_digest.clone())
+            .context("Failed to deserialize transaction digest")?;
+
+        let contents = digest_to_events
+            .get(&tx_digest)
+            .context("Failed to get events")?;
+
+        let native_events: Vec<NativeEvent> = contents.events()?;
+        let event_bounds = tx_ev_bounds(page, tx_seq_num, native_events.len());
+
+        for ev_seq_num in event_bounds {
+            let event_cursor = EventCursor {
+                tx_sequence_number: tx_seq_num,
+                ev_sequence_number: ev_seq_num as u64,
+            };
+
+            let event = Event {
+                scope: scope.clone(),
+                native: native_events[ev_seq_num].clone(),
+                transaction_digest: tx_digest,
+                sequence_number: ev_seq_num as u64,
+                timestamp_ms: contents.timestamp_ms(),
+            };
+
+            results.push((event_cursor, event));
+            count += 1;
+
+            if count >= limit {
+                return Ok(results);
+            }
+        }
+    }
+
+    Ok(results)
 }
