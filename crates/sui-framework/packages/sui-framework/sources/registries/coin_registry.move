@@ -10,18 +10,18 @@ module sui::coin_registry;
 use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::Supply;
-use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata};
+use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
-/// No CoinData found for this coin type.
-const ECoinDataNotFound: u64 = 0;
+/// No Currency found for this coin type.
+const ECurrencyNotFound: u64 = 0;
 /// Metadata cap already claimed
 const EMetadataCapAlreadyClaimed: u64 = 1;
 /// Only the system address can create the registry
 const ENotSystemAddress: u64 = 2;
-/// CoinData for this coin type already exists
-const ECoinDataAlreadyExists: u64 = 3;
+/// Currency for this coin type already exists
+const ECurrencyAlreadyExists: u64 = 3;
 /// Attempt to set the deny list state permissionlessly while it has already been set.
 const EDenyListStateAlreadySet: u64 = 4;
 /// Tries to delete legacy metadata without having claimed the management capability.
@@ -43,24 +43,24 @@ public struct CoinRegistry has key, store {
 
 /// Store only object that enables more flexible coin data
 /// registration, allowing for additional fields to be added
-/// without changing the CoinData structure.
+/// without changing the Currency structure.
 #[allow(unused_field)]
 public struct ExtraField(TypeName, vector<u8>) has store;
 
 /// Key used to access coin metadata hung off the `CoinRegistry`
 /// object. This key can be versioned to allow for future changes
 /// to the metadata object.
-public struct CoinDataKey<phantom T>() has copy, drop, store;
+public struct CurrencyKey<phantom T>() has copy, drop, store;
 
 /// Capability object that enables coin metadata to be updated.
 /// This capability is created when a coin is registered and allows
 /// the holder to modify the coin's metadata fields.
 public struct MetadataCap<phantom T> has key, store { id: UID }
 
-/// CoinData object that stores comprehensive information about a coin type.
+/// Currency object that stores comprehensive information about a coin type.
 /// This includes metadata like name, symbol, and description, as well as
 /// supply and regulatory status information.
-public struct CoinData<phantom T> has key {
+public struct Currency<phantom T> has key {
     id: UID,
     /// Number of decimal places the coin uses for display purposes
     decimals: u8,
@@ -81,7 +81,7 @@ public struct CoinData<phantom T> has key {
     /// ID of the treasury cap for this coin type, if registered
     treasury_cap_id: Option<ID>,
     /// ID of the metadata capability for this coin type, if claimed
-    metadata_cap_id: Option<ID>,
+    metadata_cap_id: MetadataCapState,
     /// Additional fields for extensibility
     extra_fields: VecMap<String, ExtraField>,
 }
@@ -110,10 +110,19 @@ public enum RegulatedState has copy, drop, store {
     Unknown,
 }
 
+public enum MetadataCapState has copy, drop, store {
+    /// The metadata cap has been claimed
+    Claimed(ID),
+    /// The metadata cap has not been claimed
+    Unclaimed,
+    /// The metadata cap has been deleted (so all metadata entries are immutable).
+    Deleted,
+}
+
 /// Hot potato pattern object to enforce registration after "create_currency" data creation.
 /// This object must be transferred to the registry to complete the coin registration process.
 public struct CurrencyBuilder<phantom T> {
-    data: CoinData<T>,
+    data: Currency<T>,
     is_otw: bool,
 }
 
@@ -135,7 +144,7 @@ public fun new_currency<T: drop>(
 
     let treasury_cap = coin::new_treasury_cap(ctx);
 
-    let metadata = CoinData<T> {
+    let metadata = Currency<T> {
         id: object::new(ctx),
         decimals,
         name,
@@ -145,7 +154,7 @@ public fun new_currency<T: drop>(
         supply: option::some(SupplyState::Unknown),
         regulated: RegulatedState::Unregulated,
         treasury_cap_id: option::some(object::id(&treasury_cap)),
-        metadata_cap_id: option::none(),
+        metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
     };
 
@@ -169,7 +178,7 @@ public fun new_dynamic_currency<T: /* internal */ key>(
 
     let treasury_cap = coin::new_treasury_cap(ctx);
 
-    let metadata = CoinData<T> {
+    let metadata = Currency<T> {
         // TODO: use `derived_object::claim(&mut registry.id, CoinKey<T>())`
         id: object::new(ctx),
         decimals,
@@ -180,7 +189,7 @@ public fun new_dynamic_currency<T: /* internal */ key>(
         supply: option::some(SupplyState::Unknown),
         regulated: RegulatedState::Unregulated,
         treasury_cap_id: option::some(object::id(&treasury_cap)),
-        metadata_cap_id: option::none(),
+        metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
     };
 
@@ -208,21 +217,19 @@ public fun make_regulated<T>(
 /// Claim a MetadataCap for a coin type. This is only allowed from the owner of `TreasuryCap`, and only once.
 /// Aborts if the metadata capability has already been claimed.
 public fun claim_cap<T>(
-    data: &mut CoinData<T>,
+    data: &mut Currency<T>,
     _: &TreasuryCap<T>,
     ctx: &mut TxContext,
 ): MetadataCap<T> {
     assert!(!data.metadata_cap_claimed(), EMetadataCapAlreadyClaimed);
     let id = object::new(ctx);
-    let metadata_cap_id = id.to_inner();
-
-    data.metadata_cap_id.fill(metadata_cap_id);
+    data.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
     MetadataCap { id }
 }
 
-/// Freeze the supply by destroying the TreasuryCap and storing it in the CoinData.
-public fun freeze_supply<T>(data: &mut CoinData<T>, cap: TreasuryCap<T>) {
+/// Freeze the supply by destroying the TreasuryCap and storing it in the Currency.
+public fun freeze_supply<T>(data: &mut Currency<T>, cap: TreasuryCap<T>) {
     match (data.supply.swap(SupplyState::Frozen(cap.into_supply()))) {
         // Impossible: We cannot fix a supply or make a supply deflationary twice.
         SupplyState::Frozen(_supply) | SupplyState::Deflationary(_supply) => abort,
@@ -232,8 +239,8 @@ public fun freeze_supply<T>(data: &mut CoinData<T>, cap: TreasuryCap<T>) {
 }
 
 /// Make the supply "deflatinary" by destroying the TreasuryCap and taking control of the
-/// supply through the CoinData.
-public fun make_deflationary<T>(data: &mut CoinData<T>, cap: TreasuryCap<T>) {
+/// supply through the Currency.
+public fun make_deflationary<T>(data: &mut Currency<T>, cap: TreasuryCap<T>) {
     match (data.supply.swap(SupplyState::Deflationary(cap.into_supply()))) {
         // Impossible: We cannot fix a supply or make a supply deflationary twice.
         SupplyState::Frozen(_supply) | SupplyState::Deflationary(_supply) => abort,
@@ -246,7 +253,7 @@ public fun finalize<T>(builder: CurrencyBuilder<T>, ctx: &mut TxContext): Metada
     let CurrencyBuilder { mut data, is_otw } = builder;
 
     let id = object::new(ctx);
-    data.metadata_cap_id.fill(id.to_inner());
+    data.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
     if (is_otw) transfer::transfer(data, coin_registry_id().to_address())
     else transfer::share_object(data);
@@ -254,16 +261,16 @@ public fun finalize<T>(builder: CurrencyBuilder<T>, ctx: &mut TxContext): Metada
     MetadataCap<T> { id }
 }
 
-/// The second step in the "otw" initialization of coin metadata, that takes in the `CoinData<T>` that was
+/// The second step in the "otw" initialization of coin metadata, that takes in the `Currency<T>` that was
 /// transferred from init, and transforms it in to a "derived address" shared object.
 public fun finalize_registration<T>(
     registry: &mut CoinRegistry,
-    coin_data: Receiving<CoinData<T>>,
+    coin_data: Receiving<Currency<T>>,
     ctx: &mut TxContext,
 ) {
-    // 1. Consume CoinData
+    // 1. Consume Currency
     // 2. Re-create it with a "derived" address.
-    let CoinData {
+    let Currency {
         id,
         decimals,
         name,
@@ -280,7 +287,7 @@ public fun finalize_registration<T>(
     id.delete();
 
     // Now, create the shared version of the coin data.
-    transfer::share_object(CoinData {
+    transfer::share_object(Currency {
         // TODO: Replace this with `derived_object::claim()`
         id: object::new(ctx),
         decimals,
@@ -298,35 +305,45 @@ public fun finalize_registration<T>(
 
 /// Get mutable reference to the coin data from CurrencyBuilder.
 /// This function is package-private and should only be called by the coin module.
-public fun inner_mut<T>(init: &mut CurrencyBuilder<T>): &mut CoinData<T> {
+public fun inner_mut<T>(init: &mut CurrencyBuilder<T>): &mut Currency<T> {
     &mut init.data
 }
 
-// === CoinData Setters  ===
+/// Allows burning coins for deflationary
+public fun burn<T>(data: &mut Currency<T>, coin: Coin<T>) {
+    assert!(data.is_deflationary());
+
+    match (data.supply.borrow_mut()) {
+        SupplyState::Deflationary(supply) => { supply.decrease_supply(coin.into_balance()); },
+        _ => abort,
+    }
+}
+
+// === Currency Setters  ===
 
 /// Enables a metadata cap holder to update a coin's name.
-public fun set_name<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, name: String) {
+public fun set_name<T>(data: &mut Currency<T>, _: &MetadataCap<T>, name: String) {
     data.name = name;
 }
 
 /// Enables a metadata cap holder to update a coin's symbol.
 /// TODO: Should we kill this? :)
-public fun set_symbol<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, symbol: String) {
+public fun set_symbol<T>(data: &mut Currency<T>, _: &MetadataCap<T>, symbol: String) {
     data.symbol = symbol;
 }
 
 /// Enables a metadata cap holder to update a coin's description.
-public fun set_description<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, description: String) {
+public fun set_description<T>(data: &mut Currency<T>, _: &MetadataCap<T>, description: String) {
     data.description = description;
 }
 
 /// Enables a metadata cap holder to update a coin's icon URL.
-public fun set_icon_url<T>(data: &mut CoinData<T>, _: &MetadataCap<T>, icon_url: String) {
+public fun set_icon_url<T>(data: &mut Currency<T>, _: &MetadataCap<T>, icon_url: String) {
     data.icon_url = icon_url;
 }
 
 /// Register the treasury cap ID for a coin type at a later point.
-public fun set_treasury_cap_id<T>(data: &mut CoinData<T>, cap: &TreasuryCap<T>) {
+public fun set_treasury_cap_id<T>(data: &mut Currency<T>, cap: &TreasuryCap<T>) {
     data.treasury_cap_id.fill(object::id(cap));
 }
 
@@ -335,13 +352,13 @@ public fun set_treasury_cap_id<T>(data: &mut CoinData<T>, cap: &TreasuryCap<T>) 
 /// TODO: Register legacy coin metadata to the registry --
 /// This should:
 /// 1. Take the old metadata
-/// 2. Create a `CoinData<T>` object with a derived address (and share it!)
+/// 2. Create a `Currency<T>` object with a derived address (and share it!)
 public fun migrate_legacy_metadata<T>(registry: &mut CoinRegistry, v1: &CoinMetadata<T>) {
     abort
 }
 
 /// TODO: Allow coin metadata to be updated from legacy as described in our docs.
-public fun update_from_legacy_metadata<T>(data: &mut CoinData<T>, v1: &CoinMetadata<T>) {
+public fun update_from_legacy_metadata<T>(data: &mut Currency<T>, v1: &CoinMetadata<T>) {
     assert!(!data.metadata_cap_claimed(), ECannotUpdateManagedMetadata);
     abort
 }
@@ -351,7 +368,7 @@ public fun update_from_legacy_metadata<T>(data: &mut CoinData<T>, v1: &CoinMetad
 ///
 /// This function is only callable after there's "proof" that the author of the coin
 /// can manage the metadata using the registry system (so having a metadata cap claimed).
-public fun delete_migrated_legacy_metadata<T>(data: &mut CoinData<T>, v1: CoinMetadata<T>) {
+public fun delete_migrated_legacy_metadata<T>(data: &mut Currency<T>, v1: CoinMetadata<T>) {
     assert!(data.metadata_cap_claimed(), EMetadataCapNotClaimed);
     v1.destroy_metadata();
 }
@@ -359,7 +376,7 @@ public fun delete_migrated_legacy_metadata<T>(data: &mut CoinData<T>, v1: CoinMe
 /// Allow migrating the regulated state by access to `RegulatedCoinMetadata` frozen object.
 /// This is a permissionless operation.
 public fun migrate_regulated_state_by_metadata<T>(
-    data: &mut CoinData<T>,
+    data: &mut Currency<T>,
     metadata: &RegulatedCoinMetadata<T>,
 ) {
     // Only allow if this hasn't been migrated before.
@@ -373,7 +390,7 @@ public fun migrate_regulated_state_by_metadata<T>(
 
 /// Allow migrating the regulated state by a `DenyCapV2` object.
 /// This is a permissioned operation.
-public fun migrate_regulated_state_by_cap<T>(data: &mut CoinData<T>, cap: &DenyCapV2<T>) {
+public fun migrate_regulated_state_by_cap<T>(data: &mut Currency<T>, cap: &DenyCapV2<T>) {
     data.regulated =
         RegulatedState::Regulated {
             cap: object::id(cap),
@@ -384,34 +401,37 @@ public fun migrate_regulated_state_by_cap<T>(data: &mut CoinData<T>, cap: &DenyC
 // === Public getters  ===
 
 /// Get the number of decimal places for the coin type.
-public fun decimals<T>(coin_data: &CoinData<T>): u8 { coin_data.decimals }
+public fun decimals<T>(coin_data: &Currency<T>): u8 { coin_data.decimals }
 
 /// Get the human-readable name of the coin.
-public fun name<T>(coin_data: &CoinData<T>): String { coin_data.name }
+public fun name<T>(coin_data: &Currency<T>): String { coin_data.name }
 
 /// Get the symbol/ticker of the coin.
-public fun symbol<T>(coin_data: &CoinData<T>): String { coin_data.symbol }
+public fun symbol<T>(coin_data: &Currency<T>): String { coin_data.symbol }
 
 /// Get the description of the coin.
-public fun description<T>(coin_data: &CoinData<T>): String {
+public fun description<T>(coin_data: &Currency<T>): String {
     coin_data.description
 }
 
 /// Get the icon URL for the coin.
-public fun icon_url<T>(coin_data: &CoinData<T>): String { coin_data.icon_url }
+public fun icon_url<T>(coin_data: &Currency<T>): String { coin_data.icon_url }
 
 /// Check if the metadata capability has been claimed for this coin type.
-public fun metadata_cap_claimed<T>(coin_data: &CoinData<T>): bool {
-    coin_data.metadata_cap_id.is_some()
+public fun metadata_cap_claimed<T>(coin_data: &Currency<T>): bool {
+    match (coin_data.metadata_cap_id) {
+        MetadataCapState::Claimed(_) | MetadataCapState::Deleted => true,
+        _ => false,
+    }
 }
 
 /// Get the treasury cap ID for this coin type, if registered.
-public fun treasury_cap_id<T>(coin_data: &CoinData<T>): Option<ID> {
+public fun treasury_cap_id<T>(coin_data: &Currency<T>): Option<ID> {
     coin_data.treasury_cap_id
 }
 
 /// Get the deny cap ID for this coin type, if it's a regulated coin.
-public fun deny_cap_id<T>(coin_data: &CoinData<T>): Option<ID> {
+public fun deny_cap_id<T>(coin_data: &Currency<T>): Option<ID> {
     match (coin_data.regulated) {
         RegulatedState::Regulated { cap, .. } => option::some(cap),
         RegulatedState::Unregulated => option::none(),
@@ -419,16 +439,23 @@ public fun deny_cap_id<T>(coin_data: &CoinData<T>): Option<ID> {
     }
 }
 
-public fun is_frozen<T>(coin_data: &CoinData<T>): bool {
+public fun is_frozen<T>(coin_data: &Currency<T>): bool {
     match (coin_data.supply.borrow()) {
         SupplyState::Frozen(_) => true,
         _ => false,
     }
 }
 
-public fun is_deflationary<T>(coin_data: &CoinData<T>): bool {
+public fun is_deflationary<T>(coin_data: &Currency<T>): bool {
     match (coin_data.supply.borrow()) {
         SupplyState::Deflationary(_) => true,
+        _ => false,
+    }
+}
+
+public fun is_regulated<T>(coin_data: &Currency<T>): bool {
+    match (coin_data.regulated) {
+        RegulatedState::Regulated { .. } => true,
         _ => false,
     }
 }
@@ -440,7 +467,7 @@ public fun exists<T>(registry: &CoinRegistry): bool {
 }
 
 /// Get immutable reference to the coin data from CurrencyBuilder.
-public fun inner<T>(init: &CurrencyBuilder<T>): &CoinData<T> {
+public fun inner<T>(init: &CurrencyBuilder<T>): &Currency<T> {
     &init.data
 }
 
@@ -475,7 +502,7 @@ public fun create_coin_data_registry_for_testing(ctx: &mut TxContext): CoinRegis
 #[test_only]
 /// Unwrap CurrencyBuilder for testing purposes.
 /// This function is test-only and should only be used in tests.
-public fun unwrap_for_testing<T>(init: CurrencyBuilder<T>): CoinData<T> {
+public fun unwrap_for_testing<T>(init: CurrencyBuilder<T>): Currency<T> {
     let CurrencyBuilder { data, .. } = init;
     data
 }
