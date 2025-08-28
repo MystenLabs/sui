@@ -26,7 +26,6 @@ move-vm-config.workspace = true
 # referred to via path for execution versioning
 move-vm-types = { path = "../move-vm-types" }
 move-binary-format.workspace = true
-move-vm-profiler.workspace = true
 move-trace-format.workspace = true
 
 [dev-dependencies]
@@ -44,5 +43,4 @@ testing = []
 lazy_natives = []
 tracing = [
     "move-vm-config/tracing",
-    "move-vm-profiler/tracing",
 ]

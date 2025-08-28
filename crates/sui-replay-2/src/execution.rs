@@ -21,7 +21,6 @@ use move_trace_format::format::MoveTraceBuilder;
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashSet},
-    path::PathBuf,
     sync::Arc,
 };
 use sui_execution::Executor;
@@ -162,12 +161,9 @@ pub fn execute_transaction_to_effects(
 }
 
 impl ReplayExecutor {
-    pub fn new(
-        protocol_config: ProtocolConfig,
-        enable_profiler: Option<PathBuf>,
-    ) -> Result<Self, anyhow::Error> {
+    pub fn new(protocol_config: ProtocolConfig) -> Result<Self, anyhow::Error> {
         let silent = true; // disable Move debug API
-        let executor = sui_execution::executor(&protocol_config, silent, enable_profiler)
+        let executor = sui_execution::executor(&protocol_config, silent)
             .context("Filed to create executor. ProtocolConfig inconsistency?")?;
 
         let registry = prometheus::Registry::new();

@@ -1,0 +1,132 @@
+---
+title: Custom Indexer and Walrus
+description: Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Integrating a custom Sui Indexer with Walrus can provide novel user experiences.
+keywords: [ walrus, indexer, custom indexer, custom indexer framework, blob, sequential pipeline, blog ]
+mdx:
+  format: md
+---
+
+:::tip
+
+This topic examines how to use a custom indexer with [Walrus](https://www.walrus.xyz/). For a more in-depth look at creating a custom indexer, see [Build Your First Custom Indexer](../custom-indexer.mdx). 
+
+:::
+
+Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs.  It is a content-addressable storage protocol, meaning data is identified and retrieved using a unique identifier called a  _blob_. Blobs are derived from the content itself rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one. 
+
+For uniqueness, each blob uploaded to Walrus also creates a corresponding [`Blob` NFT object on Sui](https://docs.wal.app/dev-guide/sui-struct.html#blob-and-storage-objects) with a unique ID. Furthermore, the associated `Blob` object can optionally have a `Metadata` [dynamic field](../../../../concepts/dynamic-fields.mdx). 
+
+`Metadata` dynamic fields are a key-value extension that allows an on-chain object’s data to be augmented at runtime. If set, this dynamic field acts as [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes). 
+
+You can use the [custom indexer framework](/concepts/custom-indexing-framework) to extend the existing functionality of Walrus.
+
+:::info 
+
+The Walrus Foundation operates and controls Walrus. For the most accurate and up-to-date information on the Walrus protocol, consult the official [Walrus Docs](https://docs.wal.app/).
+
+:::
+
+## Blog platform using Walrus
+
+The system derives the ID of a dynamic field from its type and parent object's ID. Each `Metadata` dynamic field ID is also unique. You can leverage these unique characteristics and the `Metadata` attribute pairs to build a blog platform that enables users to:
+
+- Upload blog posts with titles.
+- View their own posts and metrics.
+- Delete posts they created.
+- Edit post titles.
+- Browse posts by other publishers.
+
+Assume a blog platform service already exists to handle uploads to Walrus. When the service creates a blob and its associated NFT object on Walrus, it also attaches a `Metadata` dynamic field containing key-value pairs for `publisher` (the Sui Address that uploaded the blob), `view_count`, and `title`. The service prevents users from modifying the `publisher` and `view_count` pairs, but allows the `publisher` to update the `title `value.
+
+When a user views a post, the service retrieves the relevant blog post `Metadata` from the indexed database. It then uses the `Owner` field to fetch the blob from the full node. The liveness of the `Blob` object on Sui is used to represent whether a blog post is available. If the `Blob` object is wrapped or deleted, the blog post is not accessible through the service, even if the underlying content on Walrus still exists.
+
+## Data modeling
+
+One option for data modeling is to use a single table that maps publisher addresses to `Metadata` dynamic fields. With this approach, the table is keyed on `dynamic_field_id` because it both identifies your dApp data and uniquely represents the content of each uploaded blob. 
+
+For example, the `up.sql` file to create this table might looks like the following:
+
+{@inject: examples/rust/walrus-attributes-indexer/migrations/YYYY-MM-DD-HHMMSS_blog-post/up.sql}
+
+### Reads
+
+To load blog posts from a particular publisher, pass the `publisher` and `LIMIT` values to the following query pattern:
+
+```sql
+SELECT *
+FROM blog_post
+WHERE publisher = $1
+ORDER BY title
+LIMIT $2;
+```
+
+## Custom indexer implementation
+
+This example uses a [sequential pipeline](../../../../concepts/custom-indexer/pipeline-architecture.mdx#sequential-pipeline-architecture), ensuring each checkpoint is committed once in strict order and as a single atomic operation. The sequential pipeline architecture is not required for this project, but it is a more straightforward option than implementing the concurrent architecture. You can always [scale up to the concurrent pipeline](../../../../concepts/custom-indexer/pipeline-architecture.mdx#decision-framework) if and when your project requires it.
+
+This implementation tracks the latest object state at checkpoint boundary. When the `Metadata` dynamic field is created, mutated, wrapped or deleted, or unwrapped, it appears among the transaction output under the object changes. You can see an [example transaction](https://suivision.xyz/txblock/3Qcuo2FaTZL5wfdi7JzPELcmkuZm7hVfdNrkLrdkKioN?tab=Changes) on Testnet that creates the field. These dynamic fields have type `0x2::dynamic_field::Field<vector<u8>, 0xabc...123::metadata::Metadata>`.
+
+| Object change to `Metadata` dynamic field | Included in input objects | Included in live output objects | How to index |
+| --- | --- | --- | --- |
+| Creation (or unwrap) | ❌ | ✅ | Insert row |
+| Mutation | ✅ | ✅ | Update row |
+| Deletion (or wrap) | ✅ | ❌ | Delete row |
+
+### `Processor`
+
+All pipelines implement the same [`Processor` trait](../../../../concepts/custom-indexer/pipeline-architecture.mdx#seq-processor), which defines the logic to transform a checkpoint from the ingestion task into an intermediate or final form to commit to the store. Data flows into and out of the processor, potentially out of order.
+
+#### `process` function
+
+The `process` function computes the `checkpoint_input_objects` and `latest_live_output_objects` sets to capture the state of objects entering and exiting a checkpoint. A `Metadata` dynamic field that appears in `checkpoint_input_objects` but not in `latest_live_output_objects` means it has been either wrapped or deleted. In those cases, you need to record only the dynamic field ID for the commit function to handle later deletion. For creation, mutation, and unwrap operations, the objects always appear in at least the `latest_live_output_objects` set.
+
+{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=process}
+
+### `Committer`
+
+The second and final part of the sequential pipeline is the `Committer`. Because data flows from the processor into the committer out of order, it is the committer's responsibility to batch and write the transformed data to the store in order on checkpoint boundaries.
+
+#### `batch`
+
+The `batch` function defines how to batch transformed data from other processed checkpoints. This function maintains a mapping of `dynamic_field_id` to the processed Walrus `Metadata`. The `batch` function guarantees that the next checkpoint to batch is the next contiguous checkpoint, which means it's safe for you to overwrite the existing entry.
+
+{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=batch}
+
+#### `commit`
+
+The `commit` function conducts final transformations to the processed data before writing to the store. In this case, the logic partitions the processed data into `to_delete` and `to_upsert`.
+
+{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=commit}
+
+## Putting it all together
+
+The `main` function for the service 
+
+{@inject: examples/rust/walrus-attributes-indexer/src/main.rs#fun=main}
+
+To provide users with a list of posts written by a publisher, your service first queries the
+database on `publisher`, yielding a result like the following. The service then uses the `blob_obj_id` to fetch the
+`Blob` NFT contents. From there, you can retrieve the actual Walrus content.
+
+```
+                          dynamic_field_id                          | df_version |                             publisher                              |                            blob_obj_id                             | view_count |      title
+--------------------------------------------------------------------+------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------+------------------
+ \x40b5ae12e780ae815d7b0956281291253c02f227657fe2b7a8ccf003a5f597f7 |  608253371 | \xfe9c7a465f63388e5b95c8fd2db857fad4356fc873f96900f4d8b6e7fc1e760e | \xcfb3d474c9a510fde93262d4b7de66cad62a2005a54f31a63e96f3033f465ed3 |         10 | Blog Post Module
+```
+
+## Additional considerations
+
+All Walrus blobs carry an associated lifetime, so you must track expiration changes. Whenever the `Metadata` dynamic field changes, the parent Sui `Blob` object should also appear in the output changes. You can read the blob’s lifetime directly from the `Blob` object contents. However, lifetime changes usually occur on the `Blob` object itself. Because updates to the parent object don’t affect the child dynamic field, unless you directly modify the child, these lifetime changes remain hidden in the current indexing setup. You can address this in several ways:
+
+- Watch all `Blob` object changes.
+- Watch all `BlobCertified` events.
+- Construct PTBs that make calls to manage blob lifetime and ping the `Metadata` dynamic field in the same transaction.
+
+If you don't want to perform additional work on the write side, then you are limited to the first two options. This requires two pipelines, one to do the work in the previous section of indexing metadata, and another to index `BlobCertified` events (or `Blob` object changes.)
+
+## Related links
+
+- [Walrus Docs](https://docs.wal.app/): Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs.
+- [Build Your First Indexer](../custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui full node, and provides efficient assemblage of checkpoint data.
+- [Dynamic Fields](../../../../concepts/dynamic-fields.mdx): Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values.
+- [Indexer with Walrus example files](https://github.com/MystenLabs/sui/tree/main/examples/rust/walrus-attributes-indexer): Directory in the Sui repo containing the files for this example.
