@@ -4864,7 +4864,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=16fa86d0dd943024a9088d46850a72ecd55b7f46#16fa86d0dd943024a9088d46850a72ecd55b7f46"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3#204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4875,6 +4875,7 @@ dependencies = [
  "ark-serialize",
  "auto_ops",
  "base64ct",
+ "bcs",
  "bech32",
  "bincode 1.3.3",
  "blake2",
@@ -4919,7 +4920,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=16fa86d0dd943024a9088d46850a72ecd55b7f46#16fa86d0dd943024a9088d46850a72ecd55b7f46"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3#204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -4928,7 +4929,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=16fa86d0dd943024a9088d46850a72ecd55b7f46#16fa86d0dd943024a9088d46850a72ecd55b7f46"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3#204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4947,7 +4948,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=16fa86d0dd943024a9088d46850a72ecd55b7f46#16fa86d0dd943024a9088d46850a72ecd55b7f46"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3#204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -4964,7 +4965,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=16fa86d0dd943024a9088d46850a72ecd55b7f46#16fa86d0dd943024a9088d46850a72ecd55b7f46"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3#204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -13804,7 +13805,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=0a15520575a413f41c855609b829a62e4594f890#0a15520575a413f41c855609b829a62e4594f890"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c035a4508b681222f9d8012beaf384bbf3587f42#c035a4508b681222f9d8012beaf384bbf3587f42"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15860,7 +15861,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=0a15520575a413f41c855609b829a62e4594f890#0a15520575a413f41c855609b829a62e4594f890"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c035a4508b681222f9d8012beaf384bbf3587f42#c035a4508b681222f9d8012beaf384bbf3587f42"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16018,7 +16019,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=0a15520575a413f41c855609b829a62e4594f890#0a15520575a413f41c855609b829a62e4594f890"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c035a4508b681222f9d8012beaf384bbf3587f42#c035a4508b681222f9d8012beaf384bbf3587f42"
 dependencies = [
  "base64ct",
  "bcs",

@@ -2083,6 +2083,7 @@ impl CheckpointBuilder {
                 end_of_epoch_data,
                 timestamp_ms,
                 matching_randomness_rounds,
+                vec![],
             );
             summary.report_checkpoint_age(
                 &self.metrics.last_created_checkpoint_age,

@@ -219,12 +219,30 @@ impl Epoch {
             Error::Internal(format!("Error deserializing commitments: {e}")).extend()
         })?;
 
-        let digest = commitments.into_iter().next().map(|commitment| {
-            let EpochCommitment::ECMHLiveObjectSetDigest(digest) = commitment;
-            Base58::encode(digest.digest.into_inner())
-        });
+        for commitment in commitments {
+            if let EpochCommitment::ECMHLiveObjectSetDigest(digest) = commitment {
+                return Ok(Some(Base58::encode(digest.digest.into_inner())));
+            }
+        }
+        Ok(None)
+    }
 
-        Ok(digest)
+    /// A commitment by the committee on the artifacts of the checkpoint.
+    /// e.g., object checkpoint states
+    async fn artifacts_digest(&self) -> Result<Option<String>> {
+        let Some(commitments) = self.stored.epoch_commitments.as_ref() else {
+            return Ok(None);
+        };
+        let commitments: Vec<EpochCommitment> = bcs::from_bytes(commitments).map_err(|e| {
+            Error::Internal(format!("Error deserializing commitments: {e}")).extend()
+        })?;
+
+        for commitment in commitments {
+            if let EpochCommitment::CheckpointArtifactsDigest(digest) = commitment {
+                return Ok(Some(digest.base58_encode()));
+            }
+        }
+        Ok(None)
     }
 
     /// The epoch's corresponding checkpoints.
