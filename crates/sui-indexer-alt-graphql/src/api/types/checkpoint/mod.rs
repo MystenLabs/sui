@@ -11,7 +11,9 @@ use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
     message_envelope::Message,
-    messages_checkpoint::{CheckpointCommitment, CheckpointContents as NativeCheckpointContents, CheckpointSummary},
+    messages_checkpoint::{
+        CheckpointCommitment, CheckpointContents as NativeCheckpointContents, CheckpointSummary,
+    },
 };
 
 use crate::{
