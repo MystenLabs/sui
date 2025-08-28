@@ -90,10 +90,10 @@ pub enum TargetKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageDefinition {
+pub struct PackageDefinition<Def= Definition> {
     pub package: Option<Symbol>,
     pub named_address_map: NamedAddressMapIndex,
-    pub def: Definition,
+    pub def: Def,
     pub target_kind: TargetKind,
 }
 
@@ -1783,18 +1783,19 @@ impl AstDebug for ModuleDefinition {
             address,
             name,
             is_spec_module,
+            is_extension,
             members,
             definition_mode: _,
         } = self;
         doc.ast_debug(w);
         attributes.ast_debug(w);
+        let keyword = if *is_extension { "extend " } else { "module " };
         match address {
             None => w.write(format!(
-                "module {}{}",
+                "{keyword} {}{name}",
                 if *is_spec_module { "spec " } else { "" },
-                name
             )),
-            Some(addr) => w.write(format!("module {}::{}", addr, name)),
+            Some(addr) => w.write(format!("{keyword} {addr}::{name}")),
         };
         w.block(|w| {
             for mem in members {

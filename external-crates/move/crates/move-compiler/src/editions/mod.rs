@@ -311,6 +311,7 @@ impl FeatureGate {
             FeatureGate::TypeHoles => "'_' placeholders for type inference are",
             FeatureGate::Lambda => "lambda expressions are",
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
+            FeatureGate::ModuleExtension => "module extensions are",
         }
     }
 }
