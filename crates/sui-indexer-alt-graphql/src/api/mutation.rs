@@ -4,10 +4,10 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Object, Result};
 use fastcrypto::encoding::{Base64, Encoding};
-use sui_indexer_alt_reader::full_node_client::Error::GrpcExecutionError;
-use sui_indexer_alt_reader::full_node_client::FullNodeClient;
+use sui_indexer_alt_reader::full_node_client::{Error::GrpcExecutionError, FullNodeClient};
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 
+use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
@@ -52,13 +52,10 @@ impl Mutation {
             bcs::from_bytes(&bytes).context("Invalid BCS encoding in transaction data")?
         };
 
-        // Parse signatures from Base64 BCS
+        // Parse signatures from Base64 encoded raw signature bytes
         let mut parsed_signatures = Vec::new();
         for (i, sig_str) in signatures.iter().enumerate() {
-            let sig_bytes = Base64::decode(sig_str)
-                .with_context(|| format!("Invalid Base64 encoding in signature {i}"))?;
-
-            let signature = bcs::from_bytes::<GenericSignature>(&sig_bytes)
+            let signature = GenericSignature::decode_base64(sig_str)
                 .with_context(|| format!("Invalid signature bytes for signature {i}"))?;
 
             parsed_signatures.push(signature);
