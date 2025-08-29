@@ -70,8 +70,11 @@ Other limited resources per transaction that you should consider are:
 - Number of UIDs generated, deleted, or transferred.
 
 <details>
+
 <summary>
+
 Complete list of `ProtocolConfig` limits.
+
 </summary>
 
 {@inject: crates/sui-protocol-config/src/lib.rs#struct=ProtocolConfig}
@@ -92,8 +95,11 @@ It's important that the inputs to the second function are fixed and cannot be mo
 Gracefully handle the case in which the second step is never completed. You could accomplish this, for example, by charging a fee in the first step.
 
 <details>
+
 <summary>
+
 Example implementation.
+
 </summary>
 
 {@inject: examples/move/random/random_nft/sources/example.move#fun=reveal_alternative2_step1,reveal_alternative2_step2}

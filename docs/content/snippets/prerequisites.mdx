@@ -1,0 +1,50 @@
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
+
+- [x] Set up your Sui account and CLI environment. 
+
+<details className="nudge-details">
+
+<summary>
+
+Create Sui account and setup CLI environment
+
+</summary>
+
+```sh
+$ sui client
+```
+
+If this is the first time running the `sui client` CLI tool, it asks you to provide a Sui full node server URL and a meaningful environment alias. It also generates an address with a random key pair in `sui.keystore` and a config `client.yaml`.
+
+By default, the `client.yaml` and `sui.keystore` files are located in `~/.sui/sui_config`. For more information, refer to the [Sui client CLI tutorial](/references/cli/client.mdx).
+
+If this is not your first time running `sui client`, then you already have a `client.yaml` file in your local environment. If you'd like to create a new address for this tutorial, use the command:
+
+```sh 
+$ sui client new-address ed25519
+```
+
+</details>
+
+- [x] Obtain test tokens. 
+
+<details className="nudge-details">
+
+<summary>
+
+How to obtain tokens
+
+</summary>
+
+If you are connected to the Devnet or Testnet networks, use the [Faucet UI](https://faucet.sui.io/) to request tokens.
+
+If you are connected to a local full node, [learn how to get local network tokens](/guides/developer/getting-started/local-network).
+
+</details>
+
+</TabItem>
+</Tabs>
