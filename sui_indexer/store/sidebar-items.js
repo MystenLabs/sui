@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["read_with_retry","transaction_with_retry"],"mod":["indexer_store","package_resolver","pg_partition_manager"],"struct":["PgIndexerStore"]};

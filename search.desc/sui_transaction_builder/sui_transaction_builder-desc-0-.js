@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_transaction_builder", 0, "Returns the argument unchanged.\nGet the object references for a list of object IDs\nCalls <code>U::from(self)</code>.\nConstruct a transaction kind for the PaySui transaction …\nConstruct a transaction kind for the SplitCoin transaction …")

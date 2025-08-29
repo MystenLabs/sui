@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SEPOLIA_BRIDGE_PROXY_ADDR"],"enum":["BridgeClientCommands","BridgeCommand","GovernanceClientCommands","Network"],"fn":["make_action","select_contract_address"],"struct":["Args","BridgeCliConfig","LoadedBridgeCliConfig"]};
