@@ -57,6 +57,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         BridgeUtils.Message memory message
     )
         external
+        virtual
         nonReentrant
         verifyMessageAndSignatures(message, signatures, BridgeUtils.TOKEN_TRANSFER)
         onlySupportedChain(message.chainID)
