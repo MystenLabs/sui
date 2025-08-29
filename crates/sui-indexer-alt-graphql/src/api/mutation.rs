@@ -3,8 +3,8 @@
 
 use anyhow::anyhow;
 use async_graphql::{Context, Object, Result};
-use fastcrypto::error::FastCryptoError;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
+use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
@@ -12,7 +12,10 @@ use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
 use crate::{
-    api::types::execution_result::ExecutionResult,
+    api::types::{
+        execution_result::ExecutionResult,
+        transaction_effects::{EffectsContents, TransactionEffects},
+    },
     error::{bad_user_input, RpcError},
     scope::Scope,
 };
@@ -83,7 +86,7 @@ impl Mutation {
                         scope,
                         contents: Some(std::sync::Arc::new(
                             NativeTransactionContents::ExecutedTransaction {
-                                effects: response.effects,
+                                effects: Box::new(response.effects),
                                 events: response.events.map(|events| events.data),
                                 transaction_data: tx_data,
                                 signatures: parsed_signatures,

@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
 use sui_indexer_alt_jsonrpc::config::{ObjectsConfig, RpcConfig as JsonRpcConfig};
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_json_rpc_types::Page;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},

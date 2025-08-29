@@ -49,7 +49,7 @@ pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
     ExecutedTransaction {
-        effects: TransactionEffects,
+        effects: Box<TransactionEffects>,
         events: Option<Vec<Event>>,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
@@ -264,7 +264,7 @@ impl TransactionContents {
                 bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
             }
             Self::Bigtable(kv) => Ok(kv.effects.clone()),
-            Self::ExecutedTransaction { effects, .. } => Ok(effects.clone()),
+            Self::ExecutedTransaction { effects, .. } => Ok(*effects.clone()),
         }
     }
 
@@ -294,7 +294,7 @@ impl TransactionContents {
             Self::Pg(stored) => Ok(stored.raw_effects.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(&kv.effects).context("Failed to serialize effects"),
             Self::ExecutedTransaction { effects, .. } => {
-                bcs::to_bytes(effects).context("Failed to serialize effects")
+                bcs::to_bytes(effects.as_ref()).context("Failed to serialize effects")
             }
         }
     }

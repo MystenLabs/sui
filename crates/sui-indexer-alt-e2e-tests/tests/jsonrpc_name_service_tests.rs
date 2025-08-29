@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::{find_immutable, find_shared, FullCluster, OffchainClusterConfig};
 use sui_indexer_alt_jsonrpc::config::{NameServiceConfig, RpcConfig as JsonRpcConfig};
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
