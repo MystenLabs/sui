@@ -12,82 +12,6 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
 [notion-overview]: https://www.notion.so/Package-management-revamp-overview-1aa6d9dcb4e980128c1bc13063c418c7?pvs=21
 [notion-userstories]: https://www.notion.so/Package-management-user-stories-1bd6d9dcb4e98005a4a7ddea4424f757?pvs=21
 
-# TODOs
-
- - careful rollout plan - parallel with extisting system?
- - sui move build/test now will use the active env from cli to match which dependencies to use
- - two packages share an identity if they have the same original-id in any environment
- - maybe need to do additional identity checks when running `--publish-unpublished-deps`
- - cached deps are read-write but you can’t use dirty ones without asking
- - non-git local deps are a loud warning
-
-# Points of contention and remaining questions
-
-(*) indicates @Michael George ‘s preference
-
- - For `move build` and `move test`: should we build/test for all environments or only for one?
-     - * opt 1: Build/test for all environments by default
-         - Con: efficiency, but compilation is fast
-         - Con: Need to do work to deduplicate warnings from different environments
-     - opt 2: Build/test for only current environment by default
-         - Con: defers error detection
-         - Con: can be easy to forget to test with a specific configuration
-         - Con: more complicated CI (where presumably you do actually want to test everything)
-     - **Resolution**: it will use the corresponding `[dep-replacements]` in `build` and `test` as per
-       the active environment from the cli, unless you pass `--env`. We also allow `--all-envs` for `test`,
-       which runs tests in all environments.
- - For cached deps in `~/.move`: read only?
-     - opt 1: read-only
-         - Cons: can’t easily fiddle with them during debugging. Except (1) we
-           don’t support that anyway, and (2) any decent editor will just say
-           “file is read only, are you sure you want to write it?” and change it
-           to r/w for you
-     - opt 2: read-write
-         - Cons: if a user accidentally changes it during a debugging session
-           (assuming we don’t continue to duplicate dependency sources in each
-           package), it will change for everyone. Except we could probably just
-           do a git clean before we use a cached dependency (we should probably
-           do this anyway)
-     - Resolution: read-write but require opt-in to build with dirty cache (with
-       an `--allow-dirty-cache` opt-in)
- - For local deps that don’t share a parent git repository: error or warning?
-     - **Resolution:** loud, clear warning that explains why this is bad
- - Include the dependencies in the publication records in Move.lock?
-     - **Resolution:** omit them.
-     - The requirement from the publisher for successful source verification is that you have a
-       single revision with the "correct" source and a lockfile containing the published address
-     - Note that "correct" means that the compiled bytecode is the same - there can still be
-       changes to macros, comments, etc! We might want to make this more secure in the future, e.g.
-       by including some kind of digest or publishing macros on-chain
-
- - Question: Consider you have pkg A that depends on pkg B, which depends on pkg C.
-        Today, pkg A can directly use pkg C's code due to global inherited addresses.
-        In the new design, should it be allowed, and if yes, how -- which name should A
-        use to refer to the package and its modules?
-        We should also consider how this would work in the case of bytecode dependencies.
-
- - Question: What should we name the new edition that contains these changes?
-     - Move 2025!
-
- - Question: What does the `flavor` field currently do? How does it interact with `edition`? Do we
-   need to support it?
- - Question: What is `--dependencies-are-root`? Do we still need it?
- - Question: Do we want a `build` section in the manifest?
- - Question: `override = true` for transitive deps
-     - If A depends on B and C, B depends on Dv1, C depends on Dv2, Dv1 depends on Ev1, and Dv2 depends on Ev2, does A need to specify an override for E?
-     - If so, should we change this?
- - Worry: packages are now identified by published address instead of name. Published addresses are
-   chain-specific, which is fine; we can detect errors separately on different chains. However, what
-   about ephemeral networks and `--publish-unpublished-deps`? Is it ok that we just publish two
-   different versions of a package and treat them as different packages (you would already have
-   gotten a warning if they are published on one of the networks you care about).
-
- - Question: how do we help users who are publishing using mechanisms other than the
-   CLI to keep their lock files up to date?
-     - When we "publish" with --dump, we not only output the bytecode, but an additional file
-       containing the information needed to update the lockfile; we then have a separate command
-       that users can use to update the lock file after publishing
-
 # Example manifest and lock files
 
 Move.toml:
@@ -95,7 +19,7 @@ Move.toml:
 ```toml
 [package]
 name = "example"
-edition = "2025"
+edition = "2024" # we do not bump the edition just for package system changes
 ...
 
 [environments]
@@ -330,6 +254,10 @@ cached to support offline builds) to detect the correct environment from the man
 using the chain ID we decouple the client environment names (which are really RPC specific) from the
 manifest environment names, but we make things work out in the common cases of mainnet and testnet.
 
+In our current MVP we do not do any all-environment operations. However, we could consider doing
+some cross-environment sanity checks (such as detecting packages that conflict in one environment
+but not another, or running tests in all environments.
+
 ## Pinned dependencies
 
 The purpose of the lockfile is to give stability to developers by pinning consistent (transitive)
@@ -341,6 +269,9 @@ will yield the same source package. For example, a git dependency with a branch 
 pinned, because the branch may be moved to a different commit, which might have different source
 code. To pin this kind of dependency, we must replace the branch name with a commit hash -
 downloading the same commit should always produce the same source code.
+
+Local dependencies of git dependencies are pinned as git dependencies with the paths fixed up, but
+local dependencies of the root package are pinned as they are.
 
 Although we expect pinned dependencies to not change, there are a few situations where they could.
 One possiblity is local dependencies - if a single repository contains both a dependency and the
@@ -639,8 +570,6 @@ execution. This models what happens on-chain as closely as possible.
 
 ## Publish / Upgrade
 
-TODO: report on changed dependencies during upgrades
-
 During publication, we need to recheck that the dependencies are all published on the given network
 and that the relevant chain IDs are consistent. We also need to ensure that the additional on-chain
 linkage requirements are met (for example, on-chain packages can have extra dependencies in their
@@ -660,8 +589,8 @@ publishing any packages that haven't yet been published. This would be a nice co
 working with a group of related packages (esp. during testing). We should only allow it for local
 ephemeral environments and devnet, since publication relies on the user to update the lockfiles of the
 published packages; for non-ephemeral networks these would be sitting in the cache and not easy to
-push back upstream. Put another way, the `Move.lock` files in the cache should be read-only (but the
-`.Move.<env>.lock` files can be created/updated).
+push back upstream. Put another way, the `Move.published` files in the cache should be read-only (but the
+`Move.pub.local` files can be created/updated). (TODO: Move.pub.local files aren't described yet).
 
 Some users will want to perform the actual publication step outside of the CLI (for example if they
 want to go through a separate signing process for the transaction). For these transactions, I don't
@@ -689,9 +618,6 @@ If a user somehow loses track of publication information or wants to migrate an 
 should provide a tool to allow them to add a PublishedMetadata entry to their lockfile (possibly
 using a transaction ID?).
 
-We might also provide tools to fix things up if the user somehow ends up with two PublishedMetadata
-for the same environment (one in the main lockfile and one in .Move.<env>.lock).
-
 ### Verify source
 
 Source verification is the process of checking that recompiling a given source package produces a
@@ -709,6 +635,15 @@ For a given `PublishedMetadata`, we can use the `toolchain-version` to determine
 generation module to use; this code generation module can then use the stored pinned dependencies
 and the `build-config` field to reliably reproduce the bytecode (which can then be compared to the
 on-chain version).
+
+### Pre-publication information dump
+
+When publishing or upgrading a package, there are certain facts about the dependencies that can be
+important for the user to be conscious of. For example, an upgrade can change the version of a
+dependency, while a publication can produce a linkage that forces a dependency to upgrade. Although
+the developer has to "sign off" on these (e.g. by adding `override = true` to the manifest or
+running `upgrade-deps`), we think it makes sense to display these kinds of facts to the user as part
+of the publication process.
 
 # Migration and backwards compatibility
 
