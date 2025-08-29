@@ -8424,6 +8424,7 @@ dependencies = [
 name = "move-vm-profiler"
 version = "0.1.0"
 dependencies = [
+ "move-trace-format",
  "move-vm-config",
  "once_cell",
  "serde",
@@ -8442,7 +8443,6 @@ dependencies = [
  "move-core-types",
  "move-trace-format",
  "move-vm-config",
- "move-vm-profiler",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
@@ -8460,7 +8460,6 @@ dependencies = [
  "move-bytecode-verifier-v0",
  "move-core-types",
  "move-vm-config",
- "move-vm-profiler",
  "move-vm-types-v0",
  "once_cell",
  "parking_lot 0.11.2",
@@ -8478,7 +8477,6 @@ dependencies = [
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
- "move-vm-profiler",
  "move-vm-types-v1",
  "once_cell",
  "parking_lot 0.11.2",
@@ -8496,7 +8494,6 @@ dependencies = [
  "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",
- "move-vm-profiler",
  "move-vm-types-v2",
  "once_cell",
  "parking_lot 0.11.2",
@@ -8536,7 +8533,6 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
- "move-vm-profiler",
  "serde",
  "smallvec",
 ]
@@ -8548,7 +8544,6 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
- "move-vm-profiler",
  "serde",
  "smallvec",
 ]
@@ -8560,7 +8555,6 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
- "move-vm-profiler",
  "serde",
  "smallvec",
 ]
@@ -13111,6 +13105,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
  "msim",
@@ -15444,7 +15439,7 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "humantime",
- "move-vm-profiler",
+ "move-vm-config",
  "mysten-common",
  "mysten-metrics",
  "mysten-network",

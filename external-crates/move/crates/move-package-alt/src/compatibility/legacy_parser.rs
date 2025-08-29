@@ -236,30 +236,11 @@ fn parse_source_manifest(
             let modern_name = derive_modern_name(&addresses, path)?;
             let new_name = temporary_spanned(modern_name.clone());
 
+            let original_id = addresses.get(modern_name.as_str()).copied().flatten();
+
             // Gather the original publish information from the manifest, if it's defined on the Toml file.
-            let manifest_address_info = if let Some(published_at) = metadata.published_at {
-                let latest_id = parse_address_literal(&published_at);
-                let original_id = addresses.get(modern_name.as_str()).copied().flatten();
-
-                // If we have BOTH the original and latest id, we can create the published ids!
-                if let (Ok(latest_id), Some(original_id)) = (latest_id, original_id) {
-                    // We cannot support "0x0" as the "original-id" of a published package.
-                    if original_id == AccountAddress::ZERO {
-                        return Err(anyhow::anyhow!(
-                            "'0x0' cannot be used as the 'original-id' of a published package."
-                        ));
-                    }
-
-                    Some(PublishAddresses {
-                        published_at: crate::schema::PublishedID(latest_id),
-                        original_id: crate::schema::OriginalID(original_id),
-                    })
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let manifest_address_info =
+                get_manifest_address_info(original_id, metadata.published_at)?;
 
             // remove the "modern" name (address) from the addresses table to avoid duplications
             // Validate that we no longer support `_` addresses for legacy [addresses] sections!
@@ -761,6 +742,42 @@ fn temporary_spanned<T>(val: T) -> Spanned<T> {
     Spanned::new(0..1, val)
 }
 
+/// Given the original_id (optional) and the `published_at` from the manifest,
+/// we derive the `PublishAddresses`
+fn get_manifest_address_info(
+    original_id: Option<AccountAddress>,
+    published_at: Option<String>,
+) -> Result<Option<PublishAddresses>> {
+    // If we have a published-at address, we must have an original-id set (if it's 0x0, we cannot derive it).
+    if published_at.is_some()
+        && (original_id.is_none() || original_id.is_some_and(|id| id == AccountAddress::ZERO))
+    {
+        bail!("If `published-at` is defined in Move.toml, `original-id` must also be defined.");
+    }
+
+    let Some(original_id) = original_id else {
+        return Ok(None);
+    };
+
+    // We cannot support "0x0" as the "original-id" of a published package.
+    if original_id == AccountAddress::ZERO {
+        return Ok(None);
+    }
+
+    if let Some(published_at) = published_at {
+        let published_at = parse_address_literal(&published_at)?;
+        Ok(Some(PublishAddresses {
+            published_at: crate::schema::PublishedID(published_at),
+            original_id: crate::schema::OriginalID(original_id),
+        }))
+    } else {
+        Ok(Some(PublishAddresses {
+            published_at: crate::schema::PublishedID(original_id),
+            original_id: crate::schema::OriginalID(original_id),
+        }))
+    }
+}
+
 /// Given the addresses & the package's path, derive the
 /// modern styled name. The modern styled name is:
 ///
@@ -793,5 +810,76 @@ fn derive_modern_name(
         Ok(PackageName::new(zero_addresses[0].to_string())?)
     } else {
         find_module_name_for_package(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_manifest_address_info() {
+        let original_id = Some(AccountAddress::from_hex_literal("0x1").unwrap());
+        let published_at = Some("0x2".to_string());
+        let manifest_address_info = get_manifest_address_info(original_id, published_at).unwrap();
+        assert_eq!(
+            manifest_address_info,
+            Some(PublishAddresses {
+                published_at: PublishedID(AccountAddress::from_hex_literal("0x2").unwrap()),
+                original_id: OriginalID(AccountAddress::from_hex_literal("0x1").unwrap()),
+            })
+        );
+    }
+
+    #[test]
+    fn test_get_manifest_address_info_no_published_at() {
+        let original_id = Some(AccountAddress::from_hex_literal("0x1").unwrap());
+        let published_at = None;
+        let manifest_address_info = get_manifest_address_info(original_id, published_at).unwrap();
+        assert_eq!(
+            manifest_address_info,
+            Some(PublishAddresses {
+                published_at: PublishedID(AccountAddress::from_hex_literal("0x1").unwrap()),
+                original_id: OriginalID(AccountAddress::from_hex_literal("0x1").unwrap()),
+            })
+        );
+    }
+
+    #[test]
+    fn test_get_manifest_address_info_none_original_id() {
+        let original_id = None;
+        let published_at = Some("0x2".to_string());
+        let result = get_manifest_address_info(original_id, published_at);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "If `published-at` is defined in Move.toml, `original-id` must also be defined."
+        ));
+    }
+
+    #[test]
+    fn test_get_manifest_address_info_zero_original_id_no_published_at() {
+        let original_id = Some(AccountAddress::ZERO);
+        let published_at = None;
+        let manifest_address_info = get_manifest_address_info(original_id, published_at).unwrap();
+        assert_eq!(manifest_address_info, None);
+    }
+
+    #[test]
+    fn test_get_manifest_address_info_zero_original_id_with_published_at() {
+        let original_id = Some(AccountAddress::ZERO);
+        let published_at = Some("0x2".to_string());
+        let result = get_manifest_address_info(original_id, published_at);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "If `published-at` is defined in Move.toml, `original-id` must also be defined."
+        ));
+    }
+
+    #[test]
+    fn test_get_manifest_address_info_invalid_published_at_format() {
+        let original_id = Some(AccountAddress::from_hex_literal("0x1").unwrap());
+        let published_at = Some("invalid_address".to_string());
+        let result = get_manifest_address_info(original_id, published_at);
+        assert!(result.is_err());
     }
 }

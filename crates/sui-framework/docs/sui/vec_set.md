@@ -307,10 +307,9 @@ and are *not* sorted.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b> + drop&gt;(<b>mut</b> <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>: vector&lt;K&gt;): <a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt; {
-    <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.reverse();
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b> + drop&gt;(<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>: vector&lt;K&gt;): <a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt; {
     <b>let</b> <b>mut</b> set = <a href="../sui/vec_set.md#sui_vec_set_empty">empty</a>();
-    <b>while</b> (<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.<a href="../sui/vec_set.md#sui_vec_set_length">length</a>() != 0) set.<a href="../sui/vec_set.md#sui_vec_set_insert">insert</a>(<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.pop_back());
+    <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.do!(|key| set.<a href="../sui/vec_set.md#sui_vec_set_insert">insert</a>(key));
     set
 }
 </code></pre>
