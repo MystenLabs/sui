@@ -1,19 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Range, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
-    dataloader::DataLoader,
     Context, Object,
 };
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer_alt_reader::{
-    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
-    pg_reader::PgReader,
-    tx_digests::TxDigestKey,
+use sui_indexer_alt_reader::kv_loader::{
+    KvLoader, TransactionContents as NativeTransactionContents,
 };
 
 use sui_types::{
@@ -22,25 +19,26 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
+use super::transaction_kind::TransactionKind;
+use super::{
+    address::Address,
+    epoch::Epoch,
+    gas_input::GasInput,
+    transaction::filter::TransactionFilter,
+    transaction_effects::{EffectsContents, TransactionEffects},
+    user_signature::UserSignature,
+};
+use crate::api::types::transaction::filter::TxSequenceNumberDigest;
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
+    api::{
+        scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
+        types::transaction::filter::fetch_tx_sequence_number_digests,
+    },
     error::RpcError,
     pagination::Page,
     scope::Scope,
     task::watermark::Watermarks,
 };
-
-use super::{
-    address::Address,
-    checkpoint::filter::checkpoint_bounds,
-    epoch::Epoch,
-    gas_input::GasInput,
-    transaction::filter::{tx_bounds, TransactionFilter},
-    transaction_effects::{EffectsContents, TransactionEffects},
-    user_signature::UserSignature,
-};
-
-use super::transaction_kind::TransactionKind;
 
 pub(crate) mod filter;
 
@@ -196,86 +194,33 @@ impl Transaction {
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let mut conn = Connection::new(false, false);
-
         if page.limit() == 0 {
-            return Ok(Connection::new(false, false));
+            return Ok(conn);
         }
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
-        let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
-
-        let global_tx_hi = watermarks.high_watermark().transaction();
-
-        let Some(cp_bounds) = checkpoint_bounds(
-            filter.after_checkpoint.map(u64::from),
-            filter.at_checkpoint.map(u64::from),
-            filter.before_checkpoint.map(u64::from),
-            reader_lo,
-            scope.checkpoint_viewed_at(),
-        ) else {
-            return Ok(Connection::new(false, false));
-        };
-
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
-        let tx_digest_keys = tx_unfiltered(&tx_bounds, &page);
+        let tx_sequence_number_digests =
+            fetch_tx_sequence_number_digests(ctx, &scope, watermarks, &page, filter).await?;
 
         // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
-        let (prev, next, results) = page.paginate_results(tx_digest_keys, |&t| JsonCursor::new(t));
-
-        let results: Vec<_> = results.collect();
-        let tx_digest_keys: Vec<TxDigestKey> =
-            results.iter().map(|(_, sq)| TxDigestKey(*sq)).collect();
-
-        // Load the transaction digests for the paginated tx_sequence_numbers
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let digest_map = pg_loader
-            .load_many(tx_digest_keys)
-            .await
-            .context("Failed to load transaction digests")?;
+        let (prev, next, results) = page.paginate_results(tx_sequence_number_digests, |t| {
+            JsonCursor::new(t.tx_sequence_number as u64)
+        });
 
         // Convert the transaction digests to Transaction objects
-        for (cursor, tx_sequence_number) in results {
-            let key = TxDigestKey(tx_sequence_number);
-            if let Some(stored) = digest_map.get(&key) {
-                let transaction_digest = TransactionDigest::try_from(stored.tx_digest.clone())
-                    .context("Failed to deserialize transaction digest")?;
-                let transaction = Self::with_id(scope.clone(), transaction_digest);
-                conn.edges
-                    .push(Edge::new(cursor.encode_cursor(), transaction));
-            }
+        for (cursor, TxSequenceNumberDigest { tx_digest, .. }) in results {
+            let transaction_digest = TransactionDigest::try_from(tx_digest)
+                .context("Failed to deserialize transaction digest")?;
+            let transaction = Self::with_id(scope.clone(), transaction_digest);
+            conn.edges
+                .push(Edge::new(cursor.encode_cursor(), transaction));
         }
 
         conn.has_previous_page = prev;
         conn.has_next_page = next;
 
         Ok(conn)
-    }
-}
-
-/// The tx_sequence_numbers with cursors applied inclusively.
-/// Results are limited to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
-fn tx_unfiltered(tx_bounds: &Range<u64>, page: &Page<CTransaction>) -> Vec<u64> {
-    // Inclusive cursor bounds
-    let pg_lo = page
-        .after()
-        .map_or(tx_bounds.start, |cursor| cursor.max(tx_bounds.start));
-    let pg_hi = page
-        .before()
-        .map(|cursor: &JsonCursor<u64>| cursor.saturating_add(1))
-        .map_or(tx_bounds.end, |cursor| cursor.min(tx_bounds.end));
-
-    if page.is_from_front() {
-        (pg_lo..pg_hi).take(page.limit_with_overhead()).collect()
-    } else {
-        // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
-        // we reverse the results after applying limits.
-        let mut results: Vec<_> = (pg_lo..pg_hi)
-            .rev()
-            .take(page.limit_with_overhead())
-            .collect();
-        results.reverse();
-        results
     }
 }
 

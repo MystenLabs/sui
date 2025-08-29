@@ -2301,6 +2301,11 @@ input TransactionExecutionInput {
 
 input TransactionFilter {
 	"""
+	Limit to transactions that interacted with the given address. The address could be a
+	sender, sponsor, or recipient of the transaction.
+	"""
+	affectedAddress: SuiAddress
+	"""
 	Limit to transactions that occured strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
