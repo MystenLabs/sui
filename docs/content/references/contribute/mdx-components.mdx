@@ -32,7 +32,7 @@ mdx:
 
 ### Optional frontmatter 
 
-### `beta`
+#### `beta`
 
 Adds an admonition box to the top of the page to inform readers of the feature or topic's beta status.  
 
@@ -50,7 +50,7 @@ beta: devnet, testnet
 ---
 ```
 
-### `effort`
+#### `effort`
 
 Used for end-to-end tutorials. Adds an admonition box at the top indicating the effort required to complete the tutorial.
 
@@ -72,7 +72,7 @@ effort: medium
 
 ## `UnsafeLink`
 
-Use `UnsafeLink` to to skip the Docusaurus link checker for a URL.
+Use `UnsafeLink` to skip the Docusaurus link checker for a URL.
 
 This is **necessary** for pages that the Docusaurus build auto-generates, as they are generated after the link checker runs and thus will result in a build error.
 
@@ -88,7 +88,7 @@ In local development, the setting `onBrokenMarkdownLinks: "warn"` remains at `"w
 
 ## Custom admonition boxes
 
-Beyond the Docusaurus defaults (`info`, `note`, `warning`, `danger`), and the `beta` and `effort` boxes mentioned in the [custom frontmatter section](#custom-frontmatter), there is another custom admonition box for checkpoints.
+Beyond the Docusaurus defaults (`info`, `note`, `warning`, `danger`), there is another custom admonition box for checkpoints.
 
 Use checkpoints in end-to-end guides to validate user progress.
 
@@ -96,9 +96,11 @@ Use checkpoints in end-to-end guides to validate user progress.
 
 ```
 :::checkpoint
+
 Run your app and make sure you can:
 - Create an NFT.
 - Initiate a trade.
+
 :::
 ```
 
@@ -116,7 +118,7 @@ To create a tabbed section:
 
 1. Add the `<Tabs>` element where you want the tabbed content to go. Include the optional `groupId` property if there are other `Tabs` with the same selections.
 
-1. Add a `<TabItem>` element for each section of content as a child of the `Tabs` element. Each `TabItem` needs both `value` and `label` property values. If you're using `groupId` in the parent `Tabs`, make sure the `value` remains consistent across `TabItem`s that are intended to show the same type of information.
+1. Add a `<TabItem>` element for each section of content as a child of the `Tabs` element. Each `TabItem` needs both `value` and `label` property values. If you're using `groupId` in the parent `Tabs`, make sure the `value` remains consistent across `TabItem`s in other `Tabs` with the same `groupId` value. Doing so makes the `TabItem`s that are intended to show the same type of information become active across all relevant `Tabs`. This behavior persists across pages and sessions.  
 
 1. Close each `</TabItem>` and the parent `</Tabs>`.
 
@@ -166,9 +168,9 @@ Snippets help reduce maintenance and avoid forcing readers off-page for importan
  
 1. Insert the snippet into another page with `{@include: ../../snippets/reusable.mdx}`.
 
-:::warning
-Do not use file-structure links inside snippets. Use site-relative paths (`/concepts/file`).
-:::
+    :::warning
+    Do not use file-structure links inside snippets. Use site-relative paths (`/concepts/file`).
+    :::
 
 1. Ensure there are empty lines above and below the `{@include:}` line.
 
@@ -197,7 +199,6 @@ When including sections of code, understand that the code might change from what
 
 :::caution
 You **cannot** use `{@inject:}` within the snippet file for an `{@include:}` directive. You must use the `<CodeFromFile>` component instead.
-:::
 
 ```
 <CodeFromFile
@@ -277,7 +278,7 @@ If you don't want to include a section of code, but instead focus on the code ar
 
 1. In the source file, add a comment where the section should begin in the form `// docs::#ID`.
 
-```ts 
+    ```ts 
 // docs::#IDstring 
 import lib from "library"; 
 ...
@@ -332,7 +333,7 @@ You can also add additional strings to the end of the inject statement to highli
 - `noTests` → Strip tests  
 - `noTitle` → Remove code block title  
 - `singleSpace` → Normalize spacing  
-- `highlight` → Highlight specific line  
+- `highlight` → Highlight a specific line using a unique word in the line you want highlighted (ex. `highlight=variable_name`)
 
 **Example:**  
 
