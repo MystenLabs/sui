@@ -725,6 +725,13 @@ collect all of them from transitive dependencies.
 
 If a legacy package depends on a modern package, it will not inherit addresses.
 
+## Dev-dependencies
+
+When processing the `[dev-dependencies]` section of a legacy manifest, we produce normal dependencies
+with `mode = ["test"]`. We should make a best effort to do the right thing if the same dependency
+shows up in both `[dependencies]` and `[dev-dependencies]` --- I'm not sure what the current system
+does in this case.
+
 ## What we see in the wild
 
 Note: @Manos Liolios promised me a particularly wild example or two, and a more comprehensive list
