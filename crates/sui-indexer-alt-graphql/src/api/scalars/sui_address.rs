@@ -10,7 +10,7 @@ use sui_types::base_types::{ObjectID, SuiAddress as NativeSuiAddress};
 const SUI_ADDRESS_LENGTH: usize = 32;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub(crate) struct SuiAddress([u8; SUI_ADDRESS_LENGTH]);
+pub(crate) struct SuiAddress(pub [u8; SUI_ADDRESS_LENGTH]);
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {

@@ -10,7 +10,7 @@ use diesel::{
 
 use crate::{
     api::{
-        scalars::uint53::UInt53,
+        scalars::{sui_address::SuiAddress, uint53::UInt53},
         types::{checkpoint::filter::checkpoint_bounds, transaction::CTransaction},
     },
     error::RpcError,
@@ -33,6 +33,10 @@ pub(crate) struct TransactionFilter {
 
     /// Limit to transaction that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
+
+    /// Limit to transactions that interacted with the given address. The address could be a
+    /// sender, sponsor, or recipient of the transaction.
+    pub affected_address: Option<SuiAddress>,
 }
 
 #[derive(QueryableByName)]
@@ -59,6 +63,7 @@ impl TransactionFilter {
             after_checkpoint: intersect!(after_checkpoint, intersect::by_max)?,
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
+            affected_address: intersect!(affected_address, intersect::by_eq)?,
         })
     }
 }
@@ -138,6 +143,16 @@ INNER JOIN
         page.before().map_or(i64::MAX, |cursor| **cursor as i64 + 1), // page_tx_hi
         *cp_bounds.end() as i64 + 1,                             // cp_hi
     );
+
+    if let Some(SuiAddress(affected_address)) = filter.affected_address {
+        query += query!(
+            r#"
+INNER JOIN
+    tx_affected_addresses aff ON aff.tx_sequence_number = dig.tx_sequence_number AND aff.affected = {Bytea} /* affected_address */
+"#,
+            affected_address.to_vec(), /* affected_address */
+        )
+    };
 
     // todo conditionally add join filters here
 
