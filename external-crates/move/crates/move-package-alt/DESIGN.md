@@ -633,7 +633,9 @@ published-at = "TODO: replace this with the published address of your package"
 The user can still screw this up, but they at least have the chance of noticing the problem and
 fixing it when they review the commit. We can also output a loud warning from the command line!
 
-## Local publication
+## Post-MVP operations
+
+### Local publication
 
 It's important for users to be able to publish to local networks for testing. However, we don't want
 users to add local networks to their manifests and store the publication records in
@@ -693,7 +695,12 @@ to modify the `Move.pub.<env>` files to share publications if they want to.
 
 This approach also decouples this feature from the package system which gives us more flexibility.
 
-## Post-MVP operations
+It also seems reasonable to extend the PTB commands to pull addresses from the `Move.pub.<env>`
+files in a similar way to how we support `mvr` names now.
+
+Although localnet development is important, we only need to support `sui client publish --build-env`
+to have a devex that is comparable to the old system, so it makes sense to save the `test-publish`
+command as a post-MVP feature.
 
 ### Fixup lockfiles
 
