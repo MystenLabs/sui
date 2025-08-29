@@ -144,7 +144,7 @@ fn execute<M: Measurement + 'static>(
                         .make_vm(linkage.clone())
                         .unwrap()
                         .execute_function_bypass_visibility(
-                            &module_id,
+                            module_id,
                             fun_name,
                             vec![],
                             Vec::<Vec<u8>>::new(),
