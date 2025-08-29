@@ -659,6 +659,16 @@ on a single chain), while for migration we can do a better job using user assist
 More research is needed to describe the exact mapping, but the goal is that we unpack old-style lock
 files into the same data structure as new-style lock files.
 
+## Unsupported features
+
+We currently plan to remove support for the following features, and we don't mind if we break how
+they work in legacy packages:
+
+ - "wildcard" addresses: `foo = "_"`
+ - `--with-unpublished-addresses`
+ - `[dev-addresses]`
+ - address renaming
+
 ## Build (manifest)
 
 Another field that exists today is `build`. It particularly refers to an architecture or language
