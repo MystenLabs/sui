@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/inferred_string_invalid_type.move:4:26
+  │
+4 │     fun test() { let _x: S = "inferred stringŻ"; }
+  │                          ^   ------------------ Given: string
+  │                          │    
+  │                          Invalid type annotation
+  │                          Expected: 'a::m::S'

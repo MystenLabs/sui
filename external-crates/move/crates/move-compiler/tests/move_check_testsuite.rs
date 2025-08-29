@@ -34,6 +34,7 @@ const TEST_EXT: &str = "unit_test";
 const UNUSED_EXT: &str = "unused";
 const MIGRATION_EXT: &str = "migration";
 const IDE_EXT: &str = "ide";
+const NO_STDLIB_EXT: &str = "no_std";
 const MODE_EXT: &str = "mode";
 
 const LINTER_DIR: &str = "linter";
@@ -60,6 +61,8 @@ enum TestKind {
     Migration,
     // Tests additional generation for the IDE
     IDE,
+    // Tests with std library disabled
+    NoStd,
     // Tests with a mode enabled
     Mode(Vec<Symbol>),
 }
@@ -72,6 +75,7 @@ impl TestKind {
             _ if path_extension == UNUSED_EXT => TestKind::Unused,
             _ if path_extension == MIGRATION_EXT => TestKind::Migration,
             _ if path_extension == IDE_EXT => TestKind::IDE,
+            _ if path_extension == NO_STDLIB_EXT => TestKind::NoStd,
             _ if path_extension.to_string_lossy().starts_with(MODE_EXT) => {
                 let pe_str = path_extension.to_string_lossy();
                 let mode_str = pe_str.strip_prefix(MODE_EXT).unwrap();
@@ -92,6 +96,7 @@ impl TestKind {
             TestKind::Unused => Some(UNUSED_EXT.to_string()),
             TestKind::Migration => Some(MIGRATION_EXT.to_string()),
             TestKind::IDE => Some(IDE_EXT.to_string()),
+            TestKind::NoStd => Some(NO_STDLIB_EXT.to_string()),
             TestKind::Mode(modes) => Some(format!(
                 "{MODE_EXT}{}",
                 modes
@@ -122,7 +127,7 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
     mapping
         .into_iter()
         .map(|(name, addr)| (name.to_string(), NumericalAddress::parse_str(addr).unwrap()))
-        .collect()
+        .collect::<BTreeMap<_, _>>()
 }
 
 fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
@@ -175,8 +180,8 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
     };
     // flags
     let flags = match &test_kind {
-        // no flags for normal tests
-        TestKind::Normal => Flags::empty(),
+        // no flags for normal tests and no-stdlib tests
+        TestKind::Normal | TestKind::NoStd => Flags::empty(),
         // we want to be able to see test/test_only elements in these modes
         TestKind::Test | TestKind::Unused | TestKind::Migration => Flags::testing(),
         // additional flags for IDE
@@ -211,11 +216,15 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let flavor = package_config.flavor;
     let targets: Vec<String> = vec![move_path.to_str().unwrap().to_owned()];
     let named_address_map = default_testing_addresses(flavor);
-    let deps = vec![PackagePaths {
-        name: Some(("stdlib".into(), PackageConfig::default())),
-        paths: move_stdlib::source_files(),
-        named_address_map: named_address_map.clone(),
-    }];
+    let deps = if matches!(test_kind, TestKind::NoStd) {
+        vec![]
+    } else {
+        vec![PackagePaths {
+            name: Some(("stdlib".into(), PackageConfig::default())),
+            paths: move_stdlib::source_files(),
+            named_address_map: named_address_map.clone(),
+        }]
+    };
     let target_name = if migration_mode {
         Some(("test".into(), package_config.clone()))
     } else {
@@ -297,6 +306,9 @@ datatest_stable::harness!(
     run_test,
     "tests/",
     r".*\.ide$",
+    run_test,
+    "tests/",
+    r".*\.no_std$",
     run_test,
     "tests/",
     r".*\.mode-.*$",

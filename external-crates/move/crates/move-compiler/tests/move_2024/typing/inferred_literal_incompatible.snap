@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04033]: types are not equal
+  ┌─ tests/move_2024/typing/inferred_literal_incompatible.move:2:33
+  │
+2 │     fun test() { let _x = "hi"; _x = 10; }
+  │                           ----  ^^   -- Given a num literal
+  │                           │     │     
+  │                           │     Invalid assignment to variable '_x'
+  │                           Expected a string literal
+  │
+  = Inferred value types must be compatible

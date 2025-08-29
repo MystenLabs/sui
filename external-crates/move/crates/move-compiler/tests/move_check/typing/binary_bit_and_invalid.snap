@@ -199,7 +199,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^
    │         │
    │         Invalid argument to '&'
-   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_bit_and_invalid.move:18:16
@@ -216,7 +216,7 @@ error[E04003]: built-in operation not supported
 18 │         (0, 1) & (0, 1, 2);
    │         ------   ^^^^^^^^^ Invalid argument to '&'
    │         │         
-   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_bit_and_invalid.move:19:9
@@ -225,7 +225,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^
    │         │
    │         Invalid argument to '&'
-   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_bit_and_invalid.move:19:18
@@ -233,4 +233,4 @@ error[E04003]: built-in operation not supported
 19 │         (1, 2) & (0, 1);
    │         ------   ^^^^^^ Invalid argument to '&'
    │         │         
-   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

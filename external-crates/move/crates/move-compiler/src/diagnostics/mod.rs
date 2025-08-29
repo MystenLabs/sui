@@ -36,7 +36,7 @@ use std::{
     iter::FromIterator,
     ops::Range,
     path::PathBuf,
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
 
 //**************************************************************************************************
@@ -47,8 +47,8 @@ use std::{
 pub struct DiagnosticReporter<'env> {
     flags: &'env Flags,
     known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
-    diags: &'env RwLock<Diagnostics>,
-    ide_information: &'env RwLock<IDEInfo>,
+    diags: Arc<RwLock<Diagnostics>>,
+    ide_information: Arc<RwLock<IDEInfo>>,
     warning_filters_scope: WarningFiltersScope,
 }
 
@@ -372,8 +372,8 @@ impl<'env> DiagnosticReporter<'env> {
     pub const fn new(
         flags: &'env Flags,
         known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
-        diags: &'env RwLock<Diagnostics>,
-        ide_information: &'env RwLock<IDEInfo>,
+        diags: Arc<RwLock<Diagnostics>>,
+        ide_information: Arc<RwLock<IDEInfo>>,
         warning_filters_scope: WarningFiltersScope,
     ) -> Self {
         Self {
@@ -381,6 +381,23 @@ impl<'env> DiagnosticReporter<'env> {
             known_filter_names,
             diags,
             ide_information,
+            warning_filters_scope,
+        }
+    }
+
+    /// Creates a dummy reporter -- this can be passed in anywhere a reporter is expected, but will
+    /// not actually report the diagnostics or IDE information. This can be useful to speculatively
+    /// look up information in, e.g., exapsnion or name resolution.
+    pub fn dummy_reporter(
+        flags: &'env Flags,
+        known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
+        warning_filters_scope: WarningFiltersScope,
+    ) -> Self {
+        Self {
+            flags,
+            known_filter_names,
+            diags: Arc::new(RwLock::new(Diagnostics::new())),
+            ide_information: Arc::new(RwLock::new(IDEInfo::new())),
             warning_filters_scope,
         }
     }

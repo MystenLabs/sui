@@ -11,7 +11,7 @@ error[E04004]: expected a single non-reference type
 4 │         vector[&0];
   │         ^^^^^^^^^^
   │         │      │
-  │         │      Expected a single non-reference type, but found: '&u64'
+  │         │      Expected a single non-reference type, but found: '&{integer}'
   │         Invalid 'vector' type
 
 error[E04004]: expected a single non-reference type
@@ -20,7 +20,7 @@ error[E04004]: expected a single non-reference type
 5 │         vector[&mut 0];
   │         ^^^^^^^^^^^^^^
   │         │      │
-  │         │      Expected a single non-reference type, but found: '&mut u64'
+  │         │      Expected a single non-reference type, but found: '&mut {integer}'
   │         Invalid 'vector' type
 
 error[E04004]: expected a single non-reference type
@@ -38,7 +38,7 @@ error[E04004]: expected a single non-reference type
 7 │         vector[(0, false)];
   │         ^^^^^^^^^^^^^^^^^^
   │         │      │
-  │         │      Expected a single non-reference type, but found: '(u64, bool)'
+  │         │      Expected a single non-reference type, but found: '({integer}, bool)'
   │         Invalid 'vector' type
 
 error[E04004]: expected a single non-reference type
@@ -47,7 +47,7 @@ error[E04004]: expected a single non-reference type
 9 │         vector[&0, &mut 0];
   │         ^^^^^^^^^^^^^^^^^^
   │         │      │
-  │         │      Expected a single non-reference type, but found: '&u64'
+  │         │      Expected a single non-reference type, but found: '&{integer}'
   │         Invalid 'vector' type
 
 error[E04004]: expected a single non-reference type
@@ -56,5 +56,5 @@ error[E04004]: expected a single non-reference type
 10 │         vector[&mut 0, &0];
    │         ^^^^^^^^^^^^^^^^^^
    │         │              │
-   │         │              Expected a single non-reference type, but found: '&u64'
+   │         │              Expected a single non-reference type, but found: '&{integer}'
    │         Invalid 'vector' type

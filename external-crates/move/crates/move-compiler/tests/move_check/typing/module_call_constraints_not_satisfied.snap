@@ -51,18 +51,6 @@ error[E05001]: ability constraint not satisfied
    │         'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:29:9
-   │
-15 │     fun both<R: key, C: copy>(_r: R, _c: C) {
-   │                 --- 'key' constraint declared here
-   ·
-29 │         both(0, Coin{})
-   │         ^^^^^^^^^^^^^^^
-   │         │    │
-   │         │    The type 'u64' does not have the ability 'key'
-   │         'key' constraint not satisifed
-
-error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:33:9
    │
  7 │     fun new_box<T>(): Box<T> {

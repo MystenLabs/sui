@@ -1,0 +1,11 @@
+Command `build`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING A
+Command `test`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING A
+Running Move unit tests
+[ PASS    ] A::test::t0
+[ PASS    ] A::test::t1
+[ PASS    ] A::test::t2
+Test result: OK. Total tests: 3; passed: 3; failed: 0
