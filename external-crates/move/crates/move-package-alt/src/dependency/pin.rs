@@ -2,13 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf};
 
 use path_clean::PathClean;
 
 use crate::{
     dependency::{ResolvedDependency, resolve::Resolved},
-    errors::{FileHandle, PackageResult},
+    errors::{FileHandle, PackageResult, fmt_truncated},
     flavor::MoveFlavor,
     git::{GitCache, GitError, GitTree},
     schema::{
@@ -253,6 +253,27 @@ impl From<Pinned> for LockfileDependencyInfo {
     }
 }
 
+impl fmt::Display for PinnedDependencyInfo {
+    // TODO: this is maybe misguided; we should perhaps only display manifest dependencies?
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0.dep_info {
+            Pinned::Local(_local) => write!(
+                f,
+                r#"{{ local = {:?} }}"#,
+                _local.relative_path_from_root_package
+            ),
+            Pinned::Git(git) => {
+                let repo = fmt_truncated(git.inner.repo_url(), 8, 12);
+                let path = git.inner.path_in_repo().to_string_lossy();
+                let rev = fmt_truncated(git.inner.sha(), 6, 2);
+                write!(f, r#"{{ git = "{repo}", path = "{path}", rev = "{rev}" }}"#)
+            }
+            Pinned::OnChain(_on_chain) => write!(f, "{{ on-chain = true }}"),
+            Pinned::Root => write!(f, "{{ local = \".\" }}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
@@ -414,6 +435,31 @@ mod tests {
     #[ignore]
     async fn git_no_rev() {
         todo!()
+    }
+
+    // Displaying pinned deps //////////////////////////////////////////////////////////////////////
+
+    #[test]
+    fn display_local() {
+        let dep = new_pinned_local_from("Move.lock", "foo/bar");
+        assert_snapshot!(format!("{dep}"), @r###"{ local = "foo/bar" }"###);
+    }
+
+    #[test]
+    fn display_git() {
+        let dep = new_pinned_git_from(
+            "Move.lock",
+            "https://foo.git.com/org/repo.git",
+            "ac4911261dd71cac55cf5bf2dd3288f3a12f2563",
+            "foo/bar/baz",
+        );
+        assert_snapshot!(format!("{dep}"), @r###"{ git = "https://...org/repo.git", path = "foo/bar/baz", rev = "ac4911...63" }"###);
+    }
+
+    #[test]
+    fn display_root() {
+        let dep = new_pinned_root("Move.lock");
+        assert_snapshot!(format!("{dep}"), @r###"{ local = "." }"###);
     }
 
     // Test infrastructure /////////////////////////////////////////////////////////////////////////

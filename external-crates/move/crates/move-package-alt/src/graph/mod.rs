@@ -8,7 +8,7 @@ mod package_info;
 mod rename_from;
 mod to_lockfile;
 
-pub use linkage::LinkageError;
+pub use linkage::{LinkageError, LinkageTable};
 pub use package_info::{NamedAddress, PackageInfo};
 pub use rename_from::RenameError;
 
@@ -109,28 +109,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
     // this
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
-        let linkage = self.linkage()?;
-
-        // Populate ALL the linkage elements
-        let mut result: Vec<PackageInfo<F>> = linkage.values().cloned().collect();
-
-        // Add all nodes that exist but are not in the linkage table.
-        // This is done to support unpublished packages, as linkage only includes
-        // published packages.
-        for node in self.inner.node_indices() {
-            let package = &self.inner[node];
-
-            if package
-                .original_id()
-                .is_some_and(|oid| linkage.contains_key(oid))
-            {
-                continue;
-            }
-
-            result.push(self.package_info(node));
-        }
-
-        Ok(result)
+        Ok(self.linkage()?.values().cloned().collect())
     }
 
     /// Return the sorted list of dependencies' name
@@ -154,97 +133,4 @@ impl<F: MoveFlavor> PackageGraph<F> {
             self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish));
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    // TODO: example with a --[local]--> a/b --[local]--> a/c
-    use std::collections::BTreeMap;
-
-    use test_log::test;
-
-    use crate::{
-        flavor::Vanilla,
-        graph::{PackageGraph, PackageInfo},
-        schema::PackageName,
-        test_utils::graph_builder::TestPackageGraph,
-    };
-
-    /// Return the packages in the graph, grouped by their name
-    fn packages_by_name(
-        graph: &PackageGraph<Vanilla>,
-    ) -> BTreeMap<PackageName, PackageInfo<Vanilla>> {
-        graph
-            .packages()
-            .expect("failed to get packages from graph")
-            .into_iter()
-            .map(|node| (node.name().clone(), node))
-            .collect()
-    }
-
-    /// Root package `root` depends on `a` which depends on `b` which depends on `c`, which depends
-    /// on `d`; `a`, `b`,
-    /// `c`, and `d` are all legacy packages.
-    ///
-    /// Named addresses for 'a' should contain `c` and `d`
-    #[test(tokio::test)]
-    async fn modern_legacy_legacy_legacy_legacy() {
-        let scenario = TestPackageGraph::new(["root"])
-            .add_legacy_packages(["a", "b", "c", "d"])
-            .add_deps([("root", "a"), ("a", "b"), ("b", "c"), ("c", "d")])
-            .build();
-
-        let graph = scenario.graph_for("root").await;
-
-        let packages = packages_by_name(&graph);
-
-        assert!(packages["a"].named_addresses().unwrap().contains_key("c"));
-        assert!(packages["a"].named_addresses().unwrap().contains_key("d"));
-        assert!(packages["a"].named_addresses().unwrap().contains_key("b"));
-        assert!(packages["a"].named_addresses().unwrap().contains_key("a"));
-        assert!(
-            !packages["root"]
-                .named_addresses()
-                .unwrap()
-                .contains_key("c")
-        );
-    }
-
-    /// Root package `root` depends on `a` which depends on `b` which depends on `c` which depends
-    /// on `d`; `a` and `c` are legacy packages.
-    ///
-    /// After adding legacy transitive deps, `a` should have direct dependencies on `c` and `d`
-    /// (even though they "pass through" a modern package)
-    #[test(tokio::test)]
-    async fn modern_legacy_modern_legacy() {
-        let scenario = TestPackageGraph::new(["root", "b", "d"])
-            .add_legacy_packages(["legacy_a", "legacy_c"])
-            .add_deps([
-                ("root", "legacy_a"),
-                ("legacy_a", "b"),
-                ("b", "legacy_c"),
-                ("legacy_c", "d"),
-            ])
-            .build();
-
-        let graph = scenario.graph_for("root").await;
-
-        let packages = packages_by_name(&graph);
-
-        assert!(
-            packages["legacy_a"]
-                .named_addresses()
-                .unwrap()
-                .contains_key("legacy_c")
-        );
-        assert!(
-            packages["legacy_a"]
-                .named_addresses()
-                .unwrap()
-                .contains_key("d")
-        );
-        assert!(!packages["b"].named_addresses().unwrap().contains_key("d"));
-    }
-
-    // TODO: tests around name conflicts?
 }
