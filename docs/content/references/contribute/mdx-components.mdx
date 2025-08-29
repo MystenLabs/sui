@@ -5,28 +5,44 @@ mdx:
   format: md
 ---
 
-Sui Docs uses the MDX format for its network documentation, which allows [JSX in markdown content](https://mdxjs.com/). Sui uses features provided by Docusaurus, plugins from its community, and custom plugins in an effort to improve reader experience. None of these features are required in your markdown contributions to the Sui documentation, but the Sui community might include them if it improves experience.
+The Sui developer documentation uses the MarkdownX (`.mdx`) format for all pages. MDX allows [JSX within Markdown content](https://mdxjs.com/). The site uses Docusaurus, an open-source framework that provides built-in features like admonitions and Mermaid diagrams. It also utilizes community plugins and custom components the documentation team developed. While none of these features are required in a contribution, you may include them if they enhance the reader’s experience.
 
 ## Custom frontmatter
 
-The frontmatter at the top of MDX pages provides context for the current topic. The only frontmatter entry required at the time of riting is `title`. In addition to the standard frontmatter entries available, the following custom items are useful for certain topic types.
+The frontmatter at the top of every documentation page provides additional context for the page, including a description that appears in the page's link preview, keywords for optimized search results, and other optional, format-related components.
 
-### Format for pages
+Include the following components on every page:
 
-Include the following in the frontmatter for pages that use the `{@include:}` and `{@inject:}` directives. This is not custom, but necessary for proper rendering of those pages.
+```
+---
+title: Title of Page
+description: 1-2 sentences summarizing the page's content.
+keywords: [ words, for, search, results ]
+---
+```
+
+### MDX format
+
+Pages that use `{@include:}` and `{@inject:}` directives **must** use the following MDX format frontmatter for those directives to render properly on the page. Without this, the Docusaurus build throws an "acorns" error.
 
 ```yaml
 mdx:
   format: md
 ```
 
-### beta
+### Optional frontmatter 
 
-Including the `beta` entry applies a box to the top of the topic that informa the reader of the beta status of the feature or service described. Possible values include `true` for a standard box, or a list of environments the feature or service is available in (`devnet`, `testnet`, `mainnet`) to include that information in the note.
+#### `beta`
+
+Adds an admonition box to the top of the page to inform readers of the feature or topic's beta status.  
+
+**Options:**  
+- `true` → Standard beta box.  
+- `devnet`, `testnet`, `mainnet` → Displays environments where the feature is available.  
 
 **Example:**
 
-```
+```yaml
 ---
 title: Page title
 description: A page of information describing a beta feature.
@@ -34,46 +50,47 @@ beta: devnet, testnet
 ---
 ```
 
-### effort
+#### `effort`
 
-The `effort` option is used for end-to-end guides. Including this entry places a box at the top of the guide to let the reader know what kind of effort is required to complete the guide. Available values are `small`, `medium`, `large`.
+Used for end-to-end tutorials. Adds an admonition box at the top indicating the effort required to complete the tutorial.
+
+**Options:** 
+
+- `small`
+- `medium`
+- `large`
 
 **Example:**
-```
+
+```yaml
 ---
-title: A Guides
+title: A Guide
 description: A guide on how to do this thing in Sui.
 effort: medium
 ---
 ```
 
-## UnsafeLink
+## `UnsafeLink`
 
-Use the `Unsafelink` component to create a link that skips the link checker.
+Use `UnsafeLink` to skip the Docusaurus link checker for a URL.
 
-### When to use
-
-The site is configured to throw an error when it comes across a broken link at build. Sometimes it's necessary to create a link to an auto-generated page, but this throws an error because the page does not exist when the link checker runs. Use this component to bypass that check.
+This is **necessary** for pages that the Docusaurus build auto-generates, as they are generated after the link checker runs and thus will result in a build error.
 
 :::info
-
-The `onBrokenMarkdownLinks: "warn"` setting remains at `warn` so that starting the site locally is not blocked by broken links. This setting does not stop thrown errors at build.
-
+In local development, the setting `onBrokenMarkdownLinks: "warn"` remains at `"warn"`, but in production the build process still throws a build error.
 :::
 
-### How to use
+**Example:**
 
-Instead of a markdon link or anchor tag, pass the `href` value to the `UnsafeLink` component.
-
-`<UnsafeLink href="link/to/path">Link title</UnsafeLink>`
+```jsx
+<UnsafeLink href="link/to/path">Link title</UnsafeLink>
+```
 
 ## Custom admonition boxes
 
-Beyond the default admonition boxes that Docusaurus offers (info, note, warning, danger), the following are also available.
+Beyond the Docusaurus defaults (`info`, `note`, `warning`, `danger`), there is another custom admonition box for checkpoints.
 
-### Checkpoint
-
-The `:::checkpoint` admonition box is used in end-to-end guides to provide the status of the project that the current guide is walking through. The idea is that if their own work fails the checkpoint, then they know where things went wrong rather than getting to the end of the guide with a broken example.
+Use checkpoints in end-to-end guides to validate user progress.
 
 **Example:**
 
@@ -81,7 +98,6 @@ The `:::checkpoint` admonition box is used in end-to-end guides to provide the s
 :::checkpoint
 
 Run your app and make sure you can:
-
 - Create an NFT.
 - Initiate a trade.
 
@@ -90,126 +106,91 @@ Run your app and make sure you can:
 
 ## Tabs
 
-`Tabs` and child `TabItem` elements allow for the segmentation of content so that users see only the content that is relevant to them. Sui documentation uses the default Docusaurus tab components. Check the [official documentation](https://docusaurus.io/docs/next/markdown-features/tabs) for all available options.  
+Use `<Tabs>` and `<TabItem>` to segment content that achieves the same goal but for different operating systems, programming languages, or developer environments. 
 
-### When to use
+Docusaurus automatically imports the `<Tabs>` and `<TabItem>` components into every documentation page. You do not need to import them manually. 
 
-Use tabs to divide repetitive content that doesn't typically apply to all audiences. Operating system or language specific content are the most ubiquitous examples. Most users are not going to be interested in Rust AND TypeScript instruction, or Windows AND Linux content. Tabs can produce a more focused page that includes only the information the reader cares about. If you use the `groupId` attribute, you can persist user selection across pages and sessions so the reader doesn't have to click the same tab on different pages or select again when revisiting pages.        
+The docs use a few custom scripts to properly render and style the `<Tabs>` component. These scripts let you use `<Tabs>` with [`{@include:}` snippets](#snippets-include) without breaking the page's formatting.
 
-### How to use
+When using multiple instances of `<Tabs>` within a page, use `groupId` to persist selections across sections. The name of each `<TabItem>` across `<Tabs>` components using `groupId` must match for the tabs to function properly.
 
 To create a tabbed section:
 
-1. Add the `<Tabs>` element where you want the tabbed content to go. Include the optional `groupId` property if there are other `Tabs` with the same selections. For example, `<Tabs groupId="operating-systems">` persists users' selections across other `Tabs` with the same `groupId` value.
-1. Add a `<TabItem>` element for each section of content as a child of the `Tabs` element. Each `TabItem` needs both `value` and `label` property values. If you're using `groupId` in the parent `Tabs`, make sure the `value` value remains consistent across `TabItem`s that are intended to show the same type of information.
+1. Add the `<Tabs>` element where you want the tabbed content to go. Include the optional `groupId` property if there are other `Tabs` with the same selections.
+
+1. Add a `<TabItem>` element for each section of content as a child of the `Tabs` element. Each `TabItem` needs both `value` and `label` property values. If you're using `groupId` in the parent `Tabs`, make sure the `value` remains consistent across `TabItem`s in other `Tabs` with the same `groupId` value. Doing so makes the `TabItem`s that are intended to show the same type of information become active across all relevant `Tabs`. This behavior persists across pages and sessions.  
+
+
 1. Close each `</TabItem>` and the parent `</Tabs>`.
-1. Check your page in the Vercel preview of your PR (`sui-core` preview link in Vercel comment) to make sure the content displays as expected.
 
 **Example:**
-```
+
+```md
 <Tabs groupId="operating-systems">
 
-<TabItem value="linux" label="Linux">
+  <TabItem value="linux" label="Linux">
 
-Whatever content is in here is only displayed when the user selects the **Linux** tab.
+    Linux-only content.
 
-</TabItem>
+  </TabItem>
 
-<TabItem value="macos" label="MacOS">
+  <TabItem value="macos" label="macOS">
 
-Whatever content is in here is only displayed when the user selects the **MacOS** tab.
+    macOS-only content.
 
-</TabItem>
+  </TabItem>
 
-<TabItem value="windows" label="Windows">
+  <TabItem value="windows" label="Windows">
 
-Whatever content is in here is only displayed when the user selects the **Windows** tab.
+    Windows-only content.
 
-</TabItem>
+  </TabItem>
 
 </Tabs>
 ```
 
-<Tabs groupId="operating-systems">
-
-<TabItem value="linux" label="Linux">
-
-Whatever content is in here is only displayed when the user selects the **Linux** tab.
-
-</TabItem>
-
-<TabItem value="macos" label="MacOS">
-
-Whatever content is in here is only displayed when the user selects the **MacOS** tab.
-
-</TabItem>
-
-<TabItem value="windows" label="Windows">
-
-Whatever content is in here is only displayed when the user selects the **Windows** tab.
-
-</TabItem>
-
-</Tabs>
-
 :::info
-
-The empty newlines between each opening and closing element in the example are important.
-
+You must add empty newlines between content, opening, and closing tags. Without them, the component fails to render properly.
 :::
 
-## Snippets
+## Snippets `{@include:}`
 
-Snippets are short pieces of reusable text, such as tips, tab components, or other plaintext. Snippets are not used for code snippets; see code inject for embedding code. The `docs/content/snippets` folder contains all the reusable content. Pages in that directory do not appear in the ToC and are hidden from search engines. Upon build, the process deletes the folder so the content doesn't get rendered to the final site as it's own page.
+Reusable Markdown content stored in `docs/content/snippets`. Snippets can be reusable sentences, paragraphs, admonition boxes, `<Tabs>`, or pieces of code. 
 
-### When to use
+Tables of data, technology requirements, and other information relevant to more than one topic or audience are good candidates to create as snippets (especially if the information is likely to change).
 
-Use a snippet for content that appears in more than one place. Snippets are typically a paragraph or smaller. Tables of data, technology requirements, and other information relevant to more than one topic or audience are good candidates to create as snippets (especially if the information is likely to change). If you want to use a snippet for longer form content, consider just using a hyperlink instead.
+Snippets help reduce maintenance and avoid forcing readers off-page for important information.  
 
-The use of snippets reduces maintenance effort because one edit updates the content wherever it appears. It also doesn't require the reader to leave the current page to get necessary information, as a hyperlink does.
+### How to use snippets
 
-### How to use
+1. Create an `.mdx` file in the `/docs/content/snippets` directory. This file cannot have frontmatter.
+    
+    1. If the file contains code from another file, it must be inserted with the `<CodeFromFile>` component rather than the `{@inject:}` syntax.
+ 
+1. Insert the snippet into another page with `{@include: ../../snippets/reusable.mdx}`.
 
-To create and use snippets:
+    :::warning
+    Do not use file-structure links inside snippets. Use site-relative paths (`/concepts/file`).
+    :::
 
-:::info
+1. Ensure there are empty lines above and below the `{@include:}` line.
 
-You do not need to `import` a component to use snippets.
+1. Add the required frontmatter to the top of the page that contains the `{@include:}` line.
 
-:::
-
-1. Create an .mdx file in the `docs/content/snippets` folder with the content you want to use in different locations. Do not include frontmatter in the file, just markdown content. Frontmatter is the content between `---` at the top of doc source pages.  
-1. In the document where you want to include the content from the snippet, add the `{@include}` directive with a relative location of the file. 
-
-    `{@include: ../../snippets/reusable.mdx}`
-
-There must be an empty line above and below the `{@include} line for it to render properly. 
-
-You must also add the following frontmatter to the page that includes the `{@include}` statement:
-
-```
+```yaml
 mdx:
   format: md
 ```
 
-1. Repeat the previous step for all locations the content should appear. Be sure to update the relative location of the snippet based on where the file containing the directive exists in the repo.
-1. Check each page in the Vercel preview of your PR (`sui-core` preview link in Vercel comment) to make sure the content displays. If the relative link you provide does not resolve correctly, the page displays error text instead of the expected content.
+## Inject code `{@inject:}`
 
-:::warning
+Inject code directly into a documentation file using a custom plugin that supports filtering and syntax highlighting.
 
-Do not use links relative to the file structure in snippets (for example, `../concepts/file.mdx`). If your snippet requires a link internal to the Sui docs site, use the relative HTML path instead (`/concepts/file`). 
+In an active repo, source code changes frequently. If you copy and paste that source code in a document, then the two sources can diverge quickly and drastically. If the code you inject is tested, this directive ensures the code in your document is also tested.
 
-:::
+Use `{@inject:}` to keep docs synchronized with live source code, as it prevents divergence between the docs and repo code. 
 
-## Code inject
-
-Sui documentation uses a custom Docusaurus plugin to include code from the Sui repo in its pages. 
-
-Code inject formats code in a code block with syntax highlighting. Code inject can only be used for files located in the current repo, as they must be referenced via relative path.
-
-### When to use
-
-In an active repo, source code changes frequently. If you copy and paste that source code in a document, then the two sources can diverge quickly and drastically. In Sui Docs, you can use the `{@inject}` directive to make a copy of the source when the site builds (merge PR), ensuring the source used in the content always matches the source code in the repo. If the code you inject is tested, this directive ensures the code in your document is also tested.
+:::caution 
 
 #### Considerations
 
@@ -217,102 +198,67 @@ The effective use of `{@inject}` often requires code comments in the source file
 
 When including sections of code, understand that the code might change from what you reference during document creation to what a reader eventually consumes. Assume other processes will update the accompanying content, but be mindful of the possibility of changing code when considering the level of detail in your instruction. You can take comfort in the knowledge that the code is always valid, though.
 
-### How to use
-
-To include the entire source file, use the `{@inject: ...}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write:
-
-``
-{@inject: examples/move/hero/sources/example.move`
-```
-
-The file location is automatically used as the title for the codeblock.
-
-You must also add the following frontmatter to the page that includes the `{@inject}` statement:
+:::caution
+You **cannot** use `{@inject:}` within the snippet file for an `{@include:}` directive. You must use the `<CodeFromFile>` component instead.
 
 ```
-mdx:
-  format: md
+<CodeFromFile
+  filePath="crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=values"
+/>
 ```
-
-There must be an empty line above and below the `{@inject} line for it to render properly. 
-
-#### Include part of code
-
-To include only sections of code, add an ID to identify the section, function, struct, or module. The ID is used in the directive syntax and in source code comments. The following sections provide examples of different uses and how to format them.
-
-#### Include a Move section
-
-:::info
-
-This approach is a work in progress and there are certain formatting situations that prevents their use. In those cases, use the `docs://#id` approach instead.
 
 :::
 
-You can include specific sections of Move code using the following constructs appended to the end of the code directory. You can uses a comma delimited list for functions, structs, and variables to include each in the same codeblock:
-- Module: #module=MODULE::NAME
-- Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION
-- Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT
-- Trait: #trait=TRAIT_NAME,ANOTHER_TRAIT
-- Variables: #var=variableName,anotherVariable
-- Move import: #use=LIBRARY::NAME
-- React component: #component=ComponentName
-- Type declaration: #type=TypeName
+### Referencing files within the Sui monorepo 
+
+Reference files via their relative path:
+
+```
+{@inject: examples/move/hero/sources/example.move}
+```
+
+### Referencing files from other repos 
+
+If several code files located in another repo need to be referenced across multiple documentation pages, the Sui documentation team may have added it as a **submodule** of the Sui repo. Submodules are a GitHub feature that creates symlinks across repositories. 
+
+Current submodules within the Sui docs include:
+
+- [TS SDK](https://github.com/MystenLabs/ts-sdks): `/docs/submodules/ts-sdks`
+
+- [DeepBook](https://github.com/MystenLabs/deepbookv3): `/docs/submodules/deepbookv3`
+
+The Sui documentation team decides whether to add submodules. Community contributions should not attempt to add submodules.
+
+### How to use 
+
+First, add the required frontmatter:
+
+```yaml
+mdx:
+format: md
+```
+
+To include an entire file of code: 
+
+```
+{@inject: examples/move/hero/sources/example.move}
+```
+
+To include specific components or sections, use IDs or directives:  
+
+- Module: #module=MODULE::NAME 
+- Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION 
+- Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT 
+- Trait: #trait=TRAIT_NAME,ANOTHER_TRAIT 
+- Variables: #var=variableName,anotherVariable 
+- Move import: #use=LIBRARY::NAME 
+- React component: #component=ComponentName 
+- Type declaration: #type=TypeName 
 - Enum declaration: #enum=EnumName
 
-For example, `{@inject: examples/move/example.source#fun=buy_sword}`
-
-#### Include linear parts of code
-
-If you want to include a complete section of code, use a descriptive ID in the document and source file. 
-
-1. In your document, add the directive to the file with the ID appended. The build process replaces this line with the referenced code, so place where the code should appear.
-    `{@inject: examples/foo/bar.move#IDstring}`
-1. In the source file, add a comment where the section should begin in the form `// docs::#ID`.
-    ```ts
-    // docs::#IDstring
-
-    import lib from "library";
-    ...
-    ```
-1. In the source file, add a comment where the section should end in the form `// docs::/#ID`.
-    ```ts
-    // docs::#IDstring
-
-    import lib from "library";
-    ...
-    return book;
-
-    // docs::/#IDstring
-    ...
-    ```
-
-#### Add closing syntax
-
-When including linear sections of code, you sometimes want only the first part of a code source. Often, this requires placing the end directive (`// docs::/#ID`) before the closing syntax of the code source. To display closing syntax for well-formed code in the document, append the necessary syntax to the end directive.
-
-For example,
-
-```ts
-// docs::#funcBasic
-function func(){ 
-    const basic = () => {
-        const basic2 = () => {};
-        // docs::/#funcBasic};}
-        const inter = () => {};
-    };
-    const advanced = () => {};
-}
+**Example:**  
 ```
-
-displays as
-
-```
-function func(){
-    const basic = () => {
-        const basic2 = () => {};
-    };
-}
-        
+{@inject: examples/move/example.source#fun=buy_sword}
 ```
 
 #### Include nonlinear parts of code
@@ -326,113 +272,133 @@ Consider restructuring your document before using this approach. This feature is
 If you don't want to include a section of code, but instead focus on the code around it in a single doc instance, you can pause the injection with a source code comment in the form `// docs::#ID-pause`. A second comment in the form `// docs::#ID-resume` continues the injection.
 
 1. In your document, add the directive to the file with the ID appended. The build process replaces this line with the referenced code, so place where the code should appear.
-    &#123;`@inject: examples/foo/bar.move#IDstring`
+
+```
+{@inject: examples/foo/bar.move#IDstring}
+```
+
 1. In the source file, add a comment where the section should begin in the form `// docs::#ID`.
-    ```ts
-    // docs::#IDstring
 
-    import lib from "library";
-    ...
-    ```
-1. In the source file, add a comment where the injection should pause and where it should resume. Optionally, append a colon and replacement text to the pause directive. The replacement text displays in the document instead of the code.   
-    ```ts
-    // docs::#IDstring
+    ```ts 
+// docs::#IDstring 
+import lib from "library"; 
+...
+```
 
-    import lib from "library";
-    ...
-    // docs::#IDstring-pause:TODO
+1. In the source file, add a comment where the injection should pause and where it should resume. Optionally, append a colon and replacement text to the pause directive. The replacement text displays in the document instead of the code.
 
-    const Advanced = () => {};
+```ts 
+// docs::#IDstring 
+import lib from "library"; 
+... 
 
-    // docs::#IDstring-resume
-    ```
-1. In the source file, add a comment where the injection should end. 
-    ```ts
-    // docs::#IDstring
+// docs::#IDstring-pause:TODO 
+const Advanced = () => {}; 
+// docs::#IDstring-resume
+```
 
-    import lib from "library";
-    ...
-    // docs::#IDstring-pause:// TODO
+1. In the source file, add a comment where the injection should end.
 
-    const Advanced = () => {};
-    ...
+```ts 
+// docs::#IDstring 
+import lib from "library"; 
+... 
 
-    // docs::#IDstring-resume
+// docs::#IDstring-pause:
+// TODO 
+const Advanced = () => {};
+... 
 
-    return book;
+// docs::#IDstring-resume 
+return book; 
 
-    // docs::/#IDstring
-    ...
-    ```
+// docs::/#IDstring 
+...
+```
 
 The final result in the document from these steps is:
 
-```ts
-import lib from "library";
+```ts 
+import lib from "library"; 
 ...
 
-// TODO
-
+// TODO 
 return book;
 ```
 
-#### Options
+### Additional options 
 
-You can include a space-limited list of options after the @inject call. The following options are supported:
-- `noComments`: Remove comments from Move code.
-- `noTests`: Remove tests from captured section of code.
-- `noTitle`: Don't place a hyperlinked title at the top of the code block.
-- `singleSpace`: If the code source has spurious whitespace, use this option to display code without extra spaces between lines. Useful when the code uses extra blank lines for readability. 
-- `highlight`: Highlight a single line out of the injected code. Use a word (such as a variable name) in the line you want highlighted. 
+You can also add additional strings to the end of the inject statement to highlight specific lines, remove titles, etc:
 
-For example, `{@inject: examples/move/example.source#module=example::example noComments noTests noTitle singleSpace}`
+- `noComments` → Strip comments  
+- `noTests` → Strip tests  
+- `noTitle` → Remove code block title  
+- `singleSpace` → Normalize spacing  
+- `highlight` → Highlight a specific line using a unique word in the line you want highlighted (ex. `highlight=variable_name`)
 
-## Summary and details 
+**Example:**  
 
-For long portions of text or code that can be omitted, but should be available for readers looking for it, you can use the `<details>` syntax to create a collapsible component. The collapsible component takes up less space on the page, making it easier for readers to skim the page's content. 
+```
+{@inject: examples/move/example.source#module=example::example noComments noTests}
+```
 
+## Collapsible components: Details and summary 
 
-<details> 
+Use `<details>` and `<summary>` to create collapsible content. This is useful for reducing page length by placing long code files, command output, or other large text blocks inside `<details>`, making the page easier to scroll.
 
-<summary> Example </summary>
+Add an empty newline above and below the content, opening, and closing tags.
 
-Example collapsible component.
+**Example:**
+
+```html
+<details>
+
+  <summary>Example</summary>
+
+  Collapsible details go here.
 
 </details>
+``` 
 
-### How to use 
+## Using step headings
 
-Use `<details>` opening and closing tags to create the component, and the `<summary>` opening and closing tags to display the text shown when the component is closed:
+Prefer ordered lists for processes; keep each step to one instruction. However, if a step needs multiple sub-instructions or lots of context, use step headings (headings with step/substep) to group content. 
 
-    <details>
+Avoid lists where Step 1 spans pages and switch to step headings instead. Step headings make long guides easier to resume and navigate via the ToC.
 
-    <summary> 
-    
-    Example title 
-    
-    </summary>
+### How to use step headings
 
-    Component details.
+To create step headings, add a `step` or `substep` suffix to the usual heading levels. 
 
-    </details>
+For instance, to create a level 2 heading, write `##step Buy peanuts`, which is the same as typing `## Step 1: Buy peanuts`.
 
-There must be an empty line above and below the both the opening and closing `<summary>` and `<detail>` tags for it to render properly. 
+The feature supports one level of `nesting` using the `substep` suffix in the same manner. Don't forget to use the proper number of hashes in relation to the parent step. Continuing the example, you might have `###substep Buy Cracker Jacks`, which would be the same as typing `### Step 1.1: Buy Cracker Jacks`.
+
+##step Buy peanuts
+
+Buy me some peanuts.
+
+###substep Buy Cracker Jacks
+
+And Cracker Jacks.
+
+##step Come back
+
+I don't care if I ever come back.
 
 ## Mermaid graphs
 
 Mermaid graphs are text-based [Mermaid.js](https://mermaid.js.org) diagrams. Mermaid has native support in Docusaurus.
 
-### When to use
+Any graph you want to include should use Mermaid. Flowchart and sequence diagram types are particularly useful. The Docusaurus implementation determines support for newer graph types, which might not render correctly. 
 
-Any graph you want to include should use Mermaid. Flowchart and sequence diagram types are particularly useful. Support for newer graph types are dependent on the Docusaurus implementation and might not render correctly. 
-
-The reason for using Mermaid is to allow anyone, anywhere the ability to update or augment information for visual assets without needing separate imaging software or source files.
+By using Mermaid, anyone can update or augment visual assets without relying on separate imaging software or source files.
 
 ### How to use
 
 To create a mermaid graph, place the code inside tick fencing with `mermaid` defined as the language. You do not need to import anything into your document. 
 
-The following code
+The following code:
 
     ```mermaid
     flowchart LR
@@ -451,7 +417,7 @@ The following code
         AC2 <==>|Network TCP| Authority2
     ```
 
-produces
+creates the following diagram:
 
 ```mermaid
 flowchart LR
@@ -461,61 +427,26 @@ flowchart LR
     ClientService --> AuthorityAggregator
     AuthorityAggregator --> AC1[AuthorityClient] & AC2[AuthorityClient]
     subgraph Authority1
-      AS[AuthorityState]
+    AS[AuthorityState]
     end
     subgraph Authority2
-      AS2[AuthorityState]
+    AS2[AuthorityState]
     end
     AC1 <==>|Network TCP| Authority1
     AC2 <==>|Network TCP| Authority2
 ```
 
+<!----- not currently used
+
 ## YouTube player with thumbnail carousel
 
-Displays a list of YouTube thumbnails and provides a player for the currently selected video.
+Use `YTCarousel` to display multiple videos.  
 
-### When to use
-
-Use when you have three or more YouTube videos. You could use with as few as one but there is currently not a way to turn off the carousel so would look weird.
-
-### How to use
-
-Because there are not many videos on the site, you need to import the component on the page in which you're using it.
-
-`import YTCarousel from "@site/src/components/YTCarousel"`
-
-The import statement can go anywhere, but it's typically added to the top of the page. Then use the component by providing an array of YouTube video IDs. Sui videos should not have this problem, but be aware that videos might not have thumbnails like in the example.
-
-`<YTCarousel ids={["youtubeID1","youtubeID2","youtubeID3",...]}/>`
-
-import YTCarousel from "@site/src/components/YTCarousel"
+**Example:**
+```jsx
+import YTCarousel from "@site/src/components/YTCarousel";
 
 <YTCarousel ids={["dQw4w9WgXcQ","EwTZ2xpQwpA","1TewCPi92ro"]}/>
+```
 
-## Step titles
-
-It is recommended to use an actual ordered list when documenting processes. Each list item step should consist of a single instruction for the user. On occasion, however, you might want to have a group of instructions for each step, making it impractical for a standard ordered list. The step titles feature enables the use of numbered steps and sub-steps in a heading, where you can then group a set of instructions in a single step.
-
-### When to use
-
-Use when you detail a long process with multiple technologies, or a process that otherwise requires lengthy contextual content. Do not create a verbose ordered list or one where list item #1 requires several pages of depth before the reader gets to list item #2. If you find that you're creating such a process list, then it might be a good candidate for step headings. Having steps in the title of longer processes helps readers recall where they left off if they don't complete the task set, and enables them to easily navigate back using the ToC. 
-
-### How to use
-
-To create step headings, add a `step` or `substep` suffix to the usual heading levels. 
-
-For instance, to create a level 2 heading, write `##step Buy peanuts`, which is the same as typing `## Step 1: Buy peanuts`.
-
-The feature supports one level of [`nesting`](/) using the `substep` suffix in the same manner. Don't forget to use the proper number of hashes in relation to the parent step. Continuing the example, you might have `###substep Buy Cracker Jacks`, which would be the same as typing `### Step 1.1: Buy Cracker Jacks`.
-
-##step Buy peanuts
-
-Buy me some peanuts.
-
-###substep Buy Cracker Jacks
-
-And Cracker Jacks.
-
-##step Come back
-
-I don't care if I ever come back.
+----->

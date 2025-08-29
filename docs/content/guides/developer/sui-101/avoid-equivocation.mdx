@@ -32,13 +32,13 @@ In cases where creating multiple owned objects is not practical or desired, you 
 
 The Sui SDK offers transaction executors to help process multiple transactions from the same address.
 
-### SerialTransactionExecutor
+### `SerialTransactionExecutor`
 
 Use the `SerialTransactionExecutor` when processing transactions one after another. The executor grabs all the coins from the sender and combines them into a single coin that is used for all transactions.
 
 Using the `SerialTransactionExecutor` prevents `SequenceNumber` errors by handling the versioning of object inputs across a PTB.
 
-### ParallelTransactionExecutor
+### `ParallelTransactionExecutor`
 
 Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates a pool of gas coins that it manages to ensure parallel transactions don't equivocate those coins. The class tracks objects used across transactions and orders their processing so that the object inputs are also not equivocated.
 
@@ -46,7 +46,7 @@ Use the `ParallelTransactionExecutor` when you want to process transactions with
 
 If you find your smart contracts unintentionally locking objects, there are some tools you can use to help fix the issue.
 
-### sui-tool
+### `sui-tool`
 
 You can install the `sui-tool` (https://github.com/MystenLabs/sui/tree/main/crates/sui-tool) utility and use the `locked-object` command to check the locked status of the passed asset on a specific RPC network (`--fullnode-rpc-url` value). If you provide an address, locked-object checks if all the gas objects owned by that address are locked. Pass an object ID to check if that specific object is locked.
 

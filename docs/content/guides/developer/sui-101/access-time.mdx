@@ -8,7 +8,7 @@ mdx:
 
 You have options when needing to access network-based time for your transactions. If you need a near real-time measurement (within a few seconds), use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every network checkpoint. If you don't need as current a time slice, use the `epoch_timestamp_ms` function to capture the precise moment the current epoch started.
 
-## The sui::clock::Clock module
+## The `sui::clock::Clock` module
 
 To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address `0x6`, no new instances can be created.
 
@@ -40,7 +40,7 @@ The following functions test `Clock`-dependent code by manually creating a `Cloc
 
 {@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/clock.move#fun=create_for_testing,share_for_testing,increment_for_testing,set_for_testing,destroy_for_testing noComments}
 
-The next example presents a basic test that creates a Clock, increments it, and then checks its value:
+The next example presents a basic test that creates a `Clock`, increments it, and then checks its value:
 
 {@inject: ../../../../../crates/sui-framework/packages/sui-framework/tests/clock_tests.move#module=sui::clock_tests noComments}
 
