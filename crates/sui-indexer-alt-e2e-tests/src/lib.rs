@@ -136,6 +136,7 @@ impl FullCluster {
             ConsistentConfig::for_test(),
             JsonRpcConfig::default(),
             GraphQlConfig::default(),
+            FullNodeArgs::default(),
             &prometheus::Registry::new(),
             CancellationToken::new(),
         )
@@ -153,6 +154,7 @@ impl FullCluster {
         consistent_config: ConsistentConfig,
         jsonrpc_config: JsonRpcConfig,
         graphql_config: GraphQlConfig,
+        full_node_args: FullNodeArgs,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
@@ -175,6 +177,7 @@ impl FullCluster {
             consistent_config,
             jsonrpc_config,
             graphql_config,
+            full_node_args,
             registry,
             cancel,
         )
@@ -328,6 +331,7 @@ impl OffchainCluster {
         consistent_config: ConsistentConfig,
         jsonrpc_config: JsonRpcConfig,
         graphql_config: GraphQlConfig,
+        full_node_args: FullNodeArgs,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
@@ -421,7 +425,7 @@ impl OffchainCluster {
         let graphql = start_graphql(
             Some(database_url.clone()),
             None,
-            FullNodeArgs::default(),
+            full_node_args,
             DbArgs::default(),
             BigtableArgs::default(),
             consistent_reader_args,
