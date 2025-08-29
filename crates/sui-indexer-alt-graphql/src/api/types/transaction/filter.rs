@@ -3,14 +3,21 @@
 
 use anyhow::Context as _;
 use async_graphql::{Context, InputObject};
-use diesel::{prelude::QueryableByName, sql_types::BigInt};
+use diesel::{
+    sql_types::{BigInt, Binary},
+    QueryableByName,
+};
 
-use crate::api::types::checkpoint::filter::checkpoint_bounds;
-use crate::scope::Scope;
-use crate::task::watermark::Watermarks;
 use crate::{
-    api::scalars::uint53::UInt53, api::types::transaction::CTransaction, error::RpcError,
-    intersect, pagination::Page,
+    api::{
+        scalars::uint53::UInt53,
+        types::{checkpoint::filter::checkpoint_bounds, transaction::CTransaction},
+    },
+    error::RpcError,
+    intersect,
+    pagination::Page,
+    scope::Scope,
+    task::watermark::Watermarks,
 };
 
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -29,9 +36,11 @@ pub(crate) struct TransactionFilter {
 }
 
 #[derive(QueryableByName)]
-struct TxSequenceNumber {
-    #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")]
-    tx_sequence_number: i64,
+pub(crate) struct TxSequenceNumberDigest {
+    #[diesel(sql_type = BigInt)]
+    pub tx_sequence_number: i64,
+    #[diesel(sql_type = Binary)]
+    pub tx_digest: Vec<u8>,
 }
 
 impl TransactionFilter {
@@ -66,13 +75,13 @@ impl TransactionFilter {
 /// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
 /// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
 /// `hi_inclusive`).
-pub(crate) async fn tx_sequence_numbers(
+pub(crate) async fn fetch_tx_sequence_number_digests(
     ctx: &Context<'_>,
     scope: &Scope,
     watermarks: &Watermarks,
     page: &Page<CTransaction>,
     filter: TransactionFilter,
-) -> Result<Vec<u64>, RpcError> {
+) -> Result<Vec<TxSequenceNumberDigest>, RpcError> {
     let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
     let global_tx_hi = watermarks.high_watermark().transaction();
 
@@ -115,7 +124,7 @@ tx_hi AS (
 )
 
 SELECT
-    dig.tx_sequence_number
+    dig.tx_sequence_number, dig.tx_digest
 FROM
     tx_digests dig
 INNER JOIN
@@ -150,21 +159,15 @@ LIMIT
         .await
         .context("Failed to connect to database")?;
 
-    let wrapped_tx_sequence_numbers: Vec<TxSequenceNumber> = conn
+    let mut tx_sequence_number_digests: Vec<TxSequenceNumberDigest> = conn
         .results(query)
         .await
         .context("Failed to execute query")?;
 
-    let tx_sequence_numbers_iter = wrapped_tx_sequence_numbers
-        .iter()
-        .map(|tx_sequence_number| tx_sequence_number.tx_sequence_number as u64);
-
-    let tx_sequence_numbers = if is_asc {
-        tx_sequence_numbers_iter.collect()
-    } else {
+    if !is_asc {
         // Graphql "last" queries are in DESC order to apply LIMIT, but results need to be in ASC order.
-        tx_sequence_numbers_iter.rev().collect()
-    };
+        tx_sequence_number_digests.reverse()
+    }
 
-    Ok(tx_sequence_numbers)
+    Ok(tx_sequence_number_digests)
 }
