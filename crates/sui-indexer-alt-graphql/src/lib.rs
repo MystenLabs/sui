@@ -283,7 +283,13 @@ pub async fn start_rpc(
     let metrics = rpc.metrics();
 
     // Create gRPC full node client wrapper
-    let grpc_client = FullNodeClient::new(full_node_args, cancel.child_token()).await?;
+    let grpc_client = FullNodeClient::new(
+        Some("graphql_full_node"),
+        full_node_args,
+        registry,
+        cancel.child_token(),
+    )
+    .await?;
 
     let pg_reader = PgReader::new(
         Some("graphql_db"),
