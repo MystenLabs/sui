@@ -18,7 +18,6 @@ echo 'Setup Complete'
 /usr/local/bin/stress \
     --staggered-start-max-multiplier "${STRESS_STAGGERED_START_MAX_MULTIPLIER:-0}" \
     --fullnode-rpc-addresses "${FULLNODE_RPC_ADDRESS}" \
-    --use-fullnode-for-reconfig "${USE_FULLNODE_FOR_RECONFIG}" \
     --num-client-threads 24 \
     --num-server-threads 1 \
     --num-transfer-accounts 2 \

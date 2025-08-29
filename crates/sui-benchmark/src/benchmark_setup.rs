@@ -63,7 +63,6 @@ impl Env {
                     opts.primary_gas_owner_id.as_str(),
                     opts.keystore_path.as_str(),
                     opts.genesis_blob_path.as_str(),
-                    opts.use_fullnode_for_reconfig,
                     opts.use_fullnode_for_execution,
                     opts.fullnode_rpc_addresses.clone(),
                 )
@@ -149,7 +148,6 @@ impl Env {
         primary_gas_owner_id: &str,
         keystore_path: &str,
         genesis_blob_path: &str,
-        use_fullnode_for_reconfig: bool,
         use_fullnode_for_execution: bool,
         fullnode_rpc_address: Vec<String>,
     ) -> Result<BenchmarkSetup> {
@@ -182,14 +180,11 @@ impl Env {
             fullnodes
         } else {
             info!("Using LocalValidatorAggregatorProxy");
-            let reconfig_fullnode_rpc_url = if use_fullnode_for_reconfig {
+            let reconfig_fullnode_rpc_url =
                 // Only need to use one full node for reconfiguration.
                 Some(fullnode_rpc_urls.choose(&mut rand::thread_rng()).context(
                     "Failed to get fullnode-rpc-url which is required when use-fullnode-for-reconfig is true",
-                )?)
-            } else {
-                None
-            };
+                )?);
             vec![Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     genesis,

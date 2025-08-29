@@ -495,67 +495,6 @@ impl<A: Clone> AuthorityAggregator<A> {
         }
     }
 
-    /// This function recreates AuthorityAggregator with the given committee.
-    /// It also updates committee store which impacts other of its references.
-    /// When disallow_missing_intermediate_committees is true, it requires the
-    /// new committee needs to be current epoch + 1.
-    /// The function could be used along with `reconfig_from_genesis` to fill in
-    /// all previous epoch's committee info.
-    pub fn recreate_with_net_addresses(
-        &self,
-        committee: CommitteeWithNetworkMetadata,
-        network_config: &Config,
-        disallow_missing_intermediate_committees: bool,
-    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
-        let network_clients =
-            make_network_authority_clients_with_network_config(&committee, network_config);
-
-        let safe_clients = network_clients
-            .into_iter()
-            .map(|(name, api)| {
-                (
-                    name,
-                    Arc::new(SafeClient::new(
-                        api,
-                        self.committee_store.clone(),
-                        name,
-                        SafeClientMetrics::new(&self.safe_client_metrics_base, name),
-                    )),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        // TODO: It's likely safer to do the following operations atomically, in case this function
-        // gets called from different threads. It cannot happen today, but worth the caution.
-        let new_committee = committee.committee().clone();
-        if disallow_missing_intermediate_committees {
-            fp_ensure!(
-                self.committee.epoch + 1 == new_committee.epoch,
-                SuiError::AdvanceEpochError {
-                    error: format!(
-                        "Trying to advance from epoch {} to epoch {}",
-                        self.committee.epoch, new_committee.epoch
-                    )
-                }
-            );
-        }
-        // This call may return error if this committee is already inserted,
-        // which is fine. We should continue to construct the new aggregator.
-        // This is because there may be multiple AuthorityAggregators
-        // or its containers (e.g. Quorum Drivers)  share the same committee
-        // store and all of them need to reconfigure.
-        let _ = self.committee_store.insert_new_committee(&new_committee);
-        Ok(AuthorityAggregator {
-            committee: Arc::new(new_committee),
-            authority_clients: Arc::new(safe_clients),
-            metrics: self.metrics.clone(),
-            timeouts: self.timeouts.clone(),
-            safe_client_metrics_base: self.safe_client_metrics_base.clone(),
-            committee_store: self.committee_store.clone(),
-            validator_display_names: Arc::new(HashMap::new()),
-        })
-    }
-
     pub fn get_client(&self, name: &AuthorityName) -> Option<&Arc<SafeClient<A>>> {
         self.authority_clients.get(name)
     }

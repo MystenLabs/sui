@@ -59,10 +59,6 @@ pub struct Opts {
     /// use a LocalValidatorAggregatorProxy.
     #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
     pub use_fullnode_for_execution: bool,
-    /// True to use FullNodeReconfigObserver,
-    /// Otherwise use EmbeddedReconfigObserver,
-    #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
-    pub use_fullnode_for_reconfig: bool,
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
     pub run_spec: RunSpec,
