@@ -818,6 +818,13 @@ include these in the named addresses we hand to the compiler.
 
 If a legacy package depends on a modern package, it will not inherit addresses from that package.
 
+## Dev-dependencies
+
+When processing the `[dev-dependencies]` section of a legacy manifest, we produce normal dependencies
+with `mode = ["test"]`. We should make a best effort to do the right thing if the same dependency
+shows up in both `[dependencies]` and `[dev-dependencies]` --- I'm not sure what the current system
+does in this case.
+
 ## What we see in the wild
 
 Note: @Manos Liolios promised me a particularly wild example or two, and a more comprehensive list
