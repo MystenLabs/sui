@@ -6,15 +6,20 @@ use async_graphql::{Context, Object, Result};
 use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer_alt_reader::full_node_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::full_node_client::FullNodeClient;
+use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::{
     api::types::{
-        execution_result::ExecutionResult, transaction_execution_input::TransactionExecutionInput,
+        execution_result::ExecutionResult, 
+        transaction_execution_input::TransactionExecutionInput,
+        transaction_effects::{EffectsContents, TransactionEffects},
     },
     error::RpcError,
+    scope::Scope,
 };
 
 pub struct Mutation;
@@ -61,18 +66,40 @@ impl Mutation {
 
         // Execute transaction - capture gRPC errors for ExecutionResult.errors
         match full_node_client
-            .execute_transaction(tx_data, parsed_signatures)
+            .execute_transaction(tx_data.clone(), parsed_signatures.clone())
             .await
         {
-            // TODO: Implement effects for ExecutionResult
-            Ok(_response) => Ok(ExecutionResult {
-                effects: None,
-                errors: None,
-            }),
-            Err(GrpcExecutionError(status)) => Ok(ExecutionResult {
-                effects: None,
-                errors: Some(vec![status.to_string()]),
-            }),
+            Ok(response) => {
+                let scope = Scope::new(ctx)?;
+                let transaction_digest = response.effects.transaction_digest();
+                
+                // Create TransactionEffects with fresh ExecutedTransaction data
+                let effects = TransactionEffects {
+                    digest: *transaction_digest,
+                    contents: EffectsContents {
+                        scope,
+                        contents: Some(std::sync::Arc::new(
+                            NativeTransactionContents::ExecutedTransaction {
+                                effects: response.effects,
+                                events: response.events.map(|events| events.data),
+                                transaction_data: tx_data,
+                                signatures: parsed_signatures,
+                            }
+                        )),
+                    },
+                };
+                
+                Ok(ExecutionResult {
+                    effects: Some(effects),
+                    errors: None,
+                })
+            }
+            Err(GrpcExecutionError(status)) => {
+                Ok(ExecutionResult {
+                    effects: None,
+                    errors: Some(vec![status.to_string()]),
+                })
+            }
             Err(other_error) => {
                 Err(anyhow::anyhow!("Failed to execute transaction: {}", other_error).into())
             }

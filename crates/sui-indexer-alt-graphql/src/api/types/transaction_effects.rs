@@ -98,7 +98,9 @@ impl EffectsContents {
             return None;
         };
 
-        Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
+        content.cp_sequence_number()
+            .map(|cp_num| Checkpoint::with_sequence_number(self.scope.clone(), cp_num))
+            .unwrap_or(None) // ExecutedTransaction can have no checkpoint
     }
 
     /// Whether the transaction executed successfully or not.
@@ -344,15 +346,15 @@ impl EffectsContents {
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
-            let execution_checkpoint = content.cp_sequence_number();
-            let unchanged_consensus_object = UnchangedConsensusObject::from_native(
-                self.scope.clone(),
-                unchanged_consensus_objects[*edge.cursor].clone(),
-                execution_checkpoint,
-            );
-
-            conn.edges
-                .push(Edge::new(edge.cursor, unchanged_consensus_object))
+            if let Some(cp_num) = content.cp_sequence_number() {
+                let unchanged_consensus_object = UnchangedConsensusObject::from_native(
+                    self.scope.clone(),
+                    unchanged_consensus_objects[*edge.cursor].clone(),
+                    cp_num,
+                );
+                conn.edges.push(Edge::new(edge.cursor, unchanged_consensus_object));
+            }
+            // Skip ExecutedTransaction entries (None) as they don't have checkpoint info
         }
 
         Ok(Some(conn))
@@ -446,8 +448,10 @@ impl EffectsContents {
         };
 
         // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        if transaction.cp_sequence_number() > self.scope.checkpoint_viewed_at() {
-            return Ok(self.clone());
+        if let Some(cp_num) = transaction.cp_sequence_number() {
+            if cp_num > self.scope.checkpoint_viewed_at() {
+                return Ok(self.clone());
+            }
         }
 
         Ok(Self {
