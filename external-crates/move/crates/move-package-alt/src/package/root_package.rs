@@ -10,7 +10,7 @@ use tracing::debug;
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
-use crate::graph::PackageInfo;
+use crate::graph::{LinkageTable, PackageInfo};
 use crate::schema::{
     Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
     Publication, RenderToml,
@@ -61,6 +61,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     pubs: PublicationSource<F>,
 
     /// The list of published ids for every dependency in the root package
+    // TODO: the comment says published ids but the type says original id; what is this for?
     deps_published_ids: Vec<OriginalID>,
 }
 
@@ -245,7 +246,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Return the linkage table for the root package. This contains an entry for each package that
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
-    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+    pub fn linkage(&self) -> PackageResult<LinkageTable<F>> {
         Ok(self.graph.linkage()?)
     }
 
@@ -382,6 +383,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.package_graph().sorted_deps()
     }
 
+    // TODO: what is the spec of this function?
     pub fn deps_published_ids(&self) -> &Vec<OriginalID> {
         &self.deps_published_ids
     }
@@ -996,7 +998,17 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @"TODO: inconsistent linkage");
+        assert_snapshot!(root.unwrap_err().to_string(), @r###"
+        Package depends on multiple versions of the package with ID 0x00...0001:
+
+          root::dep1 refers to { local = "../dep1" }
+          root::dep2 refers to { local = "../dep2" }
+
+        To resolve this, you must explicitly add an override in your Move.toml:
+
+            [dependencies]
+            _dep1 = { ..., override = true }
+        "###);
     }
 
     /// Loading an ephemeral root package from a non-existing file succeeds and uses the published

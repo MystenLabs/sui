@@ -17,12 +17,14 @@ use super::PackageGraph;
 /// A narrow interface for representing packages outside of `move-package-alt`
 #[derive(Copy)]
 #[derive_where(Clone)]
-pub struct PackageInfo<'a, F: MoveFlavor> {
-    graph: &'a PackageGraph<F>,
-    node: NodeIndex,
+pub struct PackageInfo<'graph, F: MoveFlavor> {
+    // TODO: this code really needs a little reorganization (pub(super)?)
+    pub(super) graph: &'graph PackageGraph<F>,
+    pub(super) node: NodeIndex,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+// TODO: `NamedAddress` is a terrible name for this
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NamedAddress {
     RootPackage(Option<OriginalID>),
     Unpublished { dummy_addr: OriginalID },
@@ -48,7 +50,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 }
 
-impl<F: MoveFlavor> PackageInfo<'_, F> {
+impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     /// The name that the package has declared for itself
     pub fn name(&self) -> &PackageName {
         self.package().name()
@@ -58,6 +60,28 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     /// Invariant: For modern packages, this is always equal to `name().as_str()`
     pub fn display_name(&self) -> &str {
         self.package().display_name()
+    }
+
+    /// Produce a string of identifiers from the root to this package for identifying the package
+    /// in error messages
+    pub fn display_path(&self) -> String {
+        if let Some(incoming) = self
+            .graph
+            .inner
+            .edges_directed(self.node, Direction::Incoming)
+            .next()
+        {
+            let parent = PackageInfo {
+                graph: self.graph,
+                node: incoming.source(),
+            };
+            let mut result = parent.display_path();
+            result.push_str("::");
+            result.push_str(incoming.weight().name.as_str());
+            result
+        } else {
+            self.package().name().to_string()
+        }
     }
 
     /// The unique ID for this package in the package graph
@@ -103,8 +127,17 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
             .is_none()
     }
 
+    /// Return an original id for this node; using the dummy address if needed
+    pub(crate) fn original_id(&self) -> OriginalID {
+        match self.node_to_addr(self.node) {
+            NamedAddress::RootPackage(original_id) => original_id.unwrap_or(0.into()),
+            NamedAddress::Unpublished { dummy_addr } => dummy_addr,
+            NamedAddress::Defined(original_id) => original_id,
+        }
+    }
+
     /// Return the package information for the direct dependencies of this package
-    pub(crate) fn direct_deps(&self) -> BTreeMap<PackageName, PackageInfo<F>> {
+    pub(crate) fn direct_deps(&self) -> BTreeMap<PackageName, PackageInfo<'graph, F>> {
         self.graph
             .inner
             .edges(self.node)
@@ -221,6 +254,7 @@ mod tests {
     // TODO: example with a --[local]--> a/b --[local]--> a/c
     use std::collections::BTreeMap;
 
+    use insta::assert_snapshot;
     use test_log::test;
 
     use crate::{
@@ -242,11 +276,12 @@ mod tests {
             .collect()
     }
 
-    /// Root package `root` depends on `a` which depends on `b` which depends on `c`, which depends
-    /// on `d`; `a`, `b`,
-    /// `c`, and `d` are all legacy packages.
+    /// ```mermaid
+    /// graph LR
+    ///     root --> |"a (legacy)"| --> |"b (legacy)"| --> |"c (legacy)"| --> |"d (legacy)"|
+    /// ```
     ///
-    /// Named addresses for 'a' should contain `c` and `d`
+    /// Named addresses for `a` should contain `b`, `c`, and `d`
     #[test(tokio::test)]
     async fn modern_legacy_legacy_legacy_legacy() {
         let scenario = TestPackageGraph::new(["root"])
@@ -270,12 +305,15 @@ mod tests {
         );
     }
 
-    /// Root package `root` depends on `a` which depends on `b` which depends on `c` which depends
-    /// on `d`; `a` and `c` are legacy packages.
+    /// ```mermaid
+    /// graph LR
+    ///     root --> |"a (legacy)"| --> b --> |"c (legacy)"| --> d
+    /// ```
     ///
     /// After adding legacy transitive deps, `a` should have direct dependencies on `c` and `d`
     /// (even though they "pass through" a modern package)
-    #[test(tokio::test)]
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
     async fn modern_legacy_modern_legacy() {
         let scenario = TestPackageGraph::new(["root", "b", "d"])
             .add_legacy_packages(["legacy_a", "legacy_c"])
@@ -306,5 +344,24 @@ mod tests {
         assert!(!packages["b"].named_addresses().unwrap().contains_key("d"));
     }
 
-    // TODO: tests around name conflicts?
+    /// In the following package graph for `a`, calling `d.display_path` should return `a::x::y::d`:
+    ///
+    /// ```mermaid
+    /// graph LR
+    ///     a -->|"x = {..., rename-from=b}"| b -->|"y = {..., rename-from=c}"| c --> d
+    /// ```
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn display_path() {
+        let scenario = TestPackageGraph::new(["a", "b", "c", "d"])
+            .add_dep("a", "b", |dep| dep.name("x").rename_from("b"))
+            .add_dep("b", "c", |dep| dep.name("y").rename_from("c"))
+            .add_deps([("c", "d")])
+            .build();
+
+        let graph = scenario.graph_for("a").await;
+        let packages = packages_by_name(&graph);
+
+        assert_snapshot!(packages["d"].display_path(), @"a::x::y::d");
+    }
 }
