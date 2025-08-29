@@ -14,13 +14,13 @@ The following example creates an in-game currency called a GEM, which represents
 
 The Sui repo hosts a basic example of creating in-game currency. The Move modules that create the economy of the example are in the gems.move source file.
 
-### Module examples::sword
+### Module `examples::sword`
 
 The `examples::sword` module creates one of the objects, a `sword`, that has in-game value. The module assigns a value in GEMs (the other valuable in-game item) to the sword. The module also provides the logic for trading GEMs to receive a sword. 
 
 {@inject: ../../../../../examples/move/token/sources/gems.move#module=examples::sword noComments}
 
-### Module examples::gem
+### Module `examples::gem`
 
 The `examples::gem` module creates the in-game currency, GEMs. Users spend SUI to purchase GEMs, which can then be traded for swords. The module defines three groups of GEMs (small, medium, and large), with each group representing a different in-game value. Constants hold both the value of each package and the actual number of GEMs the groups contain. 
 

@@ -51,9 +51,9 @@ To connect the Sui client to a network, run the following command:
 $ sui client
 ```
 
-If you receive the `sui-client` help output in the console, you already have a client.yaml file. See [Connect to a custom RPC endpoint](#connect-to-a-custom-rpc-endpoint) to add a new environment alias or to switch the currently active network.
+If you receive the `sui-client` help output in the console, you already have a `client.yaml` file. See [Connect to a custom RPC endpoint](#connect-to-a-custom-rpc-endpoint) to add a new environment alias or to switch the currently active network.
 
-The first time you start Sui client without having a client.yaml file, the console displays the following message:
+The first time you start a Sui client without having a `client.yaml` file, the console displays the following message:
 
 ```
 Config file ["<PATH-TO-FILE>/client.yaml"] doesn't exist, do you want to connect to a Sui full node server [y/N]?
@@ -89,9 +89,9 @@ Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud s
 
 ### Connect to a custom RPC endpoint
 
-If you previously used `sui genesis` with the force option (`-f` or `--force`), your client.yaml file already includes two RPC endpoints: `localnet` at `http://0.0.0.0:9000` and `devnet` at `https://fullnode.devnet.sui.io:443`. You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
+If you previously used `sui genesis` with the force option (`-f` or `--force`), your `client.yaml` file already includes two RPC endpoints: `localnet` at `http://0.0.0.0:9000` and `devnet` at `https://fullnode.devnet.sui.io:443`. You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
 
-If you previously installed a Sui client that connected to a Sui network, or created a local network, you can modify your existing client.yaml file to change the configured RPC endpoint. The `sui client` commands that relate to environments read from and write to the client.yaml file.
+If you previously installed a Sui client that connected to a Sui network, or created a local network, you can modify your existing `client.yaml` file to change the configured RPC endpoint. The `sui client` commands that relate to environments read from and write to the `client.yaml` file.
 
 To check currently available environment aliases, run the following command: 
 
