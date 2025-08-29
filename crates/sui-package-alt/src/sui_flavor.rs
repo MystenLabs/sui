@@ -159,9 +159,10 @@ impl MoveFlavor for SuiFlavor {
 mod tests {
 
     use super::*;
+    use move_package_alt::package::environment::Environment;
     use move_package_alt::package::manifest::Manifest;
     use move_package_alt::package::RootPackage;
-    use move_package_alt::schema::{Environment, PackageName};
+    use move_package_alt::schema::PackageName;
 
     #[test]
     fn test_implicit_deps() {

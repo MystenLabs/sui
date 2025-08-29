@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
 
 use super::compute_digest;
+use super::environment::Environment;
 use super::manifest::Manifest;
 use super::paths::PackagePath;
 use crate::compatibility::legacy::LegacyData;
@@ -19,9 +20,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::manifest::Digest,
-    schema::{
-        Environment, OriginalID, PackageMetadata, PackageName, PublishAddresses, PublishedID,
-    },
+    schema::{OriginalID, PackageMetadata, PackageName, PublishAddresses, PublishedID},
 };
 use std::sync::{LazyLock, Mutex};
 

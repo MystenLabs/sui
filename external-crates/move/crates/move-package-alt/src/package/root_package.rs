@@ -6,10 +6,11 @@ use std::{collections::BTreeMap, fmt, path::Path};
 
 use tracing::debug;
 
+use super::environment::Environment;
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
-use crate::schema::{Environment, OriginalID, PackageName, ParsedPubs, Publication, RenderToml};
+use crate::schema::{OriginalID, PackageName, ParsedPubs, Publication, RenderToml};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,

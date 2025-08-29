@@ -9,8 +9,8 @@ use clap::Parser;
 use crate::{
     errors::{PackageError, PackageResult},
     flavor::Vanilla,
-    package::RootPackage,
-    schema::{Environment, EnvironmentName},
+    package::{RootPackage, environment::Environment},
+    schema::EnvironmentName,
 };
 
 /// Re-pin the dependencies of this package.

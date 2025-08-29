@@ -8,9 +8,9 @@ use crate::{
         find_module_name_for_package,
     },
     errors::FileHandle,
-    package::{EnvironmentName, paths::PackagePath},
+    package::{EnvironmentName, envuronment::Environment, paths::PackagePath},
     schema::{
-        DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
+        DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
         ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
         ParsedManifest, PublishAddresses, PublishedID,
     },

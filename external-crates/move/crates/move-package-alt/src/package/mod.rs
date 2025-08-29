@@ -9,6 +9,7 @@ pub mod paths;
 pub mod root_package;
 pub use package_impl::*;
 pub use root_package::RootPackage;
+pub mod environment;
 pub mod layout;
 
 use sha2::{Digest, Sha256};

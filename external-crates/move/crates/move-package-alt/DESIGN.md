@@ -92,15 +92,29 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
 
 Move.toml:
 
+
 ```toml
+# TODO: discuss moving linkage to after tree shaking
+
 [package]
 name = "example"
 edition = "2025"
 ...
 
+
 [environments]
+# note: there are default environments
 mainnet = "35834a8a"
 testnet = "4c78adac"
+
+# local environments are used for publishing; metatata is stored in `Move.pub.local`
+[local-environments]
+# right-hand side needed for two reasons:
+# 1. how to resolve mvr dependencies? we need a non-ephemeral chain ID
+# 2. We don't want these to be inherited, so the "real" envionment is what's used for dependencies
+# but we can still override dependencies for a local network
+localnet = "mainnet"
+test = "mainnet" # shouldn't think of this as a replacement for [dev-dependencies]
 
 [dependencies]
 foo = {
@@ -108,6 +122,13 @@ foo = {
 	override = true,     # same as today
 	git = "https://.../foo.git", # resolver specific fields
 	rev = "releases/v4",
+
+    # NOTE: by specifying things this way, we guarantee that for a given
+    # environment there is a master package graph, and all modes are subgraphs of
+    # the master. Therefore we only need to store the master graph in the lockfile
+    #
+    # When we do conflict resolution, we only do it for a specific mode
+    modes = ["test"] # this could be a solution for [dev-dependencies] (part of the MVP?)
 }
 
 non = {
@@ -126,6 +147,9 @@ mainnet.foo = {
 	published-at = "...",
 	use-environment = "mainnet_alpha" # override/specify the dep's environment
 }
+
+# you can override for local environments
+localnet.foo = { ... }
 ```
 
 Move.lock (contains `unpublished` and entries for environments defined in `Move.toml`):
@@ -139,7 +163,7 @@ version = 4
 # detect local changes), and a set of outgoing edges. The edges are labeled by the name of the dependency.
 #
 # The identities of the nodes are arbitrary, but it seems nice to generate them from the package
-# names that dependencies declare for themselves (adding numbers to disambiguate if there are 
+# names that dependencies declare for themselves (adding numbers to disambiguate if there are
 # collisions).
 # There is also a node for the current package; the only thing that makes it special is that it has
 # the name of the current package as its identity (it will also always have `{local = "."}` as its
@@ -191,6 +215,8 @@ deps.sui = "Sui"
 
 [pinned.mainnet.[...]] # other transitive dependencies from example
 
+[pinned.localnet] # local environments have pinned deps too
+
 # the same for testnet environment as above
 [pinned.testnet.MoveStdlib]
 source = { git = "...", path = "...", rev = "1234" }
@@ -198,7 +224,7 @@ manifest_digest = "..."
 deps = {}
 
 [pinned.testnet.Sui]
-source = { git = "...", path = "...", rev = "1234" }
+source = { git = "...", path = "...", rev = "1234", modes = ["test"] }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 
@@ -208,6 +234,11 @@ source = { git = "...", path = "...", rev = "1234" }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
+```
+
+We store the publication metadata in a separate file called `Move.published`
+(not `Move.pub` because `.pub` files have other meanings)
+
 
 # The `published` section contains a record for the current versions published on each declared
 # environment (if any).
@@ -229,6 +260,8 @@ upgrade-cap = "..."
 toolchain-version = "..."
 build-config = "..."
 version = "5"
+
+
 ```
 
 `.Move.<environment>.lock` (contains information for a chain not included in `Move.toml`, should be

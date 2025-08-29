@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use crate::{
     errors::{PackageError, PackageResult},
     flavor::Vanilla,
-    package::RootPackage,
-    schema::{Environment, EnvironmentName},
+    package::{RootPackage, environment::Environment},
+    schema::EnvironmentName,
 };
 use clap::Parser;
 
