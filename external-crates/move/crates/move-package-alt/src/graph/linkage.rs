@@ -181,9 +181,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         if deduped.len() <= 1 {
             Ok(**deduped.first().expect("nodes is nonempty"))
         } else {
-            Err(LinkageError::InconsistentLinkage(
-                "TODO: inconsistent linkage".to_string(),
-            ))
+            Err(LinkageError::inconsistent_linkage(self, deduped))
             /* TODO: construct error message
                 let paths = deduped.map(|target| todo!());
                 "Package <TODO: root> depends on <TODO: p1> and <TODO: p2>, but these depend on different versions of <TODO: conflict>:
@@ -197,6 +195,21 @@ impl<F: MoveFlavor> PackageGraph<F> {
             "
             */
         }
+    }
+}
+
+impl LinkageError {
+    /// Produce an error message indicating that the packages in `duplicates` can't be combined
+    /// into a consistent linkage
+    fn inconsistent_linkage<F: MoveFlavor>(
+        graph: &PackageGraph<F>,
+        duplicates: BTreeSet<&NodeIndex>,
+    ) -> Self {
+        let _packages = duplicates
+            .into_iter()
+            .map(|node| PackageInfo { graph, node: *node });
+
+        Self::InconsistentLinkage("TODO: inconsistent linkage".to_string())
     }
 }
 
