@@ -155,12 +155,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
     }
 }
-
-#[cfg(test)]
+#[cfg(any(doc, test))]
 mod tests {
     // TODO: example with a --[local]--> a/b --[local]--> a/c
     use std::collections::BTreeMap;
 
+    use insta::assert_snapshot;
     use test_log::test;
 
     use crate::{
@@ -244,6 +244,27 @@ mod tests {
                 .contains_key("d")
         );
         assert!(!packages["b"].named_addresses().unwrap().contains_key("d"));
+    }
+
+    /// In the following package graph for `a`, calling `d.display_path` should return `a::x::y::d`:
+    ///
+    /// ```mermaid
+    /// graph LR
+    ///     a -->|"x = {..., rename-from=b}"| b -->|"y = {..., rename-from=c}"| c --> d
+    /// ```
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn display_path() {
+        let scenario = TestPackageGraph::new(["a", "b", "c", "d"])
+            .add_dep("a", "b", |dep| dep.name("x").rename_from("b"))
+            .add_dep("b", "c", |dep| dep.name("y").rename_from("c"))
+            .add_deps([("c", "d")])
+            .build();
+
+        let graph = scenario.graph_for("a").await;
+        let packages = packages_by_name(&graph);
+
+        assert_snapshot!(packages["d"].display_path(), @"a::x::y::d");
     }
 
     // TODO: tests around name conflicts?
