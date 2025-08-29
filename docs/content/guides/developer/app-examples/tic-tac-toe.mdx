@@ -63,7 +63,7 @@ Add `Move.toml` to `tic-tac-toe/move/`
 
 :::
 
-## owned.move {#owned.move}
+## `owned.move` {#owned.move}
 
 Create a new file in `tic-tac-toe/move/sources` titled `owned.move`. Later, you will update this file to contain the Move code for the game board in the centralized (and multisig) version of tic-tac-toe.
 
@@ -110,7 +110,7 @@ To view the entire source code, see the [owned.move source file](https://github.
 
 An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
 
-## shared.move {#shared.move}
+## `shared.move` {#shared.move}
 
 In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
 
@@ -146,7 +146,7 @@ In this implementation of the game, the game is in a 1-of-2 multisig account tha
 
 ### Creating a multisig account
 
-A multisig account is defined by the public keys of its constituent keypairs, their relative weights, and the threshold -- a signature is valid if the sum of weights of constituent keys having signed the signature exceeds the threshold. In our case, there are at most two constituent keypairs, they each have a weight of 1 and the threshold is also 1. A multisig cannot mention the same public key twice, so keys are deduplicated before the multisig is formed to deal with the case where a player is playing themselves:
+A multisig account is defined by the public keys of its constituent key pairs, their relative weights, and the threshold -- a signature is valid if the sum of weights of constituent keys having signed the signature exceeds the threshold. In our case, there are at most two constituent keypairs, they each have a weight of 1 and the threshold is also 1. A multisig cannot mention the same public key twice, so keys are deduplicated before the multisig is formed to deal with the case where a player is playing themselves:
 
 ```typescript title="examples/tic-tac-toe/ui/src/MultiSig.ts"
 export function multiSigPublicKey(keys: PublicKey[]): MultiSigPublicKey {
@@ -301,4 +301,4 @@ The first step is to get the multisig public key, which was written to `Game.adm
 
 The reason for the two signatures is clearer when looking at the construction of the `recv` transaction: The multisig authorizes access to the `Game`, and the wallet authorizes access to the gas object. This is because the multisig account does not hold any coins of its own, so it relies on the player account to sponsor the transaction.
 
-You can find an example React front-end supporting both the multi-sig and shared variants of the game in the [ui directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui), and a CLI written in Rust in the [cli directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/cli).
+You can find an example React front-end supporting both the multi-sig and shared variants of the game in the [`ui` directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui), and a CLI written in Rust in the [`cli` directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/cli).

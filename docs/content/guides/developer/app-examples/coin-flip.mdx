@@ -6,7 +6,7 @@ mdx:
   format: md
 ---
 
-This example walks you through building a coin flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This coin flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
+This example walks you through building a Coin Flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This Coin Flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
 
 The guide is split into two parts:
 
@@ -48,7 +48,7 @@ To follow along with this guide, set your new Move package to `satoshi_flip`.
 
 :::
 
-### House module
+### `house_data` module
 
 This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game's data somewhere, and in this module you create a [shared object](concepts/object-ownership/shared.mdx) for all house data.
 
@@ -257,7 +257,7 @@ You have established the data structure of this module, but without the appropri
 
 And with that, your `house_data.move` code is complete.
 
-### Counter module
+### `counter_nft` module
 
 In the same `sources` directory, now create a file named `counter_nft.move`. A `Counter` object is used as the VRF input for every game that a player plays. First, populate the file with the following:
 
@@ -322,7 +322,7 @@ The `get_vrf_input_and_increment` function is the core of this module. The funct
 
 This code also adds a `count` function that returns the current count, and a test-only function that calls the `burn` function.
 
-### Game module
+### `single_player_satoshi` module
 
 Lastly, you need a game module and object that can create a new game, distribute funds after the game, and potentially cancel games. Because this is a one-player game, create an [address-owned object](concepts/object-ownership/address-owned.mdx) rather than a [shared object](/concepts/object-ownership/shared.mdx).
 
