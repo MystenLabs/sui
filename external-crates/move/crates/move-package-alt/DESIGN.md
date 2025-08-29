@@ -615,15 +615,6 @@ There are some footguns we want to prevent. For example, if a user has two diffe
 for the same chain ID, we should require them to specify a specific environment (this would prevent
 accidentally publishing an alpha version to the beta address, for example).
 
-Although we certainly want to remove `--with-unpublished-deps` (which has bad semantics), there is a
-useful feature we might provide `--publish-unpublished-deps=env_name`. This would work by recursively
-publishing any packages that haven't yet been published. This would be a nice convenience for
-working with a group of related packages (esp. during testing). We should only allow it for local
-ephemeral environments and devnet, since publication relies on the user to update the lockfiles of the
-published packages; for non-ephemeral networks these would be sitting in the cache and not easy to
-push back upstream. Put another way, the `Move.published` files in the cache should be read-only (but the
-`Move.pub.local` files can be created/updated). (TODO: Move.pub.local files aren't described yet).
-
 Some users will want to perform the actual publication step outside of the CLI (for example if they
 want to go through a separate signing process for the transaction). For these transactions, I don't
 think we know the published address until after the transaction executes. I think we should still
@@ -641,6 +632,66 @@ published-at = "TODO: replace this with the published address of your package"
 
 The user can still screw this up, but they at least have the chance of noticing the problem and
 fixing it when they review the commit. We can also output a loud warning from the command line!
+
+## Local publication
+
+It's important for users to be able to publish to local networks for testing. However, we don't want
+users to add local networks to their manifests and store the publication records in
+`Move.published`, because local networks are local and information about them shouldn't be persisted
+to source control.
+
+It's also useful for users to be able to publish entire dependency graphs easily (for local
+networks) so that they don't have to incrementally deploy their packages to localnet for testing.
+This was previously supported by `--with-unpublished-deps`, but that feature has bad semantics and
+shouldn't be used for this purpose.
+
+We propose a separate tool for this purpose `sui client test-publish --build-env <env>`. This tool
+maintains a separate publication file `Move.pub.<env>` (e.g. `Move.pub.localnet`) for each (local)
+environment `<env>`. These files are completely ephemeral --- they are `.gitignore`d and can be
+discarded at any time. A `Move.pub.<env>` file has the following format:
+
+```toml
+chain-id = "12345678"
+
+[packages.example] # keys are the same as in the lockfile
+original-id = "..."
+published-at = "..."
+version = "..."
+upgrade-cap = "..."
+
+[packages.Foo_0]
+original-id = "..."
+published-at = "..."
+version = "..."
+upgrade-cap = "..."
+```
+
+The command `sui client test-publish --build-env <env>` would do the following:
+
+ - use the `sui client` environment to determine the local environment name and chain ID
+
+ - require confirmation if the manifest's defines any environments with that chain ID
+    > warning: package `example` defines a `mainnet` environment with the same chain ID as your
+    >   `local-mainnet` environment; are you sure you want to publish another copy to `mainnet`?
+
+ - use the provided build environment to build the package and its dependencies.
+
+ - if the `Move.pub.<env>` file has the wrong chain ID, remove all the packages and update the chain
+   ID
+
+ - for each package in the package graph (in reverse topological order):
+    - if the package is not in the `Move.pub.<env>` file, publish it
+    - if it's in the `Move.pub.<env>` file but the bytecode doesn't match, upgrade it
+
+Note: an earlier proposal stored the dependencies' publications in their own `Move.pub.local` files
+instead of in the root package, but that approach seems more complex and less flexible than
+necessary. The main difference here is that if you are developing two (root) packages with a common
+dependency, then doing a local publish with this design won't share the published package (whereas
+storing the publication with the dependency would). It's not clear which behaviour is the better
+devex, but with this approach it's obvious what's going on and easy for the user (or a future tool)
+to modify the `Move.pub.<env>` files to share publications if they want to.
+
+This approach also decouples this feature from the package system which gives us more flexibility.
 
 ## Post-MVP operations
 
