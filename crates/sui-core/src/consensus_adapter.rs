@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::net::IpAddr;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -372,7 +373,7 @@ impl ConsensusAdapter {
             if transaction.is_end_of_publish() {
                 info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
             }
-            self.submit_unchecked(&[transaction], epoch_store, None);
+            self.submit_unchecked(&[transaction], epoch_store, None, None);
         }
     }
 
@@ -620,8 +621,15 @@ impl ConsensusAdapter {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
-        self.submit_batch(&[transaction], lock, epoch_store, tx_consensus_position)
+        self.submit_batch(
+            &[transaction],
+            lock,
+            epoch_store,
+            tx_consensus_position,
+            submitter_client_addr,
+        )
     }
 
     pub fn submit_batch(
@@ -630,6 +638,7 @@ impl ConsensusAdapter {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
             // In soft bundle, we need to check if all transactions are of CertifiedTransaction
@@ -647,7 +656,12 @@ impl ConsensusAdapter {
         }
 
         epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
-        Ok(self.submit_unchecked(transactions, epoch_store, tx_consensus_position))
+        Ok(self.submit_unchecked(
+            transactions,
+            epoch_store,
+            tx_consensus_position,
+            submitter_client_addr,
+        ))
     }
 
     /// Performs weakly consistent checks on internal buffers to quickly
@@ -668,6 +682,7 @@ impl ConsensusAdapter {
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
         let async_stage = self
@@ -676,6 +691,7 @@ impl ConsensusAdapter {
                 transactions.to_vec(),
                 epoch_store.clone(),
                 tx_consensus_position,
+                submitter_client_addr,
             )
             .in_current_span();
         // Number of these tasks is weakly limited based on `num_inflight_transactions`.
@@ -689,6 +705,7 @@ impl ConsensusAdapter {
         transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) {
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
         //
@@ -706,6 +723,7 @@ impl ConsensusAdapter {
                 transactions,
                 &epoch_store,
                 tx_consensus_position,
+                submitter_client_addr,
             ))
             .await
             .ok(); // result here indicates if epoch ended earlier, we don't care about it
@@ -718,6 +736,7 @@ impl ConsensusAdapter {
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) {
         if transactions.is_empty() {
             return;
@@ -850,6 +869,25 @@ impl ConsensusAdapter {
                         )
                         .await;
 
+                    if let Some(submitted_cache) = &epoch_store.submitted_transaction_cache {
+                        for (transaction, consensus_position) in
+                            transactions.iter().zip(consensus_positions.iter())
+                        {
+                            if let ConsensusTransactionKind::UserTransaction(tx) = &transaction.kind
+                            {
+                                let submitted_round = consensus_position.block.round;
+                                let digest = tx.digest();
+
+                                submitted_cache.record_submitted_tx(
+                                    digest,
+                                    submitted_round,
+                                    amplification_factor as u32,
+                                    submitter_client_addr,
+                                );
+                            }
+                        }
+                    }
+
                     if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
                         tracing::Span::current().record(
                             "consensus_positions",
@@ -952,6 +990,7 @@ impl ConsensusAdapter {
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
                 epoch_store,
+                None,
                 None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
@@ -1201,6 +1240,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 None,
                 epoch_store,
                 None,
+                None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             } else {
@@ -1351,7 +1391,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        self.submit_batch(transactions, None, epoch_store, None)
+        self.submit_batch(transactions, None, epoch_store, None, None)
             .map(|_| ())
     }
 
