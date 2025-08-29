@@ -99,20 +99,29 @@ edition = "2025"
 ...
 
 [environments]
-mainnet = "35834a8a"
-testnet = "4c78adac"
+# the [environments] section contains entries mapping names to chain IDs
+#  mainnet = "35834a8a"
+#  testnet = "4c78adac"
+# but these two environments (mainnet and testnet) are added implicitly, so in
+# most cases the `[environments]` section is not needed
+#
+# one potential use for additional environments is if you want to maintain
+# multiple deployments on the same network; you could then use
+# [dep-replacements] to have different dependencies for the different deployments
+testnet_alpha = "4c78adac"
+testnet_beta  = "4c78adac"
 
 [dependencies]
-foo = {
-	rename-from = "Foo", # needed for name consistency - see Validation section
-	override = true,     # same as today
-	git = "https://.../foo.git", # resolver specific fields
+foo_1 = {
+	rename-from = "foo",                # needed for name consistency - see Validation section
+	override = true,                    # same as today - see Linking
+	git = "https://.../foo1.git",       # resolver specific fields
 	rev = "releases/v4",
 }
 
-non = {
-	rename-from = "Foo", # needed for name consistency - see Validation section
-	git = "https://.../non.git", # resolver specific fields
+foo_2 = {
+	rename-from = "foo",          # needed for name consistency - see Validation section
+	git = "https://.../foo2.git", # resolver specific fields
 	rev = "releases/v1",
 }
 
@@ -128,7 +137,7 @@ mainnet.foo = {
 }
 ```
 
-Move.lock (contains `unpublished` and entries for environments defined in `Move.toml`):
+Move.lock contains information about pinned dependencies for each environment:
 
 ```toml
 [move]
@@ -139,13 +148,14 @@ version = 4
 # detect local changes), and a set of outgoing edges. The edges are labeled by the name of the dependency.
 #
 # The identities of the nodes are arbitrary, but it seems nice to generate them from the package
-# names that dependencies declare for themselves (adding numbers to disambiguate if there are 
+# names that dependencies declare for themselves (adding numbers to disambiguate if there are
 # collisions).
+#
 # There is also a node for the current package; the only thing that makes it special is that it has
-# the name of the current package as its identity (it will also always have `{local = "."}` as its
+# the name of the current package as its identity (it will also always have `{ root = true }` as its
 # source)
 [pinned.mainnet.example]
-source = { root = true }
+source = { root = true, use-environment = "mainnet" }
 manifest_digest = "..."
 
 deps.std = "MoveStdlib"
@@ -165,7 +175,7 @@ manifest_digest = "..."
 deps.std = "MoveStdlib"
 
 [pinned.mainnet.Foo_0]
-source = { git = "...", path = "...", rev = "bade" }
+source = { git = "...", path = "...", rev = "bade", use-environment = "mainnet_alpha" }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
@@ -209,42 +219,39 @@ manifest_digest = "..."
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
 
-# The `published` section contains a record for the current versions published on each declared
-# environment (if any).
+```
+
+Move.published contains information about historical publications in each environment:
+
+```toml
+# This file should be checked in
+
 [published.mainnet] # metadata from most recent publish to mainnet
-chain-id = "35834a8a"
+# generic move fields:
+chain-id = "35834a8a" # used to ensure the chain ID is consistent
 published-at = "..."
 original-id  = "..."
-upgrade-cap = "..."
-
-build-config = "..."
-toolchain-version = "..."
 version = "3"
+
+# other useful chain-specific stuff:
+upgrade-cap = "..."
+build-config = { ... }
+toolchain-version = "..."
 
 [published.testnet] # metadata from most recent publish to testnet
 chain-id = "4c78adac"
 published-at = "..."
 original-id = "..."
-upgrade-cap = "..."
-toolchain-version = "..."
-build-config = "..."
 version = "5"
-```
 
-`.Move.<environment>.lock` (contains information for a chain not included in `Move.toml`, should be
-gitignored and hidden - think `.Move.localnet.lock`):
-
-```toml
-chain-id = "840cd942"
-published-at = "..."
-original-id = "..."
 upgrade-cap = "..."
 toolchain-version = "..."
 build-config = "..."
-version = "0"
 ```
 
 # Schema for manifest and lock files
+
+See [src/schema](src/schema) for the schemata implementations.
 
 ```
 Move.toml
@@ -258,54 +265,70 @@ Move.toml
 
     environments : EnvironmentName → ChainID
 
-    dependencies : PackageName → (SourceDependencyInfo + DependencyLocation)
+    dependencies : PackageName → DefaultDependency
 
-    dep-replacements : EnvironmentName → PackageName → (Optional DependencySpec + Optional AddressInfo)
+    dep-replacements : EnvironmentName → PackageName → ReplacementDependency
+
+DefaultDependency: # information used to locate a dependency
+    # dep-type specific fields e.g. git = "...", rev = "..."
+    override: bool
+    rename-from: PackageName
+
+ReplacementDependency:
+    optionally any DefaultDependency fields
+    optionally both AddressInfo fields      # see backwards compatibility
+    optionally
+    use-environment : Optional EnvironmentName
 
 Move.lock
     move
         version : 4
 
     pinned : EnvironmentName -> PackageID →
-        source : PinnedDependencyLoc
+        source : PinnedDependency
         manifest_digest : Digest
         deps : PackageName → PackageID
 
-    published : EnvironmentName → PublishedMetadata
-
-Move.<EnvironmentName>.lock
-    PublishedMetadata
-
-# TODO - check if this is correct and fix
-DependencyLocation: # information used to locate a dependency
-    source: ResolverName
-    additional resolver-dependent fields
-
-PinnedDependencyLoc:
+PinnedDependency:
     DependencyLocation with additional constraints - see Pinning
 
-SourceDependencyInfo: # additional properties of a dependency
-    override : Optional Boolean
-    rename-from : Optional PackageName
-    use-environment : Optional EnvironmentName
+Move.published
+    published : EnvironmentName →
+        chain-id: EnvironmentID
+        published-at: Object ID
+        original-id: Object ID
+        version: uint
+
+        # sui specific
+        upgrade-cap: Optional Object ID
+        toolchain-verison: String
+        build-config: table
+
 
 AddressInfo:
     published-at : ObjectID
     original-id  : ObjectID
 
-PublishedMetadata: # snapshot of an on-chain published version
-    # Note: we will always output the optional fields, but we may not be able to
-    # when migrating historical packages.
-    chain-id : ChainID
-    upgrade-cap : Optional ObjectID
-    + AddressInfo
-    version : String # used to report dependency changes during publication
-
-    toolchain-version : Optional ToolchainVersion
-    build-config : Optional OpaqueBuildConfig
 ```
 
 # Internal Operations
+
+## Environments
+
+All operations are performed in the context of a specific environment. From the package management
+perspective, the environments must be declared in the manifest (although we provide default
+environments for mainnet and testnet). The CLI may support other environments - for example
+publishing to localnet must be supported, but in this case the user must supply `--build-env` to
+indicate which manifest environment to use.
+
+From here on, when we say "all dependencies", we are referring to dependencies in the current
+environment.
+
+From the CLI perspective, we have the problem of selecting an environment to use if the user doesn't
+provide one. By default we will use the current chain ID from `sui client` (which we will keep
+cached to support offline builds) to detect the correct environment from the manifest to use. By
+using the chain ID we decouple the client environment names (which are really RPC specific) from the
+manifest environment names, but we make things work out in the common cases of mainnet and testnet.
 
 ## Pinned dependencies
 
@@ -330,8 +353,10 @@ will store digests of all transitive dependency manifests and repin if any of th
 Dependencies are always pinned as a group and are only repinned in two situations:
 
 1. The user explicitly asks for it by running `sui move update-deps`. This command will repin all
-   dependencies.
-2. If the manifest has changed, then all dependencies are repinned.
+   dependencies for the current environment.
+
+2. If the parts of the manifest that are relevant for the current environment have changed, then all
+   dependencies are repinned.
 
 Note: we had considered only repinning the dependencies that had changed and allowing the user to
 repin only specific deps, but this leads to a lot of confusing corner cases. This is consistent with
@@ -351,20 +376,12 @@ above.
 
 ## From start to package graph
 
-0. validate manifest
-    - parsing against schema
-    - TODO: maybe allow environments that aren't listed - this will allow package system to support
-      special verifier or testing environments. Maybe warn on unrecognized environments. Similarly,
-      there may be test-related reasons to include a dependency in "dep-replacements" that wasn't
-      listed in "dependencies".
-
 1. check for repin
-    - fetch all pinned dependencies
-    - walk pinned graph - for each node, if manifest doesn't match digest, need to repin
+    - if there's no lockfile, you need to repin; continue to step 2
+    - fetch all pinned dependencies from the lockfile
+    - walk pinned graph - for each node, if manifest doesn't match digest, need to repin - continue
+      to step 2
     - if you don't need to repin, you're done
-
-    - TODO: what if someone has mucked around with the lockfile? Maybe worth doing some validation
-      if we're not repinning?
 
 2. recursively repin everything
     - explode the manifest dependencies so that there is a dep for every environment
@@ -377,13 +394,12 @@ above.
     - record FS path, pinned dep info, manifest digest
 
 3. check for conflicts
-    - if a node doesn't have a published id for a given network, warn: you won't be able to publish
+    - ensure the graph is not cyclic
 
-    - if two nodes have same original id and same published id (but different source), choose one
-      using heuristics. E.g. choose a source dep over a bytecode dep. Maybe also warn?
+    - if a node doesn't have a published id for the current environment, warn: you won't be able to publish
 
-    - if two nodes have same original id and different published id for a given network, there is a
-      conflict - warn
+    - if two nodes have same original id, there may be a version conflict (but we can't know for
+      sure until after compilation - see linkage below); warn
 
 4. rewrite the dependency graph to the lock file
 
@@ -392,20 +408,20 @@ above.
 To the best of our ability, we establish the following invariants while constructing the package
 graph:
 
- - there is a node in the `pinned` section having an ID that matches the package name and a `source`
-   field containing exactly `{ local = "." }`; we call this the "root node"
+ - for each environment, there is a node in the `[pinned.<env>]` section having an ID that matches
+   the package name and a `source` field containing exactly `{ root = true }`; we call this the
+   "root node"
 
  - the dependency graph in `pinned` is a DAG rooted at the root node.
 
- - every entry in `pinned` has a different `source`
+ - every entry in `pinned` has a different `(source`
 
  - For each node `p` in the `pinned` section of `Move.lock`:
      - `p.manifest_digest` is the digest of `Move.toml` for the corresponding package
      - `p.deps` contains the same keys as the dependencies of `Move.toml`
      - `p.source` has been cached locally
 
- - environments are in Move.lock if and only if they are in Move.toml; all other environments live
-   in .Move.<env>.lock. If this is violated, we move the published metadata into or out of Move.lock
+ - all environments in Move.published or Move.lock are in Move.toml
 
 These can also be violated if a user mucks around with their lockfiles - I think we should just do
 best-effort on that. We may provide an additional tool to help fix things up (e.g. `sui move
@@ -430,7 +446,8 @@ the environment and the `<data>` as arguments. The method call responses will th
 internal dependencies.
 
 Currently the only external resolver is mvr, and it will just look up the mvr name and convert it
-into a git dependency.
+into a git dependency (there is also a mock-resolver that echoes its input that is used for
+testing).
 
 ## System dependencies
 
@@ -442,13 +459,20 @@ Non-default system dependencies can be specified like that: `system_dependencies
 Like externally resolved dependencies, system dependencies will be pinned to different versions
 for each environment.
 
+The default system deps for Sui would be `sui` and `std`. The available system deps are `std`,
+`sui`, `system`, `deepbook-v2`, `bridge`, `monorepo-sui`, `monorepo-std`. The `monorepo` deps are
+converted to local dependencies are are used for our internal tests (they would expand to `sui = {
+local = "path_to_monorepo/crates/sui-framework/packages/sui" }` and would fail if they are used
+outside the monorepo.
+
 ## Fetching
 
 Once dependencies have been pinned they should be fetched to the local cache in `.move`. Since
 dependencies are pinned, we don’t need to keep around a git repository for the cache - the cache is
 simply a snapshot of the files.
 
-In particular, we should use sparse shallow checkouts to make downloading fast.
+In particular, we use sparse shallow checkouts to make downloading fast. This requires care when
+multiple projects live in the same repo, but there is no fundamental problem.
 
 Since the cached files will never change, it is safe to use them across projects. In particular, I
 think we don’t need to have a copy of dependency sources within a project’s build artifacts.
@@ -470,6 +494,10 @@ Bytecode dependencies are handled entirely during the fetching process. When fet
 dependency, we immediately convert it into a source dependency by generating stubs, a manifest, and
 lockfiles.
 
+Care must be taken to properly generate dependencies. In particular, we should use the bytecode to
+determine the direct dependencies rather than relying on the on-chain linkage table. See Linkage
+below.
+
 Once this process is complete, bytecode deps are identical to any other dependency.
 
 The only other place where bytecode deps are relevant is during testing - we need to make sure that
@@ -477,8 +505,6 @@ we run the stored bytecode rather than the compiled stubs. However, it is probab
 use the cached build artifacts when testing.
 
 ## Validation
-
-TODO: this maybe needs to change
 
 Finally, we may want to do some validation and sanity checks after downloading. For example, `mvr`
 would check the `published-at` fields of the dependencies' lock files match the registered versions.
@@ -492,7 +518,8 @@ For example, we can perform the following checks:
     indicate that it is published on mainnet.
     >
     >
-    > If the package is published, you can specify the address in your `Move.toml`
+    > If the package is published, you should ask the author to add the address to the
+    > `Move.published` file, but you can work around this by adding the address in your `Move.toml`
     > in the [dep-replacements] section:
     >
     > [dep-replacements]
@@ -500,7 +527,6 @@ For example, we can perform the following checks:
     >
     > here published-at should refer to the current version of the package and
     > original-id should refer to the first version of the package.
-    >
 
  - are the chain IDs for the environments consistent?
 
@@ -515,7 +541,7 @@ For example, we can perform the following checks:
 the one in the package?
 
     > Warning: your package specifies a published-at address for foo on
-    > mainnet, but package foo is published at a different address according to its Move.lock file.
+    > mainnet, but package foo is published at a different address according to its Move.published file.
     > Consider removing the published-at field for foo from your Move.toml file
 
 - If two dependencies in the graph have the same original ID but different published addresses, then
@@ -530,9 +556,9 @@ the one in the package?
     > baz = { <info for latest of the conflicting versions>, override = "true" }
     >
 
-- If two deps have the same published addresses, then we have two source packages claiming to match
-  the same on-chain package. We will build with two different packages, as specified by the
-  dependencies.
+  Update: we can only perform this step _after_ compilation because whether an override is necessary
+  or not depends on whether dependencies are direct or transitive and we can't know that (esp. for
+  legacy packages) until after tree shaking. See Linkage
 
 - Are there local dependencies that don’t share a repository with the current package? This is
   almost certainly a bug!
@@ -554,6 +580,46 @@ the one in the package?
 In general, any property that would cause a publish to fail should probably be reported either at
 update or at build time.
 
+## Compilation
+
+Although compilation itself is outside the purview of the package system, the set of packages that
+we pass to the compiler depends on the package graph, and there are some important changes from the
+previous system.
+
+In particular, the previous system precomputed the overrides before handing packages to the
+compiler, but this means that dependencies may be compiled inconsistently from how they were
+compiled on-chain. Source validation doesn't even help here unless we are super-careful, because the
+source code and compiled bytecode can match completely but the bytecode we generate for our internal
+operations can differ (e.g. in the presence of macros).
+
+Therefore, the new system will compile each package against the pinned dependency version that it
+has. This means there may be multiple version of the same package in the package graph. We only
+detect and disambiguate conflicts during the linkage step, _after_ compilation.
+
+Another important difference is that in the old system packages inherit named addresses from their
+dependencies. In the new system, if you refer to a package by name in your source code, you must
+specify a direct dependency in your manifest. This makes all dependency names local, which makes it
+possible to integrate multiple packages with the same name.
+
+## Linkage
+
+For the entire process through compilation, the package system can treat the package graph as a
+tree: there is no problem if multiple nodes represent "the same" package. However, before we can
+publish or run a package, we must select a single implementation for each package original-id. This
+is the process of linkage.
+
+The rules for linkage and how they interact with overrides is the same as in the previous system,
+although because we allow multiple packages with the same ids to appear in the compilation graph,
+there are some corner cases that the old system gets a little bit wrong. In particular, the
+definition of a valid linkage requires a distinction between direct and transitive dependencies, and
+because named addresses are inherited in the old system it is possible to allow some linkages that
+should require `override = true` in the manifests. There are also corner cases if a dependency is
+declared but not used, but these only require people to write an additional unnecessary dep and so
+aren't a large concern.
+
+See the `test` module in [src/graph/linkage.rs] for a bunch of worked examples of linkage checking
+(you can also render diagrams for the tests - see the comments there for instructions).
+
 # User operations
 
 ## Update dependencies (repinning)
@@ -565,31 +631,24 @@ specified dependencies.
 ## Build / Test
 
 Building and testing for a given environment is easy - once we reestablish the invariants, all the
-source packages for the pinned dependencies are available. We always compile and test against the
+source packages for the pinned dependencies are available. We always compile against the
 source/bytecode we have.
 
-One important note is that we have removed named addresses - packages will use the names assigned in
-the `[dependencies]` section of their toml files to address packages. As a sanity check, we will
-ensure during validation that the package names declared by dependencies either match the declared
-name of the dependency in the dependent package or the `rename-from` field.
-
-If the package declares multiple environments, we build and/or test for all environments unless the
-user provides a flag telling us otherwise. Although less efficient, it ensures that the user detects
-problems early. Compilation and testing are currently cheap since packages are typically small.
-
-Care must be taken to use the correct environments if a package has a dependency with a
-`use-environment`
+When running tests, we compute the linkage first and then hand those packages to the VM for
+execution. This models what happens on-chain as closely as possible.
 
 ## Publish / Upgrade
 
 TODO: report on changed dependencies during upgrades
 
 During publication, we need to recheck that the dependencies are all published on the given network
-and that the relevant chain IDs are consistent.
+and that the relevant chain IDs are consistent. We also need to ensure that the additional on-chain
+linkage requirements are met (for example, on-chain packages can have extra dependencies in their
+linkage that they don't actually use, so we need to union in the on-chain linkages).
 
 During upgrade we can use the stored upgrade cap.
 
-We also need to update the lock file to include the updated `PublishedMetadata`.
+We also need to update the `Move.published` file to include the updated `PublishedMetadata`.
 
 There are some footguns we want to prevent. For example, if a user has two different environments
 for the same chain ID, we should require them to specify a specific environment (this would prevent
@@ -633,7 +692,7 @@ using a transaction ID?).
 We might also provide tools to fix things up if the user somehow ends up with two PublishedMetadata
 for the same environment (one in the main lockfile and one in .Move.<env>.lock).
 
-### Verify
+### Verify source
 
 Source verification is the process of checking that recompiling a given source package produces a
 given binary output.
@@ -671,24 +730,23 @@ Another field that exists today is `build`. It particularly refers to an archite
 version. I believe we’re not using it in our Move style code, but we might have to consider it in
 some way.
 
-## Flavor (manifest)
+## Package names
 
-In the current package management, one can declare the kind of flavor the Move package has by
-passing in the `flavor` field, which is of type String. It can take `sui`, `core`, `aptos`, and some
-other flavors. We’d need a way to keep a backward compatible way here to know which flavor was used.
+To provide consistency between legacy and modern packages, we are attempting to extract a new-style
+package name for legacy packages. This means, for example, that the `MoveStdlib` package should
+actually be called `std` (so that its name in source code matches its package name, as with modern
+packages).
+
+To do this, we have a handful of heuristics for pulling the name from the named address table, using
+the source code to disambiguate if necessary.
 
 ## Named addresses (manifest)
 
-The biggest migration challenge will be the removal of named addresses. We will have to look at a
-lot of data to see how people are using named addresses outside of package management.
+Although there's no facility for writing named addresses in the modern system, we're keeping around
+the named addresses from legacy packages and using them. This means we need to perform a pass to
+collect all of them from transitive dependencies.
 
-## Packages from before automated address management
-
-TODO
-
-## Packages using automated address management
-
-TODO
+If a legacy package depends on a modern package, it will not inherit addresses.
 
 ## What we see in the wild
 
@@ -713,6 +771,11 @@ of examples post-bootcamp.
 # Other considerations
 
 ## Changes to Move
+
+We will not make any changes to Move. A future version of Move may add restrictions that all modules
+in the package's source code are defined in that package (right now you can write `module p::m` for
+any `p`). The new package system will make this more sensible, but we don't plan to make any changes
+now.
 
 ## Security considerations
 
