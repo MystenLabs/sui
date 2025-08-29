@@ -143,7 +143,7 @@ public fun add_city(
 }
 ```
 
-The `add_city` function lets the `AdminCap` holder add a new city to the Sui Weather Oracle. The caller must present their `AdminCap` and pass a mutable reference to the main oracle object. The function accepts city metadata—geoname ID, name, country and coordinates (latitude, longitude, and their positive flags). It then creates a `CityWeatherOracle` sub-object, initializes its weather fields to empty/zero, and inserts it into the oracle’s dynamic fields keyed by the geoname ID. After this, the city is registered and ready to receive updates from the backend.
+The `add_city` function lets the `AdminCap` holder add a new city to the Sui Weather Oracle. The caller must present their `AdminCap` and pass a mutable reference to the main `Oracle` object. The function accepts city metadata—geoname ID, name, country and coordinates (latitude, longitude, and their positive flags). It then creates a `CityWeatherOracle` sub-object, initializes its weather fields to empty/zero, and inserts it into the oracle’s dynamic fields keyed by the geoname ID. After this, the city is registered and ready to receive updates from the backend.
 
 To delete a city, call `remove_city`. The admin again provides the `AdminCap` and a **mutable** oracle reference, plus the city’s geoname ID. The function removes the corresponding `CityWeatherOracle` sub-object and deletes its dynamic field entry from the oracle. This cleanly unregisters the city and frees the associated on-chain storage.
 
@@ -176,7 +176,7 @@ public fun remove_city(
 }
 ```
 
-After you implement `add_city` and `remove_city`, update each city’s weather data. Every 10 minutes, the backend service fetches conditions from the OpenWeather API and **calls** the Sui Weather Oracle’s `update` function with the results.
+After you implement `add_city` and `remove_city`, update each city’s weather data. Every 10 minutes, the backend service fetches conditions from the OpenWeather API and **calls** the `weather_oracle` module's `update` function with the results.
 
 The `update` function accepts the city’s geoname ID and the new weather fields, then **writes** them to the corresponding `CityWeatherOracle` object. This keeps the on-chain weather data current and accurate.
 
@@ -669,7 +669,7 @@ The code in `index.ts` does the following:
 - Defines some constants, such as `CHUNK_SIZE`, `MS`, `MINUTE`, and `TEN_MINUTES`. These constants are used to control the frequency and size of the updates that the code performs.
 - Defines an async function called `performUpdates`, which takes two arguments: `cities` and `weatherOracleDynamicFields`. This function is the main logic of the code, and it does the following:
   - Filters the `cities` array based on the `weatherOracleDynamicFields` array, which contains the names and object IDs of the weather oracle dynamic fields that the code needs to update.
-  - Loops through the filtered cities in chunks of `CHUNK_SIZE`, and for each chunk, it calls another async function called `getTransaction`, which returns a transaction block that contains the Move calls to update the weather oracle dynamic fields with the latest weather data from the OpenWeatherMap API.
+  - Loops through the filtered cities in chunks of `CHUNK_SIZE`, and for each chunk, it calls another async function called `getTransaction`, which returns a transaction block that contains the Move calls to update the weather oracle dynamic fields with the latest weather data from the `OpenWeatherMap` API.
   - Tries to sign and execute the transaction block using the client and key pair, and catches any errors that may occur.
   - Calculates the time it took to perform the updates, and sets a timeout to call itself again after `TEN_MINUTES` minus the elapsed time.
 - The code defines another async function called `getTransaction`, which takes one argument: `cities`. This function does the following:

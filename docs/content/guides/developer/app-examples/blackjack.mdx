@@ -104,9 +104,9 @@ The main sub-directories are:
 - [`app/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/): The main code of the pages and the API endpoints.
 - [`components/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
 - [`hooks/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks): The custom hooks used in the app.
-- [`helpers/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/helpers), [`utils/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/utils), [lib/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/lib): Multiple helper functions and utilities.
+- [`helpers/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/helpers), [`utils/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/utils), [`lib/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/lib): Multiple helper functions and utilities.
 - [`types/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/types): The types/interfaces used in the app.
-- [`styles/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/styles): The global css files to style our app.
+- [`styles/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/styles): The global CSS files to style the app.
 
 ### Components and custom hooks for state management
 
@@ -114,7 +114,7 @@ The main sub-directories are:
 
 - **Component for game initialization:** The [`StartGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/StartGame.tsx) component is implemented to facilitate the creation of a new game. It renders the [`CollectMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/CollectMouseRandomness.tsx) to capture the randomness and uses the `handleCreateGame` function of the [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) hook to execute the create-game transaction.
 
-- **Randomness generation:** Fair game outcomes are also ensured by the [`CollectMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/CollectMouseRandomness.tsx) component. This component is using the [`useMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useMouseRandomness.ts) custom hook, and is in charge of capturing some user's mouse movements and generating a random bytes array. This array is converted to a hexadecimal string (`randomness`) and used in the create-game transaction.
+- **Randomness generation:** Fair game outcomes are also ensured by the [`CollectMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/CollectMouseRandomness.tsx) component. This component uses the [`useMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useMouseRandomness.ts) custom hook, and is in charge of capturing some user's mouse movements and generating a random bytes array. This array is converted to a hexadecimal string (`randomness`) and used in the create-game transaction.
 
 - **Card displaying and management:** The [`DealerCards`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/DealerCards.tsx) and the [`PlayerCards`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/PlayerCards.tsx) components are used to display the total points and the cards owned by the dealer and the player respectively.
 
