@@ -112,13 +112,14 @@ Docusaurus automatically imports the `<Tabs>` and `<TabItem>` components into ev
 
 The docs use a few custom scripts to properly render and style the `<Tabs>` component. These scripts let you use `<Tabs>` with [`{@include:}` snippets](#snippets-include) without breaking the page's formatting.
 
-When using multiple instances of `<Tabs>` within a page, use `groupId` to persist selections across sections.
+When using multiple instances of `<Tabs>` within a page, use `groupId` to persist selections across sections. The name of each `<TabItem>` across `<Tabs>` components using `groupId` must match for the tabs to function properly.
 
 To create a tabbed section:
 
 1. Add the `<Tabs>` element where you want the tabbed content to go. Include the optional `groupId` property if there are other `Tabs` with the same selections.
 
 1. Add a `<TabItem>` element for each section of content as a child of the `Tabs` element. Each `TabItem` needs both `value` and `label` property values. If you're using `groupId` in the parent `Tabs`, make sure the `value` remains consistent across `TabItem`s in other `Tabs` with the same `groupId` value. Doing so makes the `TabItem`s that are intended to show the same type of information become active across all relevant `Tabs`. This behavior persists across pages and sessions.  
+
 
 1. Close each `</TabItem>` and the parent `</Tabs>`.
 
