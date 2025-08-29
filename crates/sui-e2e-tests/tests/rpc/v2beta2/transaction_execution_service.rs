@@ -30,27 +30,25 @@ async fn execute_transaction_transfer() {
         make_transfer_sui_transaction(&test_cluster.wallet, Some(address), Some(amount)).await;
     let sender = txn.transaction_data().sender();
 
-    let ExecuteTransactionResponse {
-        finality: _,
-        transaction,
-    } = client
-        .execute_transaction(ExecuteTransactionRequest {
-            transaction: Some(Transaction {
-                bcs: Some(Bcs::serialize(txn.transaction_data()).unwrap()),
-                ..Default::default()
-            }),
-            signatures: txn
+    let ExecuteTransactionResponse { transaction, .. } = client
+        .execute_transaction({
+            let mut message = ExecuteTransactionRequest::default();
+            message.transaction = Some({
+                let mut message = Transaction::default();
+                message.bcs = Some(Bcs::serialize(txn.transaction_data()).unwrap());
+                message
+            });
+            message.signatures = txn
                 .tx_signatures()
                 .iter()
-                .map(|s| UserSignature {
-                    bcs: Some(Bcs {
-                        name: None,
-                        value: Some(s.as_ref().to_owned().into()),
-                    }),
-                    ..Default::default()
+                .map(|s| {
+                    let mut message = UserSignature::default();
+                    message.bcs = Some(Bcs::from(s.as_ref().to_owned()));
+                    message
                 })
-                .collect(),
-            read_mask: Some(FieldMask::from_paths(["finality", "transaction"])),
+                .collect();
+            message.read_mask = Some(FieldMask::from_paths(["finality", "transaction"]));
+            message
         })
         .await
         .unwrap()

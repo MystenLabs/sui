@@ -45,7 +45,7 @@ pub async fn get_checkpoint(
             .await?
             .pop()
             .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?,
-        None => {
+        None | _ => {
             let sequence_number = client.get_latest_checkpoint().await?;
             client
                 .get_checkpoints(&[sequence_number])
@@ -67,7 +67,5 @@ pub async fn get_checkpoint(
         );
     }
     // TODO: handle Checkpoint::TRANSACTIONS_FIELD submask
-    Ok(GetCheckpointResponse {
-        checkpoint: Some(message),
-    })
+    Ok(GetCheckpointResponse::new(message))
 }

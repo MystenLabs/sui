@@ -2369,6 +2369,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytestring"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e465647ae23b2823b0753f50decb2d5a86d2bb2cac04788fafd1f80e45378e5f"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "bzip2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13803,8 +13812,8 @@ dependencies = [
 
 [[package]]
 name = "sui-crypto"
-version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=0a15520575a413f41c855609b829a62e4594f890#0a15520575a413f41c855609b829a62e4594f890"
+version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e7f07ac938706473d0a68ede78ba8587ec271f88#e7f07ac938706473d0a68ede78ba8587ec271f88"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15859,8 +15868,8 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=0a15520575a413f41c855609b829a62e4594f890#0a15520575a413f41c855609b829a62e4594f890"
+version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e7f07ac938706473d0a68ede78ba8587ec271f88#e7f07ac938706473d0a68ede78ba8587ec271f88"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -15868,7 +15877,6 @@ dependencies = [
  "http 1.3.1",
  "prost",
  "prost-types",
- "roaring",
  "serde",
  "serde_json",
  "sui-sdk-types",
@@ -16017,15 +16025,16 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=0a15520575a413f41c855609b829a62e4594f890#0a15520575a413f41c855609b829a62e4594f890"
+version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e7f07ac938706473d0a68ede78ba8587ec271f88#e7f07ac938706473d0a68ede78ba8587ec271f88"
 dependencies = [
  "base64ct",
  "bcs",
  "blake2",
  "bnum",
  "bs58 0.5.1",
- "hex",
+ "bytes",
+ "bytestring",
  "itertools 0.13.0",
  "roaring",
  "serde",

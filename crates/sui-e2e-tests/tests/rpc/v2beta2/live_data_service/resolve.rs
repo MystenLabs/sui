@@ -63,33 +63,35 @@ async fn resolve_transaction_simple_transfer() {
     gas.sort_by_key(|object_ref| object_ref.0);
     let obj_to_send = gas.first().unwrap().0;
 
-    let unresolved_transaction = Transaction {
-        kind: Some(TransactionKind::from(ProgrammableTransaction {
-            inputs: vec![
-                Input {
-                    object_id: Some(obj_to_send.to_canonical_string(true)),
-                    ..Default::default()
-                },
-                Input {
-                    literal: Some(Box::new(recipient.to_string().into())),
-                    ..Default::default()
-                },
-            ],
-            commands: vec![Command::from(TransferObjects {
-                objects: vec![Argument::new_input(0)],
-                address: Some(Argument::new_input(1)),
-            })],
-        })),
-        sender: Some(sender.to_string()),
-        ..Default::default()
-    };
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![
+            {
+                let mut message = Input::default();
+                message.object_id = Some(obj_to_send.to_canonical_string(true));
+                message
+            },
+            {
+                let mut message = Input::default();
+                message.literal = Some(Box::new(recipient.to_string().into()));
+                message
+            },
+        ];
+        ptb.commands = vec![Command::from({
+            let mut message = TransferObjects::default();
+            message.objects = vec![Argument::new_input(0)];
+            message.address = Some(Argument::new_input(1));
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
 
     let resolved = alpha_client
-        .simulate_transaction(SimulateTransactionRequest {
-            transaction: Some(unresolved_transaction),
-            do_gas_selection: Some(true),
-            ..Default::default()
-        })
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
         .await
         .unwrap()
         .into_inner();
@@ -120,37 +122,40 @@ async fn resolve_transaction_transfer_with_sponsor() {
     let obj_to_send = gas.first().unwrap().0;
     let sponsor = test_cluster.wallet.get_addresses()[1];
 
-    let unresolved_transaction = Transaction {
-        kind: Some(TransactionKind::from(ProgrammableTransaction {
-            inputs: vec![
-                Input {
-                    object_id: Some(obj_to_send.to_canonical_string(true)),
-                    ..Default::default()
-                },
-                Input {
-                    literal: Some(Box::new(recipient.to_string().into())),
-                    ..Default::default()
-                },
-            ],
-            commands: vec![Command::from(TransferObjects {
-                objects: vec![Argument::new_input(0)],
-                address: Some(Argument::new_input(1)),
-            })],
-        })),
-        sender: Some(sender.to_string()),
-        gas_payment: Some(GasPayment {
-            owner: Some(sponsor.to_string()),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![
+            {
+                let mut message = Input::default();
+                message.object_id = Some(obj_to_send.to_canonical_string(true));
+                message
+            },
+            {
+                let mut message = Input::default();
+                message.literal = Some(Box::new(recipient.to_string().into()));
+                message
+            },
+        ];
+        ptb.commands = vec![Command::from({
+            let mut message = TransferObjects::default();
+            message.objects = vec![Argument::new_input(0)];
+            message.address = Some(Argument::new_input(1));
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
+    unresolved_transaction.gas_payment = Some({
+        let mut message = GasPayment::default();
+        message.owner = Some(sponsor.to_string());
+        message
+    });
 
     let resolved = alpha_client
-        .simulate_transaction(SimulateTransactionRequest {
-            transaction: Some(unresolved_transaction),
-            do_gas_selection: Some(true),
-            ..Default::default()
-        })
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
         .await
         .unwrap()
         .into_inner();
@@ -194,30 +199,30 @@ async fn resolve_transaction_borrowed_shared_object() {
 
     let sender = test_cluster.wallet.get_addresses()[0];
 
-    let unresolved_transaction = Transaction {
-        kind: Some(TransactionKind::from(ProgrammableTransaction {
-            inputs: vec![Input {
-                object_id: Some("0x6".to_owned()),
-                ..Default::default()
-            }],
-            commands: vec![Command::from(MoveCall {
-                package: Some("0x2".to_owned()),
-                module: Some("clock".to_owned()),
-                function: Some("timestamp_ms".to_owned()),
-                type_arguments: vec![],
-                arguments: vec![Argument::new_input(0)],
-            })],
-        })),
-        sender: Some(sender.to_string()),
-        ..Default::default()
-    };
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![{
+            let mut message = Input::default();
+            message.object_id = Some("0x6".to_owned());
+            message
+        }];
+        ptb.commands = vec![Command::from({
+            let mut message = MoveCall::default();
+            message.package = Some("0x2".to_owned());
+            message.module = Some("clock".to_owned());
+            message.function = Some("timestamp_ms".to_owned());
+            message.arguments = vec![Argument::new_input(0)];
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
 
     let resolved = alpha_client
-        .simulate_transaction(SimulateTransactionRequest {
-            transaction: Some(unresolved_transaction),
-            do_gas_selection: Some(true),
-            ..Default::default()
-        })
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
         .await
         .unwrap()
         .into_inner();
@@ -248,44 +253,46 @@ async fn resolve_transaction_mutable_shared_object() {
 
     let validator_address = test_cluster.swarm.config().validator_configs()[0].sui_address();
 
-    let unresolved_transaction = Transaction {
-        kind: Some(TransactionKind::from(ProgrammableTransaction {
-            inputs: vec![
-                Input {
-                    object_id: Some("0x5".to_owned()),
-                    ..Default::default()
-                },
-                Input {
-                    object_id: Some(obj_to_stake.to_canonical_string(true)),
-                    ..Default::default()
-                },
-                Input {
-                    literal: Some(Box::new(validator_address.to_string().into())),
-                    ..Default::default()
-                },
-            ],
-            commands: vec![Command::from(MoveCall {
-                package: Some("0x3".to_owned()),
-                module: Some("sui_system".to_owned()),
-                function: Some("request_add_stake".to_owned()),
-                type_arguments: vec![],
-                arguments: vec![
-                    Argument::new_input(0),
-                    Argument::new_input(1),
-                    Argument::new_input(2),
-                ],
-            })],
-        })),
-        sender: Some(sender.to_string()),
-        ..Default::default()
-    };
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![
+            {
+                let mut message = Input::default();
+                message.object_id = Some("0x5".to_owned());
+                message
+            },
+            {
+                let mut message = Input::default();
+                message.object_id = Some(obj_to_stake.to_canonical_string(true));
+                message
+            },
+            {
+                let mut message = Input::default();
+                message.literal = Some(Box::new(validator_address.to_string().into()));
+                message
+            },
+        ];
+        ptb.commands = vec![Command::from({
+            let mut message = MoveCall::default();
+            message.package = Some("0x3".to_owned());
+            message.module = Some("sui_system".to_owned());
+            message.function = Some("request_add_stake".to_owned());
+            message.arguments = vec![
+                Argument::new_input(0),
+                Argument::new_input(1),
+                Argument::new_input(2),
+            ];
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
 
     let resolved = alpha_client
-        .simulate_transaction(SimulateTransactionRequest {
-            transaction: Some(unresolved_transaction),
-            do_gas_selection: Some(true),
-            ..Default::default()
-        })
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
         .await
         .unwrap()
         .into_inner();
@@ -310,31 +317,30 @@ async fn resolve_transaction_insufficient_gas() {
         .unwrap();
 
     // Test the case where we don't have enough coins/gas for the required budget
-    let unresolved_transaction = Transaction {
-        kind: Some(TransactionKind::from(ProgrammableTransaction {
-            inputs: vec![Input {
-                object_id: Some("0x6".to_owned()),
-                ..Default::default()
-            }],
-            commands: vec![Command::from(MoveCall {
-                package: Some("0x2".to_owned()),
-                module: Some("clock".to_owned()),
-                function: Some("timestamp_ms".to_owned()),
-                type_arguments: vec![],
-                arguments: vec![Argument::new_input(0)],
-            })],
-        })),
-        sender: Some(SuiAddress::random_for_testing_only().to_string()), // random account with no
-        // gas
-        ..Default::default()
-    };
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![{
+            let mut message = Input::default();
+            message.object_id = Some("0x6".to_owned());
+            message
+        }];
+        ptb.commands = vec![Command::from({
+            let mut message = MoveCall::default();
+            message.package = Some("0x2".to_owned());
+            message.module = Some("clock".to_owned());
+            message.function = Some("timestamp_ms".to_owned());
+            message.arguments = vec![Argument::new_input(0)];
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(SuiAddress::random_for_testing_only().to_string()); // random account with no
 
     let error = alpha_client
-        .simulate_transaction(SimulateTransactionRequest {
-            transaction: Some(unresolved_transaction),
-            do_gas_selection: Some(true),
-            ..Default::default()
-        })
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
         .await
         .unwrap_err();
 
