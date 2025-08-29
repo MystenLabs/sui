@@ -24,6 +24,7 @@ use builder::PackageGraphBuilder;
 
 use derive_where::derive_where;
 use petgraph::{
+    Direction,
     algo::toposort,
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
@@ -86,6 +87,28 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     /// Returns true if the node is the root of the package graph
     pub fn is_root(&self) -> bool {
         self.package().is_root()
+    }
+
+    /// Produce a string of identifiers from the root to this package for identifying the package
+    /// in error messages
+    pub fn display_path(&self) -> String {
+        if let Some(incoming) = self
+            .graph
+            .inner
+            .edges_directed(self.node, Direction::Incoming)
+            .next()
+        {
+            let parent = PackageInfo {
+                graph: self.graph,
+                node: incoming.source(),
+            };
+            let mut result = parent.display_path();
+            result.push_str("::");
+            result.push_str(incoming.weight().name.as_str());
+            result
+        } else {
+            self.package().name().to_string()
+        }
     }
 
     /// The addresses for the names that are available to this package. For modern packages, this
@@ -263,11 +286,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(doc, test))]
 mod tests {
     // TODO: example with a --[local]--> a/b --[local]--> a/c
     use std::collections::BTreeMap;
 
+    use insta::assert_snapshot;
     use test_log::test;
 
     use crate::{
@@ -351,6 +375,27 @@ mod tests {
                 .contains_key("d")
         );
         assert!(!packages["b"].named_addresses().unwrap().contains_key("d"));
+    }
+
+    /// In the following package graph for `a`, calling `d.display_path` should return `a::x::y::d`:
+    ///
+    /// ```mermaid
+    /// graph LR
+    ///     a -->|"x = {..., rename-from=b}"| b -->|"y = {..., rename-from=c}"| c --> d
+    /// ```
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn display_path() {
+        let scenario = TestPackageGraph::new(["a", "b", "c", "d"])
+            .add_dep("a", "b", |dep| dep.name("x").rename_from("b"))
+            .add_dep("b", "c", |dep| dep.name("y").rename_from("c"))
+            .add_deps([("c", "d")])
+            .build();
+
+        let graph = scenario.graph_for("a").await;
+        let packages = packages_by_name(&graph);
+
+        assert_snapshot!(packages["d"].display_path(), @"a::x::y::d");
     }
 
     // TODO: tests around name conflicts?
