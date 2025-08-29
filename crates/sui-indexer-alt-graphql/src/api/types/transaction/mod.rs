@@ -309,8 +309,10 @@ impl TransactionContents {
         };
 
         // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        if transaction.cp_sequence_number() > self.scope.checkpoint_viewed_at() {
-            return Ok(self.clone());
+        if let Some(cp_num) = transaction.cp_sequence_number() {
+            if cp_num > self.scope.checkpoint_viewed_at() {
+                return Ok(self.clone());
+            }
         }
 
         Ok(Self {

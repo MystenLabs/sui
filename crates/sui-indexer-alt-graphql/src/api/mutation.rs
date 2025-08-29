@@ -14,6 +14,7 @@ use crate::api::scalars::base64::Base64;
 use crate::{
     api::types::execution_result::ExecutionResult,
     error::{bad_user_input, RpcError},
+    scope::Scope,
 };
 
 /// Error type for user input validation in executeTransaction
@@ -68,14 +69,34 @@ impl Mutation {
 
         // Execute transaction - capture gRPC errors for ExecutionResult.errors
         match fullnode_client
-            .execute_transaction(tx_data, parsed_signatures)
+            .execute_transaction(tx_data.clone(), parsed_signatures.clone())
             .await
         {
-            // TODO: Implement effects for ExecutionResult
-            Ok(_response) => Ok(ExecutionResult {
-                effects: None,
-                errors: None,
-            }),
+            Ok(response) => {
+                let scope = Scope::new(ctx)?;
+                let transaction_digest = response.effects.transaction_digest();
+
+                // Create TransactionEffects with fresh ExecutedTransaction data
+                let effects = TransactionEffects {
+                    digest: *transaction_digest,
+                    contents: EffectsContents {
+                        scope,
+                        contents: Some(std::sync::Arc::new(
+                            NativeTransactionContents::ExecutedTransaction {
+                                effects: response.effects,
+                                events: response.events.map(|events| events.data),
+                                transaction_data: tx_data,
+                                signatures: parsed_signatures,
+                            },
+                        )),
+                    },
+                };
+
+                Ok(ExecutionResult {
+                    effects: Some(effects),
+                    errors: None,
+                })
+            }
             Err(GrpcExecutionError(status)) => Ok(ExecutionResult {
                 effects: None,
                 errors: Some(vec![status.to_string()]),
