@@ -301,4 +301,4 @@ The first step is to get the multisig public key, which was written to `Game.adm
 
 The reason for the two signatures is clearer when looking at the construction of the `recv` transaction: The multisig authorizes access to the `Game`, and the wallet authorizes access to the gas object. This is because the multisig account does not hold any coins of its own, so it relies on the player account to sponsor the transaction.
 
-You can find an example React front-end supporting both the multi-sig and shared variants of the game in the [UI directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui), and a CLI written in Rust in the [CLI directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/cli).
+You can find an example React front-end supporting both the multi-sig and shared variants of the game in the [`ui` directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui), and a CLI written in Rust in the [`cli` directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/cli).
