@@ -1,335 +1,313 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
-use anyhow::Context;
+use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{json, Value};
+use simulacrum::Simulacrum;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
 use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
+use sui_indexer_alt_reader::full_node_client::FullNodeArgs;
 use sui_macros::sim_test;
-use sui_types::{
-    base_types::SuiAddress,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
-};
+use sui_test_transaction_builder::make_transfer_sui_transaction;
+use sui_types::base_types::SuiAddress;
+use test_cluster::{TestCluster, TestClusterBuilder};
+use tokio_util::sync::CancellationToken;
 
-const DEFAULT_GAS_BUDGET: u64 = 1_000_000_000;
-
-struct GraphQlExecuteTestCluster {
-    cluster: FullCluster,
-    client: Client,
-    graphql_url: String,
+async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> FullCluster {
+    FullCluster::new_with_configs(
+        Simulacrum::new(),
+        IndexerArgs::default(),
+        IndexerArgs::default(),
+        IndexerConfig::for_test(),
+        ConsistentConfig::for_test(),
+        JsonRpcConfig::default(),
+        GraphQlConfig::default(),
+        FullNodeArgs {
+            full_node_rpc_url: Some(validator_cluster.rpc_url().to_string()),
+            ..Default::default()
+        },
+        &Registry::new(),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("Failed to create GraphQL test cluster")
 }
 
-impl GraphQlExecuteTestCluster {
-    async fn new() -> anyhow::Result<Self> {
-        // Use FullCluster which includes Simulacrum + all indexer services
-        // This automatically configures all services including GraphQL with gRPC support
-        let cluster = FullCluster::new()
-            .await
-            .context("Failed to create FullCluster")?;
+#[sim_test]
+async fn test_execute_transaction_mutation_schema() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
 
-        let graphql_url = cluster.graphql_url().to_string();
-        
-        Ok(Self {
-            cluster,
-            client: Client::new(),
-            graphql_url,
-        })
-    }
+    // Create a simple transfer transaction for testing
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
 
-    /// Execute a GraphQL mutation and return the response
-    async fn execute_graphql_mutation(
-        &self,
-        query: &str,
-        variables: Value,
-    ) -> anyhow::Result<Value> {
-        let body = json!({
-            "query": query,
-            "variables": variables
-        });
-
-        let response = self
-            .client
-            .post(&self.graphql_url)
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send GraphQL request")?;
-
-        let result: Value = response
-            .json()
-            .await
-            .context("Failed to parse GraphQL response")?;
-
-        if let Some(errors) = result.get("errors") {
-            anyhow::bail!("GraphQL errors: {}", errors);
-        }
-
-        Ok(result["data"].clone())
-    }
-
-    /// Create a simple transfer transaction for testing
-    async fn create_transfer_transaction(&mut self) -> anyhow::Result<(String, Vec<String>)> {
-        // Get funded accounts from FullCluster
-        let (sender, sender_kp, gas) = self
-            .cluster
-            .funded_account(DEFAULT_GAS_BUDGET + 1000)
-            .context("Failed to fund sender account")?;
-
-        // Use a fixed recipient address for simplicity
-        let recipient_address = SuiAddress::random_for_testing_only();
-
-        // Build transfer transaction
-        let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_sui(recipient_address, Some(1000));
-
-        let data = TransactionData::new_programmable(
-            sender,
-            vec![gas],
-            builder.finish(),
-            DEFAULT_GAS_BUDGET,
-            self.cluster.reference_gas_price(),
-        );
-
-        // Sign transaction
-        let transaction = Transaction::from_data_and_signer(data, vec![&sender_kp]);
-        let (tx_bytes, signatures) = transaction.to_tx_bytes_and_signatures();
-
-        // Convert to base64 strings for GraphQL
-        let tx_data_bcs = tx_bytes.encoded();
-        let signature_strings: Vec<String> = signatures
-            .iter()
-            .map(|sig| sig.encoded())
-            .collect();
-
-        println!("Generated {} signatures", signature_strings.len());
-        for (i, sig) in signature_strings.iter().enumerate() {
-            println!("Signature {}: {} (length: {})", i, sig, sig.len());
-        }
-
-        Ok((tx_data_bcs, signature_strings))
-    }
-
-    /// Query a transaction by digest after it's been indexed
-    async fn query_transaction(&self, digest: &str) -> anyhow::Result<Value> {
-        let query = r#"
-            query($digest: String!) {
-                transaction(digest: $digest) {
-                    digest
-                    sender {
-                        address
-                    }
+    let client = Client::new();
+    let response = client
+        .post(graphql_cluster.graphql_url())
+        .json(&json!({
+            "query": r#"
+            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
+                executeTransaction(transaction: $tx, signatures: $sigs) {
                     effects {
+                        digest
                         status
                         checkpoint {
                             sequenceNumber
                         }
-                        events {
-                            nodes {
-                                type {
-                                    repr
-                                }
+                        transaction {
+                            sender { address }
+                            gasInput { gasBudget }
+                            signatures {
+                                signatureBytes
                             }
                         }
                     }
+                    errors
                 }
             }
-        "#;
+        "#,
+            "variables": {
+                "tx": { "transactionDataBcs": tx_bytes.encoded() },
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }
+        }))
+        .send()
+        .await
+        .expect("GraphQL request failed");
 
-        let variables = json!({
-            "digest": digest
-        });
+    // Verify successful fresh execution
+    let result: Value = response.json().await.expect("Failed to parse response");
+    let data = result.get("data").expect("Should have data");
+    let execute_result = data
+        .get("executeTransaction")
+        .expect("Should have executeTransaction");
+    let effects = execute_result.get("effects").expect("Should have effects");
+    let transaction = effects.get("transaction").expect("Should have transaction");
 
-        self.execute_graphql_mutation(query, variables).await
+    let status = effects.get("status").unwrap().as_str().unwrap();
+    let checkpoint = effects.get("checkpoint");
+    let errors = execute_result.get("errors");
+    let sender_address = transaction
+        .get("sender")
+        .unwrap()
+        .get("address")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let gas_budget = transaction
+        .get("gasInput")
+        .unwrap()
+        .get("gasBudget")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let returned_sigs = transaction.get("signatures").unwrap().as_array().unwrap();
+
+    assert_eq!(status, "SUCCESS");
+    assert_eq!(checkpoint, Some(&serde_json::Value::Null));
+    assert_eq!(errors, Some(&serde_json::Value::Null));
+
+    // Verify transaction data matches original
+    assert_eq!(
+        sender_address,
+        validator_cluster.get_address_0().to_string()
+    );
+    assert_eq!(gas_budget, "10000000");
+    assert_eq!(returned_sigs.len(), signatures.len());
+    for (returned, original) in returned_sigs.iter().zip(signatures.iter()) {
+        let sig_bytes = returned.get("signatureBytes").unwrap().as_str().unwrap();
+        assert_eq!(sig_bytes, original.encoded());
     }
 }
 
 #[sim_test]
-async fn test_execute_transaction_success() {
-    // Initialize logging for debugging
-    telemetry_subscribers::init_for_testing();
+async fn test_execute_transaction_input_validation() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let client = Client::new();
 
-    let mut test_cluster = GraphQlExecuteTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    // Create a transfer transaction
-    let (tx_data_bcs, signatures) = test_cluster
-        .create_transfer_transaction()
-        .await
-        .expect("Failed to create transfer transaction");
-
-    // Execute transaction via GraphQL mutation
-    let mutation = r#"
-        mutation($transactionData: TransactionExecutionInput!, $signatures: [String!]!) {
-            executeTransaction(
-                transaction: $transactionData,
-                signatures: $signatures
-            ) {
-                effects {
-                    digest
-                    status
-                    checkpoint {
-                        sequenceNumber
-                    }
+    // Test invalid Base64 transaction data
+    let result = client
+        .post(graphql_cluster.graphql_url())
+        .json(&json!({
+            "query": r#"
+            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
+                executeTransaction(transaction: $tx, signatures: $sigs) {
+                    effects { digest }
+                    errors
                 }
-                errors
             }
-        }
-    "#;
-
-    let variables = json!({
-        "transactionData": {
-            "transactionDataBcs": tx_data_bcs
-        },
-        "signatures": signatures
-    });
-
-    let response = test_cluster
-        .execute_graphql_mutation(mutation, variables)
+        "#,
+            "variables": {
+                "tx": { "transactionDataBcs": "invalid_base64!" },
+                "sigs": ["invalidSignature"]
+            }
+        }))
+        .send()
         .await
-        .expect("Failed to execute GraphQL mutation");
-
-    println!("Execute transaction response: {:#}", response);
-
-    // Verify the response structure
-    let execute_result = response["executeTransaction"].as_object()
-        .expect("executeTransaction should be an object");
-
-    // Check that we got effects (successful execution)
-    let effects = execute_result["effects"].as_object()
-        .expect("effects should be present for successful execution");
-
-    // Check that there are no errors
-    assert!(
-        execute_result["errors"].is_null(),
-        "Expected no errors, got: {}",
-        execute_result["errors"]
-    );
-
-    // Verify fresh transaction effects
-    let digest = effects["digest"].as_str()
-        .expect("digest should be present");
-    assert!(!digest.is_empty(), "digest should not be empty");
-
-    let status = effects["status"].as_str()
-        .expect("status should be present");
-    assert_eq!(status, "success", "transaction should be successful");
-
-    // Verify fresh data characteristics (no checkpoint yet)
-    assert!(
-        effects["checkpoint"].is_null(),
-        "Fresh transaction should not have checkpoint: {}",
-        effects["checkpoint"]
-    );
-
-    // Verify that we can access events from fresh execution
-    let events = &effects["events"]["nodes"];
-    assert!(events.is_array(), "events should be accessible from fresh execution");
-
-    println!("✅ Fresh transaction executed successfully!");
-    println!("   Digest: {}", digest);
-    println!("   Status: {}", status);
-    println!("   Events: {} events found", events.as_array().unwrap().len());
-
-    // Optional: Wait for indexing and verify consistency
-    println!("⏳ Waiting for indexing to complete...");
-    tokio::time::sleep(Duration::from_secs(10)).await;
-
-    // Query the same transaction after indexing
-    let indexed_response = test_cluster
-        .query_transaction(digest)
+        .unwrap()
+        .json::<Value>()
         .await
-        .expect("Failed to query indexed transaction");
-
-    let indexed_tx = indexed_response["transaction"].as_object()
-        .expect("transaction should be found after indexing");
-
-    let indexed_effects = indexed_tx["effects"].as_object()
-        .expect("indexed transaction should have effects");
-
-    // Verify consistency between fresh and indexed data
-    assert_eq!(
-        indexed_effects["digest"].as_str().unwrap(),
-        digest,
-        "Digest should be consistent between fresh and indexed"
-    );
-
-    assert_eq!(
-        indexed_effects["status"].as_str().unwrap(),
-        status,
-        "Status should be consistent between fresh and indexed"
-    );
-
-    // Now the indexed version should have a checkpoint
-    assert!(
-        !indexed_effects["checkpoint"].is_null(),
-        "Indexed transaction should have checkpoint"
-    );
-
-    println!("✅ Indexed transaction data is consistent with fresh execution!");
+        .unwrap();
+    assert!(result.get("errors").is_some());
 }
 
 #[sim_test]
-async fn test_execute_transaction_grpc_error() {
-    telemetry_subscribers::init_for_testing();
+async fn test_execute_transaction_with_events() {
+    let validator_cluster = TestClusterBuilder::new()
+        .enable_fullnode_events()
+        .build()
+        .await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
 
-    let mut test_cluster = GraphQlExecuteTestCluster::new()
+    // Publish our test package which emits events in its init function
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packages/emit_event");
+    let tx_data = validator_cluster
+        .test_transaction_builder()
         .await
-        .expect("Failed to create test cluster");
+        .publish(path)
+        .build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
 
-    // Create invalid transaction data (empty signatures to trigger error)
-    let (tx_data_bcs, _) = test_cluster
-        .create_transfer_transaction()
-        .await
-        .expect("Failed to create transfer transaction");
-
-    let mutation = r#"
-        mutation($transactionData: TransactionExecutionInput!, $signatures: [String!]!) {
-            executeTransaction(
-                transaction: $transactionData,
-                signatures: $signatures
-            ) {
-                effects {
-                    digest
+    let client = Client::new();
+    let response = client
+        .post(graphql_cluster.graphql_url())
+        .json(&json!({
+            "query": r#"
+            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
+                executeTransaction(transaction: $tx, signatures: $sigs) {
+                    effects {
+                        digest
+                        status
+                        events {
+                            nodes {
+                                eventBcs
+                                sender { address }
+                            }
+                        }
+                    }
+                    errors
                 }
-                errors
             }
-        }
-    "#;
-
-    let variables = json!({
-        "transactionData": {
-            "transactionDataBcs": tx_data_bcs
-        },
-        "signatures": [] // Empty signatures should cause gRPC error
-    });
-
-    let response = test_cluster
-        .execute_graphql_mutation(mutation, variables)
+        "#,
+            "variables": {
+                "tx": { "transactionDataBcs": tx_bytes.encoded() },
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }
+        }))
+        .send()
         .await
-        .expect("Failed to execute GraphQL mutation");
+        .expect("GraphQL request failed");
 
-    println!("Error response: {:#}", response);
+    let result: Value = response.json().await.expect("Failed to parse response");
+    let data = result.get("data").expect("Should have data");
+    let execute_result = data
+        .get("executeTransaction")
+        .expect("Should have executeTransaction");
+    let effects = execute_result.get("effects").expect("Should have effects");
 
-    let execute_result = response["executeTransaction"].as_object()
-        .expect("executeTransaction should be an object");
+    // Verify events structure and content
+    let events = effects.get("events").expect("Should have events field");
+    let event_nodes = events
+        .get("nodes")
+        .expect("Should have event nodes")
+        .as_array()
+        .unwrap();
 
-    // For gRPC errors, we should get errors instead of effects
+    assert_eq!(effects.get("status").unwrap().as_str().unwrap(), "SUCCESS");
     assert!(
-        execute_result["effects"].is_null(),
-        "Should not have effects for failed execution"
+        !event_nodes.is_empty(),
+        "Package publish should emit events from init function"
     );
 
-    let errors = execute_result["errors"].as_array()
-        .expect("Should have errors for failed execution");
+    let sender_address = validator_cluster.get_address_0();
+    for event_node in event_nodes {
+        let sender = event_node.get("sender").expect("Event should have sender");
+        let sender_addr = sender.get("address").unwrap().as_str().unwrap();
 
-    assert!(!errors.is_empty(), "Should have at least one error");
-    
-    let error_msg = errors[0].as_str()
-        .expect("Error should be a string");
-    
-    println!("✅ gRPC error handled correctly: {}", error_msg);
+        assert!(
+            event_node.get("eventBcs").is_some(),
+            "Event should have eventBcs"
+        );
+        assert_eq!(
+            sender_addr,
+            sender_address.to_string(),
+            "Event sender should match transaction sender"
+        );
+    }
+}
+
+#[sim_test]
+async fn test_execute_transaction_grpc_errors() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+
+    // Create signature mismatch scenario: use transaction data from one tx with signatures from another
+    let recipient1 = SuiAddress::random_for_testing_only();
+    let recipient2 = SuiAddress::random_for_testing_only();
+
+    let signed_tx1 =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient1), Some(1_000_000))
+            .await;
+    let signed_tx2 =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient2), Some(2_000_000))
+            .await;
+
+    let (tx1_bytes, _) = signed_tx1.to_tx_bytes_and_signatures();
+    let (_, tx2_signatures) = signed_tx2.to_tx_bytes_and_signatures();
+
+    // This will pass GraphQL validation but fail at gRPC execution due to signature mismatch
+    let client = Client::new();
+    let response = client
+        .post(graphql_cluster.graphql_url())
+        .json(&json!({
+            "query": r#"
+            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
+                executeTransaction(transaction: $tx, signatures: $sigs) {
+                    effects {
+                        digest
+                        status
+                    }
+                    errors
+                }
+            }
+        "#,
+            "variables": {
+                "tx": { "transactionDataBcs": tx1_bytes.encoded() },
+                "sigs": tx2_signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }
+        }))
+        .send()
+        .await
+        .expect("GraphQL request failed");
+
+    let result: Value = response.json().await.expect("Failed to parse response");
+    let data = result.get("data").expect("Should have data");
+    let execute_result = data
+        .get("executeTransaction")
+        .expect("Should have executeTransaction");
+
+    // Verify gRPC execution failure response structure
+    let effects = execute_result.get("effects");
+    assert_eq!(
+        effects,
+        Some(&serde_json::Value::Null),
+        "Should have null effects on gRPC error"
+    );
+
+    let errors = execute_result
+        .get("errors")
+        .expect("Should have errors field");
+    let error_array = errors.as_array().expect("Errors should be an array");
+    assert!(!error_array.is_empty());
 }

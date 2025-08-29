@@ -21,6 +21,7 @@ use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
+use sui_indexer_alt_reader::full_node_client::FullNodeArgs;
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
@@ -185,6 +186,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
             consistent_store_config,
             jsonrpc_config,
             graphql_config,
+            FullNodeArgs::default(),
             &registry,
             cancel,
         )

@@ -14,6 +14,7 @@ use sui_indexer_alt_e2e_tests::{find_address_owned, find_immutable, FullCluster}
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_jsonrpc::config::{PackageResolverLayer, RpcConfig as JsonRpcConfig};
+use sui_indexer_alt_reader::full_node_client::FullNodeArgs;
 use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -168,6 +169,7 @@ impl TypeLimitCluster {
                 ..JsonRpcConfig::default()
             },
             GraphQlConfig::default(),
+            FullNodeArgs::default(),
             &prometheus::Registry::new(),
             CancellationToken::new(),
         )

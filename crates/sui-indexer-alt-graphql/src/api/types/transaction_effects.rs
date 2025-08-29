@@ -98,7 +98,8 @@ impl EffectsContents {
             return None;
         };
 
-        content.cp_sequence_number()
+        content
+            .cp_sequence_number()
             .map(|cp_num| Checkpoint::with_sequence_number(self.scope.clone(), cp_num))
             .unwrap_or(None) // ExecutedTransaction can have no checkpoint
     }
@@ -352,7 +353,8 @@ impl EffectsContents {
                     unchanged_consensus_objects[*edge.cursor].clone(),
                     cp_num,
                 );
-                conn.edges.push(Edge::new(edge.cursor, unchanged_consensus_object));
+                conn.edges
+                    .push(Edge::new(edge.cursor, unchanged_consensus_object));
             }
             // Skip ExecutedTransaction entries (None) as they don't have checkpoint info
         }

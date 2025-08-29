@@ -49,7 +49,7 @@ pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
     ExecutedTransaction {
-        effects: TransactionEffects,
+        effects: Box<TransactionEffects>,
         events: Option<Vec<Event>>,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
@@ -220,7 +220,9 @@ impl TransactionContents {
             Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)
                 .context("Failed to deserialize transaction data"),
             Self::Bigtable(kv) => Ok(kv.transaction.data().transaction_data().clone()),
-            Self::ExecutedTransaction { transaction_data, .. } => Ok(transaction_data.clone()),
+            Self::ExecutedTransaction {
+                transaction_data, ..
+            } => Ok(transaction_data.clone()),
         }
     }
 
@@ -262,7 +264,7 @@ impl TransactionContents {
                 bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
             }
             Self::Bigtable(kv) => Ok(kv.effects.clone()),
-            Self::ExecutedTransaction { effects, .. } => Ok(effects.clone()),
+            Self::ExecutedTransaction { effects, .. } => Ok(*effects.clone()),
         }
     }
 
@@ -281,9 +283,9 @@ impl TransactionContents {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(kv.transaction.data().transaction_data())
                 .context("Failed to serialize transaction"),
-            Self::ExecutedTransaction { transaction_data, .. } => {
-                bcs::to_bytes(transaction_data).context("Failed to serialize transaction")
-            }
+            Self::ExecutedTransaction {
+                transaction_data, ..
+            } => bcs::to_bytes(transaction_data).context("Failed to serialize transaction"),
         }
     }
 
@@ -292,7 +294,7 @@ impl TransactionContents {
             Self::Pg(stored) => Ok(stored.raw_effects.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(&kv.effects).context("Failed to serialize effects"),
             Self::ExecutedTransaction { effects, .. } => {
-                bcs::to_bytes(effects).context("Failed to serialize effects")
+                bcs::to_bytes(effects.as_ref()).context("Failed to serialize effects")
             }
         }
     }

@@ -14,9 +14,9 @@ use sui_types::transaction::TransactionData;
 
 use crate::{
     api::types::{
-        execution_result::ExecutionResult, 
-        transaction_execution_input::TransactionExecutionInput,
+        execution_result::ExecutionResult,
         transaction_effects::{EffectsContents, TransactionEffects},
+        transaction_execution_input::TransactionExecutionInput,
     },
     error::RpcError,
     scope::Scope,
@@ -69,7 +69,7 @@ impl Mutation {
             Ok(response) => {
                 let scope = Scope::new(ctx)?;
                 let transaction_digest = response.effects.transaction_digest();
-                
+
                 // Create TransactionEffects with fresh ExecutedTransaction data
                 let effects = TransactionEffects {
                     digest: *transaction_digest,
@@ -77,26 +77,24 @@ impl Mutation {
                         scope,
                         contents: Some(std::sync::Arc::new(
                             NativeTransactionContents::ExecutedTransaction {
-                                effects: response.effects,
+                                effects: Box::new(response.effects),
                                 events: response.events.map(|events| events.data),
                                 transaction_data: tx_data,
                                 signatures: parsed_signatures,
-                            }
+                            },
                         )),
                     },
                 };
-                
+
                 Ok(ExecutionResult {
                     effects: Some(effects),
                     errors: None,
                 })
             }
-            Err(GrpcExecutionError(status)) => {
-                Ok(ExecutionResult {
-                    effects: None,
-                    errors: Some(vec![status.to_string()]),
-                })
-            }
+            Err(GrpcExecutionError(status)) => Ok(ExecutionResult {
+                effects: None,
+                errors: Some(vec![status.to_string()]),
+            }),
             Err(other_error) => {
                 Err(anyhow::anyhow!("Failed to execute transaction: {}", other_error).into())
             }
