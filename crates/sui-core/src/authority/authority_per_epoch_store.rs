@@ -332,7 +332,7 @@ pub struct AuthorityPerEpochStore {
 
     /// Holds the outputs of both consensus handler and checkpoint builder in memory
     /// until they are proven not to have forked by a certified checkpoint.
-    consensus_quarantine: RwLock<ConsensusOutputQuarantine>,
+    pub(crate) consensus_quarantine: RwLock<ConsensusOutputQuarantine>,
     /// Holds variouis data from consensus_quarantine in a more easily accessible form.
     consensus_output_cache: ConsensusOutputCache,
 
@@ -373,7 +373,7 @@ pub struct AuthorityPerEpochStore {
     /// wait for in-memory tasks for the epoch to finish. If node crashes at this stage validator
     /// will start with the new epoch(and will open instance of per-epoch store for a new epoch).
     epoch_alive: tokio::sync::RwLock<bool>,
-    end_of_publish: Mutex<StakeAggregator<(), true>>,
+    pub(crate) end_of_publish: Mutex<StakeAggregator<(), true>>,
     /// Pending certificates that are waiting to be sequenced by the consensus.
     /// This is an in-memory 'index' of a AuthorityPerEpochTables::pending_consensus_transactions.
     /// We need to keep track of those in order to know when to send EndOfPublish message.
@@ -409,11 +409,11 @@ pub struct AuthorityPerEpochStore {
     jwk_aggregator: Mutex<JwkAggregator>,
 
     /// State machine managing randomness DKG and generation.
-    randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
+    pub(crate) randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
     randomness_reporter: OnceCell<RandomnessReporter>,
 
     /// Manages recording execution time observations and generating estimates.
-    execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
+    pub(crate) execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
     tx_local_execution_time: OnceCell<mpsc::Sender<LocalExecutionTimeData>>,
     tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
@@ -2228,7 +2228,7 @@ impl AuthorityPerEpochStore {
         .assigned_versions)
     }
 
-    fn load_deferred_transactions_for_randomness(
+    pub(crate) fn load_deferred_transactions_for_randomness(
         &self,
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
@@ -2264,7 +2264,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    fn load_deferred_transactions_for_up_to_consensus_round(
+    pub(crate) fn load_deferred_transactions_for_up_to_consensus_round(
         &self,
         output: &mut ConsensusCommitOutput,
         consensus_round: u64,
@@ -2793,7 +2793,7 @@ impl AuthorityPerEpochStore {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
-    fn record_jwk_vote(
+    pub(crate) fn record_jwk_vote(
         &self,
         output: &mut ConsensusCommitOutput,
         round: u64,
@@ -2900,7 +2900,10 @@ impl AuthorityPerEpochStore {
             .expect("push_consensus_output should not fail");
     }
 
-    fn process_user_signatures<'a>(&self, certificates: impl Iterator<Item = &'a Schedulable>) {
+    pub(crate) fn process_user_signatures<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a Schedulable>,
+    ) {
         let sigs: Vec<_> = certificates
             .filter_map(|s| match s {
                 Schedulable::Transaction(certificate) => {
@@ -2932,7 +2935,7 @@ impl AuthorityPerEpochStore {
         self.reconfig_state_mem.read()
     }
 
-    pub fn get_reconfig_state_write_lock_guard(&self) -> RwLockWriteGuard<ReconfigState> {
+    pub(crate) fn get_reconfig_state_write_lock_guard(&self) -> RwLockWriteGuard<ReconfigState> {
         self.reconfig_state_mem.write()
     }
 
@@ -3360,6 +3363,7 @@ impl AuthorityPerEpochStore {
         // It is ok to just release lock here as functions called by this one are the
         // only place that transition reconfig state, and this function itself is always
         // executed from consensus task.
+        // TODO(commit-handler-rewrite): [ssm] ignore execution time observations if !should_accept_consensus_certs()
         if !self
             .protocol_config()
             .ignore_execution_time_observations_after_certs_closed()
@@ -3531,9 +3535,8 @@ impl AuthorityPerEpochStore {
             // above, we know we won't be transitioning state for this commit.
             self.get_reconfig_state_read_lock_guard().should_accept_tx()
         };
-
-        // TODO(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
         let make_checkpoint = should_accept_tx || final_round;
+        // TODO(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
         if make_checkpoint {
             let checkpoint_height =
                 self.calculate_pending_checkpoint_height(consensus_commit_info.round);
@@ -4102,6 +4105,7 @@ impl AuthorityPerEpochStore {
 
                 // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
                 // And this function itself is always executed from consensus task
+                // TODO(commit-handler-rewrite): [ssm] ignore end of publish messages if !should_accept_consensus_certs()
                 let collected_end_of_publish = if lock.is_none()
                     && self
                         .get_reconfig_state_read_lock_guard()
@@ -4171,6 +4175,7 @@ impl AuthorityPerEpochStore {
         let mut lock = lock.unwrap_or_else(|| self.get_reconfig_state_write_lock_guard());
         lock.close_all_tx();
         output.store_reconfig_state(lock.clone());
+        // TODO(commit-handler-rewrite): [ssm] only return final_round=true on the first round where we transition to RejectAllTx
         Ok((Some(lock), true))
     }
 
@@ -4258,6 +4263,7 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 // TODO(commit-handler-rewrite): [ssm] can ignore capabilities v1 in rewrite
+                // TODO(commit-handler-rewrite): [ssm] ignore capability notifications if !should_accept_consensus_certs()
                 let authority = capabilities.authority;
                 if self
                     .get_reconfig_state_read_lock_guard()
@@ -4280,7 +4286,8 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
                 ..
             }) => {
-                // TODO(commit-handler-rewrite): [ssm] record authority capabilities, only if should_accept_consensus_certs()
+                // TODO(commit-handler-rewrite): [ssm] ignore capability notifications if !should_accept_consensus_certs()
+                // TODO(commit-handler-rewrite): [ssm] record authority capabilities
                 let authority = capabilities.authority;
                 if self
                     .get_reconfig_state_read_lock_guard()
@@ -4303,7 +4310,8 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::NewJWKFetched(authority, jwk_id, jwk),
                 ..
             }) => {
-                // TODO(commit-handler-rewrite): [ssm] record jwk votes, only if should_accept_consensus_certs()
+                // TODO(commit-handler-rewrite): [ssm] record jwk votes
+                // TODO(commit-handler-rewrite): [ssm] ignore jwk votes if !should_accept_consensus_certs()
                 if self
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
@@ -4334,7 +4342,8 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, bytes),
                 ..
             }) => {
-                // TODO(commit-handler-rewrite): [ssm] process dkg message if should_accept_tx()
+                // TODO(commit-handler-rewrite): [ssm] process dkg message
+                // TODO(commit-handler-rewrite): [ssm] ignore dkg message if !should_accept_tx()
                 if self.get_reconfig_state_read_lock_guard().should_accept_tx() {
                     if let Some(randomness_manager) = randomness_manager.as_mut() {
                         debug!(
@@ -4368,7 +4377,8 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, bytes),
                 ..
             }) => {
-                // TODO(commit-handler-rewrite): [ssm] process dkg confirmation if should_accept_tx()
+                // TODO(commit-handler-rewrite): [ssm] process dkg confirmation
+                // TODO(commit-handler-rewrite): [ssm] ignore dkg confirmation if !should_accept_tx()
                 if self.get_reconfig_state_read_lock_guard().should_accept_tx() {
                     if let Some(randomness_manager) = randomness_manager.as_mut() {
                         debug!(

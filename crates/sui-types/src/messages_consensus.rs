@@ -432,8 +432,16 @@ impl ConsensusTransactionKind {
         )
     }
 
-    pub fn is_user_transaction(&self) -> bool {
+    pub fn is_mfp_transaction(&self) -> bool {
         matches!(self, ConsensusTransactionKind::MFPTransaction(_))
+    }
+
+    pub fn is_user_transaction(&self) -> bool {
+        matches!(
+            self,
+            ConsensusTransactionKind::MFPTransaction(_)
+                | ConsensusTransactionKind::CertifiedTransaction(_)
+        )
     }
 }
 

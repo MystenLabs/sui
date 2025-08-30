@@ -947,6 +947,75 @@ impl ConsensusOutputQuarantine {
                 (object_id, debt)
             }))
     }
+
+    // TODO: Remove the above version and rename this without _v2
+    pub(crate) fn load_initial_object_debts_v2(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        current_round: Round,
+        for_randomness: bool,
+        transactions: &[VerifiedExecutableTransaction],
+    ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
+        let protocol_config = epoch_store.protocol_config();
+        let tables = epoch_store.tables()?;
+        let default_per_commit_budget = protocol_config
+            .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
+            .unwrap_or(0);
+        let (hash_table, db_table, per_commit_budget) = if for_randomness {
+            (
+                &self.congestion_control_randomness_object_debts,
+                &tables.congestion_control_randomness_object_debts,
+                protocol_config
+                    .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
+                    .unwrap_or(default_per_commit_budget),
+            )
+        } else {
+            (
+                &self.congestion_control_object_debts,
+                &tables.congestion_control_object_debts,
+                default_per_commit_budget,
+            )
+        };
+        let mut shared_input_object_ids: Vec<_> = transactions
+            .iter()
+            .flat_map(|tx| tx.shared_input_objects().map(|obj| obj.id))
+            .collect();
+        shared_input_object_ids.sort();
+        shared_input_object_ids.dedup();
+
+        let results = do_fallback_lookup(
+            &shared_input_object_ids,
+            |object_id| {
+                if let Some(debt) = hash_table.get(object_id) {
+                    CacheResult::Hit(Some(debt.into_v1()))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |object_ids| {
+                db_table
+                    .multi_get(object_ids)
+                    .expect("db error")
+                    .into_iter()
+                    .map(|debt| debt.map(|debt| debt.into_v1()))
+                    .collect()
+            },
+        );
+
+        Ok(results
+            .into_iter()
+            .zip(shared_input_object_ids)
+            .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
+            .map(move |((round, debt), object_id)| {
+                // Stored debts already account for the budget of the round in which
+                // they were accumulated. Application of budget from future rounds to
+                // the debt is handled here.
+                assert!(current_round > round);
+                let num_rounds = current_round - round - 1;
+                let debt = debt.saturating_sub(per_commit_budget * num_rounds);
+                (object_id, debt)
+            }))
+    }
 }
 
 // A wrapper around HashMap that uses refcounts to keep entries alive until
