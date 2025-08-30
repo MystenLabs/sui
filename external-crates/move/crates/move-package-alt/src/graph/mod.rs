@@ -80,7 +80,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
 
     /// Returns the published address of this package, if it is published
     pub fn published(&self) -> Option<&PublishAddresses> {
-        self.package().publication()
+        self.package().address()
     }
 
     /// Returns true if the node is the root of the package graph
@@ -136,7 +136,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
         }
 
         if let Some(legacy_data) = &self.package().legacy_data {
-            let addresses = legacy_data.addresses.clone();
+            let addresses = legacy_data.named_addresses.clone();
 
             for (name, addr) in addresses {
                 let new_addr = NamedAddress::Defined(OriginalID(addr));
@@ -158,10 +158,10 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     fn node_to_addr(&self, node: NodeIndex) -> NamedAddress {
         let package = self.graph.inner[node].clone();
         if package.is_root() {
-            return NamedAddress::RootPackage(package.original_id());
+            return NamedAddress::RootPackage(package.original_id().cloned());
         }
         if let Some(oid) = package.original_id() {
-            NamedAddress::Defined(oid)
+            NamedAddress::Defined(oid.clone())
         } else {
             NamedAddress::Unpublished {
                 dummy_addr: package.dummy_addr.clone(),
@@ -241,7 +241,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
             if package
                 .original_id()
-                .is_some_and(|oid| linkage.contains_key(&oid))
+                .is_some_and(|oid| linkage.contains_key(oid))
             {
                 continue;
             }
