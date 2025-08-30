@@ -32,7 +32,9 @@ use sui_indexer::{
     schema::checkpoints,
     schema::raw_checkpoints,
 };
-use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointDigest};
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointDigest,
+};
 
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(Default, InputObject)]
@@ -218,6 +220,22 @@ impl Checkpoint {
             .map(|c| bcs::to_bytes(&c).unwrap());
 
         Ok(checkpoint_bcs.map(Base64::from))
+    }
+
+    /// A commitment by the committee on the artifacts of the checkpoint.
+    /// e.g., object checkpoint states
+    async fn artifacts_digest(&self) -> Result<Option<String>> {
+        let commitments: Vec<CheckpointCommitment> =
+            bcs::from_bytes(&self.stored.checkpoint_commitments).map_err(|e| {
+                Error::Internal(format!("Error deserializing commitments: {e}")).extend()
+            })?;
+
+        for commitment in commitments {
+            if let CheckpointCommitment::CheckpointArtifactsDigest(digest) = commitment {
+                return Ok(Some(digest.base58_encode()));
+            }
+        }
+        Ok(None)
     }
 }
 
