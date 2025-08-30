@@ -272,7 +272,7 @@ impl LocalValidatorAggregatorProxy {
     pub async fn from_genesis(
         genesis: &Genesis,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: Option<&str>,
+        reconfig_fullnode_rpc_url: &str,
         transaction_driver_percentage: Option<u8>,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
@@ -300,7 +300,7 @@ impl LocalValidatorAggregatorProxy {
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: Option<&str>,
+        reconfig_fullnode_rpc_url: &str,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
         td_percentage: u8,
