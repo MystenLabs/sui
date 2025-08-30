@@ -15088,6 +15088,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "prometheus",
+ "sui-data-ingestion-core",
  "sui-kvstore",
  "sui-protocol-config",
  "sui-rpc",

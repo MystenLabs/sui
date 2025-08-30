@@ -25,12 +25,14 @@ pub struct KvRpcServer {
     chain_id: ChainIdentifier,
     client: BigTableClient,
     server_version: Option<ServerVersion>,
+    checkpoint_bucket: Option<String>,
 }
 
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
         app_profile_id: Option<String>,
+        checkpoint_bucket: Option<String>,
         server_version: Option<ServerVersion>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -53,6 +55,7 @@ impl KvRpcServer {
             chain_id,
             client,
             server_version,
+            checkpoint_bucket,
         })
     }
 }
@@ -117,10 +120,14 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
-        get_checkpoint::get_checkpoint(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_checkpoint::get_checkpoint(
+            self.client.clone(),
+            request.into_inner(),
+            self.checkpoint_bucket.clone(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_epoch(
