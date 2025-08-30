@@ -2800,7 +2800,7 @@ impl AuthorityPerEpochStore {
         authority: AuthorityName,
         id: &JwkId,
         jwk: &JWK,
-    ) -> SuiResult {
+    ) {
         info!(
             "received jwk vote from {:?} for jwk ({:?}, {:?})",
             authority.concise(),
@@ -2813,7 +2813,7 @@ impl AuthorityPerEpochStore {
                 "ignoring vote because authenticator state object does exist yet
                 (it will be created at the end of this epoch)"
             );
-            return Ok(());
+            return;
         }
 
         let mut jwk_aggregator = self.jwk_aggregator.lock();
@@ -2828,7 +2828,7 @@ impl AuthorityPerEpochStore {
                 "validator {:?} has already voted {} times this epoch, ignoring vote",
                 authority, votes,
             );
-            return Ok(());
+            return;
         }
 
         output.insert_pending_jwk(authority, id.clone(), jwk.clone());
@@ -2841,8 +2841,6 @@ impl AuthorityPerEpochStore {
             info!(epoch = ?self.epoch(), ?round, jwk = ?key, "jwk became active");
             output.insert_active_jwk(round, key);
         }
-
-        Ok(())
     }
 
     pub(crate) fn get_new_jwks(&self, round: u64) -> SuiResult<Vec<ActiveJwk>> {
@@ -4322,7 +4320,7 @@ impl AuthorityPerEpochStore {
                         *authority,
                         jwk_id,
                         jwk,
-                    )?;
+                    );
                 } else {
                     debug!(
                         "Ignoring NewJWKFetched from {:?} because of end of epoch",

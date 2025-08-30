@@ -663,6 +663,12 @@ struct CommitHandlerInput {
     new_jwks: Vec<(AuthorityName, JwkId, JWK)>,
 }
 
+struct CommitHandlerState {
+    dkg_failed: bool,
+    randomness_round: Option<RandomnessRound>,
+    output: ConsensusCommitOutput,
+}
+
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// Called during startup to allow us to observe commits we previously processed, for crash recovery.
     /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
@@ -752,20 +758,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
-        let mut output = ConsensusCommitOutput::new(commit_info.round);
+        let mut state = CommitHandlerState {
+            output: ConsensusCommitOutput::new(commit_info.round),
+            dkg_failed: false,
+            randomness_round: None,
+        };
 
-        let (randomness_manager, randomness_round, dkg_failed) =
-            self.init_randomness(&mut output, &commit_info);
-
-        if randomness_round.is_some() {
-            assert!(!dkg_failed); // invariant check
-        }
-
-        let randomness_manager = randomness_manager.map(|rm| &mut *rm);
+        let randomness_manager = self.init_randomness(&mut state, &commit_info);
 
         // DONE(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
         let transactions = self.filter_consensus_txns(&commit_info, &consensus_commit);
-        let transactions = self.deduplicate_consensus_txns(&mut output, &commit_info, transactions);
+        let transactions = self.deduplicate_consensus_txns(&mut state, &commit_info, transactions);
 
         let CommitHandlerInput {
             authenticator_state_update_transactions,
@@ -779,46 +782,38 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             new_jwks,
         } = self.build_commit_handler_input(&commit_info, transactions);
 
-        self.process_jwks(&mut output, &commit_info, new_jwks);
+        self.process_jwks(&mut state, &commit_info, new_jwks);
         self.process_capability_notifications(capability_notifications);
-        self.process_execution_time_observations(&mut output, execution_time_observations);
+        self.process_execution_time_observations(&mut state, execution_time_observations);
         self.process_checkpoint_signature_messages(checkpoint_signature_messages);
 
-        self.process_randomness_dkg_messages(randomness_manager, randomness_dkg_messages);
-        self.process_randomness_dkg_confirmations(
-            &mut output,
-            randomness_manager,
-            randomness_dkg_confirmations,
+        self.process_randomness_dkg_messages(
+            randomness_manager.as_mut().map(|rm| &mut **rm),
+            randomness_dkg_messages,
         );
+        self.process_randomness_dkg_confirmations(&mut state, randomness_dkg_confirmations);
 
         let pending_checkpoints = self.process_transactions(
-            &mut output,
+            &mut state,
             &commit_info,
-            randomness_round,
-            dkg_failed,
             authenticator_state_update_transactions,
             user_transactions,
         );
 
-        self.epoch_store
-            .process_user_signatures(user_transactions.iter());
-
         let collected_eop =
-            self.process_end_of_publish_transactions(&mut output, end_of_publish_transactions);
+            self.process_end_of_publish_transactions(&mut state, end_of_publish_transactions);
         let (lock, final_round) = if collected_eop {
             // DONE(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
-            self.advance_eop_state_machine(&mut output)
+            self.advance_eop_state_machine(&mut state)
         } else {
             (None, false)
         };
     }
 
     fn process_transactions(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
-        randomness_round: Option<RandomnessRound>,
-        dkg_failed: bool,
         authenticator_state_update_transactions: Vec<VerifiedExecutableTransaction>,
         user_transactions: Vec<VerifiedExecutableTransaction>,
     ) {
@@ -828,10 +823,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // Get the ordered set of all transactions to process, which includes deferred and
         // newly arrived transactions.
         let (ordered_txns, ordered_randomness_txns) = self.merge_and_reorder_transactions(
-            output,
+            state,
             commit_info,
-            dkg_failed,
-            randomness_round,
             authenticator_state_update_transactions,
             user_transactions,
         );
@@ -846,11 +839,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn merge_and_reorder_transactions(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
-        dkg_failed: bool,
-        randomness_round: Option<RandomnessRound>,
         authenticator_state_update_transactions: Vec<VerifiedExecutableTransaction>,
         user_transactions: Vec<VerifiedExecutableTransaction>,
     ) -> (
@@ -859,8 +850,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let protocol_config = self.epoch_store.protocol_config();
 
-        let (mut txns, mut randomness_txns) =
-            self.load_deferred_transactions(output, commit_info, dkg_failed, randomness_round);
+        let (mut txns, mut randomness_txns) = self.load_deferred_transactions(state, commit_info);
 
         txns.reserve(authenticator_state_update_transactions.len() + user_transactions.len());
         randomness_txns.reserve(user_transactions.len());
@@ -890,10 +880,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     fn load_deferred_transactions(
         &self,
-        output: &mut ConsensusCommitOutput,
+        state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
-        dkg_failed: bool,
-        randomness_round: Option<RandomnessRound>,
     ) -> (
         Vec<VerifiedExecutableTransaction>,
         Vec<VerifiedExecutableTransaction>,
@@ -930,17 +918,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // DONE(commit-handler-rewrite): Load transactions deferred from previous commits, compute the digest set of all such transactions.
         let deferred_txs: Vec<_> = self
             .epoch_store
-            .load_deferred_transactions_for_up_to_consensus_round(output, commit_info.round)
+            .load_deferred_transactions_for_up_to_consensus_round(
+                &mut state.output,
+                commit_info.round,
+            )
             .expect("db error")
             .into_iter()
-            .flat_map(|(key, tx)| tx.into_iter().map(to_verified_executable_transaction))
+            .flat_map(|(_, tx)| tx.into_iter().map(to_verified_executable_transaction))
             .collect();
 
         // DONE(commit-handler-rewrite): load all deferred randomness-using txns
-        let deferred_randomness_txs = if dkg_failed || randomness_round.is_some() {
+        let deferred_randomness_txs = if state.dkg_failed || state.randomness_round.is_some() {
             let txns: Vec<_> = self
                 .epoch_store
-                .load_deferred_transactions_for_randomness(output)
+                .load_deferred_transactions_for_randomness(&mut state.output)
                 .expect("db error")
                 .into_iter()
                 .flat_map(|(_, tx)| tx.into_iter().map(to_verified_executable_transaction))
@@ -977,14 +968,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn init_randomness(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
-    ) -> (
-        Option<tokio::sync::MutexGuard<'_, RandomnessManager>>,
-        Option<RandomnessRound>,
-        bool,
-    ) {
+    ) -> Option<tokio::sync::MutexGuard<'_, RandomnessManager>> {
         // DONE(commit-handler-rewrite): load randomness manager, get random round
         let mut randomness_manager = self.epoch_store.randomness_manager.get().map(|rm| {
             rm.try_lock()
@@ -1014,7 +1001,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .should_accept_tx()
                     {
                         randomness_manager
-                            .reserve_next_randomness(commit_info.timestamp, &mut output)?
+                            // TODO: make infallible
+                            .reserve_next_randomness(commit_info.timestamp, &mut state.output)
+                            .expect("epoch ended")
                     } else {
                         None
                     }
@@ -1024,29 +1013,36 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             None
         };
 
-        (randomness_manager, randomness_round, dkg_failed)
+        if randomness_round.is_some() {
+            assert!(!dkg_failed); // invariant check
+        }
+
+        state.randomness_round = randomness_round;
+        state.dkg_failed = dkg_failed;
+
+        randomness_manager
     }
 
     fn process_jwks(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
         new_jwks: Vec<(AuthorityName, JwkId, JWK)>,
     ) {
         // DONE(commit-handler-rewrite): [ssm] record jwk votes
         for (authority_name, jwk_id, jwk) in new_jwks {
             self.epoch_store.record_jwk_vote(
-                output,
+                &mut state.output,
                 commit_info.round,
                 authority_name,
-                jwk_id,
-                jwk,
-            )?;
+                &jwk_id,
+                &jwk,
+            );
         }
     }
 
     fn process_capability_notifications(
-        &mut self,
+        &self,
         capability_notifications: Vec<AuthorityCapabilitiesV2>,
     ) {
         // DONE(commit-handler-rewrite): [ssm] record capability notifications
@@ -1058,8 +1054,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn process_execution_time_observations(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
         execution_time_observations: Vec<ExecutionTimeObservation>,
     ) {
         // DONE(commit-handler-rewrite): [ssm] Process new execution time observations for use by congestion control.
@@ -1089,12 +1085,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 Some(generation),
                 &estimates,
             );
-            output.insert_execution_time_observation(authority_index, generation, estimates);
+            state
+                .output
+                .insert_execution_time_observation(authority_index, generation, estimates);
         }
     }
 
     fn process_checkpoint_signature_messages(
-        &mut self,
+        &self,
         checkpoint_signature_messages: Vec<CheckpointSignatureMessage>,
     ) {
         // DONE(commit-handler-rewrite): [ssm] notify checkpoint signatures
@@ -1106,7 +1104,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn process_randomness_dkg_messages(
-        &mut self,
+        &self,
         randomness_manager: Option<&mut RandomnessManager>,
         randomness_dkg_messages: Vec<(AuthorityName, Vec<u8>)>,
     ) {
@@ -1127,7 +1125,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // DONE(commit-handler-rewrite): [ssm] process dkg message
         for (authority, bytes) in randomness_dkg_messages {
             match bcs::from_bytes(&bytes) {
-                Ok(message) => randomness_manager.add_message(authority, message)?,
+                Ok(message) => randomness_manager.add_message(&authority, message)?,
                 Err(e) => {
                     warn!(
                         "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
@@ -1139,9 +1137,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn process_randomness_dkg_confirmations(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
-        randomness_manager: Option<&mut RandomnessManager>,
+        &self,
+        state: &mut CommitHandlerState,
         randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
     ) {
         if randomness_dkg_confirmations.is_empty() {
@@ -1155,13 +1152,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             return;
         }
 
-        let randomness_manager =
-            randomness_manager.expect("randomness manager should exist if randomness is enabled");
+        let randomness_manager = state
+            .randomness_manager
+            .expect("randomness manager should exist if randomness is enabled");
 
         // DONE(commit-handler-rewrite): [ssm] process dkg confirmation
         for (authority, bytes) in randomness_dkg_confirmations {
-            match bcs::from_bytes(bytes) {
-                Ok(message) => randomness_manager.add_confirmation(output, authority, message)?,
+            match bcs::from_bytes(&bytes) {
+                Ok(message) => {
+                    randomness_manager.add_confirmation(&mut state.output, authority, message)?
+                }
                 Err(e) => {
                     warn!(
                         "Failed to deserialize RandomnessDkgConfirmation from {:?}: {e:?}",
@@ -1174,8 +1174,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     /// Returns true if we have collected a quorum of end of publish messages (either in this round or a previous round).
     fn process_end_of_publish_transactions(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
         end_of_publish_transactions: Vec<AuthorityName>,
     ) -> bool {
         let mut eop_aggregator = self.epoch_store.end_of_publish.try_lock().expect(
@@ -1195,7 +1195,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
             // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
             // And this function itself is always executed from consensus task
-            output.insert_end_of_publish(authority);
+            state.output.insert_end_of_publish(authority);
             if eop_aggregator
                 .insert_generic(authority, ())
                 .is_quorum_reached()
@@ -1214,8 +1214,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// After we have collected 2f+1 EndOfPublish messages, we call this function every round until the epoch
     /// ends.
     fn advance_eop_state_machine(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
     ) -> (
         Option<RwLockWriteGuard<ReconfigState>>,
         bool, // true if final round
@@ -1225,7 +1225,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         reconfig_state.close_all_certs();
 
-        let commit_has_deferred_txns = output.has_deferred_transactions();
+        let commit_has_deferred_txns = state.output.has_deferred_transactions();
         let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
 
         // DONE(commit-handler-rewrite): [ssm] if we are rejecting all certs, AND there are no deferred transactions to process, transition to RejectAllTx
@@ -1242,7 +1242,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
         }
 
-        output.store_reconfig_state(reconfig_state.clone());
+        state.output.store_reconfig_state(reconfig_state.clone());
 
         // DONE(commit-handler-rewrite): [ssm] only return final_round=true on the first round where we transition to RejectAllTx
         if !start_state_is_reject_all_tx && reconfig_state.is_reject_all_tx() {
@@ -1587,7 +1587,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     // Filters out rejected or deprecated transactions.
     #[instrument(level = "trace", skip_all)]
     fn filter_consensus_txns(
-        &mut self,
+        &self,
         commit_info: &ConsensusCommitInfo,
         consensus_commit: &impl ConsensusCommitAPI,
     ) -> Vec<(SequencedConsensusTransactionKind, u32)> {
@@ -1754,8 +1754,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn deduplicate_consensus_txns(
-        &mut self,
-        output: &mut ConsensusCommitOutput,
+        &self,
+        state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
         transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     ) -> Vec<SequencedConsensusTransaction> {
@@ -1802,14 +1802,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
             if self
                 .epoch_store
-                .is_consensus_message_processed(key)
+                .is_consensus_message_processed(&key)
                 .expect("db error")
             {
                 self.metrics.skipped_consensus_txns.inc();
                 continue;
             }
 
-            output.record_consensus_message_processed(key);
+            state.output.record_consensus_message_processed(key);
 
             all_transactions.push(sequenced_transaction);
         }
@@ -1818,10 +1818,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn build_commit_handler_input(
-        &mut self,
+        &self,
         commit_info: &ConsensusCommitInfo,
         transactions: Vec<SequencedConsensusTransaction>,
     ) -> CommitHandlerInput {
+        let epoch = self.epoch_store.epoch();
         let mut commit_handler_input = CommitHandlerInput::default();
 
         // DONE(commit-handler-rewrite): load and activate previous round's jwks
@@ -1846,7 +1847,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             let tx = VerifiedTransaction::new_unchecked(*tx);
                             // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
                             let transaction =
-                                VerifiedExecutableTransaction::new_from_consensus(tx, self.epoch());
+                                VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
                             commit_handler_input.user_transactions.push(transaction);
                         }
 
