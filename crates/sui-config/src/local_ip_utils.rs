@@ -3,8 +3,17 @@
 
 use std::net::SocketAddr;
 #[cfg(msim)]
-use std::sync::{atomic::AtomicI16, Arc};
+use std::sync::{atomic::{AtomicI16, Ordering}, Arc};
 use sui_types::multiaddr::Multiaddr;
+#[cfg(not(msim))]
+use tracing::{warn, error};
+
+/// Base IP address used for simulation environment.
+const BASE_IP: &str = "10.10.0";
+/// Starting port for simulation environment.
+const BASE_PORT: i16 = 9000;
+/// Maximum IP offset to prevent exceeding valid IP range.
+const MAX_IP_OFFSET: i16 = 255;
 
 /// A singleton struct to manage IP addresses and ports for simtest.
 /// This allows us to generate unique IP addresses and ports for each node in simtest.
@@ -19,22 +28,25 @@ impl SimAddressManager {
     pub fn new() -> Self {
         Self {
             next_ip_offset: AtomicI16::new(1),
-            next_port: AtomicI16::new(9000),
+            next_port: AtomicI16::new(BASE_PORT),
         }
     }
 
+    /// Generates the next unique IP address in the format `10.10.0.x`.
+    /// Panics if the IP offset exceeds the maximum allowed value (255).
     pub fn get_next_ip(&self) -> String {
         let offset = self
             .next_ip_offset
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        // If offset ever goes beyond 255, we could use more bytes in the IP.
-        assert!(offset <= 255);
-        format!("10.10.0.{}", offset)
+            .fetch_add(1, Ordering::SeqCst);
+        if offset > MAX_IP_OFFSET {
+            panic!("IP offset exceeded maximum value of {}", MAX_IP_OFFSET);
+        }
+        format!("{}.{}", BASE_IP, offset)
     }
 
     pub fn get_next_available_port(&self) -> u16 {
         self.next_port
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u16
+            .fetch_add(1, Ordering::SeqCst) as u16
     }
 }
 
@@ -76,24 +88,60 @@ pub fn get_available_port(_host: &str) -> u16 {
 /// Callers should be able to bind to this port given they use SO_REUSEADDR.
 #[cfg(not(msim))]
 pub fn get_available_port(host: &str) -> u16 {
-    const MAX_PORT_RETRIES: u32 = 1000;
+    get_available_port_with_retries(host, 1000)
+        .unwrap_or_else(|| panic!("Failed to find available port on {} after maximum retries", host))
+}
 
-    for _ in 0..MAX_PORT_RETRIES {
-        if let Ok(port) = get_ephemeral_port(host) {
-            return port;
+/// Attempts to find an available port with a specified number of retries.
+/// Returns `None` if no port is found after the maximum retries.
+#[cfg(not(msim))]
+pub fn get_available_port_with_retries(host: &str, max_retries: u32) -> Option<u16> {
+    use std::time::{Duration, Instant};
+    
+    if host.is_empty() {
+        warn!("Host is empty, cannot find available port");
+        return None;
+    }
+    
+    if max_retries == 0 {
+        warn!(host = %host, "No retries allowed for finding available port");
+        return None;
+    }
+
+    let start_time = Instant::now();
+    let mut last_error = None;
+
+    for attempt in 0..max_retries {
+        match get_ephemeral_port(host) {
+            Ok(port) => return Some(port),
+            Err(e) => {
+                last_error = Some(e);
+                if attempt < max_retries - 1 {
+                    let backoff_ms = std::cmp::min(1 << attempt, 100); // Cap at 100ms
+                    std::thread::sleep(Duration::from_millis(backoff_ms));
+                }
+            }
         }
     }
 
-    panic!(
-        "Error: could not find an available port on {}: {:?}",
-        host,
-        get_ephemeral_port(host)
+    warn!(
+        host = %host,
+        attempts = max_retries,
+        duration = ?start_time.elapsed(),
+        error = ?last_error,
+        "Failed to find available port after maximum retries"
     );
+    None
 }
 
 #[cfg(not(msim))]
 fn get_ephemeral_port(host: &str) -> std::io::Result<u16> {
     use std::net::{TcpListener, TcpStream};
+
+    // Validate host
+    if host.is_empty() {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Host cannot be empty"));
+    }
 
     // Request a random available port from the OS
     let listener = TcpListener::bind((host, 0))?;
@@ -102,38 +150,52 @@ fn get_ephemeral_port(host: &str) -> std::io::Result<u16> {
     // Create and accept a connection (which we'll promptly drop) in order to force the port
     // into the TIME_WAIT state, ensuring that the port will be reserved from some limited
     // amount of time (roughly 60s on some Linux systems)
-    let _sender = TcpStream::connect(addr)?;
-    let _incoming = listener.accept()?;
+    let _sender = TcpStream::connect(addr).map_err(|e| {
+        error!(host = %host, port = addr.port(), error = %e, "Failed to connect to port");
+        e
+    })?;
+    let _incoming = listener.accept().map_err(|e| {
+        error!(host = %host, port = addr.port(), error = %e, "Failed to accept connection");
+        e
+    })?;
 
     Ok(addr.port())
 }
 
 /// Returns a new unique TCP address for the given host, by finding a new available port.
 pub fn new_tcp_address_for_testing(host: &str) -> Multiaddr {
+    if host.is_empty() {
+        panic!("Host cannot be empty");
+    }
     format!("/ip4/{}/tcp/{}/http", host, get_available_port(host))
         .parse()
+        .map_err(|e| panic!("Failed to parse TCP Multiaddr for host {}: {}", host, e))
         .unwrap()
 }
 
 /// Returns a new unique UDP address for the given host, by finding a new available port.
 pub fn new_udp_address_for_testing(host: &str) -> Multiaddr {
+    if host.is_empty() {
+        panic!("Host cannot be empty");
+    }
     format!("/ip4/{}/udp/{}", host, get_available_port(host))
         .parse()
+        .map_err(|e| panic!("Failed to parse UDP Multiaddr for host {}: {}", host, e))
         .unwrap()
 }
 
 /// Returns a new unique TCP address in String format for localhost, by finding a new available port on localhost.
 pub fn new_local_tcp_socket_for_testing_string() -> String {
-    format!(
-        "{}:{}",
-        localhost_for_testing(),
-        get_available_port(&localhost_for_testing())
-    )
+    let localhost = localhost_for_testing();
+    format!("{}:{}", localhost, get_available_port(&localhost))
 }
 
 /// Returns a new unique TCP address (SocketAddr) for localhost, by finding a new available port on localhost.
 pub fn new_local_tcp_socket_for_testing() -> SocketAddr {
-    new_local_tcp_socket_for_testing_string().parse().unwrap()
+    new_local_tcp_socket_for_testing_string()
+        .parse()
+        .map_err(|e| panic!("Failed to parse TCP SocketAddr: {}", e))
+        .unwrap()
 }
 
 /// Returns a new unique TCP address (Multiaddr) for localhost, by finding a new available port on localhost.
@@ -147,9 +209,21 @@ pub fn new_local_udp_address_for_testing() -> Multiaddr {
 }
 
 pub fn new_deterministic_tcp_address_for_testing(host: &str, port: u16) -> Multiaddr {
-    format!("/ip4/{host}/tcp/{port}/http").parse().unwrap()
+    if host.is_empty() {
+        panic!("Host cannot be empty");
+    }
+    format!("/ip4/{}/tcp/{}/http", host, port)
+        .parse()
+        .map_err(|e| panic!("Failed to parse deterministic TCP Multiaddr for host {}: {}", host, e))
+        .unwrap()
 }
 
 pub fn new_deterministic_udp_address_for_testing(host: &str, port: u16) -> Multiaddr {
-    format!("/ip4/{host}/udp/{port}/http").parse().unwrap()
+    if host.is_empty() {
+        panic!("Host cannot be empty");
+    }
+    format!("/ip4/{}/udp/{}", host, port)
+        .parse()
+        .map_err(|e| panic!("Failed to parse deterministic UDP Multiaddr for host {}: {}", host, e))
+        .unwrap()
 }
