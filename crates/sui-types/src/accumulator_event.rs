@@ -5,12 +5,11 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use mysten_common::fatal;
 
-use crate::balance::Balance;
 use crate::base_types::ObjectID;
 use crate::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
 };
-use crate::gas_coin::GAS;
+use crate::gas_coin::GasCoin;
 use crate::TypeTag;
 
 pub const ACCUMULATOR_MODULE_NAME: &IdentStr = ident_str!("accumulator");
@@ -40,38 +39,23 @@ impl AccumulatorEvent {
             ..
         } = self;
 
-        let TypeTag::Struct(struct_ty) = ty else {
-            return (0, 0);
-        };
-
-        if !Balance::is_balance(struct_ty) {
-            return (0, 0);
-        }
-
-        debug_assert!(struct_ty.type_params.len() == 1);
-        let TypeTag::Struct(coin_type) = &struct_ty.type_params[0] else {
-            // T is not a struct type
-            return (0, 0);
-        };
-
-        if !GAS::is_gas(coin_type) {
-            return (0, 0);
-        }
-
-        debug_assert_eq!(
-            *ty,
-            "0x2::balance::Balance<0x2::sui::SUI>"
-                .parse::<TypeTag>()
-                .unwrap()
-        );
-
-        let AccumulatorValue::Integer(value) = value else {
-            fatal!("Balance<SUI> accumulator value is not an integer");
+        let sui = match ty {
+            TypeTag::Struct(struct_tag) => {
+                if !GasCoin::is_gas_balance(struct_tag) {
+                    0
+                } else {
+                    match value {
+                        AccumulatorValue::Integer(v) => *v,
+                        AccumulatorValue::IntegerTuple(_, _) => fatal!("invalid accumulator value"),
+                    }
+                }
+            }
+            _ => 0,
         };
 
         match operation {
-            AccumulatorOperation::Merge => (0, *value),
-            AccumulatorOperation::Split => (*value, 0),
+            AccumulatorOperation::Merge => (0, sui),
+            AccumulatorOperation::Split => (sui, 0),
         }
     }
 }

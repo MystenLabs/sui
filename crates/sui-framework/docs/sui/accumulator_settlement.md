@@ -7,6 +7,7 @@ title: Module `sui::accumulator_settlement`
 -  [Constants](#@Constants_0)
 -  [Function `settlement_prologue`](#sui_accumulator_settlement_settlement_prologue)
 -  [Function `settle_u128`](#sui_accumulator_settlement_settle_u128)
+-  [Function `record_settlement_sui_conservation`](#sui_accumulator_settlement_record_settlement_sui_conservation)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -60,7 +61,7 @@ Called by settlement transactions to ensure that the settlement transaction has 
 digest.
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settlement_prologue">settlement_prologue</a>(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settlement_prologue">settlement_prologue</a>(_epoch: u64, _checkpoint_height: u64, _idx: u64, input_sui: u64, output_sui: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -69,8 +70,18 @@ digest.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settlement_prologue">settlement_prologue</a>(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &TxContext) {
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settlement_prologue">settlement_prologue</a>(
+    _epoch: u64,
+    _checkpoint_height: u64,
+    _idx: u64,
+    // Total input <a href="../sui/sui.md#sui_sui">sui</a> received from user transactions
+    input_sui: u64,
+    // Total output <a href="../sui/sui.md#sui_sui">sui</a> withdrawn by user transactions
+    output_sui: u64,
+    ctx: &TxContext,
+) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_ENotSystemAddress">ENotSystemAddress</a>);
+    <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_record_settlement_sui_conservation">record_settlement_sui_conservation</a>(input_sui, output_sui);
 }
 </code></pre>
 
@@ -123,6 +134,29 @@ digest.
         accumulator_root.create_metadata&lt;T&gt;(owner, ctx);
     };
 }
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_accumulator_settlement_record_settlement_sui_conservation"></a>
+
+## Function `record_settlement_sui_conservation`
+
+Called by the settlement transaction to track conservation of SUI.
+
+
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_record_settlement_sui_conservation">record_settlement_sui_conservation</a>(input_sui: u64, output_sui: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_record_settlement_sui_conservation">record_settlement_sui_conservation</a>(input_sui: u64, output_sui: u64);
 </code></pre>
 
 
