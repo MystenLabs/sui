@@ -32,6 +32,7 @@ diesel-async.workspace = true
 fastcrypto.workspace = true
 futures.workspace = true
 headers.workspace = true
+itertools.workspace = true
 prometheus.workspace = true
 prost-types.workspace = true
 serde.workspace = true

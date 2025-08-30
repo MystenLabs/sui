@@ -193,7 +193,7 @@ impl EffectsContents {
         let transaction_digest = content.digest()?;
         let timestamp_ms = content.timestamp_ms();
 
-        for edge in cursors.edges {
+        for edge in cursors.edges.iter() {
             let event = Event {
                 scope: self.scope.clone(),
                 native: events[*edge.cursor].clone(),

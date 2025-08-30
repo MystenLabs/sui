@@ -17,6 +17,7 @@ use super::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         epoch::Epoch,
+        event::{filter::EventFilter, CEvent, Event},
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
         object::{self, Object, ObjectKey, VersionFilter},
@@ -95,6 +96,24 @@ impl Query {
     ) -> Result<Option<Epoch>, RpcError> {
         let scope = self.scope(ctx)?;
         Epoch::fetch(ctx, scope, epoch_id).await
+    }
+
+    /// Paginate events that are emitted in the network, optionally filtered by event filters.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CEvent>,
+        last: Option<u64>,
+        before: Option<CEvent>,
+        filter: Option<EventFilter>,
+    ) -> Result<Connection<String, Event>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "events");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
     }
 
     /// Fetch checkpoints by their sequence numbers.

@@ -14689,6 +14689,7 @@ dependencies = [
  "futures",
  "headers",
  "insta",
+ "itertools 0.13.0",
  "move-binary-format",
  "move-core-types",
  "prometheus",
