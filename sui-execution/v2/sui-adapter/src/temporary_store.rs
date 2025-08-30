@@ -1184,6 +1184,12 @@ impl Storage for TemporaryStore<'_> {
     ) -> DenyListResult {
         unreachable!("Coin denylist v2 is not supported in sui-execution v2");
     }
+
+    fn record_generated_object_ids(&mut self, _generated_ids: BTreeSet<ObjectID>) {
+        unreachable!(
+            "Generated object IDs are not recorded in ExecutionResults in sui-execution v2"
+        );
+    }
 }
 
 impl BackingPackageStore for TemporaryStore<'_> {

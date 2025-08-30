@@ -182,6 +182,8 @@ mod checked {
         // We record what objects were contained in at the start of the transaction
         // for expensive invariant checks
         let wrapped_object_containers = object_runtime.wrapped_object_containers();
+        // We record the generated object IDs for expensive invariant checks
+        let generated_object_ids = object_runtime.generated_object_ids();
 
         // apply changes
         let finished = context.finish::<Mode>();
@@ -189,6 +191,7 @@ mod checked {
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
         state_view.save_wrapped_object_containers(wrapped_object_containers);
         state_view.record_execution_results(finished?);
+        state_view.record_generated_object_ids(generated_object_ids);
         Ok(mode_results)
     }
 
