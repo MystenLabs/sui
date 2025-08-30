@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::mem;
-
-use anyhow::ensure;
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::{
     ingestion::IngestionConfig,
@@ -21,6 +18,7 @@ pub trait Merge: Sized {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct IndexerConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionLayer,
@@ -38,9 +36,6 @@ pub struct IndexerConfig {
 
     /// Per-pipeline configurations.
     pub pipeline: PipelineLayer,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 // Configuration layers apply overrides over a base configuration. When reading configs from a
@@ -53,62 +48,52 @@ pub struct IndexerConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
     pub ingest_concurrency: Option<usize>,
     pub retry_interval_ms: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub pruner: Option<PrunerLayer>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct PrunerLayer {
     pub interval_ms: Option<u64>,
     pub delay_ms: Option<u64>,
     pub retention: Option<u64>,
     pub max_chunk_size: Option<u64>,
     pub prune_concurrency: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct PipelineLayer {
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
@@ -134,9 +119,6 @@ pub struct PipelineLayer {
     pub tx_calls: Option<ConcurrentLayer>,
     pub tx_digests: Option<ConcurrentLayer>,
     pub tx_kinds: Option<ConcurrentLayer>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 impl IndexerConfig {
@@ -168,7 +150,6 @@ impl IndexerConfig {
                     collect_interval_ms: Some(50),
                     watermark_interval_ms: Some(50),
                     write_concurrency: Some(1),
-                    ..Default::default()
                 },
                 pruner: PrunerLayer {
                     interval_ms: Some(50),
@@ -179,16 +160,10 @@ impl IndexerConfig {
             })
             .expect("Merge failed for test configuration")
     }
-
-    pub fn finish(mut self) -> anyhow::Result<IndexerConfig> {
-        check_extra("top-level", mem::take(&mut self.extra))?;
-        Ok(self)
-    }
 }
 
 impl IngestionLayer {
     pub fn finish(self, base: IngestionConfig) -> anyhow::Result<IngestionConfig> {
-        check_extra("ingestion", self.extra)?;
         Ok(IngestionConfig {
             checkpoint_buffer_size: self
                 .checkpoint_buffer_size
@@ -201,7 +176,6 @@ impl IngestionLayer {
 
 impl SequentialLayer {
     pub fn finish(self, base: SequentialConfig) -> anyhow::Result<SequentialConfig> {
-        check_extra("sequential pipeline", self.extra)?;
         Ok(SequentialConfig {
             committer: if let Some(committer) = self.committer {
                 committer.finish(base.committer)?
@@ -217,7 +191,6 @@ impl ConcurrentLayer {
     /// Unlike other parameters, `pruner` will appear in the finished configuration only if they
     /// appear in the layer *and* in the base.
     pub fn finish(self, base: ConcurrentConfig) -> anyhow::Result<ConcurrentConfig> {
-        check_extra("concurrent pipeline", self.extra)?;
         Ok(ConcurrentConfig {
             committer: if let Some(committer) = self.committer {
                 committer.finish(base.committer)?
@@ -234,7 +207,6 @@ impl ConcurrentLayer {
 
 impl CommitterLayer {
     pub fn finish(self, base: CommitterConfig) -> anyhow::Result<CommitterConfig> {
-        check_extra("committer", self.extra)?;
         Ok(CommitterConfig {
             write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
             collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
@@ -247,7 +219,6 @@ impl CommitterLayer {
 
 impl PrunerLayer {
     pub fn finish(self, base: PrunerConfig) -> anyhow::Result<PrunerConfig> {
-        check_extra("pruner", self.extra)?;
         Ok(PrunerConfig {
             interval_ms: self.interval_ms.unwrap_or(base.interval_ms),
             delay_ms: self.delay_ms.unwrap_or(base.delay_ms),
@@ -284,76 +255,55 @@ impl PipelineLayer {
             tx_calls: Some(Default::default()),
             tx_digests: Some(Default::default()),
             tx_kinds: Some(Default::default()),
-            extra: Default::default(),
         }
-    }
-
-    pub fn finish(mut self) -> anyhow::Result<PipelineLayer> {
-        check_extra("pipeline", mem::take(&mut self.extra))?;
-        Ok(self)
     }
 }
 
 impl Merge for IndexerConfig {
     fn merge(self, other: IndexerConfig) -> anyhow::Result<IndexerConfig> {
-        check_extra("top-level", self.extra)?;
-        check_extra("top-level", other.extra)?;
         Ok(IndexerConfig {
             ingestion: self.ingestion.merge(other.ingestion)?,
             committer: self.committer.merge(other.committer)?,
             pruner: self.pruner.merge(other.pruner)?,
             pipeline: self.pipeline.merge(other.pipeline)?,
-            extra: Default::default(),
         })
     }
 }
 
 impl Merge for IngestionLayer {
     fn merge(self, other: IngestionLayer) -> anyhow::Result<IngestionLayer> {
-        check_extra("ingestion", self.extra)?;
-        check_extra("ingestion", other.extra)?;
         Ok(IngestionLayer {
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
             ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
             retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
-            extra: Default::default(),
         })
     }
 }
 
 impl Merge for SequentialLayer {
     fn merge(self, other: SequentialLayer) -> anyhow::Result<SequentialLayer> {
-        check_extra("sequential pipeline", self.extra)?;
-        check_extra("sequential pipeline", other.extra)?;
         Ok(SequentialLayer {
             committer: self.committer.merge(other.committer)?,
             checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
-            extra: Default::default(),
         })
     }
 }
 
 impl Merge for ConcurrentLayer {
     fn merge(self, other: ConcurrentLayer) -> anyhow::Result<ConcurrentLayer> {
-        check_extra("concurrent pipeline", self.extra)?;
-        check_extra("concurrent pipeline", other.extra)?;
         Ok(ConcurrentLayer {
             committer: self.committer.merge(other.committer)?,
             pruner: self.pruner.merge(other.pruner)?,
-            extra: Default::default(),
         })
     }
 }
 
 impl Merge for CommitterLayer {
     fn merge(self, other: CommitterLayer) -> anyhow::Result<CommitterLayer> {
-        check_extra("committer", self.extra)?;
-        check_extra("committer", other.extra)?;
         Ok(CommitterLayer {
             write_concurrency: other.write_concurrency.or(self.write_concurrency),
             collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
             watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
-            extra: Default::default(),
         })
     }
 }
@@ -362,8 +312,6 @@ impl Merge for PrunerLayer {
     /// Last write takes precedence for all fields except the `retention`, which takes the max of
     /// all available values.
     fn merge(self, other: PrunerLayer) -> anyhow::Result<PrunerLayer> {
-        check_extra("pruner", self.extra)?;
-        check_extra("pruner", other.extra)?;
         Ok(PrunerLayer {
             interval_ms: other.interval_ms.or(self.interval_ms),
             delay_ms: other.delay_ms.or(self.delay_ms),
@@ -374,15 +322,12 @@ impl Merge for PrunerLayer {
             },
             max_chunk_size: other.max_chunk_size.or(self.max_chunk_size),
             prune_concurrency: other.prune_concurrency.or(self.prune_concurrency),
-            extra: Default::default(),
         })
     }
 }
 
 impl Merge for PipelineLayer {
     fn merge(self, other: PipelineLayer) -> anyhow::Result<PipelineLayer> {
-        check_extra("pipeline", self.extra)?;
-        check_extra("pipeline", other.extra)?;
         Ok(PipelineLayer {
             coin_balance_buckets: self
                 .coin_balance_buckets
@@ -409,7 +354,6 @@ impl Merge for PipelineLayer {
             tx_calls: self.tx_calls.merge(other.tx_calls)?,
             tx_digests: self.tx_digests.merge(other.tx_digests)?,
             tx_kinds: self.tx_kinds.merge(other.tx_kinds)?,
-            extra: Default::default(),
         })
     }
 }
@@ -430,7 +374,6 @@ impl From<IngestionConfig> for IngestionLayer {
             checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
             ingest_concurrency: Some(config.ingest_concurrency),
             retry_interval_ms: Some(config.retry_interval_ms),
-            extra: Default::default(),
         }
     }
 }
@@ -440,7 +383,6 @@ impl From<SequentialConfig> for SequentialLayer {
         Self {
             committer: Some(config.committer.into()),
             checkpoint_lag: Some(config.checkpoint_lag),
-            extra: Default::default(),
         }
     }
 }
@@ -450,7 +392,6 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
         Self {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
-            extra: Default::default(),
         }
     }
 }
@@ -461,7 +402,6 @@ impl From<CommitterConfig> for CommitterLayer {
             write_concurrency: Some(config.write_concurrency),
             collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
-            extra: Default::default(),
         }
     }
 }
@@ -474,22 +414,8 @@ impl From<PrunerConfig> for PrunerLayer {
             retention: Some(config.retention),
             max_chunk_size: Some(config.max_chunk_size),
             prune_concurrency: Some(config.prune_concurrency),
-            extra: Default::default(),
         }
     }
-}
-
-/// Check whether there are any unrecognized extra fields and if so, warn about them.
-fn check_extra(pos: &str, extra: toml::Table) -> anyhow::Result<()> {
-    ensure!(
-        extra.is_empty(),
-        "Found unrecognized {pos} field{}. This could be because of a typo, or because it was \
-         introduced in a newer version of the indexer:\n{}",
-        if extra.len() != 1 { "s" } else { "" },
-        extra,
-    );
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -515,17 +441,14 @@ mod tests {
                     write_concurrency: Some(10),
                     collect_interval_ms: Some(1000),
                     watermark_interval_ms: None,
-                    extra: Default::default(),
                 }),
                 checkpoint_lag: Some(100),
-                extra: Default::default(),
             }),
             ev_emit_mod: Some(ConcurrentLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
                     collect_interval_ms: Some(500),
                     watermark_interval_ms: None,
-                    extra: Default::default(),
                 }),
                 ..Default::default()
             }),
@@ -538,10 +461,8 @@ mod tests {
                     write_concurrency: Some(5),
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(500),
-                    extra: Default::default(),
                 }),
                 checkpoint_lag: Some(200),
-                extra: Default::default(),
             }),
             ev_emit_mod: None,
             ..Default::default()
@@ -558,20 +479,16 @@ mod tests {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
-                        extra: _,
                     }),
                     checkpoint_lag: Some(200),
-                    extra: _,
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
-                        extra: _,
                     }),
                     pruner: None,
-                    extra: _,
                 }),
                 ..
             },
@@ -585,20 +502,16 @@ mod tests {
                         write_concurrency: Some(10),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
-                        extra: _,
                     }),
                     checkpoint_lag: Some(100),
-                    extra: _,
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
-                        extra: _,
                     }),
                     pruner: None,
-                    extra: _,
                 }),
                 ..
             },
@@ -613,7 +526,6 @@ mod tests {
             retention: Some(200),
             max_chunk_size: Some(300),
             prune_concurrency: Some(1),
-            extra: Default::default(),
         };
 
         let that = PrunerLayer {
@@ -622,7 +534,6 @@ mod tests {
             retention: Some(500),
             max_chunk_size: Some(600),
             prune_concurrency: Some(2),
-            extra: Default::default(),
         };
 
         let this_then_that = this.clone().merge(that.clone()).unwrap();
@@ -636,7 +547,6 @@ mod tests {
                 retention: Some(500),
                 max_chunk_size: Some(600),
                 prune_concurrency: Some(2),
-                extra: _,
             },
         );
 
@@ -648,7 +558,6 @@ mod tests {
                 retention: Some(500),
                 max_chunk_size: Some(300),
                 prune_concurrency: Some(1),
-                extra: _,
             },
         );
     }
@@ -658,7 +567,6 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
-            extra: Default::default(),
         };
 
         let base = ConcurrentConfig {
@@ -688,7 +596,6 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
-            extra: Default::default(),
         };
 
         let base = ConcurrentConfig {
@@ -721,7 +628,6 @@ mod tests {
                 interval_ms: Some(1000),
                 ..Default::default()
             }),
-            extra: Default::default(),
         };
 
         let base = ConcurrentConfig {
@@ -760,14 +666,13 @@ mod tests {
 
     #[test]
     fn detect_unrecognized_fields() {
-        let config: IndexerConfig = toml::from_str(
+        let err = toml::from_str::<IndexerConfig>(
             r#"
             i_dont_exist = "foo"
             "#,
         )
-        .unwrap();
+        .unwrap_err();
 
-        let err = config.finish().unwrap_err();
         assert!(
             err.to_string().contains("i_dont_exist"),
             "Unexpected error: {err}"

@@ -18,12 +18,11 @@ use crate::{
 };
 
 use super::{
-    address::AddressableImpl,
     balance::{self, Balance},
     dynamic_field::{DynamicField, DynamicFieldName},
     move_type::MoveType,
     move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
+    object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     transaction::Transaction,
 };
@@ -34,7 +33,7 @@ pub(crate) struct MoveObject {
     pub(crate) super_: Object,
 
     /// Move object specific data, lazily loaded from the super object.
-    native: OnceCell<Option<Arc<NativeMoveObject>>>,
+    native: Arc<OnceCell<Option<NativeMoveObject>>>,
 }
 
 /// Interface implemented by types that represent a Move object on-chain (A Move value whose type has `key`).
@@ -95,18 +94,18 @@ pub(crate) enum IMoveObject {
 #[Object]
 impl MoveObject {
     /// The MoveObject's ID.
-    pub(crate) async fn address(&self) -> SuiAddress {
-        AddressableImpl::from(&self.super_.super_).address()
+    pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
+        self.super_.address(ctx).await
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self) -> UInt53 {
-        ObjectImpl::from(&self.super_).version()
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<UInt53, RpcError> {
+        self.super_.version(ctx).await
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self) -> String {
-        ObjectImpl::from(&self.super_).digest()
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.digest(ctx).await
     }
 
     /// Attempts to convert the object into a DynamicField.
@@ -125,9 +124,7 @@ impl MoveObject {
         ctx: &Context<'_>,
         coin_type: TypeInput,
     ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_)
-            .balance(ctx, coin_type)
-            .await
+        self.super_.balance(ctx, coin_type).await
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -139,9 +136,7 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_)
-            .balances(ctx, first, after, last, before)
-            .await
+        self.super_.balances(ctx, first, after, last, before).await
     }
 
     /// The structured representation of the object's contents.
@@ -149,7 +144,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
@@ -250,9 +245,7 @@ impl MoveObject {
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
     ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
-        AddressableImpl::from(&self.super_.super_)
-            .multi_get_balances(ctx, keys)
-            .await
+        self.super_.multi_get_balances(ctx, keys).await
     }
 
     /// Access dynamic object fields on an object using their types and BCS-encoded names.
@@ -281,11 +274,11 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
-        let bytes = bcs::to_bytes(native.as_ref()).context("Failed to serialize MoveObject")?;
+        let bytes = bcs::to_bytes(native).context("Failed to serialize MoveObject")?;
         Ok(Some(Base64(bytes)))
     }
 
@@ -299,7 +292,7 @@ impl MoveObject {
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Result<Option<Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_at(ctx, version, root_version, checkpoint)
             .await
     }
@@ -309,7 +302,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_).object_bcs(ctx).await
+        self.super_.object_bcs(ctx).await
     }
 
     /// Paginate all versions of this object after this one.
@@ -322,7 +315,7 @@ impl MoveObject {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
     }
@@ -337,7 +330,7 @@ impl MoveObject {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
     }
@@ -352,7 +345,7 @@ impl MoveObject {
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
-        AddressableImpl::from(&self.super_.super_)
+        self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -362,9 +355,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Transaction>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
-            .previous_transaction(ctx)
-            .await
+        self.super_.previous_transaction(ctx).await
     }
 }
 
@@ -374,7 +365,7 @@ impl MoveObject {
     pub(crate) fn from_super(super_: Object) -> Self {
         Self {
             super_,
-            native: OnceCell::new(),
+            native: Arc::new(OnceCell::new()),
         }
     }
 
@@ -384,7 +375,7 @@ impl MoveObject {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let Some(super_contents) = object.contents(ctx).await? else {
+        let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
@@ -394,7 +385,7 @@ impl MoveObject {
 
         Ok(Some(Self {
             super_: object.clone(),
-            native: OnceCell::from(Some(Arc::new(native.clone()))),
+            native: Arc::new(OnceCell::from(Some(native.clone()))),
         }))
     }
 
@@ -402,10 +393,10 @@ impl MoveObject {
     pub(crate) async fn native(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<Arc<NativeMoveObject>>, RpcError<object::Error>> {
+    ) -> Result<&Option<NativeMoveObject>, RpcError<object::Error>> {
         self.native
             .get_or_try_init(async || {
-                let Some(contents) = self.super_.contents(ctx).await? else {
+                let Some(contents) = self.super_.contents(ctx).await?.as_ref() else {
                     return Ok(None);
                 };
 
@@ -414,7 +405,7 @@ impl MoveObject {
                     .try_as_move()
                     .context("Object is not a MoveObject")?;
 
-                Ok(Some(Arc::new(native.clone())))
+                Ok(Some(native.clone()))
             })
             .await
     }
