@@ -31,6 +31,11 @@ const EBadWitness: u64 = 0;
 const EInvalidArg: u64 = 1;
 /// Trying to split a coin more times than its balance allows.
 const ENotEnough: u64 = 2;
+/// The metadata for the coin type was not found.
+const EMetadataNotFound: u64 = 3;
+/// The metadata for the coin type was not claimed.
+const EMetadataCapNotClaimed: u64 = 4;
+
 // #[error]
 // const EGlobalPauseNotAllowed: vector<u8> =
 //    b"Kill switch was not allowed at the creation of the DenyCapV2";
@@ -94,6 +99,9 @@ public struct DenyCapV2<phantom T> has key, store {
 public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
     balance::supply_value(&cap.total_supply)
 }
+
+/// Unwrap `TreasuryCap` getting the `Supply`.
+public use fun treasury_into_supply as TreasuryCap.into_supply;
 
 /// Unwrap `TreasuryCap` getting the `Supply`.
 ///
@@ -198,11 +206,10 @@ public fun destroy_zero<T>(c: Coin<T>) {
     balance.destroy_zero()
 }
 
-// === Registering new coin types and managing the coin supply ===
-
 /// Create a new currency type `T` as and return the `TreasuryCap` for
 /// `T` to the caller. Can only be called with a `one-time-witness`
 /// type, ensuring that there's only one `TreasuryCap` per `T`.
+#[deprecated(note = b"Use `create_currency_v2` instead")]
 public fun create_currency<T: drop>(
     witness: T,
     decimals: u8,
@@ -215,20 +222,20 @@ public fun create_currency<T: drop>(
     // Make sure there's only one instance of the type T
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
-    (
-        TreasuryCap {
-            id: object::new(ctx),
-            total_supply: balance::create_supply(witness),
-        },
-        CoinMetadata {
-            id: object::new(ctx),
-            decimals,
-            name: name.to_string(),
-            symbol: symbol.to_ascii_string(),
-            description: description.to_string(),
-            icon_url,
-        },
-    )
+    let treasury_cap = TreasuryCap {
+        id: object::new(ctx),
+        total_supply: balance::create_supply(witness),
+    };
+    let metadata = CoinMetadata {
+        id: object::new(ctx),
+        decimals,
+        name: name.to_string(),
+        symbol: symbol.to_ascii_string(),
+        description: description.to_string(),
+        icon_url,
+    };
+
+    (treasury_cap, metadata)
 }
 
 /// This creates a new currency, via `create_currency`, but with an extra capability that
@@ -239,6 +246,8 @@ public fun create_currency<T: drop>(
 /// The `allow_global_pause` flag enables an additional API that will cause all addresses to
 /// be denied. Note however, that this doesn't affect per-address entries of the deny list and
 /// will not change the result of the "contains" APIs.
+#[deprecated(note = b"Use `create_regulated_currency_v3` instead")]
+#[allow(deprecated_usage)]
 public fun create_regulated_currency_v2<T: drop>(
     witness: T,
     decimals: u8,
@@ -267,6 +276,7 @@ public fun create_regulated_currency_v2<T: drop>(
         coin_metadata_object: object::id(&metadata),
         deny_cap_object: object::id(&deny_cap),
     });
+
     (treasury_cap, deny_cap, metadata)
 }
 
@@ -479,6 +489,33 @@ public fun get_icon_url<T>(metadata: &CoinMetadata<T>): Option<Url> {
     metadata.icon_url
 }
 
+/// Destroy legacy `CoinMetadata` object
+public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
+    let CoinMetadata { id, .. } = metadata;
+    id.delete()
+}
+
+public(package) fun deny_cap_id<T>(metadata: &RegulatedCoinMetadata<T>): ID {
+    metadata.deny_cap_object
+}
+
+public(package) fun new_deny_cap_v2<T>(
+    allow_global_pause: bool,
+    ctx: &mut TxContext,
+): DenyCapV2<T> {
+    DenyCapV2 {
+        id: object::new(ctx),
+        allow_global_pause,
+    }
+}
+
+public(package) fun new_treasury_cap<T>(ctx: &mut TxContext): TreasuryCap<T> {
+    TreasuryCap {
+        id: object::new(ctx),
+        total_supply: balance::create_supply_internal(),
+    }
+}
+
 // === Test-only code ===
 
 #[test_only]
@@ -502,6 +539,12 @@ public fun create_treasury_cap_for_testing<T>(ctx: &mut TxContext): TreasuryCap<
         id: object::new(ctx),
         total_supply: balance::create_supply_for_testing(),
     }
+}
+
+#[test_only]
+/// Create a `CoinMetadata` for any `Coin` for testing purposes.
+public fun freeze_for_testing<T>(regulated_coin_metadata: RegulatedCoinMetadata<T>) {
+    transfer::freeze_object(regulated_coin_metadata);
 }
 
 // === Deprecated code ===
@@ -531,6 +574,7 @@ public struct DenyCap<phantom T> has key, store {
         note = b"For new coins, use `create_regulated_currency_v2`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2`",
     ),
 ]
+#[allow(deprecated_usage)]
 public fun create_regulated_currency<T: drop>(
     witness: T,
     decimals: u8,

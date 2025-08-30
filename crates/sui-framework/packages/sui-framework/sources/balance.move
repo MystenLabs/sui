@@ -93,6 +93,10 @@ public fun destroy_zero<T>(balance: Balance<T>) {
     let Balance { value: _ } = balance;
 }
 
+public(package) fun create_supply_internal<T>(): Supply<T> {
+    Supply { value: 0 }
+}
+
 const SUI_TYPE_NAME: vector<u8> =
     b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
 
