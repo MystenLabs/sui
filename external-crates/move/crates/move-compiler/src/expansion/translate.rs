@@ -124,8 +124,25 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn finish(self) -> WarningFiltersTable {
-        self.warning_filters_table.into_inner().unwrap()
+    /// Hands back the warning filters table and any unused module extension.
+    fn finish(
+        self,
+    ) -> (
+        WarningFiltersTable,
+        BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>>,
+    ) {
+        let Context {
+            defn_context,
+            warning_filters_table,
+            ..
+        } = self;
+        let DefnContext {
+            module_extensions, ..
+        } = defn_context;
+        (
+            warning_filters_table.into_inner().unwrap(),
+            module_extensions,
+        )
     }
 
     fn env(&self) -> &CompilationEnv {
@@ -644,10 +661,30 @@ pub fn program(
     let module_map = source_module_map;
 
     // Find primitive definers
-
     super::primitive_definers::modules(context.env(), pre_compiled_lib, &module_map);
+
+    // Finish up context, and report any unused extensions
+
+    let (warning_filters_table, module_extensions) = ctxt.finish();
+
+    for (addr, pkg) in module_extensions {
+        for (name, ext) in pkg {
+            compilation_env
+                .diagnostic_reporter_at_top_level()
+                .add_diag(diag!(
+                    Declarations::InvalidModule,
+                    (
+                        ext.loc,
+                        format!("Cannot extend unknown module '{addr}::{name}'")
+                    )
+                ));
+        }
+    }
+
+    let warning_filters_table = Arc::new(warning_filters_table);
+
     E::Program {
-        warning_filters_table: Arc::new(ctxt.finish()),
+        warning_filters_table,
         modules: module_map,
     }
 }
@@ -797,16 +834,18 @@ fn into_modules_and_extenions(
                 let na_map = named_addr_maps.get(named_address_map);
                 for attr_set in attributes {
                     for attr in attr_set.value.0 {
-                        if matches!(attr.value, P::Attribute_::Mode { .. } | P::Attribute_::External { .. }) {
-                            continue;
+                        if !matches!(
+                            attr.value,
+                            P::Attribute_::Mode { .. } | P::Attribute_::External { .. }
+                        ) {
+                            context.add_diag(diag!(
+                                Attributes::ValueWarning,
+                                (
+                                    attr.loc,
+                                    "Non-'mode' attributes on address blocks are not supported and will be ignored"
+                                )
+                            ));
                         }
-                        context.add_diag(diag!(
-                            Attributes::ValueWarning,
-                            (
-                                attr.loc,
-                                "Attributes on address blocks are not supported and will be ignored"
-                            )
-                        ));
                     }
                 }
                 let addr = top_level_address_(
@@ -1092,11 +1131,13 @@ fn module_(
     // name resolution, use fun resolution, typing, etc.
 
     let cur_addr = *context.cur_address();
-    let extension_members = context
-        .get_module_extension_opt(&cur_addr, &current_module.value.module)
-        .map(|m| m.members)
-        .unwrap_or_default();
-    members.extend(extension_members);
+
+    if let Some(extension) =
+        context.get_module_extension_opt(&cur_addr, &current_module.value.module)
+    {
+        members.extend(extension.members);
+        extension_attributes(context, extension.attributes);
+    }
 
     let mut new_scope = context.new_alias_map_builder();
     let mut use_funs_builder = UseFunsBuilder::new();
@@ -1284,6 +1325,22 @@ fn check_visibility_modifiers(
                     ));
                 }
                 _ => {}
+            }
+        }
+    }
+}
+
+fn extension_attributes(context: &mut Context<'_>, attributes: Vec<Spanned<P::Attributes_>>) {
+    for attrs in attributes {
+        for attr in attrs.value.0 {
+            if !matches!(
+                attr.value,
+                P::Attribute_::Mode { .. } | P::Attribute_::External { .. }
+            ) {
+                context.add_diag(diag!(
+                    Attributes::ValueWarning,
+                    (attr.loc, "Non-'mode' attributes on module extensions are not supported and will be ignored")
+                ));
             }
         }
     }
