@@ -43,7 +43,7 @@ pub struct Package {
 
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
-    pub loaded_modules: IndexMap<IdentifierKey, Module>,
+    pub(crate) loaded_modules: IndexMap<IdentifierKey, Module>,
 
     // NB: Package functions and code are allocated into this arena.
     pub package_arena: Arena,
@@ -178,7 +178,7 @@ pub struct StructDef {
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
     pub(crate) fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<IdentifierKey>,
+    pub(crate) field_names: ArenaVec<IdentifierKey>,
 }
 
 #[derive(Debug)]
@@ -194,9 +194,9 @@ pub struct EnumDef {
 #[derive(Debug)]
 pub struct VariantDef {
     pub variant_tag: VariantTag,
-    pub variant_name: IdentifierKey,
+    pub(crate) variant_name: IdentifierKey,
     pub(crate) fields: ArenaVec<ArenaType>,
-    pub field_names: ArenaVec<IdentifierKey>,
+    pub(crate) field_names: ArenaVec<IdentifierKey>,
     pub enum_def: VMPointer<EnumDef>,
 }
 
@@ -278,7 +278,7 @@ pub(crate) enum ArenaType {
 
 #[derive(Debug)]
 pub struct DatatypeDescriptor {
-    pub name: IdentifierKey,
+    pub(crate) name: IdentifierKey,
     pub defining_id: ModuleIdKey,
     pub runtime_id: ModuleIdKey,
     pub datatype_info: ArenaBox<Datatype>,
@@ -974,7 +974,7 @@ impl ArenaType {
 }
 
 impl ModuleIdKey {
-    pub fn from_parts(address: AccountAddress, name: IdentifierKey) -> Self {
+    pub(crate) fn from_parts(address: AccountAddress, name: IdentifierKey) -> Self {
         Self { address, name }
     }
 
@@ -993,7 +993,7 @@ impl ModuleIdKey {
 }
 
 impl DatatypeDescriptor {
-    pub fn new(
+    pub(crate) fn new(
         name: IdentifierKey,
         defining_id: ModuleIdKey,
         runtime_id: ModuleIdKey,
