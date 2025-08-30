@@ -13,20 +13,20 @@ fn arith<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "arith.move");
 }
 
-fn arith_2<M: Measurement + 'static>(c: &mut Criterion<M>) {
-    bench(c, "arith_2.move");
-}
-
 fn basic_alloc<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "basic_alloc.move");
+}
+
+fn branch<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "branch.move");
 }
 
 fn call<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "call.move");
 }
 
-fn call_2<M: Measurement + 'static>(c: &mut Criterion<M>) {
-    bench(c, "call_2.move");
+fn loops<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "loop.move");
 }
 
 fn natives<M: Measurement + 'static>(c: &mut Criterion<M>) {
@@ -46,10 +46,10 @@ criterion_group!(
     config = wall_time_measurement();
     targets =
         arith,
-        arith_2,
         basic_alloc,
+        branch,
         call,
-        call_2,
+        loops,
         natives,
         transfers,
         vector,
