@@ -20,7 +20,7 @@ use sui_types::{
 
 use crate::{verification_failure, INIT_FN_NAME};
 
-/// Checks valid rules rules for entry points, both for module initialization and transactions
+/// Checks valid rules for entry points, both for module initialization and transactions
 ///
 /// For module initialization
 /// - The existence of the function is optional
