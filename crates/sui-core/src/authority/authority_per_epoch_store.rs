@@ -3405,7 +3405,7 @@ impl AuthorityPerEpochStore {
             )?,
             self.protocol_config(),
             false,
-        )?;
+        );
         let shared_object_using_randomness_congestion_tracker =
             SharedObjectCongestionTracker::from_protocol_config(
                 self.consensus_quarantine.read().load_initial_object_debts(
@@ -3416,7 +3416,7 @@ impl AuthorityPerEpochStore {
                 )?,
                 self.protocol_config(),
                 true,
-            )?;
+            );
 
         let sequenced_non_randomness_transactions: Vec<_> = system_transactions
             .into_iter()
