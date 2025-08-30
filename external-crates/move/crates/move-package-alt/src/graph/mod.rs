@@ -263,6 +263,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 }
 
+impl<F: MoveFlavor> std::fmt::Debug for PackageInfo<'_, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.package().fmt(f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // TODO: example with a --[local]--> a/b --[local]--> a/c

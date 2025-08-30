@@ -35,7 +35,12 @@ toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-[dev-dependencies]
+#[dev-dependencies]
+# If we leave these as dev-dependencies then doc generation for tests doesn't
+# work, since rustdoc doesn't include dev-dependencies. Doc generation for
+# tests is nice since we can generate diagrams for the complicated linkage scenarios
+# (see graph::linkage::tests for an example)
+aquamarine.workspace = true
 git2 = "0.20.2"
 datatest-stable.workspace = true
 insta.workspace = true
