@@ -37,7 +37,7 @@ use crate::{
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
         ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
-        WaitForEffectsRequest, WaitForEffectsResponse,
+        SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -75,9 +75,17 @@ impl EffectsCertifier {
         // When consensus position is provided, wait for finalized and fastpath outputs at the validators' side.
         // Otherwise, only wait for finalized effects.
         // Skip the first attempt to get full effects if it is already provided.
-        let (consensus_position, full_effects) = match submit_txn_resp {
-            SubmitTxResponse::Submitted { consensus_position } => (Some(consensus_position), None),
-            SubmitTxResponse::Executed {
+
+        // Assumes only submitting one transaction, so there is exactly one result.
+        let result = submit_txn_resp.results.into_iter().next().ok_or_else(|| {
+            TransactionDriverError::Internal {
+                error: "Expected at least one result in SubmitTxResponse".to_string(),
+            }
+        })?;
+
+        let (consensus_position, full_effects) = match result {
+            SubmitTxResult::Submitted { consensus_position } => (Some(consensus_position), None),
+            SubmitTxResult::Executed {
                 effects_digest,
                 details,
                 fast_path,

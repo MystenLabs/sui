@@ -632,17 +632,38 @@ impl ConsensusAdapter {
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
-            // In soft bundle, we need to check if all transactions are of CertifiedTransaction
-            // kind. The check is required because we assume this in submit_and_wait_inner.
-            for transaction in transactions {
-                fp_ensure!(
-                    matches!(
-                        transaction.kind,
-                        ConsensusTransactionKind::CertifiedTransaction(_)
-                    ),
-                    SuiError::InvalidTxKindInSoftBundle
-                );
-                // TODO(fastpath): support batch of UserTransaction.
+            // When batching multiple transactions, ensure they are all of the same kind
+            // (either all CertifiedTransaction or all UserTransaction).
+            // This makes classifying the transactions easier in later steps.
+            let first_kind = &transactions[0].kind;
+            let is_user_tx_batch =
+                matches!(first_kind, ConsensusTransactionKind::UserTransaction(_));
+            let is_cert_batch = matches!(
+                first_kind,
+                ConsensusTransactionKind::CertifiedTransaction(_)
+            );
+
+            for transaction in &transactions[1..] {
+                if is_user_tx_batch {
+                    fp_ensure!(
+                        matches!(
+                            transaction.kind,
+                            ConsensusTransactionKind::UserTransaction(_)
+                        ),
+                        SuiError::InvalidTxKindInSoftBundle
+                    );
+                } else if is_cert_batch {
+                    fp_ensure!(
+                        matches!(
+                            transaction.kind,
+                            ConsensusTransactionKind::CertifiedTransaction(_)
+                        ),
+                        SuiError::InvalidTxKindInSoftBundle
+                    );
+                } else {
+                    // Other transaction kinds cannot be batched
+                    return Err(SuiError::InvalidTxKindInSoftBundle);
+                }
             }
         }
 
@@ -729,8 +750,8 @@ impl ConsensusAdapter {
         let skip_processed_checks = tx_consensus_positions.is_some();
 
         // Current code path ensures:
-        // - If transactions.len() > 1, it is a soft bundle. Otherwise transactions should have been submitted individually.
-        // - If is_soft_bundle, then all transactions are of UserTransaction kind.
+        // - If transactions.len() > 1, it is a soft bundle. System transactions should have been submitted individually.
+        // - If is_soft_bundle, then all transactions are of CertifiedTransaction or UserTransaction kind.
         // - If not is_soft_bundle, then transactions must contain exactly 1 tx, and transactions[0] can be of any kind.
         let is_soft_bundle = transactions.len() > 1;
 
@@ -746,10 +767,10 @@ impl ConsensusAdapter {
             let transaction_key = SequencedConsensusTransactionKey::External(transaction.key());
             transaction_keys.push(transaction_key);
         }
-        let tx_type = if !is_soft_bundle {
-            classify(&transactions[0])
-        } else {
+        let tx_type = if is_soft_bundle {
             "soft_bundle"
+        } else {
+            classify(&transactions[0])
         };
         tracing::Span::current().record("tx_type", tx_type);
         tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
@@ -787,15 +808,18 @@ impl ConsensusAdapter {
         };
 
         // Log warnings for administrative transactions that fail to get sequenced
-        let _monitor = if !is_soft_bundle
-            && matches!(
-                transactions[0].kind,
-                ConsensusTransactionKind::EndOfPublish(_)
-                    | ConsensusTransactionKind::CapabilityNotification(_)
-                    | ConsensusTransactionKind::CapabilityNotificationV2(_)
-                    | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
-                    | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
-            ) {
+        let _monitor = if matches!(
+            transactions[0].kind,
+            ConsensusTransactionKind::EndOfPublish(_)
+                | ConsensusTransactionKind::CapabilityNotification(_)
+                | ConsensusTransactionKind::CapabilityNotificationV2(_)
+                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+        ) {
+            assert!(
+                !is_soft_bundle,
+                "System transactions should have been submitted individually"
+            );
             let transaction_keys = transaction_keys.clone();
             Some(CancelOnDrop(spawn_monitored_task!(async {
                 let mut i = 0u64;
@@ -1001,7 +1025,7 @@ impl ConsensusAdapter {
                         .inc();
                     retries += 1;
 
-                    if !is_soft_bundle && transactions[0].kind.is_dkg() {
+                    if transactions[0].kind.is_dkg() {
                         // Shorter delay for DKG messages, which are time-sensitive and happen at
                         // start-of-epoch when submit errors due to active reconfig are likely.
                         time::sleep(Duration::from_millis(100)).await;
