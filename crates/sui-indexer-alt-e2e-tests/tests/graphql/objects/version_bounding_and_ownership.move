@@ -80,9 +80,51 @@ module P1::M {
 }
 
 //# run-graphql
+{ # Same is true for balance pagination
+  object(address: "@{obj_0_0}", version: 2) {
+    balances { nodes { totalBalance } }
+  }
+}
+
+//# run-graphql
+{ # ... and for balance point-lookups
+  object(address: "@{obj_0_0}", version: 2) {
+    balance(coinType: "0x2::sui::SUI") { totalBalance }
+  }
+}
+
+//# run-graphql
+{ # ... and balance multi-gets
+  object(address: "@{obj_0_0}", version: 2) {
+    multiGetBalances(keys: ["0x2::sui::SUI"]) { totalBalance }
+  }
+}
+
+//# run-graphql
 { # Error - Object fetched with rootVersion cannot query owned objects
   object(address: "@{obj_0_0}", rootVersion: 3) {
     objects { nodes { address } }
+  }
+}
+
+//# run-graphql
+{ # Same is true for balance pagination
+  object(address: "@{obj_0_0}", rootVersion: 3) {
+    balances { nodes { totalBalance } }
+  }
+}
+
+//# run-graphql
+{ # ... and for balance point-lookups
+  object(address: "@{obj_0_0}", rootVersion: 3) {
+    balance(coinType: "0x2::sui::SUI") { totalBalance }
+  }
+}
+
+//# run-graphql
+{ # ... and balance multi-gets
+  object(address: "@{obj_0_0}", rootVersion: 3) {
+    multiGetBalances(keys: ["0x2::sui::SUI"]) { totalBalance }
   }
 }
 
@@ -98,11 +140,77 @@ module P1::M {
 }
 
 //# run-graphql
+{ # Same is true for balance pagination
+  transactionEffects(digest: "@{digest_4}") {
+    gasEffects {
+      gasObject {
+        balances { nodes { totalBalance } }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and for balance point-lookups
+  transactionEffects(digest: "@{digest_4}") {
+    gasEffects {
+      gasObject {
+        balance(coinType: "0x2::sui::SUI") { totalBalance }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and balance multi-gets
+  transactionEffects(digest: "@{digest_4}") {
+    gasEffects {
+      gasObject {
+        multiGetBalances(keys: ["0x2::sui::SUI"]) { totalBalance }
+      }
+    }
+  }
+}
+
+//# run-graphql
 { # Error - Object version pagination does not support nested owned object queries
   object(address: "@{obj_0_0}") {
     objectVersionsBefore {
       nodes {
         objects { nodes { address } }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # Same is true for balance pagination
+  object(address: "@{obj_0_0}") {
+    objectVersionsBefore {
+      nodes {
+        balances { nodes { totalBalance } }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and for balance point-lookups
+  object(address: "@{obj_0_0}") {
+    objectVersionsBefore {
+      nodes {
+        balance(coinType: "0x2::sui::SUI") { totalBalance }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and balance multi-gets
+  object(address: "@{obj_0_0}") {
+    objectVersionsBefore {
+      nodes {
+        multiGetBalances(keys: ["0x2::sui::SUI"]) { totalBalance }
       }
     }
   }
@@ -121,6 +229,27 @@ module P1::M {
     packageAt(version: 1) {
       objects { nodes { address } }
     }
+  }
+}
+
+//# run-graphql
+{ # Same is true for balance pagination
+  package(address: "0x2", version: 1) {
+    balances { nodes { totalBalance } }
+  }
+}
+
+//# run-graphql
+{ # ... and for balance point-lookups
+  package(address: "0x2", version: 1) {
+    balance(coinType: "0x2::sui::SUI") { totalBalance }
+  }
+}
+
+//# run-graphql
+{ # ... and balance multi-gets
+  package(address: "0x2", version: 1) {
+    multiGetBalances(keys: ["0x2::sui::SUI"]) { totalBalance }
   }
 }
 
@@ -144,6 +273,63 @@ module P1::M {
 }
 
 //# run-graphql
+{ # Same is true for balance pagination
+  package(address: "@{obj_8_0}") {
+    previousTransaction {
+      effects {
+        objectChanges {
+          nodes {
+            outputState {
+              asMovePackage {
+                balances { nodes { totalBalance } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and for balance point-lookups
+  package(address: "@{obj_8_0}") {
+    previousTransaction {
+      effects {
+        objectChanges {
+          nodes {
+            outputState {
+              asMovePackage {
+                balance(coinType: "0x2::sui::SUI") { totalBalance }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and balance multi-gets
+  package(address: "@{obj_8_0}") {
+    previousTransaction {
+      effects {
+        objectChanges {
+          nodes {
+            outputState {
+              asMovePackage {
+                multiGetBalances(keys: ["0x2::sui::SUI"]) { totalBalance }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
 { # Error - Package version pagination does not support nested owned object queries
   package(address: "@{obj_9_0}") {
     packageVersionsBefore {
@@ -155,36 +341,67 @@ module P1::M {
 }
 
 //# run-graphql
+{ # Same is true for balance pagination
+  package(address: "@{obj_9_0}") {
+    packageVersionsBefore {
+      nodes {
+        balances { nodes { totalBalance } }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and for balance point-lookups
+  package(address: "@{obj_9_0}") {
+    packageVersionsBefore {
+      nodes {
+        balance(coinType: "0x2::sui::SUI") { totalBalance }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ... and balance multi-gets
+  package(address: "@{obj_9_0}") {
+    packageVersionsBefore {
+      nodes {
+        multiGetBalances(keys: ["0x2::sui::SUI"]) { totalBalance }
+      }
+    }
+  }
+}
+
+//# run-graphql
 { # Success - Object at specific checkpoint (including latest) can query owned objects
 
   # Should show objects owned at checkpoint 1 (first 2 transferred coins)
   cp1: checkpoint(sequenceNumber: 1) {
     query {
-      object(address: "@{obj_0_0}") {
-        objects { nodes { contents { json } } }
-      }
+      object(address: "@{obj_0_0}") { ...Owned }
     }
   }
 
   atCp1: object(address: "@{obj_0_0}", atCheckpoint: 1) {
-    objects { nodes { contents { json } } }
+    ...Owned
   }
 
   # At a later checkpoint, should show more coins.
   cp2: checkpoint(sequenceNumber: 2) {
     query {
       object(address: "@{obj_0_0}") {
-        objects { nodes { contents { json } } }
+        ...Owned
       }
     }
   }
 
   atCp2: object(address: "@{obj_0_0}", atCheckpoint: 2) {
-    objects { nodes { contents { json } } }
+    ...Owned
   }
 
   latest: object(address: "@{obj_0_0}") {
-    objects { nodes { contents { json } } }
+    ...Owned
   }
 
   # The ability to perform ownership queries is preserved by nesting.
@@ -192,11 +409,7 @@ module P1::M {
     objects {
       nodes {
         contents { json }
-        objects {
-          nodes {
-            contents { json }
-          }
-        }
+        ...Owned
       }
     }
   }
@@ -204,9 +417,7 @@ module P1::M {
   # Certain nested queries reset the "root version" bound -- like this one
   # which finds the latest version of the object.
   objectAtReset: object(address: "@{obj_0_0}", version: 2) {
-    objectAt {
-      objects { nodes { contents { json } } }
-    }
+    objectAt { ...Owned }
   }
 
   # Querying the transaction's sender gives you its state at the current
@@ -217,11 +428,7 @@ module P1::M {
         objects {
           nodes {
             contents { json }
-            objects {
-              nodes {
-                contents { json }
-              }
-            }
+            ...Owned
           }
         }
       }
@@ -229,21 +436,35 @@ module P1::M {
   }
 }
 
+fragment Owned on IAddressable {
+  objects { nodes { contents { json } } }
+  balances { nodes { coinType { repr } totalBalance } }
+  sui: balance(coinType: "0x2::sui::SUI") { totalBalance }
+  empty: balance(coinType: "0x42::empty::COIN") { totalBalance }
+}
+
 //# run-graphql
 { # Success - these successful cases also apply to packages
   latest: package(address: "0x2") {
-    objects { nodes { contents { json } } }
+    ...Owned
   }
 
   atCp1: package(address: "0x2", atCheckpoint: 1) {
-    objects { nodes { contents { json } } }
+    ...Owned
   }
 
   cp1: checkpoint(sequenceNumber: 1) {
     query {
       package(address: "0x2") {
-        objects { nodes { contents { json } } }
+        ...Owned
       }
     }
   }
+}
+
+fragment Owned on IAddressable {
+  objects { nodes { contents { json } } }
+  balances { nodes { coinType { repr } totalBalance } }
+  sui: balance(coinType: "0x2::sui::SUI") { totalBalance }
+  empty: balance(coinType: "0x42::empty::COIN") { totalBalance }
 }

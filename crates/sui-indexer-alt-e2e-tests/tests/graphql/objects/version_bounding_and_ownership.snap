@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 22 tasks
+processed 43 tasks
 
 init:
 A: object(0,0)
@@ -139,6 +139,84 @@ Response: {
   },
   "errors": [
     {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 14, lines 89-94:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 15, lines 96-101:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 16, lines 103-108:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
       "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
       "locations": [
         {
@@ -157,7 +235,85 @@ Response: {
   ]
 }
 
-task 14, lines 89-98:
+task 17, lines 110-115:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 18, lines 117-122:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 19, lines 124-129:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 20, lines 131-140:
 //# run-graphql
 Response: {
   "data": {
@@ -189,7 +345,103 @@ Response: {
   ]
 }
 
-task 15, lines 100-109:
+task 21, lines 142-151:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionEffects": {
+      "gasEffects": {
+        "gasObject": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionEffects",
+        "gasEffects",
+        "gasObject",
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 22, lines 153-162:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionEffects": {
+      "gasEffects": {
+        "gasObject": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionEffects",
+        "gasEffects",
+        "gasObject",
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 23, lines 164-173:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionEffects": {
+      "gasEffects": {
+        "gasObject": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionEffects",
+        "gasEffects",
+        "gasObject",
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 24, lines 175-184:
 //# run-graphql
 Response: {
   "data": {
@@ -217,7 +469,91 @@ Response: {
   ]
 }
 
-task 16, lines 111-116:
+task 25, lines 186-195:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        0
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 26, lines 197-206:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        0
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 27, lines 208-217:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        0
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 28, lines 219-224:
 //# run-graphql
 Response: {
   "data": {
@@ -243,7 +579,7 @@ Response: {
   ]
 }
 
-task 17, lines 118-125:
+task 29, lines 226-233:
 //# run-graphql
 Response: {
   "data": {
@@ -272,7 +608,85 @@ Response: {
   ]
 }
 
-task 18, lines 127-144:
+task 30, lines 235-240:
+//# run-graphql
+Response: {
+  "data": {
+    "package": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "package",
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 31, lines 242-247:
+//# run-graphql
+Response: {
+  "data": {
+    "package": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "package",
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 32, lines 249-254:
+//# run-graphql
+Response: {
+  "data": {
+    "package": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "package",
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 33, lines 256-273:
 //# run-graphql
 Response: {
   "data": {
@@ -329,7 +743,178 @@ Response: {
   ]
 }
 
-task 19, lines 146-155:
+task 34, lines 275-292:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "previousTransaction": {
+        "effects": {
+          "objectChanges": {
+            "nodes": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 9,
+          "column": 17
+        }
+      ],
+      "path": [
+        "package",
+        "previousTransaction",
+        "effects",
+        "objectChanges",
+        "nodes",
+        0,
+        "outputState",
+        "asMovePackage",
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 35, lines 294-311:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "previousTransaction": {
+        "effects": {
+          "objectChanges": {
+            "nodes": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 9,
+          "column": 17
+        }
+      ],
+      "path": [
+        "package",
+        "previousTransaction",
+        "effects",
+        "objectChanges",
+        "nodes",
+        0,
+        "outputState",
+        "asMovePackage",
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 36, lines 313-330:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "previousTransaction": {
+        "effects": {
+          "objectChanges": {
+            "nodes": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 9,
+          "column": 17
+        }
+      ],
+      "path": [
+        "package",
+        "previousTransaction",
+        "effects",
+        "objectChanges",
+        "nodes",
+        0,
+        "outputState",
+        "asMovePackage",
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 37, lines 332-341:
 //# run-graphql
 Response: {
   "data": {
@@ -357,7 +942,91 @@ Response: {
   ]
 }
 
-task 20, lines 157-230:
+task 38, lines 343-352:
+//# run-graphql
+Response: {
+  "data": {
+    "package": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "package",
+        "packageVersionsBefore",
+        "nodes",
+        0
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 39, lines 354-363:
+//# run-graphql
+Response: {
+  "data": {
+    "package": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "package",
+        "packageVersionsBefore",
+        "nodes",
+        0
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 40, lines 365-374:
+//# run-graphql
+Response: {
+  "data": {
+    "package": null
+  },
+  "errors": [
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "package",
+        "packageVersionsBefore",
+        "nodes",
+        0
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 41, lines 376-444:
 //# run-graphql
 Response: {
   "data": {
@@ -383,6 +1052,22 @@ Response: {
                 }
               }
             ]
+          },
+          "balances": {
+            "nodes": [
+              {
+                "coinType": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                },
+                "totalBalance": "300"
+              }
+            ]
+          },
+          "sui": {
+            "totalBalance": "300"
+          },
+          "empty": {
+            "totalBalance": "0"
           }
         }
       }
@@ -407,6 +1092,22 @@ Response: {
             }
           }
         ]
+      },
+      "balances": {
+        "nodes": [
+          {
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "totalBalance": "300"
+          }
+        ]
+      },
+      "sui": {
+        "totalBalance": "300"
+      },
+      "empty": {
+        "totalBalance": "0"
       }
     },
     "cp2": {
@@ -447,6 +1148,22 @@ Response: {
                 }
               }
             ]
+          },
+          "balances": {
+            "nodes": [
+              {
+                "coinType": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                },
+                "totalBalance": "1000"
+              }
+            ]
+          },
+          "sui": {
+            "totalBalance": "1000"
+          },
+          "empty": {
+            "totalBalance": "0"
           }
         }
       }
@@ -487,6 +1204,22 @@ Response: {
             }
           }
         ]
+      },
+      "balances": {
+        "nodes": [
+          {
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "totalBalance": "1000"
+          }
+        ]
+      },
+      "sui": {
+        "totalBalance": "1000"
+      },
+      "empty": {
+        "totalBalance": "0"
       }
     },
     "latest": {
@@ -525,6 +1258,22 @@ Response: {
             }
           }
         ]
+      },
+      "balances": {
+        "nodes": [
+          {
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "totalBalance": "1000"
+          }
+        ]
+      },
+      "sui": {
+        "totalBalance": "1000"
+      },
+      "empty": {
+        "totalBalance": "0"
       }
     },
     "nested": {
@@ -548,6 +1297,22 @@ Response: {
                   }
                 }
               ]
+            },
+            "balances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "totalBalance": "500"
+                }
+              ]
+            },
+            "sui": {
+              "totalBalance": "500"
+            },
+            "empty": {
+              "totalBalance": "0"
             }
           },
           {
@@ -559,6 +1324,15 @@ Response: {
             },
             "objects": {
               "nodes": []
+            },
+            "balances": {
+              "nodes": []
+            },
+            "sui": {
+              "totalBalance": "0"
+            },
+            "empty": {
+              "totalBalance": "0"
             }
           },
           {
@@ -570,6 +1344,15 @@ Response: {
             },
             "objects": {
               "nodes": []
+            },
+            "balances": {
+              "nodes": []
+            },
+            "sui": {
+              "totalBalance": "0"
+            },
+            "empty": {
+              "totalBalance": "0"
             }
           },
           {
@@ -581,6 +1364,15 @@ Response: {
             },
             "objects": {
               "nodes": []
+            },
+            "balances": {
+              "nodes": []
+            },
+            "sui": {
+              "totalBalance": "0"
+            },
+            "empty": {
+              "totalBalance": "0"
             }
           }
         ]
@@ -623,6 +1415,22 @@ Response: {
               }
             }
           ]
+        },
+        "balances": {
+          "nodes": [
+            {
+              "coinType": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+              },
+              "totalBalance": "1000"
+            }
+          ]
+        },
+        "sui": {
+          "totalBalance": "1000"
+        },
+        "empty": {
+          "totalBalance": "0"
         }
       }
     },
@@ -673,6 +1481,22 @@ Response: {
                       }
                     }
                   ]
+                },
+                "balances": {
+                  "nodes": [
+                    {
+                      "coinType": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                      },
+                      "totalBalance": "1000"
+                    }
+                  ]
+                },
+                "sui": {
+                  "totalBalance": "1000"
+                },
+                "empty": {
+                  "totalBalance": "0"
                 }
               },
               {
@@ -686,6 +1510,15 @@ Response: {
                 },
                 "objects": {
                   "nodes": []
+                },
+                "balances": {
+                  "nodes": []
+                },
+                "sui": {
+                  "totalBalance": "0"
+                },
+                "empty": {
+                  "totalBalance": "0"
                 }
               }
             ]
@@ -696,7 +1529,7 @@ Response: {
   }
 }
 
-task 21, lines 232-249:
+task 42, lines 446-470:
 //# run-graphql
 Response: {
   "data": {
@@ -712,11 +1545,36 @@ Response: {
             }
           }
         ]
+      },
+      "balances": {
+        "nodes": [
+          {
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "totalBalance": "600"
+          }
+        ]
+      },
+      "sui": {
+        "totalBalance": "600"
+      },
+      "empty": {
+        "totalBalance": "0"
       }
     },
     "atCp1": {
       "objects": {
         "nodes": []
+      },
+      "balances": {
+        "nodes": []
+      },
+      "sui": {
+        "totalBalance": "0"
+      },
+      "empty": {
+        "totalBalance": "0"
       }
     },
     "cp1": {
@@ -724,6 +1582,15 @@ Response: {
         "package": {
           "objects": {
             "nodes": []
+          },
+          "balances": {
+            "nodes": []
+          },
+          "sui": {
+            "totalBalance": "0"
+          },
+          "empty": {
+            "totalBalance": "0"
           }
         }
       }

@@ -36,6 +36,7 @@ use crate::{
         cursor::{BcsCursor, JsonCursor},
         owner_kind::OwnerKind,
         sui_address::SuiAddress,
+        type_filter::TypeInput,
         uint53::UInt53,
     },
     error::{bad_user_input, feature_unavailable, RpcError},
@@ -46,6 +47,7 @@ use crate::{
 
 use super::{
     address::{Address, AddressableImpl},
+    balance::{self, Balance},
     dynamic_field::DynamicField,
     move_object::MoveObject,
     move_package::MovePackage,
@@ -218,6 +220,46 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<MovePackage>, RpcError<Error>> {
         MovePackage::from_object(self, ctx).await
+    }
+
+    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    ///
+    /// If the address does not own any coins of that type, a balance of zero is returned.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_)
+            .balance(ctx, coin_type)
+            .await
+    }
+
+    /// Total balance across coins owned by this address, grouped by coin type.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_)
+            .balances(ctx, first, after, last, before)
+            .await
+    }
+
+    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    ///
+    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    pub(crate) async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+        AddressableImpl::from(&self.super_)
+            .multi_get_balances(ctx, keys)
+            .await
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -581,6 +623,10 @@ impl Object {
         page: Page<CLive>,
         filter: ObjectFilter,
     ) -> Result<Connection<String, Object>, RpcError<Error>> {
+        if scope.root_version().is_some() {
+            return Err(bad_user_input(Error::RootVersionOwnership));
+        }
+
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
         // Figure out which checkpoint to pin results to, based on the pagination cursors and
