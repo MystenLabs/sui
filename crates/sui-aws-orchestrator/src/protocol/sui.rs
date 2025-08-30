@@ -185,10 +185,11 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                 let gas_key = &gas_keys[i % committee_size];
                 let gas_address = SuiAddress::from(&gas_key.public());
 
+                // TODDO: start a full node and specify --fullnode-rpc-addresses.
                 let run = [
                     "cargo run --release --bin stress --",
                     "--num-client-threads 24 --num-server-threads 1",
-                    "--local false --num-transfer-accounts 2",
+                    "--num-transfer-accounts 2",
                     &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
                     &format!("--primary-gas-owner-id {gas_address}"),
                     "bench",

@@ -18,7 +18,7 @@ use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
-use sui_benchmark::benchmark_setup::Env;
+use sui_benchmark::benchmark_setup::BenchmarkSetup;
 use sui_benchmark::options::Opts;
 
 use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
@@ -89,8 +89,7 @@ async fn main() -> Result<()> {
 
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
-    let env = if opts.local { Env::Local } else { Env::Remote };
-    let bench_setup = env.setup(cloned_barrier, &registry, &opts).await?;
+    let bench_setup = BenchmarkSetup::new(cloned_barrier, &registry, &opts).await?;
     let system_state_observer = {
         // Only need to get system state from one proxy as it is shared for the
         // whole network.

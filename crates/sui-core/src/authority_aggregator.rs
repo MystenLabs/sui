@@ -11,7 +11,6 @@ use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use crate::test_authority_clients::MockAuthorityApi;
 use futures::StreamExt;
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, MonitorCancellation};
-use mysten_network::config::Config;
 use std::convert::AsRef;
 use std::net::SocketAddr;
 use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
@@ -23,7 +22,6 @@ use sui_network::{
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
 use sui_types::error::UserInputError;
-use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
@@ -459,6 +457,8 @@ pub struct AuthorityAggregator<A: Clone> {
     /// It's OK for this map to be empty or missing validators, it then defaults
     /// to use concise validator public keys.
     pub validator_display_names: Arc<HashMap<AuthorityName, String>>,
+    /// Reference gas price for the current epoch.
+    pub reference_gas_price: u64,
     /// How to talk to this committee.
     pub authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
     /// Metrics
@@ -473,15 +473,18 @@ pub struct AuthorityAggregator<A: Clone> {
 impl<A: Clone> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
+        reference_gas_price: u64,
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
             committee: Arc::new(committee),
+            validator_display_names,
+            reference_gas_price,
             authority_clients: create_safe_clients(
                 authority_clients,
                 &committee_store,
@@ -491,69 +494,7 @@ impl<A: Clone> AuthorityAggregator<A> {
             safe_client_metrics_base,
             timeouts,
             committee_store,
-            validator_display_names,
         }
-    }
-
-    /// This function recreates AuthorityAggregator with the given committee.
-    /// It also updates committee store which impacts other of its references.
-    /// When disallow_missing_intermediate_committees is true, it requires the
-    /// new committee needs to be current epoch + 1.
-    /// The function could be used along with `reconfig_from_genesis` to fill in
-    /// all previous epoch's committee info.
-    pub fn recreate_with_net_addresses(
-        &self,
-        committee: CommitteeWithNetworkMetadata,
-        network_config: &Config,
-        disallow_missing_intermediate_committees: bool,
-    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
-        let network_clients =
-            make_network_authority_clients_with_network_config(&committee, network_config);
-
-        let safe_clients = network_clients
-            .into_iter()
-            .map(|(name, api)| {
-                (
-                    name,
-                    Arc::new(SafeClient::new(
-                        api,
-                        self.committee_store.clone(),
-                        name,
-                        SafeClientMetrics::new(&self.safe_client_metrics_base, name),
-                    )),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        // TODO: It's likely safer to do the following operations atomically, in case this function
-        // gets called from different threads. It cannot happen today, but worth the caution.
-        let new_committee = committee.committee().clone();
-        if disallow_missing_intermediate_committees {
-            fp_ensure!(
-                self.committee.epoch + 1 == new_committee.epoch,
-                SuiError::AdvanceEpochError {
-                    error: format!(
-                        "Trying to advance from epoch {} to epoch {}",
-                        self.committee.epoch, new_committee.epoch
-                    )
-                }
-            );
-        }
-        // This call may return error if this committee is already inserted,
-        // which is fine. We should continue to construct the new aggregator.
-        // This is because there may be multiple AuthorityAggregators
-        // or its containers (e.g. Quorum Drivers)  share the same committee
-        // store and all of them need to reconfigure.
-        let _ = self.committee_store.insert_new_committee(&new_committee);
-        Ok(AuthorityAggregator {
-            committee: Arc::new(new_committee),
-            authority_clients: Arc::new(safe_clients),
-            metrics: self.metrics.clone(),
-            timeouts: self.timeouts.clone(),
-            safe_client_metrics_base: self.safe_client_metrics_base.clone(),
-            committee_store: self.committee_store.clone(),
-            validator_display_names: Arc::new(HashMap::new()),
-        })
     }
 
     pub fn get_client(&self, name: &AuthorityName) -> Option<&Arc<SafeClient<A>>> {
@@ -627,10 +568,11 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         let validator_display_names = epoch_start_state.get_authority_names_to_hostnames();
         Self::new_from_committee(
             committee,
+            Arc::new(validator_display_names),
+            epoch_start_state.reference_gas_price(),
             committee_store,
             safe_client_metrics_base,
             auth_agg_metrics,
-            Arc::new(validator_display_names),
         )
     }
 
@@ -651,21 +593,23 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
 
     pub fn new_from_committee(
         committee: CommitteeWithNetworkMetadata,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
+        reference_gas_price: u64,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
     ) -> Self {
         let net_config = default_mysten_network_config();
         let authority_clients =
             make_network_authority_clients_with_network_config(&committee, &net_config);
         Self::new(
             committee.committee().clone(),
+            validator_display_names,
+            reference_gas_price,
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
-            validator_display_names,
             Default::default(),
         )
     }
@@ -1593,6 +1537,7 @@ pub struct AuthorityAggregatorBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,
     genesis: Option<&'a Genesis>,
     committee: Option<Committee>,
+    reference_gas_price: Option<u64>,
     committee_store: Option<Arc<CommitteeStore>>,
     registry: Option<&'a Registry>,
     timeouts_config: Option<TimeoutConfig>,
@@ -1668,6 +1613,14 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         }
     }
 
+    fn get_reference_gas_price(&self) -> u64 {
+        self.reference_gas_price.unwrap_or_else(|| {
+            self.get_genesis()
+                .map(|g| g.reference_gas_price())
+                .unwrap_or(1000)
+        })
+    }
+
     fn get_genesis(&self) -> Option<&Genesis> {
         if let Some(network_config) = self.network_config {
             Some(&network_config.genesis)
@@ -1706,6 +1659,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
     ) -> AuthorityAggregator<C> {
         let committee = self.get_committee();
         let validator_display_names = self.get_committee_authority_names_to_hostnames();
+        let reference_gas_price = self.get_reference_gas_price();
         let registry = Registry::new();
         let registry = self.registry.unwrap_or(&registry);
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
@@ -1719,11 +1673,12 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
 
         AuthorityAggregator::new(
             committee,
+            Arc::new(validator_display_names),
+            reference_gas_price,
             committee_store,
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
-            Arc::new(validator_display_names),
             timeouts_config,
         )
     }
