@@ -1,0 +1,121 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-34:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 36-38:
+//# programmable --sender A --inputs @A
+//> 0: sui::object_bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 40-42:
+//# programmable --sender A --inputs @A
+//> 0: sui::object_bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 44-45:
+//# programmable --sender A --inputs object(2,0) object(3,0)
+//> 0: P::M::nest(Input(0), Input(1))
+created: object(4,0), object(4,1), object(4,2)
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 9963600,  storage_rebate: 3746952, non_refundable_storage_fee: 37848
+
+task 5, lines 47-48:
+//# programmable --sender A --inputs object(2,0)
+//> 0: P::M::poke(Input(0))
+mutated: object(0,0), object(2,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 3655600,  storage_rebate: 3619044, non_refundable_storage_fee: 36556
+
+task 6, line 50:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 52-80:
+//# run-graphql --cursors bcs(1u64) bcs(2u64)
+Response: {
+  "data": {
+    "objectVersions": {
+      "nodes": [
+        {
+          "version": 2,
+          "asMoveObject": {
+            "dynamicObjectField": null
+          }
+        },
+        {
+          "version": 4,
+          "asMoveObject": {
+            "dynamicObjectField": {
+              "version": 4,
+              "name": {
+                "json": "1"
+              },
+              "value": {
+                "version": 4,
+                "dynamicObjectField": {
+                  "version": 4,
+                  "name": {
+                    "json": "2"
+                  },
+                  "value": {
+                    "version": 4,
+                    "contents": {
+                      "json": {
+                        "c": "0",
+                        "id": "0xea7894d5a6d99889e836c789b18a705f48238e260d56a5e3301a9f9936a3888d"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "version": 5,
+          "asMoveObject": {
+            "dynamicObjectField": {
+              "version": 4,
+              "name": {
+                "json": "1"
+              },
+              "value": {
+                "version": 4,
+                "dynamicObjectField": {
+                  "version": 4,
+                  "name": {
+                    "json": "2"
+                  },
+                  "value": {
+                    "version": 5,
+                    "contents": {
+                      "json": {
+                        "c": "1",
+                        "id": "0xea7894d5a6d99889e836c789b18a705f48238e260d56a5e3301a9f9936a3888d"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

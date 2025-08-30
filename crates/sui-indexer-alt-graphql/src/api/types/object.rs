@@ -46,6 +46,7 @@ use crate::{
 
 use super::{
     address::{Address, AddressableImpl},
+    dynamic_field::DynamicField,
     move_object::MoveObject,
     move_package::MovePackage,
     object_filter::{ObjectFilter, Validator as OFValidator},
@@ -107,6 +108,7 @@ use super::{
     )
 )]
 pub(crate) enum IObject {
+    DynamicField(DynamicField),
     MoveObject(MoveObject),
     MovePackage(MovePackage),
     Object(Object),
@@ -127,6 +129,8 @@ pub(crate) struct ObjectImpl<'o>(&'o Object);
 ///
 /// The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
 ///
+/// Specifying a `version` or a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+///
 /// See `Query.object` for more details.
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ObjectKey {
@@ -136,7 +140,7 @@ pub(crate) struct ObjectKey {
     /// If specified, tries to fetch the object at this exact version.
     pub(crate) version: Option<UInt53>,
 
-    /// If specified, tries to fetch the latest version of the object at or before this version.
+    /// If specified, tries to fetch the latest version of the object at or before this version. Nested dynamic field accesses will also be subject to this bound.
     ///
     /// This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
     ///
@@ -172,6 +176,9 @@ pub(crate) enum Error {
 
     #[error("Checkpoint {0} in the future")]
     Future(u64),
+
+    #[error("Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.")]
+    RootVersionOwnership,
 }
 
 pub(crate) type CLive = BcsCursor<(u64, Vec<u8>)>;
@@ -292,30 +299,20 @@ impl Object {
     /// does not check whether the object exists, so should not be used to "fetch" an object based
     /// on an address and/or version provided as user input.
     pub(crate) fn with_ref(
-        address: Address,
+        scope: &Scope,
+        address: NativeSuiAddress,
         version: SequenceNumber,
         digest: ObjectDigest,
     ) -> Self {
+        // Set root_version since we're creating an object at a specific version
+        let scope = scope.with_root_version(version.into());
+        let super_ = Address::with_address(scope, address);
+
         Self {
-            super_: address,
+            super_,
             version,
             digest,
             contents: OnceCell::new(),
-        }
-    }
-
-    /// Construct a GraphQL representation of an `Object` from a raw object bundled into the genesis transaction.
-    pub(crate) fn from_genesis_object(scope: Scope, genesis_obj: GenesisObject) -> Self {
-        let GenesisObject::RawObject { data, owner } = genesis_obj;
-        let native =
-            NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis_marker());
-        let address = Address::with_address(scope, native.id().into());
-
-        Self {
-            super_: address,
-            version: native.version(),
-            digest: native.digest(),
-            contents: OnceCell::from(Some(Arc::new(native))),
         }
     }
 
@@ -370,7 +367,7 @@ impl Object {
             return Ok(None);
         };
 
-        Object::from_stored_version(scope, stored)
+        Object::from_stored_version(scope.with_root_version(root_version.into()), stored)
     }
 
     /// Fetch the latest version of the object at the given address as of the checkpoint with
@@ -424,10 +421,28 @@ impl Object {
             return Ok(None);
         }
 
-        Ok(Some(Self::from_contents(scope, c)))
+        Ok(Some(Self::from_contents(
+            scope.with_root_version(version.into()),
+            c,
+        )))
+    }
+
+    /// Construct a GraphQL representation of an `Object` from a raw object bundled into the genesis transaction.
+    pub(crate) fn from_genesis_object(scope: Scope, genesis_obj: GenesisObject) -> Self {
+        let GenesisObject::RawObject { data, owner } = genesis_obj;
+        let native = Arc::new(NativeObject::new_from_genesis(
+            data,
+            owner,
+            TransactionDigest::genesis_marker(),
+        ));
+
+        Self::from_contents(scope, native)
     }
 
     /// Construct a GraphQL representation of an `Object` from its native representation.
+    ///
+    /// Note that this constructor does not adjust version bounds in the scope. It is the
+    /// caller's responsibility to do that, if appropriate.
     pub(crate) fn from_contents(scope: Scope, contents: Arc<NativeObject>) -> Self {
         let address = Address::with_address(scope, contents.id().into());
 
@@ -441,7 +456,7 @@ impl Object {
 
     /// Construct a GraphQL representation of an `Object` from versioning information. This
     /// representation does not pre-fetch object contents.
-    pub(crate) fn from_stored_version(
+    fn from_stored_version(
         scope: Scope,
         stored: StoredObjVersion,
     ) -> Result<Option<Self>, RpcError<Error>> {
@@ -457,17 +472,19 @@ impl Object {
             return Ok(None);
         }
 
-        let addressable = Address::with_address(
+        let address = Address::with_address(
             scope,
             NativeSuiAddress::from_bytes(stored.object_id)
                 .context("Failed to deserialize SuiAddress")?,
         );
 
-        Ok(Some(Object::with_ref(
-            addressable,
-            SequenceNumber::from_u64(stored.object_version as u64),
-            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
-        )))
+        Ok(Some(Object {
+            super_: address,
+            version: SequenceNumber::from_u64(stored.object_version as u64),
+            digest: ObjectDigest::try_from(&digest[..])
+                .context("Failed to deserialize Object Digest")?,
+            contents: OnceCell::new(),
+        }))
     }
 
     /// Paginate through versions of an object (identified by its address).
@@ -548,7 +565,8 @@ impl Object {
         conn.has_next_page = next;
 
         for (cursor, stored) in results {
-            if let Some(object) = Self::from_stored_version(scope.clone(), stored)? {
+            let scope = scope.with_root_version(stored.object_version as u64);
+            if let Some(object) = Self::from_stored_version(scope, stored)? {
                 conn.edges.push(Edge::new(cursor.encode_cursor(), object));
             }
         }
@@ -672,7 +690,12 @@ impl Object {
 
             let cursor = CLive::new((checkpoint, edge.token));
             let address = Address::with_address(scope.clone(), id.into());
-            let object = Object::with_ref(address, version, digest);
+            let object = Object {
+                super_: address,
+                version,
+                digest,
+                contents: OnceCell::new(),
+            };
             conn.edges.push(Edge::new(cursor.encode_cursor(), object));
         }
 
@@ -715,7 +738,7 @@ impl ObjectImpl<'_> {
             at_checkpoint: checkpoint,
         };
 
-        Object::by_key(ctx, self.0.super_.scope.clone(), key).await
+        Object::by_key(ctx, self.0.super_.scope.without_root_version(), key).await
     }
 
     pub(crate) async fn object_bcs(
@@ -754,7 +777,7 @@ impl ObjectImpl<'_> {
 
         Object::paginate_by_version(
             ctx,
-            self.0.super_.scope.clone(),
+            self.0.super_.scope.without_root_version(),
             page,
             self.0.super_.address,
             filter,
@@ -786,7 +809,7 @@ impl ObjectImpl<'_> {
 
         Object::paginate_by_version(
             ctx,
-            self.0.super_.scope.clone(),
+            self.0.super_.scope.without_root_version(),
             page,
             self.0.super_.address,
             filter,
@@ -803,7 +826,7 @@ impl ObjectImpl<'_> {
         };
 
         Ok(Some(Transaction::with_id(
-            self.0.super_.scope.clone(),
+            self.0.super_.scope.without_root_version(),
             object.as_ref().previous_transaction,
         )))
     }
