@@ -108,9 +108,9 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let tx_type = if request.transaction.is_consensus_tx() {
-            TxType::SingleWriter
-        } else {
             TxType::SharedObject
+        } else {
+            TxType::SingleWriter
         };
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
