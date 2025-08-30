@@ -9,10 +9,9 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::{find_address_owned, find_immutable, FullCluster};
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_e2e_tests::{
+    find_address_owned, find_immutable, FullCluster, OffchainClusterConfig,
+};
 use sui_indexer_alt_jsonrpc::config::{PackageResolverLayer, RpcConfig as JsonRpcConfig};
 use sui_move_build::BuildConfig;
 use sui_types::{
@@ -149,25 +148,24 @@ impl TypeLimitCluster {
         // (1) Set-up a cluster that indexes object data and sets the given limits up.
         let mut cluster = FullCluster::new_with_configs(
             Simulacrum::new(),
-            IndexerArgs::default(),
-            IndexerArgs::default(),
-            IndexerConfig {
-                pipeline: PipelineLayer {
-                    cp_sequence_numbers: Some(Default::default()),
-                    kv_objects: Some(Default::default()),
-                    kv_packages: Some(Default::default()),
-                    obj_info: Some(Default::default()),
-                    obj_versions: Some(Default::default()),
+            OffchainClusterConfig {
+                indexer_config: IndexerConfig {
+                    pipeline: PipelineLayer {
+                        cp_sequence_numbers: Some(Default::default()),
+                        kv_objects: Some(Default::default()),
+                        kv_packages: Some(Default::default()),
+                        obj_info: Some(Default::default()),
+                        obj_versions: Some(Default::default()),
+                        ..Default::default()
+                    },
+                    ..IndexerConfig::for_test()
+                },
+                jsonrpc_config: JsonRpcConfig {
+                    package_resolver: package_resolver.finish(),
                     ..Default::default()
                 },
-                ..IndexerConfig::for_test()
+                ..Default::default()
             },
-            ConsistentConfig::for_test(),
-            JsonRpcConfig {
-                package_resolver: package_resolver.finish(),
-                ..JsonRpcConfig::default()
-            },
-            GraphQlConfig::default(),
             &prometheus::Registry::new(),
             CancellationToken::new(),
         )
