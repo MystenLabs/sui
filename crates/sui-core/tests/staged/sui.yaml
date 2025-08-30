@@ -126,12 +126,19 @@ ChangeEpoch:
                 SEQ: U8
             - SEQ:
                 TYPENAME: ObjectID
+CheckpointArtifactsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 CheckpointCommitment:
   ENUM:
     0:
       ECMHLiveObjectSetDigest:
         NEWTYPE:
           TYPENAME: ECMHLiveObjectSetDigest
+    1:
+      CheckpointArtifactsDigest:
+        NEWTYPE:
+          TYPENAME: CheckpointArtifactsDigest
 CheckpointContents:
   ENUM:
     0:
