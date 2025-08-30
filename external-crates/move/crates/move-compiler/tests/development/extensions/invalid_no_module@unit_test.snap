@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/development/extensions/invalid_no_module.move:6:1
+  │  
+6 │ ╭ extend a::n {
+7 │ │     fun g(): u64 { 24 }
+8 │ │ }
+  │ ╰─^ Cannot extend unknown module 'a::n'

@@ -90,7 +90,7 @@ pub enum TargetKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageDefinition<Def= Definition> {
+pub struct PackageDefinition<Def = Definition> {
     pub package: Option<Symbol>,
     pub named_address_map: NamedAddressMapIndex,
     pub def: Def,
