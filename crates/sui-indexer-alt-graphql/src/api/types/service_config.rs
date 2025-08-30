@@ -177,4 +177,16 @@ impl ServiceConfig {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_move_value_bound))
     }
+
+    /// Maximum depth of nested field access supported in display outputs.
+    async fn max_display_field_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_field_depth))
+    }
+
+    /// Maximum output size of a display output.
+    async fn max_display_output_size(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_output_size))
+    }
 }
