@@ -4,9 +4,9 @@
 #[test_only]
 module sui::nitro_attestation_tests;
 
+use std::unit_test::assert_eq;
 use sui::nitro_attestation;
 use sui::test_scenario;
-use std::unit_test::assert_eq;
 
 #[test]
 fun test_nitro_attestation() {
@@ -52,7 +52,10 @@ fun test_nitro_attestation() {
 
     assert!(res.user_data().is_none());
     assert!(res.nonce().is_none());
-    assert_eq!(*res.public_key().borrow(), x"e8e62201dbe293b703c759f653107acbc2c911fa1d2e66f2c747bec95971a2af");
+    assert_eq!(
+        *res.public_key().borrow(),
+        x"e8e62201dbe293b703c759f653107acbc2c911fa1d2e66f2c747bec95971a2af",
+    );
 
     scenario.end();
     clock.destroy_for_testing();

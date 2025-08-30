@@ -24,9 +24,10 @@ use bridge::committee::{
 };
 use bridge::crypto;
 use bridge::message;
+use std::unit_test::assert_eq;
 use sui::hex;
 use sui::test_scenario;
-use sui::test_utils::{Self, assert_eq};
+use sui::test_utils;
 use sui::vec_map;
 use sui_system::governance_test_utils::{
     advance_epoch_with_reward_amounts,
@@ -155,11 +156,11 @@ fun test_init_committee() {
     let voting_powers = system_state.validator_voting_powers_for_testing();
     committee.try_create_next_committee(voting_powers, 6000, ctx);
 
-    assert_eq(2, committee.members().length());
+    assert_eq!(2, committee.members().length());
     let (_, member0) = committee.members().get_entry_by_idx(0);
     let (_, member1) = committee.members().get_entry_by_idx(1);
-    assert_eq(5000, member0.voting_power());
-    assert_eq(5000, member1.voting_power());
+    assert_eq!(5000, member0.voting_power());
+    assert_eq!(5000, member1.voting_power());
 
     let members = committee.members();
     assert!(members.length() == 2); // must succeed
@@ -197,7 +198,7 @@ fun test_update_node_url() {
     let members = committee.members();
     assert!(members.length() == 1);
     let (_, member) = members.get_entry_by_idx(0);
-    assert_eq(member.http_rest_url(), b"test url 1");
+    assert_eq!(member.http_rest_url(), b"test url 1");
 
     // Update URL
     committee.update_node_url(
@@ -207,7 +208,7 @@ fun test_update_node_url() {
 
     let members = committee.members();
     let (_, member) = members.get_entry_by_idx(0);
-    assert_eq(member.http_rest_url(), b"test url 2");
+    assert_eq!(member.http_rest_url(), b"test url 2");
 
     test_utils::destroy(committee);
     test_scenario::return_shared(system_state);
@@ -332,7 +333,7 @@ fun test_init_committee_validator_become_inactive() {
     committee.register(&mut system_state, hex::decode(VALIDATOR3_PUBKEY), b"", &tx(@0xD, 0));
 
     // Verify validator registration
-    assert_eq(3, committee.member_registrations().length());
+    assert_eq!(3, committee.member_registrations().length());
 
     // Validator 0xA become inactive, total voting power become 50%
     sui_system::request_remove_validator(&mut system_state, &mut tx(@0xA, 0));
@@ -373,18 +374,18 @@ fun test_update_committee_registration() {
     committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
 
     // Verify registration info
-    assert_eq(1, committee.member_registrations().length());
+    assert_eq!(1, committee.member_registrations().length());
     let (address, registration) = committee.member_registrations().get_entry_by_idx(0);
-    assert_eq(@0xA, *address);
+    assert_eq!(@0xA, *address);
     assert!(&hex::decode(VALIDATOR1_PUBKEY) == registration.bridge_pubkey_bytes(), 0);
 
     // Register again with different pub key.
     committee.register(&mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xA, 0));
 
     // Verify registration info, registration count should still be 1
-    assert_eq(1, committee.member_registrations().length());
+    assert_eq!(1, committee.member_registrations().length());
     let (address, registration) = committee.member_registrations().get_entry_by_idx(0);
-    assert_eq(@0xA, *address);
+    assert_eq!(@0xA, *address);
     assert!(&hex::decode(VALIDATOR2_PUBKEY) == registration.bridge_pubkey_bytes(), 0);
 
     // teardown

@@ -36,13 +36,14 @@ use bridge::message::{
 };
 use bridge::treasury::{Self, BTC, ETH, USDC};
 use std::ascii;
+use std::unit_test::assert_eq;
 use sui::address;
 use sui::balance;
 use sui::bcs;
 use sui::coin::{Self, Coin};
 use sui::hex;
 use sui::test_scenario;
-use sui::test_utils::{assert_eq, destroy};
+use sui::test_utils::destroy;
 
 const INVALID_CHAIN: u8 = 42;
 
@@ -158,7 +159,7 @@ fun test_emergency_op_message_serialization_regression() {
     let message = serialize_message(emergency_op_message);
     let expected_msg = hex::decode(b"020100000000000000370200");
 
-    assert_eq(expected_msg, message);
+    assert_eq!(expected_msg, message);
     assert!(emergency_op_message == deserialize_message_test_only(message));
 }
 
@@ -208,7 +209,7 @@ fun test_blocklist_message_serialization_regression() {
         b"0101000000000000008102000168b43fd906c0b8f024a18c56e06744f7c6157c65",
     );
 
-    assert_eq(expected_msg, message);
+    assert_eq!(expected_msg, message);
     assert!(blocklist_message == deserialize_message_test_only(message));
 
     let blocklist = blocklist_message.extract_blocklist_payload();
@@ -229,7 +230,7 @@ fun test_blocklist_message_serialization_regression() {
         b"0101000000000000004402010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5",
     );
 
-    assert_eq(expected_msg, message);
+    assert_eq!(expected_msg, message);
     assert!(blocklist_message == deserialize_message_test_only(message));
 
     let blocklist = blocklist_message.extract_blocklist_payload();
@@ -278,7 +279,7 @@ fun test_update_bridge_limit_message_serialization_regression() {
     let message = serialize_message(update_bridge_limit);
     let expected_msg = hex::decode(b"0301000000000000000f020c00000002540be400");
 
-    assert_eq(message, expected_msg);
+    assert_eq!(message, expected_msg);
     assert!(update_bridge_limit == deserialize_message_test_only(message));
 
     let bridge_limit = extract_update_bridge_limit(&update_bridge_limit);
@@ -341,7 +342,7 @@ fun test_update_asset_price_message_serialization_regression() {
     // Test message serialization
     let message = serialize_message(asset_price_message);
     let expected_msg = hex::decode(b"0401000000000000010a0201000000003b9aca00");
-    assert_eq(expected_msg, message);
+    assert_eq!(expected_msg, message);
     assert!(asset_price_message == deserialize_message_test_only(message));
 
     let asset_price = extract_update_asset_price(&asset_price_message);
@@ -401,7 +402,7 @@ fun test_add_tokens_on_sui_message_serialization() {
     let expected_msg = hex::decode(
         b"060100000000000000010200020102024a323861633438336236663262363264643538616264663062626333663836393030643836626264633731306337303462613062333362376631633462343363383a3a6274633a3a4254434c3078626436396135346537633735346133333238303466333235333037633636323763303636333164633431303337323339373037653332343262633534326539393a3a6574683a3a4554480264000000000000006400000000000000",
     );
-    assert_eq(message, expected_msg);
+    assert_eq!(message, expected_msg);
     assert!(add_tokens_on_sui_message == deserialize_message_test_only(message));
 
     destroy(treasury);
@@ -454,7 +455,7 @@ fun test_add_tokens_on_sui_message_serialization_2() {
     let expected_msg = hex::decode(
         b"0601000000000000000002000401020304044a396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434a373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484c353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434c343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
     );
-    assert_eq(message, expected_msg);
+    assert_eq!(message, expected_msg);
     assert!(add_tokens_on_sui_message == deserialize_message_test_only(message));
 
     let mut message_bytes = b"SUI_BRIDGE_MESSAGE";
@@ -466,7 +467,7 @@ fun test_add_tokens_on_sui_message_serialization_2() {
         0,
     );
 
-    assert_eq(pubkey, x"025a8c385af9a76aa506c395e240735839cb06531301f9b396e5f9ef8eeb0d8879");
+    assert_eq!(pubkey, x"025a8c385af9a76aa506c395e240735839cb06531301f9b396e5f9ef8eeb0d8879");
     destroy(treasury);
     test_scenario::end(scenario);
 }

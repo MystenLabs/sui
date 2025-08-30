@@ -8,7 +8,7 @@ use elgamal::example;
 use sui::bls12381::{Self, Scalar, G1};
 use sui::group_ops::Element;
 use sui::random;
-use sui::test_utils::assert_eq;
+use std::unit_test::assert_eq;
 
 #[test]
 fun test_elgamal_equality() {
@@ -27,7 +27,7 @@ fun test_elgamal_equality() {
 
     // The first party decrypts the message.
     let m1 = example::elgamal_decrypt(&sk1, &enc1);
-    assert_eq(m, m1);
+    assert_eq!(m, m1);
 
     // Now, the first party wishes to send an encrypted message to pk2.
     let r2 = gen.generate_u64();
