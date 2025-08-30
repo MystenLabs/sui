@@ -14,7 +14,7 @@ Every MoveEvent has the following properties:
 - transaction digest
 
 Example:
-```
+```move
 module my::marketplace {
 use sui::event;
 /* ... */
