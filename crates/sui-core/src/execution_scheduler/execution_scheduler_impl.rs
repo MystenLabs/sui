@@ -97,6 +97,7 @@ impl ExecutionScheduler {
             Some(BalanceWithdrawScheduler::new(
                 Arc::new(child_object_resolver),
                 starting_accumulator_version,
+                false,
             ))
         } else {
             None

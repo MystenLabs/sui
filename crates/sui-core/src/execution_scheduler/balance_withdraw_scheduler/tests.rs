@@ -32,10 +32,14 @@ struct TestScheduler {
 impl TestScheduler {
     fn new(init_version: SequenceNumber, init_balances: BTreeMap<ObjectID, u128>) -> Self {
         let mock_read = Arc::new(MockBalanceRead::new(init_version, init_balances));
-        let naive_scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version);
+        let naive_scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version, false);
+        let eager_scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version, true);
         Self {
             mock_read,
-            schedulers: BTreeMap::from([("naive_scheduler".to_string(), naive_scheduler)]),
+            schedulers: BTreeMap::from([
+                ("naive_scheduler".to_string(), naive_scheduler),
+                ("eager_scheduler".to_string(), eager_scheduler),
+            ]),
         }
     }
 
