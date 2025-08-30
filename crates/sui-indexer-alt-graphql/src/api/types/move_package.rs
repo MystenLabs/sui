@@ -46,6 +46,7 @@ use super::{
     move_object::MoveObject,
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
+    owner::Owner,
     transaction::Transaction,
     type_origin::TypeOrigin,
 };
@@ -236,6 +237,14 @@ impl MovePackage {
         self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
+    }
+
+    /// The object's owner kind.
+    pub(crate) async fn owner(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Owner>, RpcError<object::Error>> {
+        self.super_.owner(ctx).await
     }
 
     /// Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.

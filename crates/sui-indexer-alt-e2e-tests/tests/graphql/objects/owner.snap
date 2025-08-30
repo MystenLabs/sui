@@ -1,0 +1,190 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 10-11:
+//# programmable --sender A --inputs object(1,0) 1000
+//> 0: sui::bag::add<u64, u64>(Input(0), Input(1), Input(1))
+created: object(2,0)
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 3754400,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 3, lines 13-15:
+//# programmable --sender A --inputs 2000
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Result(0));
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 17-19:
+//# programmable --sender A --inputs 3000
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::transfer::public_freeze_object<sui::coin::Coin<sui::sui::SUI>>(Result(0));
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 21-24:
+//# programmable --sender A --inputs 4000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::party::single_owner(Input(1));
+//> 2: sui::transfer::public_party_transfer<sui::coin::Coin<sui::sui::SUI>>(Result(0), Result(1));
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 26:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 28-29:
+//# programmable --sender A --inputs object(1,0) 5000
+//> 0: sui::bag::add<u64, u64>(Input(0), Input(1), Input(1))
+created: object(7,0)
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 3754400,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 8, line 31:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, lines 33-71:
+//# run-graphql
+Response: {
+  "data": {
+    "addressOwned": {
+      "owner": {
+        "__typename": "AddressOwner",
+        "address": {
+          "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        }
+      }
+    },
+    "objectOwned": {
+      "owner": {
+        "__typename": "ObjectOwner",
+        "address": {
+          "address": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3"
+        }
+      }
+    },
+    "shared": {
+      "owner": {
+        "__typename": "Shared",
+        "initialSharedVersion": 4
+      }
+    },
+    "immutable": {
+      "owner": {
+        "__typename": "Immutable"
+      }
+    },
+    "partyOwned": {
+      "owner": {
+        "__typename": "ConsensusAddressOwner",
+        "startVersion": 6,
+        "address": {
+          "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        }
+      }
+    }
+  }
+}
+
+task 10, lines 73-103:
+//# run-graphql
+Response: {
+  "data": {
+    "firstChild": {
+      "owner": {
+        "address": {
+          "asObject": {
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "size": "2"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "secondChild": {
+      "owner": {
+        "address": {
+          "asObject": {
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "size": "2"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 11, lines 105-120:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "address": {
+          "asObject": {
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "size": "1"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 12, lines 122-138:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "address": {
+          "asObject": {
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "size": "1"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
