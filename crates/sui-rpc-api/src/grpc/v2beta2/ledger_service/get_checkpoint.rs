@@ -55,7 +55,8 @@ pub fn get_checkpoint(
                 .get_checkpoint_by_digest(&digest.into())
                 .ok_or(CheckpointNotFoundError::digest(digest))?
         }
-        None | _ => service.reader.inner().get_latest_checkpoint()?,
+        None => service.reader.inner().get_latest_checkpoint()?,
+        _ => service.reader.inner().get_latest_checkpoint()?,
     };
 
     let summary = verified_summary.data();

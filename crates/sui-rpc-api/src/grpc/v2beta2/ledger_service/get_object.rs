@@ -72,8 +72,7 @@ pub fn get_object(
     let (requests, read_mask) =
         validate_get_object_requests(vec![(object_id, version)], read_mask)?;
     let (object_id, version) = requests[0];
-    get_object_impl(service, object_id, version, &read_mask)
-        .map(|object| GetObjectResponse::new(object))
+    get_object_impl(service, object_id, version, &read_mask).map(GetObjectResponse::new)
 }
 
 #[tracing::instrument(skip(service))]

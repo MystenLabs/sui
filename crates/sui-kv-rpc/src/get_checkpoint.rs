@@ -45,7 +45,15 @@ pub async fn get_checkpoint(
             .await?
             .pop()
             .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?,
-        None | _ => {
+        None => {
+            let sequence_number = client.get_latest_checkpoint().await?;
+            client
+                .get_checkpoints(&[sequence_number])
+                .await?
+                .pop()
+                .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?
+        }
+        _ => {
             let sequence_number = client.get_latest_checkpoint().await?;
             client
                 .get_checkpoints(&[sequence_number])
