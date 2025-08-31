@@ -573,6 +573,10 @@ type CoinMetadata implements IAddressable & IObject & IMoveObject {
 	"""
 	storageRebate: BigInt
 	"""
+	The overall balance of coins issued.
+	"""
+	supply: BigInt
+	"""
 	Symbol for the coin.
 	"""
 	symbol: String
