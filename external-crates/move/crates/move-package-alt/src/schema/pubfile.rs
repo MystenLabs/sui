@@ -1,0 +1,43 @@
+use std::collections::BTreeMap;
+
+use derive_where::derive_where;
+use serde::{Deserialize, Serialize};
+
+use crate::flavor::MoveFlavor;
+
+use super::{
+    EnvironmentID, EnvironmentName, PublishAddresses, RenderToml,
+    toml_format::{expand_toml, flatten_toml},
+};
+
+/// The schema for a `Move.published` or a `Move.published.local` file
+pub type PublicationFile<F> = BTreeMap<EnvironmentName, Publication<F>>;
+
+/// A `Publication` is a historical record describing the state of a package when it was published.
+/// It contains
+#[derive(Debug, Serialize, Deserialize)]
+#[derive_where(Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct Publication<F: MoveFlavor> {
+    #[serde(flatten)]
+    pub addresses: PublishAddresses,
+    pub chain_id: EnvironmentID,
+    // TODO: pub version: F::PublishedVersion,
+    pub version: String,
+
+    /// Additional flavor-specific fields, such as an upgrade capability or information for source
+    /// verification
+    #[serde(flatten)]
+    pub metadata: F::PublishedMetadata,
+}
+
+impl<F: MoveFlavor> RenderToml for PublicationFile<F> {
+    /// Pretty-print `self` as TOML
+    fn render_as_toml(&self) -> String {
+        let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
+        expand_toml(&mut toml);
+        flatten_toml(&mut toml["dependencies"]);
+
+        toml.to_string()
+    }
+}

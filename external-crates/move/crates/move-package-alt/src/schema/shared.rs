@@ -1,6 +1,9 @@
 use std::{fmt::Debug, fmt::Display, path::PathBuf};
 
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_core_types::{
+    account_address::{AccountAddress, AccountAddressParseError},
+    identifier::Identifier,
+};
 use serde::{Deserialize, Serialize};
 
 use super::EnvironmentID;
@@ -14,8 +17,8 @@ pub type PackageName = Identifier;
 // schema data structures of being a plain old object)
 #[derive(Debug, Clone)]
 pub struct Environment {
-    name: EnvironmentName,
-    id: EnvironmentID,
+    pub name: EnvironmentName,
+    pub id: EnvironmentID,
 }
 
 impl Environment {
@@ -74,6 +77,22 @@ impl From<u16> for OriginalID {
 impl From<u16> for PublishedID {
     fn from(value: u16) -> Self {
         Self(AccountAddress::from_suffix(value))
+    }
+}
+
+impl TryFrom<&str> for PublishedID {
+    type Error = AccountAddressParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(Self(AccountAddress::from_hex(value)?))
+    }
+}
+
+impl TryFrom<&str> for OriginalID {
+    type Error = AccountAddressParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(Self(AccountAddress::from_hex(value)?))
     }
 }
 

@@ -6,15 +6,16 @@ use std::{collections::BTreeMap, fmt, path::Path};
 
 use tracing::debug;
 
+use super::manifest::Manifest;
 use super::paths::PackagePath;
-use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
-use crate::schema::{Environment, OriginalID, PackageName, Publication};
+use crate::schema::{
+    Environment, EnvironmentID, EnvironmentName, OriginalID, PackageName, Publication,
+};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
-    package::EnvironmentName,
     schema::ParsedLockfile,
 };
 
@@ -35,7 +36,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     graph: PackageGraph<F>,
     /// The lockfile we're operating on
     /// Invariant: lockfile.pinned matches graph, except that digests may differ
-    lockfile: ParsedLockfile<F>,
+    lockfile: ParsedLockfile,
     /// The list of published ids for every dependency in the root package
     deps_published_ids: Vec<OriginalID>,
 }
@@ -125,7 +126,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
 
         // check that there is a consistent linkage
-        let _linkage = graph.linkage()?;
+        let _linkage = PackageGraph::<F>::linkage(&graph)?;
         graph.check_rename_from()?;
 
         let deps_published_ids = _linkage.into_keys().collect();
@@ -183,30 +184,29 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Set the publish information, coming in from the compiler & result of `Publish` command.
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
         // Write the publish data.
+        todo!()
+        /*
         self.lockfile
             .published
             .insert(self.environment.name().clone(), publish_data);
 
         self.save_to_disk()
+        */
     }
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
     /// TODO(Manos): Do we wanna try to read this when loading, to make sure we can operate on it?
     /// That will avoid doing all the work (to repin / publish etc), and then be unable to operate it.
-    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile<F>> {
+    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile> {
         let path = package_path.lockfile_path();
         debug!("loading lockfile {:?}", path);
 
         if !path.exists() {
-            return Ok(ParsedLockfile::<F>::default());
+            return Ok(ParsedLockfile::default());
         }
 
         let file = FileHandle::new(path)?;
         Ok(toml_edit::de::from_str(file.source())?)
-    }
-
-    pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
-        &self.lockfile
     }
 
     /// Return the package graph for `env`
@@ -215,12 +215,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.graph
     }
 
-    pub fn lockfile(&self) -> &ParsedLockfile<F> {
+    pub fn lockfile(&self) -> &ParsedLockfile {
         &self.lockfile
     }
 
     /// Return the publication information for this environment.
     pub fn publication(&self, env: EnvironmentName) -> PackageResult<Publication<F>> {
+        todo!()
+        /*
         self.lockfile
             .published
             .get(&env)
@@ -232,6 +234,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 ))
             })
             .cloned()
+        */
     }
 
     // *** PATHS RELATED FUNCTIONS ***
