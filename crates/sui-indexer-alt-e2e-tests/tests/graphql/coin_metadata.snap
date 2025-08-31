@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 4 tasks
+processed 7 tasks
 
 init:
 A: object(0,0)
@@ -16,7 +16,7 @@ task 2, line 19:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 21-54:
+task 3, lines 21-55:
 //# run-graphql
 Response: {
   "data": {
@@ -50,7 +50,8 @@ Response: {
                   "name": "",
                   "symbol": "FAKE",
                   "description": "",
-                  "iconUrl": null
+                  "iconUrl": null,
+                  "supply": "0"
                 }
               }
             }
@@ -67,7 +68,8 @@ Response: {
               "name": "",
               "symbol": "FAKE",
               "description": "",
-              "iconUrl": null
+              "iconUrl": null,
+              "supply": "0"
             }
           }
         }
@@ -78,14 +80,44 @@ Response: {
       "name": "",
       "symbol": "FAKE",
       "description": "",
-      "iconUrl": null
+      "iconUrl": null,
+      "supply": "0"
     },
     "sui": {
       "decimals": 9,
       "name": "Sui",
       "symbol": "SUI",
       "description": "",
-      "iconUrl": null
+      "iconUrl": null,
+      "supply": "10000000000"
+    }
+  }
+}
+
+task 4, lines 57-59:
+//# programmable --sender A --inputs object(1,2) 100 @A
+//> 0: sui::coin::mint<P::fake::FAKE>(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(4,0)
+mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 5, line 61:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 63-73:
+//# run-graphql
+Response: {
+  "data": {
+    "coinMetadata": {
+      "decimals": 2,
+      "name": "",
+      "symbol": "FAKE",
+      "description": "",
+      "iconUrl": null,
+      "supply": "100"
     }
   }
 }
