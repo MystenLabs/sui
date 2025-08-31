@@ -77,8 +77,7 @@ impl TransactionKind {
             })),
             K::ProgrammableSystemTransaction(pt) => {
                 Some(T::ProgrammableSystem(ProgrammableSystemTransaction {
-                    native: pt,
-                    scope,
+                    inner: ProgrammableTransaction { native: pt, scope },
                 }))
             }
         }

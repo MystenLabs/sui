@@ -1610,15 +1610,18 @@ type PerEpochConfig {
 	object: Object
 }
 
+"""
+ProgrammableSystemTransaction is identical to ProgrammableTransaction, but GraphQL does not allow multiple variants with the same type.
+"""
 type ProgrammableSystemTransaction {
-	"""
-	Input objects or primitive values.
-	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
 	"""
 	The transaction commands, executed sequentially.
 	"""
 	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
 }
 
 type ProgrammableTransaction {
