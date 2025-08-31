@@ -459,6 +459,130 @@ type CoinDenyListStateCreateTransaction {
 }
 
 """
+An object representing metadata about a coin type.
+"""
+type CoinMetadata implements IAddressable & IObject & IMoveObject {
+	"""
+	The CoinMetadata's ID.
+	"""
+	address: SuiAddress!
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	Number of decimal places the coin uses.
+	"""
+	decimals: Int
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	Description of the coin.
+	"""
+	description: String
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	URL for the coin logo.
+	"""
+	iconUrl: String
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Name for the coin.
+	"""
+	name: String
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
+	Symbol for the coin.
+	"""
+	symbol: String
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+}
+
+"""
 A single command in the programmable transaction.
 """
 union Command = MakeMoveVecCommand | MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
@@ -1397,6 +1521,10 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	address: SuiAddress!
 	"""
+	Attempts to convert the object into a CoinMetadata.
+	"""
+	asCoinMetadata: CoinMetadata
+	"""
 	Attempts to convert the object into a DynamicField.
 	"""
 	asDynamicField: DynamicField
@@ -2252,6 +2380,12 @@ type Query {
 	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
 	"""
 	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection!
+	"""
+	Fetch the CoinMetadata for a given coin type.
+	
+	Returns `null` if no CoinMetadata object exists for the given coin type.
+	"""
+	coinMetadata(coinType: String!): CoinMetadata
 	"""
 	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
 	

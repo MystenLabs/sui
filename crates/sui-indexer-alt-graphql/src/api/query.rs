@@ -19,6 +19,7 @@ use super::{
     types::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
+        coin_metadata::CoinMetadata,
         epoch::Epoch,
         event::{filter::EventFilter, CEvent, Event},
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
@@ -107,6 +108,17 @@ impl Query {
         let filter = filter.unwrap_or_default();
 
         Checkpoint::paginate(ctx, scope, page, filter).await
+    }
+
+    /// Fetch the CoinMetadata for a given coin type.
+    ///
+    /// Returns `null` if no CoinMetadata object exists for the given coin type.
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<CoinMetadata>, RpcError<object::Error>> {
+        CoinMetadata::by_coin_type(ctx, self.scope(ctx)?, coin_type.into()).await
     }
 
     /// Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.

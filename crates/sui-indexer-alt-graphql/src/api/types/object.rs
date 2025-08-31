@@ -11,6 +11,7 @@ use async_graphql::{
 };
 use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
+use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_reader::{
     consistent_reader::{self, ConsistentReader},
     kv_loader::KvLoader,
@@ -37,18 +38,19 @@ use crate::{
         cursor::{BcsCursor, JsonCursor},
         owner_kind::OwnerKind,
         sui_address::SuiAddress,
-        type_filter::TypeInput,
+        type_filter::{TypeFilter, TypeInput},
         uint53::UInt53,
     },
     error::{bad_user_input, feature_unavailable, RpcError},
     intersect,
-    pagination::{Page, PaginationConfig},
+    pagination::{Page, PageLimits, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
     address::Address,
     balance::{self, Balance},
+    coin_metadata::CoinMetadata,
     dynamic_field::DynamicField,
     move_object::MoveObject,
     move_package::MovePackage,
@@ -122,6 +124,7 @@ use super::{
     )
 )]
 pub(crate) enum IObject {
+    CoinMetadata(CoinMetadata),
     DynamicField(DynamicField),
     MoveObject(MoveObject),
     MovePackage(MovePackage),
@@ -859,6 +862,29 @@ impl Object {
         }
 
         Ok(conn)
+    }
+
+    /// Fetch a singleton object of a given type, assuming there is at most one live object of that
+    /// type in the live object set.
+    ///
+    /// Returns `None` if there is no live object of the given type.
+    pub(crate) async fn singleton(
+        ctx: &Context<'_>,
+        scope: Scope,
+        type_: StructTag,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let filter = ObjectFilter {
+            type_: Some(TypeFilter::Type(type_)),
+            owner_kind: None,
+            owner: None,
+        };
+
+        // Query for objects of this type with a limit of 1
+        let page = Page::from_params(&PageLimits::singleton(), Some(1), None, None, None)?;
+        let mut connection = Self::paginate_live(ctx, scope, page, filter).await?;
+
+        // Get the first (and should be only) result
+        Ok(connection.edges.pop().map(|edge| edge.node))
     }
 
     /// Return the object's contents, lazily loading it if necessary.

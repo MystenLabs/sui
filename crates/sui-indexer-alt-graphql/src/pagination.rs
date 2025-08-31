@@ -90,6 +90,13 @@ impl PaginationConfig {
     }
 }
 
+impl PageLimits {
+    /// Limits for fetching a single item.
+    pub(crate) fn singleton() -> Self {
+        Self { default: 1, max: 1 }
+    }
+}
+
 impl<C> Page<C> {
     /// Convert connection parameters into a page. Entries for the page are drawn from the range
     /// `(after, before)` (Both bounds are optional). The number of entries in the page is
