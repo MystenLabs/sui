@@ -51,4 +51,23 @@ fragment CM on CoinMetadata {
   symbol
   description
   iconUrl
+  supply
+}
+
+//# programmable --sender A --inputs object(1,2) 100 @A
+//> 0: sui::coin::mint<P::fake::FAKE>(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+
+//# create-checkpoint
+
+//# run-graphql
+{
+  coinMetadata(coinType: "@{P}::fake::FAKE") {
+    decimals
+    name
+    symbol
+    description
+    iconUrl
+    supply
+  }
 }

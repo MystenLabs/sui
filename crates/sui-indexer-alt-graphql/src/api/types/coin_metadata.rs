@@ -5,8 +5,10 @@ use anyhow::Context as _;
 use async_graphql::{connection::Connection, Context, Object};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
-    coin::CoinMetadata as NativeMetadata,
-    coin::{COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME},
+    coin::{
+        CoinMetadata as NativeMetadata, TreasuryCap, COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME,
+    },
+    gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 use tokio::sync::OnceCell;
@@ -305,6 +307,45 @@ impl CoinMetadata {
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError<object::Error>> {
         self.super_.storage_rebate(ctx).await
+    }
+
+    /// The overall balance of coins issued.
+    pub(crate) async fn supply(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<BigInt>, RpcError<object::Error>> {
+        let Some(native) = self.super_.native(ctx).await? else {
+            return Ok(None);
+        };
+
+        let Some(TypeTag::Struct(coin_type)) =
+            StructTag::from(native.type_().clone()).type_params.pop()
+        else {
+            return Ok(None);
+        };
+
+        if GAS::is_gas(coin_type.as_ref()) {
+            return Ok(Some(BigInt::from(TOTAL_SUPPLY_SUI)));
+        }
+
+        let type_ = TreasuryCap::type_(*coin_type);
+        let scope = self.super_.super_.super_.scope.without_root_version();
+        let Some(object) = Object::singleton(ctx, scope, type_).await? else {
+            return Ok(None);
+        };
+
+        let Some(contents) = object.contents(ctx).await? else {
+            return Ok(None);
+        };
+
+        let Some(move_object) = contents.data.try_as_move() else {
+            return Ok(None);
+        };
+
+        let treasury_cap: TreasuryCap =
+            bcs::from_bytes(move_object.contents()).context("Failed to deserialize TreasuryCap")?;
+
+        Ok(Some(BigInt::from(treasury_cap.total_supply.value)))
     }
 
     /// Symbol for the coin.
