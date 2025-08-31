@@ -2,8 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use criterion::{Criterion, criterion_group, criterion_main, measurement::Measurement};
-use language_benchmarks::{measurement::wall_time_measurement, move_vm::bench};
+use criterion::{criterion_group, criterion_main, measurement::Measurement, Criterion};
+use language_benchmarks::{measurement::wall_time_measurement, move_vm::{bench, run_cross_module_tests}};
+use std::path::PathBuf;
 
 //
 // MoveVM benchmarks
@@ -41,6 +42,13 @@ fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
 }
 
+fn cross_module<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dir = "a1";
+    path.extend(["tests", "packages", dir]);
+    run_cross_module_tests(c, path);
+}
+
 criterion_group!(
     name = vm_benches;
     config = wall_time_measurement();
@@ -53,6 +61,7 @@ criterion_group!(
         natives,
         transfers,
         vector,
+        cross_module,
 );
 
 criterion_main!(vm_benches);

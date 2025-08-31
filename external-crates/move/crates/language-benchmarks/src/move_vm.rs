@@ -117,9 +117,7 @@ fn find_bench_functions(modules: &[CompiledModule]) -> Vec<(Identifier, ModuleId
         .collect()
 }
 
-fn build_package(dir: &str) -> Result<CompiledPackage> {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend(["tests", "packages", dir]);
+fn build_package(path: PathBuf) -> Result<CompiledPackage> {
     let config = BuildConfig {
         dev_mode: true,
         test_mode: false,
@@ -130,21 +128,20 @@ fn build_package(dir: &str) -> Result<CompiledPackage> {
     };
 
     config.compile_package(&path, &mut Vec::new())
-    // BuildConfig::new_for_testing().build(&path).unwrap()
 }
 
-fn run_cross_module_tests() {
-    let modules_a1 = build_package("a1").unwrap();
+pub fn run_cross_module_tests<M: Measurement + 'static>(c: &mut Criterion<M>, path: PathBuf) {
+    let modules_a1 = build_package(path).unwrap();
     let modules = modules_a1
         .all_modules()
         .map(|m| m.unit.module.clone())
         .collect::<Vec<_>>();
     let mut move_vm = create_vm();
-    execute::<criterion::measurement::WallTime>(
-        &mut Criterion::default(),
+    execute(
+        c,
         &mut move_vm,
         modules,
-        "cross_module/ModuleA.move",
+        "cross_module/a1/sources/m.move",
     );
 }
 
