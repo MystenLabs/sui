@@ -17,6 +17,7 @@ use crate::{
 
 use super::{
     balance::{self, Balance},
+    coin_metadata::CoinMetadata,
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
@@ -72,6 +73,7 @@ use super::{
 )]
 pub(crate) enum IAddressable {
     Address(Address),
+    CoinMetadata(CoinMetadata),
     DynamicField(DynamicField),
     MoveObject(MoveObject),
     MovePackage(MovePackage),
