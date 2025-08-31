@@ -1,0 +1,91 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-17:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 19:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 21-54:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionEffects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "outputState": {
+              "asMoveObject": {
+                "asCoinMetadata": null
+              }
+            }
+          },
+          {
+            "outputState": {
+              "asMoveObject": null
+            }
+          },
+          {
+            "outputState": {
+              "asMoveObject": {
+                "asCoinMetadata": null
+              }
+            }
+          },
+          {
+            "outputState": {
+              "asMoveObject": {
+                "asCoinMetadata": {
+                  "decimals": 2,
+                  "name": "",
+                  "symbol": "FAKE",
+                  "description": "",
+                  "iconUrl": null
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "objects": {
+      "nodes": [
+        {
+          "asMoveObject": {
+            "asCoinMetadata": {
+              "decimals": 2,
+              "name": "",
+              "symbol": "FAKE",
+              "description": "",
+              "iconUrl": null
+            }
+          }
+        }
+      ]
+    },
+    "fake": {
+      "decimals": 2,
+      "name": "",
+      "symbol": "FAKE",
+      "description": "",
+      "iconUrl": null
+    },
+    "sui": {
+      "decimals": 9,
+      "name": "Sui",
+      "symbol": "SUI",
+      "description": "",
+      "iconUrl": null
+    }
+  }
+}
