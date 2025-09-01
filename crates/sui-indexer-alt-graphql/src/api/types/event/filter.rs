@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{iter::Rev, ops::Range};
+use std::ops::Range;
 
 use async_graphql::InputObject;
-use itertools::Either;
 
 use crate::{
     api::{scalars::uint53::UInt53, types::event::CEvent},
@@ -28,13 +27,13 @@ pub(crate) struct EventFilter {
     // pub type: Option<TypeFilter>,
 }
 
-// The event indicies (sequence_number) in a transaction's events array that are within the cursor bounds, inclusively.
-// If we are paginating backwards return the range with the indicies in reverse order.
+/// The event indices (sequence_number) in a transaction's events array that are within the cursor bounds, inclusively.
+/// Event transaction numbers are always returned in ascending order.
 pub(super) fn tx_ev_bounds(
     page: &Page<CEvent>,
     tx_sequence_number: u64,
     event_count: usize,
-) -> Either<Range<usize>, Rev<Range<usize>>> {
+) -> Range<usize> {
     // Find start index from 'after' cursor, defaults to 0
     let ev_lo = page
         .after()
@@ -52,11 +51,7 @@ pub(super) fn tx_ev_bounds(
         .max(ev_lo)
         .min(event_count);
 
-    if page.is_from_front() {
-        Either::Left(ev_lo..ev_hi)
-    } else {
-        Either::Right((ev_lo..ev_hi).rev())
-    }
+    ev_lo..ev_hi
 }
 
 /// The transaction sequence number bounds with pagination cursors applied inclusively.

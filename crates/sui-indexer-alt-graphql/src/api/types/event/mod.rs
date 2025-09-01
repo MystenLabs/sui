@@ -45,9 +45,6 @@ pub(crate) struct EventCursor {
 
 pub(crate) type CEvent = JsonCursor<EventCursor>;
 
-#[derive(QueryableByName)]
-struct TxSequenceNumber(#[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64);
-
 #[derive(Clone)]
 pub(crate) struct Event {
     pub(crate) scope: Scope,
@@ -138,6 +135,10 @@ impl Event {
         let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
         let pg_tx_bounds = pg_tx_bounds(&page, tx_bounds);
 
+        #[derive(QueryableByName)]
+        struct TxSequenceNumber(
+            #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
+        );
         // TODO: (henry) update query to select from ev_emit_mod or ev_struct_inst based on filters.
         let query = query!(
             r#"

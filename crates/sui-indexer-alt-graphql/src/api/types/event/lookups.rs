@@ -2,32 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::{iter::Rev, ops::Range, sync::Arc};
 
 use anyhow::Context as _;
 use async_graphql::{dataloader::DataLoader, Context};
+use itertools::Either;
 use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_indexer_alt_reader::{kv_loader::KvLoader, pg_reader::PgReader, tx_digests::TxDigestKey};
 use sui_indexer_alt_schema::transactions::StoredTxDigest;
 use sui_types::{digests::TransactionDigest, event::Event as NativeEvent};
 
-use crate::error::RpcError;
-use crate::pagination::Page;
-use crate::scope::Scope;
+use crate::{error::RpcError, pagination::Page, scope::Scope};
 
 use super::{filter::tx_ev_bounds, CEvent, Event, EventCursor};
 
-///
-/// Returns a page of Event cursors and Events emitted from transactions with cursors and limits with overhead applied by:
-/// 1. Mapping transaction sequence numbers to transaction digests.
-/// 2. Loading native events based on the transaction digests from kv store.
-/// 3. Iterating through the transaction sequence numbers, checking for cursor bounds while
-///     building a Vector of events until the page.limit_with_overhead() is reached.
-/// 4. Ordering ASC as expected by the GraphQL schema and paginate_results().
+/// The page of Event cursors and Events emitted from transactions with cursors and limits with overhead applied.
 ///
 /// Note: tx_sequence_numbers are ordered ASC or DESC depending on the page direction, while events in
-///     each transactions are returned in ASC sequence number from the store.
-///
+///       each transactions are returned in ASC sequence number from the store.
 pub(crate) async fn events_from_sequence_numbers(
     scope: &Scope,
     ctx: &Context<'_>,
@@ -73,7 +65,7 @@ pub(crate) async fn events_from_sequence_numbers(
     Ok(results)
 }
 
-/// A page of Events emitted from transactions with cursors and limits with overhead applied.
+/// Helper function to map sequence numbers to a page of Event and Event Cursors.
 fn tx_events_paginated(
     scope: &Scope,
     page: &Page<CEvent>,
@@ -82,7 +74,6 @@ fn tx_events_paginated(
     digest_to_events: &HashMap<TransactionDigest, TransactionEventsContents>,
 ) -> Result<Vec<(EventCursor, Event)>, RpcError> {
     let mut results = Vec::new();
-    let mut count = 0;
     let limit = page.limit_with_overhead();
 
     for &tx_seq_num in tx_sequence_numbers {
@@ -99,7 +90,11 @@ fn tx_events_paginated(
             .context("Failed to get events")?;
 
         let native_events: Vec<NativeEvent> = contents.events()?;
-        let event_bounds = tx_ev_bounds(page, tx_seq_num, native_events.len());
+        let event_bounds: Either<Range<usize>, Rev<Range<usize>>> = if page.is_from_front() {
+            Either::Left(tx_ev_bounds(page, tx_seq_num, native_events.len()))
+        } else {
+            Either::Right(tx_ev_bounds(page, tx_seq_num, native_events.len()).rev())
+        };
 
         for ev_seq_num in event_bounds {
             let event_cursor = EventCursor {
@@ -116,9 +111,8 @@ fn tx_events_paginated(
             };
 
             results.push((event_cursor, event));
-            count += 1;
 
-            if count >= limit {
+            if results.len() >= limit {
                 return Ok(results);
             }
         }
