@@ -205,7 +205,7 @@ impl<'a> LimitsVerifier<'a> {
         Ok(())
     }
 
-    /// Verifies the lengths of all identifers are valid
+    /// Verifies the lengths of all identifiers are valid
     fn verify_identifiers(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         for (idx, identifier) in self.module.identifiers().iter().enumerate() {
             if config
