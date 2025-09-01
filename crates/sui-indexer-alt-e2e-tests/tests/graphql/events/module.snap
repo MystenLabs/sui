@@ -1,0 +1,604 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-32:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6528400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 34-60:
+//# publish --sender B
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6574000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 61:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 63:
+//# run test::module_test::emit_multiple_events --sender B
+events: Event { package_id: test, transaction_module: Identifier("module_test"), sender: B, type_: StructTag { address: test, module: Identifier("module_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("module_test"), sender: B, type_: StructTag { address: test, module: Identifier("module_test"), name: Identifier("TestEvent2"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 65:
+//# run test2::module_test2::emit_multiple_events --sender B
+events: Event { package_id: test2, transaction_module: Identifier("module_test2"), sender: B, type_: StructTag { address: test2, module: Identifier("module_test2"), name: Identifier("TestEvent3"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test2, transaction_module: Identifier("module_test2"), sender: B, type_: StructTag { address: test2, module: Identifier("module_test2"), name: Identifier("TestEvent4"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 67:
+//# run test2::module_test2::emit_multiple_events --sender A
+events: Event { package_id: test2, transaction_module: Identifier("module_test2"), sender: A, type_: StructTag { address: test2, module: Identifier("module_test2"), name: Identifier("TestEvent3"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test2, transaction_module: Identifier("module_test2"), sender: A, type_: StructTag { address: test2, module: Identifier("module_test2"), name: Identifier("TestEvent4"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 69:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 71-132:
+//# run-graphql
+Response: {
+  "data": {
+    "allEvents": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent2"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsSentBySenderA": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsSentBySenderB": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent2"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfTestModuleByPackageId": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent2"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfTestModuleByPackageAndModule": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x61061c66800adbbb17e4d1172cdd4acd17d91be903857b7fb89bcc8eab7691c5::module_test::TestEvent2"
+            }
+          },
+          "transaction": {
+            "digest": "2Nrmvkh7iEi5MSv4XfnP7Avu78SUKx5YM4eS3Zh4Vxgc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfTestModule2ByPackageId": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfTestModule2ByPackageAndModule": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "EsBTve4U9of7rUwDXu6cs7tsM3JGCu7uhajKTDFn8DzX",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsSentBySenderBAndPackageId": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent3"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xe91d6059c963cc92a4da966a769127e83869aa1754da81803c04928365aa8b27::module_test2::TestEvent4"
+            }
+          },
+          "transaction": {
+            "digest": "26X1u2wo5hVrehr9JQw1uJypGBpH5kKA62K68Z3nciYB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsSentBySenderAAndPackageIdShouldBeEmpty": {
+      "nodes": []
+    }
+  }
+}
+
+task 9, lines 134-141:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Filtering by both emitting module and event type is not supported not available",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "eventsByModuleAndTypeIsUnavailable"
+      ],
+      "extensions": {
+        "code": "FEATURE_UNAVAILABLE"
+      }
+    }
+  ]
+}

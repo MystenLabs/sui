@@ -136,6 +136,8 @@ impl Event {
         // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
         let pg_tx_bounds = pg_tx_bounds(&page, tx_bounds);
 
+        let query_from_filters = filter.query(pg_tx_bounds)?;
+
         #[derive(QueryableByName)]
         struct TxSequenceNumber(
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
@@ -143,19 +145,12 @@ impl Event {
         // TODO: (henry) update query to select from ev_emit_mod or ev_struct_inst based on filters.
         let query = query!(
             r#"
-            SELECT
-                tx_sequence_number
-            FROM
-                ev_struct_inst
-            WHERE
-                tx_sequence_number >= {BigInt}
-                AND tx_sequence_number < {BigInt}
+            {}
             ORDER BY
                 tx_sequence_number {}
             LIMIT {BigInt}
             "#,
-            pg_tx_bounds.start as i64,
-            pg_tx_bounds.end as i64,
+            query_from_filters,
             if page.is_from_front() {
                 query!("ASC")
             } else {
@@ -178,8 +173,14 @@ impl Event {
             .unique()
             .collect();
 
-        let events =
-            lookups::events_from_sequence_numbers(&scope, ctx, &page, &tx_sequence_numbers).await?;
+        let events = lookups::events_from_sequence_numbers(
+            &scope,
+            ctx,
+            &page,
+            &tx_sequence_numbers,
+            &filter,
+        )
+        .await?;
 
         let (has_prev, has_next, edges) =
             page.paginate_results(events, |(cursor, _)| JsonCursor::new(*cursor));
