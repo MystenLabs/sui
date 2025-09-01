@@ -37,6 +37,8 @@ public fun value<T>(self: &Balance<T>): u64 {
     self.value
 }
 
+public use fun supply_value as Supply.value;
+
 /// Get the `Supply` value.
 public fun supply_value<T>(supply: &Supply<T>): u64 {
     supply.value
