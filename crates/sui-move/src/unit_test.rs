@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_cli::base::{
-    self,
-    test::{self, UnitTestResult},
-};
+use move_cli::base::test::{self, UnitTestResult};
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
@@ -52,10 +49,10 @@ impl Test {
         // save disassembly if trace execution is enabled
         let save_disassembly = self.test.trace_execution;
         // find manifest file directory from a given path or (if missing) from current dir
-        let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
+
         run_move_unit_tests(
-            &rerooted_path,
+            path.unwrap_or(Path::new(".")),
             build_config,
             Some(unit_test_config),
             compute_coverage,
