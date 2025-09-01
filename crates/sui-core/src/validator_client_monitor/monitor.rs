@@ -11,6 +11,7 @@ use arc_swap::ArcSwap;
 use mysten_metrics::TxType;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
@@ -348,6 +349,23 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
         let k = k.min(validator_with_scores.len());
         validator_with_scores[..k].shuffle(&mut rng);
+
+        // With a probability of 1/100 try to bring one of the k+1..validator_with_scores.len() validators to the top k so we give the opportunity to the validator
+        // to score again.
+        if rng.gen_bool(0.01) {
+            validator_with_scores[k + 1..].shuffle(&mut rng);
+            // swap the validator_with_scores[0] with the validator_with_scores[k+1]
+            validator_with_scores.swap(0, k + 1);
+            let validator_1 = self
+                .authority_aggregator
+                .load()
+                .get_display_name(&validator_with_scores[0].0);
+            let validator_2 = self
+                .authority_aggregator
+                .load()
+                .get_display_name(&validator_with_scores[k + 1].0);
+            debug!("Swapped {} with {}", validator_1, validator_2);
+        }
 
         validator_with_scores.into_iter().map(|(v, _)| v).collect()
     }
