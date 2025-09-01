@@ -39,7 +39,7 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
     transaction::{CheckedInputObjects, TransactionDataAPI},
 };
-use tracing::{debug, trace};
+use tracing::{debug, debug_span, trace};
 
 // Executor for the replay. Created and used by `ReplayTransaction`.
 pub struct ReplayExecutor {
@@ -75,7 +75,7 @@ pub fn execute_transaction_to_effects(
     ),
     anyhow::Error,
 > {
-    debug!("Start execution");
+    debug!(op = "execute_tx", phase = "start", "execution");
     // TODO: Hook up...
     let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
@@ -88,9 +88,10 @@ pub fn execute_transaction_to_effects(
         object_cache,
     } = txn;
 
+    let epoch = expected_effects.executed_epoch();
+    let _span = debug_span!("execute_tx", %digest, epoch, checkpoint).entered();
     let input_objects = get_input_objects_for_replay(&txn_data, &digest, &object_cache)?;
     let protocol_config = &executor.protocol_config;
-    let epoch = expected_effects.executed_epoch();
     let epoch_data = epoch_store
         .epoch_info(epoch)?
         .ok_or_else(|| anyhow::anyhow!(format!("Epoch {} not found", epoch)))?;
@@ -147,7 +148,7 @@ pub fn execute_transaction_to_effects(
         store: _,
     } = store;
     let object_cache = object_cache.into_inner();
-    debug!("End execution");
+    debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
         result,
         TxnContextAndEffects {
@@ -259,13 +260,17 @@ impl BackingPackageStore for ReplayStore<'_> {
             "Expected one package object for {}",
             package_id
         );
-        let (package, _version) = package.into_iter().next().unwrap().unwrap();
-        self.object_cache
-            .borrow_mut()
-            .entry(*package_id)
-            .or_default()
-            .insert(package.version().value(), package.clone());
-        Ok(Some(PackageObject::new(package)))
+        let maybe = package.into_iter().next().and_then(|o| o);
+        if let Some((package, _version)) = maybe {
+            self.object_cache
+                .borrow_mut()
+                .entry(*package_id)
+                .or_default()
+                .insert(package.version().value(), package.clone());
+            Ok(Some(PackageObject::new(package)))
+        } else {
+            Ok(None)
+        }
     }
 }
 

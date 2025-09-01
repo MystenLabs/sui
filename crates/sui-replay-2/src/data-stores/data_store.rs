@@ -5,6 +5,7 @@
 //! backed by the RPC GQL endpoint. Schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 //! The RPC calls are implemented in `gql_queries.rs`.
 
+use crate::summary_metrics::*;
 use crate::{
     data_stores::gql_queries,
     replay_interface::{
@@ -16,6 +17,7 @@ use crate::{
 use anyhow::Context;
 use cynic::{GraphQlResponse, Operation};
 use reqwest::header::USER_AGENT;
+use std::time::Instant;
 use std::{
     collections::BTreeMap,
     sync::{
@@ -30,7 +32,7 @@ use sui_types::{
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
 };
-use tracing::debug;
+use tracing::{debug, debug_span};
 
 type EpochId = u64;
 
@@ -77,7 +79,29 @@ macro_rules! block_on {
     ($expr:expr) => {{
         #[allow(clippy::disallowed_methods, clippy::result_large_err)]
         {
-            futures::executor::block_on($expr)
+            if tokio::runtime::Handle::try_current().is_ok() {
+                // When already inside a Tokio runtime, spawn a scoped thread to
+                // run a separate current-thread runtime without requiring
+                // tokio::task::block_in_place (which may be unavailable).
+                std::thread::scope(|scope| {
+                    scope
+                        .spawn(|| {
+                            let rt = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .expect("failed to build Tokio runtime");
+                            rt.block_on($expr)
+                        })
+                        .join()
+                        .expect("failed to join scoped thread running nested runtime")
+                })
+            } else {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("failed to build Tokio runtime");
+                rt.block_on($expr)
+            }
         }
     }};
 }
@@ -293,16 +317,36 @@ impl DataStore {
         &self,
         digest: &str,
     ) -> Result<Option<(TransactionData, TransactionEffects, u64)>, anyhow::Error> {
-        debug!("Start transaction data query");
+        let _span = debug_span!("gql_txn_query", digest = %digest).entered();
+        debug!(op = "txn_query", phase = "start", "transaction query");
+        tx_counts_add_txn();
+        let t0 = Instant::now();
         let data = gql_queries::txn_query::query(digest.to_string(), self).await;
-        debug!("End transaction data query");
+        let elapsed = t0.elapsed().as_millis();
+        tx_metrics_add_txn(elapsed);
+        debug!(
+            op = "txn_query",
+            phase = "end",
+            elapsed_ms = elapsed,
+            "transaction query"
+        );
         data
     }
 
     async fn epoch(&self, epoch_id: u64) -> Result<Option<EpochData>, anyhow::Error> {
-        debug!("Start epoch query");
+        let _span = debug_span!("gql_epoch_query", epoch = epoch_id).entered();
+        debug!(op = "epoch_query", phase = "start", "epoch query");
+        tx_counts_add_epoch();
+        let t0 = Instant::now();
         let data = gql_queries::epoch_query::query(epoch_id, self).await;
-        debug!("End epoch query");
+        let elapsed = t0.elapsed().as_millis();
+        tx_metrics_add_epoch(elapsed);
+        debug!(
+            op = "epoch_query",
+            phase = "end",
+            elapsed_ms = elapsed,
+            "epoch query"
+        );
         data
     }
 
@@ -310,9 +354,21 @@ impl DataStore {
         &self,
         keys: &[ObjectKey],
     ) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
-        debug!("Start multi objects query");
+        let _span = debug_span!("gql_objects_query", num_keys = keys.len()).entered();
+        debug!(op = "objects_query", phase = "start", "objects query");
+        // Track how many objects were requested in this batch
+        tx_objs_add(keys.len());
+        tx_counts_add_objs();
+        let t0 = Instant::now();
         let data = gql_queries::object_query::query(keys, self).await?;
-        debug!("End multi objects query");
+        let elapsed = t0.elapsed().as_millis();
+        tx_metrics_add_objs(elapsed);
+        debug!(
+            op = "objects_query",
+            phase = "end",
+            elapsed_ms = elapsed,
+            "objects query"
+        );
         Ok(data)
     }
 }
