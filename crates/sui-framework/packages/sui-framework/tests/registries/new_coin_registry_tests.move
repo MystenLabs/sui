@@ -6,7 +6,7 @@ module sui::coin_registry_tests;
 
 use std::string::String;
 use std::unit_test::assert_eq;
-use sui::coin::{Self, TreasuryCap, CoinMetadata};
+use sui::coin::{Self, DenyCapV2, TreasuryCap, CoinMetadata};
 use sui::coin_registry::{Self, CurrencyBuilder, CoinRegistry};
 use sui::test_utils::destroy;
 use sui::url;
@@ -257,10 +257,13 @@ fun dynamic_currency_duplicate() {
 // === Migration from Legacy ===
 
 #[test]
-fun perfect_migration() {
+fun perfect_migration_regulated() {
     let ctx = &mut tx_context::dummy();
     let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let (t_cap, mut metadata) = new_builder().build_legacy(COIN_REGISTRY_TESTS {}, ctx);
+    let (t_cap, deny_cap, mut metadata) = new_builder().build_legacy_regulated(
+        COIN_REGISTRY_TESTS {},
+        ctx,
+    );
     let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
         &mut registry,
         &metadata,
@@ -275,6 +278,12 @@ fun perfect_migration() {
     assert_eq!(currency.icon_url(), ICON_URL.to_string());
 
     assert!(!currency.is_metadata_cap_claimed());
+    assert!(!currency.is_regulated());
+
+    // Mark as regulated with DenyCapV2.
+    currency.migrate_regulated_state_by_cap(&deny_cap);
+    assert!(currency.is_regulated());
+    assert!(currency.deny_cap_id().is_some_and!(|id| id == object::id(&deny_cap)));
 
     // Make an adjustment to the original metadata and refresh the currency
     // state through it.
@@ -304,7 +313,49 @@ fun perfect_migration() {
     destroy(metadata_cap);
     destroy(registry);
     destroy(currency);
+    destroy(deny_cap);
     destroy(t_cap);
+}
+
+// TODO: missing migration with `RegulatedCoinMetadata`.
+
+#[test, expected_failure(abort_code = coin_registry::ECannotUpdateManagedMetadata)]
+fun update_legacy_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (t_cap, _deny_cap, metadata) = new_builder().build_legacy_regulated(
+        COIN_REGISTRY_TESTS {},
+        ctx,
+    );
+    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &metadata,
+        ctx,
+    );
+
+    let _metadata_cap = currency.claim_metadata_cap(&t_cap, ctx);
+    currency.update_from_legacy_metadata(&metadata);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::EMetadataCapNotClaimed)]
+fun delete_legacy_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (_t_cap, _deny_cap, metadata) = new_builder().build_legacy_regulated(
+        COIN_REGISTRY_TESTS {},
+        ctx,
+    );
+    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &metadata,
+        ctx,
+    );
+
+    currency.delete_migrated_legacy_metadata(metadata);
+
+    abort
 }
 
 // === Metadata Builder ===
@@ -376,6 +427,24 @@ public fun build_legacy<T: drop>(
         b.name.into_bytes(),
         b.description.into_bytes(),
         option::some(url::new_unsafe(b.icon_url.to_ascii())),
+        ctx,
+    )
+}
+
+#[allow(deprecated_usage)]
+public fun build_legacy_regulated<T: drop>(
+    b: MetadataBuilder,
+    otw: T,
+    ctx: &mut TxContext,
+): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
+    coin::create_regulated_currency_v2(
+        otw,
+        b.decimals,
+        b.symbol.into_bytes(),
+        b.name.into_bytes(),
+        b.description.into_bytes(),
+        option::some(url::new_unsafe(b.icon_url.to_ascii())),
+        false,
         ctx,
     )
 }
