@@ -31,10 +31,6 @@ const EBadWitness: u64 = 0;
 const EInvalidArg: u64 = 1;
 /// Trying to split a coin more times than its balance allows.
 const ENotEnough: u64 = 2;
-/// The metadata for the coin type was not found.
-const EMetadataNotFound: u64 = 3;
-/// The metadata for the coin type was not claimed.
-const EMetadataCapNotClaimed: u64 = 4;
 
 // #[error]
 // const EGlobalPauseNotAllowed: vector<u8> =
