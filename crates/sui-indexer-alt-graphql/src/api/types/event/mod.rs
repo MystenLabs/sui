@@ -133,6 +133,7 @@ impl Event {
         };
 
         let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
+        // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
         let pg_tx_bounds = pg_tx_bounds(&page, tx_bounds);
 
         #[derive(QueryableByName)]
