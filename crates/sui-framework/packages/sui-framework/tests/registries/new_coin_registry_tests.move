@@ -6,9 +6,10 @@ module sui::coin_registry_tests;
 
 use std::string::String;
 use std::unit_test::assert_eq;
-use sui::coin::TreasuryCap;
+use sui::coin::{Self, TreasuryCap, CoinMetadata};
 use sui::coin_registry::{Self, CurrencyBuilder, CoinRegistry};
 use sui::test_utils::destroy;
+use sui::url;
 
 /// OTW-like.
 public struct COIN_REGISTRY_TESTS has drop {}
@@ -253,6 +254,59 @@ fun dynamic_currency_duplicate() {
     abort
 }
 
+// === Migration from Legacy ===
+
+#[test]
+fun perfect_migration() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (t_cap, mut metadata) = new_builder().build_legacy(COIN_REGISTRY_TESTS {}, ctx);
+    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &metadata,
+        ctx,
+    );
+
+    // Ensure migration correctness.
+    assert_eq!(currency.decimals(), DECIMALS);
+    assert_eq!(currency.symbol(), SYMBOL.to_string());
+    assert_eq!(currency.name(), NAME.to_string());
+    assert_eq!(currency.description(), DESCRIPTION.to_string());
+    assert_eq!(currency.icon_url(), ICON_URL.to_string());
+
+    assert!(!currency.is_metadata_cap_claimed());
+
+    // Make an adjustment to the original metadata and refresh the currency
+    // state through it.
+    t_cap.update_description(&mut metadata, b"New description".to_string());
+    t_cap.update_icon_url(&mut metadata, b"https://new.test.com/img.png".to_ascii_string());
+    t_cap.update_name(&mut metadata, b"New name".to_string());
+    t_cap.update_symbol(&mut metadata, b"NEW_TEST".to_ascii_string());
+
+    // Perform a permissionless update before claiming the metadata cap.
+    currency.update_from_legacy_metadata(&metadata);
+
+    // Check that the updates were applied.
+    assert_eq!(currency.description(), b"New description".to_string());
+    assert_eq!(currency.icon_url(), b"https://new.test.com/img.png".to_string());
+    assert_eq!(currency.name(), b"New name".to_string());
+    assert_eq!(currency.symbol(), b"NEW_TEST".to_string());
+    assert_eq!(currency.decimals(), DECIMALS);
+
+    // Now updates can be made via the registry.
+    let metadata_cap = currency.claim_metadata_cap(&t_cap, ctx);
+    assert!(currency.is_metadata_cap_claimed());
+    assert!(currency.metadata_cap_id().is_some_and!(|id| id == object::id(&metadata_cap)));
+
+    // Delete the migrated legacy metadata.
+    currency.delete_migrated_legacy_metadata(metadata);
+
+    destroy(metadata_cap);
+    destroy(registry);
+    destroy(currency);
+    destroy(t_cap);
+}
+
 // === Metadata Builder ===
 
 public struct MetadataBuilder has drop {
@@ -305,6 +359,23 @@ public fun build_otw<T: drop>(
         b.name,
         b.description,
         b.icon_url,
+        ctx,
+    )
+}
+
+#[allow(deprecated_usage)]
+public fun build_legacy<T: drop>(
+    b: MetadataBuilder,
+    otw: T,
+    ctx: &mut TxContext,
+): (TreasuryCap<T>, CoinMetadata<T>) {
+    coin::create_currency(
+        otw,
+        b.decimals,
+        b.symbol.into_bytes(),
+        b.name.into_bytes(),
+        b.description.into_bytes(),
+        option::some(url::new_unsafe(b.icon_url.to_ascii())),
         ctx,
     )
 }

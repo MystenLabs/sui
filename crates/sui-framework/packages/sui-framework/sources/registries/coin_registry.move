@@ -37,6 +37,8 @@ const ECannotUpdateManagedMetadata: u64 = 6;
 const EInvalidSymbol: u64 = 7;
 /// Attempt to set the deny cap twice.
 const EDenyCapAlreadyCreated: u64 = 8;
+/// Attempt to migrate legacy metadata for a `Currency` that already exists.
+const ECurrencyAlreadyRegistered: u64 = 9;
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// 0 here matches DenyCapV2 world.
@@ -215,7 +217,7 @@ public fun new_dynamic_currency<T: /* internal */ key>(
 ///
 /// Aborts if the metadata capability has already been claimed.
 /// If `MetadataCap` was deleted, it cannot be claimed!
-public fun claim_cap<T>(
+public fun claim_metadata_cap<T>(
     data: &mut Currency<T>,
     _: &TreasuryCap<T>,
     ctx: &mut TxContext,
@@ -384,14 +386,44 @@ public fun set_treasury_cap_id<T>(data: &mut Currency<T>, cap: &TreasuryCap<T>) 
 /// This should:
 /// 1. Take the old metadata
 /// 2. Create a `Currency<T>` object with a derived address (and share it!)
-public fun migrate_legacy_metadata<T>(_registry: &mut CoinRegistry, _v1: &CoinMetadata<T>) {
-    abort
+public fun migrate_legacy_metadata<T>(
+    registry: &mut CoinRegistry,
+    legacy: &CoinMetadata<T>,
+    ctx: &mut TxContext,
+) {
+    assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
+
+    transfer::share_object(Currency<T> {
+        id: object::new(ctx), // TODO: use derived_object::claim()
+        decimals: legacy.get_decimals(),
+        name: legacy.get_name(),
+        symbol: legacy.get_symbol().to_string(),
+        description: legacy.get_description(),
+        icon_url: legacy // TODO: not a fan of this!
+            .get_icon_url()
+            .map!(|url| url.inner_url().to_string())
+            .destroy_or!(b"".to_string()),
+        supply: option::some(SupplyState::Unknown),
+        regulated: RegulatedState::Unregulated,
+        treasury_cap_id: option::none(),
+        metadata_cap_id: MetadataCapState::Unclaimed,
+        extra_fields: vec_map::empty(),
+    });
 }
 
 /// TODO: Allow coin metadata to be updated from legacy as described in our docs.
-public fun update_from_legacy_metadata<T>(data: &mut Currency<T>, _v1: &CoinMetadata<T>) {
+public fun update_from_legacy_metadata<T>(data: &mut Currency<T>, legacy: &CoinMetadata<T>) {
     assert!(!data.is_metadata_cap_claimed(), ECannotUpdateManagedMetadata);
-    abort
+
+    data.name = legacy.get_name();
+    data.symbol = legacy.get_symbol().to_string();
+    data.description = legacy.get_description();
+    data.decimals = legacy.get_decimals();
+    data.icon_url =
+        legacy // TODO: not a fan of this!
+            .get_icon_url()
+            .map!(|url| url.inner_url().to_string())
+            .destroy_or!(b"".to_string());
 }
 
 /// Delete the legacy `CoinMetadata` object if the metadata cap for the new registry
@@ -399,9 +431,9 @@ public fun update_from_legacy_metadata<T>(data: &mut Currency<T>, _v1: &CoinMeta
 ///
 /// This function is only callable after there's "proof" that the author of the coin
 /// can manage the metadata using the registry system (so having a metadata cap claimed).
-public fun delete_migrated_legacy_metadata<T>(data: &mut Currency<T>, v1: CoinMetadata<T>) {
+public fun delete_migrated_legacy_metadata<T>(data: &mut Currency<T>, legacy: CoinMetadata<T>) {
     assert!(data.is_metadata_cap_claimed(), EMetadataCapNotClaimed);
-    v1.destroy_metadata();
+    legacy.destroy_metadata();
 }
 
 /// Allow migrating the regulated state by access to `RegulatedCoinMetadata` frozen object.
@@ -574,4 +606,30 @@ public fun finalize_unwrap_for_testing<T>(
     let id = object::new(ctx);
     data.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
     (data, MetadataCap { id })
+}
+
+#[test_only]
+public fun migrate_legacy_metadata_for_testing<T>(
+    registry: &mut CoinRegistry,
+    legacy: &CoinMetadata<T>,
+    ctx: &mut TxContext,
+): Currency<T> {
+    assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
+
+    Currency<T> {
+        id: object::new(ctx), // TODO: use derived_object::claim()
+        decimals: legacy.get_decimals(),
+        name: legacy.get_name(),
+        symbol: legacy.get_symbol().to_string(),
+        description: legacy.get_description(),
+        icon_url: legacy // TODO: not a fan of this!
+            .get_icon_url()
+            .map!(|url| url.inner_url().to_string())
+            .destroy_or!(b"".to_string()),
+        supply: option::some(SupplyState::Unknown),
+        regulated: RegulatedState::Unregulated,
+        treasury_cap_id: option::none(),
+        metadata_cap_id: MetadataCapState::Unclaimed,
+        extra_fields: vec_map::empty(),
+    }
 }
