@@ -6,27 +6,33 @@
 //# publish
 module test::events_test {
     use sui::event;
+    use std::ascii;
 
     public struct TestEvent has copy, drop {
-        message: vector<u8>,
+        message: ascii::String,
+        value: u64,
+    }
+
+    public struct TestEvent2 has copy, drop {
+        message: ascii::String,
         value: u64,
     }
 
     public entry fun emit_event(value: u64) {
         event::emit(TestEvent {
-            message: b"Hello from test event",
+            message: ascii::string(b"Hello from test event"),
             value,
         });
     }
 
     public entry fun emit_multiple_events() {
         event::emit(TestEvent {
-            message: b"First event",
+            message: ascii::string(b"First event"),
             value: 1,
         });
 
-        event::emit(TestEvent {
-            message: b"Second event",
+        event::emit(TestEvent2 {
+            message: ascii::string(b"Second event"),
             value: 2,
         });
     }
@@ -35,7 +41,7 @@ module test::events_test {
         let mut i = 0;
         while (i < count) {
             event::emit(TestEvent {
-                message: b"Event from loop",
+                message: ascii::string(b"Event from loop"),
                 value: i + 1,
             });
             i = i + 1;
