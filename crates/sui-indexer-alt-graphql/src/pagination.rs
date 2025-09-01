@@ -289,3 +289,252 @@ pub(crate) fn is_connection(field: &MetaField) -> bool {
     let type_ = field.ty.as_str();
     type_.ends_with("Connection") || type_.ends_with("Connection!")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_page() {
+        let limits = PageLimits {
+            default: 10,
+            max: 100,
+        };
+
+        assert_eq!(
+            Page::<usize>::from_params(&limits, None, None, None, None).unwrap(),
+            Page {
+                after: None,
+                before: None,
+                limit: limits.default as u64,
+                end: End::Front
+            }
+        );
+    }
+
+    #[test]
+    fn test_page_forward() {
+        let limits = PageLimits {
+            default: 10,
+            max: 100,
+        };
+
+        assert_eq!(
+            Page::from_params(&limits, None, Some(1), None, None).unwrap(),
+            Page {
+                after: Some(1),
+                before: None,
+                limit: limits.default as u64,
+                end: End::Front
+            }
+        );
+
+        // Even if you provide a `before` cursor, nodes are still fetched from the front of the
+        // range if `last` is not specified.
+        assert_eq!(
+            Page::from_params(&limits, None, None, None, Some(10)).unwrap(),
+            Page {
+                after: None,
+                before: Some(10),
+                limit: limits.default as u64,
+                end: End::Front
+            }
+        );
+
+        assert_eq!(
+            Page::from_params(&limits, Some(5), Some(1), None, None).unwrap(),
+            Page {
+                after: Some(1),
+                before: None,
+                limit: 5,
+                end: End::Front
+            }
+        );
+    }
+
+    #[test]
+    fn test_page_backward() {
+        let limits = PageLimits {
+            default: 10,
+            max: 100,
+        };
+
+        assert_eq!(
+            Page::from_params(&limits, None, None, Some(5), Some(10)).unwrap(),
+            Page {
+                after: None,
+                before: Some(10),
+                limit: 5,
+                end: End::Back
+            }
+        );
+    }
+
+    #[test]
+    fn test_page_both() {
+        let limits = PageLimits {
+            default: 10,
+            max: 100,
+        };
+
+        assert!(matches!(
+            Page::<usize>::from_params(&limits, Some(5), None, Some(5), None),
+            Err(Error::FirstAndLast)
+        ));
+    }
+
+    #[test]
+    fn test_page_too_large() {
+        let limits = PageLimits {
+            default: 10,
+            max: 100,
+        };
+
+        assert!(matches!(
+            Page::<usize>::from_params(&limits, Some(1000), None, None, None),
+            Err(Error::TooLarge {
+                limit: 1000,
+                max: 100,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_paginate_results() {
+        let limits = PageLimits {
+            default: 5,
+            max: 100,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
+        let results = vec![0, 1, 2, 3, 4];
+        let expect = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_not_enough() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
+
+        let results = vec![0, 1, 2];
+        let expect = vec![(0, 0), (1, 1), (2, 2)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_limited() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
+        let results = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let expect: Vec<_> = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_backward_limited() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> =
+            Page::from_params(&limits, None, None, Some(limits.default as u64), None).unwrap();
+
+        let results = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let expect: Vec<_> = vec![(5, 5), (6, 6), (7, 7), (8, 8), (9, 9)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_with_cursors() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, Some(5), Some(2), None, None).unwrap();
+
+        let results = vec![2, 3, 4, 5, 6, 7, 8, 9];
+        let expect = vec![(3, 3), (4, 4), (5, 5), (6, 6), (7, 7)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(prev);
+        assert!(next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_inconsistent_cursor() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, Some(2), None, None).unwrap();
+
+        let results = vec![4, 5];
+        let expect: Vec<(usize, usize)> = vec![];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_empty() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, Some(2), None, Some(3)).unwrap();
+
+        let results = vec![2, 3];
+        let expect: Vec<(usize, usize)> = vec![];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+}
