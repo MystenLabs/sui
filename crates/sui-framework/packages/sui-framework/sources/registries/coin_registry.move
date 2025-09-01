@@ -90,7 +90,7 @@ public struct Currency<phantom T> has key {
 /// or unknown (supply not yet registered in the registry).
 public enum SupplyState<phantom T> has store {
     /// Coin has a fixed supply with the given Supply object
-    Frozen(Supply<T>),
+    Fixed(Supply<T>),
     /// Coin has a supply that can ONLY decrease.
     /// TODO: Public burn function OR capability? :)
     Deflationary(Supply<T>),
@@ -196,7 +196,24 @@ public fun new_dynamic_currency<T: /* internal */ key>(
     (CurrencyBuilder { data: metadata, is_otw: false }, treasury_cap)
 }
 
-/// Allows converting an `OTW` coin into a regulated coin.
+/// Claim a MetadataCap for a coin type. This is only allowed from the owner of `TreasuryCap`, and only once.
+/// Aborts if the metadata capability has already been claimed.
+public fun claim_cap<T>(
+    data: &mut Currency<T>,
+    _: &TreasuryCap<T>,
+    ctx: &mut TxContext,
+): MetadataCap<T> {
+    assert!(!data.metadata_cap_claimed(), EMetadataCapAlreadyClaimed);
+    let id = object::new(ctx);
+    data.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
+
+    MetadataCap { id }
+}
+
+/// Allows converting a currency, on init, to regulated, which creates
+/// a `DenyCapV2` object, and a denylist entry.
+///
+/// This is only possible when initializing a coin (cannot be done for existing coins).
 public fun make_regulated<T>(
     init: &mut CurrencyBuilder<T>,
     allow_global_pause: bool,
@@ -214,25 +231,11 @@ public fun make_regulated<T>(
     deny_cap
 }
 
-/// Claim a MetadataCap for a coin type. This is only allowed from the owner of `TreasuryCap`, and only once.
-/// Aborts if the metadata capability has already been claimed.
-public fun claim_cap<T>(
-    data: &mut Currency<T>,
-    _: &TreasuryCap<T>,
-    ctx: &mut TxContext,
-): MetadataCap<T> {
-    assert!(!data.metadata_cap_claimed(), EMetadataCapAlreadyClaimed);
-    let id = object::new(ctx);
-    data.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
-
-    MetadataCap { id }
-}
-
 /// Freeze the supply by destroying the TreasuryCap and storing it in the Currency.
-public fun freeze_supply<T>(data: &mut Currency<T>, cap: TreasuryCap<T>) {
-    match (data.supply.swap(SupplyState::Frozen(cap.into_supply()))) {
+public fun make_supply_fixed<T>(data: &mut Currency<T>, cap: TreasuryCap<T>) {
+    match (data.supply.swap(SupplyState::Fixed(cap.into_supply()))) {
         // Impossible: We cannot fix a supply or make a supply deflationary twice.
-        SupplyState::Frozen(_supply) | SupplyState::Deflationary(_supply) => abort,
+        SupplyState::Fixed(_supply) | SupplyState::Deflationary(_supply) => abort,
         // We replaced "unknown" with fixed supply.
         SupplyState::Unknown => (),
     };
@@ -240,10 +243,10 @@ public fun freeze_supply<T>(data: &mut Currency<T>, cap: TreasuryCap<T>) {
 
 /// Make the supply "deflatinary" by destroying the TreasuryCap and taking control of the
 /// supply through the Currency.
-public fun make_deflationary<T>(data: &mut Currency<T>, cap: TreasuryCap<T>) {
+public fun make_supply_deflationary<T>(data: &mut Currency<T>, cap: TreasuryCap<T>) {
     match (data.supply.swap(SupplyState::Deflationary(cap.into_supply()))) {
         // Impossible: We cannot fix a supply or make a supply deflationary twice.
-        SupplyState::Frozen(_supply) | SupplyState::Deflationary(_supply) => abort,
+        SupplyState::Fixed(_supply) | SupplyState::Deflationary(_supply) => abort,
         // We replaced "unknown" with frozen supply.
         SupplyState::Unknown => (),
     };
@@ -311,7 +314,7 @@ public fun inner_mut<T>(init: &mut CurrencyBuilder<T>): &mut Currency<T> {
 
 /// Allows burning coins for deflationary
 public fun burn<T>(data: &mut Currency<T>, coin: Coin<T>) {
-    assert!(data.is_deflationary());
+    assert!(data.is_supply_deflationary());
 
     match (data.supply.borrow_mut()) {
         SupplyState::Deflationary(supply) => { supply.decrease_supply(coin.into_balance()); },
@@ -439,14 +442,14 @@ public fun deny_cap_id<T>(coin_data: &Currency<T>): Option<ID> {
     }
 }
 
-public fun is_frozen<T>(coin_data: &Currency<T>): bool {
+public fun is_supply_fixed<T>(coin_data: &Currency<T>): bool {
     match (coin_data.supply.borrow()) {
-        SupplyState::Frozen(_) => true,
+        SupplyState::Fixed(_) => true,
         _ => false,
     }
 }
 
-public fun is_deflationary<T>(coin_data: &Currency<T>): bool {
+public fun is_supply_deflationary<T>(coin_data: &Currency<T>): bool {
     match (coin_data.supply.borrow()) {
         SupplyState::Deflationary(_) => true,
         _ => false,
