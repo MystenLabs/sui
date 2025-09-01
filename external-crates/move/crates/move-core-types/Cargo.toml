@@ -38,6 +38,7 @@ proptest-derive.workspace = true
 regex.workspace = true
 serde_json.workspace = true
 arbitrary = { workspace = true, features = ["derive_arbitrary"] }
+insta.workspace = true
 
 [features]
 default = []
