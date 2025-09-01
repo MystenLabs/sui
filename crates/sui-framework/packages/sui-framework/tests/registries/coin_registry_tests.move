@@ -4,423 +4,315 @@
 #[test_only]
 module sui::coin_registry_tests;
 
-use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata};
-use sui::coin_registry::{Self, CoinRegistry, MetadataCap, InitCoinData, CoinData};
-use sui::test_scenario;
-use sui::url;
+use std::string::String;
+use std::unit_test::assert_eq;
+use sui::coin::TreasuryCap;
+use sui::coin_registry::{Self, CurrencyBuilder, CoinRegistry};
+use sui::test_utils::destroy;
 
+/// OTW-like.
 public struct COIN_REGISTRY_TESTS has drop {}
 
-const TEST_ADDR: address = @0xA11CE;
+/// Dynamic currency creation.
+public struct TestDynamic has key { id: UID }
 
-fun create_test_coin(
-    scenario: &mut test_scenario::Scenario,
-): (
-    TreasuryCap<COIN_REGISTRY_TESTS>,
-    MetadataCap<COIN_REGISTRY_TESTS>,
-    InitCoinData<COIN_REGISTRY_TESTS>,
-) {
-    let witness = COIN_REGISTRY_TESTS {};
-    coin::create_currency_v2(
-        witness,
-        6,
-        b"COIN_REGISTRY_TESTS".to_string(),
-        b"coin_name".to_string(),
-        b"description".to_string(),
-        b"test_url".to_string(),
-        scenario.ctx(),
+#[test]
+fun default_scenario() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    // Treasury and Metadata Caps registered properly.
+    assert!(currency.treasury_cap_id().is_some_and!(|id| id == object::id(&t_cap)));
+    assert!(currency.metadata_cap_id().is_some_and!(|id| id == object::id(&metadata_cap)));
+    assert!(currency.is_metadata_cap_claimed());
+    assert!(currency.total_supply().is_none());
+
+    // Check metadata parameters (ignored in other tests!)
+    assert_eq!(currency.decimals(), DECIMALS);
+    assert_eq!(currency.symbol(), SYMBOL.to_string());
+    assert_eq!(currency.name(), NAME.to_string());
+    assert_eq!(currency.description(), DESCRIPTION.to_string());
+    assert_eq!(currency.icon_url(), ICON_URL.to_string());
+
+    // Check supply state.
+    assert!(!currency.is_supply_fixed());
+    assert!(!currency.is_supply_deflationary());
+    assert!(!currency.is_regulated());
+
+    destroy(metadata_cap);
+    destroy(currency);
+    destroy(t_cap);
+}
+
+// === Regulated Currency ===
+
+#[test]
+fun regulated_default() {
+    let ctx = &mut tx_context::dummy();
+    let (mut builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let deny_cap = builder.make_regulated(true, ctx);
+    let (currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    assert!(currency.is_regulated());
+    assert!(currency.deny_cap_id().is_some_and!(|id| id == object::id(&deny_cap)));
+
+    destroy(metadata_cap);
+    destroy(deny_cap);
+    destroy(currency);
+    destroy(t_cap);
+}
+
+#[test, expected_failure(abort_code = coin_registry::EDenyCapAlreadyCreated)]
+fun regulated_twice_fail() {
+    let ctx = &mut tx_context::dummy();
+    let (mut builder, _t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let _deny_cap = builder.make_regulated(true, ctx);
+    let _deny_cap2 = builder.make_regulated(true, ctx);
+
+    abort
+}
+
+// === Metadata Updates & Metadata Cap States ===
+
+#[test]
+fun update_metadata() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    // Perform updates on metadata.
+    currency.set_name(&metadata_cap, b"new_name".to_string());
+    currency.set_symbol(&metadata_cap, b"new_symbol".to_string());
+    currency.set_description(&metadata_cap, b"new_description".to_string());
+    currency.set_icon_url(&metadata_cap, b"new_icon_url".to_string());
+
+    assert_eq!(currency.name(), b"new_name".to_string());
+    assert_eq!(currency.symbol(), b"new_symbol".to_string());
+    assert_eq!(currency.description(), b"new_description".to_string());
+    assert_eq!(currency.icon_url(), b"new_icon_url".to_string());
+
+    destroy(metadata_cap);
+    destroy(currency);
+    destroy(t_cap);
+}
+
+#[test, expected_failure(abort_code = coin_registry::EInvalidSymbol)]
+fun update_symbol_non_ascii() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, _t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    currency.set_symbol(&metadata_cap, b"\x00".to_string());
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::EInvalidSymbol)]
+fun create_symbol_non_ascii() {
+    let ctx = &mut tx_context::dummy();
+    let (_builder, _t_cap) = new_builder()
+        .symbol(b"\x00".to_string())
+        .build_otw(COIN_REGISTRY_TESTS {}, ctx);
+
+    abort
+}
+
+#[test]
+fun delete_metadata_cap() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    currency.delete_metadata_cap(metadata_cap);
+
+    destroy(currency);
+    destroy(t_cap);
+}
+
+// === Supply States ===
+
+#[test]
+// Scenario:
+// 1. create a new Currency and mint some coins
+// 2. make the supply fixed
+// 3. check the total supply value
+fun fixed_supply() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    assert!(currency.total_supply().is_none());
+    assert!(!currency.is_supply_fixed());
+    assert!(!currency.is_supply_deflationary());
+
+    let amount = 10_000;
+    t_cap.mint(amount, ctx).burn_for_testing();
+    currency.make_supply_fixed(t_cap);
+
+    assert!(!currency.is_supply_deflationary());
+    assert!(currency.total_supply().is_some_and!(|total| total == amount));
+    assert!(currency.is_supply_fixed());
+
+    destroy(metadata_cap);
+    destroy(currency);
+}
+
+#[test, expected_failure] // todo: abort code
+fun burn_fixed_supply() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+    let coins = t_cap.mint(10_000, ctx);
+
+    currency.make_supply_fixed(t_cap);
+    currency.burn(coins);
+
+    abort
+}
+
+#[test, expected_failure] // todo: abort code
+fun burn_unknown_supply() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    currency.burn(t_cap.mint(10_000, ctx));
+
+    abort
+}
+
+#[test]
+// Scenario:
+// 1. create a new Currency and mint some coins
+// 2. make the supply deflationary
+// 3. burn all coins
+fun deflationary_supply() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    assert!(currency.total_supply().is_none());
+    assert!(!currency.is_supply_fixed());
+    assert!(!currency.is_supply_deflationary());
+
+    let amount = 10_000;
+    let coins = t_cap.mint(amount, ctx);
+    currency.make_supply_deflationary(t_cap);
+
+    assert!(!currency.is_supply_fixed());
+    assert!(currency.total_supply().is_some_and!(|total| total == amount));
+    assert!(currency.is_supply_deflationary());
+
+    // Perform a burn operation on deflationary supply.
+    // And check the total supply value.
+    currency.burn(coins);
+    assert!(currency.total_supply().is_some_and!(|total| total == 0));
+
+    destroy(metadata_cap);
+    destroy(currency);
+}
+
+// === Dynamic Currency Creation ===
+
+#[test]
+fun dynamic_currency_default() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (builder, t_cap) = new_builder().build_dynamic<TestDynamic>(&mut registry, ctx);
+    let (currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    // TODO: Blocked until derived addresses are in!
+    // assert!(registry.exists<TestDynamic>());
+    assert!(currency.is_metadata_cap_claimed());
+    assert!(!currency.is_supply_fixed());
+    assert!(!currency.is_supply_deflationary());
+    assert!(!currency.is_regulated());
+
+    // Check metadata parameters (ignored in other tests!)
+    assert_eq!(currency.decimals(), DECIMALS);
+    assert_eq!(currency.symbol(), SYMBOL.to_string());
+    assert_eq!(currency.name(), NAME.to_string());
+    assert_eq!(currency.description(), DESCRIPTION.to_string());
+    assert_eq!(currency.icon_url(), ICON_URL.to_string());
+
+    destroy(metadata_cap);
+    destroy(registry);
+    destroy(currency);
+    destroy(t_cap);
+}
+
+// TODO: Blocked until derived addresses are in!
+#[test, expected_failure] // todo: abort code
+fun dynamic_currency_duplicate() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (_builder, _t_cap) = new_builder().build_dynamic<TestDynamic>(&mut registry, ctx);
+    let (_builder2, _t_cap2) = new_builder().build_dynamic<TestDynamic>(&mut registry, ctx);
+
+    abort
+}
+
+// === Metadata Builder ===
+
+public struct MetadataBuilder has drop {
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+}
+
+public fun new_builder(): MetadataBuilder {
+    MetadataBuilder {
+        decimals: DECIMALS,
+        symbol: SYMBOL.to_string(),
+        name: NAME.to_string(),
+        description: DESCRIPTION.to_string(),
+        icon_url: ICON_URL.to_string(),
+    }
+}
+
+public fun symbol(mut b: MetadataBuilder, symbol: String): MetadataBuilder {
+    b.symbol = symbol;
+    b
+}
+
+public fun build_dynamic<T: key>(
+    b: MetadataBuilder,
+    registry: &mut CoinRegistry,
+    ctx: &mut TxContext,
+): (CurrencyBuilder<T>, TreasuryCap<T>) {
+    registry.new_dynamic_currency<T>(
+        b.decimals,
+        b.symbol,
+        b.name,
+        b.description,
+        b.icon_url,
+        ctx,
     )
 }
 
-fun create_test_regulated_coin(
-    scenario: &mut test_scenario::Scenario,
-): (
-    TreasuryCap<COIN_REGISTRY_TESTS>,
-    MetadataCap<COIN_REGISTRY_TESTS>,
-    DenyCapV2<COIN_REGISTRY_TESTS>,
-    InitCoinData<COIN_REGISTRY_TESTS>,
-) {
-    let witness = COIN_REGISTRY_TESTS {};
-    coin::create_regulated_currency_v3(
-        witness,
-        6,
-        b"REGULATED_COIN_METADATA_TESTS".to_string(),
-        b"coin_name".to_string(),
-        b"description".to_string(),
-        b"test_url".to_string(),
-        true,
-        scenario.ctx(),
+public fun build_otw<T: drop>(
+    b: MetadataBuilder,
+    otw: T,
+    ctx: &mut TxContext,
+): (CurrencyBuilder<T>, TreasuryCap<T>) {
+    coin_registry::new_currency(
+        otw,
+        b.decimals,
+        b.symbol,
+        b.name,
+        b.description,
+        b.icon_url,
+        ctx,
     )
 }
 
-#[allow(deprecated_usage)]
-fun create_test_coin_v1(
-    scenario: &mut test_scenario::Scenario,
-): (TreasuryCap<COIN_REGISTRY_TESTS>, CoinMetadata<COIN_REGISTRY_TESTS>) {
-    let witness = COIN_REGISTRY_TESTS {};
-    coin::create_currency(
-        witness,
-        6,
-        b"COIN_TESTS",
-        b"coin_name",
-        b"description",
-        option::some(url::new_unsafe_from_bytes(b"icon_url")),
-        scenario.ctx(),
-    )
-}
-
-#[allow(deprecated_usage)]
-fun create_test_regulated_coin_v2(
-    scenario: &mut test_scenario::Scenario,
-): (
-    TreasuryCap<COIN_REGISTRY_TESTS>,
-    DenyCapV2<COIN_REGISTRY_TESTS>,
-    CoinMetadata<COIN_REGISTRY_TESTS>,
-) {
-    let witness = COIN_REGISTRY_TESTS {};
-    coin::create_regulated_currency_v2<COIN_REGISTRY_TESTS>(
-        witness,
-        6,
-        b"COIN_TESTS",
-        b"coin_name",
-        b"description",
-        option::some(url::new_unsafe_from_bytes(b"icon_url")),
-        /* allow_global_pause */ true,
-        scenario.ctx(),
-    )
-}
-
-fun initialize_test_registry(scenario: &mut test_scenario::Scenario): CoinRegistry {
-    scenario.next_tx(@0x0);
-    coin_registry::create_coin_data_registry_for_testing(scenario.ctx())
-}
-
-#[test]
-fun test_register_metadata() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, init_coin_data) = create_test_coin(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x30);
-
-    let coin_data = init_coin_data.unwrap_for_testing();
-
-    registry.register_coin_data(coin_data);
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_migrate_receiving() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, init_coin_data) = create_test_coin(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    let coin_data = init_coin_data.unwrap_for_testing();
-
-    transfer::public_transfer(coin_data, registry.id().to_address());
-
-    scenario.next_tx(@0x20);
-
-    let receiving_coin_data_ids = test_scenario::receivable_object_ids_for_owner_id<
-        CoinData<COIN_REGISTRY_TESTS>,
-    >(
-        object::id(&registry),
-    );
-
-    let ticket = test_scenario::receiving_ticket_by_id<
-        CoinData<COIN_REGISTRY_TESTS>,
-    >(receiving_coin_data_ids[0]);
-
-    registry.migrate_receiving(ticket);
-
-    scenario.next_tx(@0x20);
-
-    assert!(registry.exists<COIN_REGISTRY_TESTS>());
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_setters() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, init_coin_data) = create_test_coin(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    let coin_data = init_coin_data.unwrap_for_testing();
-
-    registry.register_coin_data(coin_data);
-
-    registry.set_name(&metadata_cap, b"test".to_string());
-    registry.set_symbol(&metadata_cap, b"TEST".to_string());
-    registry.set_description(&metadata_cap, b"test description".to_string());
-    registry.set_icon_url(&metadata_cap, b"https://example.com/icon.png".to_string());
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().name() == b"test".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().symbol() == b"TEST".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().description() == b"test description".to_string());
-    assert!(
-        registry.data<COIN_REGISTRY_TESTS>().icon_url() == b"https://example.com/icon.png".to_string(),
-    );
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = ::sui::coin::EMetadataCapNotClaimed)]
-fun test_freeze_supply_cap_not_claimed_abort() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata) = create_test_coin_v1(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    scenario.next_tx(@0x20);
-
-    coin::migrate_metadata_to_registry<COIN_REGISTRY_TESTS>(
-        &mut registry,
-        metadata,
-        scenario.ctx(),
-    );
-
-    coin::register_treasury_cap(&mut registry, &treasury_cap);
-
-    assert!(
-        registry.data<COIN_REGISTRY_TESTS>().treasury_cap() == option::some(object::id(&treasury_cap)),
-    );
-
-    coin::register_supply(&mut registry, treasury_cap);
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().treasury_cap() == option::none());
-
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = ::sui::coin::EMetadataNotFound)]
-fun test_freeze_supply_metadata_not_found_abort() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, init_coin_data) = create_test_coin(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    coin::register_supply(&mut registry, treasury_cap);
-
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-    let coin_data = init_coin_data.unwrap_for_testing();
-    transfer::public_transfer(coin_data, scenario.sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_register_supply() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, init_coin_data) = create_test_coin(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    let coin_data = init_coin_data.unwrap_for_testing();
-
-    registry.register_coin_data(coin_data);
-
-    coin::register_supply(&mut registry, treasury_cap);
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().supply_registered());
-
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_init_freeze_supply() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, mut init_coin_data) = create_test_coin(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    coin::init_register_supply(&mut init_coin_data, treasury_cap);
-
-    let coin_data = init_coin_data.unwrap_for_testing();
-
-    registry.register_coin_data(coin_data);
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().supply_registered());
-
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_set_decimals() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, init_coin_data) = create_test_coin(&mut scenario);
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    let mut coin_data = init_coin_data.unwrap_for_testing();
-
-    coin_data.set_decimals(1);
-
-    registry.register_coin_data(coin_data);
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().decimals() == 1);
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_migrate_regulated_metadata_to_registry() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata_cap, deny_cap, init_coin_data) = create_test_regulated_coin(
-        &mut scenario,
-    );
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    let coin_data = init_coin_data.unwrap_for_testing();
-
-    registry.register_coin_data<COIN_REGISTRY_TESTS>(coin_data);
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().deny_cap() == option::some(object::id(&deny_cap)));
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(deny_cap, scenario.ctx().sender());
-    transfer::public_transfer(metadata_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_migration() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata) = create_test_coin_v1(
-        &mut scenario,
-    );
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    coin::migrate_metadata_to_registry<COIN_REGISTRY_TESTS>(
-        &mut registry,
-        metadata,
-        scenario.ctx(),
-    );
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().decimals() == 6);
-    assert!(registry.data<COIN_REGISTRY_TESTS>().name() == b"coin_name".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().symbol() == b"COIN_TESTS".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().description() == b"description".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().icon_url() == b"icon_url".to_string());
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_migrate_immutable_and_value() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, metadata) = create_test_coin_v1(
-        &mut scenario,
-    );
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    coin::migrate_immutable_metadata_to_registry<COIN_REGISTRY_TESTS>(
-        &mut registry,
-        &metadata,
-        scenario.ctx(),
-    );
-
-    coin::migrate_metadata_to_registry<COIN_REGISTRY_TESTS>(
-        &mut registry,
-        metadata,
-        scenario.ctx(),
-    );
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().decimals() == 6);
-    assert!(registry.data<COIN_REGISTRY_TESTS>().name() == b"coin_name".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().symbol() == b"COIN_TESTS".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().description() == b"description".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().icon_url() == b"icon_url".to_string());
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    scenario.end();
-}
-
-#[test]
-fun test_migrate_regulated_to_registry() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-    let (treasury_cap, deny_cap, metadata) = create_test_regulated_coin_v2(
-        &mut scenario,
-    );
-
-    let mut registry = initialize_test_registry(&mut scenario);
-    scenario.next_tx(@0x20);
-
-    coin::migrate_metadata_to_registry<COIN_REGISTRY_TESTS>(
-        &mut registry,
-        metadata,
-        scenario.ctx(),
-    );
-
-    let regulated_metadata_v1 = scenario.take_immutable<
-        RegulatedCoinMetadata<COIN_REGISTRY_TESTS>,
-    >();
-
-    coin::migrate_regulated_metadata_to_registry<COIN_REGISTRY_TESTS>(
-        &mut registry,
-        &regulated_metadata_v1,
-    );
-
-    assert!(registry.data<COIN_REGISTRY_TESTS>().decimals() == 6);
-    assert!(registry.data<COIN_REGISTRY_TESTS>().name() == b"coin_name".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().symbol() == b"COIN_TESTS".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().description() == b"description".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().icon_url() == b"icon_url".to_string());
-    assert!(registry.data<COIN_REGISTRY_TESTS>().deny_cap() == option::some(object::id(&deny_cap)));
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(deny_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
-
-    regulated_metadata_v1.freeze_for_testing();
-
-    scenario.end();
-}
+// === Default Values ===
+
+const DECIMALS: u8 = 6;
+const SYMBOL: vector<u8> = b"TEST";
+const NAME: vector<u8> = b"Test";
+const DESCRIPTION: vector<u8> = b"Test";
+const ICON_URL: vector<u8> = b"https://test.com/img.png";
