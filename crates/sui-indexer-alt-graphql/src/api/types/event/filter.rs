@@ -186,7 +186,8 @@ impl EventFilter {
 
     // Check if the Event matches sender, module, or type filters in EventFilter if they are provided.
     pub(crate) fn matches(&self, event: &NativeEvent) -> bool {
-        let sender_matches = |sender: &Option<SuiAddress>| {
+        // Helper function for optional sender filtering when module or type filter is provided.
+        let sender_is_none_or_matches = |sender: &Option<SuiAddress>| {
             sender
                 .as_ref()
                 .is_none_or(|s| s == &SuiAddress::from(event.sender))
@@ -195,7 +196,7 @@ impl EventFilter {
         match (self.sender, &self.module, &self.type_) {
             (Some(sender), None, None) => sender == SuiAddress::from(event.sender),
             (sender, Some(module), None) => {
-                sender_matches(&sender)
+                sender_is_none_or_matches(&sender)
                     && match module {
                         ModuleFilter::Package(package) => {
                             SuiAddress::from(event.package_id) == *package
@@ -207,7 +208,7 @@ impl EventFilter {
                     }
             }
             (sender, None, Some(event_type)) => {
-                sender_matches(&sender)
+                sender_is_none_or_matches(&sender)
                     && match event_type {
                         TypeFilter::Package(package) => {
                             SuiAddress::from(event.type_.address) == *package
