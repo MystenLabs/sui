@@ -2152,8 +2152,17 @@ destroy_empty
 drop
 	public fun
 	0x2::table
+EventStreamHead
+	public struct
+	0x2::event
 emit
 	public fun
+	0x2::event
+emit_authenticated
+	public fun
+	0x2::event
+emit_authenticated_impl
+	fun
 	0x2::event
 Wrapper
 	public struct

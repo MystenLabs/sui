@@ -21,6 +21,15 @@ pub struct EventEmitCostParams {
     pub event_emit_tag_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_output_cost_per_byte: InternalGas,
 }
+
+pub fn emit_authenticated_impl(
+    _context: &mut NativeContext,
+    _ty_args: Vec<Type>,
+    _args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    todo!("not implemented");
+}
+
 /***************************************************************************************************
  * native fun emit
  * Implementation of the Move native function `event::emit<T: copy + drop>(event: T)`
