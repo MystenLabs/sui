@@ -334,7 +334,7 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "objectVersions");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -390,7 +390,7 @@ impl Query {
         last: Option<u64>,
         before: Option<move_package::CPackage>,
         filter: Option<PackageCheckpointFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "packages");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -418,7 +418,7 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "packageVersions");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -460,7 +460,7 @@ impl Query {
         ctx: &Context<'_>,
         address: Domain,
         root_version: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError<object::Error>> {
+    ) -> Result<Option<Address>, RpcError> {
         let mut scope = self.scope(ctx)?;
         if let Some(version) = root_version {
             scope = scope.with_root_version(version.into());

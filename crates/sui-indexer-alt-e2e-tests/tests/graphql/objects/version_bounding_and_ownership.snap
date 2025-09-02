@@ -445,7 +445,9 @@ task 24, lines 175-184:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "objectVersionsBefore": null
+    }
   },
   "errors": [
     {
@@ -473,7 +475,9 @@ task 25, lines 186-195:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "objectVersionsBefore": null
+    }
   },
   "errors": [
     {
@@ -501,7 +505,9 @@ task 26, lines 197-206:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "objectVersionsBefore": null
+    }
   },
   "errors": [
     {
@@ -529,7 +535,9 @@ task 27, lines 208-217:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "objectVersionsBefore": null
+    }
   },
   "errors": [
     {
@@ -918,7 +926,9 @@ task 37, lines 332-341:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "packageVersionsBefore": null
+    }
   },
   "errors": [
     {
@@ -946,7 +956,9 @@ task 38, lines 343-352:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "packageVersionsBefore": null
+    }
   },
   "errors": [
     {
@@ -974,7 +986,9 @@ task 39, lines 354-363:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "packageVersionsBefore": null
+    }
   },
   "errors": [
     {
@@ -1002,7 +1016,9 @@ task 40, lines 365-374:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "packageVersionsBefore": null
+    }
   },
   "errors": [
     {
