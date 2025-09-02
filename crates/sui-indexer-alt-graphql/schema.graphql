@@ -1164,7 +1164,7 @@ input EventFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
-	Filter down to the events from this transaction (given by its transaction digest).
+	Filter on events by transaction digest.
 	"""
 	digest: String
 	"""
@@ -1178,7 +1178,7 @@ input EventFilter {
 	"""
 	module: String
 	"""
-	Filter down to events from transactions sent by this address.
+	Filter on events by transaction sender address.
 	"""
 	sender: SuiAddress
 	"""
