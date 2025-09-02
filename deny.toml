@@ -42,6 +42,8 @@ ignore = [
     "RUSTSEC-2025-0010",
     # AES functions in `ring` may panic when overflow checking is enabled
     "RUSTSEC-2025-0009",
+    # Upgrade tracing.* libs to resolve.
+    "RUSTSEC-2025-0055", 
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

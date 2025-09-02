@@ -527,6 +527,12 @@ pub struct FullNodeProxy {
 
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
+        let http_url = if http_url.starts_with("http://") || http_url.starts_with("https://") {
+            http_url.to_string()
+        } else {
+            format!("http://{http_url}")
+        };
+
         // Each request times out after 60s (default value)
         let sui_client = SuiClientBuilder::default()
             .max_concurrent_requests(500_000)

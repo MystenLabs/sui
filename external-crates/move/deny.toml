@@ -50,11 +50,12 @@ ignore = [
     "RUSTSEC-2024-0375",
     # Potential unaligned read in `atty`
     "RUSTSEC-2021-0145",
-
     # allow unmaintained instant crate used in transitive dependencies (backoff, cached, fastrand, parking_lot_*)
     "RUSTSEC-2024-0384",
     # `paste` is unmaintained
     "RUSTSEC-2024-0436",
+    # Upgrade tracing.* libs to resolve.
+    "RUSTSEC-2025-0055",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -95,8 +96,6 @@ confidence-threshold = 0.8
 # Allow 1 or more licenses on a per-crate basis, so that particular licenses
 # aren't accepted for every possible crate as with the normal allow list
 exceptions = [
-
-
   # Each entry is the crate and version constraint, and its specific allow
   # list
   # { allow = ["Zlib"], name = "adler32", version = "*" },
