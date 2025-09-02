@@ -36,7 +36,7 @@ use tracing::{error, info};
 pub mod consensus_manager_tests;
 
 #[derive(PartialEq)]
-pub(crate) enum Running {
+enum Running {
     True(EpochId, ProtocolVersion),
     False,
 }
@@ -102,34 +102,6 @@ impl ConsensusManager {
         }
     }
 
-    pub fn get_storage_base_path(&self) -> PathBuf {
-        self.consensus_config.db_path().to_path_buf()
-    }
-
-    fn get_store_path(&self, epoch: EpochId) -> PathBuf {
-        let mut store_path = self.storage_base_path.clone();
-        store_path.push(format!("{}", epoch));
-        store_path
-    }
-
-    fn pick_network(&self, epoch_store: &AuthorityPerEpochStore) -> ConsensusNetwork {
-        if let Ok(type_str) = std::env::var("CONSENSUS_NETWORK") {
-            match type_str.to_lowercase().as_str() {
-                "anemo" => return ConsensusNetwork::Anemo,
-                "tonic" => return ConsensusNetwork::Tonic,
-                _ => {
-                    info!(
-                        "Invalid consensus network type {} in env var. Continue to use the value from protocol config.",
-                        type_str
-                    );
-                }
-            }
-        }
-        epoch_store.protocol_config().consensus_network()
-    }
-}
-
-impl ConsensusManager {
     pub async fn start(
         &self,
         node_config: &NodeConfig,
@@ -332,6 +304,32 @@ impl ConsensusManager {
     pub fn replay_waiter(&self) -> ReplayWaiter {
         let consumer_monitor_receiver = self.consumer_monitor_sender.subscribe();
         ReplayWaiter::new(consumer_monitor_receiver)
+    }
+
+    pub fn get_storage_base_path(&self) -> PathBuf {
+        self.consensus_config.db_path().to_path_buf()
+    }
+
+    fn get_store_path(&self, epoch: EpochId) -> PathBuf {
+        let mut store_path = self.storage_base_path.clone();
+        store_path.push(format!("{}", epoch));
+        store_path
+    }
+
+    fn pick_network(&self, epoch_store: &AuthorityPerEpochStore) -> ConsensusNetwork {
+        if let Ok(type_str) = std::env::var("CONSENSUS_NETWORK") {
+            match type_str.to_lowercase().as_str() {
+                "anemo" => return ConsensusNetwork::Anemo,
+                "tonic" => return ConsensusNetwork::Tonic,
+                _ => {
+                    info!(
+                        "Invalid consensus network type {} in env var. Continue to use the value from protocol config.",
+                        type_str
+                    );
+                }
+            }
+        }
+        epoch_store.protocol_config().consensus_network()
     }
 }
 
