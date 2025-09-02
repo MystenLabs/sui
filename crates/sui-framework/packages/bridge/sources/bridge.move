@@ -13,6 +13,7 @@ use bridge::message::{
     EmergencyOp,
     UpdateAssetPrice,
     UpdateBridgeLimit,
+    UpdateBridgeMaxSkipLimiterSeqNum,
     AddTokenOnSui,
     ParsedTokenTransferMessage,
     to_parsed_token_transfer_message
@@ -22,6 +23,7 @@ use bridge::treasury::{Self, BridgeTreasury};
 use sui::address;
 use sui::clock::Clock;
 use sui::coin::{Coin, TreasuryCap, CoinMetadata};
+use sui::dynamic_field as df;
 use sui::event;
 use sui::linked_table::{Self, LinkedTable};
 use sui::package::UpgradeCap;
@@ -83,6 +85,8 @@ public struct BridgeRecord has drop, store {
     verified_signatures: Option<vector<vector<u8>>>,
     claimed: bool,
 }
+
+public struct MaxSkipLimiterSeqNum() has copy, drop, store;
 
 const EUnexpectedMessageType: u64 = 0;
 const EUnauthorisedClaim: u64 = 1;
@@ -216,7 +220,9 @@ public fun send_token<T>(
     assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
     assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
 
-    let bridge_seq_num = inner.get_current_seq_num_and_increment(message_types::token());
+    let bridge_seq_num = inner.get_current_seq_num_and_increment(
+        message_types::token(),
+    );
     let token_id = inner.treasury.token_id<T>();
     let token_amount = token.balance().value();
     assert!(token_amount > 0, ETokenValueIsZero);
@@ -276,7 +282,8 @@ public fun approve_token_transfer(
     let token_payload = message.extract_token_bridge_payload();
     let target_chain = token_payload.token_target_chain();
     assert!(
-        message.source_chain() == inner.chain_id || target_chain == inner.chain_id,
+        message.source_chain() == inner.chain_id ||
+        target_chain == inner.chain_id,
         EUnexpectedChainID,
     );
 
@@ -352,7 +359,12 @@ public fun claim_and_transfer_token<T>(
     bridge_seq_num: u64,
     ctx: &mut TxContext,
 ) {
-    let (token, owner) = bridge.claim_token_internal<T>(clock, source_chain, bridge_seq_num, ctx);
+    let (token, owner) = bridge.claim_token_internal<T>(
+        clock,
+        source_chain,
+        bridge_seq_num,
+        ctx,
+    );
     if (token.is_some()) {
         transfer::public_transfer(token.destroy_some(), owner)
     } else {
@@ -374,7 +386,9 @@ public fun execute_system_message(
     assert!(message.source_chain() == inner.chain_id, EUnexpectedChainID);
 
     // check system ops seq number and increment it
-    let expected_seq_num = inner.get_current_seq_num_and_increment(message_type);
+    let expected_seq_num = inner.get_current_seq_num_and_increment(
+        message_type,
+    );
     assert!(message.seq_num() == expected_seq_num, EUnexpectedSeqNum);
 
     inner.committee.verify_signatures(message, signatures);
@@ -394,6 +408,9 @@ public fun execute_system_message(
     } else if (message_type == message_types::add_tokens_on_sui()) {
         let payload = message.extract_add_tokens_on_sui();
         inner.execute_add_tokens_on_sui(payload);
+    } else if (message_type == message_types::update_bridge_max_skip_limiter_seq_num()) {
+        let payload = message.extract_update_bridge_max_skip_limiter_seq_num();
+        bridge.execute_update_bridge_max_skip_limiter_seq_num(payload);
     } else {
         abort EUnexpectedMessageType
     };
@@ -481,10 +498,15 @@ fun claim_token_internal<T>(
     bridge_seq_num: u64,
     ctx: &mut TxContext,
 ): (Option<Coin<T>>, address) {
+    let max_skip_limiter_seq_num = bridge.max_skip_limiter_seq_num();
     let inner = load_inner_mut(bridge);
     assert!(!inner.paused, EBridgeUnavailable);
 
-    let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+    let key = message::create_key(
+        source_chain,
+        message_types::token(),
+        bridge_seq_num,
+    );
     assert!(inner.token_transfer_records.contains(key), EMessageNotFoundInRecords);
 
     // retrieve approved bridge message
@@ -523,6 +545,7 @@ fun claim_token_internal<T>(
     let amount = token_payload.token_amount();
     // Make sure transfer is within limit.
     if (
+        bridge_seq_num > max_skip_limiter_seq_num &&
         !inner
             .limiter
             .check_and_record_sending_transfer<T>(
@@ -577,6 +600,14 @@ fun execute_update_bridge_limit(inner: &mut BridgeInner, payload: UpdateBridgeLi
         )
 }
 
+fun execute_update_bridge_max_skip_limiter_seq_num(
+    bridge: &mut Bridge,
+    payload: UpdateBridgeMaxSkipLimiterSeqNum,
+) {
+    df::remove_if_exists<_, u64>(&mut bridge.id, MaxSkipLimiterSeqNum());
+    df::add(&mut bridge.id, MaxSkipLimiterSeqNum(), payload.max_skip_limiter_seq_num());
+}
+
 fun execute_update_asset_price(inner: &mut BridgeInner, payload: UpdateAssetPrice) {
     inner
         .treasury
@@ -617,6 +648,11 @@ fun get_current_seq_num_and_increment(bridge: &mut BridgeInner, msg_type: u8): u
     let seq_num = *entry;
     *entry = seq_num + 1;
     seq_num
+}
+
+public(package) fun max_skip_limiter_seq_num(bridge: &Bridge): u64 {
+    let key = MaxSkipLimiterSeqNum();
+    if (df::exists_(&bridge.id, key)) *df::borrow(&bridge.id, key) else 0
 }
 
 #[allow(unused_function)]
