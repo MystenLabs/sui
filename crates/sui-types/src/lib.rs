@@ -25,7 +25,6 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 
 #[macro_use]
 pub mod error;
-
 pub mod accumulator_event;
 pub mod accumulator_metadata;
 pub mod accumulator_root;
@@ -208,6 +207,10 @@ pub fn resolve_address(addr: &str) -> Option<AccountAddress> {
 
 pub trait MoveTypeTagTrait {
     fn get_type_tag() -> TypeTag;
+
+    fn get_instance_type_tag(&self) -> TypeTag {
+        Self::get_type_tag()
+    }
 }
 
 impl MoveTypeTagTrait for u8 {

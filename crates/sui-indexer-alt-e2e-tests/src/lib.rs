@@ -3,7 +3,9 @@
 
 use std::{
     collections::HashMap,
+    fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::Path,
     time::Duration,
 };
 
@@ -14,7 +16,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
-use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
 };
@@ -38,6 +40,8 @@ use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
 };
+use sui_storage::blob::{Blob, BlobEncoding};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -124,18 +128,23 @@ pub struct OffchainCluster {
     cancel: CancellationToken,
 }
 
+pub struct OffchainClusterConfig {
+    pub indexer_args: IndexerArgs,
+    pub consistent_indexer_args: IndexerArgs,
+    pub indexer_config: IndexerConfig,
+    pub consistent_config: ConsistentConfig,
+    pub jsonrpc_config: JsonRpcConfig,
+    pub graphql_config: GraphQlConfig,
+    pub bootstrap_genesis: Option<BootstrapGenesis>,
+}
+
 impl FullCluster {
     /// Creates a cluster with a fresh executor where the off-chain services are set up with a
     /// default configuration.
     pub async fn new() -> anyhow::Result<Self> {
         Self::new_with_configs(
             Simulacrum::new(),
-            IndexerArgs::default(),
-            IndexerArgs::default(),
-            IndexerConfig::for_test(),
-            ConsistentConfig::for_test(),
-            JsonRpcConfig::default(),
-            GraphQlConfig::default(),
+            OffchainClusterConfig::default(),
             &prometheus::Registry::new(),
             CancellationToken::new(),
         )
@@ -147,39 +156,16 @@ impl FullCluster {
     /// `jsonrpc_config`, and the GraphQL server is configured using `graphql_config`.
     pub async fn new_with_configs(
         mut executor: Simulacrum,
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
+        offchain_cluster_config: OffchainClusterConfig,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
-        let temp_dir = tempfile::tempdir().context("Failed to create data ingestion path")?;
+        let (client_args, temp_dir) = local_ingestion_client_args();
         executor.set_data_ingestion_path(temp_dir.path().to_owned());
 
-        let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
-            remote_store_url: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
-        };
-
-        let offchain = OffchainCluster::new(
-            indexer_args,
-            consistent_indexer_args,
-            client_args,
-            indexer_config,
-            consistent_config,
-            jsonrpc_config,
-            graphql_config,
-            registry,
-            cancel,
-        )
-        .await
-        .context("Failed to create off-chain cluster")?;
+        let offchain = OffchainCluster::new(client_args, offchain_cluster_config, registry, cancel)
+            .await
+            .context("Failed to create off-chain cluster")?;
 
         Ok(Self {
             executor,
@@ -321,13 +307,16 @@ impl OffchainCluster {
     /// - `graphql_config` controls the GraphQL server.
     /// - `registry` is used to register metrics for the indexer, JSON-RPC, and GraphQL servers.
     pub async fn new(
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
         client_args: ClientArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
+        OffchainClusterConfig {
+            indexer_args,
+            consistent_indexer_args,
+            indexer_config,
+            consistent_config,
+            jsonrpc_config,
+            graphql_config,
+            bootstrap_genesis,
+        }: OffchainClusterConfig,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
@@ -366,14 +355,13 @@ impl OffchainCluster {
             .await
             .context("Failed to connect to database")?;
 
-        let with_genesis = true;
         let indexer = setup_indexer(
             database_url.clone(),
             DbArgs::default(),
             indexer_args,
             client_args.clone(),
             indexer_config,
-            with_genesis,
+            bootstrap_genesis,
             registry,
             cancel.child_token(),
         )
@@ -664,6 +652,20 @@ impl OffchainCluster {
     }
 }
 
+impl Default for OffchainClusterConfig {
+    fn default() -> Self {
+        Self {
+            indexer_args: Default::default(),
+            consistent_indexer_args: Default::default(),
+            indexer_config: IndexerConfig::for_test(),
+            consistent_config: ConsistentConfig::for_test(),
+            jsonrpc_config: Default::default(),
+            graphql_config: Default::default(),
+            bootstrap_genesis: None,
+        }
+    }
+}
+
 /// Returns the reference for the first address-owned object created in the effects, or an error if
 /// there is none.
 pub fn find_address_owned(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
@@ -714,4 +716,28 @@ pub fn find_address_mutated(fx: &TransactionEffects) -> anyhow::Result<ObjectRef
         .into_iter()
         .find_map(|(oref, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(oref))
         .context("Could not find mutated object")
+}
+
+/// Returns ClientArgs that use a temporary local ingestion path and the TempDir of that path.
+pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
+    let temp_dir = tempfile::tempdir()
+        .context("Failed to create data ingestion path")
+        .unwrap();
+    let client_args = ClientArgs {
+        local_ingestion_path: Some(temp_dir.path().to_owned()),
+        remote_store_url: None,
+        rpc_api_url: None,
+        rpc_username: None,
+        rpc_password: None,
+    };
+    (client_args, temp_dir)
+}
+
+/// Writes a checkpoint file to the given path.
+pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+    let file_path = path.join(file_name);
+    let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
+    fs::write(file_path, blob.to_bytes())?;
+    Ok(())
 }
