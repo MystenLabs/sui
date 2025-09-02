@@ -10,11 +10,9 @@ use sui_rpc_api::{
     proto::google::rpc::bad_request::FieldViolation, CheckpointNotFoundError, ErrorReason, RpcError,
 };
 use sui_types::digests::CheckpointDigest;
-use tracing::instrument;
 
 pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
 
-#[instrument(skip(client), fields(checkpoint_id = ?request.checkpoint_id))]
 pub async fn get_checkpoint(
     mut client: BigTableClient,
     request: GetCheckpointRequest,

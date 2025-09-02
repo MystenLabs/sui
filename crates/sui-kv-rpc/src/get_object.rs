@@ -12,9 +12,7 @@ use sui_rpc_api::{
     ledger_service::validate_get_object_requests, ErrorReason, ObjectNotFoundError, RpcError,
 };
 use sui_types::storage::ObjectKey;
-use tracing::instrument;
 
-#[instrument(skip(client), fields(object_id = ?object_id, version = ?version))]
 pub(crate) async fn get_object(
     mut client: BigTableClient,
     GetObjectRequest {
@@ -44,7 +42,6 @@ pub(crate) async fn get_object(
     Ok(GetObjectResponse::new(message))
 }
 
-#[instrument(skip(client, requests), fields(batch_size = requests.len()))]
 pub(crate) async fn batch_get_objects(
     mut client: BigTableClient,
     BatchGetObjectsRequest {

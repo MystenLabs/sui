@@ -14,7 +14,6 @@ use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
 use sui_sdk_types::Digest;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
-use tracing::instrument;
 
 mod get_checkpoint;
 mod get_epoch;
@@ -60,7 +59,6 @@ impl KvRpcServer {
 
 #[tonic::async_trait]
 impl LedgerService for KvRpcServer {
-    #[instrument(skip(self))]
     async fn get_service_info(
         &self,
         _: tonic::Request<GetServiceInfoRequest>,
@@ -75,7 +73,6 @@ impl LedgerService for KvRpcServer {
         .map_err(Into::into)
     }
 
-    #[instrument(skip(self, request), fields(object_id = ?request.get_ref().object_id, version = ?request.get_ref().version))]
     async fn get_object(
         &self,
         request: tonic::Request<GetObjectRequest>,
@@ -86,7 +83,6 @@ impl LedgerService for KvRpcServer {
             .map_err(Into::into)
     }
 
-    #[instrument(skip(self, request), fields(batch_size = request.get_ref().requests.len()))]
     async fn batch_get_objects(
         &self,
         request: tonic::Request<BatchGetObjectsRequest>,
@@ -97,7 +93,6 @@ impl LedgerService for KvRpcServer {
             .map_err(Into::into)
     }
 
-    #[instrument(skip(self, request), fields(digest = ?request.get_ref().digest))]
     async fn get_transaction(
         &self,
         request: tonic::Request<GetTransactionRequest>,
@@ -108,7 +103,6 @@ impl LedgerService for KvRpcServer {
             .map_err(Into::into)
     }
 
-    #[instrument(skip(self, request), fields(batch_size = request.get_ref().digests.len()))]
     async fn batch_get_transactions(
         &self,
         request: tonic::Request<BatchGetTransactionsRequest>,
@@ -119,7 +113,6 @@ impl LedgerService for KvRpcServer {
             .map_err(Into::into)
     }
 
-    #[instrument(skip(self, request), fields(checkpoint_id = ?request.get_ref().checkpoint_id))]
     async fn get_checkpoint(
         &self,
         request: tonic::Request<GetCheckpointRequest>,
@@ -130,7 +123,6 @@ impl LedgerService for KvRpcServer {
             .map_err(Into::into)
     }
 
-    #[instrument(skip(self, request), fields(epoch = request.get_ref().epoch))]
     async fn get_epoch(
         &self,
         request: tonic::Request<GetEpochRequest>,
@@ -146,7 +138,6 @@ impl LedgerService for KvRpcServer {
     }
 }
 
-#[instrument(skip(client, server_version), fields(chain = ?chain_id.chain()))]
 async fn get_service_info(
     mut client: BigTableClient,
     chain_id: ChainIdentifier,

@@ -15113,6 +15113,8 @@ dependencies = [
  "tokio",
  "tonic 0.13.1",
  "tonic-reflection",
+ "tower 0.5.2",
+ "tower-http",
  "tracing",
 ]
 

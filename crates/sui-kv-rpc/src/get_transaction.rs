@@ -15,11 +15,9 @@ use sui_rpc_api::{
     RpcError, TransactionNotFoundError,
 };
 use sui_types::base_types::TransactionDigest;
-use tracing::instrument;
 
 pub const READ_MASK_DEFAULT: &str = "digest";
 
-#[instrument(skip(client), fields(digest = ?request.digest))]
 pub async fn get_transaction(
     mut client: BigTableClient,
     request: GetTransactionRequest,
@@ -62,7 +60,6 @@ pub async fn get_transaction(
     )?))
 }
 
-#[instrument(skip(client, digests), fields(batch_size = digests.len()))]
 pub async fn batch_get_transactions(
     mut client: BigTableClient,
     BatchGetTransactionsRequest {
@@ -108,7 +105,6 @@ pub async fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
-#[instrument(skip(source, mask))]
 fn transaction_to_response(
     source: TransactionData,
     mask: &FieldMaskTree,
