@@ -13,6 +13,8 @@ use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServe
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
 use telemetry_subscribers::TelemetryConfig;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
+use tower::ServiceBuilder;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 
 bin_version::bin_version!();
 
@@ -94,10 +96,18 @@ async fn main() -> Result<()> {
             .await
             .expect("healh check service failed");
     });
+    let trace_layer = TraceLayer::new_for_grpc()
+        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+        .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN));
+
     builder
-        .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
-            Arc::new(RpcMetrics::new(&registry)),
-        )))
+        .layer(
+            ServiceBuilder::new()
+                .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
+                    Arc::new(RpcMetrics::new(&registry)),
+                )))
+                .layer(trace_layer)
+        )
         .add_service(LedgerServiceServer::new(server))
         .add_service(reflection_v1)
         .add_service(reflection_v1alpha)
