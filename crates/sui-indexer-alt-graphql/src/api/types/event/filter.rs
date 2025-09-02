@@ -127,7 +127,7 @@ impl EventFilter {
                             WITH bounds AS ({})
                             SELECT tx_sequence_number FROM ev_struct_inst, bounds
                             WHERE 
-                            package = {Bytea} AND module = {Text} AND name = {Text} AND instantiation = {Bytea} 
+                            package = {Bytea} AND module = {Text} AND name = {Text} {}
                             AND tx_sequence_number >= bounds.tx_lo 
                             AND tx_sequence_number < bounds.tx_hi
                             {}
@@ -136,7 +136,11 @@ impl EventFilter {
                         package,
                         module,
                         name,
-                        type_params_bytes,
+                        if tag.type_params.is_empty() {
+                            query!("")
+                        } else {
+                            query!("AND instantiation = {Bytea}", type_params_bytes)
+                        },
                         sender_filter
                     )
                 }
