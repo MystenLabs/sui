@@ -32,10 +32,10 @@ pub(crate) struct EventFilter {
     /// Limit to event that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
-    /// Filter down to the events from this transaction (given by its transaction digest).
+    /// Filter on events by transaction digest.
     pub digest: Option<Digest>,
 
-    /// Filter down to events from transactions sent by this address.
+    /// Filter on events by transaction sender address.
     pub sender: Option<SuiAddress>,
 
     /// Events emitted by a particular module. An event is emitted by a
