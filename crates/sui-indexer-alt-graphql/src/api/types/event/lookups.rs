@@ -60,7 +60,7 @@ pub(crate) async fn events_from_sequence_numbers(
         tx_sequence_numbers,
         &sequence_to_digest,
         &digest_to_events,
-        &filter,
+        filter,
     )?;
 
     if !page.is_from_front() {

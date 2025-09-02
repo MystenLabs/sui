@@ -12,8 +12,8 @@ use sui_types::event::Event as NativeEvent;
 
 use crate::{
     api::scalars::{
-        module_filter::ModuleFilter, sui_address::SuiAddress, type_filter::TypeFilter,
-        uint53::UInt53,
+        digest::Digest, module_filter::ModuleFilter, sui_address::SuiAddress,
+        type_filter::TypeFilter, uint53::UInt53,
     },
     error::{feature_unavailable, RpcError},
     pagination::Page,
@@ -33,8 +33,7 @@ pub(crate) struct EventFilter {
     pub before_checkpoint: Option<UInt53>,
 
     /// Filter down to the events from this transaction (given by its transaction digest).
-    // TODO: (henry) Implement these filters.
-    // pub transaction_digest: Option<Digest>,
+    pub digest: Option<Digest>,
 
     /// Filter down to events from transactions sent by this address.
     pub sender: Option<SuiAddress>,
@@ -60,19 +59,135 @@ pub(crate) struct EventFilter {
 }
 
 impl EventFilter {
-    pub(crate) fn query(&self, tx_bounds: std::ops::Range<u64>) -> Result<Query, RpcError> {
-        match (self.sender, &self.module, &self.type_) {
-            (sender, None, None) => Ok(select_tx_sequence_numbers(tx_bounds, sender)),
-            (sender, None, Some(event_type)) => {
-                Ok(select_event_type(event_type, tx_bounds, sender)?)
+    /// Builds a SQL query to select and filter events based on sender, module, and type filters.
+    /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
+    pub(crate) fn query(&self, tx_bounds_subquery: Query<'static>) -> Result<Query, RpcError> {
+        let sender_filter = if let Some(sender) = self.sender {
+            query!("AND sender = {Bytea}", sender.into_vec())
+        } else {
+            query!("")
+        };
+
+        let query = match (self.sender, &self.module, &self.type_) {
+            (_, None, None) => {
+                // No type or module filter - just use tx_bounds and sender
+                query!(
+                    r#"
+                    WITH bounds AS ({})
+                    SELECT tx_sequence_number FROM ev_struct_inst, bounds
+                    WHERE tx_sequence_number >= bounds.tx_lo 
+                    AND tx_sequence_number < bounds.tx_hi
+                    {}
+                    "#,
+                    tx_bounds_subquery,
+                    sender_filter
+                )
             }
-            (sender, Some(module), None) => Ok(select_emit_module(module, tx_bounds, sender)),
+            (_, None, Some(event_type)) => {
+                // Event type filter
+                match event_type {
+                    TypeFilter::Package(package) => {
+                        query!(
+                            r#"
+                            WITH bounds AS ({})
+                            SELECT tx_sequence_number FROM ev_struct_inst, bounds
+                            WHERE package = {Bytea} 
+                            AND tx_sequence_number >= bounds.tx_lo 
+                            AND tx_sequence_number < bounds.tx_hi
+                            {}
+                            "#,
+                            tx_bounds_subquery,
+                            package.into_vec(),
+                            sender_filter
+                        )
+                    }
+                    TypeFilter::Module(package, module) => {
+                        query!(
+                            r#"
+                            WITH bounds AS ({})
+                            SELECT tx_sequence_number FROM ev_struct_inst, bounds
+                            WHERE package = {Bytea} AND module = {Text} 
+                            AND tx_sequence_number >= bounds.tx_lo 
+                            AND tx_sequence_number < bounds.tx_hi
+                            {}
+                            "#,
+                            tx_bounds_subquery,
+                            package.into_vec(),
+                            module,
+                            sender_filter
+                        )
+                    }
+                    TypeFilter::Type(tag) => {
+                        let package = tag.address.to_vec();
+                        let module = tag.module.to_string();
+                        let name = tag.name.as_str().to_owned();
+                        let type_params_bytes = bcs::to_bytes(&tag.type_params)
+                            .context("Failed to serialize type parameters")?;
+
+                        query!(
+                            r#"
+                            WITH bounds AS ({})
+                            SELECT tx_sequence_number FROM ev_struct_inst, bounds
+                            WHERE 
+                            package = {Bytea} AND module = {Text} AND name = {Text} AND instantiation = {Bytea} 
+                            AND tx_sequence_number >= bounds.tx_lo 
+                            AND tx_sequence_number < bounds.tx_hi
+                            {}
+                            "#,
+                            tx_bounds_subquery,
+                            package,
+                            module,
+                            name,
+                            type_params_bytes,
+                            sender_filter
+                        )
+                    }
+                }
+            }
+            (_, Some(module), None) => {
+                // Module filter
+                match module {
+                    ModuleFilter::Package(package) => {
+                        query!(
+                            r#"
+                            WITH bounds AS ({})
+                            SELECT tx_sequence_number FROM ev_emit_mod, bounds
+                            WHERE package = {Bytea} 
+                            AND tx_sequence_number >= bounds.tx_lo 
+                            AND tx_sequence_number < bounds.tx_hi
+                            {}
+                            "#,
+                            tx_bounds_subquery,
+                            package.into_vec(),
+                            sender_filter
+                        )
+                    }
+                    ModuleFilter::Module(package, module) => {
+                        query!(
+                            r#"
+                            WITH bounds AS ({})
+                            SELECT tx_sequence_number FROM ev_emit_mod, bounds
+                            WHERE package = {Bytea} AND module = {Text} 
+                            AND tx_sequence_number >= bounds.tx_lo 
+                            AND tx_sequence_number < bounds.tx_hi
+                            {}
+                            "#,
+                            tx_bounds_subquery,
+                            package.into_vec(),
+                            module,
+                            sender_filter
+                        )
+                    }
+                }
+            }
             (_, Some(_), Some(_)) => {
                 return Err(feature_unavailable(
                     "Filtering by both emitting module and event type is not supported",
                 ))
             }
-        }
+        };
+
+        Ok(query)
     }
 
     // Check if the Event matches sender, module, or type filters in EventFilter if they are provided.
@@ -80,7 +195,7 @@ impl EventFilter {
         let sender_matches = |sender: &Option<SuiAddress>| {
             sender
                 .as_ref()
-                .map_or(true, |s| s == &SuiAddress::from(event.sender))
+                .is_none_or(|s| s == &SuiAddress::from(event.sender))
         };
 
         match (self.sender, &self.module, &self.type_) {
@@ -120,142 +235,6 @@ impl EventFilter {
             }
             (_, Some(_), Some(_)) => false,
             (None, None, None) => true,
-        }
-    }
-}
-
-fn select_tx_sequence_numbers(
-    tx_bounds: std::ops::Range<u64>,
-    sender: Option<SuiAddress>,
-) -> Query<'static> {
-    let where_clause = if let Some(sender) = sender {
-        query!("AND sender = {Bytea}", sender.into_vec())
-    } else {
-        query!("")
-    };
-    let query = query!(
-        r#"
-        SELECT tx_sequence_number FROM ev_struct_inst
-        WHERE tx_sequence_number >= {BigInt} AND tx_sequence_number < {BigInt}
-        {}
-        "#,
-        tx_bounds.start as i64,
-        tx_bounds.end as i64,
-        where_clause
-    );
-    query
-}
-
-fn select_event_type(
-    event_type: &TypeFilter,
-    tx_bounds: std::ops::Range<u64>,
-    sender: Option<SuiAddress>,
-) -> Result<Query<'_>, RpcError> {
-    match event_type {
-        TypeFilter::Package(package) => {
-            let query = query!(
-                r#"
-                SELECT tx_sequence_number FROM ev_struct_inst WHERE package = {Bytea} AND tx_sequence_number >= {BigInt} AND tx_sequence_number < {BigInt} {}
-                "#,
-                package.into_vec(),
-                tx_bounds.start as i64,
-                tx_bounds.end as i64,
-                if let Some(sender) = sender {
-                    query!("AND sender = {Bytea}", sender.into_vec())
-                } else {
-                    query!("")
-                }
-            );
-            Ok(query)
-        }
-        TypeFilter::Module(package, module) => {
-            let query = query!(
-                r#"
-                SELECT tx_sequence_number FROM ev_struct_inst WHERE package = {Bytea} AND module = {Text} AND tx_sequence_number >= {BigInt} AND tx_sequence_number < {BigInt} {}
-                "#,
-                package.into_vec(),
-                module,
-                tx_bounds.start as i64,
-                tx_bounds.end as i64,
-                if let Some(sender) = sender {
-                    query!("AND sender = {Bytea}", sender.into_vec())
-                } else {
-                    query!("")
-                }
-            );
-            Ok(query)
-        }
-        TypeFilter::Type(tag) => {
-            let package = tag.address.to_vec();
-            let module = tag.module.to_string();
-            let name = tag.name.as_str().to_owned();
-            let type_params_bytes =
-                bcs::to_bytes(&tag.type_params).context("Failed to serialize type parameters")?;
-
-            let query = query!(
-                r#"
-                SELECT tx_sequence_number FROM ev_struct_inst 
-                WHERE 
-                package = {Bytea} AND module = {Text} AND name = {Text} AND instantiation = {Bytea} AND tx_sequence_number >= {BigInt} AND tx_sequence_number < {BigInt}
-                {}
-                "#,
-                package,
-                module,
-                name,
-                type_params_bytes,
-                tx_bounds.start as i64,
-                tx_bounds.end as i64,
-                if let Some(sender) = sender {
-                    query!("AND sender = {Bytea}", sender.into_vec())
-                } else {
-                    query!("")
-                },
-            );
-            Ok(query)
-        }
-    }
-}
-
-fn select_emit_module(
-    module: &ModuleFilter,
-    tx_bounds: std::ops::Range<u64>,
-    sender: Option<SuiAddress>,
-) -> Query<'_> {
-    match module {
-        ModuleFilter::Package(package) => {
-            let query = query!(
-                r#"
-                SELECT tx_sequence_number FROM ev_emit_mod WHERE package = {Bytea} AND tx_sequence_number >= {BigInt} AND tx_sequence_number < {BigInt}
-                {}
-                "#,
-                package.into_vec(),
-                tx_bounds.start as i64,
-                tx_bounds.end as i64,
-                if let Some(sender) = sender {
-                    query!("AND sender = {Bytea}", sender.into_vec())
-                } else {
-                    query!("")
-                }
-            );
-            query
-        }
-        ModuleFilter::Module(package, module) => {
-            let query = query!(
-                r#"
-                SELECT tx_sequence_number FROM ev_emit_mod WHERE package = {Bytea} AND module = {Text} AND tx_sequence_number >= {BigInt} AND tx_sequence_number < {BigInt}
-                {}
-                "#,
-                package.into_vec(),
-                module,
-                tx_bounds.start as i64,
-                tx_bounds.end as i64,
-                if let Some(sender) = sender {
-                    query!("AND sender = {Bytea}", sender.into_vec())
-                } else {
-                    query!("")
-                }
-            );
-            query
         }
     }
 }
