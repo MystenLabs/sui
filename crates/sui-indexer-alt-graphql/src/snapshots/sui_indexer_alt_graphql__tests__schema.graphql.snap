@@ -749,6 +749,21 @@ type ExecutionError {
 }
 
 """
+The execution result of a transaction, including the transaction effects and any potential errors due to signing or quorum-driving.
+"""
+type ExecutionResult {
+	"""
+	The effects of the transaction execution, if successful.
+	"""
+	effects: TransactionEffects
+	"""
+	Errors that occurred during execution (e.g., network errors, validation failures).
+	These are distinct from execution failures within the transaction itself.
+	"""
+	errors: [String!]
+}
+
+"""
 The execution status of this transaction: success or failure.
 """
 enum ExecutionStatus {
@@ -1312,14 +1327,14 @@ type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
 	
-	- `transaction` contains the transaction data in the desired format.
+	- `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
 	- `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
 	
 	Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
 	
 	There may be a delay between transaction finality and when GraphQL requests (including the request that issued the transaction) reflect its effects. As a result, queries that depend on indexing the state of the chain (e.g. contents of output objects, address-level balance information at the time of the transaction), must wait for indexing to catch up by polling for the transaction digest using `Query.transaction`.
 	"""
-	executeTransaction(transaction: TransactionExecutionInput!, signatures: [String!]!): String!
+	executeTransaction(transactionDataBcs: Base64!, signatures: [Base64!]!): ExecutionResult!
 }
 
 """
@@ -2318,18 +2333,6 @@ type TransactionEffects {
 	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
 	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
-}
-
-"""
-Input for executing a transaction.
-"""
-input TransactionExecutionInput {
-	"""
-	BCS-encoded transaction bytes (Base64).
-	
-	This is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
-	"""
-	transactionDataBcs: String!
 }
 
 input TransactionFilter {
