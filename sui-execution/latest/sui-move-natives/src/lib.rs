@@ -986,6 +986,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ("event", "emit", make_native!(event::emit)),
         (
             "event",
+            "emit_authenticated_impl",
+            make_native!(event::emit_authenticated_impl),
+        ),
+        (
+            "event",
             "events_by_type",
             make_native!(event::get_events_by_type),
         ),
