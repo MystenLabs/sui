@@ -263,7 +263,7 @@ export default function ImportContent({
   out = out.replace(/^\s*\n/, "");
 
   // Safely compute highlight metastring
-  const title = cleaned;
+  const title = org ? `github.com/${org}/${repo}/${cleaned}` : cleaned;
   const rawHighlight = typeof highlight === "string" ? highlight : "";
   const computedHL = rawHighlight
     ? utils.highlightLine(out, rawHighlight)
