@@ -13,6 +13,7 @@ module bridged_ka::ka {
 
     const DECIMAL: u8 = 9;
 
+    #[allow(deprecated_usage)]
     fun init(otw: KA, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(
             otw,
