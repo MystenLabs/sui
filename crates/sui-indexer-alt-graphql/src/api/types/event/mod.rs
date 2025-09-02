@@ -151,6 +151,7 @@ impl Event {
         };
 
         // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
+        // Digest to tx_sequence_number is 1:1. If we have a digest filter, query tx_digests for the corresponding tx_sequence_number.
         let tx_bounds_query = if let Some(digest) = filter.digest {
             tx_bounds_by_digest_query(digest)
         } else {
@@ -169,7 +170,7 @@ impl Event {
         struct TxSequenceNumber(
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
-        // TODO: (henry) update query to select from ev_emit_mod or ev_struct_inst based on filters.
+
         let query = query!(
             r#"
             {}
