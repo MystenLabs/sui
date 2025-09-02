@@ -688,19 +688,10 @@ html[data-theme='dark'] {
   }
 }
 
-/* Optional: if the wrapper is flex/grid, ensure centering */
 .feedback-modal-overlay,
 .feedback-modal-backdrop {
   display: grid !important;
   place-items: center !important;
-/* apply to every Tabs on the site */
-.theme-doc-markdown .tabs-container {
-  border: 2px solid var(--ifm-toc-border-color);
-  border-radius: var(--ifm-global-radius);
-  background: var(--ifm-background-surface-color);
-  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06));
-  padding: var(--ifm-spacing-md) var(--ifm-spacing-md);
-}
 }
 
 /* Extra padding for every Tabs panel on the site */
@@ -711,24 +702,33 @@ html[data-theme='dark'] {
 .theme-doc-markdown .tabs-container [role="tabpanel"] > :first-child { margin-top: 0; }
 .theme-doc-markdown .tabs-container [role="tabpanel"] > :last-child { margin-bottom: 0; }
 
-/* Center the whole tab bar */
-.tabsHeadingCentered {
-  justify-content: left;
+.theme-doc-markdown .tabs-container.tabsHeadingCentered--small {
+  border: 2px solid var(--ifm-toc-border-color);
+  border-radius: var(--ifm-global-radius);
+  background: var(--ifm-background-surface-color);
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06));
+  padding: var(--ifm-spacing-md) var(--ifm-spacing-md);
 }
 
-/* Style tab items like headings */
-.tabsHeadingCentered .tabs__item {
-  font-size: 1.75rem;       /* h2 size */
-  font-weight: 700;         /* bold */
-  padding-top: 2rem;
-  padding-left: 1rem;
-  padding-bottom: 0.5rem;
-  margin: 0 0.5rem;         /* spacing between tabs */
+/* Smaller tab headings (inside the boxed tabs) */
+.theme-doc-markdown .tabs-container.tabsHeadingCentered--small .tabs__item {
+  font-size: 1.05rem !important; 
+  font-weight: 700;
+  padding-top: 0.1rem !important;
+  padding-left: 0.5rem !important;
+  padding-bottom: 0.2rem !important;
+  margin: 0 0.25rem !important;
   background: transparent;
   border: none;
   color: var(--ifm-heading-color);
   cursor: pointer;
   text-align: left;
+}
+
+
+/* Smaller panel content */
+.theme-doc-markdown .tabs-container.tabsHeadingCentered--small [role="tabpanel"] {
+  padding: clamp(0.1rem, 0.1vw, 0.1rem) !important;
 }
 
 /* Make active tab look the same as inactive */

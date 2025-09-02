@@ -7,18 +7,37 @@ keywords: [ bridge validator node, bridge node, bridge, bridge committee, metric
 
 Running a bridge validator node (bridge node) requires registering your node with the bridge committee. Correct configuration of your node ensures optimal performance and valid metrics data. Follow this topic to make sure your bridge node is set up properly.
 
-## Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-To set up and run a bridge node, you need to install `sui` and `sui-bridge-cli`. You can install them using one of the following options: 
+- [x] Install `sui` and `sui-bridge-cli`.
+
+<details className="nudge-details">
+
+<summary>
+
+Installation instructions 
+
+</summary>
+
+To set up and run a bridge node, you need to  You can install them using one of the following options: 
 
 Install from tip of `main`:
+
 ```sh
 $ cargo install --locked --git "https://github.com/MystenLabs/sui.git" sui sui-bridge-cli
 ```
+
 Install with a commit sha:
+
 ```sh
 $ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --rev {SHA} sui sui-bridge-cli
 ```
+
+</details>
+</TabItem>
+</Tabs>
+
 
 ## Committee registration
 
