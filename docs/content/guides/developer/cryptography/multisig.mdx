@@ -2,8 +2,6 @@
 title: Multisig Authentication
 description: Guide on how to create a multisig transaction and then submit it against a local network using the Sui CLI.
 keywords: [ multisig, multi-sig, multisig auth, multi-sig auth, multi signatures, multiple signatures, multisig transaction, multi-sig transaction ]
-mdx:
-  format: md
 ---
 
 The following steps demonstrate how to create a multisig transaction and then submit it against a network using the [Sui CLI](/references/cli.mdx). A transaction can be the transfer of an object, the publish or upgrade of a package, the payment of SUI, and so on.
@@ -187,7 +185,7 @@ $ COIN=<COIN-OBJECT-ID>
 
 Use the `sui client transfer` command to set up the transfer. The `--serialize-unsigned-transaction` flag outputs the Base64-encoded transaction bytes.
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client transfer --to $ACTIVE --object-id $COIN --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction

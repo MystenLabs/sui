@@ -2,8 +2,6 @@
 title: Signing and Sending Transactions
 description: Each transaction on Sui represents a call to a specific functionality that executes with inputs that define the result of the transaction. 
 keywords: [ transactions, transaction inputs, smart contract functions, signatures, Ed25519 pure, ECDSA Secp256k1, ECDSA Secp256r1, Multisig, zkLogin ]
-mdx:
-  format: md
 ---
 
 Transactions in Sui represent calls to specific functionality (like calling a smart contract function) that execute on inputs to define the result of the transaction.
@@ -244,7 +242,7 @@ sui keytool import "$MNEMONICS" secp256r1
 
 Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corresponding to the key pair used to sign. `$GAS_COIN_ID` refers to the object ID that is owned by the sender to be used as gas. `$GAS_BUDGET` refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. `$MNEMONICS` refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client gas

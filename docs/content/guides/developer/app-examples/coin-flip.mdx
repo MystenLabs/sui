@@ -2,8 +2,6 @@
 title: Coin Flip
 description: Learn Sui through a coin flip dApp that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui dApp.
 keywords: [ react app, react dApp, react example, verifiable random functions, vrfs, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, mev attack protection, mev attacks, example app, example dApp ] 
-mdx:
-  format: md
 ---
 
 This example walks you through building a Coin Flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This Coin Flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
@@ -607,7 +605,7 @@ Now that you have written our contracts, it's time to deploy them.
 
 ### Deployment {#deployment}
 
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
 Next, configure the Sui CLI to use `testnet` as the active environment, as well. If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
@@ -621,7 +619,7 @@ Run the following command to activate the `testnet` environment:
 $ sui client switch --env testnet
 ```
 
-{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+<ImportContent source="publish-to-devnet-with-coins.mdx" mode="snippet" />
 
 The output of this command contains a `packageID` value that you need to save to use the package.
 

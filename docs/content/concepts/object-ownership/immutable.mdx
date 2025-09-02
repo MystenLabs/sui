@@ -2,8 +2,6 @@
 title: Immutable Objects
 description: Immutable objects cannot be changed, transferred, or deleted. Immutable objects cannot have an owner and anyone can use them.
 keywords: [ immutable objects, objects immutable, create immutable object, convert object, use immutable object, test immutable object ]
-mdx:
-  format: md
 ---
 
 Objects in Sui have different ownership types, with two main categories: immutable objects and mutable objects. An immutable object cannot be mutated, transferred, or deleted. These objects have no owner and are freely accessible to everyone.
@@ -130,7 +128,7 @@ $ sui client objects $ADDR
 
 Publish the `ColorObject` code on-chain using the Sui Client CLI:
 
-{@include: ../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client publish $ROOT/examples/move/color_object --gas-budget <GAS-AMOUNT>

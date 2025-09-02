@@ -2,15 +2,13 @@
 title: Publish a Package
 description: You must publish Move packages on the Sui network before you can call its functions.
 keywords: [ publish, publish package, how to publish, publishing, how to publish move package, publish move package, publish transactions ]
-mdx:
-  format: md
 ---
 
 Before you can call functions in a Move package (beyond an emulated Sui execution scenario), that package must be available on the Sui network. When you publish a package, you are actually creating an immutable Sui object on the network that anyone can access.
 
 To publish your package to the Sui network, use the `publish` CLI command in the root of your package. Use the `--gas-budget` flag to set a value for the maximum amount of gas the transaction can cost. If the cost of the transaction is more than the budget you set, the transaction fails and your package doesn't publish. 
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client publish --gas-budget 5000000
@@ -116,7 +114,7 @@ $ sui client ptb \
 
 :::info 
 
-{@include: ../../../snippets/address-prefix.mdx}
+<ImportContent source="address-prefix.mdx" mode="snippet" />
 
 Depending on your shell and operating system, you might need to pass some values with quotes (`"`), for example: `--assign "forge @<FORGE-ID>"`.
 

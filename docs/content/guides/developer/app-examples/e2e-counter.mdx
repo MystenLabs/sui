@@ -3,8 +3,6 @@ title: Distributed Counter
 description: An app that allows users to create counters that anyone can increment, but only the owner can reset.
 effort: small
 keywords: [ distributed counter, example dApp, example app, react app, react dApp, increment counter, shared objects, programmable transaction blocks ptbs ]
-mdx:
-  format: md
 ---
 
 This example walks you through building a basic distributed counter app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. The app allows users to create counters that anyone can increment, but only the owner can reset. 
@@ -46,7 +44,7 @@ To begin, create a new folder on your system titled `react-e2e-counter` to hold 
 
 :::tip
     
-{@include: ../../../snippets/faucet-online.mdx}
+<ImportContent source="faucet-online.mdx" mode="snippet" />
 
 :::
 
@@ -64,7 +62,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 :::
 
-{@inject: ./ts-sdk-ref/move/counter/Move.toml}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/move/counter/Move.toml" mode="code" org="MystenLabs" repo="ts-sdks" />
 
 ### `Counter` struct
 
@@ -78,23 +76,23 @@ module counter::counter {
 
 Add the `Counter` struct and elements described in the following sections to the module. 
 
-{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#struct=Counter noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move" mode="code" struct="Counter" org="MystenLabs" repo="ts-sdks" noComments />
 
 - The `Counter` type stores the address of its `owner`, its current `value`, and its own `id`.
 
 ### Creating `Counter`
 
-{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#fun=create noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move" mode="code" fun="create" org="MystenLabs" repo="ts-sdks" noComments />
 
 In the `create` function, a new `Counter` object is created and [shared](../../../concepts/object-ownership/shared.mdx). 
 
 ### Incrementing and resetting `Counter`
 
-{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#fun=increment noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move" mode="code" fun="increment" org="MystenLabs" repo="ts-sdks" noComments />
 
 The `increment` function accepts a mutable reference to any shared `Counter` object and increments its `value` field.
 
-{@inject: ./ts-sdk-ref/move/counter/sources/counter.move#fun=set_value noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move" mode="code" fun="set_value" org="MystenLabs" repo="ts-sdks" noComments />
 
 The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. The `Counter` `owner` is the only one that can run this function.
 
@@ -108,7 +106,7 @@ Learn more about taking [object references as input](https://move-book.com/move-
 
 The final module should look like this
 
-{@inject: ./ts-sdk-ref/move/counter/sources/counter.move noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/move/counter/sources/counter.move" mode="code" org="MystenLabs" repo="ts-sdks" noComments />
 
 :::checkpoint
 
@@ -125,7 +123,7 @@ You always run `sui move build` at the same level as your `Move.toml` file. Afte
 
 ### Deployment {#deployment}
 
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
 Next, configure the Sui CLI to use `testnet` as the active environment, as well. If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
@@ -139,7 +137,7 @@ Run the following command to activate the `testnet` environment:
 $ sui client switch --env testnet
 ```
 
-{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+<ImportContent source="publish-to-devnet-with-coins.mdx" mode="snippet" />
 
 The output of this command contains a `packageID` value that you need to save to use the package.
 
@@ -304,7 +302,7 @@ Update the `src/networkConfig.ts` file to include the `packageID` constants.
 
 </summary>
 
-{@inject: ./ts-sdk-ref/src/networkConfig.ts noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/src/networkConfig.ts" mode="code" org="MystenLabs" repo="ts-sdks" noComments />
 
 </details>
 
@@ -362,7 +360,7 @@ Update the `create` function in the `src/CreateCounter.tsx` file:
 
 </summary>
 
-{@inject: ./ts-sdk-ref/src/CreateCounter.tsx noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/src/CreateCounter.tsx" mode="code" org="MystenLabs" repo="ts-sdks" noComments />
 
 </details>
 
@@ -571,7 +569,7 @@ Update the `executeMoveCall` function in the `src/Counter.tsx` file:
 
 </summary>
 
-{@inject: ./ts-sdk-ref/src/Counter.tsx noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/src/Counter.tsx" mode="code" org="MystenLabs" repo="ts-sdks" noComments />
 
 </details>
 
@@ -587,7 +585,7 @@ Update the `src/App.tsx` file to render the `Counter` component when you have a 
 
 </summary>
 
-{@inject: ./ts-sdk-ref/src/App.tsx noComments}
+<ImportContent source="packages/create-dapp/templates/react-e2e-counter/src/App.tsx" mode="code" org="MystenLabs" repo="ts-sdks" noComments />
 
 </details>
 

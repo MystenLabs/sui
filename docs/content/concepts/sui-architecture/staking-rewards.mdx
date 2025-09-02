@@ -1,8 +1,6 @@
 ---
 title: Validator Staking and Rewards
 draft: true
-mdx:
-  format: md
 ---
 
 Sui uses a delegated proof of stake (DPoS) system, where validators receive voting power from SUI token holders who delegate their stake. At the end of each epoch, validators receive rewards based on their performance and commission rate. Rewards auto-compound because validator staking pools receive new delegated stakes.
@@ -15,7 +13,7 @@ The Sui staking mechanism includes features that might differ from other blockch
 - Staking rewards auto-compound due to the liquidity-pool-inspired design.  
 - A new stake begins contributing to a validator’s voting power starting the epoch after it is created. Similarly, a withdrawn stake stops contributing starting the epoch after withdrawal.  
 
-{@include: ../../snippets/staking-pool-reqs.mdx}
+<ImportContent source="staking-pool-reqs.mdx" mode="snippet" />
 
 ## Rewards distribution
 
