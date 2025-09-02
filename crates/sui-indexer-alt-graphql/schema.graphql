@@ -699,6 +699,21 @@ type EventEdge {
 	node: Event!
 }
 
+input EventFilter {
+	"""
+	Limit to events that occured strictly after the given checkpoint.
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Limit to events in the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit to event that occured strictly before the given checkpoint.
+	"""
+	beforeCheckpoint: UInt53
+}
+
 """
 Represents execution error information for failed transactions.
 """
@@ -1720,6 +1735,10 @@ type Query {
 	"""
 	epoch(epochId: UInt53): Epoch
 	"""
+	Paginate events that are emitted in the network, optionally filtered by event filters.
+	"""
+	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
+	"""
 	Fetch checkpoints by their sequence numbers.
 	
 	Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
@@ -2311,15 +2330,15 @@ input TransactionExecutionInput {
 
 input TransactionFilter {
 	"""
-	Limit to transactions that occured strictly after the given checkpoint.
+	Filter to transactions that occurred strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
 	"""
-	Limit to transactions in the given checkpoint.
+	Filter to transactions in the given checkpoint.
 	"""
 	atCheckpoint: UInt53
 	"""
-	Limit to transaction that occured strictly before the given checkpoint.
+	Filter to transaction that occurred strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
 }
