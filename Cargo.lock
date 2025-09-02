@@ -238,7 +238,7 @@ version = "0.0.0"
 dependencies = [
  "anemo",
  "anemo-build",
- "clap",
+ "clap 4.5.4",
  "mysten-network",
  "rand 0.8.5",
  "telemetry-subscribers",
@@ -264,7 +264,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "bytes",
- "clap",
+ "clap 4.5.4",
  "dashmap",
  "rand 0.8.5",
  "tokio",
@@ -383,6 +383,20 @@ name = "append-only-vec"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7992085ec035cfe96992dd31bfd495a2ebd31969bb95f624471cb6c0b349e571"
+
+[[package]]
+name = "aquamarine"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f50776554130342de4836ba542aa85a4ddb361690d7e8df13774d7284c3d5c2"
+dependencies = [
+ "include_dir",
+ "itertools 0.10.5",
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
+]
 
 [[package]]
 name = "arbitrary"
@@ -1105,6 +1119,17 @@ dependencies = [
  "rustix 0.38.34",
  "tempfile",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "atty"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
+dependencies = [
+ "hermit-abi 0.1.19",
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -2640,12 +2665,29 @@ dependencies = [
 
 [[package]]
 name = "clap"
+version = "3.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
+dependencies = [
+ "atty",
+ "bitflags 1.3.2",
+ "clap_derive 3.2.25",
+ "clap_lex 0.2.4",
+ "indexmap 1.9.3",
+ "once_cell",
+ "strsim 0.10.0",
+ "termcolor",
+ "textwrap 0.16.0",
+]
+
+[[package]]
+name = "clap"
 version = "4.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90bc066a67923782aa8515dbaea16946c5bcc5addbd668bb80af688e53e548a0"
 dependencies = [
  "clap_builder",
- "clap_derive",
+ "clap_derive 4.5.4",
 ]
 
 [[package]]
@@ -2656,9 +2698,22 @@ checksum = "ae129e2e766ae0ec03484e609954119f123cc1fe650337e155d03b022f24f7b4"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex",
+ "clap_lex 0.7.0",
  "strsim 0.11.1",
  "terminal_size",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -2671,6 +2726,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.99",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
+dependencies = [
+ "os_str_bytes",
 ]
 
 [[package]]
@@ -3202,7 +3266,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap",
+ "clap 4.5.4",
  "criterion-plot",
  "futures",
  "is-terminal",
@@ -3671,9 +3735,20 @@ dependencies = [
 [[package]]
 name = "datatest-stable"
 version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4eaf86e44e9f0a21f6e42d8e7f83c9ee049f081745eeed1c6f47a613c76e5977"
+dependencies = [
+ "libtest-mimic 0.5.2",
+ "regex",
+ "walkdir",
+]
+
+[[package]]
+name = "datatest-stable"
+version = "0.1.3"
 source = "git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f#72db7f6d1bbe36a5407e96b9488a581f763e106f"
 dependencies = [
- "libtest-mimic",
+ "libtest-mimic 0.6.1",
  "regex",
  "walkdir",
 ]
@@ -5517,6 +5592,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "git2"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2deb07a133b1520dc1a5690e9bd08950108873d7ed5de38dcc74d3b5ebffa110"
+dependencies = [
+ "bitflags 2.6.0",
+ "libc",
+ "libgit2-sys",
+ "log",
+ "openssl-probe",
+ "openssl-sys",
+ "url",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5838,6 +5928,15 @@ dependencies = [
 
 [[package]]
 name = "heck"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
@@ -5847,6 +5946,15 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hermit-abi"
+version = "0.1.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "hermit-abi"
@@ -6599,7 +6707,7 @@ version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adcf93614601c8129ddf72e2d5633df827ba6551541c6d8c59520a371475be1f"
 dependencies = [
- "hermit-abi",
+ "hermit-abi 0.3.2",
  "io-lifetimes",
  "rustix 0.37.7",
  "windows-sys 0.48.0",
@@ -7136,6 +7244,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
+name = "libgit2-sys"
+version = "0.18.2+1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c42fe03df2bd3c53a3a9c7317ad91d80c81cd1fb0caec8d7cc4cd2bfa10c222"
+dependencies = [
+ "cc",
+ "libc",
+ "libssh2-sys",
+ "libz-sys",
+ "openssl-sys",
+ "pkg-config",
+]
+
+[[package]]
 name = "libloading"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7200,12 +7322,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "libssh2-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "220e4f05ad4a218192533b300327f5150e809b54c4ec83b5a1d91833601811b9"
+dependencies = [
+ "cc",
+ "libc",
+ "libz-sys",
+ "openssl-sys",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
+name = "libtest-mimic"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79529479c298f5af41375b0c1a77ef670d450b4c9cd7949d2b43af08121b20ec"
+dependencies = [
+ "clap 3.2.25",
+ "termcolor",
+ "threadpool",
+]
+
+[[package]]
 name = "libtest-mimic"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d8de370f98a6cb8a4606618e53e802f93b094ddec0f96988eaec2c27e6e9ce7"
 dependencies = [
- "clap",
+ "clap 4.5.4",
  "termcolor",
  "threadpool",
 ]
@@ -7217,6 +7364,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
 dependencies = [
  "cc",
+ "libc",
  "pkg-config",
  "vcpkg",
 ]
@@ -7726,7 +7874,7 @@ name = "move-analyzer"
 version = "1.0.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 4.5.4",
  "codespan-reporting",
  "crossbeam",
  "dunce",
@@ -7868,7 +8016,7 @@ name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 4.5.4",
  "crossterm 0.25.0",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -7883,7 +8031,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "codespan-reporting",
  "colored",
  "move-binary-format",
@@ -7944,7 +8092,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "codespan-reporting",
  "dunce",
  "hex",
@@ -8006,7 +8154,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "codespan",
  "colored",
  "indexmap 2.8.0",
@@ -8030,7 +8178,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "hex",
  "inline_colorization",
  "move-abstract-interpreter",
@@ -8049,7 +8197,7 @@ name = "move-docgen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 4.5.4",
  "codespan",
  "codespan-reporting",
  "itertools 0.10.5",
@@ -8072,7 +8220,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -8174,7 +8322,7 @@ name = "move-package"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 4.5.4",
  "colored",
  "dunce",
  "itertools 0.10.5",
@@ -8210,11 +8358,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "append-only-vec",
- "clap",
+ "aquamarine",
+ "clap 4.5.4",
  "codespan-reporting",
+ "datatest-stable 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive-where",
  "futures",
+ "git2",
+ "heck 0.3.3",
  "indoc",
+ "insta",
  "itertools 0.10.5",
  "jsonrpc",
  "move-command-line-common",
@@ -8228,12 +8381,15 @@ dependencies = [
  "serde_spanned",
  "sha2 0.9.9",
  "tempfile",
+ "test-log",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.5.11",
  "toml_edit 0.22.24",
  "tracing",
  "tracing-subscriber",
+ "url",
+ "walkdir",
 ]
 
 [[package]]
@@ -8355,7 +8511,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap",
+ "clap 4.5.4",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-cli",
@@ -8386,7 +8542,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "better_any",
- "clap",
+ "clap 4.5.4",
  "codespan-reporting",
  "colored",
  "itertools 0.10.5",
@@ -9154,7 +9310,7 @@ version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
- "hermit-abi",
+ "hermit-abi 0.3.2",
  "libc",
 ]
 
@@ -9334,6 +9490,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-sys"
+version = "0.9.109"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90096e2e47630d78b7d1c20952dc621f957103f8bc2c8359ec81290d75238571"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "opentelemetry"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9431,6 +9599,12 @@ checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
 dependencies = [
  "num-traits",
 ]
+
+[[package]]
+name = "os_str_bytes"
+version = "6.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
 
 [[package]]
 name = "ouroboros"
@@ -10380,6 +10554,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "version_check",
+]
+
+[[package]]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "proc-macro-error2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
+dependencies = [
+ "proc-macro-error-attr2",
+ "proc-macro2",
+ "quote",
 ]
 
 [[package]]
@@ -13077,11 +13272,11 @@ dependencies = [
  "bin-version",
  "bip32",
  "camino",
- "clap",
+ "clap 4.5.4",
  "codespan-reporting",
  "colored",
  "csv",
- "datatest-stable",
+ "datatest-stable 0.1.3 (git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f)",
  "expect-test",
  "fastcrypto",
  "fastcrypto-zkp",
@@ -13201,7 +13396,7 @@ dependencies = [
 name = "sui-adapter-transactional-tests"
 version = "0.1.0"
 dependencies = [
- "datatest-stable",
+ "datatest-stable 0.1.3 (git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f)",
  "sui-transactional-test-runner",
 ]
 
@@ -13370,7 +13565,7 @@ dependencies = [
  "aws-sdk-ec2",
  "aws-smithy-http",
  "aws-smithy-runtime-api",
- "clap",
+ "clap 4.5.4",
  "color-eyre",
  "crossterm 0.25.0",
  "eyre",
@@ -13398,7 +13593,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "comfy-table",
  "duration-str",
  "fastcrypto-zkp",
@@ -13453,7 +13648,7 @@ dependencies = [
  "backoff",
  "bcs",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "enum_dispatch",
  "ethers",
  "eyre",
@@ -13499,7 +13694,7 @@ name = "sui-bridge-cli"
 version = "1.56.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 4.5.4",
  "ethers",
  "fastcrypto",
  "futures",
@@ -13528,7 +13723,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "diesel",
  "diesel-async",
  "diesel_migrations",
@@ -13568,7 +13763,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "diesel",
  "diesel-async",
  "move-core-types",
@@ -13606,7 +13801,7 @@ version = "1.56.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap",
+ "clap 4.5.4",
  "derive_more 1.0.0",
  "fastcrypto",
  "futures",
@@ -13648,7 +13843,7 @@ dependencies = [
  "anemo",
  "anyhow",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "consensus-config",
  "csv",
  "dirs 4.0.0",
@@ -13688,7 +13883,7 @@ dependencies = [
  "bcs",
  "bincode 1.3.3",
  "bytes",
- "clap",
+ "clap 4.5.4",
  "consensus-config",
  "consensus-core",
  "consensus-types",
@@ -13897,7 +14092,7 @@ dependencies = [
  "backoff",
  "bcs",
  "bigdecimal",
- "clap",
+ "clap 4.5.4",
  "diesel",
  "diesel-async",
  "futures",
@@ -13948,7 +14143,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "coset",
  "fastcrypto",
  "fastcrypto-zkp",
@@ -14015,7 +14210,7 @@ dependencies = [
  "axum 0.8.3",
  "axum-server",
  "bytes",
- "clap",
+ "clap 4.5.4",
  "futures",
  "mysten-metrics",
  "prometheus",
@@ -14083,7 +14278,7 @@ name = "sui-execution-cut"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 4.5.4",
  "expect-test",
  "tempfile",
  "thiserror 1.0.69",
@@ -14100,7 +14295,7 @@ dependencies = [
  "axum 0.8.3",
  "axum-extra 0.10.1",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "http 1.3.1",
  "reqwest 0.12.9",
  "serde",
@@ -14176,7 +14371,7 @@ dependencies = [
 name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
- "datatest-stable",
+ "datatest-stable 0.1.3 (git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f)",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-cli",
@@ -14226,7 +14421,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "datatest-stable",
+ "datatest-stable 0.1.3 (git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f)",
  "msim",
  "serde_json",
  "sui-graphql-rpc",
@@ -14249,7 +14444,7 @@ dependencies = [
  "bcs",
  "bin-version",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "const-str",
  "diesel",
  "diesel-async",
@@ -14346,7 +14541,7 @@ dependencies = [
  "axum 0.8.3",
  "axum-extra 0.10.1",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "eyre",
  "fastcrypto",
  "futures",
@@ -14420,7 +14615,7 @@ dependencies = [
  "bytes",
  "cached",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "csv",
  "dashmap",
  "diesel",
@@ -14490,7 +14685,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "const-str",
  "dashmap",
  "diesel",
@@ -14541,7 +14736,7 @@ dependencies = [
  "bcs",
  "bin-version",
  "bincode 2.0.1",
- "clap",
+ "clap 4.5.4",
  "const-str",
  "futures",
  "http 1.3.1",
@@ -14576,7 +14771,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "datatest-stable",
+ "datatest-stable 0.1.3 (git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f)",
  "diesel",
  "diesel-async",
  "jsonrpsee",
@@ -14624,7 +14819,7 @@ dependencies = [
  "backoff",
  "bb8",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "dashmap",
  "diesel",
  "diesel-async",
@@ -14681,7 +14876,7 @@ dependencies = [
  "bcs",
  "bin-version",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "const-str",
  "diesel",
  "diesel-async",
@@ -14728,7 +14923,7 @@ dependencies = [
  "axum 0.8.3",
  "bcs",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "const-str",
  "diesel",
  "diesel-async",
@@ -14780,7 +14975,7 @@ version = "1.56.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",
- "clap",
+ "clap 4.5.4",
  "prometheus",
  "prometheus-closure-metric",
  "sui-pg-db",
@@ -14797,7 +14992,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "diesel",
  "diesel-async",
  "move-core-types",
@@ -14825,7 +15020,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap",
+ "clap 4.5.4",
  "diesel",
  "diesel-async",
  "futures",
@@ -15084,7 +15279,7 @@ dependencies = [
  "anyhow",
  "axum 0.8.3",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "mysten-metrics",
  "mysten-network",
  "prometheus",
@@ -15108,7 +15303,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.7",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "gcp_auth",
  "http 1.3.1",
  "prometheus",
@@ -15132,7 +15327,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bytes",
- "clap",
+ "clap 4.5.4",
  "env_logger",
  "log",
  "move-binary-format",
@@ -15176,7 +15371,7 @@ dependencies = [
  "backoff",
  "base64 0.21.7",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "humantime",
  "once_cell",
  "prometheus-http-query",
@@ -15213,7 +15408,7 @@ dependencies = [
  "anyhow",
  "better_any",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "colored",
  "futures",
  "insta",
@@ -15278,7 +15473,7 @@ name = "sui-move-lsp"
 version = "1.56.0"
 dependencies = [
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "move-analyzer",
  "sui-move-build",
  "sui-package-management",
@@ -15432,7 +15627,7 @@ dependencies = [
  "base64 0.21.7",
  "bcs",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "consensus-core",
  "fastcrypto",
  "fastcrypto-zkp",
@@ -15482,7 +15677,7 @@ version = "1.56.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "fastcrypto",
  "move-core-types",
  "pretty_assertions",
@@ -15519,7 +15714,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "dirs 4.0.0",
  "jsonpath_lib",
  "mysten-metrics",
@@ -15618,7 +15813,7 @@ dependencies = [
  "async-trait",
  "bb8",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "diesel",
  "diesel-async",
  "diesel_migrations",
@@ -15654,7 +15849,7 @@ dependencies = [
 name = "sui-protocol-config"
 version = "0.1.0"
 dependencies = [
- "clap",
+ "clap 4.5.4",
  "fastcrypto",
  "insta",
  "move-core-types",
@@ -15686,7 +15881,7 @@ dependencies = [
  "axum-server",
  "bin-version",
  "bytes",
- "clap",
+ "clap 4.5.4",
  "const-str",
  "fastcrypto",
  "futures",
@@ -15728,7 +15923,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "futures",
  "http 1.3.1",
  "jsonrpsee",
@@ -15776,7 +15971,7 @@ dependencies = [
  "bcs",
  "bin-version",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "csv",
  "cynic",
  "cynic-codegen",
@@ -15820,7 +16015,7 @@ dependencies = [
  "axum 0.8.3",
  "axum-extra 0.10.1",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "enum_dispatch",
  "eyre",
  "fastcrypto",
@@ -15931,7 +16126,7 @@ dependencies = [
  "bb8",
  "bb8-postgres",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "dashmap",
  "futures",
  "parking_lot 0.12.3",
@@ -15954,7 +16149,7 @@ version = "1.56.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap",
+ "clap 4.5.4",
  "dashmap",
  "dirs 4.0.0",
  "futures",
@@ -15983,7 +16178,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.7",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "colored",
  "dirs 4.0.0",
  "fastcrypto",
@@ -16043,7 +16238,7 @@ dependencies = [
  "arrow-array",
  "async-trait",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "env_logger",
  "lexical-util",
  "mysten-metrics",
@@ -16088,7 +16283,7 @@ version = "1.56.0"
 dependencies = [
  "async-trait",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "futures",
  "move-binary-format",
  "move-bytecode-utils",
@@ -16184,7 +16379,7 @@ dependencies = [
  "anyhow",
  "axum 0.8.3",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "expect-test",
  "fs_extra",
  "hyper 1.5.2",
@@ -16237,7 +16432,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "chrono",
- "clap",
+ "clap 4.5.4",
  "eyre",
  "fastcrypto",
  "futures",
@@ -16284,7 +16479,7 @@ version = "1.56.0"
 dependencies = [
  "async-trait",
  "bcs",
- "clap",
+ "clap 4.5.4",
  "futures",
  "indexmap 2.8.0",
  "move-binary-format",
@@ -16367,7 +16562,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap",
+ "clap 4.5.4",
  "simulacrum",
  "sui-storage",
  "sui-test-transaction-builder",
@@ -16436,7 +16631,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "bin-version",
- "clap",
+ "clap 4.5.4",
  "colored",
  "comfy-table",
  "consensus-core",
@@ -16513,7 +16708,7 @@ dependencies = [
  "bcs",
  "bimap",
  "bincode 2.0.1",
- "clap",
+ "clap 4.5.4",
  "criterion",
  "eyre",
  "fastcrypto",
@@ -16647,7 +16842,7 @@ name = "sui-upgrade-compatibility-transactional-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "datatest-stable",
+ "datatest-stable 0.1.3 (git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f)",
  "insta",
  "move-binary-format",
  "move-command-line-common",
@@ -16675,7 +16870,7 @@ dependencies = [
 name = "sui-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
- "datatest-stable",
+ "datatest-stable 0.1.3 (git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f)",
  "sui-transactional-test-runner",
 ]
 
@@ -16984,7 +17179,7 @@ dependencies = [
  "bytes",
  "bytes-varint",
  "camino",
- "clap",
+ "clap 4.5.4",
  "console-subscriber",
  "crossterm 0.25.0",
  "futures",
@@ -17145,6 +17340,28 @@ dependencies = [
  "serde",
  "sha-1",
  "test-fuzz-internal",
+]
+
+[[package]]
+name = "test-log"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e33b98a582ea0be1168eba097538ee8dd4bbe0f2b01b22ac92ea30054e5be7b"
+dependencies = [
+ "env_logger",
+ "test-log-macros",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "test-log-macros"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "451b374529930d7601b1eef8d32bc79ae870b6079b069401709c2a8bf9e75f36"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
 ]
 
 [[package]]
@@ -18189,7 +18406,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -19344,7 +19561,7 @@ version = "1.56.0"
 dependencies = [
  "anyhow",
  "camino",
- "clap",
+ "clap 4.5.4",
  "nexlint",
  "nexlint-lints",
 ]
