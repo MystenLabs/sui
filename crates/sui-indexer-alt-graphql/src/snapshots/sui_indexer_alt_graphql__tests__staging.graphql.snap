@@ -499,7 +499,7 @@ type CoinMetadata implements IAddressable & IObject & IMoveObject {
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	"""
@@ -555,11 +555,11 @@ type CoinMetadata implements IAddressable & IObject & IMoveObject {
 	"""
 	Paginate all versions of this object after this one.
 	"""
-	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Paginate all versions of this object before this one.
 	"""
-	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Objects owned by this object, optionally filtered by type.
 	"""
@@ -587,7 +587,7 @@ type CoinMetadata implements IAddressable & IObject & IMoveObject {
 	"""
 	The version of this object that this content comes from.
 	"""
-	version: UInt53!
+	version: UInt53
 }
 
 """
@@ -778,7 +778,7 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	"""
@@ -830,11 +830,11 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	"""
 	Paginate all versions of this object after this one.
 	"""
-	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Paginate all versions of this object before this one.
 	"""
-	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Objects owned by this object, optionally filtered by type.
 	"""
@@ -858,7 +858,7 @@ type DynamicField implements IAddressable & IObject & IMoveObject {
 	"""
 	The version of this object that this content comes from.
 	"""
-	version: UInt53!
+	version: UInt53
 }
 
 type DynamicFieldConnection {
@@ -1382,7 +1382,7 @@ interface IObject {
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	"""
@@ -1414,7 +1414,7 @@ interface IObject {
 	"""
 	The version of this object that this content comes from.
 	"""
-	version: UInt53!
+	version: UInt53
 }
 
 """
@@ -1557,7 +1557,7 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	"""
@@ -1607,11 +1607,11 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	Paginate all versions of this object after this one.
 	"""
-	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Paginate all versions of this object before this one.
 	"""
-	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Objects owned by this object, optionally filtered by type.
 	"""
@@ -1631,7 +1631,7 @@ type MoveObject implements IAddressable & IObject & IMoveObject {
 	"""
 	The version of this object that this content comes from.
 	"""
-	version: UInt53!
+	version: UInt53
 }
 
 type MoveObjectConnection {
@@ -1688,7 +1688,7 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
 	The transitive dependencies of this package.
 	"""
@@ -1717,11 +1717,11 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	Paginate all versions of this package treated as an object, after this one.
 	"""
-	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Paginate all versions of this package treated as an object, before this one.
 	"""
-	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Objects owned by this package, optionally filtered by type.
 	"""
@@ -1743,11 +1743,11 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	Paginate all versions of this package after this one.
 	"""
-	packageVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
+	packageVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection
 	"""
 	Paginate all versions of this package before this one.
 	"""
-	packageVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
+	packageVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection
 	"""
 	The transaction that created this version of the object.
 	"""
@@ -1763,7 +1763,7 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	The version of this package that this content comes from.
 	"""
-	version: UInt53!
+	version: UInt53
 }
 
 type MovePackageConnection {
@@ -1959,7 +1959,7 @@ type Object implements IAddressable & IObject {
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
@@ -1980,11 +1980,11 @@ type Object implements IAddressable & IObject {
 	"""
 	Paginate all versions of this object after this one.
 	"""
-	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Paginate all versions of this object before this one.
 	"""
-	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Objects owned by this object, optionally filtered by type.
 	"""
@@ -2004,7 +2004,7 @@ type Object implements IAddressable & IObject {
 	"""
 	The version of this object that this content comes from.
 	"""
-	version: UInt53!
+	version: UInt53
 }
 
 type ObjectChange {

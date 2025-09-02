@@ -18,7 +18,7 @@ use crate::{
         base64::Base64, big_int::BigInt, sui_address::SuiAddress, type_filter::TypeInput,
         uint53::UInt53,
     },
-    error::RpcError,
+    error::{upcast, RpcError},
     scope::Scope,
 };
 
@@ -48,12 +48,12 @@ impl CoinMetadata {
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<UInt53, RpcError> {
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
         self.super_.version(ctx).await
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
         self.super_.digest(ctx).await
     }
 
@@ -81,18 +81,12 @@ impl CoinMetadata {
     }
 
     /// The structured representation of the object's contents.
-    pub(crate) async fn contents(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
+    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
         self.super_.contents(ctx).await
     }
 
     /// Number of decimal places the coin uses.
-    pub(crate) async fn decimals(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<u8>, RpcError<object::Error>> {
+    pub(crate) async fn decimals(&self, ctx: &Context<'_>) -> Result<Option<u8>, RpcError> {
         let Some(native) = self.native(ctx).await? else {
             return Ok(None);
         };
@@ -104,15 +98,12 @@ impl CoinMetadata {
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError<object::Error>> {
+    ) -> Result<Option<String>, RpcError> {
         self.super_.default_suins_name(ctx).await
     }
 
     /// Description of the coin.
-    pub(crate) async fn description(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<&str>, RpcError<object::Error>> {
+    pub(crate) async fn description(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
         let Some(native) = self.native(ctx).await? else {
             return Ok(None);
         };
@@ -125,7 +116,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+    ) -> Result<Option<DynamicField>, RpcError> {
         self.super_.dynamic_field(ctx, name).await
     }
 
@@ -150,15 +141,12 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+    ) -> Result<Option<DynamicField>, RpcError> {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
     /// URL for the coin logo.
-    pub(crate) async fn icon_url(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<&str>, RpcError<object::Error>> {
+    pub(crate) async fn icon_url(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
         let Some(native) = self.native(ctx).await? else {
             return Ok(None);
         };
@@ -173,7 +161,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
         self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
@@ -184,7 +172,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
         self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 
@@ -192,7 +180,7 @@ impl CoinMetadata {
     pub(crate) async fn move_object_bcs(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+    ) -> Result<Option<Base64>, RpcError> {
         self.super_.move_object_bcs(ctx).await
     }
 
@@ -208,10 +196,7 @@ impl CoinMetadata {
     }
 
     /// Name for the coin.
-    pub(crate) async fn name(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError<object::Error>> {
+    pub(crate) async fn name(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
         let Some(native) = self.native(ctx).await? else {
             return Ok(None);
         };
@@ -233,10 +218,7 @@ impl CoinMetadata {
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    pub(crate) async fn object_bcs(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
         self.super_.object_bcs(ctx).await
     }
 
@@ -249,7 +231,7 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
@@ -264,7 +246,7 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
@@ -286,10 +268,7 @@ impl CoinMetadata {
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Owner>, RpcError<object::Error>> {
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
         self.super_.owner(ctx).await
     }
 
@@ -297,7 +276,7 @@ impl CoinMetadata {
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError<object::Error>> {
+    ) -> Result<Option<Transaction>, RpcError> {
         self.super_.previous_transaction(ctx).await
     }
 
@@ -305,7 +284,7 @@ impl CoinMetadata {
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError<object::Error>> {
+    ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
     }
 
@@ -314,7 +293,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError<object::Error>> {
-        let Some(native) = self.super_.native(ctx).await? else {
+        let Some(native) = self.super_.native(ctx).await.map_err(upcast)? else {
             return Ok(None);
         };
 
@@ -334,7 +313,7 @@ impl CoinMetadata {
             return Ok(None);
         };
 
-        let Some(contents) = object.contents(ctx).await? else {
+        let Some(contents) = object.contents(ctx).await.map_err(upcast)? else {
             return Ok(None);
         };
 
@@ -349,10 +328,7 @@ impl CoinMetadata {
     }
 
     /// Symbol for the coin.
-    pub(crate) async fn symbol(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<&str>, RpcError<object::Error>> {
+    pub(crate) async fn symbol(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
         let Some(native) = self.native(ctx).await? else {
             return Ok(None);
         };
@@ -375,7 +351,7 @@ impl CoinMetadata {
     pub(crate) async fn from_move_object(
         move_object: &MoveObject,
         ctx: &Context<'_>,
-    ) -> Result<Option<Self>, RpcError<object::Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let Some(native) = move_object.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -409,10 +385,7 @@ impl CoinMetadata {
     }
 
     /// Get the native CoinMetadata data, loading it lazily if needed.
-    async fn native(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<&Option<NativeMetadata>, RpcError<object::Error>> {
+    async fn native(&self, ctx: &Context<'_>) -> Result<&Option<NativeMetadata>, RpcError> {
         self.native
             .get_or_try_init(async || {
                 let Some(native_move) = self.super_.native(ctx).await?.as_ref() else {

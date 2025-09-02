@@ -1,34 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
-    move_package::{self, CSysPackage, MovePackage},
-    object::{self, Object},
-    protocol_configs::ProtocolConfigs,
-    transaction::{
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-        CTransaction, Transaction,
-    },
-};
-use crate::api::types::safe_mode::{from_system_state, SafeMode};
-use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
-use crate::api::types::storage_fund::StorageFund;
-use crate::api::types::system_parameters::{
-    from_system_parameters_v1, from_system_parameters_v2, SystemParameters,
-};
-use crate::{
-    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
-    api::types::validator_set::ValidatorSet,
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
+use std::sync::Arc;
+
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Error, Object};
+use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::try_join;
-use std::sync::Arc;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
 use sui_indexer_alt_reader::{
     epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
@@ -41,6 +19,32 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use tokio::sync::OnceCell;
+
+use crate::{
+    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
+    api::types::safe_mode::{from_system_state, SafeMode},
+    api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy},
+    api::types::storage_fund::StorageFund,
+    api::types::system_parameters::{
+        from_system_parameters_v1, from_system_parameters_v2, SystemParameters,
+    },
+    api::types::validator_set::ValidatorSet,
+    error::upcast,
+    error::RpcError,
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
+};
+
+use super::{
+    checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
+    move_package::{CSysPackage, MovePackage},
+    object::Object,
+    protocol_configs::ProtocolConfigs,
+    transaction::{
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+        CTransaction, Transaction,
+    },
+};
 
 pub(crate) struct Epoch {
     pub(crate) epoch_id: u64,
@@ -96,10 +100,7 @@ impl Epoch {
     /// State of the Coin DenyList object (0x403) at the start of this epoch.
     ///
     /// The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
-    async fn coin_deny_list(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
+    async fn coin_deny_list(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError> {
         let Some(start) = self.start(ctx).await? else {
             return Ok(None);
         };
@@ -197,12 +198,12 @@ impl Epoch {
         after: Option<CSysPackage>,
         last: Option<u64>,
         before: Option<CSysPackage>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Epoch", "systemPackages");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.start(ctx).await? else {
+        let Some(contents) = self.start(ctx).await.map_err(upcast)? else {
             return Ok(None);
         };
 
@@ -521,7 +522,7 @@ impl Epoch {
     /// Get the epoch start information.
     ///
     /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-    async fn start(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochStart>, Error> {
+    async fn start(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochStart>, RpcError> {
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(&None);
         };
@@ -555,7 +556,7 @@ impl Epoch {
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty
     /// response if the epoch has not ended yet, as of the checkpoint being viewed, or when
     /// no checkpoint is set in scope (e.g. execution scope).
-    async fn end(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochEnd>, Error> {
+    async fn end(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochEnd>, RpcError> {
         let Some(checkpoint_bound) = self.scope.checkpoint_viewed_at_exclusive_bound() else {
             return Ok(&None);
         };
@@ -577,7 +578,7 @@ impl Epoch {
     async fn cp_sequence_numbers(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<StoredCpSequenceNumbers>, Error> {
+    ) -> Result<&Option<StoredCpSequenceNumbers>, RpcError> {
         let Some(start) = self.start(ctx).await? else {
             return Ok(&None);
         };
