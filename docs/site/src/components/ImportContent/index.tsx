@@ -191,7 +191,8 @@ export default function ImportContent({
   if (content == null) {
     return (
       <div className="alert alert--warning" role="alert">
-        File not found in manifest: <code>{cleaned}</code>
+        File not found in manifest: <code>{cleaned}</code>. You probably need to
+        run `pnpm prebuild` and restart the site.
       </div>
     );
   }
