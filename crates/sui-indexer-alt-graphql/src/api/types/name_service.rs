@@ -14,10 +14,7 @@ use crate::{
     api::scalars::domain::Domain, error::RpcError, scope::Scope, task::watermark::Watermarks,
 };
 
-use super::{
-    address::Address,
-    object::{self, Object, ObjectKey},
-};
+use super::{address::Address, object::Object};
 
 /// Attempt to translate the given SuiNS `domain` to its address, as long as the mapping exists,
 /// and it hasn't expired as of the service's high watermark timestamp.
@@ -25,7 +22,7 @@ pub(crate) async fn name_to_address(
     ctx: &Context<'_>,
     scope: &Scope,
     domain: &Domain,
-) -> Result<Option<Address>, RpcError<object::Error>> {
+) -> Result<Option<Address>, RpcError> {
     let watermark: &Arc<Watermarks> = ctx.data()?;
     let timestamp_ms = watermark.timestamp_hi_ms();
 
@@ -81,7 +78,7 @@ pub(crate) async fn address_to_name(
     ctx: &Context<'_>,
     scope: &Scope,
     address: SuiAddress,
-) -> Result<Option<String>, RpcError<object::Error>> {
+) -> Result<Option<String>, RpcError> {
     let Some(reverse_record) = reverse_record(ctx, scope.clone(), address).await? else {
         return Ok(None);
     };
@@ -97,17 +94,11 @@ async fn name_record(
     ctx: &Context<'_>,
     scope: Scope,
     domain: &NativeDomain,
-) -> Result<Option<NameRecord>, RpcError<object::Error>> {
+) -> Result<Option<NameRecord>, RpcError> {
     let config: &NameServiceConfig = ctx.data()?;
 
-    let key = ObjectKey {
-        address: config.record_field_id(domain).into(),
-        version: None,
-        root_version: None,
-        at_checkpoint: None,
-    };
-
-    let Some(object) = Object::by_key(ctx, scope.without_root_version(), key).await? else {
+    let address = config.record_field_id(domain).into();
+    let Some(object) = Object::latest(ctx, scope.without_root_version(), address).await? else {
         return Ok(None);
     };
 
@@ -126,17 +117,11 @@ async fn reverse_record(
     ctx: &Context<'_>,
     scope: Scope,
     address: SuiAddress,
-) -> Result<Option<Field<SuiAddress, Domain>>, RpcError<object::Error>> {
+) -> Result<Option<Field<SuiAddress, Domain>>, RpcError> {
     let config: &NameServiceConfig = ctx.data()?;
 
-    let key = ObjectKey {
-        address: config.reverse_record_field_id(address.as_ref()).into(),
-        version: None,
-        root_version: None,
-        at_checkpoint: None,
-    };
-
-    let Some(object) = Object::by_key(ctx, scope.without_root_version(), key).await? else {
+    let address = config.reverse_record_field_id(address.as_ref()).into();
+    let Some(object) = Object::latest(ctx, scope.without_root_version(), address).await? else {
         return Ok(None);
     };
 
