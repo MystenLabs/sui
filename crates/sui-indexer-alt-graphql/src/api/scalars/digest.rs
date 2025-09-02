@@ -22,6 +22,12 @@ pub(crate) enum Error {
     BadDigestLength(usize),
 }
 
+impl Digest {
+    pub(crate) fn into_inner(self) -> [u8; DIGEST_LENGTH] {
+        self.0
+    }
+}
+
 impl_string_input!(Digest);
 
 impl From<Digest> for TransactionDigest {

@@ -172,6 +172,39 @@ Response: {
               }
             }
           }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "7yu5rwfEoh4UVQZjU1WwujW3Kg9LL5JeMgMhmbhgiYQq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
         }
       ]
     },

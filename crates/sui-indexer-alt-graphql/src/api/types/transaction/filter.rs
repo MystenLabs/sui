@@ -3,6 +3,7 @@
 
 use anyhow::Context as _;
 use std::ops::{Range, RangeInclusive};
+use sui_pg_db::query::Query;
 
 use async_graphql::{Context, InputObject};
 use diesel::prelude::QueryableByName;
@@ -10,6 +11,7 @@ use diesel::sql_types::BigInt;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
 
+use crate::api::scalars::digest::Digest;
 use crate::api::scalars::uint53::UInt53;
 use crate::error::RpcError;
 use crate::intersect;
@@ -121,4 +123,74 @@ pub(crate) async fn tx_bounds(
         .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
 
     Ok(tx_lo..tx_hi)
+}
+
+/// The tx_sequence_numbers within checkpoint bounds, further filtered by the after and before cursors.
+/// The checkpoint lower and upper bounds are used to determine the inclusive lower (tx_lo) and exclusive
+/// upper (tx_hi) bounds of the sequence of tx_sequence_numbers.
+///
+/// tx_lo: The greatest of the after cursor tx_sequence_number and the tx_lo of the checkpoint at the start of the bounds.
+/// tx_hi: The least of the before cursor tx_sequence_number and the tx_hi of the checkpoint directly after the cp_bounds.end(),
+///        or the tx_hi of the context's watermark (global_tx_hi) if the checkpoint directly after the cp_bounds.end() does not exist.
+///
+/// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
+/// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
+/// `hi_inclusive`).
+pub(crate) fn tx_bounds_query(
+    cp_bounds: &RangeInclusive<u64>,
+    global_tx_hi: u64,
+    cursor_lo: u64,
+    cursor_hi: u64,
+) -> Query<'static> {
+    query!(
+        r#"
+        WITH
+        tx_lo AS (
+            SELECT 
+                tx_lo
+            FROM 
+                cp_sequence_numbers 
+            WHERE 
+                cp_sequence_number = {BigInt}
+            LIMIT 1
+        ),
+
+        -- tx_hi is the tx_lo of the checkpoint directly after the cp_bounds.end() 
+        tx_hi AS (
+            SELECT
+                tx_lo AS tx_hi
+            FROM 
+                cp_sequence_numbers 
+            WHERE 
+                cp_sequence_number = {BigInt} + 1 
+            LIMIT 1
+        )
+
+        SELECT
+            (
+            SELECT 
+            -- tx_hi is the greatest of the after cursor, cp_bounds.start()
+            GREATEST(tx_lo, {BigInt}) 
+            FROM tx_lo
+            ) AS tx_lo,
+            -- tx_hi is the least of the before cursor and cp_bounds.end()
+            LEAST(
+                -- If we cannot get the tx_hi from the checkpoint directly after the cp_bounds.end() we use global_tx_hi
+                COALESCE((SELECT tx_hi FROM tx_hi), {BigInt}),
+                {BigInt}
+            ) AS tx_hi"#,
+        *cp_bounds.start() as i64,
+        *cp_bounds.end() as i64,
+        cursor_lo as i64,
+        global_tx_hi as i64,
+        cursor_hi as i64,
+    )
+}
+
+pub(crate) fn tx_digest_query(digest: Digest) -> Query<'static> {
+    query!(
+        r#"
+        SELECT tx_sequence_number as tx_lo, tx_sequence_number + 1 as tx_hi FROM tx_digests WHERE tx_digest = {Bytea}"#,
+        digest.into_inner()
+    )
 }

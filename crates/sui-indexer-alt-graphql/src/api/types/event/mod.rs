@@ -26,14 +26,17 @@ use sui_types::{
     event::Event as NativeEvent,
 };
 
-pub(crate) mod filter;
-mod lookups;
-
 use super::{
-    address::Address, checkpoint::filter::checkpoint_bounds, event::filter::pg_tx_bounds,
-    move_type::MoveType, move_value::MoveValue, transaction::filter::tx_bounds,
+    address::Address,
+    checkpoint::filter::checkpoint_bounds,
+    move_type::MoveType,
+    move_value::MoveValue,
+    transaction::filter::{tx_bounds_query, tx_digest_query},
     transaction::Transaction,
 };
+
+pub(crate) mod filter;
+mod lookups;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
 pub(crate) struct EventCursor {
@@ -132,11 +135,20 @@ impl Event {
             return Ok(Connection::new(false, false));
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
         // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
-        let pg_tx_bounds = pg_tx_bounds(&page, tx_bounds);
+        let tx_bounds_query = if let Some(digest) = filter.digest {
+            tx_digest_query(digest)
+        } else {
+            tx_bounds_query(
+                &cp_bounds,
+                global_tx_hi,
+                page.after().map_or(0, |c| c.tx_sequence_number),
+                page.before()
+                    .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1)),
+            )
+        };
 
-        let query_from_filters = filter.query(pg_tx_bounds)?;
+        let query_from_filters = filter.query(tx_bounds_query)?;
 
         #[derive(QueryableByName)]
         struct TxSequenceNumber(

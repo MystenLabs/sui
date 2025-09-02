@@ -1,0 +1,151 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-35:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6368800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 36-38:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 39:
+//# run test::events_test::emit_event --sender A --args 42
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 41-43:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, line 44:
+//# run test::events_test::emit_multiple_events --sender A
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 46-48:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 49-51:
+//# run test::events_test::emit_event --sender B --args 42
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: B, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 8, lines 52-54:
+//# programmable --sender A --inputs 100 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 56:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, lines 58-87:
+//# run-graphql
+Response: {
+  "data": {
+    "allEvents": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "3QXGQcUWzKsiqfcdrZwMXp6jFZDErSc59PyvJ7osufCf",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6Bw7yNTfyT8NxMjTDYYDWGWyPsAPa6j1ma63QjZv1W2J",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventByDigest": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "3QXGQcUWzKsiqfcdrZwMXp6jFZDErSc59PyvJ7osufCf",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsByDigest": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
