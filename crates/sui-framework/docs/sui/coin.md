@@ -55,6 +55,10 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `get_symbol`](#sui_coin_get_symbol)
 -  [Function `get_description`](#sui_coin_get_description)
 -  [Function `get_icon_url`](#sui_coin_get_icon_url)
+-  [Function `destroy_metadata`](#sui_coin_destroy_metadata)
+-  [Function `deny_cap_id`](#sui_coin_deny_cap_id)
+-  [Function `new_deny_cap_v2`](#sui_coin_new_deny_cap_v2)
+-  [Function `new_treasury_cap`](#sui_coin_new_treasury_cap)
 -  [Function `supply`](#sui_coin_supply)
 -  [Function `create_regulated_currency`](#sui_coin_create_regulated_currency)
 -  [Function `deny_list_add`](#sui_coin_deny_list_add)
@@ -853,20 +857,19 @@ type, ensuring that there's only one <code><a href="../sui/coin.md#sui_coin_Trea
 ): (<a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     // Make sure there's only one instance of the type T
     <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">sui::types::is_one_time_witness</a>(&witness), <a href="../sui/coin.md#sui_coin_EBadWitness">EBadWitness</a>);
-    (
-        <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a> {
-            id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-            <a href="../sui/coin.md#sui_coin_total_supply">total_supply</a>: <a href="../sui/balance.md#sui_balance_create_supply">balance::create_supply</a>(witness),
-        },
-        <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
-            id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-            decimals,
-            name: name.to_string(),
-            symbol: symbol.to_ascii_string(),
-            description: description.to_string(),
-            icon_url,
-        },
-    )
+    <b>let</b> treasury_cap = <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        <a href="../sui/coin.md#sui_coin_total_supply">total_supply</a>: <a href="../sui/balance.md#sui_balance_create_supply">balance::create_supply</a>(witness),
+    };
+    <b>let</b> metadata = <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        decimals,
+        name: name.to_string(),
+        symbol: symbol.to_ascii_string(),
+        description: description.to_string(),
+        icon_url,
+    };
+    (treasury_cap, metadata)
 }
 </code></pre>
 
@@ -1561,6 +1564,113 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_get_icon_url">get_icon_url</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;): Option&lt;Url&gt; {
     metadata.icon_url
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_destroy_metadata"></a>
+
+## Function `destroy_metadata`
+
+Destroy legacy <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> object
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_destroy_metadata">destroy_metadata</a>&lt;T&gt;(metadata: <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_destroy_metadata">destroy_metadata</a>&lt;T&gt;(metadata: <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> { id, .. } = metadata;
+    id.delete()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_deny_cap_id"></a>
+
+## Function `deny_cap_id`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_cap_id">deny_cap_id</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_RegulatedCoinMetadata">sui::coin::RegulatedCoinMetadata</a>&lt;T&gt;): <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_cap_id">deny_cap_id</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt;): ID {
+    metadata.deny_cap_object
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_new_deny_cap_v2"></a>
+
+## Function `new_deny_cap_v2`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_deny_cap_v2">new_deny_cap_v2</a>&lt;T&gt;(allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_deny_cap_v2">new_deny_cap_v2</a>&lt;T&gt;(
+    allow_global_pause: bool,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; {
+    <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        allow_global_pause,
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_new_treasury_cap"></a>
+
+## Function `new_treasury_cap`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_treasury_cap">new_treasury_cap</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_treasury_cap">new_treasury_cap</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt; {
+    <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        <a href="../sui/coin.md#sui_coin_total_supply">total_supply</a>: <a href="../sui/balance.md#sui_balance_create_supply_internal">balance::create_supply_internal</a>(),
+    }
 }
 </code></pre>
 

@@ -20,6 +20,7 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 -  [Function `split`](#sui_balance_split)
 -  [Function `withdraw_all`](#sui_balance_withdraw_all)
 -  [Function `destroy_zero`](#sui_balance_destroy_zero)
+-  [Function `create_supply_internal`](#sui_balance_create_supply_internal)
 -  [Function `create_staking_rewards`](#sui_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#sui_balance_destroy_storage_rebates)
 -  [Function `destroy_supply`](#sui_balance_destroy_supply)
@@ -421,6 +422,30 @@ Destroy a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;) {
     <b>assert</b>!(<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/balance.md#sui_balance_value">value</a> == 0, <a href="../sui/balance.md#sui_balance_ENonZero">ENonZero</a>);
     <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a>: _ } = <a href="../sui/balance.md#sui_balance">balance</a>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_balance_create_supply_internal"></a>
+
+## Function `create_supply_internal`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt; {
+    <a href="../sui/balance.md#sui_balance_Supply">Supply</a> { <a href="../sui/balance.md#sui_balance_value">value</a>: 0 }
 }
 </code></pre>
 

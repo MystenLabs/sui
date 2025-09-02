@@ -99,6 +99,8 @@ static_symbols!(
     "party_transfer",
     "derived_object",
     "claim"
+    "coin_registry",
+    "new_dynamic_currency"
 );
 
 /// The global, unique cache of strings.
