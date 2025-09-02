@@ -10,8 +10,8 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
 };
 
-/// Using a parent object, a type tag and the bcs bytes, compute
-/// the derived object address.
+/// Using a parent object, a type tag and the bcs bytes of the key,
+/// compute the derived object address.
 ///
 /// Note: Namespace is hidden so struct `T` should be passed in as is.
 pub fn derive_object_id<T>(
