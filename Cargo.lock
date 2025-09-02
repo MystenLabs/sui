@@ -15113,6 +15113,7 @@ dependencies = [
  "tokio",
  "tonic 0.13.1",
  "tonic-reflection",
+ "tracing",
 ]
 
 [[package]]

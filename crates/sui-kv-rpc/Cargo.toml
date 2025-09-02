@@ -23,4 +23,5 @@ telemetry-subscribers.workspace = true
 tokio.workspace = true
 tonic.workspace = true
 tonic-reflection.workspace = true
+tracing.workspace = true
 sui-protocol-config.workspace = true
