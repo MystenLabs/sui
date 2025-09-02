@@ -648,6 +648,8 @@ impl AuthorityStore {
     ) -> SuiResult<()> {
         let mut hasher = Sha3_256::default();
         let mut batch = perpetual_db.objects.batch();
+        let mut written = 0usize;
+        const MAX_BATCH_SIZE: usize = 100_000;
         for object in live_objects {
             hasher.update(object.object_reference().2.inner());
             match object {
@@ -678,6 +680,12 @@ impl AuthorityStore {
                         )),
                     )?;
                 }
+            }
+            written += 1;
+            if written > MAX_BATCH_SIZE {
+                batch.write()?;
+                batch = perpetual_db.objects.batch();
+                written = 0;
             }
         }
         let sha3_digest = hasher.finalize().digest;
