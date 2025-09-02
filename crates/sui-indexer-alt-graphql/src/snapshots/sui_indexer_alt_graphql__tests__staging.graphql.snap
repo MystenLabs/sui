@@ -1168,6 +1168,10 @@ input EventFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
+	Filter on events by transaction digest.
+	"""
+	digest: String
+	"""
 	Events emitted by a particular module. An event is emitted by a
 	particular module if some function in the module is called by a
 	PTB and emits an event.
@@ -1178,8 +1182,7 @@ input EventFilter {
 	"""
 	module: String
 	"""
-	Filter down to the events from this transaction (given by its transaction digest).
-	Filter down to events from transactions sent by this address.
+	Filter on events by transaction sender address.
 	"""
 	sender: SuiAddress
 	"""
