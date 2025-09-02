@@ -23,6 +23,15 @@ pub struct DbConfig {
 
     /// Number of threads to use for flush and compaction.
     pub db_parallelism: u32,
+
+    /// Enable RocksDB statistics collection for memory analysis.
+    pub enable_statistics: bool,
+
+    /// Dump stats to LOG every N seconds (0 = disabled).
+    pub stats_dump_period_sec: u32,
+
+    /// Persist stats to disk every N seconds (0 = disabled).
+    pub stats_persist_period_sec: u32,
 }
 
 impl Default for DbConfig {
@@ -39,6 +48,12 @@ impl Default for DbConfig {
             block_cache_slots: 8192,
             // Increase parallelism to allow more concurrent flushes and compactions.
             db_parallelism: 8,
+            // Disable statistics for memory analysis by default.
+            enable_statistics: false,
+            // Dump stats every 10 minutes by default.
+            stats_dump_period_sec: 600,
+            // Persist stats every 10 minutes by default.
+            stats_persist_period_sec: 600,
         }
     }
 }
@@ -80,6 +95,19 @@ impl From<DbConfig> for rocksdb::Options {
         block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
 
         opts.set_block_based_table_factory(&block_opts);
+
+        // Statistics configuration for memory analysis
+        if config.enable_statistics {
+            opts.enable_statistics();
+
+            if config.stats_dump_period_sec > 0 {
+                opts.set_stats_dump_period_sec(config.stats_dump_period_sec);
+            }
+
+            if config.stats_persist_period_sec > 0 {
+                opts.set_stats_persist_period_sec(config.stats_persist_period_sec);
+            }
+        }
 
         opts
     }
