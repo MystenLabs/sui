@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
+use anyhow::anyhow;
 use async_graphql::{Context, Object, Result};
-use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 
@@ -11,11 +10,19 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::{
-    api::types::{
-        execution_result::ExecutionResult, transaction_execution_input::TransactionExecutionInput,
-    },
-    error::RpcError,
+    api::{scalars::base64::Base64, types::execution_result::ExecutionResult},
+    error::{bad_user_input, RpcError},
 };
+
+/// Error type for user input validation in executeTransaction
+#[derive(thiserror::Error, Debug)]
+enum TransactionInputError {
+    #[error("Invalid BCS encoding in transaction data: {0}")]
+    InvalidTransactionBcs(String),
+
+    #[error("Invalid BCS encoding in signature {index}: {message}")]
+    InvalidSignatureBcs { index: usize, message: String },
+}
 
 pub struct Mutation;
 
@@ -24,7 +31,7 @@ pub struct Mutation;
 impl Mutation {
     /// Execute a transaction, committing its effects on chain.
     ///
-    /// - `transaction` contains the transaction data in the desired format.
+    /// - `transaction_data_bcs` contains the BCS-encoded transaction data (Base64-encoded).
     /// - `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
     ///
     /// Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
@@ -33,28 +40,30 @@ impl Mutation {
     async fn execute_transaction(
         &self,
         ctx: &Context<'_>,
-        transaction: TransactionExecutionInput,
-        signatures: Vec<String>,
-    ) -> Result<ExecutionResult, RpcError> {
+        transaction_data_bcs: Base64,
+        signatures: Vec<Base64>,
+    ) -> Result<ExecutionResult, RpcError<TransactionInputError>> {
         // Get the gRPC client from context
         let fullnode_client: &FullnodeClient = ctx.data()?;
 
-        // Parse transaction data from Base64 BCS
+        // Parse transaction data from BCS
         let tx_data: TransactionData = {
-            let bytes: Vec<u8> = Base64::decode(&transaction.transaction_data_bcs)
-                .context("Invalid Base64 encoding in transaction data")?;
-
-            bcs::from_bytes(&bytes).context("Invalid BCS encoding in transaction data")?
+            let bytes: &Vec<u8> = &transaction_data_bcs.0;
+            bcs::from_bytes(bytes).map_err(|e| {
+                bad_user_input(TransactionInputError::InvalidTransactionBcs(e.to_string()))
+            })?
         };
 
-        // Parse signatures from Base64 BCS
+        // Parse signatures from BCS
         let mut parsed_signatures = Vec::new();
-        for (i, sig_str) in signatures.iter().enumerate() {
-            let sig_bytes = Base64::decode(sig_str)
-                .with_context(|| format!("Invalid Base64 encoding in signature {i}"))?;
-
-            let signature = bcs::from_bytes::<GenericSignature>(&sig_bytes)
-                .with_context(|| format!("Invalid signature bytes for signature {i}"))?;
+        for (i, sig_base64) in signatures.iter().enumerate() {
+            let sig_bytes: &Vec<u8> = &sig_base64.0;
+            let signature: GenericSignature = bcs::from_bytes(sig_bytes).map_err(|e| {
+                bad_user_input(TransactionInputError::InvalidSignatureBcs {
+                    index: i,
+                    message: e.to_string(),
+                })
+            })?;
 
             parsed_signatures.push(signature);
         }
@@ -73,9 +82,9 @@ impl Mutation {
                 effects: None,
                 errors: Some(vec![status.to_string()]),
             }),
-            Err(other_error) => {
-                Err(anyhow::anyhow!("Failed to execute transaction: {}", other_error).into())
-            }
+            Err(other_error) => Err(anyhow!(other_error)
+                .context("Failed to execute transaction")
+                .into()),
         }
     }
 }
