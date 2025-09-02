@@ -100,7 +100,7 @@ static_symbols!(
     "derived_object",
     "claim"
     "coin_registry",
-    "new_dynamic_currency"
+    "new_currency_dyn"
 );
 
 /// The global, unique cache of strings.

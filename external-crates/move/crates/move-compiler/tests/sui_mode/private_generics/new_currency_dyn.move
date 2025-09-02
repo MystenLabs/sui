@@ -1,4 +1,4 @@
-// tests that `new_dynamic_currency` can only be called by internal structs.
+// tests that `new_currency_dyn` can only be called by internal structs.
 
 module a::m {
   use a::other::External;
@@ -10,11 +10,11 @@ module a::m {
   }
 
   public fun t1<T: key>() {
-    coin_registry::new_dynamic_currency<External>();
+    coin_registry::new_currency_dyn<External>();
   }
 
   public fun t2<T: key>() {
-    coin_registry::new_dynamic_currency<Internal>();
+    coin_registry::new_currency_dyn<Internal>();
   }
 }
 
@@ -33,7 +33,7 @@ module sui::object {
 }
 
 module sui::coin_registry {
-  public fun new_dynamic_currency<T: /* internal */ key>() { abort 0 }
+  public fun new_currency_dyn<T: /* internal */ key>() { abort 0 }
 }
 
 module sui::coin {

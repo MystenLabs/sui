@@ -2524,7 +2524,7 @@ MetadataCapState
 new_currency
 	public fun
 	0x2::coin_registry
-new_dynamic_currency
+new_currency_dyn
 	public fun
 	0x2::coin_registry
 claim_metadata_cap

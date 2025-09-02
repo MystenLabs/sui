@@ -19,7 +19,7 @@ supply information, regulatory status, and metadata capabilities.
 -  [Enum `MetadataCapState`](#sui_coin_registry_MetadataCapState)
 -  [Constants](#@Constants_0)
 -  [Function `new_currency`](#sui_coin_registry_new_currency)
--  [Function `new_dynamic_currency`](#sui_coin_registry_new_dynamic_currency)
+-  [Function `new_currency_dyn`](#sui_coin_registry_new_currency_dyn)
 -  [Function `claim_metadata_cap`](#sui_coin_registry_claim_metadata_cap)
 -  [Function `make_regulated`](#sui_coin_registry_make_regulated)
 -  [Function `make_supply_fixed`](#sui_coin_registry_make_supply_fixed)
@@ -670,15 +670,15 @@ TODO: Fix wording here.
 
 </details>
 
-<a name="sui_coin_registry_new_dynamic_currency"></a>
+<a name="sui_coin_registry_new_currency_dyn"></a>
 
-## Function `new_dynamic_currency`
+## Function `new_currency_dyn`
 
 Create a currency dynamically.
 TODO: Add verifier rule, as this needs to only be callable by the module that defines <code>T</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_dynamic_currency">new_dynamic_currency</a>&lt;T: key&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyBuilder">sui::coin_registry::CurrencyBuilder</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency_dyn">new_currency_dyn</a>&lt;T: key&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyBuilder">sui::coin_registry::CurrencyBuilder</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -687,7 +687,7 @@ TODO: Add verifier rule, as this needs to only be callable by the module that de
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_dynamic_currency">new_dynamic_currency</a>&lt;T: /* internal */ key&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency_dyn">new_currency_dyn</a>&lt;T: /* internal */ key&gt;(
     registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>,
     <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8,
     <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: String,
