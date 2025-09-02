@@ -1,37 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses test=0x0 --simulator
+//# init --protocol-version 70 --accounts A B --addresses P1=0x0 --simulator
 
 //# publish
-module test::events_test {
+module P1::M1 {
     use sui::event;
     use std::ascii;
 
-    public struct TestEvent has copy, drop {
+    public struct EventA has copy, drop {
         message: ascii::String,
         value: u64,
     }
 
-    public struct TestEvent2 has copy, drop {
+    public struct EventB has copy, drop {
         message: ascii::String,
         value: u64,
     }
 
     public entry fun emit_event(value: u64) {
-        event::emit(TestEvent {
+        event::emit(EventA {
             message: ascii::string(b"Hello from test event"),
             value,
         });
     }
 
     public entry fun emit_multiple_events() {
-        event::emit(TestEvent {
+        event::emit(EventA {
             message: ascii::string(b"First event"),
             value: 1,
         });
 
-        event::emit(TestEvent2 {
+        event::emit(EventB {
             message: ascii::string(b"Second event"),
             value: 2,
         });
@@ -40,7 +40,7 @@ module test::events_test {
     public entry fun emit_events_by_count(count: u64) {
         let mut i = 0;
         while (i < count) {
-            event::emit(TestEvent {
+            event::emit(EventA {
                 message: ascii::string(b"Event from loop"),
                 value: i + 1,
             });
@@ -50,13 +50,13 @@ module test::events_test {
 }
 
 // Transaction that emits a single event
-//# run test::events_test::emit_event --sender A --args 42
+//# run P1::M1::emit_event --sender A --args 42
 
 // Transaction that emits multiple events
-//# run test::events_test::emit_multiple_events --sender A
+//# run P1::M1::emit_multiple_events --sender A
 
 // Transaction that emits multiple events
-//# run test::events_test::emit_events_by_count --sender A --args 10
+//# run P1::M1::emit_events_by_count --sender A --args 10
 
 // Transaction with no events (transfer)
 //# programmable --sender A --inputs 100 @B

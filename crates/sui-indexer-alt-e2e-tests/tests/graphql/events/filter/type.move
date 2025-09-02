@@ -1,75 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses test=0x0 --simulator
+//# init --protocol-version 70 --accounts A B --addresses P1=0x0 --simulator
 
 //# publish --sender A
-module test::events_test {
+module P1::M1 {
     use sui::event;
-    use std::ascii;
 
-    public struct TestEvent has copy, drop {
-        message: ascii::String,
-        value: u64,
+    public struct T1 has copy, drop {}
+    public struct T2 has copy, drop {}
+
+    public struct EventA<T> has copy, drop {
+        value: T
     }
 
-    public struct TestEvent2 has copy, drop {
-        message: ascii::String,
-        value: u64,
+    public fun emit_T1() {
+        event::emit(EventA<T1> { value: T1 {} })
     }
 
-    public entry fun emit_event(value: u64) {
-        event::emit(TestEvent {
-            message: ascii::string(b"Hello from test event"),
-            value,
-        });
+    public fun emit_T2() {
+        event::emit(EventA<T2> { value: T2 {} })
     }
 
-    public entry fun emit_multiple_events() {
-        event::emit(TestEvent {
-            message: ascii::string(b"First event"),
-            value: 1,
-        });
-
-        event::emit(TestEvent2 {
-            message: ascii::string(b"Second event"),
-            value: 2,
-        });
-    }
-
-    public entry fun emit_events_by_count(count: u64) {
-        let mut i = 0;
-        while (i < count) {
-            event::emit(TestEvent {
-                message: ascii::string(b"Event from loop"),
-                value: i + 1,
-            });
-            i = i + 1;
-        };
+    public fun emit_both() {
+        event::emit(EventA<T1> { value: T1 {} });
+        event::emit(EventA<T2> { value: T2 {} })
     }
 }
-//# create-checkpoint
-
-// Transaction that emits a single event
-//# run test::events_test::emit_event --sender A --args 42
 
 //# create-checkpoint
 
-// Transaction that emits a single event
-//# run test::events_test::emit_event --sender B --args 42
+//# run P1::M1::emit_T1 --sender A
 
-// Transaction that emits multiple events
-//# run test::events_test::emit_multiple_events --sender A
+//# run P1::M1::emit_T2 --sender A
 
-//# create-checkpoint
+//# run P1::M1::emit_both --sender A
 
-// Transaction that emits multiple events
-//# run test::events_test::emit_multiple_events --sender B
-
-// Transaction with no events (transfer)
-//# programmable --sender A --inputs 100 @B
-//> 0: SplitCoins(Gas, [Input(0)]);
-//> 1: TransferObjects([Result(0)], Input(1))
+//# run P1::M1::emit_both --sender B
 
 //# create-checkpoint
 
@@ -80,22 +47,22 @@ module test::events_test {
       ...E
     }
   }
-  eventsOfTypeTestEvent: events(first: 50, filter: {type: "@{test}::events_test::TestEvent"}) {
+  eventsOfP1M1EventA: events(first: 50, filter: {type: "@{P1}::M1::EventA"}) {
     nodes {
       ...E
     }
   }
-  eventsOfTypeTestEvent2: events(first: 50, filter: {type: "@{test}::events_test::TestEvent2"}) {
+  eventsOfP1M1EventATypeT2: events(first: 50, filter: {type: "@{P1}::M1::EventA<@{P1}::M1::T2>"}) {
     nodes {
       ...E
     }
   }
-  eventsOfTypeTestEventBySenderA: events(first: 50, filter: {type: "@{test}::events_test::TestEvent", sender: "@{A}"}) {
+  eventsOfP1M1EventABySenderB: events(first: 50, filter: {type: "@{P1}::M1::EventA", sender: "@{B}"}) {
     nodes {
       ...E
     }
   }
-  eventsOfTypeTestEventBySenderB: events(first: 50, filter: {type: "@{test}::events_test::TestEvent", sender: "@{B}"}) {
+  eventsOfP1M1EventAByDigest: events(first: 50, filter: {type: "@{P1}::M1::EventA", digest: "@{digest_6}"}) {
     nodes {
       ...E
     }

@@ -1,30 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses test=0x0 test2=0x0 --simulator
+//# init --protocol-version 70 --accounts A B --addresses P1=0x0 P2=0x0 --simulator
 
 //# publish --sender A
-module test::module_test {
+module P1::M1 {
     use sui::event;
     use std::ascii;
 
-    public struct TestEvent has copy, drop {
+    public struct EventA has copy, drop {
         message: ascii::String,
         value: u64,
     }
 
-    public struct TestEvent2 has copy, drop {
+    public struct EventB has copy, drop {
         message: ascii::String,
         value: u64,
     }
 
     public entry fun emit_multiple_events() {
-        event::emit(TestEvent {
+        event::emit(EventA {
             message: ascii::string(b"First event"),
             value: 1,
         });
 
-        event::emit(TestEvent2 {
+        event::emit(EventB {
             message: ascii::string(b"Second event"),
             value: 2,
         });
@@ -32,27 +32,27 @@ module test::module_test {
 }
 
 //# publish --sender B
-module test2::module_test2 {
+module P2::M2 {
     use sui::event;
     use std::ascii;
 
-    public struct TestEvent3 has copy, drop {
+    public struct EventC has copy, drop {
         message: ascii::String,
         value: u64,
     }
 
-    public struct TestEvent4 has copy, drop {
+    public struct EventD has copy, drop {
         message: ascii::String,
         value: u64,
     }
 
     public entry fun emit_multiple_events() {
-        event::emit(TestEvent3 {
+        event::emit(EventC {
             message: ascii::string(b"First event"),
             value: 1,
         });
 
-        event::emit(TestEvent4 {
+        event::emit(EventD {
             message: ascii::string(b"Second event"),
             value: 2,
         });
@@ -60,11 +60,11 @@ module test2::module_test2 {
 }
 //# create-checkpoint
 
-//# run test::module_test::emit_multiple_events --sender B
+//# run P1::M1::emit_multiple_events --sender B
 
-//# run test2::module_test2::emit_multiple_events --sender B
+//# run P2::M2::emit_multiple_events --sender B
 
-//# run test2::module_test2::emit_multiple_events --sender A
+//# run P2::M2::emit_multiple_events --sender A
 
 //# create-checkpoint
 
@@ -75,42 +75,47 @@ module test2::module_test2 {
       ...E
     }
   }
-  eventsSentBySenderA: events(first: 50, filter: {sender: "@{A}"}) {
+  eventsSentByA: events(first: 50, filter: {sender: "@{A}"}) {
     nodes {
       ...E
     }
   }
-  eventsSentBySenderB: events(first: 50, filter: {sender: "@{B}"}) {
+  eventsSentByB: events(first: 50, filter: {sender: "@{B}"}) {
     nodes {
       ...E
     }
   }
-  eventsOfTestModuleByPackageId: events(first: 50, filter: {module: "@{test}"}) {
+  eventsOfP1: events(first: 50, filter: {module: "@{P1}"}) {
     nodes {
       ...E
     }
   }
-  eventsOfTestModuleByPackageAndModule: events(first: 50, filter: {type: "@{test}::module_test"}) {
+  eventOfP1M1: events(first: 50, filter: {type: "@{P1}::M1"}) {
     nodes {
         ...E
     }
   }
-  eventsOfTestModule2ByPackageId: events(first: 50, filter: {module: "@{test2}"}) {
+  eventsOfP2: events(first: 50, filter: {module: "@{P2}"}) {
     nodes {
       ...E
     }
   }
-  eventsOfTestModule2ByPackageAndModule: events(first: 50, filter: {type: "@{test2}::module_test2"}) {
+  eventsOfP2M2: events(first: 50, filter: {type: "@{P2}::M2"}) {
     nodes {
         ...E
     }
   }
-  eventsSentBySenderBAndPackageId: events(first: 50, filter: {sender: "@{B}", module: "@{test2}"}) {
+  eventsOfP2SentByB: events(first: 50, filter: {sender: "@{B}", module: "@{P2}"}) {
     nodes {
       ...E
     }
   }
-  eventsSentBySenderAAndPackageIdShouldBeEmpty: events(first: 50, filter: {sender: "@{A}", module: "@{test}"}) {
+  eventsOfP2ByDigest: events(first: 50, filter: {module: "@{P2}", digest: "@{digest_6}"}) {
+    nodes {
+      ...E
+    }
+  }
+  eventsOfP1SentByAShouldBeEmpty: events(first: 50, filter: {sender: "@{A}", module: "@{P1}"}) {
     nodes {
       ...E
     }
@@ -133,7 +138,7 @@ fragment E on Event {
 
 //# run-graphql
 {
-  eventsByModuleAndTypeIsUnavailable: events(first: 50, filter: {module: "@{test}", type: "@{test}::module_test::TestEvent3"}) {
+  eventsByModuleAndTypeIsUnavailable: events(first: 50, filter: {module: "@{P1}", type: "@{P1}::M1::EventC"}) {
     nodes {
       sequenceNumber
     }
