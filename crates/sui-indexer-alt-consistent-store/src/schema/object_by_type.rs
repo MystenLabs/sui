@@ -27,6 +27,6 @@ impl Key {
 }
 
 /// Options for creating this index's column family in RocksDB.
-pub(crate) fn options() -> rocksdb::Options {
-    rocksdb::Options::default()
+pub(crate) fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
+    base_options.clone()
 }

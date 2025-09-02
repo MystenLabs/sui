@@ -1,0 +1,204 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"annotations":{},"labels":{"app":"consistent-store-oom-debug","k8scluster":"sui-fleet-usw1","network":"testnet"},"name":"consistent-store-oom-debug","namespace":"rpc-testnet"},"spec":{"minReadySeconds":30,"persistentVolumeClaimRetentionPolicy":{"whenDeleted":"Retain","whenScaled":"Retain"},"podManagementPolicy":"OrderedReady","replicas":1,"revisionHistoryLimit":10,"selector":{"matchLabels":{"app":"consistent-store-oom-debug"}},"serviceName":"sui-indexer-alt-consistent-store","template":{"metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"9184","prometheus.io/scrape":"true","tags.datadoghq.com/env":"testnet","tags.datadoghq.com/service":"consistent-store-oom-debug"},"labels":{"app":"consistent-store-oom-debug","k8scluster":"sui-fleet-usw1","network":"testnet","role":"consistent-store-oom-debug"}},"spec":{"containers":[{"args":["-c","apt-get update \u0026\u0026 apt-get install -y procps curl;\nwhile true; do\n  echo \"=== $(date) RocksDB Memory Analysis ===\" \u003e\u003e /shared/rocksdb-memory.log\n  echo \"Container Memory Usage:\" \u003e\u003e /shared/rocksdb-memory.log\n  cat /proc/1/status | grep -E '(VmRSS|VmData|RssAnon)' \u003e\u003e /shared/rocksdb-memory.log\n  echo \"CGroup Memory:\" \u003e\u003e /shared/rocksdb-memory.log\n  cat /sys/fs/cgroup/memory.current \u003e\u003e /shared/rocksdb-memory.log 2\u003e/dev/null || echo \"cgroup v1\"\n  echo \"RocksDB LOG Stats:\" \u003e\u003e /shared/rocksdb-memory.log\n  tail -50 /opt/sui/db/rocksdb/LOG | grep -E '(Block cache|MemTable|Write buffer|Compaction Stats|memory|Memory)' \u003e\u003e /shared/rocksdb-memory.log 2\u003e/dev/null || echo \"No RocksDB stats\"\n  echo \"\" \u003e\u003e /shared/rocksdb-memory.log\n  sleep 10\ndone\n"],"command":["/bin/bash"],"image":"ubuntu:22.04","name":"memory-monitor","resources":{"limits":{"cpu":"100m","memory":"200Mi"},"requests":{"cpu":"50m","memory":"100Mi"}},"volumeMounts":[{"mountPath":"/shared","name":"shared-data"},{"mountPath":"/opt/sui/db","name":"rocksdb-storage"}]},{"command":["sui-indexer-alt-consistent-store","run","--database-path","/opt/sui/db/rocksdb","--remote-store-url","https://checkpoints.testnet.sui.io","--config","/opt/sui/config/default.toml"],"env":[{"name":"RUST_BACKTRACE","value":"1"},{"name":"RUST_LOG","value":"info,sui_indexer_alt=info,rocksdb=debug"},{"name":"GCS_SNAPSHOT_SERVICE_ACCOUNT_PROJECT_ID","value":"fullnode-snapshot-gcs"},{"name":"GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH","value":"/opt/sui/config/gcp-snapshot-gcs-sa.json"}],"image":"us-central1-docker.pkg.dev/cryptic-bolt-398315/sui/sui-indexer-alt-consistent-store:53c8eb3b93dc3c97325a4922edf78e3fa00e4089","imagePullPolicy":"Always","name":"consistent-store-oom-debug","ports":[{"containerPort":7001,"name":"rpc","protocol":"TCP"},{"containerPort":9184,"name":"metrics","protocol":"TCP"}],"readinessProbe":{"failureThreshold":60,"grpc":{"port":7001,"service":""},"initialDelaySeconds":15,"periodSeconds":30,"successThreshold":1,"timeoutSeconds":5},"resources":{"limits":{"cpu":"10","memory":"40G"},"requests":{"cpu":"8","memory":"32G"}},"terminationMessagePath":"/dev/termination-log","terminationMessagePolicy":"File","volumeMounts":[{"mountPath":"/opt/sui/db","name":"rocksdb-storage"},{"mountPath":"/shared","name":"shared-data"},{"mountPath":"/opt/sui/config/default.toml","name":"consistent-store-config-volume","subPath":"default.toml"},{"mountPath":"/opt/sui/config/gcp-snapshot-gcs-sa.json","name":"consistent-store-gcp-snapshot-sa-volume","subPath":"gcp-snapshot-gcs-sa.json"}]}],"dnsPolicy":"ClusterFirst","restartPolicy":"Always","schedulerName":"default-scheduler","securityContext":{},"terminationGracePeriodSeconds":180,"volumes":[{"emptyDir":{},"name":"shared-data"},{"configMap":{"defaultMode":420,"name":"consistent-store-config-tnt-oom"},"name":"consistent-store-config-volume"},{"name":"consistent-store-gcp-snapshot-sa-volume","secret":{"defaultMode":420,"secretName":"consistent-store-gcp-snapshot-gcs-sa-tnt-oom"}}]}},"updateStrategy":{"rollingUpdate":{"partition":0},"type":"RollingUpdate"},"volumeClaimTemplates":[{"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":{"name":"rocksdb-storage"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"300Gi"}},"storageClassName":"pd-ssd","volumeMode":"Filesystem"}}]}}
+  creationTimestamp: "2025-08-27T17:43:19Z"
+  generation: 2
+  labels:
+    app: consistent-store-oom-debug
+    k8scluster: sui-fleet-usw1
+    network: testnet
+  name: consistent-store-oom-debug
+  namespace: rpc-testnet
+  resourceVersion: "787518975"
+  uid: c616232c-0366-4991-9cce-af9338285f4f
+spec:
+  minReadySeconds: 30
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  podManagementPolicy: OrderedReady
+  replicas: 0
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: consistent-store-oom-debug
+  serviceName: sui-indexer-alt-consistent-store
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9184"
+        prometheus.io/scrape: "true"
+        tags.datadoghq.com/env: testnet
+        tags.datadoghq.com/service: consistent-store-oom-debug
+      creationTimestamp: null
+      labels:
+        app: consistent-store-oom-debug
+        k8scluster: sui-fleet-usw1
+        network: testnet
+        role: consistent-store-oom-debug
+    spec:
+      containers:
+      - args:
+        - -c
+        - |
+          apt-get update && apt-get install -y procps curl;
+          while true; do
+            echo "=== $(date) RocksDB Memory Analysis ===" >> /shared/rocksdb-memory.log
+            echo "Container Memory Usage:" >> /shared/rocksdb-memory.log
+            cat /proc/1/status | grep -E '(VmRSS|VmData|RssAnon)' >> /shared/rocksdb-memory.log
+            echo "CGroup Memory:" >> /shared/rocksdb-memory.log
+            cat /sys/fs/cgroup/memory.current >> /shared/rocksdb-memory.log 2>/dev/null || echo "cgroup v1"
+
+            echo "RocksDB Statistics Dump:" >> /shared/rocksdb-memory.log
+            # Look for complete statistics dumps with memory-related metrics
+            tail -500 /opt/sui/db/rocksdb/LOG | awk '/rocksdb.stats STATISTICS:/,/^$/ {
+              if ($0 ~ /rocksdb\.(block-cache|cur-size|estimate|size-all|memtable|pinned|num-immutable)/) print
+            }' >> /shared/rocksdb-memory.log 2>/dev/null || echo "No statistics dump found"
+
+            echo "Recent Flush Memory Usage:" >> /shared/rocksdb-memory.log
+            # Extract memory usage from recent flush events
+            tail -100 /opt/sui/db/rocksdb/LOG | grep "flush_started" | tail -5 | while read line; do
+              memory_usage=$(echo "$line" | grep -o '"memory_usage": [0-9]*' | cut -d' ' -f2)
+              if [ ! -z "$memory_usage" ]; then
+                memory_mb=$((memory_usage / 1024 / 1024))
+                echo "Flush memory usage: ${memory_mb}MB"
+              fi
+            done >> /shared/rocksdb-memory.log 2>/dev/null
+
+            echo "Recent SST Index Sizes:" >> /shared/rocksdb-memory.log
+            # Extract index sizes from table file creation events
+            tail -100 /opt/sui/db/rocksdb/LOG | grep "table_file_creation" | tail -3 | while read line; do
+              cf_name=$(echo "$line" | grep -o '"cf_name": "[^"]*"' | cut -d'"' -f4 2>/dev/null)
+              index_size=$(echo "$line" | grep -o '"index_size": [0-9]*' | cut -d' ' -f2 2>/dev/null)
+              if [ ! -z "$index_size" ]; then
+                index_size_mb=$((index_size / 1024 / 1024))
+                echo "CF: ${cf_name:-unknown}, Index: ${index_size_mb}MB"
+              fi
+            done >> /shared/rocksdb-memory.log 2>/dev/null
+
+            echo "" >> /shared/rocksdb-memory.log
+            sleep 30
+          done
+        command:
+        - /bin/bash
+        image: ubuntu:22.04
+        imagePullPolicy: IfNotPresent
+        name: memory-monitor
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+          requests:
+            cpu: 50m
+            memory: 100Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /shared
+          name: shared-data
+        - mountPath: /opt/sui/db
+          name: rocksdb-storage
+      - command:
+        - sui-indexer-alt-consistent-store
+        - run
+        - --database-path
+        - /opt/sui/db/rocksdb
+        - --remote-store-url
+        - https://checkpoints.testnet.sui.io
+        - --config
+        - /opt/sui/config/default.toml
+        env:
+        - name: RUST_BACKTRACE
+          value: "1"
+        - name: RUST_LOG
+          value: info,sui_indexer_alt=info,rocksdb=debug
+        - name: GCS_SNAPSHOT_SERVICE_ACCOUNT_PROJECT_ID
+          value: fullnode-snapshot-gcs
+        - name: GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH
+          value: /opt/sui/config/gcp-snapshot-gcs-sa.json
+        image: us-central1-docker.pkg.dev/cryptic-bolt-398315/sui/sui-indexer-alt-consistent-store:53c8eb3b93dc3c97325a4922edf78e3fa00e4089
+        imagePullPolicy: Always
+        name: consistent-store-oom-debug
+        ports:
+        - containerPort: 7001
+          name: rpc
+          protocol: TCP
+        - containerPort: 9184
+          name: metrics
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 60
+          grpc:
+            port: 7001
+            service: ""
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: "10"
+            memory: 40G
+          requests:
+            cpu: "8"
+            memory: 32G
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /opt/sui/db
+          name: rocksdb-storage
+        - mountPath: /shared
+          name: shared-data
+        - mountPath: /opt/sui/config/default.toml
+          name: consistent-store-config-volume
+          subPath: default.toml
+        - mountPath: /opt/sui/config/gcp-snapshot-gcs-sa.json
+          name: consistent-store-gcp-snapshot-sa-volume
+          subPath: gcp-snapshot-gcs-sa.json
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - emptyDir: {}
+        name: shared-data
+      - configMap:
+          defaultMode: 420
+          name: consistent-store-config-tnt-oom
+        name: consistent-store-config-volume
+      - name: consistent-store-gcp-snapshot-sa-volume
+        secret:
+          defaultMode: 420
+          secretName: consistent-store-gcp-snapshot-gcs-sa-tnt-oom
+  updateStrategy:
+    rollingUpdate:
+      partition: 0
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      creationTimestamp: null
+      name: rocksdb-storage
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 300Gi
+      storageClassName: pd-ssd
+      volumeMode: Filesystem
+    status:
+      phase: Pending
+status:
+  availableReplicas: 0
+  collisionCount: 0
+  currentRevision: consistent-store-oom-debug-84794bd8d6
+  observedGeneration: 2
+  replicas: 0
+  updateRevision: consistent-store-oom-debug-84794bd8d6

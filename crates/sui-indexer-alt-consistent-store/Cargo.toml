@@ -17,12 +17,14 @@ clap.workspace = true
 const-str.workspace = true
 futures.workspace = true
 http.workspace = true
+once_cell.workspace = true
 ouroboros.workspace = true
 prometheus.workspace = true
 rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 rustls-pemfile.workspace = true
 scoped-futures.workspace = true
 serde.workspace = true
+tap.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

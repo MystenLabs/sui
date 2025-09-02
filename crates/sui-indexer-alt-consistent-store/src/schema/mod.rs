@@ -28,11 +28,11 @@ pub(crate) struct Schema {
 }
 
 impl store::Schema for Schema {
-    fn cfs() -> Vec<(&'static str, rocksdb::Options)> {
+    fn cfs(base_options: &rocksdb::Options) -> Vec<(&'static str, rocksdb::Options)> {
         vec![
-            ("balances", balances::options()),
-            ("object_by_owner", object_by_owner::options()),
-            ("object_by_type", object_by_type::options()),
+            ("balances", balances::options(base_options)),
+            ("object_by_owner", object_by_owner::options(base_options)),
+            ("object_by_type", object_by_type::options(base_options)),
         ]
     }
 
