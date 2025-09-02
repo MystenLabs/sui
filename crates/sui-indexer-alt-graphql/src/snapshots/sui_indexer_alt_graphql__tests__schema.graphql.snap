@@ -1610,6 +1610,20 @@ type PerEpochConfig {
 	object: Object
 }
 
+"""
+ProgrammableSystemTransaction is identical to ProgrammableTransaction, but GraphQL does not allow multiple variants with the same type.
+"""
+type ProgrammableSystemTransaction {
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+}
+
 type ProgrammableTransaction {
 	"""
 	The transaction commands, executed sequentially.
@@ -2351,7 +2365,7 @@ type TransactionInputEdge {
 """
 Different types of transactions that can be executed on the Sui network.
 """
-union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction | ProgrammableSystemTransaction
 
 """
 Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.
