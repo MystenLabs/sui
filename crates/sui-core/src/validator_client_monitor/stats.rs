@@ -22,9 +22,9 @@ use tracing::debug;
 /// Decay factor for reliability EMA - lower values give more weight to recent observations
 const RELIABILITY_DECAY_FACTOR: f64 = 0.5;
 /// Decay factor for latency EMA - higher values smooth out spikes better
-const LATENCY_DECAY_FACTOR: f64 = 0.8;
+const LATENCY_DECAY_FACTOR: f64 = 0.7;
 /// Decay factor for max latency - higher values keep max stable over time
-const MAX_LATENCY_DECAY_FACTOR: f64 = 0.8;
+const MAX_LATENCY_DECAY_FACTOR: f64 = 0.7;
 
 /// Complete client-observed statistics for validator interactions.
 ///
