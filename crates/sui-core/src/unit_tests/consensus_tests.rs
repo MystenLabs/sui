@@ -299,6 +299,17 @@ pub fn make_consensus_adapter_for_test(
                 self.mock_block_status_receivers.lock().remove(0),
             ))
         }
+
+        async fn next_block(&self) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
+            Ok((
+                vec![ConsensusPosition {
+                    epoch: 0,
+                    index: 0,
+                    block: BlockRef::MIN,
+                }],
+                with_block_status(consensus_core::BlockStatus::Sequenced(BlockRef::MIN)),
+            ))
+        }
     }
     let epoch_store = state.epoch_store_for_testing();
     // Make a new consensus adapter instance.

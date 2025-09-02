@@ -643,6 +643,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
             tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
         }
+        if let Some(finalized_block_cache) = self.epoch_store.finalized_block_cache.as_ref() {
+            finalized_block_cache
+                .update_last_committed_leader_round(last_committed_round as u32)
+                .await;
+        }
 
         let commit_info = if self
             .epoch_store
@@ -791,6 +796,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let span = trace_span!("ConsensusHandler::HandleCommit::process_consensus_txns");
             let _guard = span.enter();
             for (block, parsed_transactions) in consensus_commit.transactions() {
+                // Set the status to the finalized block cache.
+                if let Some(finalized_block_cache) = self.epoch_store.finalized_block_cache.as_ref()
+                {
+                    finalized_block_cache.mark_block_finalized(ConsensusPosition {
+                        epoch,
+                        block,
+                        index: 0,
+                    });
+                }
+
                 let author = block.author.value();
                 // TODO: consider only messages within 1~3 rounds of the leader?
                 self.last_consensus_stats.stats.inc_num_messages(author);
@@ -1419,6 +1434,14 @@ impl ConsensusBlockHandler {
             .collect::<Vec<_>>();
         let mut executable_transactions = vec![];
         for (block, transactions) in parsed_transactions.into_iter() {
+            if let Some(finalized_block_cache) = self.epoch_store.finalized_block_cache.as_ref() {
+                finalized_block_cache.mark_block_finalized(ConsensusPosition {
+                    epoch,
+                    block,
+                    index: 0,
+                });
+            }
+
             for (txn_idx, parsed) in transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
                     epoch,

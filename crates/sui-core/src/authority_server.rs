@@ -26,8 +26,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::digests::TransactionDigest;
-use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
@@ -45,6 +43,7 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
+use sui_types::{digests::TransactionDigest, messages_grpc::ValidatorLatencyResponse};
 use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
@@ -52,6 +51,7 @@ use sui_types::{
 use sui_types::{
     effects::TransactionEffectsAPI, executable_transaction::VerifiedExecutableTransaction,
 };
+use sui_types::{effects::TransactionEvents, messages_grpc::ValidatorLatencyRequest};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -70,6 +70,7 @@ use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
+        finalized_block_cache::NotifyReadFinalizedBlockResult,
         shared_object_version_manager::Schedulable, ExecutionEnv,
     },
     checkpoints::CheckpointStore,
@@ -874,6 +875,32 @@ impl ValidatorService {
         Ok((consensus_positions, Weight::zero()))
     }
 
+    async fn handle_submit_to_consensus_for_latency(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<(ConsensusPosition, Weight)> {
+        {
+            // code block within reconfiguration lock
+            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+            if !reconfiguration_lock.should_accept_user_certs() {
+                self.metrics.num_rejected_cert_in_epoch_boundary.inc();
+                return Err(SuiError::ValidatorHaltedAtEpochEnd);
+            }
+        }
+
+        // Submit to consensus and wait for position, we do not check if tx
+        // has been processed by consensus already as this method is called
+        // to get back a consensus position.
+        let _metrics_guard = self.metrics.consensus_latency.start_timer();
+
+        let consensus_position = self
+            .consensus_adapter
+            .submit_for_latency(epoch_store)
+            .await?;
+
+        Ok((consensus_position, Weight::zero()))
+    }
+
     async fn handle_submit_to_consensus(
         &self,
         consensus_transactions: NonEmpty<ConsensusTransaction>,
@@ -1627,14 +1654,66 @@ impl ValidatorService {
 
     async fn validator_latency_impl(
         &self,
-        _request: tonic::Request<sui_types::messages_grpc::RawValidatorLatencyRequest>,
+        request: tonic::Request<sui_types::messages_grpc::RawValidatorLatencyRequest>,
     ) -> WrappedServiceResponse<sui_types::messages_grpc::RawValidatorLatencyResponse> {
-        let raw_response = sui_types::messages_grpc::RawValidatorLatencyResponse {
-            consensus_position: None,
-            block_digest: None,
-        };
+        let request: ValidatorLatencyRequest = request.into_inner().try_into()?;
+        let state = &self.state;
+        let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        Ok((tonic::Response::new(raw_response), Weight::one()))
+        let response = timeout(
+            Duration::from_secs(20),
+            epoch_store
+                .within_alive_epoch(self.validator_latency_response(request, &epoch_store))
+                .map_err(|_| SuiError::EpochEnded(epoch_store.epoch())),
+        )
+        .await
+        .map_err(|_| tonic::Status::internal("Timeout waiting for latency response"))???
+        .try_into()?;
+
+        Ok((
+            tonic::Response::new(response),
+            // TODO(fastpath): Implement spam weight
+            Weight::zero(),
+        ))
+    }
+
+    async fn validator_latency_response(
+        &self,
+        request: ValidatorLatencyRequest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<ValidatorLatencyResponse> {
+        // If the consensus position is provided, then wait until the block appears as certified in the cache.
+        if let Some(consensus_position) = request.consensus_position {
+            if let Some(finalized_block_cache) = epoch_store.finalized_block_cache.as_ref() {
+                match finalized_block_cache
+                    .wait_for_block_finalized(consensus_position)
+                    .await
+                {
+                    NotifyReadFinalizedBlockResult::Finalized => {
+                        let response = ValidatorLatencyResponse {
+                            consensus_position: Some(consensus_position),
+                        };
+                        return Ok(response);
+                    }
+                    NotifyReadFinalizedBlockResult::Expired(round) => {
+                        return Err(SuiError::ValidatorConsensusLagging {
+                            round: consensus_position.block.round,
+                            last_committed_round: round,
+                        });
+                    }
+                }
+            }
+        }
+
+        // If no consensus position is provided, submit a latency request to consensus
+        return self
+            .handle_submit_to_consensus_for_latency(epoch_store)
+            .await
+            .map(|(consensus_position, _spam_weight)| {
+                Ok(ValidatorLatencyResponse {
+                    consensus_position: Some(consensus_position),
+                })
+            })?;
     }
 
     fn get_client_ip_addr<T>(

@@ -96,6 +96,7 @@ use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey
 use super::transaction_reject_reason_cache::TransactionRejectReasonCache;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
+use crate::authority::finalized_block_cache::FinalizedBlockCache;
 use crate::authority::shared_object_version_manager::{
     AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
@@ -423,6 +424,9 @@ pub struct AuthorityPerEpochStore {
 
     /// A cache that maintains the reject vote reason for a transaction.
     pub(crate) tx_reject_reason_cache: Option<TransactionRejectReasonCache>,
+
+    /// A cache that maintains the finalized block for a consensus position.
+    pub(crate) finalized_block_cache: Option<FinalizedBlockCache>,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -1130,6 +1134,12 @@ impl AuthorityPerEpochStore {
             None
         };
 
+        let finalized_block_cache = if protocol_config.mysticeti_fastpath() {
+            Some(FinalizedBlockCache::new())
+        } else {
+            None
+        };
+
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
@@ -1171,6 +1181,7 @@ impl AuthorityPerEpochStore {
             end_of_epoch_execution_time_observations: OnceCell::new(),
             consensus_tx_status_cache,
             tx_reject_reason_cache,
+            finalized_block_cache,
             settlement_registrations: Default::default(),
         });
 

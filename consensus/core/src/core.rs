@@ -614,7 +614,11 @@ impl Core {
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
-        let (transactions, ack_transactions, _limit_reached) = self.transaction_consumer.next();
+        let (mut transactions, ack_transactions, _limit_reached) = self.transaction_consumer.next();
+
+        // Filter out the transactions with empty bytes. Those are meant to be used for latency purposes.
+        transactions.retain(|t| !t.data().is_empty());
+
         self.context
             .metrics
             .node_metrics

@@ -226,6 +226,11 @@ impl ConsensusClient for UpdatableConsensusClient {
         let client = self.get().await;
         client.submit(transactions, epoch_store).await
     }
+
+    async fn next_block(&self) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
+        let client = self.get().await;
+        client.next_block().await
+    }
 }
 
 /// Waits for consensus to finish replaying at consensus handler.

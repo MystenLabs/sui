@@ -420,9 +420,6 @@ pub struct RawValidatorLatencyResponse {
     /// Optional consensus position returned from latency check
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub consensus_position: Option<Bytes>,
-    /// Optional block digest returned from latency check
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub block_digest: Option<Bytes>,
 }
 
 /// Request for validator latency measurement (used for latency testing)
@@ -436,9 +433,7 @@ pub struct ValidatorLatencyRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorLatencyResponse {
     /// Optional consensus position returned from latency check
-    pub consensus_position: Option<crate::messages_consensus::ConsensusPosition>,
-    /// Optional block digest returned from latency check
-    pub block_digest: Option<crate::digests::Digest>,
+    pub consensus_position: Option<crate::messages_consensus::ConsensusPosition>
 }
 
 impl TryFrom<ValidatorHealthRequest> for RawValidatorHealthRequest {
@@ -516,8 +511,7 @@ impl TryFrom<ValidatorLatencyResponse> for RawValidatorLatencyResponse {
 
     fn try_from(value: ValidatorLatencyResponse) -> Result<Self, Self::Error> {
         Ok(Self {
-            consensus_position: value.consensus_position.map(|pos| bcs::to_bytes(&pos).unwrap().into()),
-            block_digest: value.block_digest.map(|digest| digest.into_inner().to_vec().into()),
+            consensus_position: value.consensus_position.map(|pos| bcs::to_bytes(&pos).unwrap().into())
         })
     }
 }
@@ -531,20 +525,8 @@ impl TryFrom<RawValidatorLatencyResponse> for ValidatorLatencyResponse {
             None => None,
         };
 
-        let block_digest = match value.block_digest {
-            Some(bytes) => {
-                bcs::from_bytes(&bytes).map_err(|err| {
-                    Self::Error::GrpcMessageDeserializeError {
-                        type_info: "RawValidatorLatencyResponse.block_digest".to_string(),
-                        error: err.to_string(),
-                    }
-                })?
-            },
-            None => None,
-        };
         Ok(Self {
             consensus_position,
-            block_digest,
         })
     }
 }

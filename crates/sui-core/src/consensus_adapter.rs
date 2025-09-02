@@ -237,6 +237,9 @@ pub trait ConsensusClient: Sync + Send + 'static {
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)>;
+
+    // It simulates a block submission to consensus to get a consensus position, but it does not actually submit the block to consensus.
+    async fn next_block(&self) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)>;
 }
 
 /// Submit Sui certificates to the consensus.
@@ -663,6 +666,27 @@ impl ConsensusAdapter {
         self.submit_semaphore.available_permits() > 0
     }
 
+    // It simulates a transaction submission to consensus to get a consensus position, but it does not actually submit the transaction to consensus.
+    #[instrument(
+        name = "ConsensusAdapter::submit_for_latency",
+        level = "trace",
+        skip_all
+    )]
+    pub async fn submit_for_latency(
+        self: &Arc<Self>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<ConsensusPosition> {
+        let (tx_consensus_positions, rx_consensus_positions) = oneshot::channel();
+        let handle = self.submit_unchecked(&[], epoch_store, Some(tx_consensus_positions));
+        handle.await.map_err(|e| {
+            SuiError::FailedToSubmitToConsensus(format!("Failed to submit for latency: {e}"))
+        })?;
+        let consensus_positions = rx_consensus_positions.await.map_err(|e| {
+            SuiError::FailedToSubmitToConsensus(format!("Failed to get consensus position: {e}"))
+        })?;
+        Ok(consensus_positions[0])
+    }
+
     fn submit_unchecked(
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
@@ -719,6 +743,19 @@ impl ConsensusAdapter {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) {
+        if transactions.is_empty() && tx_consensus_positions.is_some() {
+            // Submit the transaction to consensus and return the submit result with a status waiter
+            let (consensus_positions, _status_waiter) = self.next_block().await;
+
+            let tx_consensus_positions = tx_consensus_positions.unwrap();
+            tracing::Span::current().record(
+                "consensus_positions",
+                tracing::field::debug(&consensus_positions),
+            );
+            let _ = tx_consensus_positions.send(consensus_positions);
+            return;
+        }
+
         if transactions.is_empty() {
             return;
         }
@@ -963,6 +1000,55 @@ impl ConsensusAdapter {
             .sequencing_certificate_success
             .with_label_values(&[tx_type])
             .inc();
+    }
+
+    #[instrument(name = "ConsensusAdapter::next_block", level = "trace", skip_all)]
+    async fn next_block(self: &Arc<Self>) -> (Vec<ConsensusPosition>, BlockStatusReceiver) {
+        let ack_start = Instant::now();
+        let mut retries: u32 = 0;
+
+        let (consensus_positions, status_waiter) = loop {
+            let span = debug_span!("client_submit");
+            match self.consensus_client.next_block().instrument(span).await {
+                Err(err) => {
+                    // This can happen during reconfig, or when consensus has full internal buffers
+                    // and needs to back pressure, so retry a few times before logging warnings.
+                    if retries > 30 {
+                        warn!(
+                            "Failed to submit next block to consensus: {err:?}. Retry #{retries}"
+                        );
+                    }
+                    self.metrics
+                        .sequencing_certificate_failures
+                        .with_label_values(&["next_block"])
+                        .inc();
+                    retries += 1;
+
+                    time::sleep(Duration::from_secs(10)).await;
+                }
+                Ok((consensus_positions, status_waiter)) => {
+                    break (consensus_positions, status_waiter);
+                }
+            }
+        };
+
+        // we want to record the num of retries when reporting latency but to avoid label
+        // cardinality we do some simple bucketing to give us a good enough idea of how
+        // many retries happened associated with the latency.
+        let bucket = match retries {
+            0..=10 => retries.to_string(), // just report the retry count as is
+            11..=20 => "between_10_and_20".to_string(),
+            21..=50 => "between_20_and_50".to_string(),
+            51..=100 => "between_50_and_100".to_string(),
+            _ => "over_100".to_string(),
+        };
+
+        self.metrics
+            .sequencing_acknowledge_latency
+            .with_label_values(&[&bucket, "next_block"])
+            .observe(ack_start.elapsed().as_secs_f64());
+
+        (consensus_positions, status_waiter)
     }
 
     #[instrument(name = "ConsensusAdapter::submit_inner", level = "trace", skip_all)]

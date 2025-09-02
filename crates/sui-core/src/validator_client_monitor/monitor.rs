@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::{
     base_types::AuthorityName,
     messages_grpc::{ValidatorHealthRequest, ValidatorLatencyRequest},
@@ -252,10 +253,14 @@ where
                 let end_to_end_latency = start_time.elapsed();
                 self.record_interaction_result(OperationFeedback {
                     authority_name: validator_name,
-                    display_name,
+                    display_name: display_name.clone(),
                     operation: OperationType::Finalize,
                     result: Ok(end_to_end_latency),
                 });
+                self.metrics
+                    .observed_latency
+                    .with_label_values(&[&display_name, "latency_ping", "synthetic_tx"])
+                    .observe(end_to_end_latency.as_secs_f64());
             }
             Err(_) => {
                 warn!(
@@ -304,21 +309,21 @@ where
             futures.push(future);
         }
 
-        let mut digest_aggregators: BTreeMap<
-            Option<sui_types::digests::Digest>,
-            StatusAggregator<()>,
-        > = BTreeMap::new();
+        let mut digest_aggregators: BTreeMap<ConsensusPosition, StatusAggregator<()>> =
+            BTreeMap::new();
 
         while let Some((name, response)) = futures.next().await {
             match response {
                 Ok(response) => {
-                    let aggregator = digest_aggregators
-                        .entry(response.block_digest)
-                        .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
-                    aggregator.insert(name, ());
+                    if let Some(consensus_position) = response.consensus_position {
+                        let aggregator = digest_aggregators
+                            .entry(consensus_position)
+                            .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
+                        aggregator.insert(name, ());
 
-                    if aggregator.reached_quorum_threshold() {
-                        return Ok(());
+                        if aggregator.reached_quorum_threshold() {
+                            return Ok(());
+                        }
                     }
                 }
                 Err(_) => {

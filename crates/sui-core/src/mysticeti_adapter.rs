@@ -142,4 +142,42 @@ impl ConsensusClient for LazyMysticetiClient {
         }
         Ok((consensus_positions, status_waiter))
     }
+
+    async fn next_block(&self) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
+        let client_guard = self.get().await;
+        let client = client_guard
+            .as_ref()
+            .expect("Client should always be returned");
+
+        let (block_ref, _tx_indices, status_waiter) = client
+            .submit(vec![])
+            .await
+            .tap_err(|err| {
+                // Will be logged by caller as well.
+                let msg = format!("Transaction submission failed with: {:?}", err);
+                match err {
+                    ClientError::ConsensusShuttingDown(_) => {
+                        info!("{}", msg);
+                    }
+                    ClientError::OversizedTransaction(_, _)
+                    | ClientError::OversizedTransactionBundleBytes(_, _)
+                    | ClientError::OversizedTransactionBundleCount(_, _) => {
+                        if cfg!(debug_assertions) {
+                            panic!("{}", msg);
+                        } else {
+                            error!("{}", msg);
+                        }
+                    }
+                };
+            })
+            .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
+
+        // Calculate consensus tx positions
+        let consensus_positions = vec![ConsensusPosition {
+            epoch: client.epoch(),
+            block: block_ref,
+            index: 0,
+        }];
+        Ok((consensus_positions, status_waiter))
+    }
 }

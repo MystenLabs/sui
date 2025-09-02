@@ -172,6 +172,10 @@ impl ConsensusClient for MockConsensusClient {
     ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
         self.submit_impl(transactions)
     }
+
+    async fn next_block(&self) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
+        self.submit_impl(&[])
+    }
 }
 
 pub(crate) fn with_block_status(status: consensus_core::BlockStatus) -> BlockStatusReceiver {
