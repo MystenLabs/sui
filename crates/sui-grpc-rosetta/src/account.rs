@@ -71,10 +71,8 @@ pub async fn balance(
 
 //TODO this can be a convenience method in the SDK.
 async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
-    let request = GetCheckpointRequest {
-        checkpoint_id: None, // None means get latest checkpoint
-        read_mask: Some(FieldMask::from_paths([Checkpoint::SEQUENCE_NUMBER_FIELD])),
-    };
+    let request = GetCheckpointRequest::latest()
+        .with_read_mask(FieldMask::from_paths([Checkpoint::SEQUENCE_NUMBER_FIELD]));
 
     let response = ctx
         .grpc_client
@@ -94,10 +92,8 @@ async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSeque
 
 //TODO this can be a convenience method in the SDK.
 async fn get_current_epoch(grpc_client: &mut sui_rpc::client::Client) -> Result<u64, Error> {
-    let request = GetEpochRequest {
-        epoch: None, // None means get current epoch
-        read_mask: Some(FieldMask::from_paths([CheckpointSummary::EPOCH_FIELD.name])),
-    };
+    let request = GetEpochRequest::latest()
+        .with_read_mask(FieldMask::from_paths([CheckpointSummary::EPOCH_FIELD.name]));
 
     let response = grpc_client
         .ledger_client()
@@ -160,10 +156,9 @@ async fn get_account_balances(
     address: SuiAddress,
     coin_type: &str,
 ) -> Result<i128, Error> {
-    let request = GetBalanceRequest {
-        owner: Some(address.to_string()),
-        coin_type: Some(coin_type.to_string()),
-    };
+    let mut request = GetBalanceRequest::default();
+    request.owner = Some(address.to_string());
+    request.coin_type = Some(coin_type.to_string());
 
     let response = grpc_client.live_data_client().get_balance(request).await?;
 
@@ -240,17 +235,16 @@ pub async fn coins(
     let mut page_token = None;
 
     loop {
-        let list_request = ListOwnedObjectsRequest {
-            owner: Some(request.account_identifier.address.to_string()),
-            object_type: Some(SUI_COIN_TYPE.to_string()),
-            page_size: Some(5000),
-            page_token,
-            read_mask: Some(FieldMask::from_paths([
-                Object::OBJECT_ID_FIELD.name,
-                Object::VERSION_FIELD.name,
-                Object::BALANCE_FIELD.name,
-            ])),
-        };
+        let mut list_request = ListOwnedObjectsRequest::default();
+        list_request.owner = Some(request.account_identifier.address.to_string());
+        list_request.object_type = Some(SUI_COIN_TYPE.to_string());
+        list_request.page_size = Some(5000);
+        list_request.page_token = page_token;
+        list_request.read_mask = Some(FieldMask::from_paths([
+            Object::OBJECT_ID_FIELD.name,
+            Object::VERSION_FIELD.name,
+            Object::BALANCE_FIELD.name,
+        ]));
 
         let response = context
             .grpc_client

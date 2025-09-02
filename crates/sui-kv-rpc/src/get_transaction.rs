@@ -54,14 +54,17 @@ pub async fn get_transaction(
     let transaction = response
         .pop()
         .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
-    Ok(GetTransactionResponse {
-        transaction: Some(transaction_to_response(transaction, &read_mask)?),
-    })
+    Ok(GetTransactionResponse::new(transaction_to_response(
+        transaction,
+        &read_mask,
+    )?))
 }
 
 pub async fn batch_get_transactions(
     mut client: BigTableClient,
-    BatchGetTransactionsRequest { digests, read_mask }: BatchGetTransactionsRequest,
+    BatchGetTransactionsRequest {
+        digests, read_mask, ..
+    }: BatchGetTransactionsRequest,
 ) -> Result<BatchGetTransactionsResponse, RpcError> {
     let read_mask = {
         let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
@@ -99,7 +102,7 @@ pub async fn batch_get_transactions(
             GetTransactionResult::new_error(err.into_status_proto())
         })
         .collect();
-    Ok(BatchGetTransactionsResponse { transactions })
+    Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
 fn transaction_to_response(
