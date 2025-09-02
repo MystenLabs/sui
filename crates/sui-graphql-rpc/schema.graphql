@@ -1241,6 +1241,11 @@ type Epoch {
 	"""
 	liveObjectSetDigest: String
 	"""
+	A commitment by the committee on the artifacts of the checkpoint.
+	e.g., object checkpoint states
+	"""
+	artifactsDigest: String
+	"""
 	The epoch's corresponding checkpoints.
 	"""
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!

@@ -1,5 +1,6 @@
 ---
 source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
+assertion_line: 23
 expression: sdl
 ---
 type AccumulatorRootCreateTransaction {
@@ -1244,6 +1245,11 @@ type Epoch {
 	that time. This can be used to verify state snapshots.
 	"""
 	liveObjectSetDigest: String
+	"""
+	A commitment by the committee on the artifacts of the checkpoint.
+	e.g., object checkpoint states
+	"""
+	artifactsDigest: String
 	"""
 	The epoch's corresponding checkpoints.
 	"""

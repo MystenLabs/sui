@@ -1,5 +1,6 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/lib.rs
+assertion_line: 439
 expression: sdl
 ---
 """
@@ -537,6 +538,11 @@ During a particular epoch the following data is fixed:
 - validators in the committee.
 """
 type Epoch {
+	"""
+	A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
+	e.g., object checkpoint states
+	"""
+	artifactsDigest: String
 	"""
 	The epoch's corresponding checkpoints.
 	"""
