@@ -25,6 +25,7 @@ use sui_types::{
     move_package::MovePackage as NativeMovePackage,
     object::Object as NativeObject,
 };
+use tokio::sync::OnceCell;
 
 use crate::{
     api::scalars::{
@@ -55,8 +56,8 @@ pub(crate) struct MovePackage {
     /// Representation of this Move Package as a generic Object.
     super_: Object,
 
-    /// Move package specific data, extracted from the native representation of the generic object.
-    native: NativeMovePackage,
+    /// Move package specific data, lazily loaded from the super object.
+    native: Arc<OnceCell<Option<NativeMovePackage>>>,
 }
 
 /// Identifies a specific version of a package.
@@ -163,8 +164,16 @@ impl MovePackage {
 
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
     /// name, followed by module bytes), in alphabetic order by module name.
-    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
+    async fn module_bcs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let bytes = bcs::to_bytes(native.serialized_module_map())
+            .context("Failed to serialize module map")?;
         Ok(Some(bytes.into()))
     }
 
@@ -277,8 +286,15 @@ impl MovePackage {
     }
 
     /// The Base64-encoded BCS serialization of this package, as a `MovePackage`.
-    async fn package_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(&self.native).context("Failed to serialize MovePackage")?;
+    async fn package_bcs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let bytes = bcs::to_bytes(native).context("Failed to serialize MovePackage")?;
         Ok(Some(Base64(bytes)))
     }
 
@@ -357,9 +373,15 @@ impl MovePackage {
     }
 
     /// The transitive dependencies of this package.
-    async fn linkage(&self) -> Option<Vec<Linkage>> {
-        let linkage = self
-            .native
+    async fn linkage(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Vec<Linkage>>, RpcError<object::Error>> {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let linkage = native
             .linkage_table()
             .iter()
             .map(|(object_id, upgrade_info)| Linkage {
@@ -368,7 +390,7 @@ impl MovePackage {
             })
             .collect();
 
-        Some(linkage)
+        Ok(Some(linkage))
     }
 
     /// The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
@@ -380,15 +402,21 @@ impl MovePackage {
     }
 
     /// A table identifying which versions of a package introduced each of its types.
-    async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
-        let type_origins = self
-            .native
+    async fn type_origins(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Vec<TypeOrigin>>, RpcError<object::Error>> {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let type_origins = native
             .type_origin_table()
             .iter()
             .map(|native| TypeOrigin::from(native.clone()))
             .collect();
 
-        Some(type_origins)
+        Ok(Some(type_origins))
     }
 }
 
@@ -401,7 +429,7 @@ impl MovePackage {
         let super_ = Object::from_contents(scope, native);
         Some(Self {
             super_,
-            native: package,
+            native: Arc::new(OnceCell::from(Some(package))),
         })
     }
 
@@ -421,7 +449,7 @@ impl MovePackage {
 
         Ok(Some(Self {
             super_: object.clone(),
-            native: package,
+            native: Arc::new(OnceCell::from(Some(package))),
         }))
     }
 
@@ -545,7 +573,7 @@ impl MovePackage {
         let super_ = Object::from_contents(scope, native);
         Ok(Some(Self {
             super_,
-            native: package,
+            native: Arc::new(OnceCell::from(Some(package))),
         }))
     }
 
@@ -743,6 +771,27 @@ impl MovePackage {
         }
 
         Ok(conn)
+    }
+
+    /// Get the native MovePackage, loading it lazily if needed.
+    pub(crate) async fn native(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<NativeMovePackage>, RpcError<object::Error>> {
+        self.native
+            .get_or_try_init(async || {
+                let Some(contents) = self.super_.contents(ctx).await?.as_ref() else {
+                    return Ok(None);
+                };
+
+                let native = contents
+                    .data
+                    .try_as_package()
+                    .context("Object is not a MovePackage")?;
+
+                Ok(Some(native.clone()))
+            })
+            .await
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
