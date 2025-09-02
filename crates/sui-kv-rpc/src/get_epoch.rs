@@ -14,10 +14,12 @@ use sui_rpc_api::{
 };
 use sui_sdk_types::ValidatorCommittee;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use tracing::instrument;
 
 pub const READ_MASK_DEFAULT: &str =
     "epoch,committee,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
+#[instrument(skip(client), fields(requested_epoch = request.epoch, chain = ?chain))]
 pub async fn get_epoch(
     mut client: BigTableClient,
     request: GetEpochRequest,
