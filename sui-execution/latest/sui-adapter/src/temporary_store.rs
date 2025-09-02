@@ -61,6 +61,11 @@ pub struct TemporaryStore<'backing> {
     /// any of the objects referenced in this set.
     receiving_objects: Vec<ObjectRef>,
 
+    /// The set of all generated object IDs from the object runtime during the transaction. This includes any
+    /// created-and-then-deleted objects in addition to any `new_ids` which contains only the set
+    /// of created (but not deleted) IDs in the transaction.
+    generated_runtime_ids: BTreeSet<ObjectID>,
+
     // TODO: Now that we track epoch here, there are a few places we don't need to pass it around.
     /// The current epoch.
     cur_epoch: EpochId,
@@ -115,6 +120,7 @@ impl<'backing> TemporaryStore<'backing> {
             wrapped_object_containers: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             receiving_objects,
+            generated_runtime_ids: BTreeSet::new(),
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
         }
@@ -441,6 +447,19 @@ impl<'backing> TemporaryStore<'backing> {
             .extend(wrapped_object_containers);
     }
 
+    pub fn save_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
+        #[cfg(debug_assertions)]
+        {
+            for id in &self.generated_runtime_ids {
+                assert!(!generated_ids.contains(id))
+            }
+            for id in &generated_ids {
+                assert!(!self.generated_runtime_ids.contains(id));
+            }
+        }
+        self.generated_runtime_ids.extend(generated_ids);
+    }
+
     pub fn estimate_effects_size_upperbound(&self) -> usize {
         TransactionEffects::estimate_effects_size_upperbound_v2(
             self.execution_results.written_objects.len(),
@@ -586,8 +605,9 @@ impl TemporaryStore<'_> {
                 mutable_inputs.contains(id)
             })
             .copied()
-            // Add any object IDs created during execution to the authenticated set
-            .chain(self.execution_results.created_object_ids.iter().copied())
+            // Add any object IDs generated in the object runtime during execution to the
+            // authenticated set (i.e., new (non-package) objects, and possibly ephemeral UIDs).
+            .chain(self.generated_runtime_ids.iter().copied())
             .collect();
 
         // Add sender and sponsor (if present) to authenticated set
@@ -1097,6 +1117,10 @@ impl Storage for TemporaryStore<'_> {
                 .insert(SUI_DENY_LIST_OBJECT_ID);
         }
         result
+    }
+
+    fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
+        TemporaryStore::save_generated_object_ids(self, generated_ids)
     }
 }
 
