@@ -7,7 +7,7 @@ const glob = require("glob");
 
 const SITE_ROOT = path.resolve(__dirname, "../"); // docusaurus site root
 const REPO_ROOT = path.resolve(SITE_ROOT, "../../.."); // monorepo root
-const OUT_FILE = path.join(SITE_ROOT, ".generated/importContentMap.ts");
+const OUT_FILE = path.join(SITE_ROOT, ".generated/ImportContentMap.ts");
 
 // Where to look for MDX that might use <ImportContent>
 const MDX_GLOBS = [path.join(REPO_ROOT, "docs/content/**/*.{md,mdx}")];
