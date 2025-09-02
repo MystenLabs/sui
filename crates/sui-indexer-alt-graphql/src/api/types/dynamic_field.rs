@@ -25,7 +25,7 @@ use crate::{
         type_filter::{TypeFilter, TypeInput},
         uint53::UInt53,
     },
-    error::{upcast, RpcError},
+    error::RpcError,
     pagination::Page,
     scope::Scope,
 };
@@ -35,7 +35,7 @@ use super::{
     move_object::MoveObject,
     move_type::MoveType,
     move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, ObjectKey, VersionFilter},
+    object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     owner::Owner,
     transaction::Transaction,
@@ -103,12 +103,12 @@ impl DynamicField {
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<UInt53, RpcError> {
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
         self.super_.version(ctx).await
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
         self.super_.digest(ctx).await
     }
 
@@ -136,10 +136,7 @@ impl DynamicField {
     }
 
     /// The structured representation of the object's contents.
-    pub(crate) async fn contents(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
+    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
         self.super_.contents(ctx).await
     }
 
@@ -147,7 +144,7 @@ impl DynamicField {
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError<object::Error>> {
+    ) -> Result<Option<String>, RpcError> {
         self.super_.default_suins_name(ctx).await
     }
 
@@ -156,7 +153,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+    ) -> Result<Option<DynamicField>, RpcError> {
         self.super_.dynamic_field(ctx, name).await
     }
 
@@ -181,7 +178,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+    ) -> Result<Option<DynamicField>, RpcError> {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
@@ -192,7 +189,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
         self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
@@ -203,7 +200,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
         self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 
@@ -211,7 +208,7 @@ impl DynamicField {
     pub(crate) async fn move_object_bcs(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+    ) -> Result<Option<Base64>, RpcError> {
         self.super_.move_object_bcs(ctx).await
     }
 
@@ -227,7 +224,7 @@ impl DynamicField {
     }
 
     /// The dynamic field's name, as a Move value.
-    async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError<object::Error>> {
+    async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
         let Some(native) = self.native(ctx).await? else {
             return Ok(None);
         };
@@ -252,10 +249,7 @@ impl DynamicField {
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    pub(crate) async fn object_bcs(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
         self.super_.object_bcs(ctx).await
     }
 
@@ -268,7 +262,7 @@ impl DynamicField {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
@@ -283,7 +277,7 @@ impl DynamicField {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
@@ -305,10 +299,7 @@ impl DynamicField {
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Owner>, RpcError<object::Error>> {
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
         self.super_.owner(ctx).await
     }
 
@@ -316,7 +307,7 @@ impl DynamicField {
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError<object::Error>> {
+    ) -> Result<Option<Transaction>, RpcError> {
         self.super_.previous_transaction(ctx).await
     }
 
@@ -324,15 +315,12 @@ impl DynamicField {
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError<object::Error>> {
+    ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
     }
 
     /// The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
-    async fn value(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<DynamicFieldValue>, RpcError<object::Error>> {
+    async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>, RpcError> {
         let Some(native) = self.native(ctx).await? else {
             return Ok(None);
         };
@@ -347,14 +335,13 @@ impl DynamicField {
         let address: SuiAddress = bcs::from_bytes(&native.value_bytes)
             .context("Failed to deserialize dynamic object field ID")?;
 
-        let key = ObjectKey {
-            address,
-            root_version: native.scope.root_version().map(Into::into),
-            version: None,
-            at_checkpoint: None,
+        let object = if let Some(version) = native.scope.root_version() {
+            Object::version_bounded(ctx, native.scope.clone(), address, version.into()).await?
+        } else {
+            Object::latest(ctx, native.scope.clone(), address).await?
         };
 
-        let Some(object) = Object::by_key(ctx, native.scope.clone(), key).await? else {
+        let Some(object) = object else {
             return Ok(None);
         };
 
@@ -378,7 +365,7 @@ impl DynamicField {
     pub(crate) async fn from_move_object(
         move_object: &MoveObject,
         ctx: &Context<'_>,
-    ) -> Result<Option<Self>, RpcError<object::Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let Some(native) = move_object.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -398,7 +385,7 @@ impl DynamicField {
         parent: SuiAddress,
         kind: DynamicFieldType,
         name: DynamicFieldName,
-    ) -> Result<Option<Self>, RpcError<object::Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let type_ = match kind {
             DynamicFieldType::DynamicField => name.type_.0,
             DynamicFieldType::DynamicObject => {
@@ -407,16 +394,16 @@ impl DynamicField {
         };
 
         let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
-            .context("Failed to derive dynamic field ID")?;
+            .context("Failed to derive dynamic field ID")?
+            .into();
 
-        let key = ObjectKey {
-            address: field_id.into(),
-            root_version: scope.root_version().map(Into::into),
-            version: None,
-            at_checkpoint: None,
+        let object = if let Some(version) = scope.root_version() {
+            Object::version_bounded(ctx, scope.clone(), field_id, version.into()).await?
+        } else {
+            Object::latest(ctx, scope.clone(), field_id).await?
         };
 
-        let Some(object) = Object::by_key(ctx, scope.clone(), key).await? else {
+        let Some(object) = object else {
             return Ok(None);
         };
 
@@ -459,17 +446,14 @@ impl DynamicField {
     }
 
     /// Get the native dynamic field data, loading it lazily if needed.
-    async fn native(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<&Option<NativeField>, RpcError<object::Error>> {
+    async fn native(&self, ctx: &Context<'_>) -> Result<&Option<NativeField>, RpcError> {
         self.native
             .get_or_try_init(async || {
                 let Some(value) = self.super_.contents(ctx).await? else {
                     return Ok(None);
                 };
 
-                let Some(layout) = value.type_.layout_impl().await.map_err(upcast)? else {
+                let Some(layout) = value.type_.layout_impl().await? else {
                     return Ok(None);
                 };
 

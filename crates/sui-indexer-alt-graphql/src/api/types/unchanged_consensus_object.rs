@@ -17,7 +17,7 @@ use crate::{
     scope::Scope,
 };
 
-use super::object::{self, Object};
+use super::object::Object;
 
 /// Reason why a transaction that attempted to access a consensus-managed object was cancelled.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -90,7 +90,7 @@ pub(crate) struct PerEpochConfig {
 #[Object]
 impl PerEpochConfig {
     /// The per-epoch configuration object as of when the transaction was executed.
-    async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError<object::Error>> {
+    async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let Some(epoch_start) = pg_loader
             .load_one(EpochStartKey(self.epoch))
