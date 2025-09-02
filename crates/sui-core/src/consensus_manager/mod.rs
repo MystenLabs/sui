@@ -13,6 +13,7 @@ use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority,
 };
+use core::panic;
 use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
@@ -26,9 +27,9 @@ use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
-use tokio::sync::{broadcast, Mutex, MutexGuard};
+use tokio::sync::{broadcast, Mutex};
 use tokio::time::{sleep, timeout};
-use tracing::info;
+use tracing::{error, info};
 
 #[cfg(test)]
 #[path = "../unit_tests/consensus_manager_tests.rs"]
@@ -64,7 +65,6 @@ pub struct ConsensusManager {
     consumer_monitor_sender: broadcast::Sender<Arc<CommitConsumerMonitor>>,
 
     running: Mutex<Running>,
-    active: parking_lot::Mutex<bool>,
 
     #[cfg(test)]
     pub(crate) boot_counter: Mutex<u64>,
@@ -98,7 +98,6 @@ impl ConsensusManager {
             consumer_monitor: ArcSwapOption::empty(),
             consumer_monitor_sender,
             running: Mutex::new(Running::False),
-            active: parking_lot::Mutex::new(false),
             boot_counter: Mutex::new(0),
         }
     }
@@ -138,30 +137,29 @@ impl ConsensusManager {
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
     ) {
-        {
-            let mut active = self.active.lock();
-            assert!(!*active, "Cannot start consensus. It is already running!");
-            info!("Starting consensus ...");
-            *active = true;
-            self.consensus_client.set(self.client.clone());
-        }
-
         let system_state = epoch_store.epoch_start_state();
         let committee: Committee = system_state.get_consensus_committee();
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
         let network_type = self.pick_network(&epoch_store);
 
-        let Some(_guard) = RunningLockGuard::acquire_start(
-            &self.metrics,
-            &self.running,
-            epoch,
-            protocol_config.version,
-        )
-        .await
-        else {
+        // Ensure start() is not called twice.
+        let start_time = Instant::now();
+        let mut running = self.running.lock().await;
+        if let Running::True(running_epoch, running_version) = *running {
+            error!(
+                "Consensus is already Running for epoch {running_epoch:?} & protocol version {running_version:?} - shutdown first before starting",
+            );
             return;
-        };
+        }
+        *running = Running::True(epoch, protocol_config.version);
+
+        info!(
+            "Starting up consensus for epoch {epoch:?} & protocol version {:?}",
+            protocol_config.version
+        );
+
+        self.consensus_client.set(self.client.clone());
 
         let consensus_config = node_config
             .consensus_config()
@@ -262,21 +260,36 @@ impl ConsensusManager {
 
         // Send the consumer monitor to the replay waiter.
         let _ = self.consumer_monitor_sender.send(monitor);
+
+        let elapsed = start_time.elapsed().as_secs_f64();
+        self.metrics.start_latency.set(elapsed as i64);
+
+        tracing::info!(
+            "Started consensus for epoch {} & protocol version {:?} completed - took {} seconds",
+            epoch,
+            protocol_config.version,
+            elapsed
+        );
     }
 
     pub async fn shutdown(&self) {
         info!("Shutting down consensus ...");
-        let prev_active = {
-            let mut active = self.active.lock();
-            std::mem::replace(&mut *active, false)
-        };
-        if !prev_active {
-            return;
-        }
 
-        let Some(_guard) = RunningLockGuard::acquire_shutdown(&self.metrics, &self.running).await
-        else {
-            return;
+        // Ensure shutdown() is called on a running consensus and get the epoch/version info.
+        let start_time = Instant::now();
+        let mut running = self.running.lock().await;
+        let (shutdown_epoch, shutdown_version) = match *running {
+            Running::True(epoch, version) => {
+                tracing::info!(
+                    "Shutting down consensus for epoch {epoch:?} & protocol version {version:?}"
+                );
+                *running = Running::False;
+                (epoch, version)
+            }
+            Running::False => {
+                error!("Consensus shutdown was called but consensus is not running");
+                return;
+            }
         };
 
         // Stop consensus submissions.
@@ -301,11 +314,19 @@ impl ConsensusManager {
         self.registry_service.remove(registry_id);
 
         self.consensus_client.clear();
+
+        let elapsed = start_time.elapsed().as_secs_f64();
+        self.metrics.shutdown_latency.set(elapsed as i64);
+
+        tracing::info!(
+            "Consensus stopped for epoch {shutdown_epoch:?} & protocol version {shutdown_version:?} is complete - took {} seconds",
+            elapsed
+        );
     }
 
     pub async fn is_running(&self) -> bool {
-        let active = self.active.lock();
-        *active
+        let running = self.running.lock().await;
+        matches!(*running, Running::True(_, _))
     }
 
     pub fn replay_waiter(&self) -> ReplayWaiter {
@@ -430,96 +451,6 @@ impl ConsensusManagerMetrics {
                 registry,
             )
             .unwrap(),
-        }
-    }
-}
-
-pub(crate) struct RunningLockGuard<'a> {
-    state_guard: MutexGuard<'a, Running>,
-    metrics: &'a ConsensusManagerMetrics,
-    epoch: Option<EpochId>,
-    protocol_version: Option<ProtocolVersion>,
-    start: Instant,
-}
-
-impl<'a> RunningLockGuard<'a> {
-    pub(crate) async fn acquire_start(
-        metrics: &'a ConsensusManagerMetrics,
-        running_mutex: &'a Mutex<Running>,
-        epoch: EpochId,
-        version: ProtocolVersion,
-    ) -> Option<RunningLockGuard<'a>> {
-        let running = running_mutex.lock().await;
-        if let Running::True(epoch, version) = *running {
-            tracing::warn!(
-                "Consensus is already Running for epoch {epoch:?} & protocol version {version:?} - shutdown first before starting",
-            );
-            return None;
-        }
-
-        tracing::info!("Starting up consensus for epoch {epoch:?} & protocol version {version:?}");
-
-        Some(RunningLockGuard {
-            state_guard: running,
-            metrics,
-            start: Instant::now(),
-            epoch: Some(epoch),
-            protocol_version: Some(version),
-        })
-    }
-
-    pub(crate) async fn acquire_shutdown(
-        metrics: &'a ConsensusManagerMetrics,
-        running_mutex: &'a Mutex<Running>,
-    ) -> Option<RunningLockGuard<'a>> {
-        let running = running_mutex.lock().await;
-        if let Running::True(epoch, version) = *running {
-            tracing::info!(
-                "Shutting down consensus for epoch {epoch:?} & protocol version {version:?}"
-            );
-        } else {
-            tracing::warn!("Consensus shutdown was called but consensus is not running");
-            return None;
-        }
-
-        Some(RunningLockGuard {
-            state_guard: running,
-            metrics,
-            start: Instant::now(),
-            epoch: None,
-            protocol_version: None,
-        })
-    }
-}
-
-impl Drop for RunningLockGuard<'_> {
-    fn drop(&mut self) {
-        match *self.state_guard {
-            // consensus was running and now will have to be marked as shutdown
-            Running::True(epoch, version) => {
-                tracing::info!("Consensus shutdown for epoch {epoch:?} & protocol version {version:?} is complete - took {} seconds", self.start.elapsed().as_secs_f64());
-
-                self.metrics
-                    .shutdown_latency
-                    .set(self.start.elapsed().as_secs_f64() as i64);
-
-                *self.state_guard = Running::False;
-            }
-            // consensus was not running and now will be marked as started
-            Running::False => {
-                tracing::info!(
-                "Starting up consensus for epoch {} & protocol version {:?} completed - took {} seconds",
-                self.epoch.unwrap(),
-                self.protocol_version.unwrap(),
-                self.start.elapsed().as_secs_f64());
-
-                self.metrics
-                    .start_latency
-                    .set(self.start.elapsed().as_secs_f64() as i64);
-
-                *self.state_guard =
-                    Running::True(self.epoch.unwrap(), self.protocol_version.unwrap());
-            }
         }
     }
 }
