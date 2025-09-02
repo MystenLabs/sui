@@ -18,12 +18,9 @@ use crate::{
     checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop},
     consensus_adapter::NoopConsensusOverloadChecker,
     consensus_handler::ConsensusHandlerInitializer,
-    consensus_manager::{
-        mysticeti_manager::MysticetiManager, ConsensusManagerMetrics, ConsensusManagerTrait,
-    },
+    consensus_manager::{ConsensusManager, UpdatableConsensusClient},
     consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     global_state_hasher::GlobalStateHasher,
-    mysticeti_adapter::LazyMysticetiClient,
 };
 
 pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
@@ -51,7 +48,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_mysticeti_manager() {
+async fn test_consensus_manager() {
     // GIVEN
     let configs = ConfigBuilder::new_with_temp_dir()
         .committee_size(4.try_into().unwrap())
@@ -69,17 +66,14 @@ async fn test_mysticeti_manager() {
         .build()
         .await;
 
-    let metrics = Arc::new(ConsensusManagerMetrics::new(&Registry::new()));
     let epoch_store = state.epoch_store_for_testing();
-    let client = Arc::new(LazyMysticetiClient::default());
+    let consensus_client = Arc::new(UpdatableConsensusClient::new());
 
-    let manager = MysticetiManager::new(
-        config.worker_key_pair().copy(),
-        config.network_key_pair().copy(),
-        consensus_config.db_path().to_path_buf(),
-        registry_service,
-        metrics,
-        client,
+    let manager = ConsensusManager::new(
+        config,
+        consensus_config,
+        &registry_service,
+        consensus_client,
     );
 
     let boot_counter = *manager.boot_counter.lock().await;
@@ -91,7 +85,7 @@ async fn test_mysticeti_manager() {
             checkpoint_service_for_testing(state.clone()),
         );
 
-        // WHEN start mysticeti
+        // WHEN start consensus
         manager
             .start(
                 config,
