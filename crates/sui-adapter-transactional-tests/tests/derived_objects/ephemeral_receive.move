@@ -43,7 +43,6 @@ entry fun ephemeral_receive(
 ) {
   let mut uid = derived_object::claim(&mut parent.id, key);
   let obj = transfer::public_receive(&mut uid, receiving);
-
   uid.delete();
   transfer::public_transfer(obj, ctx.sender());
 }
