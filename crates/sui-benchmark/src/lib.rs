@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use anyhow::bail;
 use async_trait::async_trait;
+use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use rand::Rng;
@@ -60,6 +61,7 @@ use crate::drivers::bench_driver::ClientType;
 pub mod bank;
 pub mod benchmark_setup;
 pub mod drivers;
+pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
 pub mod in_memory_wallet;
 pub mod options;
@@ -272,7 +274,7 @@ impl LocalValidatorAggregatorProxy {
     pub async fn from_genesis(
         genesis: &Genesis,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: &str,
+        reconfig_fullnode_rpc_url: Option<&str>,
         transaction_driver_percentage: Option<u8>,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
@@ -300,7 +302,7 @@ impl LocalValidatorAggregatorProxy {
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: &str,
+        reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
         td_percentage: u8,
@@ -310,7 +312,7 @@ impl LocalValidatorAggregatorProxy {
         let (aggregator, reconfig_observer): (
             Arc<_>,
             Arc<dyn ReconfigObserver<NetworkAuthorityClient> + Sync + Send>,
-        ) = {
+        ) = if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
             info!(
                 "Using FullNodeReconfigObserver: {:?}",
                 reconfig_fullnode_rpc_url
@@ -326,8 +328,16 @@ impl LocalValidatorAggregatorProxy {
                 .await,
             );
             (Arc::new(aggregator), reconfig_observer)
+        } else {
+            info!("Using EmbeddedReconfigObserver");
+            let reconfig_observer = Arc::new(EmbeddedReconfigObserver::new());
+            // Get the latest committee from config observer
+            let aggregator = reconfig_observer
+                .get_committee(Arc::new(aggregator))
+                .await
+                .expect("Failed to get latest committee");
+            (aggregator, reconfig_observer)
         };
-
         let qd_handler_builder =
             QuorumDriverHandlerBuilder::new(aggregator.clone(), quorum_driver_metrics.clone())
                 .with_reconfig_observer(reconfig_observer.clone());
