@@ -377,12 +377,6 @@ pub struct RawValidatorHealthResponse {
     /// Current checkpoint sequence number
     #[prost(uint64, optional, tag = "4")]
     pub checkpoint_sequence: Option<u64>,
-    /// Last consensus scores
-    #[prost(uint64, repeated, tag = "5")]
-    pub last_consensus_scores: Vec<u64>,
-    /// Last consensus scores index
-    #[prost(uint64, optional, tag = "6")]
-    pub last_consensus_scores_index: Option<u64>,
 }
 
 /// Request for validator health information (used for latency measurement)
@@ -400,10 +394,6 @@ pub struct ValidatorHealthResponse {
     pub last_committed_leader_round: u32,
     /// Last locally built checkpoint sequence number
     pub last_locally_built_checkpoint: u64,
-    /// Last consensus scores
-    pub last_consensus_scores: Vec<u64>,
-    /// Last consensus scores index
-    pub last_consensus_scores_index: u64,
 }
 
 /// Raw protobuf request for validator latency measurement (evolvable)
@@ -462,8 +452,6 @@ impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
             inflight_consensus_messages: Some(value.num_inflight_consensus_transactions),
             consensus_round: Some(value.last_committed_leader_round as u64),
             checkpoint_sequence: Some(value.last_locally_built_checkpoint),
-            last_consensus_scores: value.last_consensus_scores,
-            last_consensus_scores_index: Some(value.last_consensus_scores_index),
         })
     }
 }
@@ -477,8 +465,6 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             num_inflight_execution_transactions: value.pending_certificates.unwrap_or(0),
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
-            last_consensus_scores: value.last_consensus_scores,
-            last_consensus_scores_index: value.last_consensus_scores_index.unwrap_or(0),
         })
     }
 }

@@ -43,7 +43,6 @@ pub struct ValidatorClientMonitor<A: Clone> {
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     cached_scores: RwLock<Option<HashMap<AuthorityName, f64>>>,
-    last_consensus_scores: RwLock<Option<(u64, Vec<u64>)>>,
     tx_type: TxType,
 }
 
@@ -68,7 +67,6 @@ where
             client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
             cached_scores: RwLock::new(None),
-            last_consensus_scores: RwLock::new(None),
             tx_type,
         });
 
@@ -128,7 +126,7 @@ where
                     .await
                     {
                         // TODO: Actually use the response details.
-                        Ok(Ok(response)) => {
+                        Ok(Ok(_response)) => {
                             let latency = start.elapsed();
                             monitor.record_interaction_result(OperationFeedback {
                                 authority_name: name,
@@ -136,10 +134,6 @@ where
                                 operation: OperationType::HealthCheck,
                                 result: Ok(latency),
                             });
-                            monitor.set_last_consensus_scores(
-                                response.last_consensus_scores_index,
-                                response.last_consensus_scores,
-                            );
                         }
                         Ok(Err(_)) => {
                             let _latency = start.elapsed();
@@ -398,96 +392,6 @@ impl<A: Clone> ValidatorClientMonitor<A> {
 
         let mut client_stats = self.client_stats.write();
         client_stats.record_interaction_result(feedback, &self.metrics, self.tx_type);
-    }
-
-    pub fn set_last_consensus_scores(&self, commit_index: u64, last_consensus_scores: Vec<u64>) {
-        if last_consensus_scores.is_empty() {
-            return;
-        }
-
-        let mut scores = self.last_consensus_scores.write();
-        if let Some(scores_val) = scores.as_ref() {
-            if scores_val.0 >= commit_index {
-                return;
-            }
-        }
-
-        // updating scores
-        for (score, authority_name) in last_consensus_scores
-            .iter()
-            .zip(self.authority_aggregator.load().committee.names())
-        {
-            let display_name = self
-                .authority_aggregator
-                .load()
-                .get_display_name(authority_name);
-            debug!("Validator {}: score {}", display_name, score);
-        }
-
-        *scores = Some((commit_index, last_consensus_scores));
-    }
-
-    /// Select validators based on client-observed performance with shuffled top k.
-    ///
-    /// We need to pass the current committee here because it is possible
-    /// that the fullnode is in the middle of a committee change when this
-    /// is called, and we need to maintain an invariant that the selected
-    /// validators are always in the committee passed in.
-    ///
-    /// We shuffle the top k validators to avoid the same validator being selected
-    /// too many times in a row and getting overloaded.
-    ///
-    /// Returns a vector containing:
-    /// 1. The top `k` validators by score (shuffled)
-    /// 2. The remaining validators ordered by score (not shuffled)
-    pub fn select_shuffled_preferred_validators_consensus(
-        &self,
-        committee: &Committee,
-        k: usize,
-        // TODO: Pass in the operation type so that we can select validators based on the operation type.
-    ) -> Vec<AuthorityName> {
-        let mut rng = rand::thread_rng();
-
-        let Some(cached_scores) = self.last_consensus_scores.read().clone() else {
-            let mut validators: Vec<_> = committee.names().cloned().collect();
-            validators.shuffle(&mut rng);
-            return validators;
-        };
-
-        let cached_scores = cached_scores.1.clone();
-
-        // Since the cached scores are updated periodically, it is possible that it was ran on
-        // an out-of-date committee.
-        let mut validator_with_scores: Vec<_> = committee
-            .names()
-            .zip(cached_scores.iter())
-            .map(|(v, score)| (*v, *score))
-            .collect();
-        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-        let k = k.min(validator_with_scores.len());
-
-        let mut result = Vec::with_capacity(validator_with_scores.len());
-
-        if k > 0 {
-            // For the top K elements, use weighted random selection
-            let top_k = &validator_with_scores[..k];
-
-            let selected = top_k
-                .choose_multiple_weighted(&mut rng, k, |(_, score)| *score as f64)
-                .expect("Failed to select weighted validators")
-                .map(|(validator, _)| *validator)
-                .collect::<Vec<_>>();
-
-            result.extend(selected);
-        }
-
-        // Add the remaining elements in score descending order
-        for (validator, _) in &validator_with_scores[k..] {
-            result.push(*validator);
-        }
-
-        result
     }
 
     pub fn select_shuffled_preferred_validators(
