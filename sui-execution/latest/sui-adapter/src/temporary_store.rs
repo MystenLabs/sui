@@ -450,12 +450,12 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn save_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
         #[cfg(debug_assertions)]
         {
-            self.generated_runtime_ids
-                .iter()
-                .for_each(|id| assert!(!generated_ids.contains(id)));
-            generated_ids.iter().for_each(|id| {
+            for id in &self.generated_runtime_ids {
+                assert!(!generated_ids.contains(id))
+            }
+            for id in &generated_ids {
                 assert!(!self.generated_runtime_ids.contains(id));
-            });
+            }
         }
         self.generated_runtime_ids.extend(generated_ids);
     }
