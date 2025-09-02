@@ -11,7 +11,7 @@ use sui_types::transaction::{Transaction, TransactionData};
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
-use crate::metrics::FullNodeClientMetrics;
+use crate::metrics::FullnodeClientMetrics;
 
 /// Like `anyhow::bail!`, but returns this module's `Error` type, not `anyhow::Error`.
 macro_rules! bail {
@@ -21,17 +21,17 @@ macro_rules! bail {
 }
 
 #[derive(clap::Args, Debug, Clone, Default)]
-pub struct FullNodeArgs {
+pub struct FullnodeArgs {
     /// gRPC URL for full node operations such as executeTransaction and simulateTransaction.
     #[clap(long)]
-    pub full_node_rpc_url: Option<String>,
+    pub fullnode_rpc_url: Option<String>,
 }
 
 /// A client for executing transactions via the full node gRPC service.
 #[derive(Clone)]
-pub struct FullNodeClient {
+pub struct FullnodeClient {
     client: Option<Client>,
-    metrics: Arc<FullNodeClientMetrics>,
+    metrics: Arc<FullnodeClientMetrics>,
     cancel: CancellationToken,
 }
 
@@ -47,20 +47,20 @@ pub enum Error {
     GrpcExecutionError(#[from] tonic::Status),
 }
 
-impl FullNodeClient {
+impl FullnodeClient {
     pub async fn new(
         prefix: Option<&str>,
-        args: FullNodeArgs,
+        args: FullnodeArgs,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let client = if let Some(url) = &args.full_node_rpc_url {
+        let client = if let Some(url) = &args.fullnode_rpc_url {
             Some(Client::new(url).context("Failed to create gRPC client")?)
         } else {
             None
         };
 
-        let metrics = FullNodeClientMetrics::new(prefix, registry);
+        let metrics = FullnodeClientMetrics::new(prefix, registry);
 
         Ok(Self {
             client,

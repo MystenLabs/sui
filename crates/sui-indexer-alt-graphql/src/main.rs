@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Rpc {
             database_url,
             bigtable_instance,
-            full_node,
+            fullnode_args,
             db_args,
             bigtable_args,
             consistent_reader_args,
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
             let h_rpc = start_rpc(
                 Some(database_url),
                 bigtable_instance,
-                full_node,
+                fullnode_args,
                 db_args,
                 bigtable_args,
                 consistent_reader_args,

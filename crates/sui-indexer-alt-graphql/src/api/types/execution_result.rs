@@ -5,7 +5,7 @@ use async_graphql::SimpleObject;
 
 use super::transaction_effects::TransactionEffects;
 
-/// The execution result of a transaction, including the transaction effects and any gRPC errors.
+/// The execution result of a transaction, including the transaction effects and any potential errors due to signing or quorum-driving.
 #[derive(Clone, SimpleObject)]
 pub struct ExecutionResult {
     /// The effects of the transaction execution, if successful.

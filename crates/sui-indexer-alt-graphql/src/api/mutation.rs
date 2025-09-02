@@ -4,8 +4,8 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Object, Result};
 use fastcrypto::encoding::{Base64, Encoding};
-use sui_indexer_alt_reader::full_node_client::Error::GrpcExecutionError;
-use sui_indexer_alt_reader::full_node_client::FullNodeClient;
+use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
+use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
@@ -37,7 +37,7 @@ impl Mutation {
         signatures: Vec<String>,
     ) -> Result<ExecutionResult, RpcError> {
         // Get the gRPC client from context
-        let full_node_client: &FullNodeClient = ctx.data()?;
+        let fullnode_client: &FullnodeClient = ctx.data()?;
 
         // Parse transaction data from Base64 BCS
         let tx_data: TransactionData = {
@@ -60,7 +60,7 @@ impl Mutation {
         }
 
         // Execute transaction - capture gRPC errors for ExecutionResult.errors
-        match full_node_client
+        match fullnode_client
             .execute_transaction(tx_data, parsed_signatures)
             .await
         {

@@ -33,7 +33,7 @@ pub(crate) struct ConsistentReaderMetrics {
 }
 
 #[derive(Clone)]
-pub(crate) struct FullNodeClientMetrics {
+pub(crate) struct FullnodeClientMetrics {
     pub latency: HistogramVec,
     pub requests_received: IntCounterVec,
     pub requests_succeeded: IntCounterVec,
@@ -120,9 +120,9 @@ impl ConsistentReaderMetrics {
     }
 }
 
-impl FullNodeClientMetrics {
+impl FullnodeClientMetrics {
     pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
-        let prefix = prefix.unwrap_or("full_node_client");
+        let prefix = prefix.unwrap_or("fullnode_client");
         let name = |n| format!("{prefix}_{n}");
 
         Arc::new(Self {

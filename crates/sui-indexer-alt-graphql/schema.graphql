@@ -730,7 +730,7 @@ type ExecutionError {
 }
 
 """
-The execution result of a transaction, including the transaction effects and any gRPC errors.
+The execution result of a transaction, including the transaction effects and any potential errors due to signing or quorum-driving.
 """
 type ExecutionResult {
 	"""
