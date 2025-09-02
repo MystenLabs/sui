@@ -131,7 +131,9 @@ pub(crate) fn tx_bounds_query(
     )
 }
 
-pub(crate) fn tx_digest_query(digest: Digest) -> Query<'static> {
+/// The tx_sequence_number of the transaction with the given digest.
+/// Returned as tx_sequence_number (tx_lo) and tx_sequence_number + 1 (tx_hi) to make it easier to use in queries.
+pub(crate) fn tx_bounds_by_digest_query(digest: Digest) -> Query<'static> {
     query!(
         r#"
         SELECT tx_sequence_number as tx_lo, tx_sequence_number + 1 as tx_hi FROM tx_digests WHERE tx_digest = {Bytea}"#,

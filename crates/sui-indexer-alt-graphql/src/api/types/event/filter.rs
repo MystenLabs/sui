@@ -70,7 +70,7 @@ impl EventFilter {
 
         let query = match (self.sender, &self.module, &self.type_) {
             (_, None, None) => {
-                // No type or module filter - just use tx_bounds and sender
+                // No type or module filter - just use tx_bounds and sender if provided.
                 query!(
                     r#"
                     WITH bounds AS ({})
@@ -83,12 +83,10 @@ impl EventFilter {
                     sender_filter
                 )
             }
-            (_, None, Some(event_type)) => {
-                // Event type filter
-                match event_type {
-                    TypeFilter::Package(package) => {
-                        query!(
-                            r#"
+            (_, None, Some(event_type)) => match event_type {
+                TypeFilter::Package(package) => {
+                    query!(
+                        r#"
                             WITH bounds AS ({})
                             SELECT tx_sequence_number FROM ev_struct_inst, bounds
                             WHERE package = {Bytea} 
@@ -96,14 +94,14 @@ impl EventFilter {
                             AND tx_sequence_number < bounds.tx_hi
                             {}
                             "#,
-                            tx_bounds_subquery,
-                            package.into_vec(),
-                            sender_filter
-                        )
-                    }
-                    TypeFilter::Module(package, module) => {
-                        query!(
-                            r#"
+                        tx_bounds_subquery,
+                        package.into_vec(),
+                        sender_filter
+                    )
+                }
+                TypeFilter::Module(package, module) => {
+                    query!(
+                        r#"
                             WITH bounds AS ({})
                             SELECT tx_sequence_number FROM ev_struct_inst, bounds
                             WHERE package = {Bytea} AND module = {Text} 
@@ -111,21 +109,21 @@ impl EventFilter {
                             AND tx_sequence_number < bounds.tx_hi
                             {}
                             "#,
-                            tx_bounds_subquery,
-                            package.into_vec(),
-                            module,
-                            sender_filter
-                        )
-                    }
-                    TypeFilter::Type(tag) => {
-                        let package = tag.address.to_vec();
-                        let module = tag.module.to_string();
-                        let name = tag.name.as_str().to_owned();
-                        let type_params_bytes = bcs::to_bytes(&tag.type_params)
-                            .context("Failed to serialize type parameters")?;
+                        tx_bounds_subquery,
+                        package.into_vec(),
+                        module,
+                        sender_filter
+                    )
+                }
+                TypeFilter::Type(tag) => {
+                    let package = tag.address.to_vec();
+                    let module = tag.module.to_string();
+                    let name = tag.name.as_str().to_owned();
+                    let type_params_bytes = bcs::to_bytes(&tag.type_params)
+                        .context("Failed to serialize type parameters")?;
 
-                        query!(
-                            r#"
+                    query!(
+                        r#"
                             WITH bounds AS ({})
                             SELECT tx_sequence_number FROM ev_struct_inst, bounds
                             WHERE 
@@ -134,22 +132,19 @@ impl EventFilter {
                             AND tx_sequence_number < bounds.tx_hi
                             {}
                             "#,
-                            tx_bounds_subquery,
-                            package,
-                            module,
-                            name,
-                            type_params_bytes,
-                            sender_filter
-                        )
-                    }
+                        tx_bounds_subquery,
+                        package,
+                        module,
+                        name,
+                        type_params_bytes,
+                        sender_filter
+                    )
                 }
-            }
-            (_, Some(module), None) => {
-                // Module filter
-                match module {
-                    ModuleFilter::Package(package) => {
-                        query!(
-                            r#"
+            },
+            (_, Some(module), None) => match module {
+                ModuleFilter::Package(package) => {
+                    query!(
+                        r#"
                             WITH bounds AS ({})
                             SELECT tx_sequence_number FROM ev_emit_mod, bounds
                             WHERE package = {Bytea} 
@@ -157,14 +152,14 @@ impl EventFilter {
                             AND tx_sequence_number < bounds.tx_hi
                             {}
                             "#,
-                            tx_bounds_subquery,
-                            package.into_vec(),
-                            sender_filter
-                        )
-                    }
-                    ModuleFilter::Module(package, module) => {
-                        query!(
-                            r#"
+                        tx_bounds_subquery,
+                        package.into_vec(),
+                        sender_filter
+                    )
+                }
+                ModuleFilter::Module(package, module) => {
+                    query!(
+                        r#"
                             WITH bounds AS ({})
                             SELECT tx_sequence_number FROM ev_emit_mod, bounds
                             WHERE package = {Bytea} AND module = {Text} 
@@ -172,14 +167,13 @@ impl EventFilter {
                             AND tx_sequence_number < bounds.tx_hi
                             {}
                             "#,
-                            tx_bounds_subquery,
-                            package.into_vec(),
-                            module,
-                            sender_filter
-                        )
-                    }
+                        tx_bounds_subquery,
+                        package.into_vec(),
+                        module,
+                        sender_filter
+                    )
                 }
-            }
+            },
             (_, Some(_), Some(_)) => {
                 return Err(feature_unavailable(
                     "Filtering by both emitting module and event type is not supported",

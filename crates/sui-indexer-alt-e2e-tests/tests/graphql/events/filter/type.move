@@ -56,7 +56,7 @@ module test::events_test {
 //# create-checkpoint
 
 // Transaction that emits a single event
-//# run test::events_test::emit_event --sender A --args 42
+//# run test::events_test::emit_event --sender B --args 42
 
 // Transaction that emits multiple events
 //# run test::events_test::emit_multiple_events --sender A
@@ -64,7 +64,7 @@ module test::events_test {
 //# create-checkpoint
 
 // Transaction that emits multiple events
-//# run test::events_test::emit_multiple_events --sender A
+//# run test::events_test::emit_multiple_events --sender B
 
 // Transaction with no events (transfer)
 //# programmable --sender A --inputs 100 @B
@@ -80,12 +80,22 @@ module test::events_test {
       ...E
     }
   }
-  eventsOfTypeTestEvent: events(first: 50, filter: {type: "0xc1cce56ea94b622b2e115e9393f270ed68c856803cbadf7e954a5bebffc0857e::events_test::TestEvent"}) {
+  eventsOfTypeTestEvent: events(first: 50, filter: {type: "@{test}::events_test::TestEvent"}) {
     nodes {
       ...E
     }
   }
-  eventsOfTypeTestEvent2: events(first: 50, filter: {type: "0xc1cce56ea94b622b2e115e9393f270ed68c856803cbadf7e954a5bebffc0857e::events_test::TestEvent2"}) {
+  eventsOfTypeTestEvent2: events(first: 50, filter: {type: "@{test}::events_test::TestEvent2"}) {
+    nodes {
+      ...E
+    }
+  }
+  eventsOfTypeTestEventBySenderA: events(first: 50, filter: {type: "@{test}::events_test::TestEvent", sender: "@{A}"}) {
+    nodes {
+      ...E
+    }
+  }
+  eventsOfTypeTestEventBySenderB: events(first: 50, filter: {type: "@{test}::events_test::TestEvent", sender: "@{B}"}) {
     nodes {
       ...E
     }
@@ -94,6 +104,7 @@ module test::events_test {
 
 fragment E on Event {
   sequenceNumber
+  sender { address }
   contents { type { repr } }
   transaction {
     digest,

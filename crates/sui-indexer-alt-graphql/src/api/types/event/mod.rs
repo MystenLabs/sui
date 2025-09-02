@@ -33,7 +33,7 @@ use super::{
     move_package::MovePackage,
     move_type::MoveType,
     move_value::MoveValue,
-    transaction::filter::{tx_bounds_query, tx_digest_query},
+    transaction::filter::{tx_bounds_by_digest_query, tx_bounds_query},
     transaction::Transaction,
 };
 
@@ -152,7 +152,7 @@ impl Event {
 
         // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
         let tx_bounds_query = if let Some(digest) = filter.digest {
-            tx_digest_query(digest)
+            tx_bounds_by_digest_query(digest)
         } else {
             tx_bounds_query(
                 &cp_bounds,
