@@ -953,6 +953,13 @@ impl TemporaryStore<'_> {
         let mut total_input_sui = 0;
         // total amount of SUI in output objects, including both coins and storage rebates
         let mut total_output_sui = 0;
+
+        // settlement input/output sui is used by the settlement transactions to accound for
+        // Sui that has been gathered from the accumulator writes of transactions which it is
+        // settling.
+        total_input_sui += self.execution_results.settlement_input_sui;
+        total_output_sui += self.execution_results.settlement_output_sui;
+
         for (id, input, output) in self.get_modified_objects() {
             if let Some(input) = input {
                 total_input_sui += self.get_input_sui(&id, input.version, layout_resolver)?;
