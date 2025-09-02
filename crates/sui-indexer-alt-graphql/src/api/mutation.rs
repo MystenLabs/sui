@@ -3,14 +3,16 @@
 
 use anyhow::anyhow;
 use async_graphql::{Context, Object, Result};
-use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
-use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use fastcrypto::error::FastCryptoError;
+use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 
+use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
+use crate::api::scalars::base64::Base64;
 use crate::{
-    api::{scalars::base64::Base64, types::execution_result::ExecutionResult},
+    api::types::execution_result::ExecutionResult,
     error::{bad_user_input, RpcError},
 };
 
@@ -18,10 +20,10 @@ use crate::{
 #[derive(thiserror::Error, Debug)]
 enum TransactionInputError {
     #[error("Invalid BCS encoding in transaction data: {0}")]
-    InvalidTransactionBcs(String),
+    InvalidTransactionBcs(bcs::Error),
 
-    #[error("Invalid BCS encoding in signature {index}: {message}")]
-    InvalidSignatureBcs { index: usize, message: String },
+    #[error("Invalid signature format in signature {index}: {err}")]
+    InvalidSignatureFormat { index: usize, err: FastCryptoError },
 }
 
 pub struct Mutation;
@@ -31,7 +33,7 @@ pub struct Mutation;
 impl Mutation {
     /// Execute a transaction, committing its effects on chain.
     ///
-    /// - `transaction_data_bcs` contains the BCS-encoded transaction data (Base64-encoded).
+    /// - `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
     /// - `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
     ///
     /// Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
@@ -49,22 +51,18 @@ impl Mutation {
         // Parse transaction data from BCS
         let tx_data: TransactionData = {
             let bytes: &Vec<u8> = &transaction_data_bcs.0;
-            bcs::from_bytes(bytes).map_err(|e| {
-                bad_user_input(TransactionInputError::InvalidTransactionBcs(e.to_string()))
-            })?
+            bcs::from_bytes(bytes)
+                .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionBcs(err)))?
         };
 
-        // Parse signatures from BCS
+        // Parse signatures from raw bytes
         let mut parsed_signatures = Vec::new();
-        for (i, sig_base64) in signatures.iter().enumerate() {
+        for (index, sig_base64) in signatures.iter().enumerate() {
             let sig_bytes: &Vec<u8> = &sig_base64.0;
-            let signature: GenericSignature = bcs::from_bytes(sig_bytes).map_err(|e| {
-                bad_user_input(TransactionInputError::InvalidSignatureBcs {
-                    index: i,
-                    message: e.to_string(),
-                })
-            })?;
-
+            let signature: GenericSignature =
+                GenericSignature::from_bytes(sig_bytes).map_err(|err| {
+                    bad_user_input(TransactionInputError::InvalidSignatureFormat { index, err })
+                })?;
             parsed_signatures.push(signature);
         }
 

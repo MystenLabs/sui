@@ -1308,7 +1308,7 @@ type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
 	
-	- `transaction_data_bcs` contains the BCS-encoded transaction data (Base64-encoded).
+	- `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
 	- `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
 	
 	Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
