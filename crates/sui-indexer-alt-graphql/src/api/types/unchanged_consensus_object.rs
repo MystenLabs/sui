@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Enum, Object, SimpleObject, Union};
+use anyhow::Context as _;
+use async_graphql::{dataloader::DataLoader, Context, Enum, Object, SimpleObject, Union};
+use std::sync::Arc;
+use sui_indexer_alt_reader::{epochs::EpochStartKey, pg_reader::PgReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,
@@ -18,6 +21,15 @@ use super::{
     address::Address,
     object::{self, Object},
 };
+
+/// Context for transaction execution - either a specific checkpoint or an epoch
+#[derive(Copy, Clone)]
+pub(crate) enum ExecutionContext {
+    /// Transaction was executed at a specific checkpoint
+    Checkpoint(u64),
+    /// Transaction was executed in an epoch (for ExecutedTransaction)
+    Epoch(u64),
+}
 
 /// Reason why a transaction that attempted to access a consensus-managed object was cancelled.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -83,15 +95,30 @@ pub(crate) struct ConsensusObjectCancelled {
 pub(crate) struct PerEpochConfig {
     scope: Scope,
     object_id: ObjectID,
-    /// The checkpoint when the transaction was executed (not the current view checkpoint)
-    execution_checkpoint: u64,
+    /// The execution context (checkpoint or epoch) when the transaction was executed
+    execution_context: ExecutionContext,
 }
 
 #[Object]
 impl PerEpochConfig {
-    /// The per-epoch configuration object as of the checkpoint when the transaction was executed.
+    /// The per-epoch configuration object as of when the transaction was executed.
     async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError<object::Error>> {
-        let cp: UInt53 = self.execution_checkpoint.into();
+        let cp_num = match self.execution_context {
+            ExecutionContext::Checkpoint(cp_num) => cp_num,
+            ExecutionContext::Epoch(epoch) => {
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+                let Some(epoch_start) = pg_loader
+                    .load_one(EpochStartKey(epoch))
+                    .await
+                    .context("Failed to fetch epoch start information")?
+                else {
+                    return Ok(None);
+                };
+                epoch_start.cp_lo as u64
+            }
+        };
+
+        let cp: UInt53 = cp_num.into();
         Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
     }
 }
@@ -109,7 +136,7 @@ impl UnchangedConsensusObject {
     pub(crate) fn from_native(
         scope: Scope,
         native: (ObjectID, NativeUnchangedConsensusKind),
-        execution_checkpoint: u64,
+        execution_context: ExecutionContext,
     ) -> Self {
         let (object_id, kind) = native;
 
@@ -153,7 +180,7 @@ impl UnchangedConsensusObject {
             NativeUnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig(PerEpochConfig {
                 scope,
                 object_id,
-                execution_checkpoint,
+                execution_context,
             }),
         }
     }

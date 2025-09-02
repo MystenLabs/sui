@@ -3,41 +3,146 @@
 
 use prometheus::Registry;
 use reqwest::Client;
+use serde::Deserialize;
 use serde_json::{json, Value};
-use simulacrum::Simulacrum;
-use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::FullCluster;
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
-use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
-use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use sui_indexer_alt_graphql::{
+    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+};
+use sui_indexer_alt_reader::{
+    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
+    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+};
 use sui_macros::sim_test;
+use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::base_types::SuiAddress;
-use test_cluster::{TestCluster, TestClusterBuilder};
-use tokio_util::sync::CancellationToken;
 
-async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> FullCluster {
-    FullCluster::new_with_configs(
-        Simulacrum::new(),
-        OffchainClusterConfig {
-            fullnode_args: FullnodeArgs {
-                fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
-            },
-            ..Default::default()
-        },
+use tokio_util::sync::CancellationToken;
+use url::Url;
+
+use sui_types::{
+    base_types::SuiAddress, programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::ObjectArg,
+};
+use test_cluster::{TestCluster, TestClusterBuilder};
+
+// Unified struct for all GraphQL transaction effects parsing
+#[derive(Debug, Deserialize)]
+struct TransactionEffects {
+    status: String,
+    checkpoint: Option<serde_json::Value>,
+    transaction: Option<TransactionDetails>,
+    events: Option<Events>,
+    #[serde(rename = "unchangedConsensusObjects")]
+    unchanged_consensus_objects: Option<UnchangedConsensusObjects>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TransactionDetails {
+    sender: Sender,
+    #[serde(rename = "gasInput")]
+    gas_input: GasInput,
+    signatures: Vec<Signature>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Sender {
+    address: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GasInput {
+    #[serde(rename = "gasBudget")]
+    gas_budget: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Signature {
+    #[serde(rename = "signatureBytes")]
+    signature_bytes: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Events {
+    nodes: Vec<EventNode>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EventNode {
+    #[serde(rename = "eventBcs")]
+    event_bcs: String,
+    sender: Sender,
+}
+
+#[derive(Debug, Deserialize)]
+struct UnchangedConsensusObjects {
+    edges: Vec<UnchangedConsensusObjectEdge>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UnchangedConsensusObjectEdge {
+    node: UnchangedConsensusObjectNode,
+}
+
+#[derive(Debug, Deserialize)]
+struct UnchangedConsensusObjectNode {
+    #[serde(rename = "__typename")]
+    typename: String,
+    object: Option<ConsensusObject>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConsensusObject {
+    address: String,
+    version: u64,
+}
+
+async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> Url {
+    let graphql_port = get_available_port();
+    let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
+
+    let graphql_args = GraphQlArgs {
+        rpc_listen_address: graphql_listen_address,
+        no_ide: true,
+    };
+
+    let fullnode_args = FullnodeArgs {
+        fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
+    };
+
+    let cancel = CancellationToken::new();
+
+    // Start GraphQL server that connects directly to TestCluster's RPC
+    let _graphql_handle = start_graphql(
+        None, // No database - GraphQL will use fullnode RPC for executeTransaction
+        None, // No bigtable
+        fullnode_args,
+        DbArgs::default(),
+        BigtableArgs::default(),
+        ConsistentReaderArgs::default(),
+        graphql_args,
+        SystemPackageTaskArgs::default(),
+        "0.0.0",
+        GraphQlConfig::default(),
+        vec![], // No pipelines since we're not using database
         &Registry::new(),
-        CancellationToken::new(),
+        cancel.child_token(),
     )
     .await
-    .expect("Failed to create GraphQL test cluster")
+    .expect("Failed to start GraphQL server");
+
+    Url::parse(&format!("http://{}/graphql", graphql_listen_address))
+        .expect("Failed to parse GraphQL URL")
 }
 
 #[sim_test]
 async fn test_execute_transaction_mutation_schema() {
-    let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1) // Reduce resource usage for CI
+        .build()
+        .await;
+
+    let graphql_url = create_graphql_test_cluster(&validator_cluster).await;
 
     // Create a simple transfer transaction for testing
     let recipient = SuiAddress::random_for_testing_only();
@@ -48,11 +153,11 @@ async fn test_execute_transaction_mutation_schema() {
 
     let client = Client::new();
     let response = client
-        .post(graphql_cluster.graphql_url())
+        .post(graphql_url.clone())
         .json(&json!({
             "query": r#"
-            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
-                executeTransaction(transaction: $tx, signatures: $sigs) {
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects {
                         digest
                         status
@@ -72,7 +177,7 @@ async fn test_execute_transaction_mutation_schema() {
             }
         "#,
             "variables": {
-                "tx": { "transactionDataBcs": tx_bytes.encoded() },
+                "txData": tx_bytes.encoded(),
                 "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
             }
         }))
@@ -81,70 +186,56 @@ async fn test_execute_transaction_mutation_schema() {
         .expect("GraphQL request failed");
 
     // Verify successful fresh execution
-    let result: Value = response.json().await.expect("Failed to parse response");
-    let data = result.get("data").expect("Should have data");
-    let execute_result = data
-        .get("executeTransaction")
-        .expect("Should have executeTransaction");
-    let effects = execute_result.get("effects").expect("Should have effects");
-    let transaction = effects.get("transaction").expect("Should have transaction");
+    let result: Value = response.json().await.unwrap();
+    let effects: TransactionEffects = serde_json::from_value(
+        result
+            .pointer("/data/executeTransaction/effects")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+    let errors = result.pointer("/data/executeTransaction/errors");
 
-    let status = effects.get("status").unwrap().as_str().unwrap();
-    let checkpoint = effects.get("checkpoint");
-    let errors = execute_result.get("errors");
-    let sender_address = transaction
-        .get("sender")
-        .unwrap()
-        .get("address")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    let gas_budget = transaction
-        .get("gasInput")
-        .unwrap()
-        .get("gasBudget")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    let returned_sigs = transaction.get("signatures").unwrap().as_array().unwrap();
-
-    assert_eq!(status, "SUCCESS");
-    assert_eq!(checkpoint, Some(&serde_json::Value::Null));
+    assert_eq!(effects.status, "SUCCESS");
+    assert_eq!(effects.checkpoint, None); // ExecutedTransaction has no checkpoint yet
     assert_eq!(errors, Some(&serde_json::Value::Null));
 
     // Verify transaction data matches original
+    let transaction = effects.transaction.unwrap();
     assert_eq!(
-        sender_address,
+        transaction.sender.address,
         validator_cluster.get_address_0().to_string()
     );
-    assert_eq!(gas_budget, "10000000");
-    assert_eq!(returned_sigs.len(), signatures.len());
-    for (returned, original) in returned_sigs.iter().zip(signatures.iter()) {
-        let sig_bytes = returned.get("signatureBytes").unwrap().as_str().unwrap();
-        assert_eq!(sig_bytes, original.encoded());
+    assert_eq!(transaction.gas_input.gas_budget, "10000000");
+    assert_eq!(transaction.signatures.len(), signatures.len());
+    for (returned, original) in transaction.signatures.iter().zip(signatures.iter()) {
+        assert_eq!(returned.signature_bytes, original.encoded());
     }
 }
 
 #[sim_test]
 async fn test_execute_transaction_input_validation() {
-    let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let graphql_url = create_graphql_test_cluster(&validator_cluster).await;
     let client = Client::new();
 
     // Test invalid Base64 transaction data
     let result = client
-        .post(graphql_cluster.graphql_url())
+        .post(graphql_url.clone())
         .json(&json!({
             "query": r#"
-            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
-                executeTransaction(transaction: $tx, signatures: $sigs) {
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects { digest }
                     errors
                 }
             }
         "#,
             "variables": {
-                "tx": { "transactionDataBcs": "invalid_base64!" },
+                "txData": "invalid_base64!",
                 "sigs": ["invalidSignature"]
             }
         }))
@@ -154,16 +245,18 @@ async fn test_execute_transaction_input_validation() {
         .json::<Value>()
         .await
         .unwrap();
+
     assert!(result.get("errors").is_some());
 }
 
 #[sim_test]
 async fn test_execute_transaction_with_events() {
     let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .enable_fullnode_events()
         .build()
         .await;
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let graphql_url = create_graphql_test_cluster(&validator_cluster).await;
 
     // Publish our test package which emits events in its init function
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packages/emit_event");
@@ -177,11 +270,11 @@ async fn test_execute_transaction_with_events() {
 
     let client = Client::new();
     let response = client
-        .post(graphql_cluster.graphql_url())
+        .post(graphql_url.clone())
         .json(&json!({
             "query": r#"
-            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
-                executeTransaction(transaction: $tx, signatures: $sigs) {
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects {
                         digest
                         status
@@ -197,7 +290,7 @@ async fn test_execute_transaction_with_events() {
             }
         "#,
             "variables": {
-                "tx": { "transactionDataBcs": tx_bytes.encoded() },
+                "txData": tx_bytes.encoded(),
                 "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
             }
         }))
@@ -205,38 +298,33 @@ async fn test_execute_transaction_with_events() {
         .await
         .expect("GraphQL request failed");
 
-    let result: Value = response.json().await.expect("Failed to parse response");
-    let data = result.get("data").expect("Should have data");
-    let execute_result = data
-        .get("executeTransaction")
-        .expect("Should have executeTransaction");
-    let effects = execute_result.get("effects").expect("Should have effects");
+    let result: Value = response.json().await.unwrap();
+    let effects: TransactionEffects = serde_json::from_value(
+        result
+            .pointer("/data/executeTransaction/effects")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+    let errors = result.pointer("/data/executeTransaction/errors");
 
-    // Verify events structure and content
-    let events = effects.get("events").expect("Should have events field");
-    let event_nodes = events
-        .get("nodes")
-        .expect("Should have event nodes")
-        .as_array()
-        .unwrap();
+    assert_eq!(effects.status, "SUCCESS");
+    assert_eq!(errors, Some(&serde_json::Value::Null));
 
-    assert_eq!(effects.get("status").unwrap().as_str().unwrap(), "SUCCESS");
+    let events = effects.events.unwrap();
     assert!(
-        !event_nodes.is_empty(),
+        !events.nodes.is_empty(),
         "Package publish should emit events from init function"
     );
 
     let sender_address = validator_cluster.get_address_0();
-    for event_node in event_nodes {
-        let sender = event_node.get("sender").expect("Event should have sender");
-        let sender_addr = sender.get("address").unwrap().as_str().unwrap();
-
+    for event_node in &events.nodes {
         assert!(
-            event_node.get("eventBcs").is_some(),
+            !event_node.event_bcs.is_empty(),
             "Event should have eventBcs"
         );
         assert_eq!(
-            sender_addr,
+            event_node.sender.address,
             sender_address.to_string(),
             "Event sender should match transaction sender"
         );
@@ -245,8 +333,11 @@ async fn test_execute_transaction_with_events() {
 
 #[sim_test]
 async fn test_execute_transaction_grpc_errors() {
-    let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let graphql_url = create_graphql_test_cluster(&validator_cluster).await;
 
     // Create signature mismatch scenario: use transaction data from one tx with signatures from another
     let recipient1 = SuiAddress::random_for_testing_only();
@@ -265,11 +356,11 @@ async fn test_execute_transaction_grpc_errors() {
     // This will pass GraphQL validation but fail at gRPC execution due to signature mismatch
     let client = Client::new();
     let response = client
-        .post(graphql_cluster.graphql_url())
+        .post(graphql_url.clone())
         .json(&json!({
             "query": r#"
-            mutation($tx: TransactionExecutionInput!, $sigs: [String!]!) {
-                executeTransaction(transaction: $tx, signatures: $sigs) {
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects {
                         digest
                         status
@@ -279,7 +370,7 @@ async fn test_execute_transaction_grpc_errors() {
             }
         "#,
             "variables": {
-                "tx": { "transactionDataBcs": tx1_bytes.encoded() },
+                "txData": tx1_bytes.encoded(),
                 "sigs": tx2_signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
             }
         }))
@@ -287,23 +378,117 @@ async fn test_execute_transaction_grpc_errors() {
         .await
         .expect("GraphQL request failed");
 
-    let result: Value = response.json().await.expect("Failed to parse response");
-    let data = result.get("data").expect("Should have data");
-    let execute_result = data
-        .get("executeTransaction")
-        .expect("Should have executeTransaction");
+    let result: Value = response.json().await.unwrap();
+    let effects = result.pointer("/data/executeTransaction/effects");
+    let errors = result.pointer("/data/executeTransaction/errors").unwrap();
 
-    // Verify gRPC execution failure response structure
-    let effects = execute_result.get("effects");
     assert_eq!(
         effects,
         Some(&serde_json::Value::Null),
         "Should have null effects on gRPC error"
     );
-
-    let errors = execute_result
-        .get("errors")
-        .expect("Should have errors field");
-    let error_array = errors.as_array().expect("Errors should be an array");
+    let error_array = errors.as_array().unwrap();
     assert!(!error_array.is_empty());
+}
+
+#[sim_test]
+async fn test_execute_transaction_unchanged_consensus_objects() {
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let graphql_url = create_graphql_test_cluster(&validator_cluster).await;
+
+    // Create a read-only transaction that accesses the Clock object
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let clock_arg = ptb
+        .obj(ObjectArg::SharedObject {
+            id: sui_types::SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: sui_types::base_types::SequenceNumber::from_u64(1),
+            mutable: false,
+        })
+        .unwrap();
+
+    ptb.programmable_move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        "clock".parse().unwrap(),
+        "timestamp_ms".parse().unwrap(),
+        vec![],
+        vec![clock_arg],
+    );
+
+    let tx_data = validator_cluster
+        .test_transaction_builder()
+        .await
+        .programmable(ptb.finish())
+        .build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let client = Client::new();
+    let response = client
+        .post(graphql_url.clone())
+        .json(&json!({
+            "query": r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects {
+                        digest
+                        status
+                        unchangedConsensusObjects {
+                            edges {
+                                node {
+                                    __typename
+                                    ... on ConsensusObjectRead {
+                                        object {
+                                            address
+                                            version
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    errors
+                }
+            }
+        "#,
+            "variables": {
+                "txData": tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }
+        }))
+        .send()
+        .await
+        .expect("GraphQL request failed");
+
+    let result: Value = response.json().await.unwrap();
+
+    let effects: TransactionEffects = serde_json::from_value(
+        result
+            .pointer("/data/executeTransaction/effects")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+    let errors = result.pointer("/data/executeTransaction/errors");
+
+    // Verify the transaction succeeded
+    assert_eq!(effects.status, "SUCCESS");
+    assert_eq!(errors, Some(&serde_json::Value::Null));
+
+    // Verify unchanged consensus objects are returned
+    let consensus_objects = effects.unchanged_consensus_objects.unwrap();
+    assert!(
+        !consensus_objects.edges.is_empty(),
+        "Clock read should create unchanged consensus objects"
+    );
+
+    // Verify the first edge is a ConsensusObjectRead with correct data
+    let first_edge = &consensus_objects.edges[0];
+    assert_eq!(first_edge.node.typename, "ConsensusObjectRead");
+
+    let object = first_edge.node.object.as_ref().unwrap();
+    assert_eq!(object.address, sui_types::SUI_CLOCK_OBJECT_ID.to_string());
+    assert!(object.version > 0, "Version should be greater than 0");
 }

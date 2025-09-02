@@ -14,11 +14,17 @@ use tracing::warn;
 
 /// Repeatedly try to fetch the chain identifier from the database at a given interval, eventually
 /// returning it, or an error if the task was cancelled before it had a chance to complete.
+/// If no database is available, returns a default ChainIdentifier immediately.
 pub(crate) async fn task(
     pg_reader: &PgReader,
     interval: Duration,
     cancel: CancellationToken,
 ) -> anyhow::Result<ChainIdentifier> {
+    // If no database is available, return default chain identifier
+    if !pg_reader.has_database() {
+        return Ok(ChainIdentifier::default());
+    }
+
     let mut interval = time::interval(interval);
 
     loop {

@@ -3,7 +3,7 @@ name = "emit_event"
 edition = "2024.beta"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+Sui = { local = "../../../sui-framework/packages/sui-framework" }
 
 [addresses]
 emit_event = "0x0"

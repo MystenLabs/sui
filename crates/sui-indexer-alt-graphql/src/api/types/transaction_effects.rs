@@ -16,9 +16,13 @@ use sui_indexer_alt_reader::{
     tx_balance_changes::TxBalanceChangeKey,
 };
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
+use sui_rpc_api::client::TransactionExecutionResponse;
 use sui_types::{
-    digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
+    digests::TransactionDigest,
+    effects::TransactionEffectsAPI,
+    execution_status::ExecutionStatus as NativeExecutionStatus,
+    signature::GenericSignature,
+    transaction::{TransactionData, TransactionDataAPI},
 };
 
 use crate::{
@@ -39,7 +43,7 @@ use super::{
     gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
-    unchanged_consensus_object::UnchangedConsensusObject,
+    unchanged_consensus_object::{ExecutionContext, UnchangedConsensusObject},
 };
 
 /// The execution status of this transaction: success or failure.
@@ -100,8 +104,7 @@ impl EffectsContents {
 
         content
             .cp_sequence_number()
-            .map(|cp_num| Checkpoint::with_sequence_number(self.scope.clone(), cp_num))
-            .unwrap_or(None) // ExecutedTransaction can have no checkpoint
+            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), cp))
     }
 
     /// Whether the transaction executed successfully or not.
@@ -345,18 +348,21 @@ impl EffectsContents {
         let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
         let cursors = page.paginate_indices(unchanged_consensus_objects.len());
 
+        let effects = content.effects()?;
+        let execution_context = content
+            .cp_sequence_number()
+            .map(ExecutionContext::Checkpoint)
+            .unwrap_or_else(|| ExecutionContext::Epoch(effects.executed_epoch()));
+
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
-            if let Some(cp_num) = content.cp_sequence_number() {
-                let unchanged_consensus_object = UnchangedConsensusObject::from_native(
-                    self.scope.clone(),
-                    unchanged_consensus_objects[*edge.cursor].clone(),
-                    cp_num,
-                );
-                conn.edges
-                    .push(Edge::new(edge.cursor, unchanged_consensus_object));
-            }
-            // Skip ExecutedTransaction entries (None) as they don't have checkpoint info
+            let unchanged_consensus_object = UnchangedConsensusObject::from_native(
+                self.scope.clone(),
+                unchanged_consensus_objects[*edge.cursor].clone(),
+                execution_context,
+            );
+            conn.edges
+                .push(Edge::new(edge.cursor, unchanged_consensus_object));
         }
 
         Ok(Some(conn))
@@ -397,6 +403,30 @@ impl EffectsContents {
 }
 
 impl TransactionEffects {
+    /// Create a new TransactionEffects from a TransactionExecutionResponse.
+    pub(crate) fn from_execution_response(
+        scope: Scope,
+        response: TransactionExecutionResponse,
+        transaction_data: TransactionData,
+        signatures: Vec<GenericSignature>,
+    ) -> Self {
+        let digest = *response.effects.transaction_digest();
+        let contents = NativeTransactionContents::ExecutedTransaction {
+            effects: Box::new(response.effects),
+            events: response.events.map(|events| events.data),
+            transaction_data,
+            signatures,
+        };
+
+        Self {
+            digest,
+            contents: EffectsContents {
+                scope,
+                contents: Some(Arc::new(contents)),
+            },
+        }
+    }
+
     /// Load the effects from the store, and return it fully inflated (with contents already
     /// fetched). Returns `None` if the effects do not exist (either never existed or were pruned
     /// from the store).

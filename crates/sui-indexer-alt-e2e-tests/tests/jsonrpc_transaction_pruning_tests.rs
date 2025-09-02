@@ -11,16 +11,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-<<<<<<< HEAD
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
-=======
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
-use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
-use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
->>>>>>> dd97c87fb6 (add graphql_execute_transaction_tests)
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},

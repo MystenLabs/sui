@@ -3,9 +3,10 @@
 
 module emit_event::emit_event {
     use sui::event;
+    use std::ascii;
 
     public struct TestEvent has copy, drop {
-        message: vector<u8>,
+        message: ascii::String,
         value: u64,
     }
 
@@ -13,7 +14,7 @@ module emit_event::emit_event {
     // and will emit an event that we can test for
     fun init(_ctx: &mut TxContext) {
         event::emit(TestEvent {
-            message: b"Package published successfully!",
+            message: ascii::string(b"Package published successfully!"),
             value: 42,
         });
     }

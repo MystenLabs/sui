@@ -3,19 +3,16 @@
 
 use anyhow::anyhow;
 use async_graphql::{Context, Object, Result};
-use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
-use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
+use fastcrypto::error::FastCryptoError;
 
+use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
 use crate::{
-    api::types::{
-        execution_result::ExecutionResult,
-        transaction_effects::{EffectsContents, TransactionEffects},
-    },
+    api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},
     error::{bad_user_input, RpcError},
     scope::Scope,
 };
@@ -77,23 +74,12 @@ impl Mutation {
         {
             Ok(response) => {
                 let scope = Scope::new(ctx)?;
-                let transaction_digest = response.effects.transaction_digest();
-
-                // Create TransactionEffects with fresh ExecutedTransaction data
-                let effects = TransactionEffects {
-                    digest: *transaction_digest,
-                    contents: EffectsContents {
-                        scope,
-                        contents: Some(std::sync::Arc::new(
-                            NativeTransactionContents::ExecutedTransaction {
-                                effects: Box::new(response.effects),
-                                events: response.events.map(|events| events.data),
-                                transaction_data: tx_data,
-                                signatures: parsed_signatures,
-                            },
-                        )),
-                    },
-                };
+                let effects = TransactionEffects::from_execution_response(
+                    scope,
+                    response,
+                    tx_data,
+                    parsed_signatures,
+                );
 
                 Ok(ExecutionResult {
                     effects: Some(effects),
