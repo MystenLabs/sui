@@ -265,6 +265,13 @@ impl AuthorityAPI for LocalAuthorityClient {
             }
         })
     }
+
+    async fn validator_latency(
+        &self,
+        _request: sui_types::messages_grpc::RawValidatorLatencyRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorLatencyResponse, SuiError> {
+        Ok(sui_types::messages_grpc::RawValidatorLatencyResponse::default())
+    }
 }
 
 impl LocalAuthorityClient {
@@ -507,6 +514,13 @@ impl AuthorityAPI for MockAuthorityApi {
             }
         })
     }
+
+    async fn validator_latency(
+        &self,
+        _request: sui_types::messages_grpc::RawValidatorLatencyRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorLatencyResponse, SuiError> {
+        Ok(sui_types::messages_grpc::RawValidatorLatencyResponse::default())
+    }
 }
 
 #[derive(Clone)]
@@ -613,6 +627,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _request: sui_types::messages_grpc::RawValidatorHealthRequest,
     ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+        unimplemented!()
+    }
+
+    async fn validator_latency(
+        &self,
+        _request: sui_types::messages_grpc::RawValidatorLatencyRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorLatencyResponse, SuiError> {
         unimplemented!()
     }
 }

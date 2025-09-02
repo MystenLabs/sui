@@ -16,7 +16,10 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
-use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
+use sui_types::{
+    base_types::AuthorityName,
+    messages_grpc::{ValidatorHealthRequest, ValidatorLatencyRequest},
+};
 use tokio::{
     task::JoinSet,
     time::{interval, timeout},
@@ -165,8 +168,166 @@ where
                 }
             }
 
+            // Run latency checks on all validators
+            self.clone().run_latency_checks().await;
+
             self.update_cached_scores();
         }
+    }
+
+    /// Run latency checks on all validators using two-phase measurement.
+    ///
+    /// Phase 1: Get consensus position from each validator
+    /// Phase 2: Use position to measure quorum latency similar to get_certified_finalized_effects
+    async fn run_latency_checks(self: Arc<Self>) {
+        let authority_agg = self.authority_aggregator.load();
+        let mut tasks = JoinSet::new();
+
+        for (name, safe_client) in authority_agg.authority_clients.iter() {
+            let name = *name;
+            let display_name = authority_agg.get_display_name(&name);
+            let client = safe_client.clone();
+            let timeout_duration = self.config.health_check_timeout;
+            let monitor = self.clone();
+            let authority_agg_clone = authority_agg.clone();
+
+            tasks.spawn(async move {
+                monitor
+                    .measure_validator_latency(
+                        name,
+                        display_name,
+                        client,
+                        authority_agg_clone,
+                        timeout_duration,
+                    )
+                    .await;
+            });
+        }
+
+        while let Some(result) = tasks.join_next().await {
+            if let Err(e) = result {
+                warn!("Latency check task failed: {}", e);
+            }
+        }
+    }
+
+    /// Measure latency for a single validator using two-phase approach
+    async fn measure_validator_latency(
+        self: Arc<Self>,
+        validator_name: AuthorityName,
+        display_name: String,
+        client: Arc<crate::safe_client::SafeClient<A>>,
+        authority_agg: Arc<crate::authority_aggregator::AuthorityAggregator<A>>,
+        timeout_duration: std::time::Duration,
+    ) {
+        // Get consensus position from this validator
+        // Start measuring latency from here and broadcast to all validators
+        let start_time = Instant::now();
+
+        let consensus_position = match timeout(
+            timeout_duration,
+            client.validator_latency(ValidatorLatencyRequest {
+                consensus_position: None,
+            }),
+        )
+        .await
+        {
+            Ok(Ok(response)) => {
+                if let Some(pos) = response.consensus_position {
+                    pos
+                } else {
+                    return;
+                }
+            }
+            _ => {
+                warn!("Failed to get consensus position from {}", display_name);
+                return;
+            }
+        };
+
+        match Self::wait_for_latency_quorum(&authority_agg, consensus_position, timeout_duration)
+            .await
+        {
+            Ok(_) => {
+                let end_to_end_latency = start_time.elapsed();
+                self.record_interaction_result(OperationFeedback {
+                    authority_name: validator_name,
+                    display_name,
+                    operation: OperationType::Finalize,
+                    result: Ok(end_to_end_latency),
+                });
+            }
+            Err(_) => {
+                warn!(
+                    "Failed to get latency quorum from validators for {} in consensus position {}",
+                    display_name, consensus_position
+                );
+                // Do not record latency on error
+            }
+        }
+    }
+
+    /// Wait for quorum responses from validators for latency measurement using StatusAggregator
+    async fn wait_for_latency_quorum(
+        authority_agg: &Arc<crate::authority_aggregator::AuthorityAggregator<A>>,
+        consensus_position: sui_types::messages_consensus::ConsensusPosition,
+        timeout_duration: std::time::Duration,
+    ) -> Result<(), ()> {
+        use crate::status_aggregator::StatusAggregator;
+        use futures::stream::FuturesUnordered;
+        use futures::StreamExt;
+        use std::collections::BTreeMap;
+
+        let clients = authority_agg.authority_clients.iter().collect::<Vec<_>>();
+        let committee = authority_agg.committee.clone();
+
+        let mut futures = FuturesUnordered::new();
+        for (name, client) in clients {
+            let client = client.clone();
+            let name = *name;
+
+            let future = async move {
+                match timeout(
+                    timeout_duration,
+                    client.validator_latency(ValidatorLatencyRequest {
+                        consensus_position: Some(consensus_position),
+                    }),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => (name, Ok(response)),
+                    Ok(Err(e)) => (name, Err(e)),
+                    Err(_) => (name, Err(sui_types::error::SuiError::TimeoutError)),
+                }
+            };
+
+            futures.push(future);
+        }
+
+        let mut digest_aggregators: BTreeMap<
+            Option<sui_types::digests::Digest>,
+            StatusAggregator<()>,
+        > = BTreeMap::new();
+
+        while let Some((name, response)) = futures.next().await {
+            match response {
+                Ok(response) => {
+                    let aggregator = digest_aggregators
+                        .entry(response.block_digest)
+                        .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
+                    aggregator.insert(name, ());
+
+                    if aggregator.reached_quorum_threshold() {
+                        return Ok(());
+                    }
+                }
+                Err(_) => {
+                    // Ignore errors for quorum calculation
+                }
+            }
+        }
+
+        Err(())
     }
 }
 

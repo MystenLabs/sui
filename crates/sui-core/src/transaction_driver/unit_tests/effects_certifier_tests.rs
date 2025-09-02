@@ -210,6 +210,13 @@ impl AuthorityAPI for MockAuthority {
     ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
         Ok(sui_types::messages_grpc::RawValidatorHealthResponse::default())
     }
+
+    async fn validator_latency(
+        &self,
+        _request: sui_types::messages_grpc::RawValidatorLatencyRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorLatencyResponse, SuiError> {
+        Ok(sui_types::messages_grpc::RawValidatorLatencyResponse::default())
+    }
 }
 
 fn create_test_authority_aggregator() -> AuthorityAggregator<MockAuthority> {

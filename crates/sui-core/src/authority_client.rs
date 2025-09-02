@@ -114,6 +114,12 @@ pub trait AuthorityAPI {
         &self,
         request: sui_types::messages_grpc::RawValidatorHealthRequest,
     ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError>;
+
+    /// Test validator latency with optional consensus position
+    async fn validator_latency(
+        &self,
+        request: sui_types::messages_grpc::RawValidatorLatencyRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorLatencyResponse, SuiError>;
 }
 
 #[derive(Clone)]
@@ -331,6 +337,17 @@ impl AuthorityAPI for NetworkAuthorityClient {
     ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
         self.client()?
             .validator_health(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
+    async fn validator_latency(
+        &self,
+        request: sui_types::messages_grpc::RawValidatorLatencyRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorLatencyResponse, SuiError> {
+        self.client()?
+            .validator_latency(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)

@@ -406,6 +406,41 @@ pub struct ValidatorHealthResponse {
     pub last_consensus_scores_index: u64,
 }
 
+/// Raw protobuf request for validator latency measurement (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorLatencyRequest {
+    /// Optional consensus position to use for latency measurement
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub consensus_position: Option<Bytes>,
+}
+
+/// Raw protobuf response for validator latency measurement (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorLatencyResponse {
+    /// Optional consensus position returned from latency check
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub consensus_position: Option<Bytes>,
+    /// Optional block digest returned from latency check
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub block_digest: Option<Bytes>,
+}
+
+/// Request for validator latency measurement (used for latency testing)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorLatencyRequest {
+    /// Optional consensus position to use for latency measurement
+    pub consensus_position: Option<crate::messages_consensus::ConsensusPosition>,
+}
+
+/// Response with validator latency measurement
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorLatencyResponse {
+    /// Optional consensus position returned from latency check
+    pub consensus_position: Option<crate::messages_consensus::ConsensusPosition>,
+    /// Optional block digest returned from latency check
+    pub block_digest: Option<crate::digests::Digest>,
+}
+
 impl TryFrom<ValidatorHealthRequest> for RawValidatorHealthRequest {
     type Error = crate::error::SuiError;
 
@@ -449,6 +484,67 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
             last_consensus_scores: value.last_consensus_scores,
             last_consensus_scores_index: value.last_consensus_scores_index.unwrap_or(0),
+        })
+    }
+}
+
+impl TryFrom<ValidatorLatencyRequest> for RawValidatorLatencyRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: ValidatorLatencyRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            consensus_position: value.consensus_position.map(|pos| bcs::to_bytes(&pos).unwrap().into()),
+        })
+    }
+}
+
+impl TryFrom<RawValidatorLatencyRequest> for ValidatorLatencyRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawValidatorLatencyRequest) -> Result<Self, Self::Error> {
+        let consensus_position = match value.consensus_position {
+            Some(cp) => Some(cp.as_ref().try_into()?),
+            None => None,
+        };
+
+        Ok(Self { consensus_position })
+    }
+}
+
+impl TryFrom<ValidatorLatencyResponse> for RawValidatorLatencyResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: ValidatorLatencyResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            consensus_position: value.consensus_position.map(|pos| bcs::to_bytes(&pos).unwrap().into()),
+            block_digest: value.block_digest.map(|digest| digest.into_inner().to_vec().into()),
+        })
+    }
+}
+
+impl TryFrom<RawValidatorLatencyResponse> for ValidatorLatencyResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawValidatorLatencyResponse) -> Result<Self, Self::Error> {
+        let consensus_position = match value.consensus_position {
+            Some(cp) => Some(cp.as_ref().try_into()?),
+            None => None,
+        };
+
+        let block_digest = match value.block_digest {
+            Some(bytes) => {
+                bcs::from_bytes(&bytes).map_err(|err| {
+                    Self::Error::GrpcMessageDeserializeError {
+                        type_info: "RawValidatorLatencyResponse.block_digest".to_string(),
+                        error: err.to_string(),
+                    }
+                })?
+            },
+            None => None,
+        };
+        Ok(Self {
+            consensus_position,
+            block_digest,
         })
     }
 }

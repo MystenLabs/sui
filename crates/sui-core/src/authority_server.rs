@@ -1625,6 +1625,18 @@ impl ValidatorService {
         Ok((tonic::Response::new(raw_response), Weight::one()))
     }
 
+    async fn validator_latency_impl(
+        &self,
+        _request: tonic::Request<sui_types::messages_grpc::RawValidatorLatencyRequest>,
+    ) -> WrappedServiceResponse<sui_types::messages_grpc::RawValidatorLatencyResponse> {
+        let raw_response = sui_types::messages_grpc::RawValidatorLatencyResponse {
+            consensus_position: None,
+            block_digest: None,
+        };
+
+        Ok((tonic::Response::new(raw_response), Weight::one()))
+    }
+
     fn get_client_ip_addr<T>(
         &self,
         request: &tonic::Request<T>,
@@ -1948,5 +1960,13 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<sui_types::messages_grpc::RawValidatorHealthResponse>, tonic::Status>
     {
         handle_with_decoration!(self, validator_health_impl, request)
+    }
+
+    async fn validator_latency(
+        &self,
+        request: tonic::Request<sui_types::messages_grpc::RawValidatorLatencyRequest>,
+    ) -> Result<tonic::Response<sui_types::messages_grpc::RawValidatorLatencyResponse>, tonic::Status>
+    {
+        handle_with_decoration!(self, validator_latency_impl, request)
     }
 }

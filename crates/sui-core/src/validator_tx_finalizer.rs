@@ -464,6 +464,13 @@ mod tests {
                 }
             })
         }
+
+        async fn validator_latency(
+            &self,
+            _request: sui_types::messages_grpc::RawValidatorLatencyRequest,
+        ) -> Result<sui_types::messages_grpc::RawValidatorLatencyResponse, SuiError> {
+            Ok(sui_types::messages_grpc::RawValidatorLatencyResponse::default())
+        }
     }
 
     #[sim_test]
