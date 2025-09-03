@@ -365,7 +365,6 @@ public fun delete_metadata_cap<T>(currency: &mut Currency<T>, cap: MetadataCap<T
 
 /// Allows burning coins for deflationary
 public fun burn<T>(currency: &mut Currency<T>, coin: Coin<T>) {
-    assert!(currency.is_supply_deflationary());
     currency.burn_balance(coin.into_balance());
 }
 
