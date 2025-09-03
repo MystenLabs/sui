@@ -127,7 +127,7 @@ impl Default for ECMHLiveObjectSetDigest {
 /// CheckpointArtifact is a type that represents various artifacts of a checkpoint.
 /// We hash all the artifacts together to get the checkpoint artifacts digest
 /// that is included in the checkpoint summary.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CheckpointArtifact {
     /// The post-checkpoint state of all objects modified in the checkpoint.
     /// It also includes objects that were deleted or wrapped in the checkpoint.
@@ -158,6 +158,13 @@ impl CheckpointArtifact {
             Self::ObjectStates(object_states) => object_states.is_empty(),
         }
     }
+
+    pub fn artifact_type(&self) -> &'static str {
+        match self {
+            Self::ObjectStates(_) => "ObjectStates",
+            // Future variants...
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -167,7 +174,30 @@ pub struct CheckpointArtifacts {
 }
 
 impl CheckpointArtifacts {
-    pub fn new(object_states: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>) -> Self {
+    pub fn new() -> Self {
+        Self {
+            artifacts: BTreeSet::new(),
+        }
+    }
+
+    pub fn add_artifact(&mut self, artifact: CheckpointArtifact) -> SuiResult<()> {
+        if self
+            .artifacts
+            .iter()
+            .any(|existing| existing.artifact_type() == artifact.artifact_type())
+        {
+            return Err(SuiError::from(format!(
+                "Artifact {} already exists",
+                artifact.artifact_type()
+            )));
+        }
+        self.artifacts.insert(artifact);
+        Ok(())
+    }
+
+    pub fn from_object_states(
+        object_states: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
+    ) -> Self {
         CheckpointArtifacts {
             artifacts: BTreeSet::from([CheckpointArtifact::ObjectStates(object_states)]),
         }
@@ -225,7 +255,7 @@ impl From<&[&TransactionEffects]> for CheckpointArtifacts {
             }
         }
 
-        CheckpointArtifacts::new(latest_object_states)
+        CheckpointArtifacts::from_object_states(latest_object_states)
     }
 }
 
@@ -1111,8 +1141,17 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_artifacts() {
-        let artifacts = CheckpointArtifacts::new(BTreeMap::new());
+    fn test_artifacts() {
+        // 1. Computing the digest of an empty artifact should fail
+        let o = CheckpointArtifact::ObjectStates(BTreeMap::new());
+        let mut artifacts = CheckpointArtifacts::new();
+        assert!(artifacts.add_artifact(o.clone()).is_ok());
+        assert!(artifacts.is_empty());
         assert!(artifacts.digest().is_err());
+
+        // 2. Adding a second artifact with the same type should fail
+        let mut artifacts = CheckpointArtifacts::new();
+        assert!(artifacts.add_artifact(o.clone()).is_ok());
+        assert!(artifacts.add_artifact(o.clone()).is_err());
     }
 }
