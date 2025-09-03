@@ -152,6 +152,12 @@ impl CheckpointArtifact {
             }
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::ObjectStates(object_states) => object_states.is_empty(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -180,7 +186,15 @@ impl CheckpointArtifacts {
             })
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.artifacts.iter().all(|artifact| artifact.is_empty())
+    }
+
     pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
+        if self.is_empty() {
+            return Err(SuiError::from("Cannot compute digest for empty artifacts"));
+        }
+
         // Already sorted by BTreeSet!
         let digests = self
             .artifacts
@@ -1094,5 +1108,11 @@ mod tests {
             let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
             assert_ne!(c1.digest(), c2.digest());
         }
+    }
+
+    #[test]
+    fn test_empty_artifacts() {
+        let artifacts = CheckpointArtifacts::new(BTreeMap::new());
+        assert!(artifacts.digest().is_err());
     }
 }
