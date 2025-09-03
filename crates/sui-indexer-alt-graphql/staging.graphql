@@ -1544,6 +1544,35 @@ type MoveModule {
 	package: MovePackage
 }
 
+type MoveModuleConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveModuleEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveModule!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveModuleEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveModule!
+}
+
 """
 A MoveObject is a kind of Object that reprsents data stored on-chain.
 """
@@ -1725,6 +1754,10 @@ type MovePackage implements IAddressable & IObject {
 	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module name, followed by module bytes), in alphabetic order by module name.
 	"""
 	moduleBcs: Base64
+	"""
+	Paginate through this package's modules.
+	"""
+	modules(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
