@@ -1,117 +1,76 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus_types::block::Round;
+use lru::LruCache;
 use parking_lot::RwLock;
-use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::IpAddr;
+use std::num::NonZeroUsize;
 use sui_types::digests::TransactionDigest;
 use sui_types::traffic_control::Weight;
 use tracing::debug;
 
-/// The number of consensus rounds to retain transaction submission information before garbage collection.
-pub(crate) const SUBMISSION_RETENTION_ROUNDS: u32 = 400;
-
-/// TODO(fastpath): Evaluate if this should be a configurable parameter.
-/// The allowed number of retries allowed regardless of gas price.
-pub(crate) const DEFAULT_RETRY_TOLERANCE: u32 = 20;
+pub(crate) const DEFAULT_CACHE_CAPACITY: usize = 100_000;
 
 /// Cache for tracking submitted transactions to prevent DoS through excessive resubmissions.
-/// Tracks submission counts and enforces gas-price-based amplification + retry tolerance limits.
+/// Uses LRU eviction to automatically remove least recently used entries when at capacity.
+/// Tracks submission counts and enforces gas-price-based amplification limits.
 pub(crate) struct SubmittedTransactionCache {
     inner: RwLock<Inner>,
-    retention_rounds: u32,
-    retry_tolerance: u32,
 }
 
-#[derive(Default)]
 struct Inner {
-    /// Map of transaction digest to submission metadata
-    transactions: HashMap<TransactionDigest, SubmissionMetadata>,
-    /// Transactions indexed by submitted round for efficient GC
-    transactions_by_round: BTreeMap<Round, HashSet<TransactionDigest>>,
-    /// The last committed leader round for GC purposes
-    last_committed_round: Option<Round>,
+    transactions: LruCache<TransactionDigest, SubmissionMetadata>,
 }
 
 #[derive(Debug, Clone)]
 struct SubmissionMetadata {
-    /// Round when transaction was last seen (for GC)
-    submitted_round: Round,
     /// Number of times this transaction has been submitted
     submission_count: u32,
-    /// Maximum allowed submissions based on gas price amplification + retry tolerance
+    /// Maximum allowed submissions based on gas price amplification
     max_allowed_submissions: u32,
     /// Client IP address that submitted this transaction
     submitter_client_addr: Option<IpAddr>,
 }
 
 impl SubmittedTransactionCache {
-    pub(crate) fn new(retention_rounds: Option<u32>, retry_tolerance: Option<u32>) -> Self {
-        let retention_rounds = retention_rounds.unwrap_or(SUBMISSION_RETENTION_ROUNDS);
+    pub(crate) fn new(cache_capacity: Option<usize>) -> Self {
+        let capacity = cache_capacity
+            .and_then(NonZeroUsize::new)
+            .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_CAPACITY).unwrap());
 
         Self {
-            inner: Default::default(),
-            retention_rounds,
-            retry_tolerance: retry_tolerance.unwrap_or(DEFAULT_RETRY_TOLERANCE),
+            inner: RwLock::new(Inner {
+                transactions: LruCache::new(capacity),
+            }),
         }
     }
 
     pub(crate) fn record_submitted_tx(
         &self,
         digest: &TransactionDigest,
-        submitted_round: Round,
         amplification_factor: u32,
         submitter_client_addr: Option<IpAddr>,
     ) {
         let mut inner = self.inner.write();
 
-        // We allow 1 submission for the initial submission, and then the retry tolerance + amplification factor
-        // for subsequent submissions.
-        let max_allowed_submissions = 1 + self.retry_tolerance + amplification_factor;
+        let max_allowed_submissions = amplification_factor;
 
-        if let Some(metadata) = inner.transactions.get(digest) {
-            if metadata.submitted_round < submitted_round {
-                let old_round = metadata.submitted_round;
-                debug!(
-                    "Transaction {digest} re-submitted at round {submitted_round} (previously at round {old_round})",
-                );
-
-                if let Some(txns) = inner.transactions_by_round.get_mut(&old_round) {
-                    txns.remove(digest);
-                    if txns.is_empty() {
-                        inner.transactions_by_round.remove(&old_round);
-                    }
-                }
-
-                inner
-                    .transactions_by_round
-                    .entry(submitted_round)
-                    .or_default()
-                    .insert(*digest);
-
-                let metadata = inner.transactions.get_mut(digest).unwrap();
-                metadata.submitted_round = submitted_round;
-            }
+        if let Some(_metadata) = inner.transactions.get_mut(digest) {
+            // TODO(fastpath): Track potentially different client addr for existing entries?
+            debug!("Transaction {digest} already tracked in submission cache");
         } else {
             // First time we're submitting this transaction, however we will wait till
             // we see the transaction in consensus output to increment the submission count.
             let metadata = SubmissionMetadata {
-                submitted_round,
                 submission_count: 0,
                 max_allowed_submissions,
                 submitter_client_addr,
             };
 
-            inner.transactions.insert(*digest, metadata);
-            inner
-                .transactions_by_round
-                .entry(submitted_round)
-                .or_default()
-                .insert(*digest);
+            inner.transactions.put(*digest, metadata);
 
             debug!(
-                "First submission of transaction {digest} at round {submitted_round} (max_allowed: {max_allowed_submissions})",
+                "First submission of transaction {digest} (max_allowed: {max_allowed_submissions})",
             );
         }
     }
@@ -129,7 +88,6 @@ impl SubmittedTransactionCache {
             metadata.submission_count += 1;
 
             if metadata.submission_count > metadata.max_allowed_submissions {
-                // TODO(fastpath): Reevaluate spam weight calculation. For simplicity, we use a fixed spam weight of 1 for now.
                 let spam_weight = Weight::one();
 
                 debug!(
@@ -148,48 +106,9 @@ impl SubmittedTransactionCache {
         None
     }
 
-    /// Update the last committed leader round and clean up old entries.
-    pub(crate) fn update_last_committed_round(&self, last_committed_leader_round: Round) {
-        debug!("Updating last committed leader round: {last_committed_leader_round}");
-
-        let mut inner = self.inner.write();
-
-        let Some(previous_round) = inner
-            .last_committed_round
-            .replace(last_committed_leader_round)
-        else {
-            return;
-        };
-
-        let cutoff_round = previous_round.saturating_sub(self.retention_rounds);
-
-        let rounds_to_remove: Vec<_> = inner
-            .transactions_by_round
-            .range(..=cutoff_round)
-            .map(|(round, _)| *round)
-            .collect();
-
-        let mut removed_count = 0;
-        for round in rounds_to_remove {
-            if let Some(digests) = inner.transactions_by_round.remove(&round) {
-                for digest in digests {
-                    if inner.transactions.remove(&digest).is_some() {
-                        removed_count += 1;
-                    }
-                }
-            }
-        }
-
-        if removed_count > 0 {
-            debug!(
-                "Cleaned up {removed_count} old transaction entries from SubmittedTransactionCache"
-            );
-        }
-    }
-
     #[cfg(test)]
     pub(crate) fn contains(&self, digest: &TransactionDigest) -> bool {
-        self.inner.read().transactions.contains_key(digest)
+        self.inner.read().transactions.contains(digest)
     }
 
     #[cfg(test)]
@@ -197,7 +116,7 @@ impl SubmittedTransactionCache {
         self.inner
             .read()
             .transactions
-            .get(digest)
+            .peek(digest)
             .map(|m| m.submission_count)
     }
 }
@@ -214,10 +133,10 @@ mod tests {
 
     #[test]
     fn test_first_submission_allowed() {
-        let cache = SubmittedTransactionCache::new(None, None);
+        let cache = SubmittedTransactionCache::new(None);
         let digest = create_test_digest(1);
 
-        cache.record_submitted_tx(&digest, 100, 0, None);
+        cache.record_submitted_tx(&digest, 1, None);
         assert!(cache.contains(&digest));
         assert_eq!(cache.get_submission_count(&digest), Some(0));
 
@@ -227,117 +146,111 @@ mod tests {
     }
 
     #[test]
-    fn test_retry_tolerance() {
-        let cache = SubmittedTransactionCache::new(None, Some(10));
-        let digest = create_test_digest(1);
-
-        cache.record_submitted_tx(&digest, 100, 0, None);
-
-        for i in 0..11 {
-            let spam_weight = cache.increment_submission_count(&digest);
-            assert_eq!(spam_weight, None, "Submission {} should be allowed", i + 1);
-        }
-        assert_eq!(cache.get_submission_count(&digest), Some(11));
-
-        // 12th submission should trigger spam weight
-        let spam_weight = cache.increment_submission_count(&digest);
-        assert_eq!(spam_weight.map(|(w, _)| w), Some(Weight::one()));
-        assert_eq!(cache.get_submission_count(&digest), Some(12));
-    }
-
-    #[test]
     fn test_amplification_factor() {
-        let cache = SubmittedTransactionCache::new(None, Some(10));
+        let cache = SubmittedTransactionCache::new(None);
         let digest = create_test_digest(1);
 
-        // Record with amplification_factor=5, should allow 1+10+5=16 submissions
-        cache.record_submitted_tx(&digest, 100, 5, None);
+        // Record with amplification_factor=5, should allow 5 submissions
+        cache.record_submitted_tx(&digest, 5, None);
 
-        // Should allow 16 submissions
-        for i in 0..16 {
+        // Should allow 5 submissions
+        for i in 0..5 {
             let spam_weight = cache.increment_submission_count(&digest);
             assert_eq!(spam_weight, None, "Submission {} should be allowed", i + 1);
         }
 
-        // 17th submission should trigger spam weight
+        // 6th submission should trigger spam weight
         let spam_weight = cache.increment_submission_count(&digest);
         assert_eq!(spam_weight.map(|(w, _)| w), Some(Weight::one()));
     }
 
     #[test]
-    fn test_garbage_collection() {
-        let cache = SubmittedTransactionCache::new(Some(10), None);
+    fn test_lru_eviction() {
+        // Create a cache with capacity for only 3 transactions
+        let cache = SubmittedTransactionCache::new(Some(3));
 
-        // Add transactions at different rounds
-        for round in 1..=5 {
-            let digest = create_test_digest(round as u8);
-            cache.record_submitted_tx(&digest, round as Round, 0, None);
+        // Add 3 transactions
+        for i in 1..=3 {
+            let digest = create_test_digest(i);
+            cache.record_submitted_tx(&digest, 1, None);
         }
 
-        // Verify all 5 transactions are in cache
-        for round in 1..=5 {
-            let digest = create_test_digest(round as u8);
+        // Verify all 3 transactions are in cache
+        for i in 1..=3 {
+            let digest = create_test_digest(i);
             assert!(cache.contains(&digest));
         }
 
-        // First update doesn't GC anything (no previous round to use)
-        cache.update_last_committed_round(15);
-        for round in 1..=5 {
-            let digest = create_test_digest(round as u8);
-            assert!(cache.contains(&digest));
-        }
+        // Add a 4th transaction, which should evict the least recently used (digest 1)
+        let digest4 = create_test_digest(4);
+        cache.record_submitted_tx(&digest4, 1, None);
 
-        // Second update uses previous round (15) for GC
-        // Cutoff = 15 - 10 = 5, so rounds 1-5 should be removed
-        cache.update_last_committed_round(16);
-        for round in 1..=5 {
-            let digest = create_test_digest(round as u8);
-            assert!(!cache.contains(&digest));
-        }
+        // Transaction 1 should be evicted (least recently used)
+        assert!(!cache.contains(&create_test_digest(1)));
+        // Transactions 2, 3, and 4 should still be in cache
+        assert!(cache.contains(&create_test_digest(2)));
+        assert!(cache.contains(&create_test_digest(3)));
+        assert!(cache.contains(&digest4));
     }
 
     #[test]
-    fn test_retry_updates_round() {
-        let cache = SubmittedTransactionCache::new(None, None);
-        let digest = create_test_digest(1);
+    fn test_lru_access_updates_position() {
+        // Create a cache with capacity for only 3 transactions
+        let cache = SubmittedTransactionCache::new(Some(3));
 
-        // Initial submission at round 100
-        cache.record_submitted_tx(&digest, 100, 0, None);
+        // Add 3 transactions
+        for i in 1..=3 {
+            let digest = create_test_digest(i);
+            cache.record_submitted_tx(&digest, 1, None);
+        }
 
-        // Verify it's tracked at round 100
-        let inner = cache.inner.read();
-        assert_eq!(
-            inner.transactions.get(&digest).unwrap().submitted_round,
-            100
-        );
-        assert!(inner
-            .transactions_by_round
-            .get(&100)
-            .unwrap()
-            .contains(&digest));
-        drop(inner);
+        // Access transaction 1 (moves it to front of LRU)
+        let digest1 = create_test_digest(1);
+        cache.increment_submission_count(&digest1);
 
-        // Retry at same round doesn't update
-        cache.record_submitted_tx(&digest, 100, 0, None);
-        let inner = cache.inner.read();
-        assert_eq!(
-            inner.transactions.get(&digest).unwrap().submitted_round,
-            100
-        );
-        drop(inner);
+        // Add a 4th transaction, which should now evict transaction 2 (now least recently used)
+        let digest4 = create_test_digest(4);
+        cache.record_submitted_tx(&digest4, 1, None);
 
-        // Retry at later round updates the round
-        cache.record_submitted_tx(&digest, 150, 0, None);
-        let inner = cache.inner.read();
-        assert_eq!(
-            inner.transactions.get(&digest).unwrap().submitted_round,
-            150
-        );
-        assert!(inner.transactions_by_round.get(&100).is_none()); // Removed from old round
-        assert!(inner
-            .transactions_by_round
-            .get(&150)
-            .unwrap()
-            .contains(&digest)); // Added to new round
+        // Transaction 2 should be evicted
+        assert!(!cache.contains(&create_test_digest(2)));
+        // Transactions 1, 3, and 4 should still be in cache
+        assert!(cache.contains(&digest1));
+        assert!(cache.contains(&create_test_digest(3)));
+        assert!(cache.contains(&digest4));
+    }
+
+    #[test]
+    fn test_retry_tracking() {
+        // Create a cache with capacity for only 3 transactions
+        let cache = SubmittedTransactionCache::new(Some(3));
+        let digest1 = create_test_digest(1);
+        let digest2 = create_test_digest(2);
+        let digest3 = create_test_digest(3);
+        let digest4 = create_test_digest(4);
+
+        // Add 3 transactions
+        cache.record_submitted_tx(&digest1, 1, None);
+        cache.record_submitted_tx(&digest2, 1, None);
+        cache.record_submitted_tx(&digest3, 1, None);
+
+        // Verify all 3 transactions are in cache
+        assert!(cache.contains(&digest1));
+        assert!(cache.contains(&digest2));
+        assert!(cache.contains(&digest3));
+
+        // Retry digest1 - this should move it to the front of LRU
+        cache.record_submitted_tx(&digest1, 1, None);
+
+        // Add a 4th transaction, which should evict the least recently used (digest2)
+        cache.record_submitted_tx(&digest4, 1, None);
+
+        // digest1 should still be in cache (moved to front by retry)
+        assert!(cache.contains(&digest1));
+        // digest2 should be evicted (was least recently used)
+        assert!(!cache.contains(&digest2));
+        // digest3 and digest4 should still be in cache
+        assert!(cache.contains(&digest3));
+        assert!(cache.contains(&digest4));
     }
 }

@@ -645,9 +645,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
             tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
         }
-        if let Some(submitted_cache) = self.epoch_store.submitted_transaction_cache.as_ref() {
-            submitted_cache.update_last_committed_round(last_committed_round as u32);
-        }
 
         let commit_info = if self
             .epoch_store

@@ -1135,7 +1135,7 @@ impl AuthorityPerEpochStore {
         };
 
         let submitted_transaction_cache = if protocol_config.mysticeti_fastpath() {
-            Some(SubmittedTransactionCache::new(None, None))
+            Some(SubmittedTransactionCache::new(None))
         } else {
             None
         };
