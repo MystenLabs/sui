@@ -273,6 +273,7 @@ impl ClientObservedStats {
     /// Called periodically during health checks to clean up statistics for validators
     /// that are no longer in the active set. This prevents memory leaks and
     /// ensures scores are only calculated for current validators.
+    #[allow(unused)]
     pub fn retain_validators(&mut self, current_validators: &[AuthorityName]) {
         let cur_len = self.validator_stats.len();
         let validator_set: HashSet<_> = current_validators.iter().collect();

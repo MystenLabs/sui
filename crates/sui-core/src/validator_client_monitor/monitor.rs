@@ -16,10 +16,7 @@ use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
 use sui_types::messages_consensus::ConsensusPosition;
-use sui_types::{
-    base_types::AuthorityName,
-    messages_grpc::{ValidatorHealthRequest, ValidatorLatencyRequest},
-};
+use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorLatencyRequest};
 use tokio::{
     task::JoinSet,
     time::{interval, timeout},
@@ -101,6 +98,7 @@ where
         loop {
             interval.tick().await;
 
+            /*
             let authority_agg = self.authority_aggregator.load();
 
             let current_validators: Vec<_> = authority_agg.committee.names().cloned().collect();
@@ -160,7 +158,7 @@ where
                 if let Err(e) = result {
                     warn!("Health check task failed: {}", e);
                 }
-            }
+            }*/
 
             // Run latency checks on all validators
             self.clone().run_latency_checks().await;

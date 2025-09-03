@@ -205,7 +205,7 @@ impl Default for ScoreWeights {
 // Default value functions
 
 fn default_health_check_interval() -> Duration {
-    Duration::from_secs(15)
+    Duration::from_secs(5)
 }
 
 fn default_health_check_timeout() -> Duration {
@@ -221,11 +221,11 @@ fn default_max_consecutive_failures() -> u32 {
 }
 
 fn default_latency_weight() -> f64 {
-    0.9
+    1.0
 }
 
 fn default_reliability_weight() -> f64 {
-    0.1
+    0.0
 }
 
 fn default_submit_latency_weight() -> f64 {
