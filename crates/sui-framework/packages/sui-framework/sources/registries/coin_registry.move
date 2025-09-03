@@ -526,6 +526,7 @@ public fun deny_cap_id<T>(currency: &Currency<T>): Option<ID> {
     }
 }
 
+/// Check if the supply is fixed.
 public fun is_supply_fixed<T>(currency: &Currency<T>): bool {
     match (currency.supply.borrow()) {
         SupplyState::Fixed(_) => true,
@@ -533,6 +534,7 @@ public fun is_supply_fixed<T>(currency: &Currency<T>): bool {
     }
 }
 
+/// Check if the supply is deflationary.
 public fun is_supply_deflationary<T>(currency: &Currency<T>): bool {
     match (currency.supply.borrow()) {
         SupplyState::Deflationary(_) => true,
@@ -540,6 +542,7 @@ public fun is_supply_deflationary<T>(currency: &Currency<T>): bool {
     }
 }
 
+/// Check if the currency is regulated.
 public fun is_regulated<T>(currency: &Currency<T>): bool {
     match (currency.regulated) {
         RegulatedState::Regulated { .. } => true,
@@ -548,7 +551,7 @@ public fun is_regulated<T>(currency: &Currency<T>): bool {
 }
 
 /// Get the total supply for the `Currency<T>` if the Supply is in fixed or
-/// deflationary state. Returns `None` if the supply is unknown.
+/// deflationary state. Returns `None` if the SupplyState is Unknown.
 public fun total_supply<T>(currency: &Currency<T>): Option<u64> {
     match (currency.supply.borrow()) {
         SupplyState::Fixed(supply) => option::some(supply.value()),
@@ -562,7 +565,7 @@ public fun exists<T>(registry: &CoinRegistry): bool {
     derived_object::exists(&registry.id, CurrencyKey<T>())
 }
 
-/// Return the ID of the system coin registry object located at address 0xc.
+/// Return the ID of the system `CoinRegistry` object located at address 0xc.
 public fun coin_registry_id(): ID {
     @0xc.to_id()
 }
@@ -575,7 +578,7 @@ fun create(ctx: &mut TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
     transfer::share_object(CoinRegistry {
-        // id: object::sui_coin_registry_object_id(),
+        // TODO: id: object::sui_coin_registry_object_id(),
         id: object::new(ctx),
     });
 }
