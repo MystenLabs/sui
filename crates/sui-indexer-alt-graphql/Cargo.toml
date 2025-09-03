@@ -47,8 +47,10 @@ tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 
-move-core-types.workspace = true
 move-binary-format.workspace = true
+move-core-types.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
 
 bin-version.workspace = true
 sui-default-config.workspace = true
