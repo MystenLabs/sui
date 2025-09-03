@@ -243,10 +243,13 @@ public fun begin_with_context(ctx_builder: TxContextBuilder): Scenario {
 ///
 /// NOTE: make sure to update this call when adding new system objects.
 public fun create_system_objects(scenario: &mut Scenario) {
+    let sender = scenario.ctx().sender();
+
+    // Force publishing as system - 0x0.
+    scenario.next_tx(@0x0);
     sui::clock::create_for_testing(scenario.ctx()).share_for_testing();
     sui::random::create_for_testing(scenario.ctx());
     sui::deny_list::create_for_testing(scenario.ctx());
-    let sender = scenario.ctx().sender();
     scenario.next_tx(sender);
 }
 
