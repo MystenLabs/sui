@@ -12,6 +12,7 @@ use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::Supply;
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
+use sui::derived_object;
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
@@ -144,7 +145,7 @@ public struct CurrencyBuilder<phantom T> {
 // 2. Entrypoint for creating regulated currency [done]
 // 3. Claim capability (using treasury cap) [done]
 // 3. Migrate existing CoinMetadada -> Registry Metadata
-public fun new_currency<T: drop>(
+public fun new_currency_with_otw<T: drop>(
     otw: T,
     decimals: u8,
     symbol: String,
@@ -177,9 +178,12 @@ public fun new_currency<T: drop>(
     (CurrencyBuilder { data: metadata, is_otw: true }, treasury_cap)
 }
 
-/// Create a currency dynamically.
-/// TODO: Add verifier rule, as this needs to only be callable by the module that defines `T`.
-public fun new_dynamic_currency<T: /* internal */ key>(
+/// Creates a new currency builder.
+///
+/// Note: This constructor has no long term difference from `new_currency_with_otw`. The only change is
+/// that the first requires an OTW (one-time witness), while this one can be called dynamically
+/// from the module that defines `T`, enabling the creation of a new coin type
+public fun new_currency<T: /* internal */ key>(
     registry: &mut CoinRegistry,
     decimals: u8,
     symbol: String,
@@ -195,8 +199,7 @@ public fun new_dynamic_currency<T: /* internal */ key>(
     let treasury_cap = coin::new_treasury_cap(ctx);
 
     let metadata = Currency<T> {
-        // TODO: use `derived_object::claim(&mut registry.id, CoinKey<T>())`
-        id: object::new(ctx),
+        id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals,
         name,
         symbol,
@@ -289,7 +292,7 @@ public fun finalize<T>(builder: CurrencyBuilder<T>, ctx: &mut TxContext): Metada
 public fun finalize_registration<T>(
     registry: &mut CoinRegistry,
     coin_data: Receiving<Currency<T>>,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
     // 1. Consume Currency
     // 2. Re-create it with a "derived" address.
@@ -311,8 +314,7 @@ public fun finalize_registration<T>(
 
     // Now, create the shared version of the coin data.
     transfer::share_object(Currency {
-        // TODO: Replace this with `derived_object::claim()`
-        id: object::new(ctx),
+        id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals,
         name,
         symbol,
@@ -542,9 +544,8 @@ public fun total_supply<T>(coin_data: &Currency<T>): Option<u64> {
 
 #[allow(unused_type_parameter)]
 /// Check if coin data exists for the given type T in the registry.
-public fun exists<T>(_registry: &CoinRegistry): bool {
-    // TODO: `use derived_object::exists()`
-    false // TODO: return function call once derived addresses are in!
+public fun exists<T>(registry: &CoinRegistry): bool {
+    derived_object::exists(&registry.id, CurrencyKey<T>())
 }
 
 /// Get immutable reference to the coin data from CurrencyBuilder.
@@ -612,12 +613,12 @@ public fun finalize_unwrap_for_testing<T>(
 public fun migrate_legacy_metadata_for_testing<T>(
     registry: &mut CoinRegistry,
     legacy: &CoinMetadata<T>,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ): Currency<T> {
     assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
 
     Currency<T> {
-        id: object::new(ctx), // TODO: use derived_object::claim()
+        id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals: legacy.get_decimals(),
         name: legacy.get_name(),
         symbol: legacy.get_symbol().to_string(),

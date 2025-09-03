@@ -388,7 +388,7 @@ public fun build_dynamic<T: key>(
     registry: &mut CoinRegistry,
     ctx: &mut TxContext,
 ): (CurrencyBuilder<T>, TreasuryCap<T>) {
-    registry.new_dynamic_currency<T>(
+    registry.new_currency<T>(
         b.decimals,
         b.symbol,
         b.name,
@@ -403,7 +403,7 @@ public fun build_otw<T: drop>(
     otw: T,
     ctx: &mut TxContext,
 ): (CurrencyBuilder<T>, TreasuryCap<T>) {
-    coin_registry::new_currency(
+    coin_registry::new_currency_with_otw(
         otw,
         b.decimals,
         b.symbol,
