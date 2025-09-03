@@ -71,11 +71,9 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
         // remaining balance for reservation.
         let mut cur_balances = BTreeMap::new();
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
-            // We need to first walk through all reservations in this transaction
-            // to see if we can successfully reserve each of them.
-            // If we can, we then update the current balances atomically.
-            // If not, we leave the current balances unchanged for the next transaction.
-            // We make sure to initialize each account we see in the cur_balances map.
+            // Try to reserve all withdraws in this transaction.
+            // Note that this is not atomic, so it is possible that we reserve some withdraws and not others.
+            // This is intentional to be semantically consistent with the eager scheduler.
             let mut success = true;
             for (object_id, reservation) in &withdraw.reservations {
                 let entry = cur_balances.entry(*object_id).or_insert_with(|| {
@@ -91,6 +89,11 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                     );
                     success = false;
                 } else {
+                    debug!(
+                        tx_digest =? withdraw.tx_digest,
+                        "Successfully reserved {:?} for account {:?}",
+                        reservation, object_id
+                    );
                     *entry -= *reservation as u128;
                 }
             }
