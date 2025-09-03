@@ -139,8 +139,6 @@ impl EffectsCertifier {
 
         // Retry until there is a valid full effects that matches the certified digest, or all targets
         // have been attempted.
-        //
-        // TODO(fastpath): send backup requests to get full effects before timeout or failure.
         loop {
             let display_name = authority_aggregator.get_display_name(&current_target);
             match full_effects_result {
