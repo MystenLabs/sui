@@ -538,9 +538,17 @@ public fun create_treasury_cap_for_testing<T>(ctx: &mut TxContext): TreasuryCap<
 }
 
 #[test_only]
-/// Create a `CoinMetadata` for any `Coin` for testing purposes.
-public fun freeze_for_testing<T>(regulated_coin_metadata: RegulatedCoinMetadata<T>) {
-    transfer::freeze_object(regulated_coin_metadata);
+// Keeping public(package) so no one ever uses it!
+public(package) fun regulated_coin_metadata_for_testing<T>(
+    coin_metadata_id: ID,
+    deny_cap_id: ID,
+    ctx: &mut TxContext,
+): RegulatedCoinMetadata<T> {
+    RegulatedCoinMetadata {
+        id: object::new(ctx),
+        coin_metadata_object: coin_metadata_id,
+        deny_cap_object: deny_cap_id,
+    }
 }
 
 // === Deprecated code ===
