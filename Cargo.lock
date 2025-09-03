@@ -14698,6 +14698,8 @@ dependencies = [
  "itertools 0.13.0",
  "move-binary-format",
  "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
  "prometheus",
  "prost-types",
  "serde",
