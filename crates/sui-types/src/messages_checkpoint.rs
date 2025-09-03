@@ -129,6 +129,8 @@ impl Default for ECMHLiveObjectSetDigest {
 /// that is included in the checkpoint summary.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CheckpointArtifact {
+    /// The post-checkpoint state of all objects modified in the checkpoint.
+    /// It also includes objects that were deleted or wrapped in the checkpoint.
     ObjectStates(BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>),
     // In the future, we can add more artifacts e.g., execution digests, events, etc.
 }
@@ -154,36 +156,8 @@ impl CheckpointArtifact {
 
 #[derive(Debug)]
 pub struct CheckpointArtifacts {
+    /// An ordered list of artifacts.
     artifacts: BTreeSet<CheckpointArtifact>,
-}
-
-#[derive(Debug)]
-pub struct CheckpointArtifactDigests {
-    pub digests: Vec<Digest>,
-}
-
-impl TryFrom<&CheckpointArtifacts> for CheckpointArtifactDigests {
-    type Error = SuiError;
-
-    fn try_from(artifacts: &CheckpointArtifacts) -> Result<Self, Self::Error> {
-        // Already sorted by BTreeSet!
-        let digests = artifacts
-            .artifacts
-            .iter()
-            .map(|a| a.digest())
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self { digests })
-    }
-}
-
-impl CheckpointArtifactDigests {
-    pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
-        let bytes = bcs::to_bytes(&self.digests)
-            .map_err(|e| SuiError::from(format!("BCS error: {}", e)))?;
-        Ok(CheckpointArtifactsDigest::new(
-            Blake2b256::digest(&bytes).into(),
-        ))
-    }
 }
 
 impl CheckpointArtifacts {
@@ -207,7 +181,19 @@ impl CheckpointArtifacts {
     }
 
     pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
-        CheckpointArtifactDigests::try_from(self)?.digest()
+        // Already sorted by BTreeSet!
+        let digests = self
+            .artifacts
+            .iter()
+            .map(|a| a.digest())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let bytes =
+            bcs::to_bytes(&digests).map_err(|e| SuiError::from(format!("BCS error: {}", e)))?;
+
+        Ok(CheckpointArtifactsDigest::new(
+            Blake2b256::digest(&bytes).into(),
+        ))
     }
 }
 
