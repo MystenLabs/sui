@@ -2965,9 +2965,9 @@ impl AuthorityPerEpochStore {
             .expect("epoch_terminated called twice on same epoch store");
         // This `write` acts as a barrier - it waits for futures executing in
         // `within_alive_epoch` to terminate before we can continue here
-        debug!("Epoch terminated - waiting for pending tasks to complete");
+        info!("Epoch terminated - waiting for pending tasks to complete");
         *self.epoch_alive.write().await = false;
-        debug!("All pending epoch tasks completed");
+        info!("All pending epoch tasks completed");
     }
 
     /// Waits for the notification about epoch termination
