@@ -173,7 +173,7 @@ public fun new_currency<T: /* internal */ key>(
         description,
         icon_url,
         supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unknown,
+        regulated: RegulatedState::Unregulated,
         treasury_cap_id: option::some(object::id(&treasury_cap)),
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
@@ -209,7 +209,7 @@ public fun new_currency_with_otw<T: drop>(
         description,
         icon_url,
         supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unknown,
+        regulated: RegulatedState::Unregulated,
         treasury_cap_id: option::some(object::id(&treasury_cap)),
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
@@ -246,7 +246,7 @@ public fun make_regulated<T>(
     allow_global_pause: bool,
     ctx: &mut TxContext,
 ): DenyCapV2<T> {
-    assert!(init.currency.regulated == RegulatedState::Unknown, EDenyCapAlreadyCreated);
+    assert!(init.currency.regulated == RegulatedState::Unregulated, EDenyCapAlreadyCreated);
     let deny_cap = coin::new_deny_cap_v2<T>(allow_global_pause, ctx);
 
     init.currency.regulated =
