@@ -538,7 +538,8 @@ public fun create_treasury_cap_for_testing<T>(ctx: &mut TxContext): TreasuryCap<
 }
 
 #[test_only]
-public fun regulated_coin_metadata_for_testing<T>(
+// Keeping public(package) so no one ever uses it!
+public(package) fun regulated_coin_metadata_for_testing<T>(
     coin_metadata_id: ID,
     deny_cap_id: ID,
     ctx: &mut TxContext,
