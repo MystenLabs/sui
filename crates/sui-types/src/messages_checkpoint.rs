@@ -180,6 +180,10 @@ impl CheckpointArtifacts {
         }
     }
 
+    pub fn default() -> Self {
+        Self::new()
+    }
+
     pub fn add_artifact(&mut self, artifact: CheckpointArtifact) -> SuiResult<()> {
         if self
             .artifacts
