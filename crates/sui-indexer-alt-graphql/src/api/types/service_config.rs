@@ -189,4 +189,13 @@ impl ServiceConfig {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_display_output_size))
     }
+
+    /// Maximum output size of a disassembled MoveModule, in bytes.
+    async fn max_disassembled_module_size(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_disassembled_module_size))
+    }
 }

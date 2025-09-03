@@ -136,6 +136,9 @@ pub struct Limits {
 
     /// Maximumm output size of a display output.
     pub max_display_output_size: usize,
+
+    /// Maximum output size of a disassembled Move module, in bytes.
+    pub max_disassembled_module_size: usize,
 }
 
 #[DefaultConfig]
@@ -161,6 +164,7 @@ pub struct LimitsLayer {
     pub max_move_value_bound: Option<usize>,
     pub max_display_field_depth: Option<usize>,
     pub max_display_output_size: Option<usize>,
+    pub max_disassembled_module_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -323,6 +327,9 @@ impl LimitsLayer {
             max_display_output_size: self
                 .max_display_output_size
                 .unwrap_or(base.max_display_output_size),
+            max_disassembled_module_size: self
+                .max_disassembled_module_size
+                .unwrap_or(base.max_disassembled_module_size),
         }
     }
 }
@@ -378,6 +385,7 @@ impl From<Limits> for LimitsLayer {
             max_move_value_bound: Some(value.max_move_value_bound),
             max_display_field_depth: Some(value.max_display_field_depth),
             max_display_output_size: Some(value.max_display_output_size),
+            max_disassembled_module_size: Some(value.max_disassembled_module_size),
         }
     }
 }
@@ -455,6 +463,7 @@ impl Default for Limits {
             max_move_value_bound: 1024 * 1024,
             max_display_field_depth: 10,
             max_display_output_size: 1024 * 1024,
+            max_disassembled_module_size: 1024 * 1024,
         }
     }
 }

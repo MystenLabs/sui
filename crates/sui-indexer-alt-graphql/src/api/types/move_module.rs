@@ -5,10 +5,16 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{Context, Object};
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Loc;
 use sui_package_resolver::Module as ParsedModule;
 use tokio::{join, sync::OnceCell};
 
-use crate::{api::scalars::base64::Base64, error::RpcError};
+use crate::{
+    api::scalars::base64::Base64,
+    config::Limits,
+    error::{resource_exhausted, RpcError},
+};
 
 use super::move_package::MovePackage;
 
@@ -50,6 +56,26 @@ impl MoveModule {
         };
 
         Ok(Some(Base64::from(contents.native.clone())))
+    }
+
+    /// Textual representation of the module's bytecode.
+    async fn disassembly(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            Disassembler::from_module_with_max_size(
+                contents.parsed.bytecode(),
+                Loc::invalid(),
+                Some(limits.max_disassembled_module_size),
+            )
+            .context("Failed to initialize disassembler")?
+            .disassemble()
+            .map_err(resource_exhausted)?,
+        ))
     }
 
     /// Bytecode format version.
