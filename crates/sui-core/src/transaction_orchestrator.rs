@@ -585,6 +585,7 @@ where
                 },
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
+                    concurrent_validator_submissions: None,
                 },
                 timeout_duration,
             )

@@ -3,6 +3,7 @@
 
 use crate::{workloads::ExpectedFailureType, ExecutionEffects};
 use std::fmt::Display;
+use std::net::SocketAddr;
 use sui_types::transaction::Transaction;
 
 /// A Payload is a transaction wrapper of a particular type (transfer object, shared counter, etc).
@@ -13,6 +14,12 @@ pub trait Payload: Send + Sync + std::fmt::Debug + Display {
     fn make_new_payload(&mut self, effects: &ExecutionEffects);
     fn make_transaction(&mut self) -> Transaction;
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None // Default implementation returns None
+    }
+    fn set_client_addr(&mut self, _client_addr: SocketAddr) {
+        // Default implementation does nothing - workloads can override if needed
+    }
+    fn get_client_addr(&self) -> Option<SocketAddr> {
         None // Default implementation returns None
     }
 }

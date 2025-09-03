@@ -121,7 +121,7 @@ impl BenchmarkBank {
             MAX_BUDGET,
         );
 
-        let (_, execution_result) = self.proxy.execute_transaction_block(tx).await;
+        let (_, execution_result) = self.proxy.execute_transaction_block(tx, None).await;
         let effects = execution_result?;
 
         if !effects.is_ok() {
@@ -173,7 +173,7 @@ impl BenchmarkBank {
             gas_price,
         );
 
-        let (_, execution_result) = self.proxy.execute_transaction_block(tx).await;
+        let (_, execution_result) = self.proxy.execute_transaction_block(tx, None).await;
         let effects = execution_result?;
 
         if !effects.is_ok() {

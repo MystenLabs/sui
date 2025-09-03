@@ -45,6 +45,10 @@ pub struct SubmitTransactionOptions {
     /// When forwarding transactions on behalf of a client, this is the client's address
     /// specified for ddos protection.
     pub forwarded_client_addr: Option<SocketAddr>,
+    /// Number of validators to submit to concurrently for DOS protection testing.
+    /// If None, uses the default behavior of submitting to one validator at a time.
+    /// If Some(n), submits to n validators concurrently with one blocking for consensus position.
+    pub concurrent_validator_submissions: Option<usize>,
 }
 
 pub struct TransactionDriver<A: Clone> {

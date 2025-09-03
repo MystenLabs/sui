@@ -246,6 +246,7 @@ pub trait ValidatorProxy {
     async fn execute_transaction_block(
         &self,
         tx: Transaction,
+        client_addr: Option<std::net::SocketAddr>,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>);
 
     fn clone_committee(&self) -> Arc<Committee>;
@@ -354,14 +355,21 @@ impl LocalValidatorAggregatorProxy {
     }
 
     // Submit transaction block using Transaction Driver
-    async fn submit_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn submit_transaction_block(
+        &self,
+        tx: Transaction,
+        client_addr: Option<std::net::SocketAddr>,
+    ) -> anyhow::Result<ExecutionEffects> {
         let response = self
             .td
             .drive_transaction(
                 SubmitTxRequest {
                     transaction: tx.clone(),
                 },
-                SubmitTransactionOptions::default(),
+                SubmitTransactionOptions {
+                    forwarded_client_addr: client_addr,
+                    concurrent_validator_submissions: Some(3), // Submit to 3 validators for DOS testing
+                },
             )
             .await?;
         Ok(ExecutionEffects::FinalizedTransactionEffects(
@@ -398,6 +406,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn execute_transaction_block(
         &self,
         tx: Transaction,
+        client_addr: Option<std::net::SocketAddr>,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         let tx_digest = *tx.digest();
         if self.td_percentage > 0 {
@@ -406,7 +415,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 debug!("Using TransactionDriver for transaction {:?}", tx_digest);
                 return (
                     ClientType::TransactionDriver,
-                    self.submit_transaction_block(tx).await,
+                    self.submit_transaction_block(tx, client_addr).await,
                 );
             }
         }
@@ -636,6 +645,7 @@ impl ValidatorProxy for FullNodeProxy {
     async fn execute_transaction_block(
         &self,
         tx: Transaction,
+        _client_addr: Option<std::net::SocketAddr>,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         // TODO(fastpath): Add support for TransactionDriver
         let tx_digest = *tx.digest();

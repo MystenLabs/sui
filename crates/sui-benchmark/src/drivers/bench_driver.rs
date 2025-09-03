@@ -215,6 +215,7 @@ pub struct BenchWorker {
     pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     pub group: u32,
     pub duration: Interval,
+    pub client_addr: std::net::SocketAddr, // Add client address for DOS testing
 }
 
 impl Debug for BenchWorker {
@@ -302,6 +303,7 @@ impl BenchDriver {
                     proxy: proxy.clone(),
                     group: workload_info.workload_params.group,
                     duration: workload_info.workload_params.duration,
+                    client_addr: format!("127.0.0.1:{}", 12345 + *id).parse().unwrap(),
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -965,7 +967,7 @@ async fn run_bench_worker(
                     let start = Arc::new(Instant::now());
                     let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                     let res = worker.proxy
-                        .execute_transaction_block(tx.clone())
+                        .execute_transaction_block(tx.clone(), payload.get_client_addr())
                         .then(|(client_type, res)| async move  {
                             metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
@@ -979,6 +981,8 @@ async fn run_bench_worker(
                     num_no_gas += 1;
                 } else {
                     let mut payload = free_pool.pop_front().unwrap();
+                    // Set the client address for DOS testing
+                    payload.set_client_addr(worker.client_addr);
                     num_in_flight += 1;
                     num_submitted += 1;
                     let tx = payload.make_transaction();
@@ -988,7 +992,7 @@ async fn run_bench_worker(
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let res = worker.proxy
-                        .execute_transaction_block(tx.clone())
+                        .execute_transaction_block(tx.clone(), payload.get_client_addr())
                     .then(|(client_type, res)| async move {
                         metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                         handle_execute_transaction_response(res, start, tx, payload, committee, client_type)

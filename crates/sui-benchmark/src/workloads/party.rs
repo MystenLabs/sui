@@ -37,6 +37,7 @@ pub struct PartyTestPayload {
 
     state: Arc<Mutex<InMemoryWallet>>,
     system_state_observer: Arc<SystemStateObserver>,
+    client_addr: Option<std::net::SocketAddr>, // Add client address for DOS testing
 }
 
 impl std::fmt::Display for PartyTestPayload {
@@ -85,6 +86,12 @@ impl Payload for PartyTestPayload {
 
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None
+    }
+    fn set_client_addr(&mut self, client_addr: std::net::SocketAddr) {
+        self.client_addr = Some(client_addr);
+    }
+    fn get_client_addr(&self) -> Option<std::net::SocketAddr> {
+        self.client_addr
     }
 }
 
@@ -251,7 +258,7 @@ impl Workload<dyn Payload> for PartyWorkload {
             TestTransactionBuilder::new(first_gas.1, first_gas.0, reference_gas_price)
                 .publish(path)
                 .build_and_sign(first_gas.2.as_ref());
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = proxy.execute_transaction_block(transaction, None).await;
         let effects = execution_result.unwrap();
         assert!(effects.is_ok(), "Failed to publish party package");
         let created = effects.created();
@@ -284,7 +291,7 @@ impl Workload<dyn Payload> for PartyWorkload {
             let system_state_observer = system_state_observer.clone();
             let proxy = proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+                let (_, execution_result) = proxy.execute_transaction_block(transaction, None).await;
                 let effects = execution_result.unwrap();
                 let (
                     obj_ref,
@@ -315,6 +322,7 @@ impl Workload<dyn Payload> for PartyWorkload {
                     sender,
                     state: state.clone(),
                     system_state_observer: system_state_observer.clone(),
+                    client_addr: None, // No client address for party payloads
                 }
             });
         }
@@ -329,7 +337,7 @@ impl Workload<dyn Payload> for PartyWorkload {
             let system_state_observer = system_state_observer.clone();
             let proxy = proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+                let (_, execution_result) = proxy.execute_transaction_block(transaction, None).await;
                 let effects = execution_result.unwrap();
                 let (obj_ref, Owner::AddressOwner(owner)) = effects.created()[0] else {
                     panic!("create_fastpath should always create an AddressOwner object");
@@ -348,6 +356,7 @@ impl Workload<dyn Payload> for PartyWorkload {
                     sender: owner,
                     state: state.clone(),
                     system_state_observer: system_state_observer.clone(),
+                    client_addr: None, // No client address for party payloads
                 }
             });
         }

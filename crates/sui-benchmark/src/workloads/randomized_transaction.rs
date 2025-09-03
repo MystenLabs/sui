@@ -441,7 +441,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                 let proxy_ref = proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) =
-                        proxy_ref.execute_transaction_block(transaction).await;
+                        proxy_ref.execute_transaction_block(transaction, None).await;
                     execution_result.unwrap().created()[0].0
                 });
             }
@@ -466,7 +466,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                 let proxy_ref = proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) =
-                        proxy_ref.execute_transaction_block(transaction).await;
+                        proxy_ref.execute_transaction_block(transaction, None).await;
                     let effects = execution_result.unwrap();
 
                     let created_owned = effects.created()[0].0;

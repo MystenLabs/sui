@@ -72,7 +72,8 @@ pub async fn publish_basics_package(
             retry
         );
 
-        let (client_type, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (client_type, execution_result) =
+            proxy.execute_transaction_block(transaction, None).await;
         tracing::debug!(
             "Executed publish_basics_package transaction via {:?}",
             client_type

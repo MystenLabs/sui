@@ -36,6 +36,7 @@ pub struct TransferObjectTestPayload {
     transfer_to: SuiAddress,
     gas: Vec<Gas>,
     system_state_observer: Arc<SystemStateObserver>,
+    client_addr: Option<std::net::SocketAddr>, // Add client address for DOS testing
 }
 
 impl Payload for TransferObjectTestPayload {
@@ -83,6 +84,12 @@ impl Payload for TransferObjectTestPayload {
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None
+    }
+    fn set_client_addr(&mut self, client_addr: std::net::SocketAddr) {
+        self.client_addr = Some(client_addr);
+    }
+    fn get_client_addr(&self) -> Option<std::net::SocketAddr> {
+        self.client_addr
     }
 }
 
@@ -244,6 +251,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                     transfer_to: to,
                     gas: g.to_vec(),
                     system_state_observer: system_state_observer.clone(),
+                    client_addr: None, // Initialize client_addr to None
                 })
             })
             .map(|b| Box::<dyn Payload>::from(b))

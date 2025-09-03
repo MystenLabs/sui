@@ -36,6 +36,7 @@ pub struct SharedCounterTestPayload {
     gas: Gas,
     max_tip_amount: u64,
     system_state_observer: Arc<SystemStateObserver>,
+    client_addr: Option<std::net::SocketAddr>, // Add client address for DOS testing
 }
 
 impl std::fmt::Display for SharedCounterTestPayload {
@@ -74,6 +75,12 @@ impl Payload for SharedCounterTestPayload {
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None
+    }
+    fn set_client_addr(&mut self, client_addr: std::net::SocketAddr) {
+        self.client_addr = Some(client_addr);
+    }
+    fn get_client_addr(&self) -> Option<std::net::SocketAddr> {
+        self.client_addr
     }
 }
 
@@ -233,7 +240,8 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = proxy_ref.execute_transaction_block(transaction).await;
+                let (_, execution_result) =
+                    proxy_ref.execute_transaction_block(transaction, None).await;
                 execution_result.unwrap().created()[0].0
             });
         }
@@ -265,6 +273,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 gas: g.clone(),
                 system_state_observer: system_state_observer.clone(),
                 max_tip_amount: self.max_tip_amount,
+                client_addr: None, // Will be set by the worker
             }));
         }
         let payloads: Vec<Box<dyn Payload>> = shared_payloads

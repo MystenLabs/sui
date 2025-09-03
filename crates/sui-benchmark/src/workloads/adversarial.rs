@@ -473,7 +473,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .publish(path)
             .build_and_sign(gas.2.as_ref());
 
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = proxy.execute_transaction_block(transaction, None).await;
         let effects = execution_result.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
@@ -521,7 +521,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             reference_gas_price,
         );
 
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = proxy.execute_transaction_block(transaction, None).await;
         let effects = execution_result.unwrap();
 
         let created = effects.created();
