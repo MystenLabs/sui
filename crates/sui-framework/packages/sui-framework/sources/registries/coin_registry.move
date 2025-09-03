@@ -11,7 +11,7 @@ use std::ascii;
 use std::string::String;
 use std::type_name::TypeName;
 use sui::bag::{Self, Bag};
-use sui::balance::Supply;
+use sui::balance::{Supply, Balance};
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
 use sui::derived_object;
 use sui::transfer::Receiving;
@@ -366,9 +366,14 @@ public fun delete_metadata_cap<T>(currency: &mut Currency<T>, cap: MetadataCap<T
 /// Allows burning coins for deflationary
 public fun burn<T>(currency: &mut Currency<T>, coin: Coin<T>) {
     assert!(currency.is_supply_deflationary());
+    currency.burn_balance(coin.into_balance());
+}
 
+/// Lower level function to burn a `Balance` of a deflationary `Currency`.
+public fun burn_balance<T>(currency: &mut Currency<T>, balance: Balance<T>) {
+    assert!(currency.is_supply_deflationary());
     match (currency.supply.borrow_mut()) {
-        SupplyState::Deflationary(supply) => { supply.decrease_supply(coin.into_balance()); },
+        SupplyState::Deflationary(supply) => { supply.decrease_supply(balance); },
         _ => abort,
     }
 }
