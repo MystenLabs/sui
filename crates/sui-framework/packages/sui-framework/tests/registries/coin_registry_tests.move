@@ -159,7 +159,7 @@ fun fixed_supply() {
     destroy(currency);
 }
 
-#[test, expected_failure] // todo: abort code
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
 fun burn_fixed_supply() {
     let ctx = &mut tx_context::dummy();
     let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
@@ -172,13 +172,37 @@ fun burn_fixed_supply() {
     abort
 }
 
-#[test, expected_failure] // todo: abort code
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
 fun burn_unknown_supply() {
     let ctx = &mut tx_context::dummy();
     let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
     let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
 
     currency.burn(t_cap.mint(10_000, ctx));
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
+fun burn_balance_fixed_supply() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+    let coins = t_cap.mint(10_000, ctx);
+
+    currency.make_supply_fixed(t_cap);
+    currency.burn_balance(coins.into_balance());
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
+fun burn_balance_unknown_supply() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    currency.burn_balance(t_cap.mint(10_000, ctx).into_balance());
 
     abort
 }
@@ -198,7 +222,7 @@ fun deflationary_supply() {
     assert!(!currency.is_supply_deflationary());
 
     let amount = 10_000;
-    let coins = t_cap.mint(amount, ctx);
+    let mut coins = t_cap.mint(amount, ctx);
     currency.make_supply_deflationary(t_cap);
 
     assert!(!currency.is_supply_fixed());
@@ -207,7 +231,8 @@ fun deflationary_supply() {
 
     // Perform a burn operation on deflationary supply.
     // And check the total supply value.
-    currency.burn(coins);
+    currency.burn(coins.split(5_000, ctx));
+    currency.burn_balance(coins.into_balance()); // Another way to burn.
     assert!(currency.total_supply().is_some_and!(|total| total == 0));
 
     destroy(metadata_cap);
@@ -223,8 +248,7 @@ fun dynamic_currency_default() {
     let (builder, t_cap) = new_builder().build_dynamic<TestDynamic>(&mut registry, ctx);
     let (currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
 
-    // TODO: Blocked until derived addresses are in!
-    // assert!(registry.exists<TestDynamic>());
+    assert!(registry.exists<TestDynamic>());
     assert!(currency.is_metadata_cap_claimed());
     assert!(!currency.is_supply_fixed());
     assert!(!currency.is_supply_deflationary());
@@ -243,8 +267,7 @@ fun dynamic_currency_default() {
     destroy(t_cap);
 }
 
-// TODO: Blocked until derived addresses are in!
-#[test, expected_failure] // todo: abort code
+#[test, expected_failure(abort_code = coin_registry::ECurrencyAlreadyExists)]
 fun dynamic_currency_duplicate() {
     let ctx = &mut tx_context::dummy();
     let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
@@ -317,7 +340,65 @@ fun perfect_migration_regulated() {
     destroy(t_cap);
 }
 
-// TODO: missing migration with `RegulatedCoinMetadata`.
+#[test]
+fun perfect_migration_with_regulated_coin_metadata() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (t_cap, deny_cap, metadata) = new_builder().build_legacy_regulated(
+        COIN_REGISTRY_TESTS {},
+        ctx,
+    );
+    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &metadata,
+        ctx,
+    );
+
+    let regulated_coin_metadata = coin::regulated_coin_metadata_for_testing(
+        object::id(&metadata),
+        object::id(&deny_cap),
+        ctx,
+    );
+
+    currency.migrate_regulated_state_by_metadata(&regulated_coin_metadata);
+
+    assert!(currency.is_regulated());
+    assert!(currency.deny_cap_id().is_some_and!(|id| id == object::id(&deny_cap)));
+
+    destroy(regulated_coin_metadata);
+    destroy(registry);
+    destroy(currency);
+    destroy(deny_cap);
+    destroy(metadata);
+    destroy(t_cap);
+}
+
+#[test, expected_failure(abort_code = coin_registry::EDenyListStateAlreadySet)]
+fun migrate_regulated_state_by_metadata_twice() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (_t_cap, deny_cap, metadata) = new_builder().build_legacy_regulated(
+        COIN_REGISTRY_TESTS {},
+        ctx,
+    );
+
+    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &metadata,
+        ctx,
+    );
+
+    let regulated_coin_metadata = coin::regulated_coin_metadata_for_testing(
+        object::id(&metadata),
+        object::id(&deny_cap),
+        ctx,
+    );
+
+    currency.migrate_regulated_state_by_metadata(&regulated_coin_metadata);
+    currency.migrate_regulated_state_by_metadata(&regulated_coin_metadata);
+
+    abort
+}
 
 #[test, expected_failure(abort_code = coin_registry::ECannotUpdateManagedMetadata)]
 fun update_legacy_fail() {

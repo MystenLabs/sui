@@ -24,7 +24,6 @@ const ECurrencyNotFound: u64 = 0;
 const EMetadataCapAlreadyClaimed: u64 = 1;
 /// Only the system address can create the registry
 const ENotSystemAddress: u64 = 2;
-#[allow(unused_const)]
 /// Currency for this coin type already exists
 const ECurrencyAlreadyExists: u64 = 3;
 /// Attempt to set the deny list state permissionlessly while it has already been set.
@@ -43,6 +42,8 @@ const EDenyCapAlreadyCreated: u64 = 8;
 const ECurrencyAlreadyRegistered: u64 = 9;
 /// Fixing or making deflationary an empty Supply.
 const EEmptySupply: u64 = 10;
+/// Attempt to burn a `Currency` that is not deflationary.
+const ESupplyNotDeflationary: u64 = 11;
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// 0 here matches DenyCapV2 world.
@@ -161,7 +162,7 @@ public fun new_currency<T: /* internal */ key>(
 ): (CurrencyInitializer<T>, TreasuryCap<T>) {
     // Unlike OTW creation, the guarantee on not having duplicate currencies come from the
     // coin registry.
-    assert!(!registry.exists<T>());
+    assert!(!registry.exists<T>(), ECurrencyAlreadyExists);
 
     let treasury_cap = coin::new_treasury_cap(ctx);
     let currency = Currency<T> {
@@ -172,7 +173,7 @@ public fun new_currency<T: /* internal */ key>(
         description,
         icon_url,
         supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unregulated,
+        regulated: RegulatedState::Unknown,
         treasury_cap_id: option::some(object::id(&treasury_cap)),
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
@@ -208,7 +209,7 @@ public fun new_currency_with_otw<T: drop>(
         description,
         icon_url,
         supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unregulated,
+        regulated: RegulatedState::Unknown,
         treasury_cap_id: option::some(object::id(&treasury_cap)),
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
@@ -245,7 +246,7 @@ public fun make_regulated<T>(
     allow_global_pause: bool,
     ctx: &mut TxContext,
 ): DenyCapV2<T> {
-    assert!(init.currency.regulated == RegulatedState::Unregulated, EDenyCapAlreadyCreated);
+    assert!(init.currency.regulated == RegulatedState::Unknown, EDenyCapAlreadyCreated);
     let deny_cap = coin::new_deny_cap_v2<T>(allow_global_pause, ctx);
 
     init.currency.regulated =
@@ -370,7 +371,7 @@ public fun burn<T>(currency: &mut Currency<T>, coin: Coin<T>) {
 
 /// Lower level function to burn a `Balance` of a deflationary `Currency`.
 public fun burn_balance<T>(currency: &mut Currency<T>, balance: Balance<T>) {
-    assert!(currency.is_supply_deflationary());
+    assert!(currency.is_supply_deflationary(), ESupplyNotDeflationary);
     match (currency.supply.borrow_mut()) {
         SupplyState::Deflationary(supply) => { supply.decrease_supply(balance); },
         _ => abort,
@@ -431,7 +432,7 @@ public fun migrate_legacy_metadata<T>(
             .map!(|url| url.inner_url().to_string())
             .destroy_or!(b"".to_string()),
         supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unregulated,
+        regulated: RegulatedState::Unknown, // We don't know if it's regulated or not!
         treasury_cap_id: option::none(),
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
@@ -567,7 +568,6 @@ public fun total_supply<T>(currency: &Currency<T>): Option<u64> {
     }
 }
 
-#[allow(unused_type_parameter)]
 /// Check if coin data exists for the given type T in the registry.
 public fun exists<T>(registry: &CoinRegistry): bool {
     derived_object::exists(&registry.id, CurrencyKey<T>())
@@ -650,7 +650,7 @@ public fun migrate_legacy_metadata_for_testing<T>(
             .map!(|url| url.inner_url().to_string())
             .destroy_or!(b"".to_string()),
         supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unregulated,
+        regulated: RegulatedState::Unknown,
         treasury_cap_id: option::none(),
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
