@@ -9,13 +9,14 @@ use async_graphql::{
     dataloader::DataLoader,
     Context, Object,
 };
+use diesel::{sql_types::BigInt, QueryableByName};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
     pg_reader::PgReader,
     tx_digests::TxDigestKey,
 };
-
+use sui_sql_macro::query;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     digests::TransactionDigest,
@@ -23,7 +24,10 @@ use sui_types::{
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
+    api::{
+        scalars::sui_address::SuiAddress,
+        scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
+    },
     error::RpcError,
     pagination::Page,
     scope::Scope,
@@ -37,10 +41,9 @@ use super::{
     gas_input::GasInput,
     transaction::filter::{tx_bounds, TransactionFilter},
     transaction_effects::{EffectsContents, TransactionEffects},
+    transaction_kind::TransactionKind,
     user_signature::UserSignature,
 };
-
-use super::transaction_kind::TransactionKind;
 
 pub(crate) mod filter;
 
@@ -224,7 +227,23 @@ impl Transaction {
         };
 
         let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
-        let tx_digest_keys = tx_unfiltered(&tx_bounds, &page);
+
+        // Inclusive cursor bounds
+        let pg_lo = page
+            .after()
+            .map_or(tx_bounds.start, |cursor| cursor.max(tx_bounds.start));
+        let pg_hi = page
+            .before()
+            .map(|cursor: &JsonCursor<u64>| cursor.saturating_add(1))
+            .map_or(tx_bounds.end, |cursor| cursor.min(tx_bounds.end));
+
+        let tx_bounds = pg_lo..pg_hi;
+
+        let tx_digest_keys = if let Some(affected_address) = filter.affected_address {
+            tx_affected_address(ctx, tx_bounds, &page, affected_address).await?
+        } else {
+            tx_unfiltered(tx_bounds, &page)
+        };
 
         // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
         let (prev, next, results) = page.paginate_results(tx_digest_keys, |&t| JsonCursor::new(t));
@@ -259,18 +278,80 @@ impl Transaction {
     }
 }
 
+async fn tx_affected_address(
+    ctx: &Context<'_>,
+    Range {
+        start: tx_lo,
+        end: tx_hi,
+    }: Range<u64>,
+    page: &Page<CTransaction>,
+    affected_address: SuiAddress,
+) -> Result<Vec<u64>, RpcError> {
+    let pg_reader: &PgReader = ctx.data()?;
+
+    let is_asc = page.is_from_front();
+    let query = query!(
+        r#"
+SELECT
+    tx_sequence_number
+FROM
+    tx_affected_addresses
+WHERE
+    {BigInt} <= tx_sequence_number /* tx_lo */
+    AND tx_sequence_number < {BigInt} /* tx_hi */
+    AND affected = {Bytea} /* affected_address */
+ORDER BY
+    tx_sequence_number {} /* order_by_direction */
+LIMIT
+    {BigInt} /* limit */
+"#,
+        tx_lo as i64,
+        tx_hi as i64,
+        affected_address.into_vec(),
+        page.order_by_direction(),
+        page.limit_with_overhead() as i64, /* limit */
+    );
+    #[derive(QueryableByName)]
+    struct TxSequenceNumber {
+        #[diesel(sql_type = BigInt)]
+        tx_sequence_number: i64,
+    }
+
+    let mut conn = pg_reader
+        .connect()
+        .await
+        .context("Failed to connect to database")?;
+
+    let wrapped_tx_sequence_numbers: Vec<TxSequenceNumber> = conn
+        .results(query)
+        .await
+        .context("Failed to execute query")?;
+
+    let tx_sequence_numbers = if is_asc {
+        wrapped_tx_sequence_numbers
+            .iter()
+            .map(|t| t.tx_sequence_number as u64)
+            .collect()
+    } else {
+        wrapped_tx_sequence_numbers
+            .iter()
+            .rev()
+            .map(|t| t.tx_sequence_number as u64)
+            .collect()
+    };
+
+    Ok(tx_sequence_numbers)
+}
+
 /// The tx_sequence_numbers with cursors applied inclusively.
 /// Results are limited to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
-fn tx_unfiltered(tx_bounds: &Range<u64>, page: &Page<CTransaction>) -> Vec<u64> {
-    // Inclusive cursor bounds
-    let pg_lo = page
-        .after()
-        .map_or(tx_bounds.start, |cursor| cursor.max(tx_bounds.start));
-    let pg_hi = page
-        .before()
-        .map(|cursor: &JsonCursor<u64>| cursor.saturating_add(1))
-        .map_or(tx_bounds.end, |cursor| cursor.min(tx_bounds.end));
-
+fn tx_unfiltered(
+    Range {
+        start: pg_lo,
+        end: pg_hi,
+    }: Range<u64>,
+    page: &Page<CTransaction>,
+) -> Vec<u64> {
     if page.is_from_front() {
         (pg_lo..pg_hi).take(page.limit_with_overhead()).collect()
     } else {
