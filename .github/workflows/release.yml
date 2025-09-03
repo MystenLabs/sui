@@ -99,8 +99,8 @@ jobs:
         shell: bash
         run: |
           echo "s3_existing_archive=$(for network in mainnet testnet devnet; do \
-            if curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${network}-${{ env.sui_version }}-${{ env.os_type }}.tgz \
-            | head -n1 | grep -q '200 OK'; then echo "releases/sui-${network}-${{ env.sui_version }}-${{ env.os_type }}.tgz"; \
+            if curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${network}-v${{ env.sui_version }}-${{ env.os_type }}.tgz \
+            | head -n1 | grep -q '200 OK'; then echo "releases/sui-${network}-v${{ env.sui_version }}-${{ env.os_type }}.tgz"; \
             break; fi; done)" >> $GITHUB_ENV
 
       - name: Download archive, if it exists
