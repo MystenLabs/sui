@@ -132,6 +132,14 @@ pub struct ValidatorClientMonitorConfig {
     /// Higher values are more tolerant of intermittent issues.
     #[serde(default = "default_max_consecutive_failures")]
     pub max_consecutive_failures: u32,
+
+    /// Size of the moving window for latency measurements.
+    ///
+    /// This controls how many recent latency measurements are kept for calculating
+    /// the average. Smaller values (10-20) make the system more responsive to recent changes,
+    /// while larger values (50-100) provide more stable averages.
+    #[serde(default = "default_latency_window_size")]
+    pub latency_window_size: usize,
 }
 
 /// Weights for different factors in score calculation
@@ -185,6 +193,7 @@ impl Default for ValidatorClientMonitorConfig {
             score_weights: ScoreWeights::default(),
             failure_cooldown: default_failure_cooldown(),
             max_consecutive_failures: default_max_consecutive_failures(),
+            latency_window_size: default_latency_window_size(),
         }
     }
 }
@@ -242,4 +251,8 @@ fn default_health_check_latency_weight() -> f64 {
 
 fn default_finalize_latency_weight() -> f64 {
     1.0
+}
+
+fn default_latency_window_size() -> usize {
+    50
 }

@@ -232,12 +232,28 @@ where
                 }
             }
             _ => {
+                self.record_interaction_result(OperationFeedback {
+                    authority_name: validator_name,
+                    display_name: display_name.clone(),
+                    operation: OperationType::Finalize,
+                    result: Err(()),
+                });
+
+                // Give it an end to end latency of timeout seconds
+                self.record_interaction_result(OperationFeedback {
+                    authority_name: validator_name,
+                    display_name: display_name.clone(),
+                    operation: OperationType::Finalize,
+                    result: Ok(timeout_duration),
+                });
                 warn!("Failed to get consensus position from {}", display_name);
                 return;
             }
         };
 
-        match Self::wait_for_latency_quorum(&authority_agg, consensus_position, timeout_duration)
+        let monitor = self.clone();
+        match monitor
+            .wait_for_latency_quorum(&authority_agg, consensus_position, timeout_duration)
             .await
         {
             Ok(_) => {
@@ -265,6 +281,7 @@ where
 
     /// Wait for quorum responses from validators for latency measurement using StatusAggregator
     async fn wait_for_latency_quorum(
+        self: Arc<Self>,
         authority_agg: &Arc<crate::authority_aggregator::AuthorityAggregator<A>>,
         consensus_position: sui_types::messages_consensus::ConsensusPosition,
         timeout_duration: std::time::Duration,
@@ -281,6 +298,8 @@ where
         for (name, client) in clients {
             let client = client.clone();
             let name = *name;
+            let display_name = authority_agg.get_display_name(&name);
+            let monitor = self.clone();
 
             let future = async move {
                 match timeout(
@@ -293,7 +312,15 @@ where
                 {
                     Ok(Ok(response)) => (name, Ok(response)),
                     Ok(Err(e)) => (name, Err(e)),
-                    Err(_) => (name, Err(sui_types::error::SuiError::TimeoutError)),
+                    Err(_) => {
+                        monitor.record_interaction_result(OperationFeedback {
+                            authority_name: name,
+                            display_name: display_name.clone(),
+                            operation: OperationType::Finalize,
+                            result: Err(()),
+                        });
+                        (name, Err(sui_types::error::SuiError::TimeoutError))
+                    }
                 }
             };
 

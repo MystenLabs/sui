@@ -63,7 +63,7 @@ mod client_stats_tests {
             .average_latencies
             .get(&OperationType::Submit)
             .unwrap();
-        assert_eq!(submit_latency.get(), 0.1); // 100ms = 0.1s
+        assert_eq!(submit_latency.get_average(), 0.1); // 100ms = 0.1s
     }
 
     #[tokio::test]
@@ -275,29 +275,29 @@ mod client_stats_tests {
 
     #[tokio::test]
     async fn test_validator_stats_update_latency() {
-        let mut stats = ValidatorClientStats::new(1.0);
+        let mut stats = ValidatorClientStats::new(1.0, 10);
 
         // First update creates the entry
-        stats.update_average_latency(OperationType::Submit, Duration::from_millis(100));
+        stats.update_average_latency(OperationType::Submit, Duration::from_millis(100), 10);
         assert_eq!(stats.average_latencies.len(), 1);
         assert_eq!(
             stats
                 .average_latencies
                 .get(&OperationType::Submit)
                 .unwrap()
-                .get(),
+                .get_average(),
             0.1
         );
 
-        // Second update uses EMA
-        stats.update_average_latency(OperationType::Submit, Duration::from_millis(200));
+        // Second update adds to moving window
+        stats.update_average_latency(OperationType::Submit, Duration::from_millis(200), 10);
         let latency = stats
             .average_latencies
             .get(&OperationType::Submit)
             .unwrap()
-            .get();
-        // With decay factor 0.9, new value = 0.1 * 0.9 + 0.2 * (1 - 0.9) = 0.09 + 0.02 = 0.11
-        assert!((latency - 0.11).abs() < 0.001);
+            .get_average();
+        // With moving window, average = (0.1 + 0.2) / 2 = 0.15
+        assert!((latency - 0.15).abs() < 0.001);
     }
 
     #[tokio::test]
@@ -535,7 +535,7 @@ mod client_stats_tests {
             .average_latencies
             .get(&OperationType::Submit)
             .unwrap()
-            .get();
+            .get_average();
         assert_eq!(validator_latency, 0.1);
 
         let max_latency = stats
@@ -558,7 +558,7 @@ mod client_stats_tests {
             TxType::SingleWriter,
         );
 
-        // Validator latency should decay faster (factor 0.1)
+        // Validator latency should now be average of two values
         let validator_latency = stats
             .validator_stats
             .get(&validator)
@@ -566,9 +566,9 @@ mod client_stats_tests {
             .average_latencies
             .get(&OperationType::Submit)
             .unwrap()
-            .get();
-        // old * decay + new * (1-decay) = 0.1 * 0.9 + 0.05 * (1 - 0.9) = 0.09 + 0.005 = 0.095
-        assert!((validator_latency - 0.095).abs() < 0.001);
+            .get_average();
+        // Moving window average: (0.1 + 0.05) / 2 = 0.075
+        assert!((validator_latency - 0.075).abs() < 0.001);
 
         // Max latency should decay slower (factor 0.01)
         let max_latency = stats
