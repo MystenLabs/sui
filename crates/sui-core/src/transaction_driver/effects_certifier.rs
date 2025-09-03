@@ -36,7 +36,7 @@ use crate::{
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
+        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResult,
         WaitForEffectsRequest, WaitForEffectsResponse,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
@@ -66,7 +66,8 @@ impl EffectsCertifier {
         tx_type: TxType,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
-        submit_txn_resp: SubmitTxResponse,
+        // Guaranteed to be not the Rejected variant.
+        submit_txn_result: SubmitTxResult,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
@@ -75,9 +76,10 @@ impl EffectsCertifier {
         // When consensus position is provided, wait for finalized and fastpath outputs at the validators' side.
         // Otherwise, only wait for finalized effects.
         // Skip the first attempt to get full effects if it is already provided.
-        let (consensus_position, full_effects) = match submit_txn_resp {
-            SubmitTxResponse::Submitted { consensus_position } => (Some(consensus_position), None),
-            SubmitTxResponse::Executed {
+
+        let (consensus_position, full_effects) = match submit_txn_result {
+            SubmitTxResult::Submitted { consensus_position } => (Some(consensus_position), None),
+            SubmitTxResult::Executed {
                 effects_digest,
                 details,
                 fast_path,
@@ -87,6 +89,14 @@ impl EffectsCertifier {
                 // But if it is not set, continuing to get full effects and certify the digest are still correct.
                 None => (None, None),
             },
+            SubmitTxResult::Rejected { error } => {
+                return Err(TransactionDriverError::Internal {
+                    error: format!(
+                        "Unexpected submission error in get_certified_finalized_effects(): {}",
+                        error
+                    ),
+                });
+            }
         };
 
         let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);

@@ -59,6 +59,9 @@ impl TransactionRequestError {
 /// NOTE: every error should indicate if it is retriable.
 #[derive(Eq, PartialEq, Clone)]
 pub enum TransactionDriverError {
+    /// TransactionDriver encountered an internal error.
+    /// Retriable.
+    Internal { error: String },
     /// Transient failure during transaction processing that prevents the transaction from finalization.
     /// Retriable with new transaction submission / call to TransactionDriver.
     Aborted {
@@ -82,7 +85,7 @@ pub enum TransactionDriverError {
     },
     /// Transaction timed out but we return last retriable error if it exists.
     /// Non-retriable.
-    TimeOutWithLastRetriableError {
+    TimeoutWithLastRetriableError {
         last_error: Option<Box<TransactionDriverError>>,
         attempts: u32,
         timeout: Duration,
@@ -92,10 +95,11 @@ pub enum TransactionDriverError {
 impl TransactionDriverError {
     pub fn is_retriable(&self) -> bool {
         match self {
+            TransactionDriverError::Internal { .. } => true,
             TransactionDriverError::Aborted { .. } => true,
             TransactionDriverError::InvalidTransaction { .. } => false,
             TransactionDriverError::ForkedExecution { .. } => false,
-            TransactionDriverError::TimeOutWithLastRetriableError { .. } => false,
+            TransactionDriverError::TimeoutWithLastRetriableError { .. } => true,
         }
     }
 
@@ -180,12 +184,13 @@ impl TransactionDriverError {
 impl std::fmt::Display for TransactionDriverError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            TransactionDriverError::Internal { error } => write!(f, "Internal error: {}", error),
             TransactionDriverError::Aborted { .. } => self.display_aborted(f),
             TransactionDriverError::InvalidTransaction { .. } => {
                 self.display_invalid_transaction(f)
             }
             TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
-            TransactionDriverError::TimeOutWithLastRetriableError {
+            TransactionDriverError::TimeoutWithLastRetriableError {
                 last_error,
                 attempts,
                 timeout,

@@ -175,7 +175,7 @@ where
                     .await
                     .unwrap_or_else(|_| {
                         // Timeout occurred, return with latest retriable error if available
-                        Err(TransactionDriverError::TimeOutWithLastRetriableError {
+                        Err(TransactionDriverError::TimeoutWithLastRetriableError {
                             last_error: latest_retriable_error.map(Box::new),
                             attempts,
                             timeout: duration,
@@ -196,7 +196,7 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
 
-        let (name, submit_txn_resp) = self
+        let (name, submit_txn_result) = self
             .submitter
             .submit_transaction(
                 &auth_agg,
@@ -215,7 +215,7 @@ where
                 tx_digest,
                 tx_type,
                 name,
-                submit_txn_resp,
+                submit_txn_result,
                 options,
             )
             .await
