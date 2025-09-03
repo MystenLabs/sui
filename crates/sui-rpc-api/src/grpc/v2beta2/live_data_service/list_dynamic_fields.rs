@@ -114,10 +114,10 @@ pub fn list_dynamic_fields(
             })
         });
 
-    Ok(ListDynamicFieldsResponse {
-        dynamic_fields,
-        next_page_token,
-    })
+    let mut message = ListDynamicFieldsResponse::default();
+    message.dynamic_fields = dynamic_fields;
+    message.next_page_token = next_page_token;
+    Ok(message)
 }
 
 fn decode_page_token(page_token: &[u8]) -> Result<PageToken> {

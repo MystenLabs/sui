@@ -16,8 +16,18 @@ use fun sui::accumulator_metadata::create_accumulator_metadata as AccumulatorRoo
 /// Called by settlement transactions to ensure that the settlement transaction has a unique
 /// digest.
 #[allow(unused_function)]
-fun settlement_prologue(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &TxContext) {
+fun settlement_prologue(
+    _epoch: u64,
+    _checkpoint_height: u64,
+    _idx: u64,
+    // Total input sui received from user transactions
+    input_sui: u64,
+    // Total output sui withdrawn by user transactions
+    output_sui: u64,
+    ctx: &TxContext,
+) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
+    record_settlement_sui_conservation(input_sui, output_sui);
 }
 
 #[allow(unused_function)]
@@ -55,3 +65,6 @@ fun settle_u128<T>(
         accumulator_root.create_metadata<T>(owner, ctx);
     };
 }
+
+/// Called by the settlement transaction to track conservation of SUI.
+native fun record_settlement_sui_conservation(input_sui: u64, output_sui: u64);

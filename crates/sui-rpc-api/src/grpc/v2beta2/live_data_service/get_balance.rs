@@ -61,10 +61,11 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
         .get_balance(&owner, &core_coin_type)?
         .unwrap_or_default(); // Use default (zero) if no balance found
 
-    Ok(GetBalanceResponse {
-        balance: Some(Balance {
-            coin_type: Some(coin_type.to_string()),
-            balance: Some(balance_info.balance),
-        }),
-    })
+    let mut balance = Balance::default();
+    balance.coin_type = Some(coin_type.to_string());
+    balance.balance = Some(balance_info.balance);
+
+    let mut response = GetBalanceResponse::default();
+    response.balance = Some(balance);
+    Ok(response)
 }

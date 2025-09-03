@@ -2,8 +2,6 @@
 title: Offline Signing
 description: Offline signing can be used to sign a Sui transaction when a device is not connected to a Sui network, or if the signing wallet uses a different programming language than that of the transaction being signed.
 keywords: [ offline signing, sign offline, sign transaction offline, offline transaction, serialize data, sign data, sign serialized data, sign with Sui Keystore, Sui Keystore, Keystore ]
-mdx:
-  format: md
 ---
 
 Sui supports offline signing, which is signing transactions using a device not connected to a Sui network, or in a wallet implemented in a different programming language without relying on the Sui key store. The steps to implement offline signing include:
@@ -18,7 +16,7 @@ You must serialize transaction data following [Binary Canonical Serialization](h
 
 The following example demonstrates how to serialize data for a transfer using the [Sui CLI](/references/cli.mdx). This returns serialized transaction data in Base64. Submit the raw transaction to execute as `tx_bytes`.
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction

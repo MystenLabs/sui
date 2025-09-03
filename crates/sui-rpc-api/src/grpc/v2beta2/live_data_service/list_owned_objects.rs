@@ -140,10 +140,10 @@ pub fn list_owned_objects(
             })
         });
 
-    Ok(ListOwnedObjectsResponse {
-        objects,
-        next_page_token,
-    })
+    let mut message = ListOwnedObjectsResponse::default();
+    message.objects = objects;
+    message.next_page_token = next_page_token;
+    Ok(message)
 }
 
 fn decode_page_token(page_token: &[u8]) -> Result<PageToken> {

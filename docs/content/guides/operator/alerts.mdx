@@ -1,0 +1,139 @@
+---
+title: Sui Validator Alert Reference
+description: A collection of the Prometheus Alertmanager rules that trigger alerts and warnings on Validator and Full nodes.
+---
+
+When running a Sui Validator node or Full node, you may want to configure alerting based off some or all of the following metrics.
+
+## Alert reference 
+
+The following sections cover the alert settings, but their details are meant to be customized in the following ways:
+
+- Replace `$network` with your actual network label (for example, `mainnet`, `testnet`, and so on).
+- Thresholds assume about 10,000 stake units — adjust for your own validator set size.
+- Labels like `host` and `container` are stripped to be agnostic on infrastructure.
+
+## High-priority chain health alerts (validator-specific)
+
+These alerts should receive the most immediate attention from you or your team.
+
+### Safe mode during reconfiguration
+
+| Key          | Value                                            |
+| ------------ | ------------------------------------------------ |
+| **Name**     | `Safe Mode during Reconfiguration`               |
+| **Summary**  | Epoch failed to advance; chain entered safe mode |
+| **Duration** | `5m`                                             |
+
+```sh
+is_safe_mode{network="$network"} > 0.5 or absent(is_safe_mode{network="$network"})
+```
+
+### Consensus proposals failure
+
+| Key          | Value                                       |
+| ------------ | ------------------------------------------- |
+| **Name**     | `Consensus Proposals Failure`               |
+| **Summary**  | Less than 80% of stake is proposing consensus blocks |
+| **Duration** | `5m`                                        |
+
+```sh
+sum(
+  sum by (host) (current_voting_right{network="$network"})
+  and
+  sum by (host) (rate(consensus_proposed_blocks{network="$network"}[5m])) > 0
+) < 8000
+```
+
+### Checkpoint execution rate is low
+
+| Key          | Value                                                 |
+| ------------ | ----------------------------------------------------- |
+| **Name**     | `Checkpoint Execution Rate Is Low`                    |
+| **Summary**  | Less than 80% of stake is executing checkpoints quickly enough |
+| **Duration** | `5m`                                                  |
+
+```sh
+sum(
+  sum by (host) (current_voting_right{network="$network"})
+  and
+  sum by (host) (rate(last_executed_checkpoint{network="$network"}[5m])) > 2
+) < 8000
+```
+
+### Certificate execution latencies are high
+
+| Key          | Value                                                                    |
+| ------------ | ------------------------------------------------------------------------ |
+| **Name**     | `Certificate execution latencies are high`                               |
+| **Summary**  | Less than 80% of stake is handling shared-object tx certs with low enough latency |
+| **Duration** | `5m`                                                                     |
+
+```sh
+sum(
+  sum by (host) (current_voting_right{network="$network"})
+  and
+  histogram_quantile(0.95, sum by (le, host) (
+    rate(validator_service_handle_certificate_consensus_latency_bucket{network="$network"}[5m])
+  )) < 3
+) < 8000
+```
+
+### Randomness DKG failure
+
+| Key          | Value                                             |
+| ------------ | ------------------------------------------------- |
+| **Name**     | `RandomnessDkgFailure`                            |
+| **Summary**  | Random beacon DKG has failed on one or more hosts |
+| **Duration** | `5m`                                              |
+
+```sh
+epoch_random_beacon_dkg_failed{network="$network"} > 0 or absent(is_safe_mode{network="$network"})
+```
+
+### Validators not upgraded
+
+| Key          | Value                                     |
+| ------------ | ----------------------------------------- |
+| **Name**     | `Mysten validators are not upgraded`      |
+| **Summary**  | Validators are behind on protocol version |
+| **Duration** | `1h`                                      |
+
+```sh
+min(sui_configured_max_protocol_version{network="$network", host=~"Mysten-.*"})
+  < quantile(0.34, sui_configured_max_protocol_version{network="$network"})
+```
+
+## ⚠️ Non-urgent and warning alerts
+
+All alerts are important, but the following alerts and warnings can be addressed within a normal node maintenance workflow.
+
+### Consensus sequencing p99 latency high
+
+| Key          | Value                                                        |
+| ------------ | ------------------------------------------------------------ |
+| **Name**     | `Consensus sequencing p99 latencies are high`                |
+| **Summary**  | Less than 80% of stake is sequencing tx certs with acceptable latency |
+| **Duration** | `1m`                                                         |
+
+```sh
+sum(
+  sum by (host) (current_voting_right{network="$network"})
+  and
+  histogram_quantile(0.95, sum by (le, host) (
+    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"shared_certificate|owned_certificate|soft_bundle"}[2m])
+  )) < 2
+) < 5000
+```
+
+### System invariant violations
+
+| Key          | Value                                     |
+| ------------ | ----------------------------------------- |
+| **Name**     | `System Invariant Violations`             |
+| **Summary**  | A system invariant violation was reported |
+| **Duration** | `1m`                                      |
+
+```sh
+max(system_invariant_violations{network="$network"}) > 0
+```

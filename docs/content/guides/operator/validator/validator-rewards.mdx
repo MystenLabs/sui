@@ -4,8 +4,6 @@ description: Learn how validator user and staker rewards are calculated and dist
 keywords: [ manage staking, manage gas price reference, tally rules, validator tally rules, validator staking, validator consensus, validator voting power, user staking and rewards, slashing, tallying ]
 sidebar_position: 3
 sidebar_label: Rewards
-mdx:
-  format: md
 ---
 
 The total voting power on Sui is always 10,000, regardless of the amount staked. Therefore, the quorum threshold is 6,667. There is no limit to the amount of SUI users can stake with a validator. Each validator has consensus voting power proportional to SUI in its staking pool, with one exception: the voting power of an individual validator is capped at 1,000 (10% of the total). If a validator accumulates more than 10% of total stake, the validator's voting power remains fixed at 10%, and the remaining voting power is spread across the rest of the validator set.
@@ -74,7 +72,7 @@ In practice, the process for submitting a gas price quote for the Gas Price Surv
 
 For example, to set the price quote for the next epoch to 42, run:
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client call --package <PACKAGE-ID> --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget <GAS-AMOUNT>

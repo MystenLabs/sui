@@ -1184,7 +1184,7 @@ mod test {
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
                     &registry,
-                    Some(test_cluster.fullnode_handle.rpc_url.as_str()),
+                    &test_cluster.fullnode_handle.rpc_url,
                     test_cluster.transaction_driver_percentage(),
                 )
                 .await,
@@ -1396,7 +1396,7 @@ mod test {
                                 forked_validators.clone(),
                                 /* full_halt: */ true,
                                 effects_overrides.clone(),
-                                0.1f32, // default fork probability for this test
+                                0.1f32,
                             ))
                         }
                     });
@@ -1452,6 +1452,8 @@ mod test {
         )
         .await;
         info!("Fork recovery test: First load gen done");
+
+        assert!(forked_validators.lock().unwrap().len() > 1);
 
         clear_fail_point("simulate_fork_during_execution");
 

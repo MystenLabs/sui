@@ -1,0 +1,348 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-50:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7812800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 51-53:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 54:
+//# run test::events_test::emit_event --sender A --args 42
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 56-58:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, lines 59-61:
+//# run test::events_test::emit_event --sender A --args 42
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 62:
+//# run test::events_test::emit_multiple_events --sender A
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent2"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 64-66:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 67-69:
+//# run test::events_test::emit_multiple_events --sender A
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent2"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 70-72:
+//# programmable --sender A --inputs 100 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 74:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 11, lines 76-126:
+//# run-graphql
+Response: {
+  "data": {
+    "allEvents": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "7yu5rwfEoh4UVQZjU1WwujW3Kg9LL5JeMgMhmbhgiYQq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAfterCheckpoint3": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsBeforeCheckpoint4": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAtCheckpoint4": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAfterCheckpoint0": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "7yu5rwfEoh4UVQZjU1WwujW3Kg9LL5JeMgMhmbhgiYQq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsBeforeCheckpoint100": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "7yu5rwfEoh4UVQZjU1WwujW3Kg9LL5JeMgMhmbhgiYQq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "8nG9JXw3L2kDMjkLbf3EG4rLf5zGFDr3gbrkKUKFcfYb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "962mWmgDSVWZEwtxnhZGFh74oaGHZ5CSp7jn3UX5iAVY",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAtCheckpoint100NonExistent": {
+      "nodes": []
+    }
+  }
+}

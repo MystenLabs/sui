@@ -2,8 +2,6 @@
 title: Sui Validator CLI
 description: The Sui Validator CLI is used to access the validator features of the Sui network. 
 keywords: [ sui validator cli, sui validator, sui cli validator, interact with validator from cli, validator cli, validator commands ]
-mdx:
-  format: md
 ---
 
 The Sui CLI `validator` command provides command-level access to validator features of the Sui network.
@@ -148,7 +146,7 @@ A8z83EqjmgwRNFV6sme6A5tTTTQPjiLgiW76neyvhLud
 
 ### Set gas price for the next epoch
 
-{@include: ../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui validator request_set_gas_price --args 0x5 \"42\" --gas-budget GAS-BUDGET-AMOUNT>

@@ -2,8 +2,6 @@
 title: Loyalty Tokens
 description: Use the Sui Closed-Loop Token standard to create tokens that are only valid within specific workflows and services. One example of Closed-Loop Tokens is a loyalty token.
 keywords: [ closed-loop tokens, closed-loop, closed loop, loyalty tokens, token example, create a token, how to create token, SUI token standards ]
-mdx:
-  format: md
 ---
 
 Using the Sui [Closed-Loop Token](../../../standards/closed-loop-token.mdx) standard, you can create tokens that are valid only for a specific service, like an airline that wants to grant tokens to frequent flyers to purchase tickets or upgrades. 
@@ -16,19 +14,19 @@ The loyalty token example illustrates a loyalty token that is created with the C
 
 The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the one-time witness (OTW) that creates the coin (with the same name as the module, `LOYALTY`), possesses only the `drop` ability, and has no fields. These are the characteristics of a OTW, which ensures the `LOYALTY` type has a single instance.
 
-{@inject: ../../../../../examples/move/token/sources/loyalty.move#struct=LOYALTY}
+<ImportContent source="examples/move/token/sources/loyalty.move" mode="code" struct="LOYALTY" />
 
 The `init` function of the module uses the `LOYALTY` OTW to create the token. All `init` functions run one time only at the package publish event. The initializer function makes use of the OTW `LOYALTY` type defined previously in its call to `create_currency`. The function also defines a policy, sending both the policy capability and treasury capability to the address associated with the publish event. The holder of these transferrable capabilities can mint new `LOYALTY` tokens and modify their policies.
 
-{@inject: ../../../../../examples/move/token/sources/loyalty.move#fun=init noComments}
+<ImportContent source="examples/move/token/sources/loyalty.move" mode="code" fun="init" noComments />
 
 The `LOYALTY` minting function is called `reward_user`. As mentioned previously, the holder of the `TreasuryCap` can call this function to mint new loyalty tokens and send them to the desired address. The function uses the `token::mint` function to create the token and `token::transfer` to send it to the intended recipient. 
 
-{@inject: ../../../../../examples/move/token/sources/loyalty.move#fun=reward_user noComments}
+<ImportContent source="examples/move/token/sources/loyalty.move" mode="code" fun="reward_user" noComments />
 
 Finally, the example includes a `buy_a_gift` function to handle the redemption of `LOYALTY` tokens for `Gift` types. The function ensures the gift price matches the number of loyalty tokens spent, then uses the `token::spend` function to handle the treasury bookkeeping. 
 
-{@inject: ../../../../../examples/move/token/sources/loyalty.move#fun=buy_a_gift noComments}
+<ImportContent source="examples/move/token/sources/loyalty.move" mode="code" fun="buy_a_gift" noComments />
 
 ### Complete code 
 
@@ -42,13 +40,13 @@ Toggle display of the complete source for this example, including comments, or u
 
 </summary>
 
-{@inject: ../../../../../examples/move/token/sources/loyalty.move}
+<ImportContent source="examples/move/token/sources/loyalty.move" mode="code" />
 
 </details>
 
 ## Related links
 
-- [Closed Loop Token standard](../../../standards/closed-loop-token.mdx): Details for the standard used to create tokens on Sui.
-- [Source code](https://github.com/MystenLabs/sui/blob/main/../../../../../examples/move/token/sources/loyalty.move): The source code in GitHub for this example.
-- [In-Game Tokens](./in-game-token.mdx): Example of how to create tokens for use as in-game currency.
-- [Regulated Coin and Deny List](./regulated.mdx): Example of how to create regulated coins on the Sui network.
+<RelatedLink to="/standards/closed-loop-token.mdx" />
+<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/examples/move/token/sources/loyalty.move" label="Source code" desc="The source code in GitHub for this example." />
+<RelatedLink to="/guides/developer/coin/in-game-token.mdx" />
+<RelatedLink to="/guides/developer/coin/regulated.mdx" />

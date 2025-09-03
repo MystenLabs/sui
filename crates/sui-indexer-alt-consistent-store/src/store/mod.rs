@@ -19,8 +19,9 @@ pub(crate) mod synchronizer;
 
 /// Defines the schema for the database.
 pub(crate) trait Schema: Sized {
-    /// Configuration for this schema's column families (names and options).
-    fn cfs() -> Vec<(&'static str, rocksdb::Options)>;
+    /// Configuration for this schema's column families (names and options). Takes database-level
+    /// options as the base options to extend per column-family.
+    fn cfs(base_options: &rocksdb::Options) -> Vec<(&'static str, rocksdb::Options)>;
 
     /// Construct the Rust value that represents the schema's tables, given access to the database.
     /// It is expected to be a struct containing various `DbMap`s as fields.
@@ -62,9 +63,15 @@ impl<S: Schema> Store<S> {
         config: DbConfig,
         snapshots: u64,
     ) -> anyhow::Result<Self> {
+        let db_options: rocksdb::Options = config.into();
         let db = Arc::new(
-            Db::open(path, config.into(), snapshots as usize, S::cfs())
-                .context("Failed to open database")?,
+            Db::open(
+                path,
+                db_options.clone(),
+                snapshots as usize,
+                S::cfs(&db_options),
+            )
+            .context("Failed to open database")?,
         );
 
         let schema = S::open(&db).context("Failed to open schema")?;
@@ -215,11 +222,8 @@ mod tests {
     }
 
     impl Schema for TestSchema {
-        fn cfs() -> Vec<(&'static str, rocksdb::Options)> {
-            vec![
-                ("a", rocksdb::Options::default()),
-                ("b", rocksdb::Options::default()),
-            ]
+        fn cfs(base_options: &rocksdb::Options) -> Vec<(&'static str, rocksdb::Options)> {
+            vec![("a", base_options.clone()), ("b", base_options.clone())]
         }
 
         fn open(db: &Arc<Db>) -> anyhow::Result<Self> {
@@ -404,12 +408,13 @@ mod tests {
 
         {
             // Initialize the database with some data for the pipeline
+            let db_options: rocksdb::Options = DbConfig::default().into();
             let db = Arc::new(
                 Db::open(
                     d.path().join("db"),
-                    DbConfig::default().into(),
+                    db_options.clone(),
                     snapshots as usize,
-                    TestSchema::cfs(),
+                    TestSchema::cfs(&db_options),
                 )
                 .unwrap(),
             );
@@ -457,12 +462,13 @@ mod tests {
 
         {
             // Initialize the database with some data for both pipelines
+            let db_options: rocksdb::Options = DbConfig::default().into();
             let db = Arc::new(
                 Db::open(
                     d.path().join("db"),
-                    DbConfig::default().into(),
+                    db_options.clone(),
                     snapshots as usize,
-                    TestSchema::cfs(),
+                    TestSchema::cfs(&db_options),
                 )
                 .unwrap(),
             );
@@ -516,12 +522,13 @@ mod tests {
 
         {
             // Initialize the database with some data for one of the pipelines.
+            let db_options: rocksdb::Options = DbConfig::default().into();
             let db = Arc::new(
                 Db::open(
                     d.path().join("db"),
-                    DbConfig::default().into(),
+                    db_options.clone(),
                     snapshots,
-                    TestSchema::cfs(),
+                    TestSchema::cfs(&db_options),
                 )
                 .unwrap(),
             );

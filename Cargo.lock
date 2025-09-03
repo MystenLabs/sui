@@ -2369,6 +2369,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytestring"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e465647ae23b2823b0753f50decb2d5a86d2bb2cac04788fafd1f80e45378e5f"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "bzip2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13804,8 +13813,8 @@ dependencies = [
 
 [[package]]
 name = "sui-crypto"
-version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c035a4508b681222f9d8012beaf384bbf3587f42#c035a4508b681222f9d8012beaf384bbf3587f42"
+version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=a2fe34887449f8816e3633d494fed472e99fcdcb#a2fe34887449f8816e3633d494fed472e99fcdcb"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -14509,6 +14518,7 @@ dependencies = [
  "sui-indexer-alt-schema",
  "sui-protocol-config",
  "sui-synthetic-ingestion",
+ "sui-types",
  "telemetry-subscribers",
  "tempfile",
  "tokio",
@@ -14577,9 +14587,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bcs",
  "datatest-stable",
  "diesel",
  "diesel-async",
+ "fastcrypto",
  "jsonrpsee",
  "move-core-types",
  "msim",
@@ -14595,12 +14607,14 @@ dependencies = [
  "sui-indexer-alt-graphql",
  "sui-indexer-alt-jsonrpc",
  "sui-indexer-alt-reader",
+ "sui-indexer-alt-schema",
  "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
  "sui-pg-db",
  "sui-protocol-config",
  "sui-simulator",
+ "sui-storage",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-transactional-test-runner",
@@ -14690,6 +14704,7 @@ dependencies = [
  "futures",
  "headers",
  "insta",
+ "itertools 0.13.0",
  "move-binary-format",
  "move-core-types",
  "prometheus",
@@ -15860,8 +15875,8 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c035a4508b681222f9d8012beaf384bbf3587f42#c035a4508b681222f9d8012beaf384bbf3587f42"
+version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=a2fe34887449f8816e3633d494fed472e99fcdcb#a2fe34887449f8816e3633d494fed472e99fcdcb"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -15869,7 +15884,6 @@ dependencies = [
  "http 1.3.1",
  "prost",
  "prost-types",
- "roaring",
  "serde",
  "serde_json",
  "sui-sdk-types",
@@ -16018,15 +16032,16 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.0.6"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c035a4508b681222f9d8012beaf384bbf3587f42#c035a4508b681222f9d8012beaf384bbf3587f42"
+version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=a2fe34887449f8816e3633d494fed472e99fcdcb#a2fe34887449f8816e3633d494fed472e99fcdcb"
 dependencies = [
  "base64ct",
  "bcs",
  "blake2",
  "bnum",
  "bs58 0.5.1",
- "hex",
+ "bytes",
+ "bytestring",
  "itertools 0.13.0",
  "roaring",
  "serde",

@@ -2,8 +2,6 @@
 title: Using Events
 description: Use events to notify on-chain assets of activity your smart contracts initiate and query events from other packages to trigger logic based on emitted events.
 keywords: [ using events, notify events, notify assets, notify on-chain assets, activity events, events for activities, move events, events in move, query events, sui RPC, graphql, move, filter events, rust, typescript ]
-mdx:
-  format: md
 ---
 
 The Sui network stores countless objects on chain where Move code can perform actions using those objects. Tracking this activity is often desired, for example, to discover how many times a module mints an NFT or to tally the amount of SUI in transactions that a smart contract generates.
@@ -35,7 +33,7 @@ use sui::event;
 
 With the dependency added, you can use the `emit` function to trigger an event whenever the action you want to monitor fires. For example, the following code is part of an example application that enables the locking of objects. The `lock` function handles the locking of objects and emits an event whenever the function is called.
 
-{@inject: ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="lock" noComments />
 
 ### Query events with RPC
 
@@ -316,7 +314,7 @@ Event connection
 
 </summary>
 
-{@inject: ../../../../../crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql}
+<ImportContent source="crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql" mode="code" />
 
 </details>
 
@@ -328,7 +326,7 @@ Filter events by sender
 
 </summary>
 
-{@inject: ../../../../../crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql}
+<ImportContent source="crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql" mode="code" />
 
 </details>
 
@@ -354,7 +352,7 @@ To monitor events, you need a database to store checkpoint data. The [Trustless 
 
 </summary>
 
-{@inject: ../../../../../examples/trading/api/indexer/event-indexer.ts noComments}
+<ImportContent source="examples/trading/api/indexer/event-indexer.ts" mode="code" noComments />
 
 </details>
 
@@ -368,12 +366,12 @@ Trustless Swap incorporates handlers to process each event type that triggers. F
 
 </summary>
 
-{@inject: ../../../../../examples/trading/api/indexer/locked-handler.ts}
+<ImportContent source="examples/trading/api/indexer/locked-handler.ts" mode="code" />
 
 </details>
 
 ## Related links
 
-- [Custom Indexer](../advanced/custom-indexer.mdx): For near-real time monitoring of events, you can use a custom indexer.
-- [Events](https://move-book.com/programmability/events.html): The Move Book shows how to emit events in Move.
-- [Trustless Swap](../app-examples/trustless-swap.mdx): The Trustless Swap guide uses events to update the state of its frontend.
+<RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
+<RelatedLink href="https://move-book.com/programmability/events.html" label="Events" desc="The Move Book shows how to emit events in Move." />
+<RelatedLink to="/guides/developer/app-examples/trustless-swap.mdx" />

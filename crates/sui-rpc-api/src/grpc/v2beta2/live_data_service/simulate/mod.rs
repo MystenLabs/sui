@@ -263,25 +263,26 @@ pub fn simulate_transaction(
         execution_result
             .into_iter()
             .flatten()
-            .map(|(reference_outputs, return_values)| CommandResult {
-                return_values: return_values
+            .map(|(reference_outputs, return_values)| {
+                let mut message = CommandResult::default();
+                message.return_values = return_values
                     .into_iter()
                     .map(|(bcs, ty)| to_command_output(service, None, bcs, ty))
-                    .collect(),
-                mutated_by_ref: reference_outputs
+                    .collect();
+                message.mutated_by_ref = reference_outputs
                     .into_iter()
                     .map(|(arg, bcs, ty)| to_command_output(service, Some(arg), bcs, ty))
-                    .collect(),
+                    .collect();
+                message
             })
             .collect()
     } else {
         Vec::new()
     };
 
-    let response = SimulateTransactionResponse {
-        transaction,
-        outputs,
-    };
+    let mut response = SimulateTransactionResponse::default();
+    response.transaction = transaction;
+    response.outputs = outputs;
     Ok(response)
 }
 
@@ -307,14 +308,11 @@ fn to_command_output(
             .map(Box::new)
         });
 
-    CommandOutput {
-        argument: arg.map(Into::into),
-        value: Some(Bcs {
-            name: Some(ty.to_canonical_string(true)),
-            value: Some(bcs.into()),
-        }),
-        json,
-    }
+    let mut message = CommandOutput::default();
+    message.argument = arg.map(Into::into);
+    message.value = Some(Bcs::from(bcs).with_name(ty.to_canonical_string(true)));
+    message.json = json;
+    message
 }
 
 /// Estimate the gas budget using the gas_cost_summary from a previous DryRun

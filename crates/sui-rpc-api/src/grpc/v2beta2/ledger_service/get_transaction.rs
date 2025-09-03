@@ -63,15 +63,15 @@ pub fn get_transaction(
 
     let transaction = transaction_to_response(service, transaction_read, &read_mask);
 
-    Ok(GetTransactionResponse {
-        transaction: Some(transaction),
-    })
+    Ok(GetTransactionResponse::new(transaction))
 }
 
 #[tracing::instrument(skip(service))]
 pub fn batch_get_transactions(
     service: &RpcService,
-    BatchGetTransactionsRequest { digests, read_mask }: BatchGetTransactionsRequest,
+    BatchGetTransactionsRequest {
+        digests, read_mask, ..
+    }: BatchGetTransactionsRequest,
 ) -> Result<BatchGetTransactionsResponse, RpcError> {
     let read_mask = {
         let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
@@ -108,7 +108,7 @@ pub fn batch_get_transactions(
         })
         .collect();
 
-    Ok(BatchGetTransactionsResponse { transactions })
+    Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
 fn transaction_to_response(

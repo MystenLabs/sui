@@ -3,8 +3,6 @@ title: GraphQL for Sui RPC (Alpha)
 beta: devnet, testnet, mainnet
 description: Use GraphQL to make Sui RPC calls. This feature is currently in Beta. 
 keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
-mdx:
-  format: md
 ---
 
 This section explains some of the common concepts when working with GraphQL, such as altering behavior using HTTP headers, re-using query snippets with variables and fragments, consuming paginated queries, and understanding and working within the limits enforced by the service.
@@ -21,9 +19,9 @@ For more details on GraphQL fundamentals, see the introductory documentation fro
 
 :::info
 
-{@include: ../snippets/data-serving-msg.mdx}
+<ImportContent source="data-serving-msg.mdx" mode="snippet" />
 
-{@include: ../snippets/data-serving-gql-alpha.mdx}
+<ImportContent source="data-serving-gql-alpha.mdx" mode="snippet" />
 
 :::
 
@@ -296,6 +294,6 @@ In addition to rate limits, queries are also validated against a number of rules
 
 ## Related links
 
-- [Querying Sui RPC with GraphQL](../guides/developer/getting-started/graphql-rpc.mdx): Gets you started using GraphQL to query the Sui RPC for on-chain data.  
-- [Migrating to GraphQL](../guides/developer/advanced/graphql-migration.mdx): Guides you through migrating Sui RPC projects from JSON-RPC to GraphQL. 
-- [GraphQL for Sui RPC](../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
+<RelatedLink to="/guides/developer/getting-started/graphql-rpc.mdx" />
+<RelatedLink to="/guides/developer/advanced/graphql-migration.mdx" />
+<RelatedLink to="/references/sui-graphql.mdx" />
