@@ -7,7 +7,8 @@ module sui::coin_registry_tests;
 use std::string::String;
 use std::unit_test::assert_eq;
 use sui::coin::{Self, DenyCapV2, TreasuryCap, CoinMetadata};
-use sui::coin_registry::{Self, CurrencyInitializer, CoinRegistry};
+use sui::coin_registry::{Self, Currency, CurrencyInitializer, CoinRegistry};
+use sui::test_scenario;
 use sui::test_utils::destroy;
 use sui::url;
 
@@ -437,6 +438,37 @@ fun delete_legacy_fail() {
     currency.delete_migrated_legacy_metadata(metadata);
 
     abort
+}
+
+// === Test Scenario + Receiving ===
+
+#[test, expected_failure] // TODO: Once system address is defined, change the test
+fun receive_promote() {
+    let mut test = test_scenario::begin(@0x0);
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(test.ctx());
+    let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, test.ctx());
+    let metadata_cap = builder.finalize(test.ctx());
+
+    test.next_tx(@10);
+
+    // Get Receiving<Currency<COIN_REGISTRY_TESTS>>
+    let currency = test_scenario::most_recent_receiving_ticket<Currency<COIN_REGISTRY_TESTS>>(
+        &coin_registry::coin_registry_id(),
+    );
+
+    registry.finalize_registration(currency, test.ctx());
+
+    test.next_tx(@10);
+
+    let mut currency = test.take_shared<Currency<COIN_REGISTRY_TESTS>>();
+
+    currency.make_supply_fixed(t_cap);
+    currency.delete_metadata_cap(metadata_cap);
+
+    test_scenario::return_shared(currency);
+
+    destroy(registry);
+    test.end();
 }
 
 // === Metadata Builder ===
