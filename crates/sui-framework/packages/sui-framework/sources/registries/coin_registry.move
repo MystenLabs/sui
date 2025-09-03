@@ -412,7 +412,7 @@ public fun set_treasury_cap_id<T>(currency: &mut Currency<T>, cap: &TreasuryCap<
 public fun migrate_legacy_metadata<T>(
     registry: &mut CoinRegistry,
     legacy: &CoinMetadata<T>,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
     assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
     transfer::share_object(Currency<T> {
