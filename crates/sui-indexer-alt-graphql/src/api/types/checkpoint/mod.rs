@@ -28,7 +28,10 @@ use super::{
     checkpoint::filter::{checkpoint_bounds, cp_by_epoch, cp_unfiltered, CheckpointFilter},
     epoch::Epoch,
     gas::GasCostSummary,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+        CTransaction, Transaction,
+    },
     validator_aggregated_signature::ValidatorAggregatedSignature,
 };
 
@@ -175,7 +178,7 @@ impl CheckpointContents {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
             return Ok(None);

@@ -4,15 +4,15 @@
 use anyhow::Context as _;
 use std::ops::{Range, RangeInclusive};
 
-use async_graphql::{Context, InputObject};
+use async_graphql::{Context, CustomValidator, InputObject, InputValueError};
 use diesel::prelude::QueryableByName;
 use diesel::sql_types::BigInt;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
 
-use crate::api::scalars::uint53::UInt53;
-use crate::error::RpcError;
-use crate::intersect;
+use crate::{
+    api::scalars::sui_address::SuiAddress, api::scalars::uint53::UInt53, error::RpcError, intersect,
+};
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionFilter {
@@ -24,6 +24,25 @@ pub(crate) struct TransactionFilter {
 
     /// Filter to transaction that occurred strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
+
+    /// Limit to transactions that interacted with the given address.
+    /// The address could be a sender, sponsor, or recipient of the transaction.
+    pub affected_address: Option<SuiAddress>,
+}
+
+pub(crate) struct TransactionFilterValidator;
+
+impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
+    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
+        let filters = filter.affected_address.is_some() as u8;
+        if filters > 1 {
+            return Err(InputValueError::custom(
+                "Only one of affectedAddress can be specified",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(QueryableByName)]
@@ -50,6 +69,7 @@ impl TransactionFilter {
             after_checkpoint: intersect!(after_checkpoint, intersect::by_max)?,
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
+            affected_address: intersect!(affected_address, intersect::by_eq)?,
         })
     }
 }
