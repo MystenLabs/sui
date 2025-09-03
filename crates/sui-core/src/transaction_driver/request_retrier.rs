@@ -26,8 +26,8 @@ use crate::{
 /// This component helps to manager this retry pattern.
 pub(crate) struct RequestRetrier<A: Clone> {
     remaining_clients: VecDeque<(AuthorityName, Arc<SafeClient<A>>)>,
-    non_retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
-    retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
+    pub(crate) non_retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
+    pub(crate) retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
 }
 
 impl<A: Clone> RequestRetrier<A> {
@@ -65,6 +65,7 @@ impl<A: Clone> RequestRetrier<A> {
             .reached_validity_threshold()
         {
             Err(TransactionDriverError::InvalidTransaction {
+                local_error: None,
                 submission_non_retriable_errors: aggregate_request_errors(
                     self.non_retriable_errors_aggregator.status_by_authority(),
                 ),
@@ -106,6 +107,7 @@ impl<A: Clone> RequestRetrier<A> {
                 .reached_validity_threshold()
             {
                 return Err(TransactionDriverError::InvalidTransaction {
+                    local_error: None,
                     submission_non_retriable_errors: aggregate_request_errors(
                         self.non_retriable_errors_aggregator.status_by_authority(),
                     ),
