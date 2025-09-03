@@ -180,10 +180,6 @@ impl CheckpointArtifacts {
         }
     }
 
-    pub fn default() -> Self {
-        Self::new()
-    }
-
     pub fn add_artifact(&mut self, artifact: CheckpointArtifact) -> SuiResult<()> {
         if self
             .artifacts
@@ -242,6 +238,12 @@ impl CheckpointArtifacts {
         Ok(CheckpointArtifactsDigest::new(
             Blake2b256::digest(&bytes).into(),
         ))
+    }
+}
+
+impl Default for CheckpointArtifacts {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
