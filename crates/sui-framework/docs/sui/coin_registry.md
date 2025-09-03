@@ -18,8 +18,8 @@ supply information, regulatory status, and metadata capabilities.
 -  [Enum `RegulatedState`](#sui_coin_registry_RegulatedState)
 -  [Enum `MetadataCapState`](#sui_coin_registry_MetadataCapState)
 -  [Constants](#@Constants_0)
+-  [Function `new_currency_with_otw`](#sui_coin_registry_new_currency_with_otw)
 -  [Function `new_currency`](#sui_coin_registry_new_currency)
--  [Function `new_currency_dyn`](#sui_coin_registry_new_currency_dyn)
 -  [Function `claim_metadata_cap`](#sui_coin_registry_claim_metadata_cap)
 -  [Function `make_regulated`](#sui_coin_registry_make_regulated)
 -  [Function `make_supply_fixed`](#sui_coin_registry_make_supply_fixed)
@@ -73,6 +73,7 @@ supply information, regulatory status, and metadata capabilities.
 <b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
+<b>use</b> <a href="../sui/derived_object.md#sui_derived_object">sui::derived_object</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
@@ -620,13 +621,13 @@ TODO: Fix wording here.
 
 
 
-<a name="sui_coin_registry_new_currency"></a>
+<a name="sui_coin_registry_new_currency_with_otw"></a>
 
-## Function `new_currency`
+## Function `new_currency_with_otw`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency">new_currency</a>&lt;T: drop&gt;(otw: T, <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyBuilder">sui::coin_registry::CurrencyBuilder</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency_with_otw">new_currency_with_otw</a>&lt;T: drop&gt;(otw: T, <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyBuilder">sui::coin_registry::CurrencyBuilder</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -635,7 +636,7 @@ TODO: Fix wording here.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency">new_currency</a>&lt;T: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency_with_otw">new_currency_with_otw</a>&lt;T: drop&gt;(
     otw: T,
     <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8,
     <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: String,
@@ -670,15 +671,18 @@ TODO: Fix wording here.
 
 </details>
 
-<a name="sui_coin_registry_new_currency_dyn"></a>
+<a name="sui_coin_registry_new_currency"></a>
 
-## Function `new_currency_dyn`
+## Function `new_currency`
 
-Create a currency dynamically.
-TODO: Add verifier rule, as this needs to only be callable by the module that defines <code>T</code>.
+Creates a new currency builder.
+
+Note: This constructor has no long term difference from <code><a href="../sui/coin_registry.md#sui_coin_registry_new_currency_with_otw">new_currency_with_otw</a></code>. The only change is
+that the first requires an OTW (one-time witness), while this one can be called dynamically
+from the module that defines <code>T</code>, enabling the creation of a new coin type
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency_dyn">new_currency_dyn</a>&lt;T: key&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyBuilder">sui::coin_registry::CurrencyBuilder</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency">new_currency</a>&lt;T: key&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyBuilder">sui::coin_registry::CurrencyBuilder</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -687,7 +691,7 @@ TODO: Add verifier rule, as this needs to only be callable by the module that de
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency_dyn">new_currency_dyn</a>&lt;T: /* internal */ key&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_new_currency">new_currency</a>&lt;T: /* internal */ key&gt;(
     registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>,
     <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: u8,
     <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: String,
@@ -701,8 +705,7 @@ TODO: Add verifier rule, as this needs to only be callable by the module that de
     <b>assert</b>!(!registry.<a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;());
     <b>let</b> treasury_cap = <a href="../sui/coin.md#sui_coin_new_treasury_cap">coin::new_treasury_cap</a>(ctx);
     <b>let</b> metadata = <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt; {
-        // TODO: <b>use</b> `derived_object::claim(&<b>mut</b> registry.id, CoinKey&lt;T&gt;())`
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyKey">CurrencyKey</a>&lt;T&gt;()),
         <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>,
         <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>,
         <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>,
@@ -895,7 +898,7 @@ The second step in the "otw" initialization of coin metadata, that takes in the 
 transferred from init, and transforms it in to a "derived address" shared object.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize_registration">finalize_registration</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, coin_data: <a href="../sui/transfer.md#sui_transfer_Receiving">sui::transfer::Receiving</a>&lt;<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize_registration">finalize_registration</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, coin_data: <a href="../sui/transfer.md#sui_transfer_Receiving">sui::transfer::Receiving</a>&lt;<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -907,7 +910,7 @@ transferred from init, and transforms it in to a "derived address" shared object
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize_registration">finalize_registration</a>&lt;T&gt;(
     registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>,
     coin_data: Receiving&lt;<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;&gt;,
-    ctx: &<b>mut</b> TxContext,
+    _ctx: &<b>mut</b> TxContext,
 ) {
     // 1. Consume <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>
     // 2. Re-<a href="../sui/coin_registry.md#sui_coin_registry_create">create</a> it with a "derived" <b>address</b>.
@@ -927,8 +930,7 @@ transferred from init, and transforms it in to a "derived address" shared object
     id.delete();
     // Now, <a href="../sui/coin_registry.md#sui_coin_registry_create">create</a> the shared version of the <a href="../sui/coin.md#sui_coin">coin</a> data.
     <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a> {
-        // TODO: Replace this with `derived_object::claim()`
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyKey">CurrencyKey</a>&lt;T&gt;()),
         <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>,
         <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>,
         <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>,
@@ -1184,7 +1186,7 @@ This should:
 ) {
     <b>assert</b>!(!registry.<a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(), <a href="../sui/coin_registry.md#sui_coin_registry_ECurrencyAlreadyRegistered">ECurrencyAlreadyRegistered</a>);
     <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt; {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx), // TODO: <b>use</b> derived_object::claim()
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx), // TODO: <b>use</b> <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>()
         <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: legacy.get_decimals(),
         <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: legacy.get_name(),
         <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: legacy.get_symbol().to_string(),
@@ -1679,7 +1681,7 @@ deflationary state. Returns <code>None</code> if the supply is unknown.
 Check if coin data exists for the given type T in the registry.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(_registry: &<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(registry: &<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>): bool
 </code></pre>
 
 
@@ -1688,9 +1690,8 @@ Check if coin data exists for the given type T in the registry.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(_registry: &<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>): bool {
-    // TODO: `<b>use</b> derived_object::exists()`
-    <b>false</b> // TODO: <b>return</b> function call once derived addresses are in!
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(registry: &<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>): bool {
+    <a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyKey">CurrencyKey</a>&lt;T&gt;())
 }
 </code></pre>
 

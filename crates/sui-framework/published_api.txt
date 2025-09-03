@@ -2494,6 +2494,24 @@ deny_list_remove
 deny_list_contains
 	public fun
 	0x2::coin
+Claimed
+	public struct
+	0x2::derived_object
+DerivedObjectKey
+	public struct
+	0x2::derived_object
+ClaimedStatus
+	public enum
+	0x2::derived_object
+claim
+	public fun
+	0x2::derived_object
+exists
+	public fun
+	0x2::derived_object
+derive_address
+	public fun
+	0x2::derived_object
 CoinRegistry
 	public struct
 	0x2::coin_registry
@@ -2521,10 +2539,10 @@ RegulatedState
 MetadataCapState
 	public enum
 	0x2::coin_registry
-new_currency
+new_currency_with_otw
 	public fun
 	0x2::coin_registry
-new_currency_dyn
+new_currency
 	public fun
 	0x2::coin_registry
 claim_metadata_cap

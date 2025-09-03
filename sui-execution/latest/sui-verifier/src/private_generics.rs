@@ -20,7 +20,7 @@ pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
 pub const GET_EVENTS_TEST_FUNCTION: &IdentStr = ident_str!("events_by_type");
 pub const COIN_REGISTRY_MODULE: &IdentStr = ident_str!("coin_registry");
-pub const DYNAMIC_COIN_CREATION_FUNCTION: &IdentStr = ident_str!("new_currency_dyn");
+pub const DYNAMIC_COIN_CREATION_FUNCTION: &IdentStr = ident_str!("new_currency");
 pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_transfer"),
     ident_str!("public_freeze_object"),
@@ -198,7 +198,7 @@ fn verify_dynamic_coin_creation(
 ) -> Result<(), String> {
     let fident = view.identifier_at(fhandle.name);
 
-    // If we are calling anything besides `coin::new_currency_dyn`,
+    // If we are calling anything besides `coin::new_currency`,
     // we don't need this check.
     if fident != DYNAMIC_COIN_CREATION_FUNCTION {
         return Ok(());
@@ -213,8 +213,8 @@ fn verify_dynamic_coin_creation(
     let type_arg = &type_arguments[0];
     if !is_defined_in_current_module(view, type_arg) {
         return Err(format!(
-            "Invalid call to '{}::coin_registry::{}' with dynamic coin type '{}'. \
-                The dynamic coin's type must be defined in the current module",
+            "Invalid call to '{}::coin_registry::{}' with type '{}'. \
+                The coin's type must be defined in the current module",
             SUI_FRAMEWORK_ADDRESS,
             fident,
             format_signature_token(view, type_arg),
