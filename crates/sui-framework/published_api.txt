@@ -1096,12 +1096,6 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
-blake2b256
-	public fun
-	0x2::hash
-keccak256
-	public fun
-	0x2::hash
 hash_to_input
 	public fun
 	0x2::vdf
@@ -2206,11 +2200,26 @@ destroy_empty
 drop
 	public fun
 	0x2::table
+blake2b256
+	public fun
+	0x2::hash
+keccak256
+	public fun
+	0x2::hash
 EventStreamHead
 	public struct
 	0x2::event
 emit
 	public fun
+	0x2::event
+add_to_mmr
+	fun
+	0x2::event
+hash_two_to_one_via_bcs
+	fun
+	0x2::event
+update_head
+	entry fun
 	0x2::event
 emit_authenticated
 	public fun

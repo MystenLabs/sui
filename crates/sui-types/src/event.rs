@@ -4,6 +4,8 @@
 use std::str::FromStr;
 
 use anyhow::ensure;
+use fastcrypto::hash::Blake2b256;
+use fastcrypto::hash::HashFunction;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveDatatypeLayout;
 use move_core_types::annotated_value::MoveValue;
@@ -18,6 +20,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use crate::digests::Digest;
 use crate::error::{SuiError, SuiResult};
 use crate::object::bounded_visitor::BoundedVisitor;
 use crate::sui_serde::BigInt;
@@ -139,6 +142,14 @@ impl Event {
         self.type_.address == SUI_SYSTEM_ADDRESS
             && self.type_.module.as_ident_str() == ident_str!("sui_system_state_inner")
             && self.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
+    }
+
+    /// Hash of event contents. Not guaranteed to be unique as event contents can be identical.
+    pub fn digest(&self) -> Digest {
+        let mut h = Blake2b256::new();
+        bcs::serialize_into(&mut h, &self).unwrap();
+        let digest = h.finalize();
+        Digest::new(digest.digest)
     }
 }
 
