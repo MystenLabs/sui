@@ -478,7 +478,7 @@ impl EffectsContents {
 
         // Discard the loaded result if we are viewing it at a checkpoint before it existed.
         if let Some(cp_num) = transaction.cp_sequence_number() {
-            if cp_num > self.scope.checkpoint_viewed_at() {
+            if cp_num > self.scope.checkpoint_viewed_at().unwrap_or(u64::MAX) {
                 return Ok(self.clone());
             }
         }

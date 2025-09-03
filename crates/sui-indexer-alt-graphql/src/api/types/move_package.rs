@@ -433,7 +433,7 @@ impl MovePackage {
         } else if let Some(cp) = key.at_checkpoint {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
-            let cp: UInt53 = scope.checkpoint_viewed_at().into();
+            let cp: UInt53 = scope.checkpoint_viewed_at_or_error()?.into();
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         }
     }
@@ -516,7 +516,7 @@ impl MovePackage {
         scope: Scope,
         stored: StoredPackage,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX) {
             return Ok(None);
         }
 
@@ -562,12 +562,15 @@ impl MovePackage {
 
         // The original ID record exists but points to a package that is not visible at the
         // checkpoint being viewed.
-        if original_id.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+        if original_id.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX)
+        {
             return Ok(conn);
         }
 
         let mut query = p::kv_packages
-            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(
+                p::cp_sequence_number.le(scope.checkpoint_viewed_at().unwrap_or(u64::MAX) as i64),
+            )
             .filter(p::original_id.eq(original_id.original_id))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
@@ -642,7 +645,9 @@ impl MovePackage {
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
-            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(
+                p::cp_sequence_number.le(scope.checkpoint_viewed_at().unwrap_or(u64::MAX) as i64),
+            )
             .limit(page.limit() as i64 + 2)
             .into_boxed();
 

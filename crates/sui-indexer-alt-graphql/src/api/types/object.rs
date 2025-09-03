@@ -466,7 +466,7 @@ impl Object {
 
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
-            let cp: UInt53 = scope.checkpoint_viewed_at().into();
+            let cp: UInt53 = scope.checkpoint_viewed_at_or_error()?.into();
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         }
     }
@@ -541,7 +541,9 @@ impl Object {
 
         if stored_version
             .context("Failed to get object version")?
-            .is_none_or(|s| s.cp_sequence_number as u64 > scope.checkpoint_viewed_at())
+            .is_none_or(|s| {
+                s.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX)
+            })
         {
             return Ok(None);
         }
@@ -590,7 +592,7 @@ impl Object {
 
         // If the object's version is from a later checkpoint than is being viewed currently, then
         // discard this result.
-        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX) {
             return Ok(None);
         }
 
@@ -639,7 +641,7 @@ impl Object {
                         m.object_version DESC
                     LIMIT 1)
                 "#,
-                scope.checkpoint_viewed_at() as i64,
+                scope.checkpoint_viewed_at().unwrap_or(u64::MAX) as i64,
             ))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
@@ -718,7 +720,7 @@ impl Object {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
 
-            (None, None) => scope.checkpoint_viewed_at(),
+            (None, None) => scope.checkpoint_viewed_at_or_error()?,
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 

@@ -127,7 +127,7 @@ impl Event {
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             reader_lo,
-            scope.checkpoint_viewed_at(),
+            scope.checkpoint_viewed_at().unwrap_or(u64::MAX),
         ) else {
             return Ok(Connection::new(false, false));
         };

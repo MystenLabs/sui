@@ -114,7 +114,7 @@ impl ProtocolConfigs {
     pub(crate) async fn latest(ctx: &Context<'_>, scope: &Scope) -> Result<Option<Self>, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
-        let cp = scope.checkpoint_viewed_at();
+        let cp = scope.checkpoint_viewed_at_or_error()?;
         let Some(stored) = pg_loader
             .load_one(CheckpointBoundedEpochStartKey(cp))
             .await

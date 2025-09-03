@@ -201,8 +201,10 @@ impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
     /// Returns `None` if the checkpoint is set in the future relative to the current scope's
     /// checkpoint.
+    ///
+    /// In execution context, always returns `Some` since no checkpoint is considered future.
     pub(crate) fn with_sequence_number(scope: Scope, sequence_number: u64) -> Option<Self> {
-        (sequence_number <= scope.checkpoint_viewed_at()).then_some(Self {
+        (sequence_number <= scope.checkpoint_viewed_at().unwrap_or(u64::MAX)).then_some(Self {
             scope,
             sequence_number,
         })
@@ -219,7 +221,7 @@ impl Checkpoint {
 
         // TODO: (henrychen) Update when we figure out retention for key-value stores.
         let cp_lo = 0;
-        let cp_hi_inclusive = scope.checkpoint_viewed_at();
+        let cp_hi_inclusive = scope.checkpoint_viewed_at().unwrap_or(u64::MAX);
 
         let Some(cp_bounds) = checkpoint_bounds(
             filter.after_checkpoint.map(u64::from),

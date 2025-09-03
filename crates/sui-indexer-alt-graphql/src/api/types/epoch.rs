@@ -162,7 +162,11 @@ impl Epoch {
 
         let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
         let cp_hi = end.as_ref().map_or_else(
-            || self.scope.checkpoint_viewed_at_exclusive_bound(),
+            || {
+                self.scope
+                    .checkpoint_viewed_at_exclusive_bound()
+                    .unwrap_or(u64::MAX)
+            },
             |end| end.cp_hi as u64,
         );
 
@@ -242,7 +246,11 @@ impl Epoch {
 
         let lo = start.cp_lo as u64;
         let hi = end.as_ref().map_or_else(
-            || self.scope.checkpoint_viewed_at_exclusive_bound(),
+            || {
+                self.scope
+                    .checkpoint_viewed_at_exclusive_bound()
+                    .unwrap_or(u64::MAX)
+            },
             |end| end.cp_hi as u64,
         );
 
@@ -478,13 +486,15 @@ impl Epoch {
                 .await
                 .context("Failed to fetch epoch start information by start key")?,
             None => pg_loader
-                .load_one(CheckpointBoundedEpochStartKey(scope.checkpoint_viewed_at()))
+                .load_one(CheckpointBoundedEpochStartKey(
+                    scope.checkpoint_viewed_at_or_error()?,
+                ))
                 .await
                 .context(
                     "Failed to fetch epoch start information by checkpoint bounded start key",
                 )?,
         }
-        .filter(|start| start.cp_lo as u64 <= scope.checkpoint_viewed_at());
+        .filter(|start| start.cp_lo as u64 <= scope.checkpoint_viewed_at().unwrap_or(u64::MAX));
 
         Ok(stored.map(|start| Self {
             epoch_id: start.epoch as u64,
@@ -504,7 +514,9 @@ impl Epoch {
                     .load_one(EpochStartKey(self.epoch_id))
                     .await
                     .context("Failed to fetch epoch start information")?
-                    .filter(|start| start.cp_lo as u64 <= self.scope.checkpoint_viewed_at());
+                    .filter(|start| {
+                        start.cp_lo as u64 <= self.scope.checkpoint_viewed_at().unwrap_or(u64::MAX)
+                    });
 
                 Ok(stored)
             })
@@ -529,13 +541,15 @@ impl Epoch {
             .get_or_try_init(async || {
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
+                let checkpoint_bound = self
+                    .scope
+                    .checkpoint_viewed_at_exclusive_bound()
+                    .unwrap_or(u64::MAX);
                 let stored = pg_loader
                     .load_one(EpochEndKey(self.epoch_id))
                     .await
                     .context("Failed to fetch epoch end information")?
-                    .filter(|end| {
-                        end.cp_hi as u64 <= self.scope.checkpoint_viewed_at_exclusive_bound()
-                    });
+                    .filter(|end| end.cp_hi as u64 <= checkpoint_bound);
 
                 Ok(stored)
             })

@@ -78,7 +78,7 @@ impl Query {
         let scope = self.scope(ctx)?;
         let sequence_number = sequence_number
             .map(|s| s.into())
-            .unwrap_or(scope.checkpoint_viewed_at());
+            .unwrap_or(scope.checkpoint_viewed_at_or_error()?);
 
         Ok(Checkpoint::with_sequence_number(scope, sequence_number))
     }

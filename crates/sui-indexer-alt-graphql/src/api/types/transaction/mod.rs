@@ -212,7 +212,7 @@ impl Transaction {
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             reader_lo,
-            scope.checkpoint_viewed_at(),
+            scope.checkpoint_viewed_at().unwrap_or(u64::MAX),
         ) else {
             return Ok(Connection::new(false, false));
         };
@@ -312,7 +312,7 @@ impl TransactionContents {
         let cp_num = transaction
             .cp_sequence_number()
             .context("Any transaction fetched from the DB should have a checkpoint set")?;
-        if cp_num > self.scope.checkpoint_viewed_at() {
+        if cp_num > self.scope.checkpoint_viewed_at().unwrap_or(u64::MAX) {
             return Ok(self.clone());
         }
 

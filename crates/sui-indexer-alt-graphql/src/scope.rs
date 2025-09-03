@@ -18,7 +18,9 @@ use crate::{config::Limits, error::RpcError, task::watermark::Watermarks};
 pub(crate) struct Scope {
     /// The checkpoint we are viewing this data at. Queries for the latest versions of an entity
     /// are relative to this checkpoint.
-    checkpoint_viewed_at: u64,
+    ///
+    /// None indicates execution context where we're viewing fresh transaction effects not yet indexed.
+    checkpoint_viewed_at: Option<u64>,
 
     /// Root parent object version for dynamic fields.
     ///
