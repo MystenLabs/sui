@@ -205,7 +205,7 @@ public fun destroy_zero<T>(c: Coin<T>) {
 /// Create a new currency type `T` as and return the `TreasuryCap` for
 /// `T` to the caller. Can only be called with a `one-time-witness`
 /// type, ensuring that there's only one `TreasuryCap` per `T`.
-#[deprecated(note = b"Use `coin_registry::create_currency_with_otw` instead")]
+#[deprecated(note = b"Use `coin_registry::new_currency_with_otw` instead")]
 public fun create_currency<T: drop>(
     witness: T,
     decimals: u8,
@@ -242,7 +242,7 @@ public fun create_currency<T: drop>(
 /// The `allow_global_pause` flag enables an additional API that will cause all addresses to
 /// be denied. Note however, that this doesn't affect per-address entries of the deny list and
 /// will not change the result of the "contains" APIs.
-#[deprecated(note = b"Use `coin_registry::create_currency_with_otw` with `make_regulated` instead")]
+#[deprecated(note = b"Use `coin_registry::new_currency_with_otw` with `make_regulated` instead")]
 #[allow(deprecated_usage)]
 public fun create_regulated_currency_v2<T: drop>(
     witness: T,
@@ -575,7 +575,7 @@ public struct DenyCap<phantom T> has key, store {
 /// with the coin as input objects.
 #[
     deprecated(
-        note = b"For new coins, use `create_currency_with_otw` and use `make_regulated`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2` and then use migration functions in `coin_registry`",
+        note = b"For new coins, use `new_currency_with_otw` and use `make_regulated`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2` and then use migration functions in `coin_registry`",
     ),
 ]
 #[allow(deprecated_usage)]
