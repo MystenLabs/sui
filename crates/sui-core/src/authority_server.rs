@@ -9,9 +9,10 @@ use futures::TryFutureExt;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
-    register_gauge_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, Gauge, Histogram,
-    IntCounter, IntCounterVec, Registry,
+    register_gauge_with_registry, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec,
+    Registry,
 };
 use std::{
     cmp::Ordering,
@@ -198,7 +199,6 @@ pub struct ValidatorServiceMetrics {
     pub cert_verification_latency: Histogram,
     pub consensus_latency: Histogram,
     pub handle_transaction_latency: Histogram,
-    pub handle_submit_transaction_latency: Histogram,
     pub submit_certificate_consensus_latency: Histogram,
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
@@ -207,6 +207,10 @@ pub struct ValidatorServiceMetrics {
     pub handle_soft_bundle_certificates_size_bytes: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
     pub handle_submit_transaction_consensus_latency: Histogram,
+
+    handle_submit_transaction_latency: HistogramVec,
+    handle_submit_transaction_bytes: HistogramVec,
+    handle_submit_transaction_batch_size: HistogramVec,
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
     num_rejected_cert_in_epoch_boundary: IntCounter,
@@ -254,13 +258,6 @@ impl ValidatorServiceMetrics {
                 "validator_service_handle_transaction_latency",
                 "Latency of handling a transaction",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_submit_transaction_latency: register_histogram_with_registry!(
-                "validator_service_submit_transaction_latency",
-                "Latency of submit transaction handler",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -317,6 +314,30 @@ impl ValidatorServiceMetrics {
                 "validator_service_submit_transaction_consensus_latency",
                 "Latency of submitting a user transaction sent through consensus",
                 mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_submit_transaction_latency: register_histogram_vec_with_registry!(
+                "validator_service_submit_transaction_latency",
+                "Latency of submit transaction handler",
+                &["req_type"],
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_submit_transaction_bytes: register_histogram_vec_with_registry!(
+                "validator_service_submit_transaction_bytes",
+                "The size of transactions in the submit transaction request",
+                &["req_type"],
+                mysten_metrics::BYTES_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_submit_transaction_batch_size: register_histogram_vec_with_registry!(
+                "validator_service_submit_transaction_batch_size",
+                "The number of transactions in the submit transaction request",
+                &["req_type"],
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -562,14 +583,37 @@ impl ValidatorService {
             .into());
         }
 
+        fp_ensure!(
+            request.transactions.len()
+                <= epoch_store.protocol_config().max_soft_bundle_size() as usize,
+            SuiError::UserInputError {
+                error: UserInputError::TooManyTransactionsInBatch {
+                    size: request.transactions.len(),
+                    limit: epoch_store.protocol_config().max_soft_bundle_size(),
+                },
+            }
+            .into()
+        );
+
+        let req_type = if request.transactions.len() == 1 {
+            "single_transaction"
+        } else {
+            "soft_bundle"
+        };
+
         // Transactions to submit to consensus.
         let mut consensus_transactions = Vec::with_capacity(request.transactions.len());
         // Indexes of transactions above in the request transactions.
         let mut transaction_indexes = Vec::with_capacity(request.transactions.len());
         // Results corresponding to each transaction in the request.
         let mut results: Vec<Option<SubmitTxResult>> = vec![None; request.transactions.len()];
+        // Total size of all transactions in the request.
+        let mut total_size_bytes = 0;
 
-        let _handle_tx_metrics_guard = metrics.handle_submit_transaction_latency.start_timer();
+        let _handle_tx_metrics_guard = metrics
+            .handle_submit_transaction_latency
+            .with_label_values(&[req_type])
+            .start_timer();
 
         for (idx, tx_bytes) in request.transactions.iter().enumerate() {
             let transaction = match bcs::from_bytes::<Transaction>(tx_bytes) {
@@ -584,9 +628,7 @@ impl ValidatorService {
             };
 
             // Ok to fail the request when any transaction is invalid.
-            if let Err(e) = transaction.validity_check(&epoch_store.tx_validity_check_context()) {
-                return Err(e.into());
-            }
+            let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
             // TODO: return overload error for individual transactions?
             let overload_check_res = self.state.check_system_overload(
@@ -682,6 +724,7 @@ impl ValidatorService {
                 verified_transaction.into(),
             ));
             transaction_indexes.push(idx);
+            total_size_bytes += tx_size;
         }
 
         if consensus_transactions.is_empty() {
@@ -690,6 +733,33 @@ impl ValidatorService {
                 Weight::zero(),
             ));
         }
+
+        // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
+        // We do this to account for serialization overheads and to ensure that the soft bundle is not too large
+        // when is attempted to be posted via consensus.
+        let soft_bundle_max_size_bytes = epoch_store
+            .protocol_config()
+            .consensus_max_transactions_in_block_bytes()
+            / 2;
+        fp_ensure!(
+            total_size_bytes <= soft_bundle_max_size_bytes as usize,
+            SuiError::UserInputError {
+                error: UserInputError::TotalTransactionSizeTooLargeInBatch {
+                    size: total_size_bytes,
+                    limit: soft_bundle_max_size_bytes,
+                },
+            }
+            .into()
+        );
+
+        metrics
+            .handle_submit_transaction_bytes
+            .with_label_values(&[req_type])
+            .observe(total_size_bytes as f64);
+        metrics
+            .handle_submit_transaction_batch_size
+            .with_label_values(&[req_type])
+            .observe(consensus_transactions.len() as f64);
 
         let _latency_metric_guard = metrics
             .handle_submit_transaction_consensus_latency
@@ -713,17 +783,19 @@ impl ValidatorService {
     }
 
     fn try_from_submit_tx_response(
-        responses: Vec<Option<SubmitTxResult>>,
+        results: Vec<Option<SubmitTxResult>>,
     ) -> Result<RawSubmitTxResponse, SuiError> {
-        let mut results = Vec::new();
-        for response in responses {
-            let submit_response = response.ok_or_else(|| SuiError::GenericAuthorityError {
-                error: "Missing transaction response".to_string(),
+        let mut raw_results = Vec::new();
+        for (i, result) in results.into_iter().enumerate() {
+            let result = result.ok_or_else(|| SuiError::GenericAuthorityError {
+                error: format!("Missing transaction result at {}", i),
             })?;
-            let raw_response = submit_response.try_into()?;
-            results.push(raw_response);
+            let raw_result = result.try_into()?;
+            raw_results.push(raw_result);
         }
-        Ok(RawSubmitTxResponse { results })
+        Ok(RawSubmitTxResponse {
+            results: raw_results,
+        })
     }
 
     // In addition to the response from handling the certificates,
@@ -1429,7 +1501,8 @@ impl ValidatorService {
         fp_ensure!(
             certificates.len() as u64 <= protocol_config.max_soft_bundle_size(),
             SuiError::UserInputError {
-                error: UserInputError::TooManyTransactionsInSoftBundle {
+                error: UserInputError::TooManyTransactionsInBatch {
+                    size: certificates.len(),
                     limit: protocol_config.max_soft_bundle_size()
                 }
             }
@@ -1444,8 +1517,8 @@ impl ValidatorService {
         fp_ensure!(
             total_size_bytes <= soft_bundle_max_size_bytes,
             SuiError::UserInputError {
-                error: UserInputError::SoftBundleTooLarge {
-                    size: total_size_bytes,
+                error: UserInputError::TotalTransactionSizeTooLargeInBatch {
+                    size: total_size_bytes as usize,
                     limit: soft_bundle_max_size_bytes,
                 },
             }
