@@ -9,7 +9,7 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
 use sui_config::genesis;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::storage::{ReadStore, RpcStateReader};
@@ -108,6 +108,7 @@ impl PersistedStore {
         validator_keys: Option<Vec<AccountKeyPair>>,
         reference_gas_price: Option<u64>,
         path: Option<PathBuf>,
+        enable_accumulators: bool,
     ) -> (Simulacrum<R, Self>, PersistedStoreInnerReadOnlyWrapper)
     where
         R: rand::RngCore + rand::CryptoRng,
@@ -128,6 +129,16 @@ impl PersistedStore {
             builder = builder.with_reference_gas_price(reference_gas_price)
         };
 
+        let _override_guard = if enable_accumulators {
+            Some(ProtocolConfig::apply_overrides_for_testing(|_, cfg| {
+                let mut c = cfg;
+                c.enable_accumulators_for_testing();
+                c
+            }))
+        } else {
+            None
+        };
+
         let config = builder.build();
 
         let genesis = &config.genesis;
@@ -146,6 +157,7 @@ impl PersistedStore {
         protocol_version: ProtocolVersion,
         account_configs: Vec<AccountConfig>,
         path: Option<PathBuf>,
+        enable_accumulators: bool,
     ) -> Simulacrum<R, Self>
     where
         R: rand::RngCore + rand::CryptoRng,
@@ -158,6 +170,7 @@ impl PersistedStore {
             None,
             None,
             path,
+            enable_accumulators,
         )
         .0
     }
@@ -690,6 +703,7 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
         );
         let genesis_checkpoint_digest1 = *chain1
             .store()
@@ -704,6 +718,7 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
         );
         let genesis_checkpoint_digest2 = *chain2
             .store()
@@ -721,6 +736,7 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
         );
 
         assert_ne!(

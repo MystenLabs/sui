@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{AuthorityName, VerifiedExecutionData};
-use crate::committee::Committee;
-use crate::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
-use crate::effects::{TransactionEffects, TransactionEffectsAPI};
-use crate::gas::GasCostSummary;
-use crate::messages_checkpoint::{
+use fastcrypto::traits::Signer;
+use std::mem;
+use sui_types::base_types::{AuthorityName, VerifiedExecutionData};
+use sui_types::committee::Committee;
+use sui_types::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::gas::GasCostSummary;
+use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
     CheckpointVersionSpecificData, EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint,
     VerifiedCheckpointContents,
 };
-use crate::transaction::VerifiedTransaction;
-use fastcrypto::traits::Signer;
-use std::mem;
+use sui_types::object::OBJECT_START_VERSION;
+use sui_types::transaction::{Transaction, VerifiedTransaction};
+
+use crate::accumulators::AccumulatorSettlementTxBuilder;
 
 pub trait ValidatorKeypairProvider {
     fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature>;
@@ -63,6 +66,13 @@ impl MockCheckpointBuilder {
             .push(VerifiedExecutionData::new(transaction, effects))
     }
 
+    pub fn get_next_checkpoint_number(&self) -> u64 {
+        self.previous_checkpoint
+            .as_ref()
+            .map(|c| c.sequence_number + 1)
+            .unwrap_or_default()
+    }
+
     /// Override the next checkpoint number to generate.
     /// This can be useful to generate checkpoints with specific sequence numbers.
     pub fn override_next_checkpoint_number(
@@ -109,6 +119,24 @@ impl MockCheckpointBuilder {
             timestamp_ms,
             Some((new_epoch, end_of_epoch_data)),
         )
+    }
+
+    pub fn get_settlement_txns(&self) -> Vec<Transaction> {
+        let effects: Vec<_> = self
+            .transactions
+            .iter()
+            .map(|e| e.effects.clone())
+            .collect();
+
+        let builder = AccumulatorSettlementTxBuilder::new(None, &effects);
+
+        let checkpoint_height = self.get_next_checkpoint_number();
+
+        builder
+            .build_tx(self.epoch, OBJECT_START_VERSION, checkpoint_height)
+            .into_iter()
+            .map(|tx| VerifiedTransaction::new_system_transaction(tx).into_inner())
+            .collect()
     }
 
     fn build_internal(
