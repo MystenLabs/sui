@@ -39,6 +39,7 @@ clock.json
 coin.json
 config.json
 deny_list.json
+derived_object.json
 display.json
 dynamic_field.json
 dynamic_object_field.json

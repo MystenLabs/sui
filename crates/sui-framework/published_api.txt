@@ -2476,6 +2476,24 @@ deny_list_remove
 deny_list_contains
 	public fun
 	0x2::coin
+Claimed
+	public struct
+	0x2::derived_object
+DerivedObjectKey
+	public struct
+	0x2::derived_object
+ClaimedStatus
+	public enum
+	0x2::derived_object
+claim
+	public fun
+	0x2::derived_object
+exists
+	public fun
+	0x2::derived_object
+derive_address
+	public fun
+	0x2::derived_object
 Publisher
 	public struct
 	0x2::package
