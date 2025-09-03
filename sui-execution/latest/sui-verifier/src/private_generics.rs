@@ -189,7 +189,7 @@ fn verify_private_event_emit(
     Ok(())
 }
 
-/// Coin creation using `key` (dynamic coin creation) is only possible with
+/// Coin creation using `key` (non OTW coin creation) is only possible with
 /// internal types.
 fn verify_dynamic_coin_creation(
     view: &CompiledModule,

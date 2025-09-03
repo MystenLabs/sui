@@ -1065,7 +1065,7 @@ fn check_dynamic_coin_creation(context: &mut Context, loc: Loc, mcall: &ModuleCa
     let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m == current_module);
     if !is_defined_in_current_module {
         let msg = format!(
-            "Invalid dynamic coin creation. The function '{}::{}' must be called with a type defined in the current module",
+            "Invalid coin creation. The function '{}::{}' must be called with a type defined in the current module",
             module, name
         );
         let ty_msg = format!(

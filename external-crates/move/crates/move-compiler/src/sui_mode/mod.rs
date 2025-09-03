@@ -167,7 +167,7 @@ pub const DYNAMIC_COIN_CREATION_CALL_DIAG: DiagnosticInfo = custom(
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 10,
-    "invalid dynamic coin creation call",
+    "invalid coin creation call",
 );
 
 // Bridge supported asset
