@@ -77,7 +77,7 @@ mod address;
 mod config;
 mod crypto;
 mod dynamic_field;
-mod event;
+pub mod event;
 mod object;
 pub mod object_runtime;
 mod random;
@@ -301,6 +301,9 @@ impl NativesCostTable {
                     .event_emit_output_cost_per_byte()
                     .into(),
                 event_emit_cost_base: protocol_config.event_emit_cost_base().into(),
+                event_emit_auth_stream_cost: protocol_config
+                    .event_emit_auth_stream_cost_as_option()
+                    .map(Into::into),
             },
 
             borrow_uid_cost_params: BorrowUidCostParams {

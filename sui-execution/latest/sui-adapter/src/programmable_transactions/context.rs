@@ -1518,7 +1518,7 @@ mod checked {
             result?;
         }
 
-        let user_events = user_events
+        let user_events: Vec<Event> = user_events
             .into_iter()
             .map(|(module_id, tag, contents)| {
                 Event::new(
@@ -1536,6 +1536,23 @@ mod checked {
             .map(|accum_event| match accum_event.value {
                 MoveAccumulatorValue::U64(amount) => {
                     let value = AccumulatorValue::Integer(amount);
+                    let address = AccumulatorAddress::new(
+                        accum_event.target_addr.into(),
+                        accum_event.target_ty,
+                    );
+
+                    let write = AccumulatorWriteV1 {
+                        address,
+                        operation: accum_event.action.into_sui_accumulator_action(),
+                        value,
+                    };
+
+                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                }
+                MoveAccumulatorValue::EventRef(event_idx) => {
+                    let event = &user_events[event_idx as usize];
+                    let digest = event.digest();
+                    let value = AccumulatorValue::EventDigest(event_idx, digest);
                     let address = AccumulatorAddress::new(
                         accum_event.target_addr.into(),
                         accum_event.target_ty,
