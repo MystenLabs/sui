@@ -18,14 +18,19 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
     debug!("Parsed config: {:#?}", config);
 
-    let output_root = handle_replay_config(&config.replay, VERSION).await?;
+    let output_root = handle_replay_config(
+        &config.replay_stable,
+        Some(&config.replay_experimental),
+        &config.replay_experimental.node,
+        VERSION,
+    )
+    .await?;
 
-    // Default to replay behavior when no subcommand is specified
-    if let Some(digest) = &config.replay.digest {
+    if let Some(digest) = &config.replay_stable.digest {
         print_effects_or_fork(
             digest,
             &output_root,
-            config.replay.show_effects,
+            config.replay_stable.show_effects,
             &mut std::io::stdout(),
         )?;
     }

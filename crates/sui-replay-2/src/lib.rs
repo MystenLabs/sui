@@ -50,41 +50,55 @@ const TESTNET_GQL_URL: &str = "https://public-rpc.sui-testnet.mystenlabs.com/gra
 )]
 pub struct Config {
     #[command(flatten)]
-    pub replay: ReplayConfig,
+    pub replay_stable: ReplayConfigStable,
+    #[command(flatten)]
+    pub replay_experimental: ReplayConfigExperimental,
 }
 
 /// Arguments for replay
 #[derive(Parser, Clone, Debug)]
-pub struct ReplayConfig {
+pub struct ReplayConfigStable {
     /// Transaction digest to replay.
     #[arg(long, short)]
     pub digest: Option<String>,
+
     /// File containing a list of digests, one per line.
     #[arg(long)]
     pub digests_path: Option<PathBuf>,
-    /// RPC of the fullnode used to replay the transaction.
-    #[arg(long, short, default_value = "mainnet")]
-    pub node: Node,
+
+    /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
+    #[arg(long, default_value = "false")]
+    pub terminate_early: bool,
+
     /// Whether to trace the transaction execution. Generated traces will be saved in the output
     /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
     #[arg(long = "trace", default_value = "false")]
     pub trace: bool,
+
     /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
     #[arg(long, short)]
     pub output_dir: Option<PathBuf>,
-    /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
-    #[arg(long, default_value = "false")]
-    pub terminate_early: bool,
+
     /// Show transaction effects.
     #[arg(long, short = 'e', default_value = "false")]
     pub show_effects: bool,
+
     /// Whether existing artifacts that were generated from a previous replay of the transaction
     /// should be overwritten or an error raised if they already exist.
     #[arg(long, default_value = "false")]
-    pub overwrite_existing: bool,
+    pub overwrite: bool,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct ReplayConfigExperimental {
+    /// RPC of the fullnode used to replay the transaction.
+    #[arg(long, short, default_value = "mainnet")]
+    pub node: Node,
+
     /// Print a summary of data store usage after the replay completes.
     #[arg(long, short = 'v', default_value = "false")]
     pub verbose: bool,
+
     /// Select which data store mode to use.
     /// Options:
     /// - gql-only: remote GraphQL only
@@ -161,19 +175,27 @@ impl FromStr for Node {
     }
 }
 
-pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyhow::Result<PathBuf> {
-    let ReplayConfig {
-        node,
+pub async fn handle_replay_config(
+    stable_config: &ReplayConfigStable,
+    experimental_config: Option<&ReplayConfigExperimental>,
+    node: &Node,
+    version: &str,
+) -> anyhow::Result<PathBuf> {
+    let ReplayConfigStable {
         digest,
         digests_path,
-        trace,
         mut terminate_early,
+        trace,
         output_dir,
-        show_effects: _,
-        overwrite_existing,
-        verbose,
-        store_mode,
-    } = config;
+        show_effects: _, // used in the caller
+        overwrite: overwrite_existing,
+    } = stable_config;
+
+    let (verbose, store_mode) = if let Some(experimental_config) = experimental_config {
+        (experimental_config.verbose, experimental_config.store_mode)
+    } else {
+        (false, StoreMode::GqlOnly)
+    };
 
     let output_root_dir = if let Some(dir) = output_dir {
         dir.to_path_buf()
@@ -229,7 +251,7 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
                 &digests,
                 *overwrite_existing,
                 *trace,
-                *verbose,
+                verbose,
                 terminate_early,
             )
             .await?;
@@ -246,7 +268,7 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
                 &digests,
                 *overwrite_existing,
                 *trace,
-                *verbose,
+                verbose,
                 terminate_early,
             )
             .await?;
@@ -260,7 +282,7 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
                 &digests,
                 *overwrite_existing,
                 *trace,
-                *verbose,
+                verbose,
                 terminate_early,
             )
             .await?;
@@ -279,7 +301,7 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
                 &digests,
                 *overwrite_existing,
                 *trace,
-                *verbose,
+                verbose,
                 terminate_early,
             )
             .await?;
