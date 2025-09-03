@@ -3,8 +3,6 @@ title: Coin Standard
 description: The Sui Coin standard enables you to create a broad range of fungible tokens on the Sui network to satisfy a number of use cases. The Coin standard on Sui is equivalent to the ERC-20 technical standard on Ethereum.
 sidebar_label: Coin
 keywords: [ sui coin standard, erc-20, erc-20 equivalent, creating coins, coin standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin metadata, create coin with SDK, use SDK to create coin, mint coin, minting coins ]
-mdx:
-  format: md
 pagination_prev: null
 ---
 
@@ -89,7 +87,7 @@ The `coin` module provides the logic for creating and destroying coins on the Su
 
 Use the `coin::mint` function to create new tokens.
 
-{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint noComments}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint" noComments />
 
 The signature shows that a `Coin<T>` results from calling the function with a `TreasuryCap`, value for the coin created, and the transaction context. The function updates the total supply in `TreasuryCap` automatically. Upon display, the coin `value` respects the `decimals` value in the metadata. So, if you supply 1000000 as the coin `value` that has a `decimal` value of `6`, the coin's value displays as `1.000000`.
 
@@ -97,7 +95,7 @@ The signature shows that a `Coin<T>` results from calling the function with a `T
 
 Use the `coin::burn` function to destroy current tokens.
 
-{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=burn noComments}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="burn" noComments />
 
 The signature shows that only the `TreasuryCap` and coin object you want to burn are necessary inputs, returning the amount by which the supply was decreased (value of the coin). The function does not allow you to burn more coins than are available in the supply.
 
@@ -109,7 +107,7 @@ The deny list is only applicable to regulated coins. As mentioned previously, wh
 
 Use the `coin::deny_list_v2_add` function to add the provided address to the deny list for your coin. The signature for the function is:
 
-{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_add noComments}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_add" noComments />
 
 When using this function, you provide the `DenyList` object (`0x403`), the `DenyCap` you receive on coin creation, the address to add to the list, and the transaction context. After using this function, the address you provide is unable to use your coin by the next epoch.
 
@@ -117,7 +115,7 @@ When using this function, you provide the `DenyList` object (`0x403`), the `Deny
 
 Use the `coin::deny_list_v2_remove` function to remove addresses from the deny list for your coin.
 
-{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_remove noComments}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_remove" noComments />
 
 When using this function, you provide the `DenyList` object (`0x403`), the `DenyCapV2` you receive on coin creation, the address to remove from the list, and the transaction context. If you try to remove an address that isn't on the list, you receive an `ENotFrozen` error and the function aborts. After calling this function, the address you provide is able to use your coin by the next epoch.
 
@@ -192,13 +190,13 @@ Globally pausing coin activity is only applicable to regulated coin types.
 
 To pause activity across the network for a regulated coin type with the `allow_global_pause` field set to `true`, use `coin::deny_list_v2_enable_global_pause`. You must provide the `DenyCapV2` object for the coin type to initiate the pause. Transaction activity is paused immediately, and no addresses can receive the coin in the epoch that follows the call to pause.
 
-{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_enable_global_pause noComments}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_enable_global_pause" noComments />
 
 ### Unpause coin activity
 
 To restart network activity for a paused regulated coin, use the `coin::deny_list_v2_disable_global_pause` function. As with pausing, you must provide the `DenyCapV2` object for the coin type. Transaction activity resumes immediately, and addresses can begin receiving the coin in the epoch that follows the call to remove the pause.
 
-{@inject: ../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=deny_list_v2_disable_global_pause noComments}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_disable_global_pause" noComments />
 
 ## Query coin data
 
@@ -251,8 +249,8 @@ public entry fun <FUNCTION-NAME><T>(
 
 Check out the following content for more information about coins and tokens on Sui:
 
-- [Create a Coin](../guides/developer/coin.mdx): Guide for creating coins and regulated coins in your smart contracts.
-- [Closed-Loop Token Standard](./closed-loop-token.mdx): Details the Token standard on Sui.
-- [`coin` module rustdoc documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md): Automated documentation output for the Sui framework `coin` module.
-- [`token` module rustdoc documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md): Automated documentation output for the Sui framework `token` module.
-- [Tokenomics](../concepts/tokenomics.mdx): Discover the Sui ecosystem and where SUI coins fit within it.
+<RelatedLink to="/guides/developer/coin.mdx" />
+<RelatedLink to="/standards/closed-loop-token.mdx" />
+<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md" label="`coin` module rustdoc documentation" desc="Automated documentation output for the Sui framework `coin` module." />
+<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md" label="`token` module rustdoc documentation" desc="Automated documentation output for the Sui framework `token` module." />
+<RelatedLink to="/concepts/tokenomics.mdx" />

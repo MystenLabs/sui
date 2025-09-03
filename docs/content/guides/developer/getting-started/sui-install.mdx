@@ -2,8 +2,6 @@
 title: Install Sui
 description: Install the Sui framework and required prerequisites on your system, including the Sui command line interface to interact with the Sui network.
 keywords: [ install sui, how to install sui, install sui cli, interact with sui networks, connect to sui networks, sui command line interface ]
-mdx:
-  format: md
 ---
 
 The quickest way to install Sui is using the binaries delivered with every release. If you require more control over the install process, you can install from source. To take advantage of containerization, you can utilize the Docker images in the `docker` folder of the sui repository.
@@ -21,7 +19,7 @@ Sui supports the following operating systems:
 
 ## Quick install using Homebrew, Chocolatey, or suiup {#install-homebrew}
 
-{@include: ../../../snippets/quick-install.mdx}
+<ImportContent source="quick-install.mdx" mode="snippet" />
 
 :::note
 
@@ -46,7 +44,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
 1. Navigate to the expanded folder. You should have the following extracted files:
 
-    {@include: ../../../snippets/lists/binaries-file-list.mdx}
+    <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
 
 1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
 1. Start a new terminal session or type `source ~/.bashrc` to load the new `PATH` value.
@@ -64,7 +62,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system. Replace references to this location in subsequent steps if you choose a different directory.
 1. Navigate to the expanded folder. You should have the following extracted files:
 
-    {@include: ../../../snippets/lists/binaries-file-list.mdx}
+    <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
 
 1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.zshrc` or `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
 1. Start a new terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
@@ -90,7 +88,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 
 1. Navigate to the expanded folder. You should have the following extracted files:
 
-    {@include: ../../../snippets/lists/binaries-file-list.mdx}
+    <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
 
 1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
 1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button.
@@ -231,7 +229,7 @@ $ sudo apt-get update
 
 Reference the relevant sections that follow to install each prerequisite individually, or run the following to install them all at once:
 
-{@include: ../../../snippets/linux-deps.mdx}
+<ImportContent source="linux-deps.mdx" mode="snippet" />
 
 #### cURL {#curl}
 
@@ -303,7 +301,7 @@ If the version of Linux you use doesn't support `libclang-dev`, find an equivale
 
 #### libpq-dev (optional) {#libpq-dev}
 
-{@include: ../../../snippets/libpq-req.mdx}
+<ImportContent source="libpq-req.mdx" mode="snippet" />
 
 Use the following command to install `libpq-dev`:
 
@@ -355,8 +353,7 @@ If you used the commands in the [Install using Homebrew](#install-homebrew) sect
 
 With Homebrew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
 
-{@include: ../../../snippets/macos-deps.mdx}
-
+<ImportContent source="macos-deps.mdx" mode="snippet" />
 
 #### cURL {#curl-1}
 
@@ -378,7 +375,7 @@ To customize the installation, see [Installing CMake](https://cmake.org/install/
 
 #### libpq (optional) {#libpq-1}
 
-{@include: ../../../snippets/libpq-req.mdx}
+<ImportContent source="libpq-req.mdx" mode="snippet" />
 
 Use the following command to install libpq:
 ```sh

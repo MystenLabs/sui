@@ -2,15 +2,13 @@
 title: Publish a Package
 description: You must publish Move packages on the Sui network before you can call its functions.
 keywords: [ publish, publish package, how to publish, publishing, how to publish move package, publish move package, publish transactions ]
-mdx:
-  format: md
 ---
 
 Before you can call functions in a Move package (beyond an emulated Sui execution scenario), that package must be available on the Sui network. When you publish a package, you are actually creating an immutable Sui object on the network that anyone can access.
 
 To publish your package to the Sui network, use the `publish` CLI command in the root of your package. Use the `--gas-budget` flag to set a value for the maximum amount of gas the transaction can cost. If the cost of the transaction is more than the budget you set, the transaction fails and your package doesn't publish. 
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client publish --gas-budget 5000000
@@ -116,7 +114,7 @@ $ sui client ptb \
 
 :::info 
 
-{@include: ../../../snippets/address-prefix.mdx}
+<ImportContent source="address-prefix.mdx" mode="snippet" />
 
 Depending on your shell and operating system, you might need to pass some values with quotes (`"`), for example: `--assign "forge @<FORGE-ID>"`.
 
@@ -159,9 +157,9 @@ Congratulations. 🎉 You have successfully published a package to the Sui netwo
 
 ## Related links
 
-- [Debugging](./debug.mdx): Print values to aid in logic debugging.
-- [Package Upgrades](../../../concepts/sui-move-concepts/packages.mdx): Upgrading packages published on the Sui network.
-- [Publish a Move Package](../../../references/cli/client.mdx#publish-a-move-package): More details about using the CLI to publish a package.
-- [Programmable Transaction Blocks](../../../concepts/transactions/prog-txn-blocks.mdx): PTBs are collections of transactions that are executed together.
-- [Sui Client PTB CLI](../../../references/cli/ptb.mdx): The `client ptb` command allows you to specify the transactions for execution in a programmable transaction block directly from your CLI or through bash scripts.
-- [App Examples](../app-examples.mdx): End-to-end examples that include smart contract logic and frontend code.
+<RelatedLink to="/guides/developer/first-app/debug.mdx" />
+<RelatedLink to="/concepts/sui-move-concepts/packages.mdx" />
+<RelatedLink to="/references/cli/client.mdx#publish-a-move-package" />
+<RelatedLink to="/concepts/transactions/prog-txn-blocks.mdx" />
+<RelatedLink to="/references/cli/ptb.mdx" />
+<RelatedLink to="/guides/developer/app-examples.mdx" />

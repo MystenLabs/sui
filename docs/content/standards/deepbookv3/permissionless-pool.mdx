@@ -2,8 +2,6 @@
 title: Permissionless Pool Creation
 description: Learn how to create a pool permissionlessly.
 keywords: [ pool, create pool, permissionlessly, permissionless, SUI, USDC, SUI/USDC, DEEP price point, MIST ]
-mdx:
-  format: md
 ---
 
 The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBookV3 Design](./design.mdx#pool) to learn more about the structure of pools.
@@ -14,7 +12,7 @@ The `Pool` shared object represents a market, such as a SUI/USDC market. That `P
 
 The `create_permissionless_pool()` function creates a `Pool`
 
-{@inject: ../deepbook-ref/pool.move#fun=create_permissionless_pool noComments}
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="create_permissionless_pool" noComments />
 
 Tick size should be 10^(9 - base_decimals + quote_decimals - decimal_desired). For example, if creating a SUI(9 decimals)/USDC(6 decimals) pool, with a desired decimal of 3 for tick size (0.001), tick size should be 10^(9 - 9 + 6 - 3) = 10^(3) = 1000.
 
@@ -36,7 +34,7 @@ Pools can only be created if the asset pair has not already been created before.
 
 The `add_deep_price_point()` function allows for the calculation of DEEP price and correct collection of fees in DEEP.
 
-{@inject: ../deepbook-ref/pool.move#fun=add_deep_price_point noComments}
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="add_deep_price_point" noComments />
 
 All pools support input token fees. To allow a permissionless pool to pay fees in DEEP, which has a 20% discount compared to input token fees, two conditions must be met:
 
@@ -52,8 +50,8 @@ For a pool with `SUI` as an asset, use the `DEEP/SUI` pool at `0xb663828d6217467
 The `update_allowed_versions()` function takes a pool and the registry, and updates the allowed contract versions within the pool.
 This is very important after contract upgrades to ensure the newest contract can be used on the pool.
 
-{@inject: ../deepbook-ref/pool.move#fun=update_allowed_versions noComments}
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="update_allowed_versions" noComments />
 
 ## Related links
 
-- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.
+<RelatedLink href="https://github.com/MystenLabs/deepbookv3" label="DeepBookV3 repository" desc="The DeepBookV3 repository on GitHub." />

@@ -2,8 +2,6 @@
 title: NFT Rental Example
 description: An example using the Kiosk Apps standard that provides the ability for users to rent NFTs according to the rules of a provided policy instead of outright owning them. This approach closely aligns with the ERC-4907 renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
 keywords: [ERC-721, NFT]
-mdx:
-  format: md
 ---
 
 NFT renting is a mechanism that allows individuals without ownership or possession of a specific NFT to temporarily utilize or experience it. The implementation of this process leverages the [Kiosk Apps standard](../../../standards/kiosk-apps.mdx) to establish an infrastructure for rental transactions. This approach closely aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
@@ -645,13 +643,13 @@ rect rgba(191, 223, 255, 0.2)
 
 ## Deployment
 
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
-{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+<ImportContent source="publish-to-devnet-with-coins.mdx" mode="snippet" />
 
 ## Related links
 
-- [NFT Rental example](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental): The source code that this document references.
-- [Sui Kiosk](../../../standards/kiosk.mdx): Kiosk is a decentralized system for commerce applications on Sui.
-- [Kiosk Apps](../../../standards/kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk.  
-- [Custom Transfer Rules](../../../concepts/transfers/custom-rules.mdx): Custom transfer rules are used in this example to define rental policies.
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental" label="NFT Rental example" desc="The source code that this document references." />
+<RelatedLink to="/standards/kiosk.mdx" />
+<RelatedLink to="/standards/kiosk-apps.mdx" />
+<RelatedLink to="/concepts/transfers/custom-rules.mdx" />

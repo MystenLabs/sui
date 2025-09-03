@@ -2,8 +2,6 @@
 title: Custom Indexer and Walrus
 description: Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Integrating a custom Sui Indexer with Walrus can provide novel user experiences.
 keywords: [ walrus, indexer, custom indexer, custom indexer framework, blob, sequential pipeline, blog ]
-mdx:
-  format: md
 ---
 
 :::tip
@@ -46,7 +44,7 @@ One option for data modeling is to use a single table that maps publisher addres
 
 For example, the `up.sql` file to create this table might looks like the following:
 
-{@inject: examples/rust/walrus-attributes-indexer/migrations/YYYY-MM-DD-HHMMSS_blog-post/up.sql}
+<ImportContent source="examples/rust/walrus-attributes-indexer/migrations/YYYY-MM-DD-HHMMSS_blog-post/up.sql" mode="code" />
 
 ### Reads
 
@@ -80,7 +78,7 @@ All pipelines implement the same [`Processor` trait](../../../../concepts/custom
 
 The `process` function computes the `checkpoint_input_objects` and `latest_live_output_objects` sets to capture the state of objects entering and exiting a checkpoint. A `Metadata` dynamic field that appears in `checkpoint_input_objects` but not in `latest_live_output_objects` means it has been either wrapped or deleted. In those cases, you need to record only the dynamic field ID for the commit function to handle later deletion. For creation, mutation, and unwrap operations, the objects always appear in at least the `latest_live_output_objects` set.
 
-{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=process}
+<ImportContent source="examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs" mode="code" fun="process" />
 
 ### `Committer`
 
@@ -90,19 +88,19 @@ The second and final part of the sequential pipeline is the `Committer`. Because
 
 The `batch` function defines how to batch transformed data from other processed checkpoints. This function maintains a mapping of `dynamic_field_id` to the processed Walrus `Metadata`. The `batch` function guarantees that the next checkpoint to batch is the next contiguous checkpoint, which means it's safe for you to overwrite the existing entry.
 
-{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=batch}
+<ImportContent source="examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs" mode="code" fun="batch" />
 
 #### `commit`
 
 The `commit` function conducts final transformations to the processed data before writing to the store. In this case, the logic partitions the processed data into `to_delete` and `to_upsert`.
 
-{@inject: examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs#fun=commit}
+<ImportContent source="examples/rust/walrus-attributes-indexer/src/handlers/blog_post.rs" mode="code" fun="commit" />
 
 ## Putting it all together
 
 The `main` function for the service 
 
-{@inject: examples/rust/walrus-attributes-indexer/src/main.rs#fun=main}
+<ImportContent source="examples/rust/walrus-attributes-indexer/src/main.rs" mode="code" fun="main" />
 
 To provide users with a list of posts written by a publisher, your service first queries the
 database on `publisher`, yielding a result like the following. The service then uses the `blob_obj_id` to fetch the
@@ -126,7 +124,7 @@ If you don't want to perform additional work on the write side, then you are lim
 
 ## Related links
 
-- [Walrus Docs](https://docs.wal.app/): Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs.
-- [Build Your First Indexer](../custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui full node, and provides efficient assemblage of checkpoint data.
-- [Dynamic Fields](../../../../concepts/dynamic-fields.mdx): Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values.
-- [Indexer with Walrus example files](https://github.com/MystenLabs/sui/tree/main/examples/rust/walrus-attributes-indexer): Directory in the Sui repo containing the files for this example.
+<RelatedLink href="https://docs.wal.app/" label="Walrus Docs" desc="Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs." />
+<RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
+<RelatedLink to="/concepts/dynamic-fields.mdx" />
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/rust/walrus-attributes-indexer" label="Indexer with Walrus example files" desc="Directory in the Sui repo containing the files for this example." />

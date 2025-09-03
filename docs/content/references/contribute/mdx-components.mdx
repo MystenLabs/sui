@@ -1,8 +1,6 @@
 ---
 title: MDX Components
 description: Extensions to the Sui docs rendering engine.
-mdx:
-  format: md
 ---
 
 The Sui developer documentation uses the MarkdownX (`.mdx`) format for all pages. MDX allows [JSX within Markdown content](https://mdxjs.com/). The site uses Docusaurus, an open-source framework that provides built-in features like admonitions and Mermaid diagrams. It also utilizes community plugins and custom components the documentation team developed. While none of these features are required in a contribution, you may include them if they enhance the reader’s experience.
@@ -19,15 +17,6 @@ title: Title of Page
 description: 1-2 sentences summarizing the page's content.
 keywords: [ words, for, search, results ]
 ---
-```
-
-### MDX format
-
-Pages that use `{@include:}` and `{@inject:}` directives **must** use the following MDX format frontmatter for those directives to render properly on the page. Without this, the Docusaurus build throws an "acorns" error.
-
-```yaml
-mdx:
-  format: md
 ```
 
 ### Optional frontmatter 
@@ -153,7 +142,11 @@ To create a tabbed section:
 You must add empty newlines between content, opening, and closing tags. Without them, the component fails to render properly.
 :::
 
-## Snippets `{@include:}`
+## `<ImportContent>`
+
+Use the `<ImportContent>` component to inject code or markdown into a page.
+
+### Snippet mode
 
 Reusable Markdown content stored in `docs/content/snippets`. Snippets can be reusable sentences, paragraphs, admonition boxes, `<Tabs>`, or pieces of code. 
 
@@ -161,63 +154,33 @@ Tables of data, technology requirements, and other information relevant to more 
 
 Snippets help reduce maintenance and avoid forcing readers off-page for important information.  
 
-### How to use snippets
+#### How to use snippets
 
-1. Create an `.mdx` file in the `/docs/content/snippets` directory. This file cannot have frontmatter.
-    
-    1. If the file contains code from another file, it must be inserted with the `<CodeFromFile>` component rather than the `{@inject:}` syntax.
- 
-1. Insert the snippet into another page with `{@include: ../../snippets/reusable.mdx}`.
+1. Set the `source` argument to the file path in the `snippets` folder. Do not include the `snippet` directory.
+1. Set the `mode` argument to `snippet`. 
 
-    :::warning
-    Do not use file-structure links inside snippets. Use site-relative paths (`/concepts/file`).
-    :::
+`<ImportContent source="file.mdx" mode="snippet" />`
 
-1. Ensure there are empty lines above and below the `{@include:}` line.
-
-1. Add the required frontmatter to the top of the page that contains the `{@include:}` line.
-
-```yaml
-mdx:
-  format: md
-```
-
-## Inject code `{@inject:}`
+### Code mode
 
 Inject code directly into a documentation file using a custom plugin that supports filtering and syntax highlighting.
 
 In an active repo, source code changes frequently. If you copy and paste that source code in a document, then the two sources can diverge quickly and drastically. If the code you inject is tested, this directive ensures the code in your document is also tested.
 
-Use `{@inject:}` to keep docs synchronized with live source code, as it prevents divergence between the docs and repo code. 
-
-:::caution 
+Use `<ImportContent />` to keep docs synchronized with live source code, as it prevents divergence between the docs and repo code. 
 
 #### Considerations
 
-The effective use of `{@inject}` often requires code comments in the source file. You might need to balance the granularity of your documentation with the amount of comment chatter your documentation efforts might create.
+The effective use of `<ImportContent />` often requires code comments in the source file. You might need to balance the granularity of your documentation with the amount of comment chatter your documentation efforts might create.
 
 When including sections of code, understand that the code might change from what you reference during document creation to what a reader eventually consumes. Assume other processes will update the accompanying content, but be mindful of the possibility of changing code when considering the level of detail in your instruction. You can take comfort in the knowledge that the code is always valid, though.
 
-:::caution
-You **cannot** use `{@inject:}` within the snippet file for an `{@include:}` directive. You must use the `<CodeFromFile>` component instead.
 
-```
-<CodeFromFile
-  filePath="crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=values"
-/>
-```
-
-:::
-
-### Referencing files within the Sui monorepo 
+#### Referencing files within the Sui monorepo 
 
 Reference files via their relative path:
 
-```
-{@inject: examples/move/hero/sources/example.move}
-```
-
-### Referencing files from other repos 
+#### Referencing files from other repos 
 
 If several code files located in another repo need to be referenced across multiple documentation pages, the Sui documentation team may have added it as a **submodule** of the Sui repo. Submodules are a GitHub feature that creates symlinks across repositories. 
 
@@ -229,36 +192,33 @@ Current submodules within the Sui docs include:
 
 The Sui documentation team decides whether to add submodules. Community contributions should not attempt to add submodules.
 
-### How to use 
+#### How to use
 
-First, add the required frontmatter:
-
-```yaml
-mdx:
-format: md
-```
+1. Set the `source` argument to the relative path of the file. Do not include the `sui` root. 
+1. Set the `mode` argument to `code`.
+1. Include options as needed.
 
 To include an entire file of code: 
 
 ```
-{@inject: examples/move/hero/sources/example.move}
+<ImportContent source="examples/move/hero/sources/example.move" mode="code" />
 ```
 
-To include specific components or sections, use IDs or directives:  
+To include specific components or sections, use the following arguments in the component:  
 
-- Module: #module=MODULE::NAME 
-- Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION 
-- Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT 
-- Trait: #trait=TRAIT_NAME,ANOTHER_TRAIT 
-- Variables: #var=variableName,anotherVariable 
-- Move import: #use=LIBRARY::NAME 
-- React component: #component=ComponentName 
-- Type declaration: #type=TypeName 
-- Enum declaration: #enum=EnumName
+- Module: `module="MODULE::NAME"`
+- Function: `fun="FUNCTION_NAME,ANOTHER_FUNCTION"`
+- Struct: `struct="STRUCT_NAME,ANOTHER_STRUCT"`
+- Trait: `trait="TRAIT_NAME,ANOTHER_TRAIT"`
+- Variables: `var="variableName,anotherVariable"`
+- Move import: `dep="LIBRARY::NAME"`
+- React component: `component="ComponentName"`
+- Type declaration: `type="TypeName"`
+- Enum declaration: `enumeration="EnumName"`
 
 **Example:**  
 ```
-{@inject: examples/move/example.source#fun=buy_sword}
+<ImportContent source="examples/move/example.source" mode="code" fun="buy_sword" />
 ```
 
 #### Include nonlinear parts of code
@@ -271,16 +231,16 @@ Consider restructuring your document before using this approach. This feature is
 
 If you don't want to include a section of code, but instead focus on the code around it in a single doc instance, you can pause the injection with a source code comment in the form `// docs::#ID-pause`. A second comment in the form `// docs::#ID-resume` continues the injection.
 
-1. In your document, add the directive to the file with the ID appended. The build process replaces this line with the referenced code, so place where the code should appear.
+1. In your document, set the `tag` value to the name. The build process replaces this line with the referenced code, so place where the code should appear.
 
 ```
-{@inject: examples/foo/bar.move#IDstring}
+<ImportContent source="examples/foo/bar.move" mode="code" tag="tagName" />
 ```
 
-1. In the source file, add a comment where the section should begin in the form `// docs::#ID`.
+1. In the source file, add a comment where the section should begin in the form `// docs::#Tag`.
 
     ```ts 
-// docs::#IDstring 
+// docs::#tagString 
 import lib from "library"; 
 ...
 ```
@@ -288,31 +248,31 @@ import lib from "library";
 1. In the source file, add a comment where the injection should pause and where it should resume. Optionally, append a colon and replacement text to the pause directive. The replacement text displays in the document instead of the code.
 
 ```ts 
-// docs::#IDstring 
+// docs::#tagString 
 import lib from "library"; 
 ... 
 
-// docs::#IDstring-pause:TODO 
+// docs::#tagString-pause:TODO 
 const Advanced = () => {}; 
-// docs::#IDstring-resume
+// docs::#tagString-resume
 ```
 
 1. In the source file, add a comment where the injection should end.
 
 ```ts 
-// docs::#IDstring 
+// docs::#tagString 
 import lib from "library"; 
 ... 
 
-// docs::#IDstring-pause:
+// docs::#tagString-pause:
 // TODO 
 const Advanced = () => {};
 ... 
 
-// docs::#IDstring-resume 
+// docs::#tagString-resume 
 return book; 
 
-// docs::/#IDstring 
+// docs::/#tagString 
 ...
 ```
 
@@ -334,12 +294,36 @@ You can also add additional strings to the end of the inject statement to highli
 - `noTests` → Strip tests  
 - `noTitle` → Remove code block title  
 - `singleSpace` → Normalize spacing  
-- `highlight` → Highlight a specific line using a unique word in the line you want highlighted (ex. `highlight=variable_name`)
+- `highlight` → Highlight a specific line using a unique word in the line you want highlighted (ex. `highlight="variable_name"`)
 
 **Example:**  
 
 ```
-{@inject: examples/move/example.source#module=example::example noComments noTests}
+<ImportContent source="examples/move/example.source" mode="code" module="example::example" noComments noTests />
+```
+
+## `RelatedLink`
+
+Each page should have a _Related links_ section at the bottom. Use the `RelatedLink` component to itemize each link under this heading. The `## Related links` heading remains in markdown format for ease of ToC inclusion.
+
+There are two basic forms to the component. 
+
+1. `<RelatedLink to="/guides/path/to/page" />`
+    Internal pages just need a `to` value that is relative to the site root. The label and description are pulled from that pages frontmatter.
+
+1. `<RelatedLink href="https://url/to/page" label="Hyperlink label" desc="Description of link." />`
+    Links external to the site need an `href`, `label`, and `desc` values.
+
+**Example:**
+
+```
+...
+
+## Related links
+
+<RelatedLink to="/guides/path/to/page" />
+<RelatedLink href="https://url/to/page" label="Hyperlink label" desc="Description of link." />
+<RelatedLink href="https://url/to/page" label="Hyperlink label" desc="Description of link." />
 ```
 
 ## Collapsible components: Details and summary 

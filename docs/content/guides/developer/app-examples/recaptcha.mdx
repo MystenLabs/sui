@@ -2,8 +2,6 @@
 title: Prevent Bots
 description: Write and deploy a smart contract in Move that uses reCAPTCHA to verify users are human (and not bots) before they interact with the contract.
 draft: true
-mdx:
-  format: md
 ---
 
 This guide shows you how to write and deploy a smart contract in Move that uses reCAPTCHA to verify users are human (and not bots) before they interact with the contract. CAPTCHA is a method of bot mitigation that requires you to pass a challenge test to prove that you are human. CAPTCHA tests are effective in preventing bots from performing tasks, but the tests can become annoying or frustrating for legitimate users if they are too difficult or frequent. reCAPTCHA is a form of CAPTCHA testing.
@@ -211,9 +209,9 @@ And with that, your `recaptcha.move` code is complete.
 
 ## Deployment
 
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
-{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+<ImportContent source="publish-to-devnet-with-coins.mdx" mode="snippet" />
 
 The package should successfully deploy. Next, set up a backend server that verifies whether the user has successfully completed the reCAPTCHA challenge and then signs a message that should be passed to the `verify` function.
 

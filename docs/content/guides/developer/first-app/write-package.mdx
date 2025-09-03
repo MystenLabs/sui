@@ -2,8 +2,6 @@
 title: Write a Move Package
 description: The first step in getting a package on-chain is to write the Move code that defines the logic of your package. The structure of a Move package is similar to those in Rust.
 keywords: [ move package, move packages, packages, create a package, write a package, write a move package, create a move package, creating packages, create move smart contract, move smart contracts ]
-mdx:
-  format: md
 ---
 
 To begin, open a terminal or console at the location you plan to store your package. Use the `sui move new` command to create an empty Move package with the name `my_first_package`:
@@ -14,7 +12,7 @@ $ sui move new my_first_package
 
 Running the previous command creates a directory with the name you provide (`my_first_package` in this case). The command populates the new directory with a skeleton Move project that consists of a `sources` directory and a `Move.toml` manifest file. Open the manifest with a text editor to review its contents:
 
-{@inject: ../../../../../examples/move/first_package/Move.toml}
+<ImportContent source="examples/move/first_package/Move.toml" mode="code" />
 
 The manifest file contents include available sections of the manifest and comments that provide additional information. In Move, you prepend the hash mark (`#`) to a line to denote a comment.
 
@@ -30,7 +28,7 @@ You have a package now but it doesn't do anything. To make your package useful, 
 
 Populate the `example.move` file with the following code:
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#first noTests}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" tag="first" noTests />
 
 The comments in the preceding code highlight different parts of a typical Move source file.
 
@@ -46,6 +44,6 @@ After you save the file, you have a complete Move package.
 
 ## Related links
 
-- [Build and Test Packages](./build-test.mdx): Continue this example to build and test your package to get it ready for publishing.
-- [Sui Move CLI](../../../references/cli/move.mdx): Available Move commands the CLI provides.
-- [The Move Book](https://move-book.com/): A comprehensive guide to the Move programming language and the Sui blockchain.
+<RelatedLink to="/guides/developer/first-app/build-test.mdx" />
+<RelatedLink to="/references/cli/move.mdx" />
+<RelatedLink href="https://move-book.com/" label="The Move Book" desc="A comprehensive guide to the Move programming language and the Sui blockchain." />

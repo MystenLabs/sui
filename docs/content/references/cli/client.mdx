@@ -2,13 +2,11 @@
 title: Sui Client CLI
 description: The Sui Client CLI provides command-level access to interact with the Sui network.
 keywords: [ sui cli, sui client cli, sui client cli, sui client, sui cli help, sui cli reference, sui cli commands, cli commands, cli reference ]
-mdx:
-  format: md
 ---
 
 The Sui CLI `client` command provides command-level access to interact with the Sui network. Typical uses for `sui client` include publishing Move smart contracts, getting the information of an object, executing transactions, or managing addresses.
 
-{@include: ../../snippets/cli-check-install.mdx}
+<ImportContent source="cli-check-install.mdx" mode="snippet" />
 
 ## Commands
 
@@ -253,7 +251,7 @@ $ sui client gas hungry-spodumene
 
 You want to send 0.5 SUI to `eloquent-amber`. Given that you have a few gas coins, you can use `pay`. If only one gas coin exists, then you need to use `transfer-sui` or `pay-sui`, or you would need to split the coin first to have another coin to use for paying gas. In this case, let's use the `pay-sui` command as you do not need to provide a separate gas coin to be used for the gas fees. In the command below, you set the recipient to be `eloquent-amber`, which coin to use to transfer SUI from, and the amount of SUI to transfer.
 
-{@include: ../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client pay-sui --recipients eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amounts 500000000 --gas-budget 5000000

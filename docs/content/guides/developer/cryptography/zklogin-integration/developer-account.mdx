@@ -2,8 +2,6 @@
 title: Configure OpenID Providers
 description: zkLogin can be integrated with an application using an OpenID provider's OAuth Client ID and redirect URI.
 keywords: [ zklogin, how to integrate zklogin, oauth, openID, integrate openID, openID providers, open id ]
-mdx:
-  format: md
 ---
 
 To integrate zkLogin with your app, you need an OAuth client from at least one of the [available providers](#openid-providers). You will use the Client ID and redirect URI from those providers in your zkLogin project. For example, the following TypeScript code constructs a Google login URL for testing.
@@ -26,7 +24,7 @@ const loginURL = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 
 ## OpenID providers
 
-{@include: ../../../../snippets/openid-providers.mdx}
+<ImportContent source="openid-providers.mdx" mode="snippet" />
 
 ## Configuring an OpenID provider
 
@@ -212,5 +210,5 @@ _Go to Settings_
 
 ## Related links
 
-- [zkLogin Integration Guide](../zklogin-integration.mdx)
-- [zkLogin Example](./zklogin-example.mdx)
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration.mdx" />
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration/zklogin-example.mdx" />

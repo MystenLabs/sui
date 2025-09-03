@@ -2,8 +2,6 @@
 title: Create a Non-Fungible Token
 description: On Sui, everything is an object. Moreover, everything is a non-fungible token (NFT) as its objects are unique, non-fungible, and owned.
 keywords: [ERC-721, NFT]
-mdx:
-  format: md
 pagination_prev: null
 ---
 
@@ -19,15 +17,15 @@ Imagine you create an Excitable Chimp NFT collection on Sui and another blockcha
 
 The following example creates a basic NFT on Sui. The `TestnetNFT` struct defines the NFT with an `id`, `name`, `description`, and `url` fields. 
 
-{@inject: ../../../../examples/move/nft/sources/testnet_nft.move#struct=TestnetNFT noComments}
+<ImportContent source="examples/move/nft/sources/testnet_nft.move" mode="code" struct="TestnetNFT" noComments />
 
 In this example, anyone can mint the NFT by calling the `mint_to_sender` function. As the name suggests, the function creates a new `TestnetNFT` and transfers it to the address that makes the call. 
 
-{@inject: ../../../../examples/move/nft/sources/testnet_nft.move#fun=mint_to_sender noComments}
+<ImportContent source="examples/move/nft/sources/testnet_nft.move" mode="code" fun="mint_to_sender" noComments />
 
 The module includes functions to return NFT metadata, too. Referencing the hypothetical used previously, you can call the `name` function to get that value. As you can see, the function simply returns the name field value of the NFT itself.
 
-{@inject: ../../../../examples/move/nft/sources/testnet_nft.move#fun=name noComments}
+<ImportContent source="examples/move/nft/sources/testnet_nft.move" mode="code" fun="name" noComments />
 
 <details>
 
@@ -37,14 +35,14 @@ The module includes functions to return NFT metadata, too. Referencing the hypot
 
 </summary>
 
-{@inject: ../../../../examples/move/nft/sources/testnet_nft.move}
+<ImportContent source="examples/move/nft/sources/testnet_nft.move" mode="code" />
 
 </details>
 
 ## Related links
 
-- [Soulbound NFT](./nft/nft-soulbound.mdx): Example of a non-transferable NFT. 
-- [NFT Rental](./nft/nft-rental.mdx): Example that rents NFTs using Kiosk Apps. 
-- [Asset Tokenization](./nft/asset-tokenization.mdx): Example that uses NFTs to tokenize real-world assets.
-- [Kiosk](../../standards/kiosk.mdx): Asset storage on the Sui network.
-- [Kiosk Apps](../../standards/kiosk-apps.mdx): Extend the functionality of the Kiosk standard. 
+<RelatedLink to="/guides/developer/nft/nft-soulbound.mdx" />
+<RelatedLink to="/guides/developer/nft/nft-rental.mdx" />
+<RelatedLink to="/guides/developer/nft/asset-tokenization.mdx" />
+<RelatedLink to="/standards/kiosk.mdx" />
+<RelatedLink to="/standards/kiosk-apps.mdx" />
