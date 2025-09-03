@@ -3,11 +3,7 @@ title: Sui Validator Alert Reference
 description: A collection of the Prometheus Alertmanager rules that trigger alerts and warnings on Validator and Full nodes.
 ---
 
-When running a Sui Validator node or Full node, there are Prometheus Alertmanager rules that might trigger alerts and warnings.
-
-## Install/configure Alertmanager
-
-Could use some direction/information on this: https://github.com/MystenLabs/sui-operations/blob/5c5e0034f47a7648dcad318c5f6be9a9f9880b87/alerting/README.md.
+When running a Sui Validator node or Full node, you may want to configure alerting based off some or all of the following metrics.
 
 ## Alert reference 
 
@@ -17,25 +13,9 @@ The following sections cover the alert settings, but their details are meant to 
 - Thresholds assume about 10,000 stake units — adjust for your own validator set size.
 - Labels like `host` and `container` are stripped to be agnostic on infrastructure.
 
-## 🔥 High-priority chain health alerts
+## High-priority chain health alerts (validator-specific)
 
 These alerts should receive the most immediate attention from you or your team.
-
-### Epoch advancement failure
-
-| Key          | Value                                                    |
-| ------------ | -------------------------------------------------------- |
-| **Name**     | `Epoch Advancement Failure`                              |
-| **Summary**  | At least 10% of stake did not advance epoch in the last 25 hours |
-| **Duration** | `10m`                                                    |
-
-```sh
-sum(
-  sum by (host) (current_voting_right{network="$network"})
-  and
-  sum by (host) (changes(current_epoch{network="$network"}[25h]) < 1)
-) > 1000
-```
 
 ### Safe mode during reconfiguration
 
