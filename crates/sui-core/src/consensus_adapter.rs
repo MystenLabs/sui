@@ -763,6 +763,22 @@ impl ConsensusAdapter {
             return;
         }
 
+        // Record submitted transactions early for DoS protection
+        if let Some(submitted_cache) = &epoch_store.submitted_transaction_cache {
+            for transaction in &transactions {
+                if let ConsensusTransactionKind::UserTransaction(tx) = &transaction.kind {
+                    let amplification_factor = (tx.data().transaction_data().gas_price()
+                        / epoch_store.reference_gas_price().max(1))
+                    .max(1);
+                    submitted_cache.record_submitted_tx(
+                        tx.digest(),
+                        amplification_factor as u32,
+                        submitter_client_addr,
+                    );
+                }
+            }
+        }
+
         // If tx_consensus_positions channel is provided, the caller is looking for a
         // consensus position for mfp. Therefore we will skip shortcutting submission
         // if txes have already been processed.
@@ -892,25 +908,6 @@ impl ConsensusAdapter {
                             is_soft_bundle,
                         )
                         .await;
-
-                    if let Some(submitted_cache) = &epoch_store.submitted_transaction_cache {
-                        for (transaction, consensus_position) in
-                            transactions.iter().zip(consensus_positions.iter())
-                        {
-                            if let ConsensusTransactionKind::UserTransaction(tx) = &transaction.kind
-                            {
-                                let submitted_round = consensus_position.block.round;
-                                let digest = tx.digest();
-
-                                submitted_cache.record_submitted_tx(
-                                    digest,
-                                    submitted_round,
-                                    amplification_factor as u32,
-                                    submitter_client_addr,
-                                );
-                            }
-                        }
-                    }
 
                     if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
                         tracing::Span::current().record(
