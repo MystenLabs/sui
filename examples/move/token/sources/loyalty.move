@@ -31,6 +31,7 @@ public struct Gift has key, store {
     id: UID,
 }
 
+#[allow(deprecated_usage)]
 // Create a new LOYALTY currency, create a `TokenPolicy` for it and allow
 // everyone to spend `Token`s if they were `reward`ed.
 fun init(otw: LOYALTY, ctx: &mut TxContext) {
