@@ -272,7 +272,7 @@ pub fn print_consensus_commit(
 }
 
 pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::Result<()> {
-    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None, None);
     if let Some((epoch, checkpoint_seq_num)) =
         perpetual_db.get_checkpoint_sequence_number(&opt.digest)?
     {
@@ -292,7 +292,7 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
 }
 
 pub fn print_object(path: &Path, opt: PrintObjectOptions) -> anyhow::Result<()> {
-    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None, None);
 
     let obj = if let Some(version) = opt.version {
         perpetual_db.get_object_by_key_fallible(&opt.id, version.into())?

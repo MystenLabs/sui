@@ -16,7 +16,7 @@ use tidehunter::metrics::Metrics;
 pub use tidehunter::{
     key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
-    IndexWalPosition, WalPosition,
+    Decision, IndexWalPosition, WalPosition,
 };
 use typed_store_error::TypedStoreError;
 

@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Weak};
+use std::sync::{atomic::AtomicU64, Arc, Weak};
 use std::time::Duration;
 use sui_core::authority::authority_store_tables::{
     AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
@@ -515,9 +515,11 @@ impl SuiNode {
             enable_write_stall,
             compaction_filter,
         };
+        let pruner_watermark = Arc::new(AtomicU64::new(0));
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
             Some(perpetual_tables_options),
+            Some(pruner_watermark.clone()),
         ));
         let is_genesis = perpetual_tables
             .database_is_empty()
@@ -758,6 +760,7 @@ impl SuiNode {
             pruner_db,
             config.policy_config.clone(),
             config.firewall_config.clone(),
+            pruner_watermark,
         )
         .await;
         // ensure genesis txn was executed

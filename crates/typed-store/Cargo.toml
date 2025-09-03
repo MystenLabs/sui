@@ -12,6 +12,7 @@ publish = false
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
 backoff.workspace = true
 bcs.workspace = true
 bincode.workspace = true
