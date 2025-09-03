@@ -218,20 +218,20 @@ public fun create_currency<T: drop>(
     // Make sure there's only one instance of the type T
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
-    let treasury_cap = TreasuryCap {
-        id: object::new(ctx),
-        total_supply: balance::create_supply(witness),
-    };
-    let metadata = CoinMetadata {
-        id: object::new(ctx),
-        decimals,
-        name: name.to_string(),
-        symbol: symbol.to_ascii_string(),
-        description: description.to_string(),
-        icon_url,
-    };
-
-    (treasury_cap, metadata)
+    (
+        TreasuryCap {
+            id: object::new(ctx),
+            total_supply: balance::create_supply(witness),
+        },
+        CoinMetadata {
+            id: object::new(ctx),
+            decimals,
+            name: name.to_string(),
+            symbol: symbol.to_ascii_string(),
+            description: description.to_string(),
+            icon_url,
+        },
+    )
 }
 
 /// This creates a new currency, via `create_currency`, but with an extra capability that

@@ -53,7 +53,7 @@ const REGULATED_COIN_VARIANT: u8 = 0;
 /// System object found at address 0xc that stores coin data for all
 /// registered coin types. This is a shared object that acts as a central
 /// registry for coin metadata, supply information, and regulatory status.
-public struct CoinRegistry has key, store {
+public struct CoinRegistry has key {
     id: UID,
 }
 
@@ -63,9 +63,7 @@ public struct CoinRegistry has key, store {
 #[allow(unused_field)]
 public struct ExtraField(TypeName, vector<u8>) has store;
 
-/// Key used to access coin metadata hung off the `CoinRegistry`
-/// object. This key can be versioned to allow for future changes
-/// to the metadata object.
+/// Key used to derive addresses when creating `Currency<T>` objects.
 public struct CurrencyKey<phantom T>() has copy, drop, store;
 
 /// Capability object that gates metadata (name, description, icon_url, symbol)
@@ -73,9 +71,8 @@ public struct CurrencyKey<phantom T>() has copy, drop, store;
 /// be deleted to prevent changes to the `Currency` metacurrency.
 public struct MetadataCap<phantom T> has key, store { id: UID }
 
-/// Currency object that stores comprehensive information about a coin type.
-/// This includes metadata like name, symbol, and description, as well as
-/// supply and regulatory status information.
+// Currency stores metadata such as name, symbol, decimals, icon_url and description,
+// as well as supply states (optional) and regulatory status.
 public struct Currency<phantom T> has key {
     id: UID,
     /// Number of decimal places the coin uses for display purposes
@@ -102,13 +99,14 @@ public struct Currency<phantom T> has key {
     extra_fields: VecMap<String, ExtraField>,
 }
 
-/// Supply state of a coin type, which can be fixed (with a known supply)
-/// or unknown (supply not yet registered in the registry).
+// Supply state marks the type of Currency Supply, which can be
+// - Fixed: no minting or burning,
+// - Deflationary: only burning
+// - Unknown: flexible (supply is not managed by this object, it's controlled by it's TreasuryCap)
 public enum SupplyState<phantom T> has store {
     /// Coin has a fixed supply with the given Supply object
     Fixed(Supply<T>),
     /// Coin has a supply that can ONLY decrease.
-    /// TODO: Public burn function OR capability? :)
     Deflationary(Supply<T>),
     /// Supply information is not yet known or registered
     Unknown,
@@ -132,7 +130,7 @@ public enum MetadataCapState has copy, drop, store {
     Claimed(ID),
     /// The metadata cap has not been claimed.
     Unclaimed,
-    /// The metadata cap has been deleted (so the `Currency` metadata cannot be updated).
+    /// The metadata cap has been claimed and then deleted.
     Deleted,
 }
 
@@ -146,7 +144,7 @@ public struct CurrencyInitializer<phantom T> {
     is_otw: bool,
 }
 
-/// Creates a new currency builder.
+/// Creates a new currency.
 ///
 /// Note: This constructor has no long term difference from `new_currency_with_otw`. The only change is
 /// that the first requires an OTW (one-time witness), while this one can be called dynamically
@@ -163,7 +161,6 @@ public fun new_currency<T: /* internal */ key>(
     // Unlike OTW creation, the guarantee on not having duplicate currencies come from the
     // coin registry.
     assert!(!registry.exists<T>(), ECurrencyAlreadyExists);
-
     let treasury_cap = coin::new_treasury_cap(ctx);
     let currency = Currency<T> {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
@@ -178,14 +175,13 @@ public fun new_currency<T: /* internal */ key>(
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
     };
-
     (CurrencyInitializer { currency, is_otw: false, extra_fields: bag::new(ctx) }, treasury_cap)
 }
 
-// 1. Entrypoint for creating currency [done]
-// 2. Entrypoint for creating regulated currency [done]
-// 3. Claim capability (using treasury cap) [done]
-// 3. Migrate existing CoinMetadada -> Registry Metadata
+/// Creates a new currency with using an OTW as proof of uniqueness.
+///
+/// This is a two-step operation:
+/// 1. This function is called on init
 public fun new_currency_with_otw<T: drop>(
     otw: T,
     decimals: u8,
@@ -199,7 +195,6 @@ public fun new_currency_with_otw<T: drop>(
     assert!(sui::types::is_one_time_witness(&otw));
     // Hacky check to make sure the Symbol is ASCII.
     assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
-
     let treasury_cap = coin::new_treasury_cap(ctx);
     let currency = Currency<T> {
         id: object::new(ctx),
@@ -248,7 +243,6 @@ public fun make_regulated<T>(
 ): DenyCapV2<T> {
     assert!(init.currency.regulated == RegulatedState::Unregulated, EDenyCapAlreadyCreated);
     let deny_cap = coin::new_deny_cap_v2<T>(allow_global_pause, ctx);
-
     init.currency.regulated =
         RegulatedState::Regulated {
             cap: object::id(&deny_cap),
@@ -304,7 +298,6 @@ public fun make_supply_deflationary<T>(currency: &mut Currency<T>, cap: Treasury
 public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): MetadataCap<T> {
     let CurrencyInitializer { mut currency, is_otw, extra_fields } = builder;
     extra_fields.destroy_empty();
-
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
@@ -337,10 +330,8 @@ public fun finalize_registration<T>(
         metadata_cap_id,
         extra_fields,
     } = transfer::receive(&mut registry.id, currency);
-
     id.delete();
-
-    // Now, create the shared version of the coin currency.
+    // Now, create the derived version of the coin currency.
     transfer::share_object(Currency {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals,
@@ -420,14 +411,13 @@ public fun migrate_legacy_metadata<T>(
     ctx: &mut TxContext,
 ) {
     assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
-
     transfer::share_object(Currency<T> {
-        id: object::new(ctx), // TODO: use derived_object::claim()
+        id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals: legacy.get_decimals(),
         name: legacy.get_name(),
         symbol: legacy.get_symbol().to_string(),
         description: legacy.get_description(),
-        icon_url: legacy // TODO: not a fan of this!
+        icon_url: legacy
             .get_icon_url()
             .map!(|url| url.inner_url().to_string())
             .destroy_or!(b"".to_string()),
@@ -442,16 +432,12 @@ public fun migrate_legacy_metadata<T>(
 /// TODO: Allow coin metadata to be updated from legacy as described in our docs.
 public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &CoinMetadata<T>) {
     assert!(!currency.is_metadata_cap_claimed(), ECannotUpdateManagedMetadata);
-
     currency.name = legacy.get_name();
     currency.symbol = legacy.get_symbol().to_string();
     currency.description = legacy.get_description();
     currency.decimals = legacy.get_decimals();
     currency.icon_url =
-        legacy // TODO: not a fan of this!
-            .get_icon_url()
-            .map!(|url| url.inner_url().to_string())
-            .destroy_or!(b"".to_string());
+        legacy.get_icon_url().map!(|url| url.inner_url().to_string()).destroy_or!(b"".to_string());
 }
 
 /// Delete the legacy `CoinMetadata` object if the metadata cap for the new registry
