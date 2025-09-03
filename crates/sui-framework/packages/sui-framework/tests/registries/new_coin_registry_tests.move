@@ -7,7 +7,7 @@ module sui::coin_registry_tests;
 use std::string::String;
 use std::unit_test::assert_eq;
 use sui::coin::{Self, DenyCapV2, TreasuryCap, CoinMetadata};
-use sui::coin_registry::{Self, CurrencyBuilder, CoinRegistry};
+use sui::coin_registry::{Self, CurrencyInitializer, CoinRegistry};
 use sui::test_utils::destroy;
 use sui::url;
 
@@ -387,7 +387,7 @@ public fun build_dynamic<T: key>(
     b: MetadataBuilder,
     registry: &mut CoinRegistry,
     ctx: &mut TxContext,
-): (CurrencyBuilder<T>, TreasuryCap<T>) {
+): (CurrencyInitializer<T>, TreasuryCap<T>) {
     registry.new_currency<T>(
         b.decimals,
         b.symbol,
@@ -402,7 +402,7 @@ public fun build_otw<T: drop>(
     b: MetadataBuilder,
     otw: T,
     ctx: &mut TxContext,
-): (CurrencyBuilder<T>, TreasuryCap<T>) {
+): (CurrencyInitializer<T>, TreasuryCap<T>) {
     coin_registry::new_currency_with_otw(
         otw,
         b.decimals,
