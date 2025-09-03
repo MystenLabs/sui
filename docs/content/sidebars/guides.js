@@ -198,6 +198,7 @@ const guides = [
 			'guides/operator/sui-full-node',
 			'guides/operator/genesis',
 			'guides/operator/monitoring',
+			'guides/operator/alerts',
 			'guides/operator/updates',
 			'guides/operator/data-management',
 			'guides/operator/snapshots',
