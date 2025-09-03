@@ -637,7 +637,6 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
-        // TODO(fastpath): Add support for TransactionDriver
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 10 {

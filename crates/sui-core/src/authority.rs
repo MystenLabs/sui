@@ -1439,10 +1439,6 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.await_transaction_latency.start_timer();
         debug!("await_transaction");
 
-        // TODO(fastpath): Add handling for transactions rejected by Mysticeti fast path.
-        // TODO(fastpath): Can an MFP transaction be reverted after epoch ends? If so,
-        // same warning as above applies: We must be careful not to return a result
-        // here after the epoch ends.
         epoch_store
             .within_alive_epoch(
                 self.notify_read_effects("AuthorityState::await_transaction_effects", digest),

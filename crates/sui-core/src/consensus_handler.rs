@@ -787,7 +787,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                         }
                         // Skip executing rejected transactions.
-                        // TODO(fastpath): Handle unlocking.
                         continue;
                     }
                     if parsed.transaction.kind.is_user_transaction() {

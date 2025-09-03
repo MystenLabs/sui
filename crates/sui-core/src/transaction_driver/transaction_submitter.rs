@@ -134,7 +134,7 @@ impl TransactionSubmitter {
             });
             TransactionRequestError::TimedOutSubmittingTransaction
         })?
-        // TODO: Note that we do not record this error in the client monitor
+        // TODO(fastpath): Note that we do not record this error in the client monitor
         // because it may be due to invalid transactions.
         // To fully utilize this error, we need to either pre-check the transaction
         // on the fullnode, or be able to categorize the error.
