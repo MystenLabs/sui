@@ -748,7 +748,7 @@ impl SuiClientCommands {
                 if let Some(digest) = &replay_config.digest {
                     // show effects and gas
                     SR2::print_effects_or_fork(
-                        &digest,
+                        digest,
                         &artifact_path,
                         replay_config.show_effects,
                         &mut std::io::stdout(),
