@@ -239,7 +239,7 @@ public fun begin_with_context(ctx_builder: TxContextBuilder): Scenario {
 }
 
 /// Creates and shares system objects, allowing `Random`, `Clock`, `DenyList`
-/// and other "native" objects to be pulled from inventory.
+/// and other "native" objects, so they are available in the inventory.
 ///
 /// NOTE: make sure to update this call when adding new system objects.
 public fun create_system_objects(scenario: &mut Scenario) {
