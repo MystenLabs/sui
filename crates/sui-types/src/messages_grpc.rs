@@ -248,6 +248,10 @@ pub enum RawValidatorSubmitStatus {
     // Transaction has already been executed (finalized).
     #[prost(message, tag = "2")]
     Executed(RawExecutedStatus),
+
+    // Transaction is rejected from consensus submission.
+    #[prost(message, tag = "3")]
+    Rejected(RawRejectedStatus),
 }
 
 #[derive(Clone, prost::Message)]

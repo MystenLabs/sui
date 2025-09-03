@@ -36,8 +36,8 @@ use crate::{
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
-        SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
+        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResult,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -66,7 +66,8 @@ impl EffectsCertifier {
         tx_type: TxType,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
-        submit_txn_resp: SubmitTxResponse,
+        // Guaranteed to be not the Rejected variant.
+        submit_txn_result: SubmitTxResult,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
@@ -76,14 +77,7 @@ impl EffectsCertifier {
         // Otherwise, only wait for finalized effects.
         // Skip the first attempt to get full effects if it is already provided.
 
-        // Assumes only submitting one transaction, so there is exactly one result.
-        let result = submit_txn_resp.results.into_iter().next().ok_or_else(|| {
-            TransactionDriverError::Internal {
-                error: "Expected at least one result in SubmitTxResponse".to_string(),
-            }
-        })?;
-
-        let (consensus_position, full_effects) = match result {
+        let (consensus_position, full_effects) = match submit_txn_result {
             SubmitTxResult::Submitted { consensus_position } => (Some(consensus_position), None),
             SubmitTxResult::Executed {
                 effects_digest,
@@ -95,6 +89,14 @@ impl EffectsCertifier {
                 // But if it is not set, continuing to get full effects and certify the digest are still correct.
                 None => (None, None),
             },
+            SubmitTxResult::Rejected { error } => {
+                return Err(TransactionDriverError::Internal {
+                    error: format!(
+                        "Unexpected submission error in get_certified_finalized_effects(): {}",
+                        error
+                    ),
+                });
+            }
         };
 
         let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);

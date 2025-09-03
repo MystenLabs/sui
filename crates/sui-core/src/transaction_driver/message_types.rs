@@ -49,6 +49,9 @@ pub enum SubmitTxResult {
         // Whether the transaction was executed using fast path.
         fast_path: bool,
     },
+    Rejected {
+        error: SuiError,
+    },
 }
 
 impl fmt::Debug for SubmitTxResult {
@@ -67,6 +70,7 @@ impl fmt::Debug for SubmitTxResult {
                 .field("effects_digest", &format_args!("{}", effects_digest))
                 .field("fast_path", fast_path)
                 .finish(),
+            Self::Rejected { error } => f.debug_struct("Rejected").field("error", &error).finish(),
         }
     }
 }
@@ -87,6 +91,9 @@ impl TryFrom<SubmitTxResult> for RawSubmitTxResult {
             } => {
                 let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
                 RawValidatorSubmitStatus::Executed(raw_executed)
+            }
+            SubmitTxResult::Rejected { error } => {
+                RawValidatorSubmitStatus::Rejected(try_from_response_rejected(Some(error))?)
             }
         };
         Ok(RawSubmitTxResult { inner: Some(inner) })
@@ -110,6 +117,15 @@ impl TryFrom<RawSubmitTxResult> for SubmitTxResult {
                     details,
                     fast_path,
                 })
+            }
+            Some(RawValidatorSubmitStatus::Rejected(error)) => {
+                let error = try_from_raw_rejected_status(error)?.ok_or_else(|| {
+                    SuiError::GrpcMessageDeserializeError {
+                        type_info: "RawSubmitTxResult.inner.Error".to_string(),
+                        error: "RawSubmitTxResult.inner.Error is None".to_string(),
+                    }
+                })?;
+                Ok(SubmitTxResult::Rejected { error })
             }
             None => Err(SuiError::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxResult.inner".to_string(),

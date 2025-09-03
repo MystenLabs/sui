@@ -630,7 +630,6 @@ impl ValidatorService {
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
-            // TODO: return overload error for individual transactions?
             let overload_check_res = self.state.check_system_overload(
                 &*consensus_adapter,
                 transaction.data(),
@@ -641,7 +640,8 @@ impl ValidatorService {
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
                     .inc();
-                return Err(error.into());
+                results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
             }
 
             // Ok to fail the request when any signature is invalid.
@@ -714,8 +714,9 @@ impl ValidatorService {
                             continue;
                         }
                     }
-                    // TODO: return error for individual transactions.
-                    return Err(e.into());
+                    // Otherwise, record the error for the transaction.
+                    results[idx] = Some(SubmitTxResult::Rejected { error: e });
+                    continue;
                 }
             }
 
@@ -1098,7 +1099,6 @@ impl ValidatorService {
 
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
                     epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
-                    // TODO(fastpath): Make sure consensus handler does this for a UserTransaction.
                 }
 
                 Ok::<_, SuiError>(ExecutedData {
@@ -1288,11 +1288,7 @@ impl ValidatorService {
         .await
         .map_err(|_| tonic::Status::internal("Timeout waiting for effects"))???
         .try_into()?;
-        Ok((
-            tonic::Response::new(response),
-            // TODO(fastpath): Implement spam weight
-            Weight::zero(),
-        ))
+        Ok((tonic::Response::new(response), Weight::zero()))
     }
 
     #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, err(level = "debug"), fields(consensus_position = ?request.consensus_position, fast_path_effects = tracing::field::Empty))]
