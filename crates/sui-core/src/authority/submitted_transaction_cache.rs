@@ -28,8 +28,8 @@ struct SubmissionMetadata {
     submission_count: u32,
     /// Maximum allowed submissions based on gas price amplification
     max_allowed_submissions: u32,
-    /// Client IP address that submitted this transaction
-    submitter_client_addr: Option<IpAddr>,
+    /// List of client IP addresses that have submitted this transaction
+    submitter_client_addrs: Vec<IpAddr>,
 }
 
 impl SubmittedTransactionCache {
@@ -55,16 +55,23 @@ impl SubmittedTransactionCache {
 
         let max_allowed_submissions = amplification_factor;
 
-        if let Some(_metadata) = inner.transactions.get_mut(digest) {
-            // TODO(fastpath): Track potentially different client addr for existing entries?
+        if let Some(metadata) = inner.transactions.get_mut(digest) {
+            // Track additional client addresses for resubmissions
+            if let Some(addr) = submitter_client_addr {
+                if !metadata.submitter_client_addrs.contains(&addr) {
+                    metadata.submitter_client_addrs.push(addr);
+                    debug!("Added new client address {addr} for transaction {digest}");
+                }
+            }
             debug!("Transaction {digest} already tracked in submission cache");
         } else {
             // First time we're submitting this transaction, however we will wait till
             // we see the transaction in consensus output to increment the submission count.
+            let submitter_client_addrs = submitter_client_addr.into_iter().collect();
             let metadata = SubmissionMetadata {
                 submission_count: 0,
                 max_allowed_submissions,
-                submitter_client_addr,
+                submitter_client_addrs,
             };
 
             inner.transactions.put(*digest, metadata);
@@ -77,11 +84,11 @@ impl SubmittedTransactionCache {
 
     /// Increments the submission count when we see a transaction in consensus output.
     /// This tracks how many times the transaction has appeared in consensus (from any validator).
-    /// Returns the spam weight and submitter client address if the transaction exceeds allowed submissions.
+    /// Returns the spam weight and list of submitter client addresses if the transaction exceeds allowed submissions.
     pub(crate) fn increment_submission_count(
         &self,
         digest: &TransactionDigest,
-    ) -> Option<(Weight, Option<IpAddr>)> {
+    ) -> Option<(Weight, Vec<IpAddr>)> {
         let mut inner = self.inner.write();
 
         if let Some(metadata) = inner.transactions.get_mut(digest) {
@@ -98,7 +105,7 @@ impl SubmittedTransactionCache {
                     spam_weight
                 );
 
-                return Some((spam_weight, metadata.submitter_client_addr));
+                return Some((spam_weight, metadata.submitter_client_addrs.clone()));
             }
         }
         // If we don't know about this transaction, it was submitted by another validator
@@ -124,6 +131,7 @@ impl SubmittedTransactionCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
 
     fn create_test_digest(val: u8) -> TransactionDigest {
         let mut bytes = [0u8; 32];
@@ -229,6 +237,42 @@ mod tests {
         assert!(cache.contains(&digest1));
         assert!(cache.contains(&create_test_digest(3)));
         assert!(cache.contains(&digest4));
+    }
+
+    #[test]
+    fn test_multiple_client_addresses() {
+        let cache = SubmittedTransactionCache::new(None);
+        let digest = create_test_digest(1);
+        let addr1 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let addr2 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
+        let addr3 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 3));
+
+        // First submission with addr1
+        cache.record_submitted_tx(&digest, 2, Some(addr1));
+
+        // Resubmission with addr2 - should track both addresses
+        cache.record_submitted_tx(&digest, 2, Some(addr2));
+
+        // Resubmission with addr1 again - should not duplicate
+        cache.record_submitted_tx(&digest, 2, Some(addr1));
+
+        // Resubmission with addr3 - should track all three
+        cache.record_submitted_tx(&digest, 2, Some(addr3));
+
+        // Increment submission count twice to exceed limit
+        cache.increment_submission_count(&digest);
+        cache.increment_submission_count(&digest);
+
+        // Third submission should trigger spam weight for all addresses
+        let result = cache.increment_submission_count(&digest);
+        assert!(result.is_some());
+
+        let (spam_weight, addrs) = result.unwrap();
+        assert_eq!(spam_weight, Weight::one());
+        assert_eq!(addrs.len(), 3);
+        assert!(addrs.contains(&addr1));
+        assert!(addrs.contains(&addr2));
+        assert!(addrs.contains(&addr3));
     }
 
     #[test]

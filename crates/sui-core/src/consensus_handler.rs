@@ -796,24 +796,29 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             &parsed.transaction.kind
                         {
                             let digest = tx.digest();
-                            if let Some((spam_weight, submitter_client_addr)) =
+                            if let Some((spam_weight, submitter_client_addrs)) =
                                 submitted_cache.increment_submission_count(digest)
                             {
                                 if let Some(ref traffic_controller) = self.state.traffic_controller
                                 {
                                     debug!(
-                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to traffic controller",
+                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
+                                        submitter_client_addrs.len()
                                     );
 
-                                    traffic_controller.tally(TrafficTally::new(
-                                        submitter_client_addr,
-                                        None,
-                                        None,
-                                        spam_weight,
-                                    ));
+                                    // Apply spam weight to all client addresses that submitted this transaction
+                                    for addr in submitter_client_addrs {
+                                        traffic_controller.tally(TrafficTally::new(
+                                            Some(addr),
+                                            None,
+                                            None,
+                                            spam_weight.clone(),
+                                        ));
+                                    }
                                 } else {
                                     warn!(
-                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} (traffic controller not configured)",
+                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} for {} client addresses (traffic controller not configured)",
+                                        submitter_client_addrs.len()
                                     );
                                 }
                             }
