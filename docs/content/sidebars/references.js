@@ -59,8 +59,8 @@ const references = [
 					id: 'references/sui-graphql',
 				},
 				items: [
-					graphqlAlpha,
 					graphqlBeta,
+					graphqlAlpha,
 				],
 			},
 			{
