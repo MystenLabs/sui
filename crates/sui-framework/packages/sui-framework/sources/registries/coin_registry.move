@@ -480,7 +480,7 @@ public fun migrate_regulated_state_by_cap<T>(currency: &mut Currency<T>, cap: &D
 
 // === Public getters  ===
 
-/// Get the number of decimal places for the coin type.a
+/// Get the number of decimal places for the coin type.
 public fun decimals<T>(currency: &Currency<T>): u8 { currency.decimals }
 
 /// Get the human-readable name of the coin.
