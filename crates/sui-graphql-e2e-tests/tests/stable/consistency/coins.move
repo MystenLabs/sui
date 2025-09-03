@@ -15,7 +15,6 @@ module P0::fake {
 
     public struct FAKE has drop {}
 
-    #[allow(deprecated_usage)]
     fun init(witness: FAKE, ctx: &mut TxContext){
         let (mut treasury_cap, metadata) = coin::create_currency(
             witness,

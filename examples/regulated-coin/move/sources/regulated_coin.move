@@ -3,33 +3,27 @@
 
 module regulated_coin_example::regulated_coin;
 
-use sui::coin_registry;
+use sui::coin;
 
-/// OTW for the coin.
 public struct REGULATED_COIN has drop {}
 
 fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
     // Creates a new currency using `create_currency`, but with an extra capability that
     // allows for specific addresses to have their coins frozen. Those addresses cannot interact
     // with the coin as input objects.
-    let (mut builder, treasury_cap) = coin_registry::new_currency(
+    let (treasury_cap, deny_cap, meta_data) = coin::create_regulated_currency_v2(
         otw,
-        5, // Decimals
-        b"$TABLE".to_string(), // Symbol
-        b"RegulaCoin".to_string(), // Name
-        b"Example Regulated Coin".to_string(), // Description
-        b"https://example.com/regulated_coin.png".to_string(), // Icon URL
+        5,
+        b"$TABLE",
+        b"RegulaCoin",
+        b"Example Regulated Coin",
+        option::none(),
+        true,
         ctx,
     );
 
-    // Mark the currency as regulated, issue a `DenyCapV2`.
-    let deny_cap = builder.make_regulated(true, ctx);
-    let metadata_cap = builder.finalize(ctx);
-
-    let sender = ctx.sender();
-
-    // Transfer the treasury cap, deny cap, and metadata cap to the publisher.
+    let sender = tx_context::sender(ctx);
     transfer::public_transfer(treasury_cap, sender);
     transfer::public_transfer(deny_cap, sender);
-    transfer::public_transfer(metadata_cap, sender);
+    transfer::public_transfer(meta_data, sender);
 }

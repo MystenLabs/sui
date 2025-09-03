@@ -1167,7 +1167,6 @@ module bridge::bridge_env {
 //
 
 #[test_only]
-#[allow(deprecated_usage)]
 module bridge::test_token {
     use std::ascii;
     use std::type_name;
@@ -1204,7 +1203,7 @@ module bridge::test_token {
     }
 }
 
-#[test_only, allow(deprecated_usage)]
+#[test_only]
 module bridge::btc {
     use std::ascii;
     use std::type_name;
@@ -1241,7 +1240,7 @@ module bridge::btc {
     }
 }
 
-#[test_only, allow(deprecated_usage)]
+#[test_only]
 module bridge::eth {
     use std::ascii;
     use std::type_name;
@@ -1278,7 +1277,7 @@ module bridge::eth {
     }
 }
 
-#[test_only, allow(deprecated_usage)]
+#[test_only]
 module bridge::usdc {
     use std::ascii;
     use std::type_name;
@@ -1315,7 +1314,7 @@ module bridge::usdc {
     }
 }
 
-#[test_only, allow(deprecated_usage)]
+#[test_only]
 module bridge::usdt {
     use std::ascii;
     use std::type_name;
