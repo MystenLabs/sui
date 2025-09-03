@@ -224,6 +224,10 @@ pub struct HandleCertificateRequestV3 {
 pub struct RawSubmitTxRequest {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub transactions: Vec<Bytes>,
+
+    /// Whether to ensure all transactions are in the same block.
+    #[prost(bool, tag = "2")]
+    pub ensure_same_block: bool,
 }
 
 #[derive(Clone, prost::Message)]
@@ -235,7 +239,7 @@ pub struct RawSubmitTxResponse {
 
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxResult {
-    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2")]
+    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2, 3")]
     pub inner: Option<RawValidatorSubmitStatus>,
 }
 

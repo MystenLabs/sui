@@ -5,7 +5,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
-use futures::TryFutureExt;
+use futures::{future, TryFutureExt};
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
@@ -583,13 +583,22 @@ impl ValidatorService {
             .into());
         }
 
+        let max_num_transactions = if request.ensure_same_block {
+            // Soft bundle cannot contain too many transactions.
+            // Otherwise it is hard to include all of them in a single block.
+            epoch_store.protocol_config().max_soft_bundle_size()
+        } else {
+            // Still enforce a limit even when transactions do not need to be in the same block.
+            epoch_store
+                .protocol_config()
+                .max_num_transactions_in_block()
+        };
         fp_ensure!(
-            request.transactions.len()
-                <= epoch_store.protocol_config().max_soft_bundle_size() as usize,
+            request.transactions.len() <= max_num_transactions as usize,
             SuiError::UserInputError {
                 error: UserInputError::TooManyTransactionsInBatch {
                     size: request.transactions.len(),
-                    limit: epoch_store.protocol_config().max_soft_bundle_size(),
+                    limit: max_num_transactions,
                 },
             }
             .into()
@@ -597,8 +606,10 @@ impl ValidatorService {
 
         let req_type = if request.transactions.len() == 1 {
             "single_transaction"
-        } else {
+        } else if request.ensure_same_block {
             "soft_bundle"
+        } else {
+            "batch"
         };
 
         // Transactions to submit to consensus.
@@ -738,16 +749,22 @@ impl ValidatorService {
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
         // We do this to account for serialization overheads and to ensure that the soft bundle is not too large
         // when is attempted to be posted via consensus.
-        let soft_bundle_max_size_bytes = epoch_store
-            .protocol_config()
-            .consensus_max_transactions_in_block_bytes()
-            / 2;
+        let max_transaction_bytes = if request.ensure_same_block {
+            epoch_store
+                .protocol_config()
+                .consensus_max_transactions_in_block_bytes()
+                / 2
+        } else {
+            epoch_store
+                .protocol_config()
+                .consensus_max_transactions_in_block_bytes()
+        };
         fp_ensure!(
-            total_size_bytes <= soft_bundle_max_size_bytes as usize,
+            total_size_bytes <= max_transaction_bytes as usize,
             SuiError::UserInputError {
                 error: UserInputError::TotalTransactionSizeTooLargeInBatch {
                     size: total_size_bytes,
-                    limit: soft_bundle_max_size_bytes,
+                    limit: max_transaction_bytes,
                 },
             }
             .into()
@@ -766,12 +783,22 @@ impl ValidatorService {
             .handle_submit_transaction_consensus_latency
             .start_timer();
 
-        let consensus_positions = self
-            .handle_submit_to_consensus_for_position(
+        let consensus_positions = if request.ensure_same_block {
+            self.handle_submit_to_consensus_for_position(
                 NonEmpty::from_vec(consensus_transactions).unwrap(),
                 &epoch_store,
             )
-            .await?;
+            .await?
+        } else {
+            let futures = consensus_transactions.into_iter().map(|t| {
+                self.handle_submit_to_consensus_for_position(NonEmpty::new(t), &epoch_store)
+            });
+            future::try_join_all(futures)
+                .await?
+                .into_iter()
+                .flatten()
+                .collect()
+        };
 
         for (idx, consensus_position) in transaction_indexes.into_iter().zip(consensus_positions) {
             results[idx] = Some(SubmitTxResult::Submitted { consensus_position });

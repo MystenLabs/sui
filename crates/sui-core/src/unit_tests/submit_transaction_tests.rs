@@ -11,6 +11,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::effects::TransactionEffectsAPI as _;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
 use sui_types::messages_grpc::RawSubmitTxRequest;
@@ -97,6 +98,7 @@ impl TestContext {
     fn build_submit_request(&self, transaction: Transaction) -> RawSubmitTxRequest {
         RawSubmitTxRequest {
             transactions: vec![bcs::to_bytes(&transaction).unwrap().into()],
+            ..Default::default()
         }
     }
 }
@@ -132,6 +134,7 @@ async fn test_submit_transaction_invalid_transaction() {
     // Create an invalid request with malformed transaction bytes
     let request = RawSubmitTxRequest {
         transactions: vec![vec![0xFF, 0xFF, 0xFF].into()],
+        ..Default::default()
     };
 
     let response = test_context.client.submit_transaction(request, None).await;
@@ -292,8 +295,25 @@ async fn test_submit_transaction_gas_object_validation() {
     let transaction = to_sender_signed_transaction(tx_data, &test_context.keypair);
     let request = test_context.build_submit_request(transaction);
 
+    // Because the error comes from validating transaction input, the response should contain SubmitTxResult
+    // with the Rejected variant.
     let response = test_context.client.submit_transaction(request, None).await;
-    assert!(response.is_err());
+    let result: SubmitTxResult = response
+        .unwrap()
+        .results
+        .first()
+        .unwrap()
+        .clone()
+        .try_into()
+        .unwrap();
+    assert!(matches!(
+        result,
+        SubmitTxResult::Rejected {
+            error: SuiError::UserInputError {
+                error: UserInputError::ObjectNotFound { .. }
+            }
+        }
+    ));
 }
 
 #[tokio::test]
@@ -309,6 +329,7 @@ async fn test_submit_batched_transactions() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
+        ensure_same_block: false,
     };
 
     // Submit request with batched transactions.
@@ -333,7 +354,44 @@ async fn test_submit_batched_transactions() {
 }
 
 #[tokio::test]
-async fn test_submit_batched_transactions_with_already_executed() {
+async fn test_submit_soft_bundle_transactions() {
+    let test_context = TestContext::new().await;
+
+    let tx1 = test_context.build_test_transaction();
+    let tx2 = test_context.build_test_transaction();
+
+    // Build request with batched transactions.
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        ensure_same_block: true,
+    };
+
+    // Submit request with batched transactions.
+    let raw_response = test_context
+        .client
+        .submit_transaction(request, None)
+        .await
+        .unwrap();
+
+    // Verify we got results for both transactions
+    assert_eq!(raw_response.results.len(), 2);
+
+    // Both should be submitted to consensus
+    for result in raw_response.results {
+        match result.inner {
+            Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
+                // Expected: transactions were submitted to consensus
+            }
+            _ => panic!("Expected Submitted status for all transactions"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_submit_soft_bundle_transactions_with_already_executed() {
     let test_context = TestContext::new().await;
 
     // Create 1st transaction and execute it
@@ -377,6 +435,7 @@ async fn test_submit_batched_transactions_with_already_executed() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
+        ensure_same_block: true,
     };
 
     // Submit both transactions

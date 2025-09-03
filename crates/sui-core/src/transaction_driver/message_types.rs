@@ -32,6 +32,7 @@ impl SubmitTxRequest {
                     error: e.to_string(),
                 })?
                 .into()],
+            ..Default::default()
         })
     }
 }
@@ -119,12 +120,12 @@ impl TryFrom<RawSubmitTxResult> for SubmitTxResult {
                 })
             }
             Some(RawValidatorSubmitStatus::Rejected(error)) => {
-                let error = try_from_raw_rejected_status(error)?.ok_or_else(|| {
+                let error = try_from_raw_rejected_status(error)?.unwrap_or(
                     SuiError::GrpcMessageDeserializeError {
                         type_info: "RawSubmitTxResult.inner.Error".to_string(),
                         error: "RawSubmitTxResult.inner.Error is None".to_string(),
-                    }
-                })?;
+                    },
+                );
                 Ok(SubmitTxResult::Rejected { error })
             }
             None => Err(SuiError::GrpcMessageDeserializeError {

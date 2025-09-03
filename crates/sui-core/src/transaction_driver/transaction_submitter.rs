@@ -146,7 +146,7 @@ impl TransactionSubmitter {
             })
         })?;
 
-        // Since only one transaction is submitted, it is ok to return error as Result.
+        // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
         if let SubmitTxResult::Rejected { error } = result {
             return Err(TransactionRequestError::RejectedAtValidator(error));
         }
