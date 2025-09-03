@@ -474,6 +474,18 @@ impl Object {
         }
     }
 
+    /// Construct an object that is represented by just its address. This does not check that the
+    /// object exists, so should not be used to "fetch" an address provided as user input. When the
+    /// object's contents are fetched from the latest version of that object as of the current
+    /// checkpoint.
+    pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
+        Self {
+            super_: Address::with_address(scope, address),
+            version_digest: None,
+            contents: Arc::new(OnceCell::new()),
+        }
+    }
+
     /// Fetch an object by its key. The key can either specify an exact version to fetch, an
     /// upperbound against a "root version", an upperbound against a checkpoint, or none of the
     /// above. Returns `None` when no checkpoint is set in scope (e.g. execution scope)
