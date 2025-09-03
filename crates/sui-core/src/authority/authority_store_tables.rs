@@ -230,7 +230,7 @@ impl AuthorityPerpetualTables {
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
-
+        let epoch_prefix_key = KeyType::prefix_uniform(8, 0);
         let configs = vec![
             (
                 "objects".to_string(),
@@ -335,7 +335,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::VariableLength,
                     MUTEXES,
-                    uniform_key,
+                    epoch_prefix_key,
                     KeySpaceConfig::default(),
                 ),
             ),
@@ -344,7 +344,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::VariableLength,
                     MUTEXES,
-                    uniform_key,
+                    epoch_prefix_key,
                     KeySpaceConfig::default(),
                 ),
             ),
