@@ -59,7 +59,7 @@ module test::m {
         transfer::transfer(child, recipient)
     }
 
-    public fun make_dynamic_remove_and_then_share(ctx: &mut TxContext): Outer {
+    public fun make_dynamic_remove_and_then_share(ctx: &mut TxContext) {
         let child = Child { id: object::new(ctx), value: 0 };
 
         let mut parent = new_parent(ctx);
@@ -67,7 +67,7 @@ module test::m {
         add_field(&mut parent, child);
         let c: Child = ofield::remove(&mut parent.id, 0u64);
         transfer::share_object(c);
-        parent
+        transfer::share_object(parent);
     }
 }
 

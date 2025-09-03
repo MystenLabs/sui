@@ -41,7 +41,7 @@ env:
 jobs:
   release-build:
     name: Build & Publish Binaries
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       matrix:
         os:
@@ -110,7 +110,9 @@ jobs:
 
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
-        uses: taiki-e/install-action@33022ba120c3f523d134bbbee12278fc11a3df1a # pin@nextest
+        uses: taiki-e/install-action@7bf3bbf3104a2e9a77906ccbdf6d4aa6a87b0210 # pin@2.52.5
+        with:
+          tool: cargo-hack
 
       - name: Install postgres (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
@@ -173,7 +175,9 @@ jobs:
 
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
-          [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
+
+          # Upload tar balls to s3 so that we don't have to rebuild if they have already built
+          aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
       - name: Publish Windows sui binary to Chocolatey
         if: ${{ matrix.os == 'windows-ghcloud' && contains(env.sui_tag, 'testnet') }}
@@ -240,6 +244,7 @@ jobs:
 
   # Tag all sui images with release tag, so that they can be easily found
   tag-docker-hub-images:
+    name: Tag sui docker images in DockerHub
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
@@ -249,3 +254,16 @@ jobs:
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: tag-docker-images
           client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ env.TAG_NAME }}"}'
+
+  # Tag all sui images with release tag, so that they can be easily found
+  tag-release-binaries-in-s3:
+    name: Tag sui binaries in s3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Release binaries builds in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: build-release-binaries
+          client-payload: '{"sui_commit": "${{ github.sha }}", "tag_name": "${{ env.TAG_NAME }}"}'

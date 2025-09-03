@@ -5,16 +5,16 @@
 use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
-        ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, Mutability,
+        AbilitySet, Attributes, Friend, ModuleIdent, Mutability, ability_modifiers_ast_debug,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, DatatypeTypeParameter, TParam},
     parser::ast::{
-        self as P, BinOp, ConstantName, DatatypeName, Field, FunctionName, TargetKind, UnaryOp,
-        VariantName, ENTRY_MODIFIER,
+        self as P, BinOp, ConstantName, DatatypeName, ENTRY_MODIFIER, Field, FunctionName,
+        TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name,
-        NumericalAddress, TName,
+        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
+        unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;
@@ -394,6 +394,7 @@ pub enum UnannotatedExp_ {
     ErrorConstant {
         line_number_loc: Loc,
         error_constant: Option<ConstantName>,
+        error_code: Option<u8>,
     },
 
     ModuleCall(Box<ModuleCall>),
@@ -1620,11 +1621,16 @@ impl AstDebug for UnannotatedExp_ {
             E::ErrorConstant {
                 line_number_loc: _,
                 error_constant,
+                error_code,
             } => {
-                w.write("ErrorConstant");
-                if let Some(c) = error_constant {
-                    w.write(format!("({})", c))
+                w.write("ErrorConstant(");
+                if let Some(c) = error_code {
+                    w.write(format!("code={},", c))
                 }
+                if let Some(c) = error_constant {
+                    w.write(format!("{}", c))
+                }
+                w.write(")");
             }
         }
     }

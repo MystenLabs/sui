@@ -8,7 +8,7 @@ use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_framework_snapshot::{update_bytecode_snapshot_manifest, SnapshotPackage};
 use sui_protocol_config::ProtocolVersion;
 
-// Define the `GIT_REVISION` const
+// Define the `GIT_FULL_SHA_REVISION` const
 bin_version::git_revision!();
 
 fn main() {
@@ -19,7 +19,7 @@ fn main() {
         write_package_to_file(version, &package.compiled);
         files.push(SnapshotPackage::from_system_package_metadata(package));
     }
-    update_bytecode_snapshot_manifest(GIT_REVISION, version, files);
+    update_bytecode_snapshot_manifest(GIT_FULL_SHA_REVISION, version, files);
 }
 
 fn write_package_to_file(version: u64, package: &SystemPackage) {

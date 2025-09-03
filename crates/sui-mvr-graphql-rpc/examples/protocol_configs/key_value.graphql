@@ -1,9 +1,0 @@
-# Select the key and value of the protocol configuration
-{
-  protocolConfig {
-    configs {
-      key
-      value
-    }
-  }
-}

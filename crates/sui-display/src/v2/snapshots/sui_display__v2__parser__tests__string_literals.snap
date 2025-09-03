@@ -1,0 +1,10 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{'foo' | 'bar\\nbaz' | 'qux\\\\'quux' | 'quy\\\\\\\\quz' | 'xyz\\\\zy' }\")"
+---
+{ "foo"
+| "bar\nbaz"
+| "qux'quux"
+| "quy\\quz"
+| "xyzzy"
+}

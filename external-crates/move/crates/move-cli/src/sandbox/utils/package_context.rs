@@ -1,9 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
-use crate::{sandbox::utils::OnDiskStateView, DEFAULT_BUILD_DIR};
-use anyhow::{bail, Result};
-use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
+use crate::{DEFAULT_BUILD_DIR, sandbox::utils::OnDiskStateView};
+use anyhow::{Result, bail};
+use move_package::{BuildConfig, compilation::compiled_package::CompiledPackage};
 use move_vm_runtime::dev_utils::storage::StoredPackage;
 use std::{
     collections::BTreeMap,

@@ -4,11 +4,10 @@
 use super::gas_predicates::charge_input_as_memory;
 use crate::gas_model::units_types::{CostTable, Gas, GasCost};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    gas_algebra::{AbstractMemorySize, InternalGas},
-    vm_status::StatusCode,
-};
-use move_vm_profiler::GasProfiler;
+
+use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas};
+
+use move_core_types::vm_status::StatusCode;
 use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 
@@ -65,7 +64,6 @@ pub struct GasStatus {
     instructions_next_tier_start: Option<u64>,
     instructions_current_tier_mult: u64,
 
-    pub profiler: Option<GasProfiler>,
     pub num_native_calls: u64,
 }
 
@@ -102,7 +100,6 @@ impl GasStatus {
             stack_height_next_tier_start,
             stack_size_next_tier_start,
             instructions_next_tier_start,
-            profiler: None,
             num_native_calls: 0,
         }
     }
@@ -130,7 +127,6 @@ impl GasStatus {
             stack_height_next_tier_start: None,
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
-            profiler: None,
             num_native_calls: 0,
         }
     }

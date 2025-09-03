@@ -5,10 +5,10 @@ use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::storage::{FullObjectKey, MarkerValue};
 use tracing::error;
 use typed_store::metrics::SamplingInterval;
@@ -16,7 +16,7 @@ use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
     MetricConf,
 };
-use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
+use typed_store::traits::Map;
 
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_types::{
@@ -24,13 +24,12 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::rocksdb::compaction_filter::Decision;
-use typed_store::DBMapUtils;
+use typed_store::{DBMapUtils, DbIterator};
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
-const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 
 /// Options to apply to every column family of the `perpetual` DB.
 #[derive(Default)]
@@ -51,6 +50,7 @@ impl AuthorityPerpetualTablesOptions {
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
+#[cfg_attr(tidehunter, tidehunter)]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
@@ -94,11 +94,12 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    // Currently this is needed in the validator for returning events during process certificates.
-    // We could potentially remove this if we decided not to provide events in the execution path.
-    // TODO: Figure out what to do with this table in the long run.
-    // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
-    pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+    #[allow(dead_code)]
+    #[deprecated]
+    events: DBMap<(TransactionEventsDigest, usize), Event>,
+
+    // Events keyed by the digest of the transaction that produced them.
+    pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.
@@ -106,10 +107,11 @@ pub struct AuthorityPerpetualTables {
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
-    // Finalized root state accumulator for epoch, to be included in CheckpointSummary
+    // Finalized root state hash for epoch, to be included in CheckpointSummary
     // of last checkpoint of epoch. These values should only ever be written once
     // and never changed
-    pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
+    pub(crate) root_state_hash_by_epoch:
+        DBMap<EpochId, (CheckpointSequenceNumber, GlobalStateHash)>,
 
     /// Parameters of the system fixed at the epoch start
     pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
@@ -163,6 +165,7 @@ impl AuthorityPerpetualTables {
         parent_path.join("perpetual")
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open(
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
@@ -187,17 +190,170 @@ impl AuthorityPerpetualTables {
                 "effects".to_string(),
                 effects_table_config(db_options.clone()),
             ),
-            (
-                "events".to_string(),
-                events_table_config(db_options.clone()),
-            ),
         ]));
+
         Self::open_tables_read_write(
             Self::path(parent_path),
             MetricConf::new("perpetual")
                 .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
             Some(db_options.options),
             Some(table_options),
+        )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
+        tracing::warn!("AuthorityPerpetualTables using tidehunter");
+        use typed_store::tidehunter_util::{
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size, Bytes,
+            IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+        };
+        let mutexes = default_mutex_count() * 2;
+        let value_cache_size = default_value_cache_size();
+
+        let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
+        let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
+            let mut retain = HashSet::new();
+            let mut previous: Option<&[u8]> = None;
+            const OID_SIZE: usize = 32;
+            for (key, _) in index.iter().rev() {
+                if let Some(prev) = previous {
+                    if prev == &key[..OID_SIZE] {
+                        continue;
+                    }
+                }
+                previous = Some(&key[..OID_SIZE]);
+                retain.insert(key.clone());
+            }
+            index.retain(|k, _| retain.contains(k));
+        };
+        let mut digest_prefix = vec![0; 8];
+        digest_prefix[7] = 32;
+        let uniform_key = KeyType::uniform(default_cells_per_mutex());
+
+        let configs = vec![
+            (
+                "objects".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8,
+                    mutexes,
+                    KeyType::uniform(default_cells_per_mutex() * 4),
+                    KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
+                ),
+            ),
+            (
+                "owned_object_transaction_locks".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8 + 32 + 8,
+                    mutexes,
+                    KeyType::uniform(default_cells_per_mutex() * 4),
+                    bloom_config.clone(),
+                ),
+            ),
+            (
+                "transactions".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::new().with_value_cache_size(value_cache_size),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "effects".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
+                    mutexes,
+                    uniform_key,
+                    bloom_config.clone().with_value_cache_size(value_cache_size),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "executed_effects".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
+                    mutexes,
+                    uniform_key,
+                    bloom_config.clone().with_value_cache_size(value_cache_size),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "events".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32 + 8,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "events_2".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "executed_transactions_to_checkpoint".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "root_state_hash_by_epoch".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "epoch_start_configuration".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
+                "pruned_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
+                "expected_network_sui_amount".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
+                "expected_storage_fund_imbalance".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
+                "object_per_epoch_marker_table".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                ),
+            ),
+            (
+                "object_per_epoch_marker_table_v2".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                ),
+            ),
+        ];
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::new("perpetual")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            configs.into_iter().collect(),
         )
     }
 
@@ -350,8 +506,10 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
-    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
-        Ok(self.pruned_checkpoint.get(&())?.unwrap_or_default())
+    pub fn get_highest_pruned_checkpoint(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.pruned_checkpoint.get(&())
     }
 
     pub fn set_highest_pruned_checkpoint(
@@ -420,7 +578,7 @@ impl AuthorityPerpetualTables {
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.safe_iter(),
+            iter: Box::new(self.objects.safe_iter()),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -437,7 +595,7 @@ impl AuthorityPerpetualTables {
         let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
 
         LiveSetIter {
-            iter: self.objects.safe_iter_with_bounds(lower_bound, upper_bound),
+            iter: Box::new(self.objects.safe_iter_with_bounds(lower_bound, upper_bound)),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -449,28 +607,10 @@ impl AuthorityPerpetualTables {
         self.objects.checkpoint_db(path).map_err(Into::into)
     }
 
-    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
-        // TODO: Add new tables that get added to the db automatically
-        self.objects.unsafe_clear()?;
-        self.live_owned_object_markers.unsafe_clear()?;
-        self.executed_effects.unsafe_clear()?;
-        self.events.unsafe_clear()?;
-        self.executed_transactions_to_checkpoint.unsafe_clear()?;
-        self.root_state_hash_by_epoch.unsafe_clear()?;
-        self.epoch_start_configuration.unsafe_clear()?;
-        self.pruned_checkpoint.unsafe_clear()?;
-        self.expected_network_sui_amount.unsafe_clear()?;
-        self.expected_storage_fund_imbalance.unsafe_clear()?;
-        self.object_per_epoch_marker_table.unsafe_clear()?;
-        self.object_per_epoch_marker_table_v2.unsafe_clear()?;
-        self.objects.rocksdb.flush()?;
-        Ok(())
-    }
-
     pub fn get_root_state_hash(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
         Ok(self.root_state_hash_by_epoch.get(&epoch)?)
     }
 
@@ -478,10 +618,10 @@ impl AuthorityPerpetualTables {
         &self,
         epoch: EpochId,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
-        accumulator: Accumulator,
+        hash: GlobalStateHash,
     ) -> SuiResult {
         self.root_state_hash_by_epoch
-            .insert(&epoch, &(last_checkpoint_of_epoch, accumulator))?;
+            .insert(&epoch, &(last_checkpoint_of_epoch, hash))?;
         Ok(())
     }
 
@@ -540,8 +680,7 @@ impl ObjectStore for AuthorityPerpetualTables {
 }
 
 pub struct LiveSetIter<'a> {
-    iter:
-        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::SafeIterator,
+    iter: DbIterator<'a, (ObjectKey, StoreObjectWrapper)>,
     tables: &'a AuthorityPerpetualTables,
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
     /// Whether a wrapped object is considered as a live object.
@@ -689,10 +828,4 @@ fn effects_table_config(db_options: DBOptions) -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
-}
-
-fn events_table_config(db_options: DBOptions) -> DBOptions {
-    db_options
-        .optimize_for_write_throughput()
-        .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }

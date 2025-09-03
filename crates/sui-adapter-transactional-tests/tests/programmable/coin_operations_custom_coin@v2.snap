@@ -1,0 +1,51 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-20:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 22-24:
+//# programmable --sender A --inputs object(1,2) 100 @A
+//> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(2,0)
+mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 3, line 26:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<test::fake::FAKE> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<test::fake::FAKE> {
+        value: 100u64,
+    },
+}
+
+task 4, lines 28-34:
+//# programmable --sender A --inputs object(1,2) 100 object(2,0) 1 @A
+//> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
+//> 1: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
+//> 2: SplitCoins(Result(0), [Input(3)]);
+//> 3: SplitCoins(Input(2), [Input(3)]);
+//> MergeCoins(Result(1), [Result(0), Input(2), Result(2), Result(3)]);
+//> TransferObjects([Result(1)], Input(4))
+created: object(4,0)
+mutated: object(0,0), object(1,2)
+deleted: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128

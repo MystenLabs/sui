@@ -1,6 +1,7 @@
 ---
 title: Address-Owned Objects
 description: Address-owned objects are owned by a Sui 32-byte address, which can either be an account address or an object ID. Learn how to create and access these objects.
+keywords: [ address-owned objects, address-owned, owned objects, objects owned by address, accessing objects, accessing owned objects, address ownership ]
 ---
 
 An address-owned object is owned by a specific 32-byte address that is either an account address (derived from a particular signature scheme) or an object ID. An address-owned object is accessible only to its owner and no others.
@@ -9,7 +10,7 @@ As the owner (of the address that owns) an address-owned objects, you can transf
 
 ## Creating address-owned objects
 
-You can use one of the following functions (defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move)) to create address-owned objects.
+Use these [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move) functions to create address-owned objects:
 
 ```move
 public fun transfer<T: key>(obj: T, recipient: address)
@@ -30,14 +31,17 @@ If the address owner of the object is a signature-derived address (an account ad
 
 ## When to use address-owned objects
 
-Use address-owned objects in cases where you want or need only a single owner for the object at any point in time. When designing, you should generally prefer address-owned objects over shared objects as address-owned objects whenever it is reasonable or possible to do so. Owned objects do not need to be sequenced through consensus, and are therefore less prone to throughput bottlenecks if the object is being used extensively.
+Use address-owned objects when you need:
+- Single ownership at any time
+- Better performance than shared objects
+- Avoidance of consensus sequencing
 
 ## Example
 
 An example of an object that is frequently address-owned is that of a [Coin object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move). If address `0xA11CE` had a coin `C` with 100 SUI and wanted to pay address `0xB0B` 100 SUI, `0xA11CE` could do so by transferring `C` to `0xB0B`.
 
 ```move
-sui::transfer::public_transfer(C, @0xB0B);
+transfer::public_transfer(C, @0xB0B);
 ```
 
 This results in `C` having a new address owner of `0xB0B`, and `0xB0B` can later use that 100 SUI coin.

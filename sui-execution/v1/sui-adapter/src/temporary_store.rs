@@ -69,7 +69,7 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
-        let deleted_consensus_objects = input_objects.deleted_consensus_objects();
+        let deleted_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
         Self {
             store,
@@ -110,12 +110,14 @@ impl<'backing> TemporaryStore<'backing> {
         let results = self.execution_results;
         InnerTemporaryStore {
             input_objects: self.input_objects,
-            deleted_consensus_objects: self.deleted_consensus_objects,
+            stream_ended_consensus_objects: self.deleted_consensus_objects,
             mutable_inputs: self.mutable_input_refs,
             written: results.written_objects,
             events: TransactionEvents {
                 data: results.user_events,
             },
+            // no accumulator events for v1
+            accumulator_events: vec![],
             loaded_runtime_objects: self.loaded_runtime_objects,
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
@@ -214,7 +216,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .into_iter()
                 .map(|shared_input| match shared_input {
                     SharedInput::Existing(oref) => oref,
-                    SharedInput::Deleted(_) => {
+                    SharedInput::ConsensusStreamEnded(_) => {
                         unreachable!("Shared object deletion not supported in effects v1")
                     }
                     SharedInput::Cancelled(_) => {
@@ -656,8 +658,10 @@ impl TemporaryStore<'_> {
                 Owner::ObjectOwner(_parent) => {
                     unreachable!("Input objects must be address owned, shared, or immutable")
                 }
-                Owner::ConsensusV2 { .. } => {
-                    unimplemented!("ConsensusV2 does not exist for this execution version")
+                Owner::ConsensusAddressOwner { .. } => {
+                    unimplemented!(
+                        "ConsensusAddressOwner does not exist for this execution version"
+                    )
                 }
             }
         }
@@ -687,8 +691,10 @@ impl TemporaryStore<'_> {
                         "Only system packages can be upgraded"
                     );
                 }
-                Owner::ConsensusV2 { .. } => {
-                    unimplemented!("ConsensusV2 does not exist for this execution version")
+                Owner::ConsensusAddressOwner { .. } => {
+                    unimplemented!(
+                        "ConsensusAddressOwner does not exist for this execution version"
+                    )
                 }
             }
         }
@@ -1067,8 +1073,6 @@ impl ChildObjectResolver for TemporaryStore<'_> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
@@ -1085,7 +1089,6 @@ impl ChildObjectResolver for TemporaryStore<'_> {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2,
         )
     }
 }

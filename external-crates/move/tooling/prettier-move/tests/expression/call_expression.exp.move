@@ -3,7 +3,7 @@
 // tabWidth: 4
 // useModuleLabel: true
 
-module prettier::index_expression;
+module prettier::call_expression;
 
 fun call_expression() {
     call(/* a */ 10, /* b */ 10);
@@ -13,6 +13,22 @@ fun call_expression() {
         /* c */ 10,
     );
     call(/* a */ 10 /* trailing */);
+    call(
+        // leading
+        10,
+    );
+    call(
+        10, // trailing
+    );
+    call(
+        /* a */ 10, // trailing line
+    );
+
+    call(if (cond) {
+        b"1"
+    } else {
+        b"0"
+    }.to_string());
 }
 
 fun misc() {

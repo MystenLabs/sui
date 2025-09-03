@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
         config
             .checkpoints_path
             .map(|p| p.into())
-            .unwrap_or(tempfile::tempdir()?.into_path()),
+            .unwrap_or(tempfile::tempdir()?.keep()),
         config.deepbook_genesis_checkpoint,
         ingestion_metrics.clone(),
         Box::new(indexer_meterics.clone()),

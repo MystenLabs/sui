@@ -194,11 +194,11 @@ title: Module `deepbook::critbit`
 
 
 
-<a name="deepbook_critbit_EIndexOutOfRange"></a>
+<a name="deepbook_critbit_ETreeNotEmpty"></a>
 
 
 
-<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_EIndexOutOfRange">EIndexOutOfRange</a>: u64 = 7;
+<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_ETreeNotEmpty">ETreeNotEmpty</a>: u64 = 3;
 </code></pre>
 
 
@@ -221,6 +221,15 @@ title: Module `deepbook::critbit`
 
 
 
+<a name="deepbook_critbit_EIndexOutOfRange"></a>
+
+
+
+<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_EIndexOutOfRange">EIndexOutOfRange</a>: u64 = 7;
+</code></pre>
+
+
+
 <a name="deepbook_critbit_ENullParent"></a>
 
 
@@ -230,20 +239,11 @@ title: Module `deepbook::critbit`
 
 
 
-<a name="deepbook_critbit_ETreeNotEmpty"></a>
+<a name="deepbook_critbit_PARTITION_INDEX"></a>
 
 
 
-<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_ETreeNotEmpty">ETreeNotEmpty</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="deepbook_critbit_MAX_CAPACITY"></a>
-
-
-
-<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_MAX_CAPACITY">MAX_CAPACITY</a>: u64 = 9223372036854775807;
+<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_PARTITION_INDEX">PARTITION_INDEX</a>: u64 = 9223372036854775808;
 </code></pre>
 
 
@@ -257,11 +257,11 @@ title: Module `deepbook::critbit`
 
 
 
-<a name="deepbook_critbit_PARTITION_INDEX"></a>
+<a name="deepbook_critbit_MAX_CAPACITY"></a>
 
 
 
-<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_PARTITION_INDEX">PARTITION_INDEX</a>: u64 = 9223372036854775808;
+<pre><code><b>const</b> <a href="../deepbook/critbit.md#deepbook_critbit_MAX_CAPACITY">MAX_CAPACITY</a>: u64 = 9223372036854775807;
 </code></pre>
 
 

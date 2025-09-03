@@ -61,6 +61,16 @@ decimal.
 ## Constants
 
 
+<a name="std_fixed_point32_MAX_U64"></a>
+
+> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
+
+
+<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_MAX_U64">MAX_U64</a>: <a href="../std/u128.md#std_u128">u128</a> = 18446744073709551615;
+</code></pre>
+
+
+
 <a name="std_fixed_point32_EDENOMINATOR"></a>
 
 The denominator provided was zero
@@ -81,16 +91,6 @@ The quotient value would be too large to be held in a <code><a href="../std/u64.
 
 
 
-<a name="std_fixed_point32_EDIVISION_BY_ZERO"></a>
-
-A division by zero was encountered
-
-
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDIVISION_BY_ZERO">EDIVISION_BY_ZERO</a>: <a href="../std/u64.md#std_u64">u64</a> = 65540;
-</code></pre>
-
-
-
 <a name="std_fixed_point32_EMULTIPLICATION"></a>
 
 The multiplied value would be too large to be held in a <code><a href="../std/u64.md#std_u64">u64</a></code>
@@ -101,22 +101,22 @@ The multiplied value would be too large to be held in a <code><a href="../std/u6
 
 
 
+<a name="std_fixed_point32_EDIVISION_BY_ZERO"></a>
+
+A division by zero was encountered
+
+
+<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDIVISION_BY_ZERO">EDIVISION_BY_ZERO</a>: <a href="../std/u64.md#std_u64">u64</a> = 65540;
+</code></pre>
+
+
+
 <a name="std_fixed_point32_ERATIO_OUT_OF_RANGE"></a>
 
 The computed ratio when converting to a <code><a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">FixedPoint32</a></code> would be unrepresentable
 
 
 <pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_ERATIO_OUT_OF_RANGE">ERATIO_OUT_OF_RANGE</a>: <a href="../std/u64.md#std_u64">u64</a> = 131077;
-</code></pre>
-
-
-
-<a name="std_fixed_point32_MAX_U64"></a>
-
-> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
-
-
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_MAX_U64">MAX_U64</a>: <a href="../std/u128.md#std_u128">u128</a> = 18446744073709551615;
 </code></pre>
 
 

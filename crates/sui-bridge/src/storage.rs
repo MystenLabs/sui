@@ -8,8 +8,6 @@ use sui_types::Identifier;
 
 use sui_types::event::EventID;
 use typed_store::rocks::{DBMap, MetricConf};
-use typed_store::traits::TableSummary;
-use typed_store::traits::TypedStoreDebug;
 use typed_store::DBMapUtils;
 use typed_store::Map;
 

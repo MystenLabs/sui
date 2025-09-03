@@ -13,3 +13,11 @@ Run the following script from the Sui's [root directory](../../) and accept any 
 ```
 
 Please use your best judgment to decide if the changes between old and new versions of the snapshots look "reasonable" (e.g., a minor change in gas costs). When in doubt, please reach out to a member of Sui core team.
+
+## Documentation updates
+
+Do not make updates to the documentation directly in the .md files. You must update the relevant code comment and then build the framework, which updates the relevant documentation file during the process. To build, run the following command in the `crates/sui-framework` directory:
+
+```bash
+UPDATE=1 cargo nextest run build_system_packages
+```

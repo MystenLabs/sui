@@ -1,0 +1,53 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/annotated_lambda_type_inference_invalid.move:5:23
+  │
+5 │ macro fun do_u32($f: |u32| -> u64, $arg: _): u64 {
+  │                       ^^^
+  │                       │
+  │                       Invalid type annotation
+  │                       Expected: 'u32'
+  ·
+9 │ macro fun do_u16($f: |u16| -> u64, $arg: _): u64 {
+  │                       --- Given: 'u16'
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/move_2024/typing/annotated_lambda_type_inference_invalid.move:14:27
+   │
+ 9 │ macro fun do_u16($f: |u16| -> u64, $arg: _): u64 {
+   │                       --- Expected a literal of type 'u16', but the value is too large.
+   ·
+14 │     do_u16!(|x| x as u64, 0xFFFF_FFFF);
+   │                           ^^^^^^^^^^^
+   │                           │
+   │                           Invalid numerical literal
+   │                           Annotating the literal might help inference: '4294967295u32'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/annotated_lambda_type_inference_invalid.move:18:20
+   │
+18 │ macro fun do2($f: |u32| -> u64, $g: |u16| -> u64): u64 {
+   │                    ^^^
+   │                    │
+   │                    Invalid type annotation
+   │                    Expected: 'u32'
+   ·
+22 │ macro fun double($f: |u16| -> u64): u64 {
+   │                       --- Given: 'u16'
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/move_2024/typing/annotated_lambda_type_inference_invalid.move:31:26
+   │
+30 │ macro fun do2_invalid($f: |u32| -> u64, $g: |u16| -> u64): u64 {
+   │                                              --- Expected a literal of type 'u16', but the value is too large.
+31 │     $f(0xFFFF_FFFF) + $g(0xFFFF_FFFF)
+   │                          ^^^^^^^^^^^
+   │                          │
+   │                          Invalid numerical literal
+   │                          Annotating the literal might help inference: '4294967295u32'

@@ -6,7 +6,9 @@
 /// the ability to modify those objects.
 module trusted_swap::example;
 
-use sui::{balance::{Self, Balance}, coin::{Self, Coin}, sui::SUI};
+use sui::balance::{Self, Balance};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
 
 public struct Object has key, store {
     id: UID,

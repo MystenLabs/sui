@@ -184,6 +184,9 @@ error[E04007]: incompatible types
 error[E04017]: too many arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:120:9
     │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                       ------ Expected 2 argument(s)
+    ·
 120 │         &v[i, j]
     │         ^^^^^^^^
     │         │ │
@@ -193,6 +196,9 @@ error[E04017]: too many arguments
 error[E04017]: too many arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:120:10
     │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                       ------ Expected 2 argument(s)
+    ·
 120 │         &v[i, j]
     │          ^^^^^^^
     │          ││
@@ -202,6 +208,9 @@ error[E04017]: too many arguments
 error[E04017]: too many arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:124:9
     │
+ 12 │     native public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+    │                       ---------- Expected 2 argument(s)
+    ·
 124 │         &mut v[i, j]
     │         ^^^^^^^^^^^^
     │         │     │
@@ -211,6 +220,9 @@ error[E04017]: too many arguments
 error[E04017]: too many arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:124:14
     │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                       ------ Expected 2 argument(s)
+    ·
 124 │         &mut v[i, j]
     │              ^^^^^^^
     │              ││
@@ -220,6 +232,9 @@ error[E04017]: too many arguments
 error[E04017]: too many arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:128:10
     │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                       ------ Expected 2 argument(s)
+    ·
 128 │         &v[i, j]
     │          ^^^^^^^
     │          ││
@@ -246,6 +261,9 @@ error[E03004]: unbound type
 error[E04017]: too many arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:132:14
     │
+  8 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                       ------ Expected 2 argument(s)
+    ·
 132 │         &mut v[i, j]
     │              ^^^^^^^
     │              ││
@@ -266,6 +284,9 @@ error[E04007]: incompatible types
 error[E04016]: too few arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:152:9
     │
+142 │     public fun borrow_s(s: &S, i: u64, j: u64): &u64 {
+    │                -------- Expected 3 argument(s)
+    ·
 152 │         &s[i]
     │         ^^^^^
     │         │ │
@@ -275,6 +296,9 @@ error[E04016]: too few arguments
 error[E04016]: too few arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:152:10
     │
+142 │     public fun borrow_s(s: &S, i: u64, j: u64): &u64 {
+    │                -------- Expected 3 argument(s)
+    ·
 152 │         &s[i]
     │          ^^^^
     │          ││
@@ -284,6 +308,9 @@ error[E04016]: too few arguments
 error[E04016]: too few arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:156:9
     │
+147 │     public fun borrow_s_mut(s: &mut S, i: u64, j: u64): &mut u64 {
+    │                ------------ Expected 3 argument(s)
+    ·
 156 │         &mut s[i]
     │         ^^^^^^^^^
     │         │     │
@@ -293,6 +320,9 @@ error[E04016]: too few arguments
 error[E04016]: too few arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:156:14
     │
+142 │     public fun borrow_s(s: &S, i: u64, j: u64): &u64 {
+    │                -------- Expected 3 argument(s)
+    ·
 156 │         &mut s[i]
     │              ^^^^
     │              ││

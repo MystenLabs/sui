@@ -4,13 +4,10 @@
 pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    #[cfg(feature = "tracing")]
-    use move_vm_config::runtime::VMProfilerConfig;
     use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
     use move_vm_runtime::natives::functions::{NativeFunctionTable, NativeFunctions};
     use move_vm_runtime::runtime::MoveRuntime;
     use std::cell::RefCell;
-    use std::path::PathBuf;
     use std::rc::Rc;
     use std::{collections::BTreeMap, sync::Arc};
 
@@ -28,7 +25,7 @@ mod checked {
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
-    use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
+    use sui_move_natives::{NativesCostTable, object_runtime::ObjectRuntime};
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
@@ -43,16 +40,7 @@ mod checked {
     pub fn new_move_runtime(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
-        _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveRuntime, SuiError> {
-        #[cfg(not(feature = "tracing"))]
-        let vm_profiler_config = None;
-        #[cfg(feature = "tracing")]
-        let vm_profiler_config = _enable_profiler.clone().map(|path| VMProfilerConfig {
-            full_path: path,
-            track_bytecode_instructions: false,
-            use_long_function_name: false,
-        });
         let native_functions =
             NativeFunctions::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?;
         Ok(MoveRuntime::new(
@@ -69,7 +57,6 @@ mod checked {
                     .disable_invariant_violation_check_in_swap_loc(),
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
-                profiler_config: vm_profiler_config,
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
                 binary_config: to_binary_config(protocol_config),
@@ -142,9 +129,9 @@ mod checked {
 
     pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
         format!(
-        "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
-        id
-    )
+            "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
+            id
+        )
     }
 
     /// Run the bytecode verifier with a meter limit

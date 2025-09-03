@@ -1,0 +1,175 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-26:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5548000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 27-32:
+//# programmable --sender A --inputs 100u64 @A
+//> 0: test::dependency_test::create_object(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+// Transaction 2: Use objects created in previous transactions
+// Dependencies: Transaction 1 (uses object(2,0)), system transactions
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 33-34:
+//# programmable --sender A --inputs object(2,0)
+//> 0: test::dependency_test::object_value(Input(0));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 2407680, non_refundable_storage_fee: 24320
+
+task 4, line 36:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 38-56:
+//# run-graphql
+Response: {
+  "data": {
+    "genesisTransaction": {
+      "nodes": [
+        {
+          "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+          "effects": {
+            "dependencies": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "hasPreviousPage": false
+              },
+              "nodes": []
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6, lines 58-75:
+//# run-graphql
+Response: {
+  "data": {
+    "systemTransactionDependencies": {
+      "digest": "EryreUUK41LJwEELmUbbFUGioFKJUe21SJD3b69AWn3z",
+      "dependencies": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        },
+        "nodes": [
+          {
+            "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+            "sender": null
+          },
+          {
+            "digest": "ATmvpUHzATrVhwFQmXU8YUuKWYmRESNPUDmWzTuyXbvV",
+            "sender": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 7, lines 77-101:
+//# run-graphql
+Response: {
+  "data": {
+    "userTransactionDependencies": {
+      "digest": "3jwXUvcEfnAL6k6zertRAieMqDYxiB1bDwfAjYEHTdTq",
+      "dependencies": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        },
+        "nodes": [
+          {
+            "digest": "ATmvpUHzATrVhwFQmXU8YUuKWYmRESNPUDmWzTuyXbvV",
+            "sender": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            },
+            "gasInput": {
+              "gasBudget": "5000000000",
+              "gasPrice": "1000"
+            },
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            }
+          },
+          {
+            "digest": "EryreUUK41LJwEELmUbbFUGioFKJUe21SJD3b69AWn3z",
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "gasInput": {
+              "gasBudget": "5000000000",
+              "gasPrice": "1000"
+            },
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 8, lines 103-142:
+//# run-graphql
+Response: {
+  "data": {
+    "paginationTest": {
+      "digest": "3jwXUvcEfnAL6k6zertRAieMqDYxiB1bDwfAjYEHTdTq",
+      "dependencies": {
+        "pageInfo": {
+          "hasNextPage": true,
+          "hasPreviousPage": false
+        },
+        "edges": [
+          {
+            "cursor": "MA==",
+            "node": {
+              "digest": "ATmvpUHzATrVhwFQmXU8YUuKWYmRESNPUDmWzTuyXbvV",
+              "sender": {
+                "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "backwardPaginationTest": {
+      "digest": "3jwXUvcEfnAL6k6zertRAieMqDYxiB1bDwfAjYEHTdTq",
+      "dependencies": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": true
+        },
+        "edges": [
+          {
+            "cursor": "MQ==",
+            "node": {
+              "digest": "EryreUUK41LJwEELmUbbFUGioFKJUe21SJD3b69AWn3z",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

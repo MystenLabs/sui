@@ -17,7 +17,7 @@ module test::m1 {
 
 //# programmable
 //> 0: test::m1::a();
-// wrong type annotation doesn't matter
+// wrong type annotation did not matter in v1 of PTB execution
 //> sui::event::emit<bool>(Result(0));
 
 //# programmable

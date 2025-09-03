@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ethnum::U256 as EthnumU256;
-use num::{bigint::Sign, BigInt};
+use num::{BigInt, bigint::Sign};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::strategy::BoxedStrategy;
 use rand::{
-    distributions::{
-        uniform::{SampleUniform, UniformSampler},
-        Distribution, Standard,
-    },
     Rng,
+    distributions::{
+        Distribution, Standard,
+        uniform::{SampleUniform, UniformSampler},
+    },
 };
 use std::{
     fmt,
@@ -637,7 +637,7 @@ impl UniformSampler for UniformU256 {
             let unsigned_max = U256::max_value();
             let zone = unsigned_max - self.z;
             loop {
-                let v: U256 = rng.gen();
+                let v: U256 = rng.r#gen();
                 let (hi, lo) = v.wmul(range);
                 if lo <= zone {
                     return self.low.wrapping_add(hi);
@@ -645,7 +645,7 @@ impl UniformSampler for UniformU256 {
             }
         } else {
             // Sample from the entire integer range.
-            rng.gen()
+            rng.r#gen()
         }
     }
 
@@ -679,14 +679,14 @@ impl UniformSampler for UniformU256 {
         // If the above resulted in wrap-around to 0, the range is U256::MIN..=U256::MAX,
         // and any integer will do.
         if range == U256::zero() {
-            return rng.gen();
+            return rng.r#gen();
         }
         // conservative but fast approximation. `- 1` is necessary to allow the
         // same comparison without bias.
         let zone = (range << range.leading_zeros()).wrapping_sub(U256::one());
 
         loop {
-            let v: U256 = rng.gen();
+            let v: U256 = rng.r#gen();
             let (hi, lo) = v.wmul(range);
             if lo <= zone {
                 return low.wrapping_add(hi);

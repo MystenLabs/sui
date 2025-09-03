@@ -1,0 +1,6 @@
+[submodule "docs/submodules/deepbookv3"]
+	path = docs/submodules/deepbookv3
+	url = https://github.com/MystenLabs/deepbookv3
+[submodule "docs/submodules/ts-sdks"]
+	path = docs/submodules/ts-sdks
+	url = https://github.com/MystenLabs/ts-sdks

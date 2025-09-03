@@ -4,10 +4,8 @@
 use crate::{legacy_test_cost, types::is_otw_struct};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{gas_algebra::InternalGas, runtime_value::MoveTypeLayout};
-use move_vm_runtime::execution::{
-    values::{Struct, Value},
-    Type,
-};
+use move_vm_runtime::execution::values::Struct;
+use move_vm_runtime::execution::{values::Value, Type};
 use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
 use smallvec::smallvec;
 use std::collections::VecDeque;

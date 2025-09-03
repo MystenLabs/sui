@@ -1,0 +1,119 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+foo(p#0#0: u64): u64 {
+L1:	%#1: u64
+L2:	res#1#0: u64
+B0:
+	0: CopyLoc[0](p#0#0: u64)
+	1: LdU64(1)
+	2: Lt
+	3: BrFalse(9)
+B1:
+	4: CopyLoc[0](p#0#0: u64)
+	5: CopyLoc[0](p#0#0: u64)
+	6: Add
+	7: StLoc[1](%#1: u64)
+	8: Branch(13)
+B2:
+	9: CopyLoc[0](p#0#0: u64)
+	10: LdU64(1)
+	11: Add
+	12: StLoc[1](%#1: u64)
+B3:
+	13: MoveLoc[1](%#1: u64)
+	14: StLoc[2](res#1#0: u64)
+B4:
+	15: CopyLoc[2](res#1#0: u64)
+	16: LdU64(10)
+	17: Lt
+	18: BrFalse(25)
+B5:
+	19: Branch(20)
+B6:
+	20: MoveLoc[2](res#1#0: u64)
+	21: LdU64(1)
+	22: Add
+	23: StLoc[2](res#1#0: u64)
+	24: Branch(15)
+B7:
+	25: MoveLoc[2](res#1#0: u64)
+	26: MoveLoc[0](p#0#0: u64)
+	27: Add
+	28: StLoc[2](res#1#0: u64)
+B8:
+	29: CopyLoc[2](res#1#0: u64)
+	30: LdU64(13)
+	31: Lt
+	32: BrFalse(39)
+B9:
+	33: Branch(34)
+B10:
+	34: MoveLoc[2](res#1#0: u64)
+	35: LdU64(1)
+	36: Add
+	37: StLoc[2](res#1#0: u64)
+	38: Branch(29)
+B11:
+	39: CopyLoc[2](res#1#0: u64)
+	40: MoveLoc[2](res#1#0: u64)
+	41: Call bar(u64): u64
+	42: Add
+	43: StLoc[2](res#1#0: u64)
+	44: CopyLoc[2](res#1#0: u64)
+	45: MoveLoc[2](res#1#0: u64)
+	46: Call bar(u64): u64
+	47: Add
+	48: Ret
+}
+
+bar(p#0#0: u64): u64 {
+L1:	%#1: u64
+B0:
+	0: CopyLoc[0](p#0#0: u64)
+	1: LdU64(1)
+	2: Lt
+	3: BrFalse(9)
+B1:
+	4: CopyLoc[0](p#0#0: u64)
+	5: MoveLoc[0](p#0#0: u64)
+	6: Add
+	7: StLoc[1](%#1: u64)
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](p#0#0: u64)
+	10: LdU64(1)
+	11: Add
+	12: StLoc[1](%#1: u64)
+B3:
+	13: MoveLoc[1](%#1: u64)
+	14: Ret
+}
+
+test() {
+L0:	_res#1#0: u64
+B0:
+	0: LdU64(1)
+	1: Call foo(u64): u64
+	2: StLoc[0](_res#1#0: u64)
+	3: CopyLoc[0](_res#1#0: u64)
+	4: MoveLoc[0](_res#1#0: u64)
+	5: Call foo(u64): u64
+	6: Add
+	7: StLoc[0](_res#1#0: u64)
+	8: CopyLoc[0](_res#1#0: u64)
+	9: MoveLoc[0](_res#1#0: u64)
+	10: Call foo(u64): u64
+	11: Add
+	12: Pop
+	13: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

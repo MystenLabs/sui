@@ -26,7 +26,7 @@ module basics::counter {
     public fun create(ctx: &mut TxContext) {
         transfer::share_object(Counter {
             id: object::new(ctx),
-            owner: tx_context::sender(ctx),
+            owner: ctx.sender(),
             value: 0,
         })
     }
@@ -38,7 +38,7 @@ module basics::counter {
 
     /// Set value (only runnable by the Counter owner)
     public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
-        assert!(counter.owner == ctx.sender(), 0);
+        assert!(counter.owner == ctx.sender());
         counter.value = value;
     }
 
@@ -49,7 +49,7 @@ module basics::counter {
 
     /// Delete counter (only runnable by the Counter owner)
     public fun delete(counter: Counter, ctx: &TxContext) {
-        assert!(counter.owner == ctx.sender(), 0);
+        assert!(counter.owner == ctx.sender());
         let Counter { id, owner: _, value: _ } = counter;
         id.delete();
     }

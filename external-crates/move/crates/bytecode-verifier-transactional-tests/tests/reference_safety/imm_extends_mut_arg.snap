@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-21:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::eps1_freeze'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x2::eps1_freeze,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 5)],
+}
+
+task 1, lines 23-41:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::eps2_freeze'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x3::eps2_freeze,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 5)],
+}
+
+task 2, lines 43-63:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::eps1_reborrow'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x4::eps1_reborrow,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}
+
+task 3, lines 65-85:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::eps2_reborrow'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::eps2_reborrow,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 2)],
+}

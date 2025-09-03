@@ -1,0 +1,65 @@
+Command `build --mode spec`:
+BUILDING foo
+error[E03009]: unbound variable
+  ┌─ ./sources/foo.move:5:11
+  │
+5 │     abort(invalid_code);
+  │           ^^^^^^^^^^^^ Unbound variable 'invalid_code'
+
+error[E03009]: unbound variable
+   ┌─ ./sources/foo.move:10:11
+   │
+10 │     abort(invalid_code);
+   │           ^^^^^^^^^^^^ Unbound variable 'invalid_code'
+
+Command `build --mode test`:
+BUILDING foo
+error[E10005]: unable to generate test
+  ┌─ ./sources/foo.move:1:14
+  │
+1 │ module 0x42::foo;
+  │              ^^^ Compilation in test mode requires passing the UnitTest module in the Move stdlib as a dependency
+
+error[E03009]: unbound variable
+  ┌─ ./sources/foo.move:5:11
+  │
+5 │     abort(invalid_code);
+  │           ^^^^^^^^^^^^ Unbound variable 'invalid_code'
+
+error[E03009]: unbound variable
+   ┌─ ./sources/foo.move:15:11
+   │
+15 │     abort(invalid_code);
+   │           ^^^^^^^^^^^^ Unbound variable 'invalid_code'
+
+Command `build --mode test --mode spec`:
+BUILDING foo
+error[E10005]: unable to generate test
+  ┌─ ./sources/foo.move:1:14
+  │
+1 │ module 0x42::foo;
+  │              ^^^ Compilation in test mode requires passing the UnitTest module in the Move stdlib as a dependency
+
+error[E03009]: unbound variable
+  ┌─ ./sources/foo.move:5:11
+  │
+5 │     abort(invalid_code);
+  │           ^^^^^^^^^^^^ Unbound variable 'invalid_code'
+
+error[E03009]: unbound variable
+   ┌─ ./sources/foo.move:10:11
+   │
+10 │     abort(invalid_code);
+   │           ^^^^^^^^^^^^ Unbound variable 'invalid_code'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ ./sources/foo.move:14:12
+   │
+ 9 │ public fun bar() {
+   │            --- Alias previously defined here
+   ·
+14 │ public fun bar() {
+   │            ^^^ Duplicate module member or alias 'bar'. Top level names in a namespace must be unique
+
+Command `build`:
+BUILDING foo

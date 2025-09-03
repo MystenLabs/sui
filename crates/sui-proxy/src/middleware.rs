@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{consumer::ProtobufDecoder, peers::SuiNodeProvider};
 use axum::{
-    async_trait,
     body::Body,
     body::Bytes,
     extract::{Extension, FromRequest},
@@ -99,7 +98,6 @@ pub async fn expect_valid_public_key(
 #[derive(Debug)]
 pub struct LenDelimProtobuf(pub Vec<MetricFamily>);
 
-#[async_trait]
 impl<S> FromRequest<S> for LenDelimProtobuf
 where
     S: Send + Sync,

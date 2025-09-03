@@ -83,6 +83,7 @@ control over the currency which a simple open-loop system can't provide.
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -94,6 +95,7 @@ control over the currency which a simple open-loop system can't provide.
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
@@ -361,32 +363,12 @@ we emit this event in the <code><a href="../sui/token.md#sui_token_share_policy"
 ## Constants
 
 
-<a name="sui_token_EBalanceTooLow"></a>
+<a name="sui_token_EUnknownAction"></a>
 
-The balance is too low to perform the action.
-
-
-<pre><code><b>const</b> <a href="../sui/token.md#sui_token_EBalanceTooLow">EBalanceTooLow</a>: u64 = 3;
-</code></pre>
+The action is not allowed (defined) in the policy.
 
 
-
-<a name="sui_token_ECantConsumeBalance"></a>
-
-The balance is not zero when trying to confirm with <code>TransferPolicyCap</code>.
-
-
-<pre><code><b>const</b> <a href="../sui/token.md#sui_token_ECantConsumeBalance">ECantConsumeBalance</a>: u64 = 5;
-</code></pre>
-
-
-
-<a name="sui_token_ENoConfig"></a>
-
-Rule is trying to access a missing config (with type).
-
-
-<pre><code><b>const</b> <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>: u64 = 6;
+<pre><code><b>const</b> <a href="../sui/token.md#sui_token_EUnknownAction">EUnknownAction</a>: u64 = 0;
 </code></pre>
 
 
@@ -411,6 +393,16 @@ Trying to perform an admin action with a wrong cap.
 
 
 
+<a name="sui_token_EBalanceTooLow"></a>
+
+The balance is too low to perform the action.
+
+
+<pre><code><b>const</b> <a href="../sui/token.md#sui_token_EBalanceTooLow">EBalanceTooLow</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="sui_token_ENotZero"></a>
 
 The balance is not zero.
@@ -421,12 +413,22 @@ The balance is not zero.
 
 
 
-<a name="sui_token_EUnknownAction"></a>
+<a name="sui_token_ECantConsumeBalance"></a>
 
-The action is not allowed (defined) in the policy.
+The balance is not zero when trying to confirm with <code>TransferPolicyCap</code>.
 
 
-<pre><code><b>const</b> <a href="../sui/token.md#sui_token_EUnknownAction">EUnknownAction</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/token.md#sui_token_ECantConsumeBalance">ECantConsumeBalance</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="sui_token_ENoConfig"></a>
+
+Rule is trying to access a missing config (with type).
+
+
+<pre><code><b>const</b> <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>: u64 = 6;
 </code></pre>
 
 
@@ -442,22 +444,22 @@ of the function must be used instead.
 
 
 
-<a name="sui_token_FROM_COIN"></a>
-
-A Tag for the <code><a href="../sui/token.md#sui_token_from_coin">from_coin</a></code> action.
-
-
-<pre><code><b>const</b> <a href="../sui/token.md#sui_token_FROM_COIN">FROM_COIN</a>: vector&lt;u8&gt; = vector[102, 114, 111, 109, 95, 99, 111, 105, 110];
-</code></pre>
-
-
-
 <a name="sui_token_SPEND"></a>
 
 A Tag for the <code><a href="../sui/token.md#sui_token_spend">spend</a></code> action.
 
 
 <pre><code><b>const</b> <a href="../sui/token.md#sui_token_SPEND">SPEND</a>: vector&lt;u8&gt; = vector[115, 112, 101, 110, 100];
+</code></pre>
+
+
+
+<a name="sui_token_TRANSFER"></a>
+
+A Tag for the <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> action.
+
+
+<pre><code><b>const</b> <a href="../sui/token.md#sui_token_TRANSFER">TRANSFER</a>: vector&lt;u8&gt; = vector[116, 114, 97, 110, 115, 102, 101, 114];
 </code></pre>
 
 
@@ -472,12 +474,12 @@ A Tag for the <code><a href="../sui/token.md#sui_token_to_coin">to_coin</a></cod
 
 
 
-<a name="sui_token_TRANSFER"></a>
+<a name="sui_token_FROM_COIN"></a>
 
-A Tag for the <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> action.
+A Tag for the <code><a href="../sui/token.md#sui_token_from_coin">from_coin</a></code> action.
 
 
-<pre><code><b>const</b> <a href="../sui/token.md#sui_token_TRANSFER">TRANSFER</a>: vector&lt;u8&gt; = vector[116, 114, 97, 110, 115, 102, 101, 114];
+<pre><code><b>const</b> <a href="../sui/token.md#sui_token_FROM_COIN">FROM_COIN</a>: vector&lt;u8&gt; = vector[102, 114, 111, 109, 95, 99, 111, 105, 110];
 </code></pre>
 
 
@@ -1090,7 +1092,7 @@ required by the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolic
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_add_approval">add_approval</a>&lt;T, W: drop&gt;(_t: W, request: &<b>mut</b> <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> TxContext) {
-    request.<a href="../sui/token.md#sui_token_approvals">approvals</a>.insert(type_name::get&lt;W&gt;())
+    request.<a href="../sui/token.md#sui_token_approvals">approvals</a>.insert(type_name::with_defining_ids&lt;W&gt;())
 }
 </code></pre>
 
@@ -1395,7 +1397,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     <b>if</b> (!self.<a href="../sui/token.md#sui_token_rules">rules</a>.contains(&<a href="../sui/token.md#sui_token_action">action</a>)) {
         <a href="../sui/token.md#sui_token_allow">allow</a>(self, cap, <a href="../sui/token.md#sui_token_action">action</a>, ctx);
     };
-    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).insert(type_name::get&lt;Rule&gt;())
+    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -1429,7 +1431,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     _ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
-    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).remove(&type_name::get&lt;Rule&gt;())
+    self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).remove(&type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 

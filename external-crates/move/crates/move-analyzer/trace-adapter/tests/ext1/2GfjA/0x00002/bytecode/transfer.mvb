@@ -1,0 +1,171 @@
+// Move bytecode v6
+module 2.transfer {
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+use 0000000000000000000000000000000000000000000000000000000000000002::party;
+
+struct Receiving<phantom Ty0: key> has drop {
+	id: ID,
+	version: u64
+}
+
+public transfer<Ty0: key>(Arg0: Ty0, Arg1: address) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: MoveLoc[1](Arg1: address)
+	2: Call transfer_impl<Ty0>(Ty0, address)
+	3: Ret
+}
+
+public public_transfer<Ty0: store + key>(Arg0: Ty0, Arg1: address) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: MoveLoc[1](Arg1: address)
+	2: Call transfer_impl<Ty0>(Ty0, address)
+	3: Ret
+}
+
+public party_transfer<Ty0: key>(Arg0: Ty0, Arg1: Party) {
+L2:	loc0: vector<address>
+L3:	loc1: u64
+L4:	loc2: vector<u64>
+B0:
+	0: ImmBorrowLoc[1](Arg1: Party)
+	1: Call party::is_single_owner(&Party): bool
+	2: BrFalse(4)
+B1:
+	3: Branch(6)
+B2:
+	4: LdU64(13836747248740204551)
+	5: Abort
+B3:
+	6: MoveLoc[1](Arg1: Party)
+	7: Call party::into_native(Party): u64 * vector<address> * vector<u64>
+	8: StLoc[4](loc2: vector<u64>)
+	9: StLoc[2](loc0: vector<address>)
+	10: StLoc[3](loc1: u64)
+	11: MoveLoc[0](Arg0: Ty0)
+	12: MoveLoc[3](loc1: u64)
+	13: MoveLoc[2](loc0: vector<address>)
+	14: MoveLoc[4](loc2: vector<u64>)
+	15: Call party_transfer_impl<Ty0>(Ty0, u64, vector<address>, vector<u64>)
+	16: Ret
+}
+
+public public_party_transfer<Ty0: store + key>(Arg0: Ty0, Arg1: Party) {
+L2:	loc0: vector<address>
+L3:	loc1: u64
+L4:	loc2: vector<u64>
+B0:
+	0: ImmBorrowLoc[1](Arg1: Party)
+	1: Call party::is_single_owner(&Party): bool
+	2: BrFalse(4)
+B1:
+	3: Branch(6)
+B2:
+	4: LdU64(13836747317459681287)
+	5: Abort
+B3:
+	6: MoveLoc[1](Arg1: Party)
+	7: Call party::into_native(Party): u64 * vector<address> * vector<u64>
+	8: StLoc[4](loc2: vector<u64>)
+	9: StLoc[2](loc0: vector<address>)
+	10: StLoc[3](loc1: u64)
+	11: MoveLoc[0](Arg0: Ty0)
+	12: MoveLoc[3](loc1: u64)
+	13: MoveLoc[2](loc0: vector<address>)
+	14: MoveLoc[4](loc2: vector<u64>)
+	15: Call party_transfer_impl<Ty0>(Ty0, u64, vector<address>, vector<u64>)
+	16: Ret
+}
+
+public freeze_object<Ty0: key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call freeze_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public public_freeze_object<Ty0: store + key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call freeze_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public share_object<Ty0: key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call share_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public public_share_object<Ty0: store + key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call share_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public receive<Ty0: key>(Arg0: &mut UID, Arg1: Receiving<Ty0>): Ty0 {
+L2:	loc0: ID
+L3:	loc1: u64
+B0:
+	0: MoveLoc[1](Arg1: Receiving<Ty0>)
+	1: UnpackGeneric[0](Receiving<Ty0>)
+	2: StLoc[3](loc1: u64)
+	3: StLoc[2](loc0: ID)
+	4: MoveLoc[0](Arg0: &mut UID)
+	5: FreezeRef
+	6: Call object::uid_to_address(&UID): address
+	7: MoveLoc[2](loc0: ID)
+	8: MoveLoc[3](loc1: u64)
+	9: Call receive_impl<Ty0>(address, ID, u64): Ty0
+	10: Ret
+}
+
+public public_receive<Ty0: store + key>(Arg0: &mut UID, Arg1: Receiving<Ty0>): Ty0 {
+L2:	loc0: ID
+L3:	loc1: u64
+B0:
+	0: MoveLoc[1](Arg1: Receiving<Ty0>)
+	1: UnpackGeneric[0](Receiving<Ty0>)
+	2: StLoc[3](loc1: u64)
+	3: StLoc[2](loc0: ID)
+	4: MoveLoc[0](Arg0: &mut UID)
+	5: FreezeRef
+	6: Call object::uid_to_address(&UID): address
+	7: MoveLoc[2](loc0: ID)
+	8: MoveLoc[3](loc1: u64)
+	9: Call receive_impl<Ty0>(address, ID, u64): Ty0
+	10: Ret
+}
+
+public receiving_object_id<Ty0: key>(Arg0: &Receiving<Ty0>): ID {
+B0:
+	0: MoveLoc[0](Arg0: &Receiving<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Receiving.id: ID)
+	2: ReadRef
+	3: Ret
+}
+
+native public(friend) freeze_object_impl<Ty0: key>(Arg0: Ty0);
+
+native public(friend) share_object_impl<Ty0: key>(Arg0: Ty0);
+
+native public(friend) party_transfer_impl<Ty0: key>(Arg0: Ty0, Arg1: u64, Arg2: vector<address>, Arg3: vector<u64>);
+
+native public(friend) transfer_impl<Ty0: key>(Arg0: Ty0, Arg1: address);
+
+native receive_impl<Ty0: key>(Arg0: address, Arg1: ID, Arg2: u64): Ty0;
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => u64: 2
+	3 => u64: 3
+	4 => u64: 4
+	5 => u64: 5
+	6 => vector<u8>: "EInvalidPartyPermissions" // interpreted as UTF8 string
+	7 => vector<u8>: "Party transfer is currently limited to one party." // interpreted as UTF8 string
+]
+}

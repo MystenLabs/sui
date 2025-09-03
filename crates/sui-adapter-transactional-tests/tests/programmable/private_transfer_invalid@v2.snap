@@ -1,0 +1,78 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-17:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5228800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-21:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::pub();
+//> sui::transfer::transfer<test::m1::Pub>(Result(0), Input(0));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::transfer. Use the public variant instead, sui::transfer::public_transfer"), command: Some(1) } }
+
+task 3, lines 23-25:
+//# programmable
+//> 0: test::m1::pub();
+//> sui::transfer::share_object<test::m1::Pub>(Result(0));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::share_object. Use the public variant instead, sui::transfer::public_share_object"), command: Some(1) } }
+
+task 4, lines 27-32:
+//# programmable
+//> 0: test::m1::pub();
+//> sui::transfer::freeze_object<test::m1::Pub>(Result(0));
+// Does not have store, cannot be used with internal variants
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::freeze_object. Use the public variant instead, sui::transfer::public_freeze_object"), command: Some(1) } }
+
+task 5, lines 34-36:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::priv();
+//> sui::transfer::transfer<test::m1::Priv>(Result(0), Input(0));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::transfer. Use the public variant instead, sui::transfer::public_transfer"), command: Some(1) } }
+
+task 6, lines 38-40:
+//# programmable
+//> 0: test::m1::priv();
+//> sui::transfer::share_object<test::m1::Priv>(Result(0));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::share_object. Use the public variant instead, sui::transfer::public_share_object"), command: Some(1) } }
+
+task 7, lines 42-47:
+//# programmable
+//> 0: test::m1::priv();
+//> sui::transfer::freeze_object<test::m1::Priv>(Result(0));
+// Does not have store, cannot be used with public variants
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::freeze_object. Use the public variant instead, sui::transfer::public_freeze_object"), command: Some(1) } }
+
+task 8, lines 49-51:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::priv();
+//> sui::transfer::public_transfer<test::m1::Priv>(Result(0), Input(0));
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }
+
+task 9, lines 53-55:
+//# programmable
+//> 0: test::m1::priv();
+//> sui::transfer::public_share_object<test::m1::Priv>(Result(0));
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }
+
+task 10, lines 57-59:
+//# programmable
+//> 0: test::m1::priv();
+//> sui::transfer::public_freeze_object<test::m1::Priv>(Result(0));
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }

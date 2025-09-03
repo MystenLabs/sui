@@ -1,0 +1,116 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-18:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7166800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-33:
+//# upgrade --package Test_DepV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 7166800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 36-47:
+//# publish --upgradeable --dependencies Test_DepV1 --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6908400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 49-60:
+//# upgrade --package Test_V1 --upgrade-capability 3,1 --dependencies Test_DepV1 --sender A
+created: object(4,0)
+mutated: object(0,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 6908400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 5, lines 62-73:
+//# upgrade --package Test_V2 --upgrade-capability 3,1 --dependencies Test_DepV2 --sender A
+created: object(5,0)
+mutated: object(0,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 6908400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, line 76:
+//# run Test_DepV1::DepM1::foo
+created: object(6,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, lines 78-80:
+//# view-object 6,0
+Owner: Shared( 2 )
+Version: 2
+Contents: Test_DepV1::DepM1::DepObj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    v: 42u64,
+}
+
+task 8, lines 81-83:
+//# programmable --sender A --inputs object(6,0)
+//> 0: Test_DepV1::DepM1::mod_obj(Input(0));
+//> 1: Test_DepV2::DepM1::mod_obj(Input(0));
+mutated: object(0,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
+
+task 9, lines 85-88:
+//# view-object 6,0
+Owner: Shared( 2 )
+Version: 7
+Contents: Test_DepV1::DepM1::DepObj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    v: 39u64,
+}
+
+task 10, lines 89-91:
+//# programmable --sender A --inputs object(6,0)
+//> 0: Test_V1::M1::mod_dep_obj(Input(0));
+//> 1: Test_V2::M1::mod_dep_obj(Input(0));
+mutated: object(0,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
+
+task 11, lines 93-96:
+//# view-object 6,0
+Owner: Shared( 2 )
+Version: 8
+Contents: Test_DepV1::DepM1::DepObj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    v: 37u64,
+}
+
+task 12, lines 97-99:
+//# programmable --sender A --inputs object(6,0)
+//> 0: Test_V2::M1::mod_dep_obj(Input(0));
+//> 1: Test_V3::M1::mod_dep_obj(Input(0));
+mutated: object(0,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
+
+task 13, line 101:
+//# view-object 6,0
+Owner: Shared( 2 )
+Version: 9
+Contents: Test_DepV1::DepM1::DepObj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    v: 34u64,
+}

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
+use crate::authority::shared_object_version_manager::Schedulable;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
@@ -12,6 +13,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
+
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};
@@ -21,6 +23,7 @@ use crate::unit_test_utils::{
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 
 use sui_types::error::SuiError;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 
 use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -263,7 +266,7 @@ pub async fn do_cert_with_shared_objects(
     send_consensus(authority, cert).await;
     authority
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[*cert.digest()])
+        .notify_read_executed_effects("", &[*cert.digest()])
         .await
         .pop()
         .unwrap()
@@ -423,21 +426,32 @@ async fn test_execution_with_dependencies() {
 
     // ---- Execute transactions in reverse dependency order on the last authority.
 
-    // Sets shared object locks in the executed order.
+    // Assign shared object versions in the executed order.
+
+    let mut certs = Vec::new();
     for cert in executed_shared_certs.iter() {
-        send_consensus_no_execution(&authorities[3], cert).await;
+        let assigned_versions = send_consensus_no_execution(&authorities[3], cert).await;
+        certs.push((
+            Schedulable::Transaction(VerifiedExecutableTransaction::new_from_certificate(
+                cert.clone(),
+            )),
+            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+        ));
     }
 
     // Enqueue certs out of dependency order for executions.
-    for cert in executed_shared_certs.iter().rev() {
-        authorities[3].enqueue_certificates_for_execution(
-            vec![cert.clone()],
+    for (cert, env) in certs.iter().rev() {
+        authorities[3].execution_scheduler().enqueue(
+            vec![(cert.clone(), env.clone())],
             &authorities[3].epoch_store_for_testing(),
         );
     }
     for cert in executed_owned_certs.iter().rev() {
-        authorities[3].enqueue_certificates_for_execution(
-            vec![cert.clone()],
+        authorities[3].execution_scheduler().enqueue(
+            vec![(
+                VerifiedExecutableTransaction::new_from_certificate(cert.clone()).into(),
+                ExecutionEnv::new(),
+            )],
             &authorities[3].epoch_store_for_testing(),
         );
     }
@@ -450,7 +464,7 @@ async fn test_execution_with_dependencies() {
         .collect();
     authorities[3]
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
@@ -486,14 +500,24 @@ async fn test_per_object_overload() {
         config
     });
 
-    // Initialize a network with 1 account and 2000 gas objects.
+    // Initialize a network with 1 account and gas objects.
     let (addr, key): (_, AccountKeyPair) = get_key_pair();
-    const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 2000;
+    // Use a small threshold for testing to avoid creating too many objects
+    const TEST_PER_OBJECT_QUEUE_LENGTH: usize = 20;
+    const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = TEST_PER_OBJECT_QUEUE_LENGTH + 10; // Some buffer
     let gas_objects = (0..NUM_GAS_OBJECTS_PER_ACCOUNT)
         .map(|_| Object::with_owner_for_testing(addr))
         .collect_vec();
     let (aggregator, authorities, _genesis, package) =
-        init_local_authorities(4, gas_objects.clone()).await;
+        init_local_authorities_with_overload_thresholds(
+            4,
+            gas_objects.clone(),
+            AuthorityOverloadConfig {
+                max_transaction_manager_per_object_queue_length: TEST_PER_OBJECT_QUEUE_LENGTH,
+                ..Default::default()
+            },
+        )
+        .await;
     let rgp = authorities
         .first()
         .unwrap()
@@ -522,7 +546,7 @@ async fn test_per_object_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[*create_counter_cert.digest()])
+            .notify_read_executed_effects("", &[*create_counter_cert.digest()])
             .await
             .pop()
             .unwrap();
@@ -536,7 +560,7 @@ async fn test_per_object_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[*create_counter_cert.digest()])
+        .notify_read_executed_effects("", &[*create_counter_cert.digest()])
         .await
         .pop()
         .unwrap();
@@ -581,6 +605,8 @@ async fn test_per_object_overload() {
         }
         send_consensus(&authorities[3], &shared_cert).await;
     }
+    // Give enough time to schedule the transactions.
+    sleep(Duration::from_secs(3)).await;
 
     // Trying to sign a new transaction would now fail.
     let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[num_txns].id()).await;
@@ -592,7 +618,7 @@ async fn test_per_object_overload() {
         )
         .build_and_sign(&key);
     let res = authorities[3]
-        .transaction_manager()
+        .execution_scheduler()
         .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
@@ -658,7 +684,7 @@ async fn test_txn_age_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[*create_counter_cert.digest()])
+            .notify_read_executed_effects("", &[*create_counter_cert.digest()])
             .await
             .pop()
             .unwrap();
@@ -672,7 +698,7 @@ async fn test_txn_age_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[*create_counter_cert.digest()])
+        .notify_read_executed_effects("", &[*create_counter_cert.digest()])
         .await
         .pop()
         .unwrap();
@@ -727,7 +753,7 @@ async fn test_txn_age_overload() {
         )
         .build_and_sign(&key);
     let res = authorities[3]
-        .transaction_manager()
+        .execution_scheduler()
         .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(

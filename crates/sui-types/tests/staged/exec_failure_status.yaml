@@ -36,5 +36,8 @@
 34: AddressDeniedForCoin
 35: CoinTypeGlobalPause
 36: ExecutionCancelledDueToRandomnessUnavailable
-37: InvalidLinkage
-38: DuplicateModuleName
+37: MoveVectorElemTooBig
+38: MoveRawValueTooBig
+39: InvalidLinkage
+40: InsufficientBalanceForWithdraw
+41: DuplicateModuleName

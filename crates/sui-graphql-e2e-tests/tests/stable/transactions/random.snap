@@ -9,7 +9,7 @@ Checkpoint created: 1
 
 task 2, line 8:
 //# advance-epoch --create-random-state
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 3, lines 10-46:
 //# run-graphql
@@ -83,7 +83,7 @@ Response: {
           "kind": {
             "__typename": "RandomnessStateUpdateTransaction",
             "epoch": {
-              "epochId": 0
+              "epochId": 1
             },
             "randomnessRound": 0,
             "randomBytes": "SGVsbG8gU3Vp",

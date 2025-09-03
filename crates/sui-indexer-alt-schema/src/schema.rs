@@ -14,6 +14,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    coin_balance_buckets_deletion_reference (cp_sequence_number, object_id) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     cp_sequence_numbers (cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_lo -> Int8,
@@ -105,6 +112,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    kv_packages (package_id, package_version) {
+        package_id -> Bytea,
+        package_version -> Int8,
+        original_id -> Bytea,
+        is_system_package -> Bool,
+        serialized_object -> Bytea,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     kv_protocol_configs (protocol_version, config_name) {
         protocol_version -> Int8,
         config_name -> Text,
@@ -138,10 +156,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    obj_info_deletion_reference (cp_sequence_number, object_id) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     obj_versions (object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
-        object_digest -> Bytea,
+        object_digest -> Nullable<Bytea>,
         cp_sequence_number -> Int8,
     }
 }
@@ -152,16 +177,6 @@ diesel::table! {
         display_id -> Bytea,
         display_version -> Int2,
         display -> Bytea,
-    }
-}
-
-diesel::table! {
-    sum_packages (package_id) {
-        package_id -> Bytea,
-        original_id -> Bytea,
-        package_version -> Int8,
-        move_package -> Bytea,
-        cp_sequence_number -> Int8,
     }
 }
 
@@ -227,6 +242,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     coin_balance_buckets,
+    coin_balance_buckets_deletion_reference,
     cp_sequence_numbers,
     ev_emit_mod,
     ev_struct_inst,
@@ -236,12 +252,13 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_feature_flags,
     kv_genesis,
     kv_objects,
+    kv_packages,
     kv_protocol_configs,
     kv_transactions,
     obj_info,
+    obj_info_deletion_reference,
     obj_versions,
     sum_displays,
-    sum_packages,
     tx_affected_addresses,
     tx_affected_objects,
     tx_balance_changes,

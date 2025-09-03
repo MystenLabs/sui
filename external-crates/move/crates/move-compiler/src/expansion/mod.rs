@@ -5,6 +5,7 @@
 pub(crate) mod alias_map_builder;
 mod aliases;
 pub mod ast;
+mod attributes;
 mod byte_string;
 mod hex_string;
 mod legacy_aliases;

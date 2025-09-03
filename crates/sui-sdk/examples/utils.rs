@@ -9,7 +9,7 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME,
 };
 use sui_json_rpc_types::{Coin, SuiObjectDataOptions};
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, GenerateOptions};
 use sui_sdk::{
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
@@ -21,7 +21,6 @@ use serde_json::json;
 use shared_crypto::intent::Intent;
 use sui_sdk::types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::SignatureScheme::ED25519,
     digests::TransactionDigest,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     quorum_driver_types::ExecuteTransactionRequestType,
@@ -36,11 +35,12 @@ struct FaucetResponse {
     error: Option<String>,
 }
 
-// const SUI_FAUCET: &str = "https://faucet.devnet.sui.io/gas"; // devnet faucet
+// const SUI_FAUCET: &str = "https://faucet.devnet.sui.io/v2/gas"; // devnet faucet
 
-pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v1/gas"; // testnet faucet
+// Testnet faucet is under heavy rate limit, we recommend using devnet for these examples
+pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v2/gas"; // testnet faucet
 
-// const SUI_FAUCET: &str = "http://127.0.0.1:9123/gas";
+// const SUI_FAUCET: &str = "http://127.0.0.1:9123/v2/gas";
 
 /// Return a sui client to interact with the APIs,
 /// the active address of the local wallet, and another address that can be used as a recipient.
@@ -55,7 +55,7 @@ pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), an
     if coin.is_none() {
         request_tokens_from_faucet(active_address, &client).await?;
     }
-    let wallet = retrieve_wallet()?;
+    let wallet = retrieve_wallet().await?;
     let addresses = wallet.get_addresses();
     let addresses = addresses
         .into_iter()
@@ -77,7 +77,7 @@ pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), an
 pub async fn setup_for_read() -> Result<(SuiClient, SuiAddress), anyhow::Error> {
     let client = SuiClientBuilder::default().build_testnet().await?;
     println!("Sui testnet version is: {}", client.api_version());
-    let mut wallet = retrieve_wallet()?;
+    let mut wallet = retrieve_wallet().await?;
     assert!(wallet.get_addresses().len() >= 2);
     let active_address = wallet.active_address()?;
 
@@ -252,8 +252,11 @@ pub async fn split_coin_digest(
     );
 
     // sign & execute the transaction
-    let keystore = FileBasedKeystore::new(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
-    let signature = keystore.sign_secure(sender, &tx_data, Intent::sui_transaction())?;
+    let keystore =
+        FileBasedKeystore::load_or_create(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
+    let signature = keystore
+        .sign_secure(sender, &tx_data, Intent::sui_transaction())
+        .await?;
 
     let transaction_response = sui
         .quorum_driver_api()
@@ -266,18 +269,18 @@ pub async fn split_coin_digest(
     Ok(transaction_response.digest)
 }
 
-pub fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
+pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     let keystore_path = sui_config_dir()?.join(SUI_KEYSTORE_FILENAME);
 
     // check if a wallet exists and if not, create a wallet and a sui client config
     if !keystore_path.exists() {
-        let keystore = FileBasedKeystore::new(&keystore_path)?;
-        keystore.save()?;
+        let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+        keystore.save().await?;
     }
 
     if !wallet_conf.exists() {
-        let keystore = FileBasedKeystore::new(&keystore_path)?;
+        let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
         let mut client_config = SuiClientConfig::new(keystore.into());
 
         client_config.add_env(SuiEnv::testnet());
@@ -292,25 +295,27 @@ pub fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
         info!("Client config file is stored in {:?}.", &wallet_conf);
     }
 
-    let mut keystore = FileBasedKeystore::new(&keystore_path)?;
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
     let mut client_config: SuiClientConfig = PersistedConfig::read(&wallet_conf)?;
 
     let default_active_address = if let Some(address) = keystore.addresses().first() {
         *address
     } else {
         keystore
-            .generate_and_add_new_key(ED25519, None, None, None)?
-            .0
+            .generate(None, GenerateOptions::default())
+            .await?
+            .address
     };
 
     if keystore.addresses().len() < 2 {
-        keystore.generate_and_add_new_key(ED25519, None, None, None)?;
+        keystore.generate(None, GenerateOptions::default()).await?;
     }
 
     client_config.active_address = Some(default_active_address);
     client_config.save(&wallet_conf)?;
 
-    let wallet = WalletContext::new(&wallet_conf, Some(std::time::Duration::from_secs(60)), None)?;
+    let wallet =
+        WalletContext::new(&wallet_conf)?.with_request_timeout(std::time::Duration::from_secs(60));
 
     Ok(wallet)
 }

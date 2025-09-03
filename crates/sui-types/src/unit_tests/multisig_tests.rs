@@ -413,13 +413,21 @@ fn zklogin_in_multisig_works_with_both_addresses() {
     let multisig =
         MultiSig::insecure_new(vec![zklogin_sig.to_compressed().unwrap()], 1, multisig_pk);
 
-    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch, true)
         .unwrap()
         .into_iter()
         .collect();
 
-    let aux_verify_data =
-        VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, true, Some(30));
+    let aux_verify_data = VerifyParams::new(
+        parsed,
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        true,
+        Some(30),
+        true,
+    );
     let res = multisig.verify_claims(
         intent_msg,
         multisig_address,

@@ -6,7 +6,11 @@
 
 use crate::{
     completions::utils::mod_defs,
-    symbols::{CursorContext, CursorDefinition, DefInfo, Symbols},
+    symbols::{
+        Symbols,
+        cursor::{CursorContext, CursorDefinition},
+        def_info::DefInfo,
+    },
 };
 use lsp_types::{CompletionItem, CompletionItemKind, Documentation, InsertTextFormat, Position};
 use move_command_line_common::files::FileHash;
@@ -132,7 +136,9 @@ pub fn init_completion(
             // the init function has a struct thats an one-time-witness candidate struct
             let otw_candidate = Symbol::from(mod_ident.module.value().to_uppercase());
             let init_snippet = if mdef.structs().contains_key(&otw_candidate) {
-                format!("{INIT_FN_NAME}(${{1:witness}}: {otw_candidate}, {sui_ctx_arg}) {{\n\t${{2:}}\n}}\n")
+                format!(
+                    "{INIT_FN_NAME}(${{1:witness}}: {otw_candidate}, {sui_ctx_arg}) {{\n\t${{2:}}\n}}\n"
+                )
             } else {
                 format!("{INIT_FN_NAME}({sui_ctx_arg}) {{\n\t${{1:}}\n}}\n")
             };

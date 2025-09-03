@@ -482,11 +482,7 @@ impl Bytecode {
         F: FnMut(TempIndex) -> TempIndex,
     {
         self.remap_vars_internal(func_target, &mut |is_src, idx| {
-            if is_src {
-                f(idx)
-            } else {
-                idx
-            }
+            if is_src { f(idx) } else { idx }
         })
     }
 

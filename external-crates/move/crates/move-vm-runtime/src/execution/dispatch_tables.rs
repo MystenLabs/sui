@@ -8,7 +8,7 @@
 // in the transitive closure of the root package.
 
 use crate::{
-    cache::identifier_interner::{self, intern_identifier, resolve_interned, IdentifierKey},
+    cache::identifier_interner::{self, IdentifierKey, intern_identifier, resolve_interned},
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
@@ -582,7 +582,7 @@ impl VMDispatchTables {
         let ty = self.resolve_type(datatype_name)?.to_ref();
         // TODO(vm-rewrite): update this code
         let type_layout = match ty.datatype_info.inner_ref() {
-            Datatype::Enum(ref einfo) => {
+            Datatype::Enum(einfo) => {
                 let mut variant_layouts = vec![];
                 *count += einfo.variants.len() as u64;
                 for variant in einfo.variants.iter() {
@@ -601,7 +601,7 @@ impl VMDispatchTables {
                     Box::new(variant_layouts),
                 )))
             }
-            Datatype::Struct(ref sinfo) => {
+            Datatype::Struct(sinfo) => {
                 let field_tys = sinfo
                     .fields
                     .iter()
@@ -926,7 +926,7 @@ impl DepthFormula {
                     return Err(
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                             .with_message(format!("{t_i:?} missing mapping")),
-                    )
+                    );
                 }
                 Some(ty_depth) => depth = std::cmp::max(depth, ty_depth.saturating_add(*c_i)),
             }

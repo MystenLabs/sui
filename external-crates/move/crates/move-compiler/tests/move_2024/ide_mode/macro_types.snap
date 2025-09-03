@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/macro_types.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/ide_mode/macro_types.move:31:9
+   │
+31 │ #[allow(ide_path_autocomplete)]
+   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/ide_mode/macro_types.move:47:9
+   │
+47 │ #[allow(ide_path_autocomplete)]
+   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'

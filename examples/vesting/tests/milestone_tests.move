@@ -4,10 +4,10 @@
 #[test_only]
 module vesting::milestone_tests;
 
-use vesting::milestone::{Self, new_wallet, Wallet};
-use sui::coin::{Self};
-use sui::test_scenario as ts;
+use sui::coin;
 use sui::sui::SUI;
+use sui::test_scenario as ts;
+use vesting::milestone::{Self, new_wallet, Wallet};
 
 public struct Token has key, store { id: UID }
 

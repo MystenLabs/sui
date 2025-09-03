@@ -50,7 +50,7 @@ pub fn ed25519_verify(
     // Load the cost parameters from the protocol config
     let ed25519_verify_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .ed25519_verify_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -60,11 +60,11 @@ pub fn ed25519_verify(
     );
 
     let msg = pop_arg!(args, VectorRef);
-    let msg_ref = &*msg.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref();
     let public_key_bytes = pop_arg!(args, VectorRef);
-    let public_key_bytes_ref = &*public_key_bytes.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
     let signature_bytes = pop_arg!(args, VectorRef);
-    let signature_bytes_ref = &*signature_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
@@ -76,16 +76,17 @@ pub fn ed25519_verify(
     );
     let cost = context.gas_used();
 
-    let Ok(signature) = <Ed25519Signature as ToFromBytes>::from_bytes(signature_bytes_ref) else {
+    let Ok(signature) = <Ed25519Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let Ok(public_key) = <Ed25519PublicKey as ToFromBytes>::from_bytes(public_key_bytes_ref) else {
+    let Ok(public_key) = <Ed25519PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref)
+    else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::bool(public_key.verify(msg_ref, &signature).is_ok())],
+        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
     ))
 }

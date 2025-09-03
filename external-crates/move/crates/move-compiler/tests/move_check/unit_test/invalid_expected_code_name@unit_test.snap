@@ -9,16 +9,34 @@ error[E10003]: invalid attribute value
   ┌─ tests/move_check/unit_test/invalid_expected_code_name.move:4:7
   │
 4 │     #[expected_failure(cod=1)]
-  │       ^^^^^^^^^^^^^^^^^^^^^^^ Invalid #[expected_failure(...)] attribute, expected 1 failure kind but found 0. Expected one of: abort_code, arithmetic_error, vector_error, out_of_gas, major_status
+  │       ^^^^^^^^^^^^^^^^^^^^^^^ Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected one of: 'abort_code', 'arithmetic_error', 'major_status', 'out_of_gas', or 'vector_error'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/unit_test/invalid_expected_code_name.move:4:24
+  │
+4 │     #[expected_failure(cod=1)]
+  │                        ^^^ Unknown field 'cod' for 'expected_failure'. Expected one of: 'abort_code', 'arithmetic_error', 'location', 'major_status', 'minor_status', 'out_of_gas', or 'vector_error'
 
 error[E10003]: invalid attribute value
   ┌─ tests/move_check/unit_test/invalid_expected_code_name.move:8:7
   │
 8 │     #[expected_failure(code=1)]
-  │       ^^^^^^^^^^^^^^^^^^^^^^^^ Invalid #[expected_failure(...)] attribute, expected 1 failure kind but found 0. Expected one of: abort_code, arithmetic_error, vector_error, out_of_gas, major_status
+  │       ^^^^^^^^^^^^^^^^^^^^^^^^ Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected one of: 'abort_code', 'arithmetic_error', 'major_status', 'out_of_gas', or 'vector_error'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/unit_test/invalid_expected_code_name.move:8:24
+  │
+8 │     #[expected_failure(code=1)]
+  │                        ^^^^ Unknown field 'code' for 'expected_failure'. Expected one of: 'abort_code', 'arithmetic_error', 'location', 'major_status', 'minor_status', 'out_of_gas', or 'vector_error'
 
 error[E10003]: invalid attribute value
    ┌─ tests/move_check/unit_test/invalid_expected_code_name.move:12:7
    │
 12 │     #[expected_failure(abort_cod=1)]
-   │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid #[expected_failure(...)] attribute, expected 1 failure kind but found 0. Expected one of: abort_code, arithmetic_error, vector_error, out_of_gas, major_status
+   │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected one of: 'abort_code', 'arithmetic_error', 'major_status', 'out_of_gas', or 'vector_error'
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/unit_test/invalid_expected_code_name.move:12:24
+   │
+12 │     #[expected_failure(abort_cod=1)]
+   │                        ^^^^^^^^^ Unknown field 'abort_cod' for 'expected_failure'. Expected one of: 'abort_code', 'arithmetic_error', 'location', 'major_status', 'minor_status', 'out_of_gas', or 'vector_error'

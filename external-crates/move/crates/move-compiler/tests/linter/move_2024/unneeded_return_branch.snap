@@ -5,6 +5,14 @@ info:
   edition: 2024.alpha
   lint: true
 ---
+warning[W09005]: dead or unreachable code
+  ┌─ tests/linter/move_2024/unneeded_return_branch.move:5:5
+  │
+5 │     if (cond) { return 5 } else { abort ZERO }
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Any code after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[Lint W04004]: unneeded return
   ┌─ tests/linter/move_2024/unneeded_return_branch.move:5:17
   │
@@ -12,6 +20,14 @@ warning[Lint W04004]: unneeded return
   │                 ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/linter/move_2024/unneeded_return_branch.move:9:5
+  │
+9 │     if (cond) { return 5 } else { return 0 }
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Any code after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04004]: unneeded return
   ┌─ tests/linter/move_2024/unneeded_return_branch.move:9:17

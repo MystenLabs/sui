@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import './ComputedField.css';
+import "./ComputedField.css";
 
-import { CheckIcon, CopyIcon } from '@radix-ui/react-icons';
-import { IconButton, TextField, Tooltip } from '@radix-ui/themes';
-import { ReactElement, useState } from 'react';
-import toast from 'react-hot-toast';
+import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
+import { IconButton, TextField, Tooltip } from "@radix-ui/themes";
+import { ReactElement, useState } from "react";
+import toast from "react-hot-toast";
 
 /**
  * A TextField that displays a value that is already generated (cannot
@@ -18,38 +18,38 @@ import toast from 'react-hot-toast';
  * copy the value.
  */
 export function ComputedField({ label, value }: { label: string; value?: string }): ReactElement {
-	const tooltip = value ? `${label}: ${value}` : undefined;
-	const [copied, setCopied] = useState(false);
+    const tooltip = value ? `${label}: ${value}` : undefined;
+    const [copied, setCopied] = useState(false);
 
-	async function onClick() {
-		await navigator.clipboard.writeText(value!!);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 1000);
-		toast.success('Copied ID to clipboard!');
-	}
+    async function onClick() {
+        await navigator.clipboard.writeText(value!!);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1000);
+        toast.success("Copied ID to clipboard!");
+    }
 
-	const field = (
-		<TextField.Root
-			className="filledField"
-			size="2"
-			mb="2"
-			value={value}
-			placeholder={label}
-			disabled={true}
-		>
-			{value && (
-				<TextField.Slot side="right">
-					<IconButton variant="ghost" onClick={onClick}>
-						{copied ? <CheckIcon /> : <CopyIcon />}
-					</IconButton>
-				</TextField.Slot>
-			)}
-		</TextField.Root>
-	);
+    const field = (
+        <TextField.Root
+            className="filledField"
+            size="2"
+            mb="2"
+            value={value}
+            placeholder={label}
+            disabled={true}
+        >
+            {value && (
+                <TextField.Slot side="right">
+                    <IconButton variant="ghost" onClick={onClick}>
+                        {copied ? <CheckIcon /> : <CopyIcon />}
+                    </IconButton>
+                </TextField.Slot>
+            )}
+        </TextField.Root>
+    );
 
-	if (!tooltip) {
-		return field;
-	}
+    if (!tooltip) {
+        return field;
+    }
 
-	return <Tooltip content={tooltip}>{field}</Tooltip>;
+    return <Tooltip content={tooltip}>{field}</Tooltip>;
 }

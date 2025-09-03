@@ -5,22 +5,18 @@ use std::sync::Arc;
 
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
+use sui_indexer_alt_reader::{
+    bigtable_reader::{BigtableArgs, BigtableReader},
+    kv_loader::KvLoader,
+    package_resolver::{DbPackageStore, PackageCache},
+    pg_reader::db::DbArgs,
+    pg_reader::PgReader,
+};
 use sui_package_resolver::Resolver;
-use sui_pg_db::DbArgs;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use crate::{
-    config::RpcConfig,
-    data::{
-        bigtable_reader::BigtableReader,
-        error::Error,
-        kv_loader::KvLoader,
-        package_resolver::{DbPackageStore, PackageCache, PackageResolver},
-        pg_reader::PgReader,
-    },
-    metrics::RpcMetrics,
-};
+use crate::{config::RpcConfig, metrics::RpcMetrics};
 
 /// A bundle of different interfaces to data, for use by JSON-RPC method implementations.
 #[derive(Clone)]
@@ -39,7 +35,7 @@ pub(crate) struct Context {
 
     /// Access to the database for accessing information about types from their packages (again
     /// through the same connection pool as `reader`).
-    package_resolver: PackageResolver,
+    package_resolver: Arc<Resolver<Arc<PackageCache>>>,
 
     /// Access to the RPC's metrics.
     metrics: Arc<RpcMetrics>,
@@ -49,29 +45,38 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    /// Set-up access to the database through all the interfaces available in the context. If
-    /// `database_url` is `None`, the interfaces will be set-up but will fail to accept any
-    /// connections.
+    /// Set-up access to the stores through all the interfaces available in the context. If
+    /// `bigtable_instance` is set, KV lookups will be sent to it, otherwise they will be sent to
+    /// the `database. If `database_url` is `None`, the interfaces will be set-up but will fail to
+    /// accept any connections.
     pub(crate) async fn new(
         database_url: Option<Url>,
+        bigtable_instance: Option<String>,
         db_args: DbArgs,
+        bigtable_args: BigtableArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
         cancel: CancellationToken,
-    ) -> Result<Self, Error> {
-        let pg_reader =
-            PgReader::new(database_url, db_args, metrics.clone(), registry, cancel).await?;
+    ) -> Result<Self, anyhow::Error> {
+        let pg_reader = PgReader::new(None, database_url, db_args, registry, cancel).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-        let kv_loader = if let Some(config) = config.bigtable.clone() {
-            let bigtable_reader = BigtableReader::new(config.instance_id, registry).await?;
+        let kv_loader = if let Some(instance_id) = bigtable_instance {
+            let bigtable_reader = BigtableReader::new(
+                instance_id,
+                "indexer-alt-jsonrpc".to_owned(),
+                bigtable_args,
+                registry,
+            )
+            .await?;
+
             KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
         } else {
             KvLoader::new_with_pg(pg_loader.clone())
         };
 
-        let store = PackageCache::new(DbPackageStore::new(pg_loader.clone()));
+        let store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
         let package_resolver = Arc::new(Resolver::new_with_limits(
             store,
             config.package_resolver.clone(),
@@ -105,8 +110,8 @@ impl Context {
     }
 
     /// For querying type and function signature information.
-    pub(crate) fn package_resolver(&self) -> &PackageResolver {
-        &self.package_resolver
+    pub(crate) fn package_resolver(&self) -> &Resolver<Arc<PackageCache>> {
+        self.package_resolver.as_ref()
     }
 
     /// Access to the RPC metrics.

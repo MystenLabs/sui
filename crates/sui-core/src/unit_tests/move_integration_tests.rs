@@ -338,7 +338,7 @@ async fn test_object_owning_another_object() {
         Owner::Shared { .. }
         | Owner::Immutable
         | Owner::AddressOwner(_)
-        | Owner::ConsensusV2 { .. } => panic!(),
+        | Owner::ConsensusAddressOwner { .. } => panic!(),
     };
     let field_object = authority.get_object(&field_id).await.unwrap();
     assert_eq!(field_object.owner, parent.0);

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Module which defines instances of the poseidon hash functions.
+/// Module which defines instances of the poseidon hash functions. Available in Devnet only.
 module sui::poseidon;
 
 use sui::bcs;
@@ -22,6 +22,8 @@ const BN254_MAX: u256 =
 ///
 /// Each element has to be a BN254 field element in canonical representation so it must be smaller than the BN254
 /// scalar field size which is 21888242871839275222246405745257275088548364400416034343698204186575808495617.
+///
+/// This function is currently only enabled on Devnet.
 public fun poseidon_bn254(data: &vector<u256>): u256 {
     let (mut i, mut b, l) = (0, vector[], data.length());
     assert!(l > 0, EEmptyInput);

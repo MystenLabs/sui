@@ -1,0 +1,2 @@
+*.snap.new
+!**/*.lock

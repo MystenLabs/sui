@@ -1,0 +1,129 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-14:
+//# programmable --sender A --inputs object(1,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 4, lines 16-18:
+//# programmable --sender A --inputs object(1,0) 2
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 5, line 20:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, line 24:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 27-41:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "sequenceNumber": 0,
+      "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+      "summaryBcs": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAII/Q4Z5+qdJKUDyzNYkuLiwR01x7Y/3tCE0YTmrFpwFEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+      "contentBcs": "AAEgIWDMbaVHvFW7i0Ui8x2OI/4gF+maumAYbO23tQoH9xogiyn+aqWBXKl0VAbMsD+elKCWE021VdzI1bOrkhv+KboBAA=="
+    },
+    "c1": {
+      "sequenceNumber": 1,
+      "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
+      "summaryBcs": "AAAAAAAAAAABAAAAAAAAAAIAAAAAAAAAIFHvBoDXUXQZlB5hdm06OL3S9Gmfs5bQ9xB5kRzXF88UASDP9W7oPLPDw+Uqki7RqRI2vyM0QFeSc91NeRy1tRl7zUBCDwAAAAAAwCYeAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+      "contentBcs": "AAEgjBxd57wb5tluI7Ueto4FmG/q+paWNHz62u2u8j6AnBUgRvut9H4eEz0mz5lFOIN2q2Tt//zCJMirMptQB4MTDeIBAWEA9TS9Lcr1ukH4MtLpLk5SW6DoOsE/AN5Q7DNZZVmaYcgL4uCRCwUB7oCFK4q79P05vNMz0baKxJ3iW1rmdmYQBn9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgko"
+    },
+    "c2": {
+      "sequenceNumber": 2,
+      "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+      "summaryBcs": "AAAAAAAAAAACAAAAAAAAAAQAAAAAAAAAIE4wrN29KdUdkVqjJvp8KXSTGMHUFoKTwi3IbBKuBZxEASBO82LIKYn7tw9t9ZHmFGV7FH7ne2EZZBgjCgbSE/wIRMDGLQAAAAAAQHRaAAAAAAAgszsAAAAAAGCaAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+      "contentBcs": "AAIgcwtWw5nt1Yp17lbrFbdiyLmF5+uAJ6TZ0dWwQQquv4IgTcBtBTiXcnIKwyMUVPl4zEZ/EId0ziLPOyvXtYH9MrggRnW8HNjY0btS7NU+TmivkevFabCxIjZIAJyqO/iQxy0ghcg/yGfr85tX66T8EPRfNAbd7iSs07LsapyEA6yFsVwCAWEA6EEXlYP2LHgWTerSIjGtbjDeFfvrO5HWXzO7YIeNeD6eKgawmxCslr4DdFG/qnxDobl62iX/syD/WLZ68YpOCn9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgkoAWEAQoZV9oG7KfDNPtRbJ4AGlMotZ7bMYZJGX0wZuzjzw2cuIqJQvUY3z/3G1SOWFXPo2ZrT7tiXtb4gW7+FLt+zDX9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgko"
+    },
+    "c3": {
+      "sequenceNumber": 3,
+      "digest": "5MPMJ8CDUt35cXKebu3AbzQNg8sLXNtX5nhggxZSnDpj",
+      "summaryBcs": "AAAAAAAAAAADAAAAAAAAAAUAAAAAAAAAIPPA5J2n/GXiDNc3BDPZ5R2ELDz7FjYIUax0C0nu1apuASATLBJPcHdnaF/uUwa4cIqwq1cHEaA1DYutE/WiSRkaCMDGLQAAAAAAQHRaAAAAAAAgszsAAAAAAGCaAAAAAAAAQQEAAAAAAAAAAAIAAA==",
+      "contentBcs": "AAEgD3ACDl8vpFB3ECpvuesWXiAaqYtvv+lttTo/309jYxAgIXkBn9nUOW1PgI7FXpZOilExi9XDRx8XyRdnBmcLLDIBAWEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 0,
+        "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+        "summaryBcs": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAII/Q4Z5+qdJKUDyzNYkuLiwR01x7Y/3tCE0YTmrFpwFEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+        "contentBcs": "AAEgIWDMbaVHvFW7i0Ui8x2OI/4gF+maumAYbO23tQoH9xogiyn+aqWBXKl0VAbMsD+elKCWE021VdzI1bOrkhv+KboBAA=="
+      },
+      {
+        "sequenceNumber": 1,
+        "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
+        "summaryBcs": "AAAAAAAAAAABAAAAAAAAAAIAAAAAAAAAIFHvBoDXUXQZlB5hdm06OL3S9Gmfs5bQ9xB5kRzXF88UASDP9W7oPLPDw+Uqki7RqRI2vyM0QFeSc91NeRy1tRl7zUBCDwAAAAAAwCYeAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+        "contentBcs": "AAEgjBxd57wb5tluI7Ueto4FmG/q+paWNHz62u2u8j6AnBUgRvut9H4eEz0mz5lFOIN2q2Tt//zCJMirMptQB4MTDeIBAWEA9TS9Lcr1ukH4MtLpLk5SW6DoOsE/AN5Q7DNZZVmaYcgL4uCRCwUB7oCFK4q79P05vNMz0baKxJ3iW1rmdmYQBn9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgko"
+      },
+      {
+        "sequenceNumber": 2,
+        "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+        "summaryBcs": "AAAAAAAAAAACAAAAAAAAAAQAAAAAAAAAIE4wrN29KdUdkVqjJvp8KXSTGMHUFoKTwi3IbBKuBZxEASBO82LIKYn7tw9t9ZHmFGV7FH7ne2EZZBgjCgbSE/wIRMDGLQAAAAAAQHRaAAAAAAAgszsAAAAAAGCaAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+        "contentBcs": "AAIgcwtWw5nt1Yp17lbrFbdiyLmF5+uAJ6TZ0dWwQQquv4IgTcBtBTiXcnIKwyMUVPl4zEZ/EId0ziLPOyvXtYH9MrggRnW8HNjY0btS7NU+TmivkevFabCxIjZIAJyqO/iQxy0ghcg/yGfr85tX66T8EPRfNAbd7iSs07LsapyEA6yFsVwCAWEA6EEXlYP2LHgWTerSIjGtbjDeFfvrO5HWXzO7YIeNeD6eKgawmxCslr4DdFG/qnxDobl62iX/syD/WLZ68YpOCn9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgkoAWEAQoZV9oG7KfDNPtRbJ4AGlMotZ7bMYZJGX0wZuzjzw2cuIqJQvUY3z/3G1SOWFXPo2ZrT7tiXtb4gW7+FLt+zDX9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgko"
+      },
+      {
+        "sequenceNumber": 3,
+        "digest": "5MPMJ8CDUt35cXKebu3AbzQNg8sLXNtX5nhggxZSnDpj",
+        "summaryBcs": "AAAAAAAAAAADAAAAAAAAAAUAAAAAAAAAIPPA5J2n/GXiDNc3BDPZ5R2ELDz7FjYIUax0C0nu1apuASATLBJPcHdnaF/uUwa4cIqwq1cHEaA1DYutE/WiSRkaCMDGLQAAAAAAQHRaAAAAAAAgszsAAAAAAGCaAAAAAAAAQQEAAAAAAAAAAAIAAA==",
+        "contentBcs": "AAEgD3ACDl8vpFB3ECpvuesWXiAaqYtvv+lttTo/309jYxAgIXkBn9nUOW1PgI7FXpZOilExi9XDRx8XyRdnBmcLLDIBAWEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    ]
+  }
+}
+
+task 9, lines 43-51:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": null
+  }
+}
+
+task 10, lines 53-61:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 2,
+        "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+        "summaryBcs": "AAAAAAAAAAACAAAAAAAAAAQAAAAAAAAAIE4wrN29KdUdkVqjJvp8KXSTGMHUFoKTwi3IbBKuBZxEASBO82LIKYn7tw9t9ZHmFGV7FH7ne2EZZBgjCgbSE/wIRMDGLQAAAAAAQHRaAAAAAAAgszsAAAAAAGCaAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+        "contentBcs": "AAIgcwtWw5nt1Yp17lbrFbdiyLmF5+uAJ6TZ0dWwQQquv4IgTcBtBTiXcnIKwyMUVPl4zEZ/EId0ziLPOyvXtYH9MrggRnW8HNjY0btS7NU+TmivkevFabCxIjZIAJyqO/iQxy0ghcg/yGfr85tX66T8EPRfNAbd7iSs07LsapyEA6yFsVwCAWEA6EEXlYP2LHgWTerSIjGtbjDeFfvrO5HWXzO7YIeNeD6eKgawmxCslr4DdFG/qnxDobl62iX/syD/WLZ68YpOCn9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgkoAWEAQoZV9oG7KfDNPtRbJ4AGlMotZ7bMYZJGX0wZuzjzw2cuIqJQvUY3z/3G1SOWFXPo2ZrT7tiXtb4gW7+FLt+zDX9RRjrrdtiNybdeY3JQsiDEnPW3ln2/F8H5+nxZSgko"
+      },
+      null,
+      {
+        "sequenceNumber": 0,
+        "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+        "summaryBcs": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAII/Q4Z5+qdJKUDyzNYkuLiwR01x7Y/3tCE0YTmrFpwFEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAA==",
+        "contentBcs": "AAEgIWDMbaVHvFW7i0Ui8x2OI/4gF+maumAYbO23tQoH9xogiyn+aqWBXKl0VAbMsD+elKCWE021VdzI1bOrkhv+KboBAA=="
+      },
+      null
+    ]
+  }
+}

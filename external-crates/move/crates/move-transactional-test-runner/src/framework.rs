@@ -5,10 +5,10 @@
 #![forbid(unsafe_code)]
 
 use crate::tasks::{
-    taskify, InitCommand, PrintBytecodeCommand, PublishAndCallsCommand, PublishCommand,
-    PublishRunCommand, RunCommand, SyntaxChoice, TaskCommand, TaskInput,
+    InitCommand, PrintBytecodeCommand, PublishAndCallsCommand, PublishCommand, PublishRunCommand,
+    RunCommand, SyntaxChoice, TaskCommand, TaskInput, taskify,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
@@ -17,13 +17,14 @@ use move_command_line_common::{
     env::read_bool_env_var,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
     insta_assert,
+    testing::InstaOptions,
 };
 use move_compiler::{
+    PreCompiledProgramInfo,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
+    diagnostics::{Diagnostics, warning_filters::WarningFiltersBuilder},
     editions::{Edition, Flavor},
-    shared::{files::MappedFiles, NumericalAddress, PackageConfig},
-    FullyCompiledProgram,
+    shared::{NumericalAddress, PackageConfig, files::MappedFiles},
 };
 use move_core_types::parsing::{
     address::ParsedAddress,
@@ -50,7 +51,7 @@ use std::{
 use tempfile::NamedTempFile;
 
 pub struct CompiledState {
-    pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_program_info_opt: Option<Arc<PreCompiledProgramInfo>>,
     pre_compiled_ids: BTreeSet<(AccountAddress, String)>,
     compiled_module_named_address_mapping: BTreeMap<ModuleId, Symbol>,
     pub named_address_mapping: BTreeMap<String, NumericalAddress>,
@@ -120,7 +121,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
     fn default_syntax(&self) -> SyntaxChoice;
     async fn init(
         default_syntax: SyntaxChoice,
-        option: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_info_opt: Option<Arc<PreCompiledProgramInfo>>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         path: &Path,
     ) -> (Self, Option<String>);
@@ -498,17 +499,15 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
 impl CompiledState {
     pub fn new(
         named_address_mapping: BTreeMap<String, NumericalAddress>,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
         default_named_address_mapping: Option<NumericalAddress>,
         compiler_edition: Option<Edition>,
         flavor: Option<Flavor>,
     ) -> Self {
         let pre_compiled_ids = match pre_compiled_deps.clone() {
             None => BTreeSet::new(),
-            Some(pre_compiled) => pre_compiled
-                .cfgir
-                .modules
-                .key_cloned_iter()
+            Some(pre_compiled_deps) => pre_compiled_deps
+                .iter()
                 .map(|(ident, _)| {
                     (
                         ident.value.address.into_addr_bytes().into_inner(),
@@ -518,7 +517,7 @@ impl CompiledState {
                 .collect(),
         };
         let mut state = Self {
-            pre_compiled_deps: pre_compiled_deps.clone(),
+            pre_compiled_program_info_opt: pre_compiled_deps.clone(),
             pre_compiled_ids,
             modules: BTreeMap::new(),
             compiled_module_named_address_mapping: BTreeMap::new(),
@@ -528,8 +527,10 @@ impl CompiledState {
             default_named_address_mapping,
             temp_files: BTreeMap::new(),
         };
-        if let Some(pcd) = pre_compiled_deps {
-            for unit in &pcd.compiled {
+
+        if let Some(pre_compiled_deps) = pre_compiled_deps {
+            for (_, module_info) in pre_compiled_deps.iter() {
+                let unit = module_info.compiled_unit.clone().unwrap();
                 let (named_addr_opt, _id) = unit.module_id();
                 state.add_precompiled(
                     named_addr_opt.map(|n| n.value),
@@ -733,7 +734,7 @@ pub fn compile_source_units(
         state.source_files().cloned().collect::<Vec<_>>(),
         named_address_mapping,
     )
-    .set_pre_compiled_lib_opt(state.pre_compiled_deps.clone())
+    .set_pre_compiled_program_opt(state.pre_compiled_program_info_opt.clone())
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
     .set_warning_filter(Some(warning_filter))
     .set_default_config(PackageConfig {
@@ -746,8 +747,8 @@ pub fn compile_source_units(
 
     match units_or_diags {
         Err((_pass, diags)) => {
-            if let Some(pcd) = state.pre_compiled_deps.clone() {
-                files.extend(pcd.files.clone());
+            if let Some(pre_compiled_module_info) = state.pre_compiled_program_info_opt.clone() {
+                files.extend(pre_compiled_module_info.files());
             }
             Err(anyhow!(rendered_diags(&files, diags).unwrap()))
         }
@@ -766,6 +767,7 @@ pub fn compile_ir_module(
         .iter()
         .map(|(name, addr)| (name.clone(), addr.into_inner()))
         .collect();
+    // TODO this mapping does not work well with upgrades since they have the same original ID
     IRCompiler::new(state.dep_modules().collect())
         .with_named_addresses(named_addresses)
         .into_compiled_module(&code)
@@ -775,7 +777,7 @@ pub fn compile_ir_module(
 /// if it is a `TaskCommand::Init`. Returns the adapter and the output string.
 pub async fn create_adapter<'a, Adapter>(
     path: &Path,
-    fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
 ) -> Result<(String, Adapter), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -825,16 +827,14 @@ where
             None
         }
     };
-
     let (adapter, result_opt) =
-        Adapter::init(default_syntax, fully_compiled_program_opt, init_opt, path).await;
+        Adapter::init(default_syntax, pre_compiled_program, init_opt, path).await;
 
     if let Some(result) = result_opt {
         if let Err(e) = writeln!(output, "\ninit:\n{}", result) {
             return Err(Box::new(e));
         }
     }
-
     Ok((output, adapter))
 }
 
@@ -843,6 +843,7 @@ pub async fn run_tasks_with_adapter<'a, Adapter>(
     path: &Path,
     mut adapter: Adapter,
     mut output: String,
+    insta_options: Option<InstaOptions>,
 ) -> Result<()>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -875,10 +876,19 @@ where
         handle_known_task(&mut output, &mut adapter, task).await;
     }
 
-    insta_assert! {
-        input_path: path,
-        contents: output,
+    if let Some(options) = insta_options {
+        insta_assert! {
+            input_path: path,
+            contents: output,
+            options: options,
+        }
+    } else {
+        insta_assert! {
+            input_path: path,
+            contents: output,
+        }
     }
+
     Ok(())
 }
 
@@ -886,7 +896,8 @@ where
 /// not need to extend the adapter.
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
-    fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+    insta_options: Option<InstaOptions>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -896,8 +907,8 @@ where
     Adapter::ExtraRunArgs: Debug,
     Adapter::Subcommand: Debug,
 {
-    let (output, adapter) = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
-    run_tasks_with_adapter(path, adapter, output).await?;
+    let (output, adapter) = create_adapter::<Adapter>(path, pre_compiled_program).await?;
+    run_tasks_with_adapter(path, adapter, output, insta_options).await?;
     Ok(())
 }
 

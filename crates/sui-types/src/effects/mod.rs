@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::effects_v2::TransactionEffectsV2;
+pub use self::effects_v2::TransactionEffectsV2;
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
@@ -14,15 +15,18 @@ use crate::digests::{
 use crate::error::SuiResult;
 use crate::event::Event;
 use crate::execution::SharedInput;
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
 use crate::storage::WriteKind;
-use effects_v1::TransactionEffectsV1;
-pub use effects_v2::UnchangedSharedKind;
+pub use effects_v1::TransactionEffectsV1;
+pub use effects_v2::UnchangedConsensusKind;
 use enum_dispatch::enum_dispatch;
-pub use object_change::{EffectsObjectChange, ObjectIn, ObjectOut};
+pub use object_change::{
+    AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+    EffectsObjectChange, ObjectIn, ObjectOut,
+};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::{BTreeMap, BTreeSet};
@@ -272,28 +276,37 @@ impl TransactionEffects {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub enum InputSharedObject {
+pub enum InputConsensusObject {
     Mutate(ObjectRef),
     ReadOnly(ObjectRef),
-    ReadDeleted(ObjectID, SequenceNumber),
-    MutateDeleted(ObjectID, SequenceNumber),
+    ReadConsensusStreamEnded(ObjectID, SequenceNumber),
+    MutateConsensusStreamEnded(ObjectID, SequenceNumber),
     Cancelled(ObjectID, SequenceNumber),
 }
 
-impl InputSharedObject {
+impl InputConsensusObject {
     pub fn id_and_version(&self) -> (ObjectID, SequenceNumber) {
-        let oref = self.object_ref();
-        (oref.0, oref.1)
+        match self {
+            InputConsensusObject::Mutate(oref) | InputConsensusObject::ReadOnly(oref) => {
+                (oref.0, oref.1)
+            }
+            InputConsensusObject::ReadConsensusStreamEnded(id, version)
+            | InputConsensusObject::MutateConsensusStreamEnded(id, version) => (*id, *version),
+            InputConsensusObject::Cancelled(id, version) => (*id, *version),
+        }
     }
 
+    // NOTE: When `ObjectDigest::OBJECT_DIGEST_DELETED` is returned, the object's consensus stream
+    // has ended, but it may not be deleted.
+    #[deprecated]
     pub fn object_ref(&self) -> ObjectRef {
         match self {
-            InputSharedObject::Mutate(oref) | InputSharedObject::ReadOnly(oref) => *oref,
-            InputSharedObject::ReadDeleted(id, version)
-            | InputSharedObject::MutateDeleted(id, version) => {
+            InputConsensusObject::Mutate(oref) | InputConsensusObject::ReadOnly(oref) => *oref,
+            InputConsensusObject::ReadConsensusStreamEnded(id, version)
+            | InputConsensusObject::MutateConsensusStreamEnded(id, version) => {
                 (*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED)
             }
-            InputSharedObject::Cancelled(id, version) => {
+            InputConsensusObject::Cancelled(id, version) => {
                 (*id, *version, ObjectDigest::OBJECT_DIGEST_CANCELLED)
             }
         }
@@ -306,6 +319,7 @@ pub trait TransactionEffectsAPI {
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+    fn move_abort(&self) -> Option<(MoveLocation, u64)>;
 
     /// The version assigned to all output objects (apart from packages).
     fn lamport_version(&self) -> SequenceNumber;
@@ -315,21 +329,29 @@ pub trait TransactionEffectsAPI {
     /// It includes objects that are mutated, wrapped and deleted.
     /// This API is only available on effects v2 and above.
     fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)>;
-    /// Returns the list of sequenced shared objects used in the input.
+    /// Returns the list of sequenced consensus objects used in the input.
     /// This is needed in effects because in transaction we only have object ID
-    /// for shared objects. Their version and digest can only be figured out after sequencing.
+    /// for consensus objects. Their version and digest can only be figured out after sequencing.
     /// Also provides the use kind to indicate whether the object was mutated or read-only.
     /// It does not include per epoch config objects since they do not require sequencing.
-    /// TODO: Rename this function to indicate sequencing requirement.
-    fn input_shared_objects(&self) -> Vec<InputSharedObject>;
+    fn input_consensus_objects(&self) -> Vec<InputConsensusObject>;
     fn created(&self) -> Vec<(ObjectRef, Owner)>;
     fn mutated(&self) -> Vec<(ObjectRef, Owner)>;
     fn unwrapped(&self) -> Vec<(ObjectRef, Owner)>;
     fn deleted(&self) -> Vec<ObjectRef>;
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
     fn wrapped(&self) -> Vec<ObjectRef>;
+    fn transferred_from_consensus(&self) -> Vec<ObjectRef>;
+    fn transferred_to_consensus(&self) -> Vec<ObjectRef>;
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef>;
 
     fn object_changes(&self) -> Vec<ObjectChange>;
+
+    /// The set of object refs written by this transaction, including deleted and wrapped objects.
+    /// Unlike object_changes(), returns no information about the starting state of the object.
+    fn written(&self) -> Vec<ObjectRef>;
+
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent>;
 
     // TODO: We should consider having this function to return Option.
     // When the gas object is not available (i.e. system transaction), we currently return
@@ -343,21 +365,24 @@ pub trait TransactionEffectsAPI {
 
     fn gas_cost_summary(&self) -> &GasCostSummary;
 
-    fn deleted_mutably_accessed_shared_objects(&self) -> Vec<ObjectID> {
-        self.input_shared_objects()
+    fn stream_ended_mutably_accessed_consensus_objects(&self) -> Vec<ObjectID> {
+        self.input_consensus_objects()
             .into_iter()
             .filter_map(|kind| match kind {
-                InputSharedObject::MutateDeleted(id, _) => Some(id),
-                InputSharedObject::Mutate(..)
-                | InputSharedObject::ReadOnly(..)
-                | InputSharedObject::ReadDeleted(..)
-                | InputSharedObject::Cancelled(..) => None,
+                InputConsensusObject::MutateConsensusStreamEnded(id, _) => Some(id),
+                InputConsensusObject::Mutate(..)
+                | InputConsensusObject::ReadOnly(..)
+                | InputConsensusObject::ReadConsensusStreamEnded(..)
+                | InputConsensusObject::Cancelled(..) => None,
             })
             .collect()
     }
 
-    /// Returns all root shared objects (i.e. not child object) that are read-only in the transaction.
-    fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)>;
+    /// Returns all root consensus objects (i.e. not child object) that are read-only in the transaction.
+    fn unchanged_consensus_objects(&self) -> Vec<(ObjectID, UnchangedConsensusKind)>;
+
+    /// Returns all accumulator updates in the transaction.
+    fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)>;
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
@@ -365,7 +390,7 @@ pub trait TransactionEffectsAPI {
     fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary;
     fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest;
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest>;
-    fn unsafe_add_input_shared_object_for_testing(&mut self, kind: InputSharedObject);
+    fn unsafe_add_input_consensus_object_for_testing(&mut self, kind: InputConsensusObject);
 
     // Adding an old version of a live object.
     fn unsafe_add_deleted_live_object_for_testing(&mut self, obj_ref: ObjectRef);
@@ -443,3 +468,7 @@ impl CertifiedTransactionEffects {
         Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
     }
 }
+
+#[cfg(test)]
+#[path = "../unit_tests/effects_tests.rs"]
+mod effects_tests;

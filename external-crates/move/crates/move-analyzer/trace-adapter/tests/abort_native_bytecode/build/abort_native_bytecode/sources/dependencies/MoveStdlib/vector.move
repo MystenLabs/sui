@@ -61,7 +61,7 @@ module std::vector {
     /// Aborts if `i` or `j` is out of bounds.
     public native fun swap<Element>(v: &mut vector<Element>, i: u64, j: u64);
 
-    /// Return an vector of size one containing element `e`.
+    /// Return a vector of size one containing element `e`.
     public fun singleton<Element>(e: Element): vector<Element> {
         let mut v = empty();
         v.push_back(e);

@@ -11,7 +11,7 @@ use crate::{
         make_module_natives,
     },
     pop_arg,
-    shared::views::ValueView,
+    shared::views::{SizeConfig, ValueView},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -42,7 +42,10 @@ pub fn native_empty(
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
-    NativeResult::map_partial_vm_result_one(context.gas_used(), Vector::empty(&ty_args[0]))
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        (&ty_args[0]).try_into().and_then(Vector::empty),
+    )
 }
 
 pub fn make_native_empty(gas_params: EmptyGasParameters) -> NativeFunction {
@@ -115,7 +118,13 @@ pub fn native_push_back(
 
     if gas_params.legacy_per_abstract_memory_unit != 0.into() {
         let cost = gas_params.legacy_per_abstract_memory_unit
-            * std::cmp::max(e.legacy_abstract_memory_size(), 1.into());
+            * std::cmp::max(
+                e.abstract_memory_size(&SizeConfig {
+                    traverse_references: false,
+                    include_vector_size: false,
+                }),
+                1.into(),
+            );
         native_charge_gas_early_exit!(context, cost);
     }
 

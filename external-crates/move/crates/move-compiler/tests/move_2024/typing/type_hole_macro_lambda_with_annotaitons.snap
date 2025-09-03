@@ -15,7 +15,7 @@ error[E04007]: incompatible types
    │                                     Expected: 'u64'
    ·
 20 │         applyu64!(|_: _| -> _ { 0u8 });
-   │                                 --- Given: 'u8'
+   │                               ------- Given: 'u8'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:6:37
@@ -27,7 +27,7 @@ error[E04007]: incompatible types
    │                                     Expected: 'u64'
    ·
 21 │         applyu64!(|_: _| -> _ { b"hello" });
-   │                                 -------- Given: 'vector<u8>'
+   │                               ------------ Given: 'vector<u8>'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/type_hole_macro_lambda_with_annotaitons.move:10:46

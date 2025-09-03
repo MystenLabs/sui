@@ -42,19 +42,19 @@ use tokio::join;
 pub const SUI_MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 pub const GET_POOLS_PATH: &str = "/get_pools";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID_WITH_INTERVAL: &str =
-    "/historical_volume_by_balance_manager_id_with_interval/:pool_names/:balance_manager_id";
+    "/historical_volume_by_balance_manager_id_with_interval/{pool_names}/{balance_manager_id}";
 pub const GET_HISTORICAL_VOLUME_BY_BALANCE_MANAGER_ID: &str =
-    "/historical_volume_by_balance_manager_id/:pool_names/:balance_manager_id";
-pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/:pool_names";
+    "/historical_volume_by_balance_manager_id/{pool_names}/{balance_manager_id}";
+pub const HISTORICAL_VOLUME_PATH: &str = "/historical_volume/{pool_names}";
 pub const ALL_HISTORICAL_VOLUME_PATH: &str = "/all_historical_volume";
-pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
+pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/{asset_ids}/{timestamp}";
 pub const TICKER_PATH: &str = "/ticker";
-pub const TRADES_PATH: &str = "/trades/:pool_name";
-pub const ORDER_UPDATES_PATH: &str = "/order_updates/:pool_name";
+pub const TRADES_PATH: &str = "/trades/{pool_name}";
+pub const ORDER_UPDATES_PATH: &str = "/order_updates/{pool_name}";
 pub const TRADE_COUNT_PATH: &str = "/trade_count";
 pub const ASSETS_PATH: &str = "/assets";
 pub const SUMMARY_PATH: &str = "/summary";
-pub const LEVEL2_PATH: &str = "/orderbook/:pool_name";
+pub const LEVEL2_PATH: &str = "/orderbook/{pool_name}";
 pub const LEVEL2_MODULE: &str = "pool";
 pub const LEVEL2_FUNCTION: &str = "get_level2_ticks_from_mid";
 pub const DEEPBOOK_PACKAGE_ID: &str =

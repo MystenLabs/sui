@@ -47,7 +47,7 @@ const ELenOutOfRange: u64 = 2;
 /// A helper struct that saves resources on operations. For better
 /// vector performance, it stores reversed bytes of the BCS and
 /// enables use of `vector::pop_back`.
-public struct BCS has store, copy, drop {
+public struct BCS has copy, drop, store {
     bytes: vector<u8>,
 }
 
@@ -75,12 +75,7 @@ public fun into_remainder_bytes(bcs: BCS): vector<u8> {
 /// Read address from the bcs-serialized bytes.
 public fun peel_address(bcs: &mut BCS): address {
     assert!(bcs.bytes.length() >= address::length(), EOutOfRange);
-    let (mut addr_bytes, mut i) = (vector[], 0);
-    while (i < address::length()) {
-        addr_bytes.push_back(bcs.bytes.pop_back());
-        i = i + 1;
-    };
-    address::from_bytes(addr_bytes)
+    address::from_bytes(vector::tabulate!(address::length(), |_| bcs.bytes.pop_back()))
 }
 
 /// Read a `bool` value from bcs-serialized bytes.
@@ -162,14 +157,7 @@ public fun peel_vec_length(bcs: &mut BCS): u64 {
 /// functionality of peeling each value.
 public macro fun peel_vec<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): vector<$T> {
     let bcs = $bcs;
-    let len = bcs.peel_vec_length();
-    let mut i = 0;
-    let mut res = vector[];
-    while (i < len) {
-        res.push_back($peel(bcs));
-        i = i + 1;
-    };
-    res
+    vector::tabulate!(bcs.peel_vec_length(), |_| $peel(bcs))
 }
 
 /// Peel a vector of `address` from serialized bytes.
@@ -245,8 +233,7 @@ public fun peel_enum_tag(bcs: &mut BCS): u32 {
 /// functionality of peeling the inner value.
 public macro fun peel_option<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): Option<$T> {
     let bcs = $bcs;
-    if (bcs.peel_bool()) option::some($peel(bcs))
-    else option::none()
+    if (bcs.peel_bool()) option::some($peel(bcs)) else option::none()
 }
 
 /// Peel `Option<address>` from serialized bytes.

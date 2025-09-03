@@ -4,7 +4,7 @@
 
 //! This module defines traits and representations of domains used in dataflow analysis.
 
-use im::{ordmap, ordset, OrdMap, OrdSet};
+use im::{OrdMap, OrdSet, ordmap, ordset};
 use itertools::Itertools;
 use std::{
     borrow::Borrow,

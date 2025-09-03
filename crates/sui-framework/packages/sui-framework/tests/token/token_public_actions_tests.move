@@ -3,45 +3,45 @@
 
 #[test_only]
 /// This module tests `join`, `split`, `zero` and `destroy_zero` functions
-module sui::token_public_actions_tests {
-    use sui::token_test_utils::{Self as test, TEST};
-    use sui::token;
+module sui::token_public_actions_tests;
 
-    #[test]
-    /// Scenario: mint a Token, split it, merge back, then issue a zero and
-    /// destroy it.
-    fun test_public_split_join_zero_destroy() {
-        let ctx = &mut test::ctx(@0x0);
-        let mut token = test::mint(100, ctx);
+use sui::token;
+use sui::token_test_utils::{Self as test, TEST};
 
-        let split = token.split(50, ctx);
-        let zero = token::zero<TEST>(ctx);
+#[test]
+/// Scenario: mint a Token, split it, merge back, then issue a zero and
+/// destroy it.
+fun test_public_split_join_zero_destroy() {
+    let ctx = &mut test::ctx(@0x0);
+    let mut token = test::mint(100, ctx);
 
-        token.join(split);
-        token.join(zero);
+    let split = token.split(50, ctx);
+    let zero = token::zero<TEST>(ctx);
 
-        let zero = token.split(0, ctx);
-        zero.destroy_zero();
-        token.keep(ctx);
-    }
+    token.join(split);
+    token.join(zero);
 
-    #[test, expected_failure(abort_code = token::ENotZero)]
-    /// Scenario: try to destroy a non-zero Token.
-    fun test_public_destroy_non_zero_fail() {
-        let ctx = &mut test::ctx(@0x0);
-        let token = test::mint(100, ctx);
+    let zero = token.split(0, ctx);
+    zero.destroy_zero();
+    token.keep(ctx);
+}
 
-        token.destroy_zero()
-    }
+#[test, expected_failure(abort_code = token::ENotZero)]
+/// Scenario: try to destroy a non-zero Token.
+fun test_public_destroy_non_zero_fail() {
+    let ctx = &mut test::ctx(@0x0);
+    let token = test::mint(100, ctx);
 
-    #[test, expected_failure(abort_code = token::EBalanceTooLow)]
-    /// Scenario: try to split more than in the Token.
-    fun test_split_excessive_fail() {
-        let ctx = &mut test::ctx(@0x0);
-        let mut token = test::mint(0, ctx);
+    token.destroy_zero()
+}
 
-        let _t = token.split(100, ctx);
+#[test, expected_failure(abort_code = token::EBalanceTooLow)]
+/// Scenario: try to split more than in the Token.
+fun test_split_excessive_fail() {
+    let ctx = &mut test::ctx(@0x0);
+    let mut token = test::mint(0, ctx);
 
-        abort 1337
-    }
+    let _t = token.split(100, ctx);
+
+    abort 1337
 }

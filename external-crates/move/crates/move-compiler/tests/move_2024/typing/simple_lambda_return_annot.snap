@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/simple_lambda_return_annot.move:9:14
+   │  
+ 9 │       call!(|| {
+   │ ╭──────────────^
+10 │ │         if (cond) return false;
+   │ │                          ----- Found: 'bool'. It is not compatible with the other type.
+11 │ │         if (cond) return false;
+12 │ │         (return true: u8)
+   │ │                       -- Found: 'u8'. It is not compatible with the other type.
+13 │ │     });
+   │ ╰─────^ Invalid lambda return

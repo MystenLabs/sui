@@ -1,0 +1,123 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:15:14
+   │
+15 │     do!((|x| { x }: |u8| -> u16), 42);
+   │              ^^^^^   --     --- Expected: 'u16'
+   │              │       │       
+   │              │       Given: 'u8'
+   │              Invalid type annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:16:5
+   │
+16 │     do!(((|x| { x }: |bool| -> u8): |u8| -> bool), false);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │                                │             │
+   │     │                                │             Expected: 'bool'
+   │     │                                Given: 'u8'
+   │     Invalid type annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:16:12
+   │
+16 │     do!(((|x| { x }: |bool| -> u8): |u8| -> bool), false);
+   │            ^                         --            ----- Given: 'bool'
+   │            │                         │              
+   │            │                         Expected: 'u8'
+   │            Invalid type annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:16:22
+   │
+16 │     do!(((|x| { x }: |bool| -> u8): |u8| -> bool), false);
+   │                      ^^^^^^^^^^^^    -- Expected: 'u8'
+   │                      ││               
+   │                      │Given: 'bool'
+   │                      Invalid annotation for lambda
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:20:21
+   │
+20 │     do!((|x| { x }: u8), 42);
+   │          ---------  ^^
+   │          │          │
+   │          │          Invalid annotation for lambda
+   │          │          Expected: 'u8'
+   │          Given: '|_| -> _'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:21:22
+   │
+21 │     do!(((|x| { x }: bool): |bool| -> bool), false);
+   │           ---------  ^^^^
+   │           │          │
+   │           │          Invalid annotation for lambda
+   │           │          Expected: 'bool'
+   │           Given: '|bool| -> bool'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:25:21
+   │
+25 │     do!((|x| { x }: |u8, u8| -> u8), 42);
+   │          ---------  ^^^^^^^^^^^^^^
+   │          │          │
+   │          │          Invalid annotation for lambda
+   │          │          Expected a lambda with 2 arguments: '|u8, u8| -> u8'
+   │          Given lambda with 1 arguments: '|_| -> _'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:26:29
+   │
+26 │     do2!((|x, y| { x + y }: |u8| -> u8), 42);
+   │           ----------------  ^^^^^^^^^^
+   │           │                 │
+   │           │                 Invalid annotation for lambda
+   │           │                 Expected a lambda with 1 arguments: '|u8| -> u8'
+   │           Given lambda with 2 arguments: '|_, _| -> _'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:28:41
+   │
+28 │     do!(((|_| { false }: |u8| -> bool): |u8, u8| -> bool), 0);
+   │           -------------                 ^^^^^^^^^^^^^^^^
+   │           │                             │
+   │           │                             Invalid annotation for lambda
+   │           │                             Expected a lambda with 2 arguments: '|u8, u8| -> bool'
+   │           Given lambda with 1 arguments: '|_| -> _'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:29:26
+   │
+29 │     do!(((|_| { false }: |u8, u8| -> bool): |u8| -> bool), 0);
+   │           -------------  ^^^^^^^^^^^^^^^^
+   │           │              │
+   │           │              Invalid annotation for lambda
+   │           │              Expected a lambda with 2 arguments: '|u8, u8| -> bool'
+   │           Given lambda with 1 arguments: '|u8| -> bool'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:31:30
+   │
+31 │     do2!(((|_, _| { false }: |u8| -> bool): |u8, u8| -> bool), 0);
+   │            ----------------  ^^^^^^^^^^^^
+   │            │                 │
+   │            │                 Invalid annotation for lambda
+   │            │                 Expected a lambda with 1 arguments: '|u8| -> bool'
+   │            Given lambda with 2 arguments: '|u8, u8| -> bool'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:32:49
+   │
+32 │     do2!(((|_, _| { false }: |u8, u8| -> bool): |u8| -> bool), 0);
+   │            ----------------                     ^^^^^^^^^^^^
+   │            │                                    │
+   │            │                                    Invalid annotation for lambda
+   │            │                                    Expected a lambda with 1 arguments: '|u8| -> bool'
+   │            Given lambda with 2 arguments: '|_, _| -> _'

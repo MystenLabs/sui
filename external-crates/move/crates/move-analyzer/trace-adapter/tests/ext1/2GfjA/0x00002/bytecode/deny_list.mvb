@@ -1,0 +1,1126 @@
+// Move bytecode v6
+module 2.deny_list {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+use 0000000000000000000000000000000000000000000000000000000000000002::bag;
+use 0000000000000000000000000000000000000000000000000000000000000002::config;
+use 0000000000000000000000000000000000000000000000000000000000000002::dynamic_object_field;
+use 0000000000000000000000000000000000000000000000000000000000000002::event;
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+use 0000000000000000000000000000000000000000000000000000000000000002::table;
+use 0000000000000000000000000000000000000000000000000000000000000002::transfer;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+use 0000000000000000000000000000000000000000000000000000000000000002::vec_set;
+
+struct DenyList has key {
+	id: UID,
+	lists: Bag
+}
+
+struct ConfigWriteCap has drop {
+	dummy_field: bool
+}
+
+struct ConfigKey has copy, drop, store {
+	per_type_index: u64,
+	per_type_key: vector<u8>
+}
+
+struct AddressKey has copy, drop, store {
+	pos0: address
+}
+
+struct GlobalPauseKey has copy, drop, store {
+	dummy_field: bool
+}
+
+struct PerTypeConfigCreated has copy, drop, store {
+	key: ConfigKey,
+	config_id: ID
+}
+
+struct PerTypeList has store, key {
+	id: UID,
+	denied_count: Table<address, u64>,
+	denied_addresses: Table<vector<u8>, VecSet<address>>
+}
+
+public(friend) v2_add(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: address, Arg4: &mut TxContext) {
+L5:	loc0: ConfigWriteCap
+L6:	loc1: &mut ConfigWriteCap
+L7:	loc2: &mut Config<ConfigWriteCap>
+L8:	loc3: &mut TxContext
+L9:	loc4: &mut TxContext
+L10:	loc5: &mut DenyList
+L11:	loc6: AddressKey
+L12:	loc7: &mut bool
+L13:	loc8: &mut Config<ConfigWriteCap>
+L14:	loc9: u64
+L15:	loc10: vector<u8>
+L16:	loc11: AddressKey
+B0:
+	0: MoveLoc[0](Arg0: &mut DenyList)
+	1: StLoc[10](loc5: &mut DenyList)
+	2: MoveLoc[1](Arg1: u64)
+	3: StLoc[14](loc9: u64)
+	4: MoveLoc[2](Arg2: vector<u8>)
+	5: StLoc[15](loc10: vector<u8>)
+	6: CopyLoc[4](Arg4: &mut TxContext)
+	7: StLoc[8](loc3: &mut TxContext)
+	8: CopyLoc[10](loc5: &mut DenyList)
+	9: FreezeRef
+	10: CopyLoc[14](loc9: u64)
+	11: CopyLoc[15](loc10: vector<u8>)
+	12: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	13: Not
+	14: BrFalse(21)
+B1:
+	15: CopyLoc[10](loc5: &mut DenyList)
+	16: CopyLoc[14](loc9: u64)
+	17: CopyLoc[15](loc10: vector<u8>)
+	18: MoveLoc[8](loc3: &mut TxContext)
+	19: Call add_per_type_config(&mut DenyList, u64, vector<u8>, &mut TxContext)
+	20: Branch(23)
+B2:
+	21: MoveLoc[8](loc3: &mut TxContext)
+	22: Pop
+B3:
+	23: MoveLoc[10](loc5: &mut DenyList)
+	24: MoveLoc[14](loc9: u64)
+	25: MoveLoc[15](loc10: vector<u8>)
+	26: Call borrow_per_type_config_mut(&mut DenyList, u64, vector<u8>): &mut Config<ConfigWriteCap>
+	27: StLoc[13](loc8: &mut Config<ConfigWriteCap>)
+	28: MoveLoc[3](Arg3: address)
+	29: Pack[3](AddressKey)
+	30: StLoc[16](loc11: AddressKey)
+	31: MoveLoc[13](loc8: &mut Config<ConfigWriteCap>)
+	32: StLoc[7](loc2: &mut Config<ConfigWriteCap>)
+	33: LdFalse
+	34: Pack[1](ConfigWriteCap)
+	35: StLoc[5](loc0: ConfigWriteCap)
+	36: MutBorrowLoc[5](loc0: ConfigWriteCap)
+	37: StLoc[6](loc1: &mut ConfigWriteCap)
+	38: MoveLoc[16](loc11: AddressKey)
+	39: StLoc[11](loc6: AddressKey)
+	40: MoveLoc[4](Arg4: &mut TxContext)
+	41: StLoc[9](loc4: &mut TxContext)
+	42: CopyLoc[7](loc2: &mut Config<ConfigWriteCap>)
+	43: FreezeRef
+	44: CopyLoc[11](loc6: AddressKey)
+	45: CopyLoc[9](loc4: &mut TxContext)
+	46: FreezeRef
+	47: Call config::exists_with_type_for_next_epoch<ConfigWriteCap, AddressKey, bool>(&Config<ConfigWriteCap>, AddressKey, &TxContext): bool
+	48: Not
+	49: BrFalse(63)
+B4:
+	50: CopyLoc[7](loc2: &mut Config<ConfigWriteCap>)
+	51: Pop
+	52: CopyLoc[6](loc1: &mut ConfigWriteCap)
+	53: Pop
+	54: CopyLoc[9](loc4: &mut TxContext)
+	55: Pop
+	56: CopyLoc[7](loc2: &mut Config<ConfigWriteCap>)
+	57: CopyLoc[6](loc1: &mut ConfigWriteCap)
+	58: CopyLoc[11](loc6: AddressKey)
+	59: LdTrue
+	60: CopyLoc[9](loc4: &mut TxContext)
+	61: Call config::add_for_next_epoch<ConfigWriteCap, AddressKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, AddressKey, bool, &mut TxContext): Option<bool>
+	62: Pop
+B5:
+	63: MoveLoc[7](loc2: &mut Config<ConfigWriteCap>)
+	64: MoveLoc[6](loc1: &mut ConfigWriteCap)
+	65: MoveLoc[11](loc6: AddressKey)
+	66: MoveLoc[9](loc4: &mut TxContext)
+	67: Call config::borrow_for_next_epoch_mut<ConfigWriteCap, AddressKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, AddressKey, &mut TxContext): &mut bool
+	68: StLoc[12](loc7: &mut bool)
+	69: LdTrue
+	70: MoveLoc[12](loc7: &mut bool)
+	71: WriteRef
+	72: Ret
+}
+
+public(friend) v2_remove(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: address, Arg4: &mut TxContext) {
+L5:	loc0: ConfigWriteCap
+L6:	loc1: &mut Config<ConfigWriteCap>
+L7:	loc2: &mut TxContext
+L8:	loc3: &mut DenyList
+L9:	loc4: &mut Config<ConfigWriteCap>
+L10:	loc5: u64
+L11:	loc6: vector<u8>
+L12:	loc7: AddressKey
+B0:
+	0: MoveLoc[0](Arg0: &mut DenyList)
+	1: StLoc[8](loc3: &mut DenyList)
+	2: MoveLoc[1](Arg1: u64)
+	3: StLoc[10](loc5: u64)
+	4: MoveLoc[2](Arg2: vector<u8>)
+	5: StLoc[11](loc6: vector<u8>)
+	6: CopyLoc[4](Arg4: &mut TxContext)
+	7: StLoc[7](loc2: &mut TxContext)
+	8: CopyLoc[8](loc3: &mut DenyList)
+	9: FreezeRef
+	10: CopyLoc[10](loc5: u64)
+	11: CopyLoc[11](loc6: vector<u8>)
+	12: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	13: Not
+	14: BrFalse(21)
+B1:
+	15: CopyLoc[8](loc3: &mut DenyList)
+	16: CopyLoc[10](loc5: u64)
+	17: CopyLoc[11](loc6: vector<u8>)
+	18: MoveLoc[7](loc2: &mut TxContext)
+	19: Call add_per_type_config(&mut DenyList, u64, vector<u8>, &mut TxContext)
+	20: Branch(23)
+B2:
+	21: MoveLoc[7](loc2: &mut TxContext)
+	22: Pop
+B3:
+	23: MoveLoc[8](loc3: &mut DenyList)
+	24: MoveLoc[10](loc5: u64)
+	25: MoveLoc[11](loc6: vector<u8>)
+	26: Call borrow_per_type_config_mut(&mut DenyList, u64, vector<u8>): &mut Config<ConfigWriteCap>
+	27: StLoc[9](loc4: &mut Config<ConfigWriteCap>)
+	28: MoveLoc[3](Arg3: address)
+	29: Pack[3](AddressKey)
+	30: StLoc[12](loc7: AddressKey)
+	31: MoveLoc[9](loc4: &mut Config<ConfigWriteCap>)
+	32: StLoc[6](loc1: &mut Config<ConfigWriteCap>)
+	33: LdFalse
+	34: Pack[1](ConfigWriteCap)
+	35: StLoc[5](loc0: ConfigWriteCap)
+	36: MoveLoc[6](loc1: &mut Config<ConfigWriteCap>)
+	37: MutBorrowLoc[5](loc0: ConfigWriteCap)
+	38: MoveLoc[12](loc7: AddressKey)
+	39: MoveLoc[4](Arg4: &mut TxContext)
+	40: Call config::remove_for_next_epoch<ConfigWriteCap, AddressKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, AddressKey, &mut TxContext): Option<bool>
+	41: Pop
+	42: Ret
+}
+
+public(friend) v2_contains_current_epoch(Arg0: &DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: address, Arg4: &TxContext): bool {
+L5:	loc0: bool
+L6:	loc1: Option<bool>
+L7:	loc2: &Config<ConfigWriteCap>
+L8:	loc3: AddressKey
+B0:
+	0: CopyLoc[0](Arg0: &DenyList)
+	1: CopyLoc[1](Arg1: u64)
+	2: CopyLoc[2](Arg2: vector<u8>)
+	3: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	4: Not
+	5: BrFalse(12)
+B1:
+	6: MoveLoc[0](Arg0: &DenyList)
+	7: Pop
+	8: MoveLoc[4](Arg4: &TxContext)
+	9: Pop
+	10: LdFalse
+	11: Ret
+B2:
+	12: MoveLoc[0](Arg0: &DenyList)
+	13: MoveLoc[1](Arg1: u64)
+	14: MoveLoc[2](Arg2: vector<u8>)
+	15: Call borrow_per_type_config(&DenyList, u64, vector<u8>): &Config<ConfigWriteCap>
+	16: StLoc[7](loc2: &Config<ConfigWriteCap>)
+	17: MoveLoc[3](Arg3: address)
+	18: Pack[3](AddressKey)
+	19: StLoc[8](loc3: AddressKey)
+	20: MoveLoc[7](loc2: &Config<ConfigWriteCap>)
+	21: Call object::id<Config<ConfigWriteCap>>(&Config<ConfigWriteCap>): ID
+	22: MoveLoc[8](loc3: AddressKey)
+	23: MoveLoc[4](Arg4: &TxContext)
+	24: Call config::read_setting<AddressKey, bool>(ID, AddressKey, &TxContext): Option<bool>
+	25: StLoc[6](loc1: Option<bool>)
+	26: ImmBorrowLoc[6](loc1: Option<bool>)
+	27: Call option::is_some<bool>(&Option<bool>): bool
+	28: BrFalse(33)
+B3:
+	29: MoveLoc[6](loc1: Option<bool>)
+	30: Call option::destroy_some<bool>(Option<bool>): bool
+	31: StLoc[5](loc0: bool)
+	32: Branch(37)
+B4:
+	33: MoveLoc[6](loc1: Option<bool>)
+	34: Call option::destroy_none<bool>(Option<bool>)
+	35: LdFalse
+	36: StLoc[5](loc0: bool)
+B5:
+	37: MoveLoc[5](loc0: bool)
+	38: Ret
+}
+
+public(friend) v2_contains_next_epoch(Arg0: &DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: address): bool {
+L4:	loc0: bool
+L5:	loc1: Option<bool>
+L6:	loc2: &Config<ConfigWriteCap>
+L7:	loc3: AddressKey
+B0:
+	0: CopyLoc[0](Arg0: &DenyList)
+	1: CopyLoc[1](Arg1: u64)
+	2: CopyLoc[2](Arg2: vector<u8>)
+	3: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	4: Not
+	5: BrFalse(10)
+B1:
+	6: MoveLoc[0](Arg0: &DenyList)
+	7: Pop
+	8: LdFalse
+	9: Ret
+B2:
+	10: MoveLoc[0](Arg0: &DenyList)
+	11: MoveLoc[1](Arg1: u64)
+	12: MoveLoc[2](Arg2: vector<u8>)
+	13: Call borrow_per_type_config(&DenyList, u64, vector<u8>): &Config<ConfigWriteCap>
+	14: StLoc[6](loc2: &Config<ConfigWriteCap>)
+	15: MoveLoc[3](Arg3: address)
+	16: Pack[3](AddressKey)
+	17: StLoc[7](loc3: AddressKey)
+	18: MoveLoc[6](loc2: &Config<ConfigWriteCap>)
+	19: MoveLoc[7](loc3: AddressKey)
+	20: Call config::read_setting_for_next_epoch<ConfigWriteCap, AddressKey, bool>(&Config<ConfigWriteCap>, AddressKey): Option<bool>
+	21: StLoc[5](loc1: Option<bool>)
+	22: ImmBorrowLoc[5](loc1: Option<bool>)
+	23: Call option::is_some<bool>(&Option<bool>): bool
+	24: BrFalse(29)
+B3:
+	25: MoveLoc[5](loc1: Option<bool>)
+	26: Call option::destroy_some<bool>(Option<bool>): bool
+	27: StLoc[4](loc0: bool)
+	28: Branch(33)
+B4:
+	29: MoveLoc[5](loc1: Option<bool>)
+	30: Call option::destroy_none<bool>(Option<bool>)
+	31: LdFalse
+	32: StLoc[4](loc0: bool)
+B5:
+	33: MoveLoc[4](loc0: bool)
+	34: Ret
+}
+
+public(friend) v2_enable_global_pause(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: &mut TxContext) {
+L4:	loc0: ConfigWriteCap
+L5:	loc1: &mut ConfigWriteCap
+L6:	loc2: &mut Config<ConfigWriteCap>
+L7:	loc3: &mut TxContext
+L8:	loc4: &mut TxContext
+L9:	loc5: &mut DenyList
+L10:	loc6: GlobalPauseKey
+L11:	loc7: &mut bool
+L12:	loc8: u64
+L13:	loc9: vector<u8>
+B0:
+	0: MoveLoc[0](Arg0: &mut DenyList)
+	1: StLoc[9](loc5: &mut DenyList)
+	2: MoveLoc[1](Arg1: u64)
+	3: StLoc[12](loc8: u64)
+	4: MoveLoc[2](Arg2: vector<u8>)
+	5: StLoc[13](loc9: vector<u8>)
+	6: CopyLoc[3](Arg3: &mut TxContext)
+	7: StLoc[7](loc3: &mut TxContext)
+	8: CopyLoc[9](loc5: &mut DenyList)
+	9: FreezeRef
+	10: CopyLoc[12](loc8: u64)
+	11: CopyLoc[13](loc9: vector<u8>)
+	12: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	13: Not
+	14: BrFalse(21)
+B1:
+	15: CopyLoc[9](loc5: &mut DenyList)
+	16: CopyLoc[12](loc8: u64)
+	17: CopyLoc[13](loc9: vector<u8>)
+	18: MoveLoc[7](loc3: &mut TxContext)
+	19: Call add_per_type_config(&mut DenyList, u64, vector<u8>, &mut TxContext)
+	20: Branch(23)
+B2:
+	21: MoveLoc[7](loc3: &mut TxContext)
+	22: Pop
+B3:
+	23: MoveLoc[9](loc5: &mut DenyList)
+	24: MoveLoc[12](loc8: u64)
+	25: MoveLoc[13](loc9: vector<u8>)
+	26: Call borrow_per_type_config_mut(&mut DenyList, u64, vector<u8>): &mut Config<ConfigWriteCap>
+	27: StLoc[6](loc2: &mut Config<ConfigWriteCap>)
+	28: LdFalse
+	29: Pack[1](ConfigWriteCap)
+	30: StLoc[4](loc0: ConfigWriteCap)
+	31: MutBorrowLoc[4](loc0: ConfigWriteCap)
+	32: StLoc[5](loc1: &mut ConfigWriteCap)
+	33: LdFalse
+	34: Pack[4](GlobalPauseKey)
+	35: StLoc[10](loc6: GlobalPauseKey)
+	36: MoveLoc[3](Arg3: &mut TxContext)
+	37: StLoc[8](loc4: &mut TxContext)
+	38: CopyLoc[6](loc2: &mut Config<ConfigWriteCap>)
+	39: FreezeRef
+	40: CopyLoc[10](loc6: GlobalPauseKey)
+	41: CopyLoc[8](loc4: &mut TxContext)
+	42: FreezeRef
+	43: Call config::exists_with_type_for_next_epoch<ConfigWriteCap, GlobalPauseKey, bool>(&Config<ConfigWriteCap>, GlobalPauseKey, &TxContext): bool
+	44: Not
+	45: BrFalse(59)
+B4:
+	46: CopyLoc[6](loc2: &mut Config<ConfigWriteCap>)
+	47: Pop
+	48: CopyLoc[5](loc1: &mut ConfigWriteCap)
+	49: Pop
+	50: CopyLoc[8](loc4: &mut TxContext)
+	51: Pop
+	52: CopyLoc[6](loc2: &mut Config<ConfigWriteCap>)
+	53: CopyLoc[5](loc1: &mut ConfigWriteCap)
+	54: CopyLoc[10](loc6: GlobalPauseKey)
+	55: LdTrue
+	56: CopyLoc[8](loc4: &mut TxContext)
+	57: Call config::add_for_next_epoch<ConfigWriteCap, GlobalPauseKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, GlobalPauseKey, bool, &mut TxContext): Option<bool>
+	58: Pop
+B5:
+	59: MoveLoc[6](loc2: &mut Config<ConfigWriteCap>)
+	60: MoveLoc[5](loc1: &mut ConfigWriteCap)
+	61: MoveLoc[10](loc6: GlobalPauseKey)
+	62: MoveLoc[8](loc4: &mut TxContext)
+	63: Call config::borrow_for_next_epoch_mut<ConfigWriteCap, GlobalPauseKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, GlobalPauseKey, &mut TxContext): &mut bool
+	64: StLoc[11](loc7: &mut bool)
+	65: LdTrue
+	66: MoveLoc[11](loc7: &mut bool)
+	67: WriteRef
+	68: Ret
+}
+
+public(friend) v2_disable_global_pause(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: &mut TxContext) {
+L4:	loc0: ConfigWriteCap
+L5:	loc1: &mut Config<ConfigWriteCap>
+L6:	loc2: &mut TxContext
+L7:	loc3: &mut DenyList
+L8:	loc4: u64
+L9:	loc5: vector<u8>
+B0:
+	0: MoveLoc[0](Arg0: &mut DenyList)
+	1: StLoc[7](loc3: &mut DenyList)
+	2: MoveLoc[1](Arg1: u64)
+	3: StLoc[8](loc4: u64)
+	4: MoveLoc[2](Arg2: vector<u8>)
+	5: StLoc[9](loc5: vector<u8>)
+	6: CopyLoc[3](Arg3: &mut TxContext)
+	7: StLoc[6](loc2: &mut TxContext)
+	8: CopyLoc[7](loc3: &mut DenyList)
+	9: FreezeRef
+	10: CopyLoc[8](loc4: u64)
+	11: CopyLoc[9](loc5: vector<u8>)
+	12: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	13: Not
+	14: BrFalse(21)
+B1:
+	15: CopyLoc[7](loc3: &mut DenyList)
+	16: CopyLoc[8](loc4: u64)
+	17: CopyLoc[9](loc5: vector<u8>)
+	18: MoveLoc[6](loc2: &mut TxContext)
+	19: Call add_per_type_config(&mut DenyList, u64, vector<u8>, &mut TxContext)
+	20: Branch(23)
+B2:
+	21: MoveLoc[6](loc2: &mut TxContext)
+	22: Pop
+B3:
+	23: MoveLoc[7](loc3: &mut DenyList)
+	24: MoveLoc[8](loc4: u64)
+	25: MoveLoc[9](loc5: vector<u8>)
+	26: Call borrow_per_type_config_mut(&mut DenyList, u64, vector<u8>): &mut Config<ConfigWriteCap>
+	27: StLoc[5](loc1: &mut Config<ConfigWriteCap>)
+	28: LdFalse
+	29: Pack[1](ConfigWriteCap)
+	30: StLoc[4](loc0: ConfigWriteCap)
+	31: MoveLoc[5](loc1: &mut Config<ConfigWriteCap>)
+	32: MutBorrowLoc[4](loc0: ConfigWriteCap)
+	33: LdFalse
+	34: Pack[4](GlobalPauseKey)
+	35: MoveLoc[3](Arg3: &mut TxContext)
+	36: Call config::remove_for_next_epoch<ConfigWriteCap, GlobalPauseKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, GlobalPauseKey, &mut TxContext): Option<bool>
+	37: Pop
+	38: Ret
+}
+
+public(friend) v2_is_global_pause_enabled_current_epoch(Arg0: &DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: &TxContext): bool {
+L4:	loc0: bool
+L5:	loc1: Option<bool>
+B0:
+	0: CopyLoc[0](Arg0: &DenyList)
+	1: CopyLoc[1](Arg1: u64)
+	2: CopyLoc[2](Arg2: vector<u8>)
+	3: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	4: Not
+	5: BrFalse(12)
+B1:
+	6: MoveLoc[0](Arg0: &DenyList)
+	7: Pop
+	8: MoveLoc[3](Arg3: &TxContext)
+	9: Pop
+	10: LdFalse
+	11: Ret
+B2:
+	12: MoveLoc[0](Arg0: &DenyList)
+	13: MoveLoc[1](Arg1: u64)
+	14: MoveLoc[2](Arg2: vector<u8>)
+	15: Call borrow_per_type_config(&DenyList, u64, vector<u8>): &Config<ConfigWriteCap>
+	16: Call object::id<Config<ConfigWriteCap>>(&Config<ConfigWriteCap>): ID
+	17: LdFalse
+	18: Pack[4](GlobalPauseKey)
+	19: MoveLoc[3](Arg3: &TxContext)
+	20: Call config::read_setting<GlobalPauseKey, bool>(ID, GlobalPauseKey, &TxContext): Option<bool>
+	21: StLoc[5](loc1: Option<bool>)
+	22: ImmBorrowLoc[5](loc1: Option<bool>)
+	23: Call option::is_some<bool>(&Option<bool>): bool
+	24: BrFalse(29)
+B3:
+	25: MoveLoc[5](loc1: Option<bool>)
+	26: Call option::destroy_some<bool>(Option<bool>): bool
+	27: StLoc[4](loc0: bool)
+	28: Branch(33)
+B4:
+	29: MoveLoc[5](loc1: Option<bool>)
+	30: Call option::destroy_none<bool>(Option<bool>)
+	31: LdFalse
+	32: StLoc[4](loc0: bool)
+B5:
+	33: MoveLoc[4](loc0: bool)
+	34: Ret
+}
+
+public(friend) v2_is_global_pause_enabled_next_epoch(Arg0: &DenyList, Arg1: u64, Arg2: vector<u8>): bool {
+L3:	loc0: bool
+L4:	loc1: Option<bool>
+B0:
+	0: CopyLoc[0](Arg0: &DenyList)
+	1: CopyLoc[1](Arg1: u64)
+	2: CopyLoc[2](Arg2: vector<u8>)
+	3: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	4: Not
+	5: BrFalse(10)
+B1:
+	6: MoveLoc[0](Arg0: &DenyList)
+	7: Pop
+	8: LdFalse
+	9: Ret
+B2:
+	10: MoveLoc[0](Arg0: &DenyList)
+	11: MoveLoc[1](Arg1: u64)
+	12: MoveLoc[2](Arg2: vector<u8>)
+	13: Call borrow_per_type_config(&DenyList, u64, vector<u8>): &Config<ConfigWriteCap>
+	14: LdFalse
+	15: Pack[4](GlobalPauseKey)
+	16: Call config::read_setting_for_next_epoch<ConfigWriteCap, GlobalPauseKey, bool>(&Config<ConfigWriteCap>, GlobalPauseKey): Option<bool>
+	17: StLoc[4](loc1: Option<bool>)
+	18: ImmBorrowLoc[4](loc1: Option<bool>)
+	19: Call option::is_some<bool>(&Option<bool>): bool
+	20: BrFalse(25)
+B3:
+	21: MoveLoc[4](loc1: Option<bool>)
+	22: Call option::destroy_some<bool>(Option<bool>): bool
+	23: StLoc[3](loc0: bool)
+	24: Branch(29)
+B4:
+	25: MoveLoc[4](loc1: Option<bool>)
+	26: Call option::destroy_none<bool>(Option<bool>)
+	27: LdFalse
+	28: StLoc[3](loc0: bool)
+B5:
+	29: MoveLoc[3](loc0: bool)
+	30: Ret
+}
+
+public(friend) migrate_v1_to_v2(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: &mut TxContext) {
+L4:	loc0: u64
+L5:	loc1: u64
+L6:	loc2: vector<address>
+L7:	loc3: ConfigWriteCap
+L8:	loc4: address
+L9:	loc5: &mut PerTypeList
+L10:	loc6: &mut ConfigWriteCap
+L11:	loc7: &mut Config<ConfigWriteCap>
+L12:	loc8: &mut TxContext
+L13:	loc9: &mut TxContext
+L14:	loc10: &mut u64
+L15:	loc11: &mut DenyList
+L16:	loc12: vector<address>
+L17:	loc13: u64
+L18:	loc14: u64
+L19:	loc15: u64
+L20:	loc16: AddressKey
+L21:	loc17: &mut bool
+L22:	loc18: &mut Config<ConfigWriteCap>
+L23:	loc19: u64
+L24:	loc20: vector<u8>
+L25:	loc21: AddressKey
+L26:	loc22: u64
+L27:	loc23: u64
+L28:	loc24: &vector<address>
+L29:	loc25: vector<address>
+B0:
+	0: CopyLoc[0](Arg0: &mut DenyList)
+	1: MutBorrowField[0](DenyList.lists: Bag)
+	2: CopyLoc[1](Arg1: u64)
+	3: Call bag::borrow_mut<u64, PerTypeList>(&mut Bag, u64): &mut PerTypeList
+	4: StLoc[9](loc5: &mut PerTypeList)
+	5: CopyLoc[9](loc5: &mut PerTypeList)
+	6: ImmBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	7: CopyLoc[2](Arg2: vector<u8>)
+	8: Call table::contains<vector<u8>, VecSet<address>>(&Table<vector<u8>, VecSet<address>>, vector<u8>): bool
+	9: Not
+	10: BrFalse(14)
+B1:
+	11: LdConst[3](vector<address>: 00)
+	12: StLoc[6](loc2: vector<address>)
+	13: Branch(20)
+B2:
+	14: CopyLoc[9](loc5: &mut PerTypeList)
+	15: MutBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	16: CopyLoc[2](Arg2: vector<u8>)
+	17: Call table::remove<vector<u8>, VecSet<address>>(&mut Table<vector<u8>, VecSet<address>>, vector<u8>): VecSet<address>
+	18: Call vec_set::into_keys<address>(VecSet<address>): vector<address>
+	19: StLoc[6](loc2: vector<address>)
+B3:
+	20: MoveLoc[6](loc2: vector<address>)
+	21: StLoc[16](loc12: vector<address>)
+	22: ImmBorrowLoc[16](loc12: vector<address>)
+	23: StLoc[28](loc24: &vector<address>)
+	24: CopyLoc[28](loc24: &vector<address>)
+	25: VecLen(48)
+	26: StLoc[5](loc1: u64)
+	27: LdU64(0)
+	28: StLoc[18](loc14: u64)
+	29: MoveLoc[5](loc1: u64)
+	30: StLoc[27](loc23: u64)
+B4:
+	31: CopyLoc[18](loc14: u64)
+	32: CopyLoc[27](loc23: u64)
+	33: Lt
+	34: BrFalse(68)
+B5:
+	35: CopyLoc[18](loc14: u64)
+	36: StLoc[19](loc15: u64)
+	37: CopyLoc[28](loc24: &vector<address>)
+	38: MoveLoc[19](loc15: u64)
+	39: VecImmBorrow(48)
+	40: ReadRef
+	41: StLoc[8](loc4: address)
+	42: CopyLoc[9](loc5: &mut PerTypeList)
+	43: MutBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	44: CopyLoc[8](loc4: address)
+	45: Call table::borrow_mut<address, u64>(&mut Table<address, u64>, address): &mut u64
+	46: StLoc[14](loc10: &mut u64)
+	47: CopyLoc[14](loc10: &mut u64)
+	48: ReadRef
+	49: LdU64(1)
+	50: Sub
+	51: CopyLoc[14](loc10: &mut u64)
+	52: WriteRef
+	53: MoveLoc[14](loc10: &mut u64)
+	54: ReadRef
+	55: LdU64(0)
+	56: Eq
+	57: BrFalse(63)
+B6:
+	58: CopyLoc[9](loc5: &mut PerTypeList)
+	59: MutBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	60: MoveLoc[8](loc4: address)
+	61: Call table::remove<address, u64>(&mut Table<address, u64>, address): u64
+	62: Pop
+B7:
+	63: MoveLoc[18](loc14: u64)
+	64: LdU64(1)
+	65: Add
+	66: StLoc[18](loc14: u64)
+	67: Branch(31)
+B8:
+	68: MoveLoc[28](loc24: &vector<address>)
+	69: Pop
+	70: MoveLoc[9](loc5: &mut PerTypeList)
+	71: Pop
+	72: MoveLoc[0](Arg0: &mut DenyList)
+	73: StLoc[15](loc11: &mut DenyList)
+	74: MoveLoc[1](Arg1: u64)
+	75: StLoc[23](loc19: u64)
+	76: MoveLoc[2](Arg2: vector<u8>)
+	77: StLoc[24](loc20: vector<u8>)
+	78: CopyLoc[3](Arg3: &mut TxContext)
+	79: StLoc[12](loc8: &mut TxContext)
+	80: CopyLoc[15](loc11: &mut DenyList)
+	81: FreezeRef
+	82: CopyLoc[23](loc19: u64)
+	83: CopyLoc[24](loc20: vector<u8>)
+	84: Call per_type_exists(&DenyList, u64, vector<u8>): bool
+	85: Not
+	86: BrFalse(94)
+B9:
+	87: Branch(88)
+B10:
+	88: CopyLoc[15](loc11: &mut DenyList)
+	89: CopyLoc[23](loc19: u64)
+	90: CopyLoc[24](loc20: vector<u8>)
+	91: MoveLoc[12](loc8: &mut TxContext)
+	92: Call add_per_type_config(&mut DenyList, u64, vector<u8>, &mut TxContext)
+	93: Branch(96)
+B11:
+	94: MoveLoc[12](loc8: &mut TxContext)
+	95: Pop
+B12:
+	96: MoveLoc[15](loc11: &mut DenyList)
+	97: MoveLoc[23](loc19: u64)
+	98: MoveLoc[24](loc20: vector<u8>)
+	99: Call borrow_per_type_config_mut(&mut DenyList, u64, vector<u8>): &mut Config<ConfigWriteCap>
+	100: StLoc[22](loc18: &mut Config<ConfigWriteCap>)
+	101: MoveLoc[16](loc12: vector<address>)
+	102: StLoc[29](loc25: vector<address>)
+	103: MutBorrowLoc[29](loc25: vector<address>)
+	104: Call vector::reverse<address>(&mut vector<address>)
+	105: ImmBorrowLoc[29](loc25: vector<address>)
+	106: VecLen(48)
+	107: StLoc[4](loc0: u64)
+	108: LdU64(0)
+	109: StLoc[17](loc13: u64)
+	110: MoveLoc[4](loc0: u64)
+	111: StLoc[26](loc22: u64)
+B13:
+	112: CopyLoc[17](loc13: u64)
+	113: CopyLoc[26](loc22: u64)
+	114: Lt
+	115: BrFalse(168)
+B14:
+	116: CopyLoc[17](loc13: u64)
+	117: Pop
+	118: MutBorrowLoc[29](loc25: vector<address>)
+	119: VecPopBack(48)
+	120: Pack[3](AddressKey)
+	121: StLoc[25](loc21: AddressKey)
+	122: CopyLoc[22](loc18: &mut Config<ConfigWriteCap>)
+	123: StLoc[11](loc7: &mut Config<ConfigWriteCap>)
+	124: LdFalse
+	125: Pack[1](ConfigWriteCap)
+	126: StLoc[7](loc3: ConfigWriteCap)
+	127: MutBorrowLoc[7](loc3: ConfigWriteCap)
+	128: StLoc[10](loc6: &mut ConfigWriteCap)
+	129: MoveLoc[25](loc21: AddressKey)
+	130: StLoc[20](loc16: AddressKey)
+	131: CopyLoc[3](Arg3: &mut TxContext)
+	132: StLoc[13](loc9: &mut TxContext)
+	133: CopyLoc[11](loc7: &mut Config<ConfigWriteCap>)
+	134: FreezeRef
+	135: CopyLoc[20](loc16: AddressKey)
+	136: CopyLoc[13](loc9: &mut TxContext)
+	137: FreezeRef
+	138: Call config::exists_with_type_for_next_epoch<ConfigWriteCap, AddressKey, bool>(&Config<ConfigWriteCap>, AddressKey, &TxContext): bool
+	139: Not
+	140: BrFalse(154)
+B15:
+	141: CopyLoc[11](loc7: &mut Config<ConfigWriteCap>)
+	142: Pop
+	143: CopyLoc[10](loc6: &mut ConfigWriteCap)
+	144: Pop
+	145: CopyLoc[13](loc9: &mut TxContext)
+	146: Pop
+	147: CopyLoc[11](loc7: &mut Config<ConfigWriteCap>)
+	148: CopyLoc[10](loc6: &mut ConfigWriteCap)
+	149: CopyLoc[20](loc16: AddressKey)
+	150: LdTrue
+	151: CopyLoc[13](loc9: &mut TxContext)
+	152: Call config::add_for_next_epoch<ConfigWriteCap, AddressKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, AddressKey, bool, &mut TxContext): Option<bool>
+	153: Pop
+B16:
+	154: MoveLoc[11](loc7: &mut Config<ConfigWriteCap>)
+	155: MoveLoc[10](loc6: &mut ConfigWriteCap)
+	156: MoveLoc[20](loc16: AddressKey)
+	157: MoveLoc[13](loc9: &mut TxContext)
+	158: Call config::borrow_for_next_epoch_mut<ConfigWriteCap, AddressKey, bool>(&mut Config<ConfigWriteCap>, &mut ConfigWriteCap, AddressKey, &mut TxContext): &mut bool
+	159: StLoc[21](loc17: &mut bool)
+	160: LdTrue
+	161: MoveLoc[21](loc17: &mut bool)
+	162: WriteRef
+	163: MoveLoc[17](loc13: u64)
+	164: LdU64(1)
+	165: Add
+	166: StLoc[17](loc13: u64)
+	167: Branch(112)
+B17:
+	168: MoveLoc[22](loc18: &mut Config<ConfigWriteCap>)
+	169: Pop
+	170: MoveLoc[3](Arg3: &mut TxContext)
+	171: Pop
+	172: MoveLoc[29](loc25: vector<address>)
+	173: VecUnpack(48, 0)
+	174: Ret
+}
+
+add_per_type_config(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: &mut TxContext) {
+L4:	loc0: ConfigWriteCap
+L5:	loc1: Config<ConfigWriteCap>
+L6:	loc2: ID
+L7:	loc3: ConfigKey
+B0:
+	0: MoveLoc[1](Arg1: u64)
+	1: MoveLoc[2](Arg2: vector<u8>)
+	2: Pack[2](ConfigKey)
+	3: StLoc[7](loc3: ConfigKey)
+	4: LdFalse
+	5: Pack[1](ConfigWriteCap)
+	6: StLoc[4](loc0: ConfigWriteCap)
+	7: MutBorrowLoc[4](loc0: ConfigWriteCap)
+	8: MoveLoc[3](Arg3: &mut TxContext)
+	9: Call config::new<ConfigWriteCap>(&mut ConfigWriteCap, &mut TxContext): Config<ConfigWriteCap>
+	10: StLoc[5](loc1: Config<ConfigWriteCap>)
+	11: ImmBorrowLoc[5](loc1: Config<ConfigWriteCap>)
+	12: Call object::id<Config<ConfigWriteCap>>(&Config<ConfigWriteCap>): ID
+	13: StLoc[6](loc2: ID)
+	14: MoveLoc[0](Arg0: &mut DenyList)
+	15: MutBorrowField[3](DenyList.id: UID)
+	16: CopyLoc[7](loc3: ConfigKey)
+	17: MoveLoc[5](loc1: Config<ConfigWriteCap>)
+	18: Call dynamic_object_field::internal_add<ConfigKey, Config<ConfigWriteCap>>(&mut UID, ConfigKey, Config<ConfigWriteCap>)
+	19: MoveLoc[7](loc3: ConfigKey)
+	20: MoveLoc[6](loc2: ID)
+	21: Pack[5](PerTypeConfigCreated)
+	22: Call event::emit<PerTypeConfigCreated>(PerTypeConfigCreated)
+	23: Ret
+}
+
+borrow_per_type_config_mut(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>): &mut Config<ConfigWriteCap> {
+L3:	loc0: ConfigKey
+B0:
+	0: MoveLoc[1](Arg1: u64)
+	1: MoveLoc[2](Arg2: vector<u8>)
+	2: Pack[2](ConfigKey)
+	3: StLoc[3](loc0: ConfigKey)
+	4: MoveLoc[0](Arg0: &mut DenyList)
+	5: MutBorrowField[3](DenyList.id: UID)
+	6: MoveLoc[3](loc0: ConfigKey)
+	7: Call dynamic_object_field::internal_borrow_mut<ConfigKey, Config<ConfigWriteCap>>(&mut UID, ConfigKey): &mut Config<ConfigWriteCap>
+	8: Ret
+}
+
+borrow_per_type_config(Arg0: &DenyList, Arg1: u64, Arg2: vector<u8>): &Config<ConfigWriteCap> {
+L3:	loc0: ConfigKey
+B0:
+	0: MoveLoc[1](Arg1: u64)
+	1: MoveLoc[2](Arg2: vector<u8>)
+	2: Pack[2](ConfigKey)
+	3: StLoc[3](loc0: ConfigKey)
+	4: MoveLoc[0](Arg0: &DenyList)
+	5: ImmBorrowField[3](DenyList.id: UID)
+	6: MoveLoc[3](loc0: ConfigKey)
+	7: Call dynamic_object_field::internal_borrow<ConfigKey, Config<ConfigWriteCap>>(&UID, ConfigKey): &Config<ConfigWriteCap>
+	8: Ret
+}
+
+per_type_exists(Arg0: &DenyList, Arg1: u64, Arg2: vector<u8>): bool {
+L3:	loc0: ConfigKey
+B0:
+	0: MoveLoc[1](Arg1: u64)
+	1: MoveLoc[2](Arg2: vector<u8>)
+	2: Pack[2](ConfigKey)
+	3: StLoc[3](loc0: ConfigKey)
+	4: MoveLoc[0](Arg0: &DenyList)
+	5: ImmBorrowField[3](DenyList.id: UID)
+	6: MoveLoc[3](loc0: ConfigKey)
+	7: Call dynamic_object_field::exists_<ConfigKey>(&UID, ConfigKey): bool
+	8: Ret
+}
+
+public(friend) v1_add(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: address) {
+L4:	loc0: vector<address>
+B0:
+	0: LdConst[2](vector<address>: 1200..)
+	1: StLoc[4](loc0: vector<address>)
+	2: ImmBorrowLoc[4](loc0: vector<address>)
+	3: ImmBorrowLoc[3](Arg3: address)
+	4: Call vector::contains<address>(&vector<address>, &address): bool
+	5: Not
+	6: BrFalse(8)
+B1:
+	7: Branch(12)
+B2:
+	8: MoveLoc[0](Arg0: &mut DenyList)
+	9: Pop
+	10: LdConst[1](u64: 1)
+	11: Abort
+B3:
+	12: MoveLoc[0](Arg0: &mut DenyList)
+	13: MutBorrowField[0](DenyList.lists: Bag)
+	14: MoveLoc[1](Arg1: u64)
+	15: Call bag::borrow_mut<u64, PerTypeList>(&mut Bag, u64): &mut PerTypeList
+	16: MoveLoc[2](Arg2: vector<u8>)
+	17: MoveLoc[3](Arg3: address)
+	18: Call v1_per_type_list_add(&mut PerTypeList, vector<u8>, address)
+	19: Ret
+}
+
+v1_per_type_list_add(Arg0: &mut PerTypeList, Arg1: vector<u8>, Arg2: address) {
+L3:	loc0: &mut VecSet<address>
+L4:	loc1: &mut u64
+B0:
+	0: CopyLoc[0](Arg0: &mut PerTypeList)
+	1: ImmBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	2: CopyLoc[1](Arg1: vector<u8>)
+	3: Call table::contains<vector<u8>, VecSet<address>>(&Table<vector<u8>, VecSet<address>>, vector<u8>): bool
+	4: Not
+	5: BrFalse(11)
+B1:
+	6: CopyLoc[0](Arg0: &mut PerTypeList)
+	7: MutBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	8: CopyLoc[1](Arg1: vector<u8>)
+	9: Call vec_set::empty<address>(): VecSet<address>
+	10: Call table::add<vector<u8>, VecSet<address>>(&mut Table<vector<u8>, VecSet<address>>, vector<u8>, VecSet<address>)
+B2:
+	11: CopyLoc[0](Arg0: &mut PerTypeList)
+	12: MutBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	13: MoveLoc[1](Arg1: vector<u8>)
+	14: Call table::borrow_mut<vector<u8>, VecSet<address>>(&mut Table<vector<u8>, VecSet<address>>, vector<u8>): &mut VecSet<address>
+	15: StLoc[3](loc0: &mut VecSet<address>)
+	16: CopyLoc[3](loc0: &mut VecSet<address>)
+	17: FreezeRef
+	18: ImmBorrowLoc[2](Arg2: address)
+	19: Call vec_set::contains<address>(&VecSet<address>, &address): bool
+	20: BrFalse(26)
+B3:
+	21: MoveLoc[0](Arg0: &mut PerTypeList)
+	22: Pop
+	23: MoveLoc[3](loc0: &mut VecSet<address>)
+	24: Pop
+	25: Ret
+B4:
+	26: MoveLoc[3](loc0: &mut VecSet<address>)
+	27: CopyLoc[2](Arg2: address)
+	28: Call vec_set::insert<address>(&mut VecSet<address>, address)
+	29: CopyLoc[0](Arg0: &mut PerTypeList)
+	30: ImmBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	31: CopyLoc[2](Arg2: address)
+	32: Call table::contains<address, u64>(&Table<address, u64>, address): bool
+	33: Not
+	34: BrFalse(40)
+B5:
+	35: CopyLoc[0](Arg0: &mut PerTypeList)
+	36: MutBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	37: CopyLoc[2](Arg2: address)
+	38: LdU64(0)
+	39: Call table::add<address, u64>(&mut Table<address, u64>, address, u64)
+B6:
+	40: MoveLoc[0](Arg0: &mut PerTypeList)
+	41: MutBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	42: MoveLoc[2](Arg2: address)
+	43: Call table::borrow_mut<address, u64>(&mut Table<address, u64>, address): &mut u64
+	44: StLoc[4](loc1: &mut u64)
+	45: CopyLoc[4](loc1: &mut u64)
+	46: ReadRef
+	47: LdU64(1)
+	48: Add
+	49: MoveLoc[4](loc1: &mut u64)
+	50: WriteRef
+	51: Ret
+}
+
+public(friend) v1_remove(Arg0: &mut DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: address) {
+L4:	loc0: vector<address>
+B0:
+	0: LdConst[2](vector<address>: 1200..)
+	1: StLoc[4](loc0: vector<address>)
+	2: ImmBorrowLoc[4](loc0: vector<address>)
+	3: ImmBorrowLoc[3](Arg3: address)
+	4: Call vector::contains<address>(&vector<address>, &address): bool
+	5: Not
+	6: BrFalse(8)
+B1:
+	7: Branch(12)
+B2:
+	8: MoveLoc[0](Arg0: &mut DenyList)
+	9: Pop
+	10: LdConst[1](u64: 1)
+	11: Abort
+B3:
+	12: MoveLoc[0](Arg0: &mut DenyList)
+	13: MutBorrowField[0](DenyList.lists: Bag)
+	14: MoveLoc[1](Arg1: u64)
+	15: Call bag::borrow_mut<u64, PerTypeList>(&mut Bag, u64): &mut PerTypeList
+	16: MoveLoc[2](Arg2: vector<u8>)
+	17: MoveLoc[3](Arg3: address)
+	18: Call v1_per_type_list_remove(&mut PerTypeList, vector<u8>, address)
+	19: Ret
+}
+
+v1_per_type_list_remove(Arg0: &mut PerTypeList, Arg1: vector<u8>, Arg2: address) {
+L3:	loc0: &mut VecSet<address>
+L4:	loc1: &mut u64
+B0:
+	0: CopyLoc[0](Arg0: &mut PerTypeList)
+	1: MutBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	2: MoveLoc[1](Arg1: vector<u8>)
+	3: Call table::borrow_mut<vector<u8>, VecSet<address>>(&mut Table<vector<u8>, VecSet<address>>, vector<u8>): &mut VecSet<address>
+	4: StLoc[3](loc0: &mut VecSet<address>)
+	5: CopyLoc[3](loc0: &mut VecSet<address>)
+	6: FreezeRef
+	7: ImmBorrowLoc[2](Arg2: address)
+	8: Call vec_set::contains<address>(&VecSet<address>, &address): bool
+	9: BrFalse(11)
+B1:
+	10: Branch(17)
+B2:
+	11: MoveLoc[0](Arg0: &mut PerTypeList)
+	12: Pop
+	13: MoveLoc[3](loc0: &mut VecSet<address>)
+	14: Pop
+	15: LdConst[1](u64: 1)
+	16: Abort
+B3:
+	17: MoveLoc[3](loc0: &mut VecSet<address>)
+	18: ImmBorrowLoc[2](Arg2: address)
+	19: Call vec_set::remove<address>(&mut VecSet<address>, &address)
+	20: CopyLoc[0](Arg0: &mut PerTypeList)
+	21: MutBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	22: CopyLoc[2](Arg2: address)
+	23: Call table::borrow_mut<address, u64>(&mut Table<address, u64>, address): &mut u64
+	24: StLoc[4](loc1: &mut u64)
+	25: CopyLoc[4](loc1: &mut u64)
+	26: ReadRef
+	27: LdU64(1)
+	28: Sub
+	29: CopyLoc[4](loc1: &mut u64)
+	30: WriteRef
+	31: MoveLoc[4](loc1: &mut u64)
+	32: ReadRef
+	33: LdU64(0)
+	34: Eq
+	35: BrFalse(42)
+B4:
+	36: MoveLoc[0](Arg0: &mut PerTypeList)
+	37: MutBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	38: MoveLoc[2](Arg2: address)
+	39: Call table::remove<address, u64>(&mut Table<address, u64>, address): u64
+	40: Pop
+	41: Branch(44)
+B5:
+	42: MoveLoc[0](Arg0: &mut PerTypeList)
+	43: Pop
+B6:
+	44: Ret
+}
+
+public(friend) v1_contains(Arg0: &DenyList, Arg1: u64, Arg2: vector<u8>, Arg3: address): bool {
+L4:	loc0: vector<address>
+B0:
+	0: LdConst[2](vector<address>: 1200..)
+	1: StLoc[4](loc0: vector<address>)
+	2: ImmBorrowLoc[4](loc0: vector<address>)
+	3: ImmBorrowLoc[3](Arg3: address)
+	4: Call vector::contains<address>(&vector<address>, &address): bool
+	5: BrFalse(10)
+B1:
+	6: MoveLoc[0](Arg0: &DenyList)
+	7: Pop
+	8: LdFalse
+	9: Ret
+B2:
+	10: MoveLoc[0](Arg0: &DenyList)
+	11: ImmBorrowField[0](DenyList.lists: Bag)
+	12: MoveLoc[1](Arg1: u64)
+	13: Call bag::borrow<u64, PerTypeList>(&Bag, u64): &PerTypeList
+	14: MoveLoc[2](Arg2: vector<u8>)
+	15: MoveLoc[3](Arg3: address)
+	16: Call v1_per_type_list_contains(&PerTypeList, vector<u8>, address): bool
+	17: Ret
+}
+
+v1_per_type_list_contains(Arg0: &PerTypeList, Arg1: vector<u8>, Arg2: address): bool {
+B0:
+	0: CopyLoc[0](Arg0: &PerTypeList)
+	1: ImmBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	2: CopyLoc[2](Arg2: address)
+	3: Call table::contains<address, u64>(&Table<address, u64>, address): bool
+	4: Not
+	5: BrFalse(10)
+B1:
+	6: MoveLoc[0](Arg0: &PerTypeList)
+	7: Pop
+	8: LdFalse
+	9: Ret
+B2:
+	10: CopyLoc[0](Arg0: &PerTypeList)
+	11: ImmBorrowField[2](PerTypeList.denied_count: Table<address, u64>)
+	12: CopyLoc[2](Arg2: address)
+	13: Call table::borrow<address, u64>(&Table<address, u64>, address): &u64
+	14: ReadRef
+	15: LdU64(0)
+	16: Eq
+	17: BrFalse(22)
+B3:
+	18: MoveLoc[0](Arg0: &PerTypeList)
+	19: Pop
+	20: LdFalse
+	21: Ret
+B4:
+	22: CopyLoc[0](Arg0: &PerTypeList)
+	23: ImmBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	24: CopyLoc[1](Arg1: vector<u8>)
+	25: Call table::contains<vector<u8>, VecSet<address>>(&Table<vector<u8>, VecSet<address>>, vector<u8>): bool
+	26: Not
+	27: BrFalse(32)
+B5:
+	28: MoveLoc[0](Arg0: &PerTypeList)
+	29: Pop
+	30: LdFalse
+	31: Ret
+B6:
+	32: MoveLoc[0](Arg0: &PerTypeList)
+	33: ImmBorrowField[1](PerTypeList.denied_addresses: Table<vector<u8>, VecSet<address>>)
+	34: MoveLoc[1](Arg1: vector<u8>)
+	35: Call table::borrow<vector<u8>, VecSet<address>>(&Table<vector<u8>, VecSet<address>>, vector<u8>): &VecSet<address>
+	36: ImmBorrowLoc[2](Arg2: address)
+	37: Call vec_set::contains<address>(&VecSet<address>, &address): bool
+	38: Ret
+}
+
+create(Arg0: &mut TxContext) {
+L1:	loc0: Bag
+B0:
+	0: CopyLoc[0](Arg0: &mut TxContext)
+	1: FreezeRef
+	2: Call tx_context::sender(&TxContext): address
+	3: LdConst[4](address: 0x00..)
+	4: Eq
+	5: BrFalse(7)
+B1:
+	6: Branch(11)
+B2:
+	7: MoveLoc[0](Arg0: &mut TxContext)
+	8: Pop
+	9: LdConst[0](u64: 0)
+	10: Abort
+B3:
+	11: CopyLoc[0](Arg0: &mut TxContext)
+	12: Call bag::new(&mut TxContext): Bag
+	13: StLoc[1](loc0: Bag)
+	14: MutBorrowLoc[1](loc0: Bag)
+	15: LdConst[0](u64: 0)
+	16: MoveLoc[0](Arg0: &mut TxContext)
+	17: Call per_type_list(&mut TxContext): PerTypeList
+	18: Call bag::add<u64, PerTypeList>(&mut Bag, u64, PerTypeList)
+	19: Call object::sui_deny_list_object_id(): UID
+	20: MoveLoc[1](loc0: Bag)
+	21: Pack[0](DenyList)
+	22: Call transfer::share_object<DenyList>(DenyList)
+	23: Ret
+}
+
+per_type_list(Arg0: &mut TxContext): PerTypeList {
+B0:
+	0: CopyLoc[0](Arg0: &mut TxContext)
+	1: Call object::new(&mut TxContext): UID
+	2: CopyLoc[0](Arg0: &mut TxContext)
+	3: Call table::new<address, u64>(&mut TxContext): Table<address, u64>
+	4: MoveLoc[0](Arg0: &mut TxContext)
+	5: Call table::new<vector<u8>, VecSet<address>>(&mut TxContext): Table<vector<u8>, VecSet<address>>
+	6: Pack[6](PerTypeList)
+	7: Ret
+}
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => vector<address>: 120000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000700000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000b000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000d000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000f0000000000000000000000000000000000000000000000000000000000000403000000000000000000000000000000000000000000000000000000000000dee9
+	3 => vector<address>: 00
+	4 => address: 0x0000000000000000000000000000000000000000000000000000000000000000
+]
+}

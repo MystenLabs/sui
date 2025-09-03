@@ -6,7 +6,7 @@ use sui_field_count::FieldCount;
 
 use crate::schema::{kv_epoch_ends, kv_epoch_starts, kv_feature_flags, kv_protocol_configs};
 
-#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
+#[derive(Insertable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_epoch_ends)]
 #[diesel(treat_none_as_default_value = false)]
 pub struct StoredEpochEnd {
@@ -27,7 +27,7 @@ pub struct StoredEpochEnd {
     pub epoch_commitments: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Queryable, QueryableByName, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_epoch_starts)]
 pub struct StoredEpochStart {
     pub epoch: i64,
@@ -38,7 +38,7 @@ pub struct StoredEpochStart {
     pub system_state: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_feature_flags)]
 pub struct StoredFeatureFlag {
     pub protocol_version: i64,
@@ -46,7 +46,7 @@ pub struct StoredFeatureFlag {
     pub flag_value: bool,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_protocol_configs)]
 pub struct StoredProtocolConfig {
     pub protocol_version: i64,

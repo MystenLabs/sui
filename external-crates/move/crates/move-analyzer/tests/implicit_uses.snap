@@ -5,8 +5,8 @@ source: crates/move-analyzer/tests/ide_testsuite.rs
 -- test 0 -------------------
 use line: 4, use_ndx: 1
 Use: 'Option', start: 13, end: 19
-Def: 'Option', line: 7, def char: 18
-TypeDef: 'Option', line: 7, char: 18
+Def: 'Option', line: 8, def char: 14
+TypeDef: 'Option', line: 8, char: 14
 On Hover:
 public struct Option<Element> has copy, drop, store {
 	vec: vector<Element>

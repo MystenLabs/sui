@@ -233,6 +233,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
             sp!(_, ">") => token!(T::RAngle),
             sp!(_, "@") => token!(T::At),
             sp!(_, ".") => token!(T::Dot),
+            sp!(_, "/") => token!(T::ForwardSlash),
 
             sp!(_, "'" | "\"") => self.string(c),
 

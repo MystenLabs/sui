@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04006]: invalid subtype
+  ┌─ tests/move_2024/typing/loop_break_ref_invalid_2.move:5:5
+  │  
+3 │   fun test(a: &u64): &mut u64 {
+  │               ----   -------- Expected: '&mut u64'
+  │               │       
+  │               Given: '&u64'
+4 │       let b = a;
+5 │ ╭     loop {
+6 │ │         break b
+7 │ │     }
+  │ ╰─────^ Invalid return expression

@@ -53,43 +53,43 @@ use sui::test_scenario;
 #[test]
 fun test_add_delete() {
     let mut ts = test_scenario::begin(@0xA);
-    let ctx = test_scenario::ctx(&mut ts);
+    let ctx = ts.ctx();
 
     let mut p = Parent { id: object::new(ctx) };
-    add_child(&mut p, Child { id: object::new(ctx), count: 0 });
+    p.add_child(Child { id: object::new(ctx), count: 0 });
 
-    mutate_child_via_parent(&mut p);
-    delete_child(&mut p);
+    p.mutate_child_via_parent();
+    p.delete_child();
 
     let Parent { id } = p;
-    object::delete(id);
+    id.delete();
 
-    test_scenario::end(ts);
+    ts.end();
 }
 
 #[test]
 fun test_add_reclaim() {
     let mut ts = test_scenario::begin(@0xA);
-    let ctx = test_scenario::ctx(&mut ts);
+    let ctx = ts.ctx();
 
     let mut p = Parent { id: object::new(ctx) };
-    add_child(&mut p, Child { id: object::new(ctx), count: 0 });
+    p.add_child(Child { id: object::new(ctx), count: 0 });
 
-    mutate_child_via_parent(&mut p);
+    p.mutate_child_via_parent();
 
-    let mut c = reclaim_child(&mut p);
+    let mut c = p.reclaim_child();
     assert!(c.count == 1, 0);
 
-    mutate_child(&mut c);
+    c.mutate_child();
     assert!(c.count == 2, 1);
 
     let Child { id, count: _ } = c;
-    object::delete(id);
+    id.delete();
 
     let Parent { id } = p;
-    object::delete(id);
+    id.delete();
 
-    test_scenario::end(ts);
+    ts.end();
 }
 
 #[test]
@@ -98,13 +98,13 @@ fun test_add_reclaim() {
 /// inaccessible.
 fun test_delete_with_child_attached() {
     let mut ts = test_scenario::begin(@0xA);
-    let ctx = test_scenario::ctx(&mut ts);
+    let ctx = ts.ctx();
 
     let mut p = Parent { id: object::new(ctx) };
-    add_child(&mut p, Child { id: object::new(ctx), count: 0 });
+    p.add_child(Child { id: object::new(ctx), count: 0 });
 
     let Parent { id } = p;
-    object::delete(id);
+    id.delete();
 
-    test_scenario::end(ts);
+    ts.end();
 }

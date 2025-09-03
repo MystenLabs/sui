@@ -1,6 +1,7 @@
 ---
 title: Signatures
-description: Sui supports multiple cryptography algorithms and primitives and can switch between them rapidly.
+description: Sui supports multiple cryptography algorithms and primitives. Switching between them rapidly is supported.
+keywords: [ Ed25519 pure, pure Ed255190, ECDSA Secp256k1, ECDSA Secp256r1, multisig, zkLogin, passkey, signature requirements, signature authority, authority signature, account key pair, account key pair, network key pair ]
 ---
 
 When a user submits a signed transaction, a serialized signature and a serialized transaction data is submitted. The serialized transaction data is the BCS serialized bytes of the struct `TransactionData` and the serialized signature is defined as a concatenation of bytes of `flag || sig || pk`.
@@ -9,7 +10,7 @@ The `flag` is a 1-byte representation corresponding to the signature scheme that
 
 | Scheme          | Flag |
 | --------------- | ---- |
-| Ed25519 Pure    | 0x00 |
+| Pure Ed25519    | 0x00 |
 | ECDSA Secp256k1 | 0x01 |
 | ECDSA Secp256r1 | 0x02 |
 | multisig        | 0x03 |
@@ -44,12 +45,12 @@ The signature must commit to the hash of the intent message of the transaction d
 
 When invoking the signing API, you must first hash the intent message of the transaction data to 32 bytes using Blake2b. This external hashing is distinct from the hashing performed inside the signing API. To be compatible with existing standards and hardware secure modules (HSMs), the signing algorithms perform additional hashing internally. For ECDSA Secp256k1 and Secp256r1, you must use SHA-2 SHA256 as the internal hash function. For pure Ed25519, you must use SHA-512.
 
-An accepted ECDSA secp256k1 and secp256r1 signature must follow:
+An accepted ECDSA Secp256k1 and Secp256r1 signature must follow:
 
 1. The internal hash used by ECDSA must be SHA256 [SHA-2](https://en.wikipedia.org/wiki/SHA-2) hash of the transaction data. Sui uses SHA256 because it is supported by [Apple](https://developer.apple.com/forums/thread/89619), HSMs, and [cloud](https://developer.apple.com/forums/thread/89619), and it is widely adopted by [Bitcoin](https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm).
 1. The signature must be of length 64 bytes in the form of `[r, s]` where the first 32 bytes are `r`, the second 32 bytes are `s`.
 1. The `r` value can be between `0x1` and `0xFFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364140` (inclusive).
-1. The `s` value must be in the lower half of the curve order. If the signature is too high, convert it to a lower `s` according to [BIP-0062](https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures) with the corresponding curve orders using `order - s`. For secp256k1, the curve order is `0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141`. For secp256r1, the curve order is `0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551` defined in [Standards for Efficient Cryptography](https://secg.org/SEC2-Ver-1.0.pdf).
+1. The `s` value must be in the lower half of the curve order. If the signature is too high, convert it to a lower `s` according to [BIP-0062](https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures) with the corresponding curve orders using `order - s`. For Secp256k1, the curve order is `0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141`. For Secp256r1, the curve order is `0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551` defined in [Standards for Efficient Cryptography](https://secg.org/SEC2-Ver-1.0.pdf).
 1. Ideally, the signature must be generated with deterministic nonce according to [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
 
 An accepted pure Ed25519 signature must follow:
@@ -65,7 +66,7 @@ For more on passkey signature, see [SIP-8](https://github.com/sui-foundation/sip
 
 ## Authority signature
 
-The Authority on Sui (collection of validators) holds three distinctive keypairs:
+The Authority on Sui (collection of validators) holds three distinctive key pairs:
 
 1.  [Protocol key pair](#protocol-pair)
 1.  [Account key pair](#account-pair)

@@ -5,7 +5,7 @@ use super::*;
 use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use bcs;
 use sui_types::{
-    execution_status::ExecutionStatus,
+    base_types::FullObjectRef, execution_status::ExecutionStatus,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
@@ -36,11 +36,13 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         builder
             .transfer_object(
                 recipient,
-                authority_state
-                    .get_object(obj_id)
-                    .await
-                    .unwrap()
-                    .compute_object_reference(),
+                FullObjectRef::from_fastpath_ref(
+                    authority_state
+                        .get_object(obj_id)
+                        .await
+                        .unwrap()
+                        .compute_object_reference(),
+                ),
             )
             .unwrap()
     }
@@ -114,11 +116,13 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         builder
             .transfer_object(
                 recipient,
-                authority_state
-                    .get_object(obj_id)
-                    .await
-                    .unwrap()
-                    .compute_object_reference(),
+                FullObjectRef::from_fastpath_ref(
+                    authority_state
+                        .get_object(obj_id)
+                        .await
+                        .unwrap()
+                        .compute_object_reference(),
+                ),
             )
             .unwrap()
     }

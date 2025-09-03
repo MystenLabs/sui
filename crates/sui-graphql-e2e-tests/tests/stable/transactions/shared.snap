@@ -54,10 +54,10 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": {
+            "unchangedConsensusObjects": {
               "nodes": [
                 {
-                  "__typename": "SharedObjectRead",
+                  "__typename": "ConsensusObjectRead",
                   "address": "0x563d2842f82166a5603cfc2374792b4eef15b571ab3cc3066a869cd991ebf144",
                   "version": 2,
                   "digest": "Gp5Rr2Nuy61twdaS5SLnyThvnFpQRAE8ZpaNYzaFD7Yo",
@@ -94,7 +94,7 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": {
+            "unchangedConsensusObjects": {
               "nodes": []
             }
           }
@@ -119,7 +119,7 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": {
+            "unchangedConsensusObjects": {
               "nodes": []
             }
           }

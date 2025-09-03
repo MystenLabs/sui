@@ -5,7 +5,7 @@
 use move_core_types::metadata::Metadata;
 use proptest::{
     arbitrary::any,
-    collection::{btree_set, vec, SizeRange},
+    collection::{SizeRange, btree_set, vec},
     strategy::Strategy,
 };
 

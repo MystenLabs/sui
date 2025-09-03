@@ -314,8 +314,10 @@ pub enum StatusCode {
     ZERO_SIZED_ENUM = 1134,
     MAX_VARIANTS_REACHED = 1135,
 
-    MISMATCHED_MODULE_IDS_IN_PACKAGE = 1136,
-    CYCLIC_PACKAGE_DEPENDENCY = 1137,
+    INVALID_IDENTIFIER = 1136,
+
+    MISMATCHED_MODULE_IDS_IN_PACKAGE = 1137,
+    CYCLIC_PACKAGE_DEPENDENCY = 1138,
 
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.

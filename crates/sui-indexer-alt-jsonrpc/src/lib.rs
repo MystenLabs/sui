@@ -3,33 +3,36 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
-use api::coin::Coins;
+use api::coin::{Coins, DelegationCoins};
 use api::dynamic_fields::DynamicFields;
 use api::move_utils::MoveUtils;
 use api::name_service::NameService;
 use api::objects::{Objects, QueryObjects};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
-use api::write::{Write, WriteArgs};
+use api::write::Write;
 use config::RpcConfig;
-use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
 use prometheus::Registry;
 use serde_json::json;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::pg_reader::db::DbArgs;
+use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
-use sui_pg_db::DbArgs;
+use timeout::TimeoutLayer;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
-use tracing::info;
+use tracing::{info, warn};
 use url::Url;
 
-use crate::api::governance::Governance;
+use crate::api::governance::{DelegationGovernance, Governance};
 use crate::context::Context;
 
 pub mod api;
@@ -40,6 +43,7 @@ pub mod data;
 mod error;
 mod metrics;
 mod paginate;
+mod timeout;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
@@ -51,6 +55,16 @@ pub struct RpcArgs {
     /// many requests, it will start responding with 429.
     #[clap(long, default_value_t = Self::default().max_in_flight_requests)]
     pub max_in_flight_requests: u32,
+
+    /// Requests that take longer than this (in milliseconds) to respond to will be terminated, and
+    /// the query itself will be logged as a warning.
+    #[clap(long, default_value_t = Self::default().request_timeout_ms)]
+    pub request_timeout_ms: u64,
+
+    /// Requests that take longer than this (in milliseconds) will be logged even if they succeed.
+    /// This should be shorter than `request_timeout_ms`.
+    #[clap(long, default_value_t = Self::default().slow_request_threshold_ms)]
+    pub slow_request_threshold_ms: u64,
 }
 
 pub struct RpcService {
@@ -63,6 +77,12 @@ pub struct RpcService {
     /// Metrics for the RPC service.
     metrics: Arc<RpcMetrics>,
 
+    /// Maximum time a request can take to complete.
+    request_timeout: Duration,
+
+    /// Threshold for logging slow requests.
+    slow_request_threshold: Duration,
+
     /// All the methods added to the server so far.
     modules: jsonrpsee::RpcModule<()>,
 
@@ -73,6 +93,19 @@ pub struct RpcService {
     cancel: CancellationToken,
 }
 
+impl RpcArgs {
+    /// Requests that take longer than this are terminated and logged for debugging.
+    fn request_timeout(&self) -> Duration {
+        Duration::from_millis(self.request_timeout_ms)
+    }
+
+    /// Requests that take longer than this are logged for debugging even if they succeed.
+    /// This threshold should be lower than the request timeout threshold.
+    fn slow_request_threshold(&self) -> Duration {
+        Duration::from_millis(self.slow_request_threshold_ms)
+    }
+}
+
 impl RpcService {
     /// Create a new instance of the JSON-RPC service, configured by `rpc_args`. The service will
     /// not accept connections until [Self::run] is called.
@@ -81,18 +114,13 @@ impl RpcService {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
-        let RpcArgs {
-            rpc_listen_address,
-            max_in_flight_requests,
-        } = rpc_args;
-
         let metrics = RpcMetrics::new(registry);
 
         let server = ServerBuilder::new()
             .http_only()
             // `jsonrpsee` calls this a limit on connections, but it is implemented as a limit on
             // requests.
-            .max_connections(max_in_flight_requests)
+            .max_connections(rpc_args.max_in_flight_requests)
             .max_response_body_size(u32::MAX)
             .set_batch_request_config(BatchRequestConfig::Disabled);
 
@@ -108,9 +136,11 @@ impl RpcService {
         );
 
         Ok(Self {
-            rpc_listen_address,
+            rpc_listen_address: rpc_args.rpc_listen_address,
             server,
             metrics,
+            request_timeout: rpc_args.request_timeout(),
+            slow_request_threshold: rpc_args.slow_request_threshold(),
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
@@ -138,6 +168,8 @@ impl RpcService {
             rpc_listen_address,
             server,
             metrics,
+            request_timeout,
+            slow_request_threshold,
             mut modules,
             schema,
             cancel,
@@ -151,10 +183,13 @@ impl RpcService {
             .register_method("rpc.discover", move |_, _, _| json!(schema.clone()))
             .context("Failed to add schema discovery method")?;
 
-        let middleware = RpcServiceBuilder::new().layer(MetricsLayer::new(
-            metrics,
-            modules.method_names().map(|n| n.to_owned()).collect(),
-        ));
+        let middleware = RpcServiceBuilder::new()
+            .layer(TimeoutLayer::new(request_timeout))
+            .layer(MetricsLayer::new(
+                metrics,
+                modules.method_names().map(|n| n.to_owned()).collect(),
+                slow_request_threshold,
+            ));
 
         let handle = server
             .set_rpc_middleware(middleware)
@@ -193,25 +228,44 @@ impl Default for RpcArgs {
         Self {
             rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
             max_in_flight_requests: 2000,
+            request_timeout_ms: 60_000,
+            slow_request_threshold_ms: 15_000,
         }
     }
+}
+
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct NodeArgs {
+    /// The URL of the fullnode RPC we connect to for transaction execution,
+    /// dry-running, and delegation coin queries etc.
+    #[arg(long)]
+    pub fullnode_rpc_url: Option<url::Url>,
 }
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line). The service will continue to run until the cancellation token is triggered, and
 /// will signal cancellation on the token when it is shutting down.
 ///
-/// Access to reads is controlled by the `database_url` -- if it is `None`, reads will not work.
-/// Similarly, access to writes (executing and dry-running transactions) is controlled by
-/// `write_args.fullnode_rpc_url`, which can be omitted to disable writes from this RPC.
+/// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not work.
+/// The only exceptions are the `DelegationCoins` and `DelegationGovernance` modules, which are controlled
+/// by `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
+///
+/// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
+/// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
+/// `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials JSON file.
+///
+/// Access to writes (executing and dry-running transactions) is controlled by `node_args.fullnode_rpc_url`,
+/// which can be omitted to disable writes from this RPC.
 ///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     database_url: Option<Url>,
+    bigtable_instance: Option<String>,
     db_args: DbArgs,
+    bigtable_args: BigtableArgs,
     rpc_args: RpcArgs,
-    write_args: WriteArgs,
+    node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
     rpc_config: RpcConfig,
     registry: &Registry,
@@ -222,7 +276,9 @@ pub async fn start_rpc(
 
     let context = Context::new(
         database_url,
+        bigtable_instance,
         db_args,
+        bigtable_args,
         rpc_config,
         rpc.metrics(),
         registry,
@@ -231,8 +287,9 @@ pub async fn start_rpc(
     .await?;
 
     let system_package_task = SystemPackageTask::new(
-        context.clone(),
         system_package_task_args,
+        context.pg_reader().clone(),
+        context.package_resolver().package_store().clone(),
         cancel.child_token(),
     );
 
@@ -247,12 +304,18 @@ pub async fn start_rpc(
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
 
-    // Add the write module if a fullnode rpc url is provided.
-    if let Some(fullnode_rpc_url) = write_args.fullnode_rpc_url {
-        rpc.add_module(Write::new(
-            fullnode_rpc_url,
-            context.config().write.clone(),
+    if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
+        rpc.add_module(DelegationCoins::new(
+            fullnode_rpc_url.clone(),
+            context.config().node.clone(),
         )?)?;
+        rpc.add_module(DelegationGovernance::new(
+            fullnode_rpc_url.clone(),
+            context.config().node.clone(),
+        )?)?;
+        rpc.add_module(Write::new(fullnode_rpc_url, context.config().node.clone())?)?;
+    } else {
+        warn!("No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added.");
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
@@ -496,7 +559,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_received
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             1
         );
@@ -504,7 +567,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_succeeded
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             0
         );
@@ -512,7 +575,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_failed
-                .with_label_values(&["<UNKNOWN>", &format!("{METHOD_NOT_FOUND_CODE}")])
+                .with_label_values(&["UNKNOWN:test_baz", &format!("{METHOD_NOT_FOUND_CODE}")])
                 .get(),
             1
         );

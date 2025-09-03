@@ -10,7 +10,10 @@
 ///
 module slot_machine::example;
 
-use sui::{balance::Balance, coin::{Self, Coin}, random::{Random, new_generator}, sui::SUI};
+use sui::balance::Balance;
+use sui::coin::{Self, Coin};
+use sui::random::{Random, new_generator};
+use sui::sui::SUI;
 
 /// Error codes
 const EInvalidAmount: u64 = 0;

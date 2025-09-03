@@ -1,0 +1,22 @@
+[package]
+name = "sui-metrics-push-client"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+prometheus.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+snap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+fastcrypto.workspace = true
+mysten-metrics.workspace = true
+sui-tls.workspace = true
+sui-types.workspace = true
+

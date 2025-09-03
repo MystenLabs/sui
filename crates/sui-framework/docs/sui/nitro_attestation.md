@@ -29,8 +29,10 @@ title: Module `sui::nitro_attestation`
 <b>use</b> <a href="../sui/clock.md#sui_clock">sui::clock</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
+<b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 </code></pre>
 
 
@@ -138,16 +140,6 @@ Nitro Attestation Document defined for AWS.
 ## Constants
 
 
-<a name="sui_nitro_attestation_EInvalidPCRsError"></a>
-
-Error that the PCRs are invalid.
-
-
-<pre><code><b>const</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_EInvalidPCRsError">EInvalidPCRsError</a>: u64 = 3;
-</code></pre>
-
-
-
 <a name="sui_nitro_attestation_ENotSupportedError"></a>
 
 Error that the feature is not available on this network.
@@ -178,6 +170,16 @@ Error that the attestation failed to be verified.
 
 
 
+<a name="sui_nitro_attestation_EInvalidPCRsError"></a>
+
+Error that the PCRs are invalid.
+
+
+<pre><code><b>const</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_EInvalidPCRsError">EInvalidPCRsError</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="sui_nitro_attestation_load_nitro_attestation"></a>
 
 ## Function `load_nitro_attestation`
@@ -198,10 +200,7 @@ may abort with errors described above.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation">load_nitro_attestation</a>(
-    attestation: vector&lt;u8&gt;,
-    <a href="../sui/clock.md#sui_clock">clock</a>: &Clock
-): <a href="../sui/nitro_attestation.md#sui_nitro_attestation_NitroAttestationDocument">NitroAttestationDocument</a> {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation">load_nitro_attestation</a>(attestation: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &Clock): <a href="../sui/nitro_attestation.md#sui_nitro_attestation_NitroAttestationDocument">NitroAttestationDocument</a> {
     <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation_internal">load_nitro_attestation_internal</a>(&attestation, <a href="../sui/clock.md#sui_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>))
 }
 </code></pre>

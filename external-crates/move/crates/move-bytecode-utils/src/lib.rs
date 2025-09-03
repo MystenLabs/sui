@@ -10,7 +10,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use indexmap::IndexMap;
 use petgraph::graphmap::DiGraphMap;
 use std::collections::BTreeMap;

@@ -140,7 +140,11 @@ impl TestEnvironment {
                 arguments,
             )
             .build();
-        let transaction = self.test_cluster.wallet.sign_transaction(&transaction);
+        let transaction = self
+            .test_cluster
+            .wallet
+            .sign_transaction(&transaction)
+            .await;
         self.test_cluster
             .execute_transaction_return_raw_effects(transaction)
             .await

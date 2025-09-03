@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02015]: invalid attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/warning_suppression/allow_on_use_fun.move:2:7
   │
 2 │     #[allow(unused)]
-  │       ^^^^^
+  │       ^^^^^^^^^^^^^
   │       │
-  │       Known attribute 'allow' is not expected with a use
+  │       Attribute 'allow' is not expected with a use
   │       Expected to be used with one of the following: module, constant, struct, enum, function
 
 error[E02017]: invalid 'use fun' declaration

@@ -3,8 +3,8 @@
 
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::{
-    empty_module, Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
-    IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken, Visibility,
+    Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
+    ModuleHandleIndex, Signature, SignatureIndex, SignatureToken, Visibility, empty_module,
 };
 use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};

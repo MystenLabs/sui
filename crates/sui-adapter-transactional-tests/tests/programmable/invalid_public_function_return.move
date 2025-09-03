@@ -15,11 +15,11 @@ module test::m1 {
     public fun t3(_: &mut u64): (u64, &u64) { abort 0}
 }
 
-//# programmable
-//> 0: test::m1::t1();
+//# programmable --inputs 0
+//> 0: test::m1::t1(Input(0));
 
-//# programmable
-//> 0: test::m1::t2();
+//# programmable --inputs 0
+//> 0: test::m1::t2(Input(0));
 
-//# programmable
-//> 0: test::m1::t3();
+//# programmable --inputs 0
+//> 0: test::m1::t3(Input(0));

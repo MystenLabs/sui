@@ -4,15 +4,15 @@
 //! Implements lint to warn against freezing capability-like types in Sui, identifying function calls that may incorrectly freeze such types.
 //! The lint checks for specific freezing functions defined in constants and inspects their type arguments for capability-like type names.
 
-use super::{LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX};
+use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
 use crate::{
     diag,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     naming::ast::TypeName_,
     shared::Identifier,
     sui_mode::{
-        linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME},
         SUI_ADDR_VALUE,
+        linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME},
     },
     typing::{ast as T, core, visitor::simple_visitor},
 };

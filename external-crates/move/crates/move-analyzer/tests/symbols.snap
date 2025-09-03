@@ -683,7 +683,7 @@ public fun Symbols::M5::combined_long_type_param_list<
 -- test 16 -------------------
 use line: 75, use_ndx: 2
 Use: 'extract', start: 37, end: 44
-Def: 'extract', line: 80, def char: 15
+Def: 'extract', line: 78, def char: 11
 TypeDef: no info
 On Hover:
 public fun option::extract<Element>(
@@ -696,11 +696,11 @@ public fun option::extract<Element>(
 -- test 17 -------------------
 use line: 78, use_ndx: 1
 Use: 'singleton', start: 21, end: 30
-Def: 'singleton', line: 64, def char: 15
+Def: 'singleton', line: 65, def char: 11
 TypeDef: no info
 On Hover:
 public fun vector::singleton<Element>(
 	e: Element
 ): vector<Element>
 
- Return a vector of size one containing element `e`.
+ Return an vector of size one containing element `e`.

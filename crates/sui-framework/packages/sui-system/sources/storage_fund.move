@@ -47,7 +47,10 @@ public(package) fun advance_epoch(
     self.total_object_storage_rebates.join(storage_charges);
 
     // Split out the non-refundable portion of the storage rebate and put it into the non-refundable balance.
-    let non_refundable_storage_fee = self.total_object_storage_rebates.split(non_refundable_storage_fee_amount);
+    let non_refundable_storage_fee = self
+        .total_object_storage_rebates
+        .split(non_refundable_storage_fee_amount);
+
     self.non_refundable_balance.join(non_refundable_storage_fee);
 
     // `storage_rebates` include the already refunded rebates of deleted objects and old rebates of modified objects and

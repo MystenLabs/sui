@@ -4,12 +4,13 @@
 use crate::NativesCostTable;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
+use move_vm_runtime::native_charge_gas_early_exit;
+use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{values::Value, Type},
     natives::functions::NativeResult,
     pop_arg,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -34,7 +35,7 @@ pub fn from_bytes(
 
     let address_from_bytes_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .address_from_bytes_cost_params
         .clone();
 
@@ -73,7 +74,7 @@ pub fn to_u256(
 
     let address_to_u256_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .address_to_u256_cost_params
         .clone();
 
@@ -112,7 +113,7 @@ pub fn from_u256(
 
     let address_from_u256_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .address_from_u256_cost_params
         .clone();
 

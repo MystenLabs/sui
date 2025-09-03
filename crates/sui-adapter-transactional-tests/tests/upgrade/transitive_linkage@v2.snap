@@ -1,0 +1,43 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-12:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6216800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-21:
+//# upgrade --package Test_DepV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6216800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 23-33:
+//# upgrade --package Test_DepV2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6520800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, lines 36-42:
+//# publish --upgradeable --dependencies Test_DepV1 --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6201600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 44-50:
+//# upgrade --package Test_V1 --upgrade-capability 4,1 --dependencies Test_DepV2 --sender A
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 6201600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, lines 52-59:
+//# upgrade --package Test_V2 --upgrade-capability 4,1 --dependencies Test_DepV3 --sender A
+created: object(6,0)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

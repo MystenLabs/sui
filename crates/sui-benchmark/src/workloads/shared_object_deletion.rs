@@ -274,16 +274,13 @@ impl Workload<dyn Payload> for SharedCounterDeletionWorkload {
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                proxy_ref
-                    .execute_transaction_block(transaction)
-                    .await
-                    .unwrap()
-                    .created()[0]
-                    .0
+                let (_, execution_result) = proxy_ref.execute_transaction_block(transaction).await;
+                execution_result.unwrap().created()[0].0
             });
         }
         self.counters = join_all(futures).await;
     }
+
     async fn make_test_payloads(
         &self,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
@@ -319,5 +316,9 @@ impl Workload<dyn Payload> for SharedCounterDeletionWorkload {
             .map(|b| Box::<dyn Payload>::from(b))
             .collect();
         payloads
+    }
+
+    fn name(&self) -> &str {
+        "SharedObjectDeletion"
     }
 }

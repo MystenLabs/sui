@@ -1,0 +1,50 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-12:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 3693600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-16:
+//# programmable --sender A --inputs 100 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 18:
+//# run test::failed_module::always_fails --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::failed_module::always_fails (function index 0) at offset 1, Abort Code: 42
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("failed_module") }, function: 0, instruction: 1, function_name: Some("always_fails") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("test::failed_module::always_fails at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("failed_module") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 4, line 20:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 22-27:
+//# run-graphql
+Response: {
+  "data": {
+    "successTransaction": {
+      "status": "SUCCESS"
+    }
+  }
+}
+
+task 6, lines 29-34:
+//# run-graphql
+Response: {
+  "data": {
+    "failedTransaction": {
+      "status": "FAILURE"
+    }
+  }
+}

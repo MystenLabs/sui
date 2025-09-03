@@ -1,0 +1,105 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-27:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7394800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 29-31:
+//# programmable --sender A --inputs 10 @B  
+//> 0: test::transfer_test::create_test_object(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 33:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 35-37:
+//# programmable --sender A --inputs 10 object(1,0) @B  
+//> 0: test::transfer_test::create_test_object(Input(0));
+//> 1: TransferObjects([Result(0), Input(1)], Input(2));
+created: object(4,0)
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 3845600,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+
+task 5, line 39:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 41-69:
+//# run-graphql
+Response: {
+  "data": {
+    "sendSingleResultObject": {
+      "kind": {
+        "commands": {
+          "nodes": [
+            {
+              "__typename": "MoveCallCommand"
+            },
+            {
+              "__typename": "TransferObjectsCommand",
+              "inputs": [
+                {
+                  "__typename": "TxResult",
+                  "cmd": 0,
+                  "ix": null
+                }
+              ],
+              "address": {
+                "__typename": "Input",
+                "ix": 1
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 71-99:
+//# run-graphql
+Response: {
+  "data": {
+    "sendMultipleResultObjects": {
+      "kind": {
+        "commands": {
+          "nodes": [
+            {
+              "__typename": "MoveCallCommand"
+            },
+            {
+              "__typename": "TransferObjectsCommand",
+              "inputs": [
+                {
+                  "__typename": "TxResult",
+                  "cmd": 0,
+                  "ix": null
+                },
+                {
+                  "__typename": "Input",
+                  "ix": 1
+                }
+              ],
+              "address": {
+                "__typename": "Input",
+                "ix": 2
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

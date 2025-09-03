@@ -97,6 +97,7 @@ pub struct ValidatorGenesisConfigBuilder {
     protocol_key_pair: Option<AuthorityKeyPair>,
     account_key_pair: Option<AccountKeyPair>,
     ip: Option<String>,
+    stake: Option<u64>,
     gas_price: Option<u64>,
     /// If set, the validator will use deterministic addresses based on the port offset.
     /// This is useful for benchmarking.
@@ -125,6 +126,11 @@ impl ValidatorGenesisConfigBuilder {
         self
     }
 
+    pub fn with_stake(mut self, stake: u64) -> Self {
+        self.stake = Some(stake);
+        self
+    }
+
     pub fn with_gas_price(mut self, gas_price: u64) -> Self {
         self.gas_price = Some(gas_price);
         self
@@ -142,6 +148,7 @@ impl ValidatorGenesisConfigBuilder {
 
     pub fn build<R: rand::RngCore + rand::CryptoRng>(self, rng: &mut R) -> ValidatorGenesisConfig {
         let ip = self.ip.unwrap_or_else(local_ip_utils::get_new_ip);
+        let stake = self.stake.unwrap_or(default_stake());
         let localhost = local_ip_utils::localhost_for_testing();
 
         let protocol_key_pair = self
@@ -206,7 +213,7 @@ impl ValidatorGenesisConfigBuilder {
             narwhal_primary_address,
             narwhal_worker_address,
             consensus_address,
-            stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
+            stake,
             name: None,
         }
     }
@@ -267,7 +274,7 @@ fn default_multiaddr_address() -> Multiaddr {
 }
 
 fn default_stake() -> u64 {
-    sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST
+    20_000_000_000_000_000
 }
 
 fn default_bls12381_key_pair() -> AuthorityKeyPair {

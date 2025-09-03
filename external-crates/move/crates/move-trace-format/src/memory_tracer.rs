@@ -14,16 +14,16 @@
 use crate::{
     format::{DataLoad, Effect, Location, Read, TraceEvent, TraceIndex, TraceValue, Write},
     interface::{Tracer, Writer},
+    value::SerializableMoveValue,
 };
 use core::fmt;
-use move_core_types::annotated_value::MoveValue;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct TraceState {
     // Tracks "global memory" state (i.e., references out in to global memory/references returned
     // from native functions).
-    pub loaded_state: BTreeMap<TraceIndex, MoveValue>,
+    pub loaded_state: BTreeMap<TraceIndex, SerializableMoveValue>,
     // The current state (i.e., values) of the VM's operand stack.
     pub operand_stack: Vec<TraceValue>,
     // The current call stack indexed by frame id. Maps from the frame id to the current state of
@@ -126,7 +126,7 @@ impl TraceState {
 
     /// Given a reference "location" return a mutable reference to the value it points to so that
     /// it can be updated.
-    fn get_mut_location(&mut self, location: &Location) -> &mut MoveValue {
+    fn get_mut_location(&mut self, location: &Location) -> &mut SerializableMoveValue {
         match location {
             Location::Local(frame_idx, idx) => {
                 let frame = self.call_stack.get_mut(frame_idx).unwrap();

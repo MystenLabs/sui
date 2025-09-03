@@ -1,0 +1,79 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+struct SomeStruct has drop {
+	struct_field: VecStruct
+}
+
+struct VecStruct has copy, drop {
+	vec_field: vector<u64>
+}
+
+bar(vec_ref#0#0: &mut vector<u64>): u64 {
+L1:	e#1#0: &mut u64
+B0:
+	0: CopyLoc[0](vec_ref#0#0: &mut vector<u64>)
+	1: LdU64(0)
+	2: VecMutBorrow(1)
+	3: StLoc[1](e#1#0: &mut u64)
+	4: LdU64(42)
+	5: MoveLoc[1](e#1#0: &mut u64)
+	6: WriteRef
+	7: MoveLoc[0](vec_ref#0#0: &mut vector<u64>)
+	8: FreezeRef
+	9: LdU64(0)
+	10: VecImmBorrow(1)
+	11: ReadRef
+	12: Ret
+}
+
+foo(some_struct_ref#0#0: &mut SomeStruct): u64 {
+B0:
+	0: CopyLoc[0](some_struct_ref#0#0: &mut SomeStruct)
+	1: MutBorrowField[0](SomeStruct.struct_field: VecStruct)
+	2: MutBorrowField[1](VecStruct.vec_field: vector<u64>)
+	3: Call bar(&mut vector<u64>): u64
+	4: MoveLoc[0](some_struct_ref#0#0: &mut SomeStruct)
+	5: ImmBorrowField[0](SomeStruct.struct_field: VecStruct)
+	6: ImmBorrowField[1](VecStruct.vec_field: vector<u64>)
+	7: LdU64(0)
+	8: VecImmBorrow(1)
+	9: ReadRef
+	10: Add
+	11: Ret
+}
+
+some_struct(): SomeStruct {
+B0:
+	0: LdU64(0)
+	1: Call vector::singleton<u64>(u64): vector<u64>
+	2: Pack[1](VecStruct)
+	3: Pack[0](SomeStruct)
+	4: Ret
+}
+
+test() {
+L0:	some_struct#1#0: SomeStruct
+B0:
+	0: Call some_struct(): SomeStruct
+	1: StLoc[0](some_struct#1#0: SomeStruct)
+	2: MutBorrowLoc[0](some_struct#1#0: SomeStruct)
+	3: MutBorrowField[0](SomeStruct.struct_field: VecStruct)
+	4: MutBorrowField[1](VecStruct.vec_field: vector<u64>)
+	5: LdU64(7)
+	6: VecPushBack(1)
+	7: MutBorrowLoc[0](some_struct#1#0: SomeStruct)
+	8: Call foo(&mut SomeStruct): u64
+	9: Pop
+	10: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

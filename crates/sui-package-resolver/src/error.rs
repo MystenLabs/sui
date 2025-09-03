@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use move_binary_format::errors::VMError;
 use move_core_types::account_address::AccountAddress;
-use sui_types::TypeTag;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -30,13 +29,6 @@ pub enum Error {
         .0.to_canonical_display(/* with_prefix */ true),
     )]
     FunctionNotFound(AccountAddress, String, String),
-
-    #[error(
-        "Conflicting types for input {0}: {} and {}",
-        .1.to_canonical_display(/* with_prefix */ true),
-        .2.to_canonical_display(/* with_prefix */ true),
-    )]
-    InputTypeConflict(u16, TypeTag, TypeTag),
 
     #[error(
         "Linkage not found for package: {}",

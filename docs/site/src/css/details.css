@@ -1,0 +1,39 @@
+/* Make plain <details> in both normal MDX pages and your heavy-HTML
+   wrapper look like the built-in Docusaurus Details component. */
+.theme-doc-markdown details,
+.markdown details {
+  @apply p-6 border border-solid border-sui-gray-65 rounded-lg bg-sui-gray-45 dark:bg-sui-gray-90;
+}
+
+/* Summary row */
+.theme-doc-markdown details > summary,
+.markdown details > summary {
+  @apply relative cursor-pointer m-0 list-none pl-4;
+}
+
+/* Remove default webkit marker so we can supply the chevron */
+.theme-doc-markdown details > summary::-webkit-details-marker,
+.markdown details > summary::-webkit-details-marker {
+  @apply hidden;
+}
+
+/* Chevron icon (matches Docusaurus’ simple chevron behavior) */
+.theme-doc-markdown details > summary::before,
+.markdown details > summary::before {
+  @apply absolute content-[""] inline-block w-3 h-3 mr-4 top-0 -left-2 mask-arrow border-[.38rem] border-solid origin-[calc(.38rem/2)_50%];
+}
+
+.theme-doc-markdown details[open] > summary::before,
+.markdown details[open] > summary::before {
+  @apply rotate-90 -top-2 left-0 transition-all duration-300 ease-in-out;
+}
+
+details > div > div {
+  @apply !border-t-sui-gray-65;
+}
+
+@media (max-width: 1050px) {
+  .navbar .button-cta {
+    display: none;
+  }
+}

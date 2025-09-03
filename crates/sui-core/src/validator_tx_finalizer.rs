@@ -193,7 +193,7 @@ where
                 }
             }
             Err(err) => {
-                error!(?tx_digest, ?err, "Failed to finalize transaction");
+                debug!(?tx_digest, "Failed to finalize transaction: {err}");
             }
         }
     }
@@ -213,7 +213,10 @@ where
             _ = tokio::time::sleep(tx_finalization_delay) => {
                 trace!(?tx_digest, "Waking up to finalize transaction");
             }
-            _ = cache_read.notify_read_executed_effects_digests(&digests) => {
+            _ = cache_read.notify_read_executed_effects_digests(
+                "ValidatorTxFinalizer::notify_read_executed_effects_digests",
+                &digests,
+            ) => {
                 trace!(?tx_digest, "Transaction already finalized");
                 return Ok(false);
             }
@@ -274,9 +277,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::authority::AuthorityState;
+    use crate::authority::{AuthorityState, ExecutionEnv};
     use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
+    use crate::execution_scheduler::SchedulingSource;
     use crate::validator_tx_finalizer::ValidatorTxFinalizer;
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
@@ -303,8 +307,9 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-        TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
+        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -322,6 +327,14 @@ mod tests {
 
     #[async_trait]
     impl AuthorityAPI for MockAuthorityClient {
+        async fn submit_transaction(
+            &self,
+            _request: RawSubmitTxRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<RawSubmitTxResponse, SuiError> {
+            unimplemented!();
+        }
+
         async fn handle_transaction(
             &self,
             transaction: Transaction,
@@ -351,13 +364,15 @@ mod tests {
                     &VerifiedExecutableTransaction::new_from_certificate(
                         VerifiedCertificate::new_unchecked(certificate),
                     ),
-                    None,
+                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                     &epoch_store,
                 )
                 .await?;
-            let events = match effects.events_digest() {
-                None => TransactionEvents::default(),
-                Some(digest) => self.authority.get_transaction_events(digest)?,
+            let events = if effects.events_digest().is_some() {
+                self.authority
+                    .get_transaction_events(effects.transaction_digest())?
+            } else {
+                TransactionEvents::default()
             };
             let signed_effects = self
                 .authority
@@ -375,6 +390,14 @@ mod tests {
             _request: HandleCertificateRequestV3,
             _client_addr: Option<SocketAddr>,
         ) -> Result<HandleCertificateResponseV3, SuiError> {
+            unimplemented!()
+        }
+
+        async fn wait_for_effects(
+            &self,
+            _request: RawWaitForEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<RawWaitForEffectsResponse, SuiError> {
             unimplemented!()
         }
 
@@ -419,6 +442,25 @@ mod tests {
             _request: SystemStateRequest,
         ) -> Result<SuiSystemState, SuiError> {
             unimplemented!()
+        }
+
+        async fn validator_health(
+            &self,
+            _request: sui_types::messages_grpc::RawValidatorHealthRequest,
+        ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+            let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+                num_inflight_consensus_transactions: 0,
+                num_inflight_execution_transactions: 0,
+                last_committed_leader_round: 1000,
+                last_locally_built_checkpoint: 500,
+            };
+
+            typed_response.try_into().map_err(|e| {
+                sui_types::error::SuiError::GrpcMessageSerializeError {
+                    type_info: "ValidatorHealthResponse".to_string(),
+                    error: format!("Failed to convert to raw response: {}", e),
+                }
+            })
         }
     }
 

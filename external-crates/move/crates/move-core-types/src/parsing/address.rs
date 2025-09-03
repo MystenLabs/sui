@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::account_address::AccountAddress;
-use crate::parsing::parser::{parse_address_number, NumberFormat};
+use crate::parsing::parser::{NumberFormat, parse_address_number};
 use crate::u256::U256;
 use anyhow::anyhow;
 use std::{fmt, hash::Hash};
