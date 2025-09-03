@@ -15,7 +15,7 @@ use crate::{
     replay_interface::{EpochStore, ObjectKey, ObjectStore, VersionQuery},
     replay_txn::{get_input_objects_for_replay, ReplayTransaction},
 };
-use anyhow::{bail, Context};
+use anyhow::{bail, ensure, Context};
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveTypeLayout, MoveValue},
@@ -38,7 +38,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::{TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind},
     error::{ExecutionError, SuiError, SuiResult},
     execution_params::{get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError},
     gas::SuiGasStatus,
@@ -46,6 +46,7 @@ use sui_types::{
     id::UID,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
+    move_package::TypeOrigin,
     object::{balance_traversal::BalanceTraversal, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
@@ -159,38 +160,88 @@ pub fn execute_transaction_to_effects(
         checkpoint: _,
         store: _,
     } = store;
-    let object_cache = object_cache.into_inner();
+
+    let mut object_cache = object_cache.into_inner();
+
+    // HACK: Redirect defining package IDs to latest package IDs, so the type resolver has
+    // something to look at.
+    let mut defining_to_latest = BTreeMap::new();
+    for (id, versions) in &object_cache {
+        for object in versions.values() {
+            let Some(package) = object.data.try_as_package() else {
+                continue;
+            };
+
+            for TypeOrigin { package, .. } in package.type_origin_table() {
+                defining_to_latest.insert(*package, *id);
+            }
+        }
+    }
+
+    for (defining, latest) in defining_to_latest {
+        if !object_cache.contains_key(&defining) {
+            object_cache.insert(defining, object_cache[&latest].clone());
+        }
+    }
+
     debug!("End execution");
 
-    let mut reads = BTreeMap::new();
-    for change in effects.object_changes() {
-        let Some(input) = change.input_version else {
+    let mut unchanged = BTreeMap::new();
+
+    for (id, meta) in &inner_store.loaded_runtime_objects {
+        let obj = object_cache
+            .get(id)
+            .and_then(|vs| vs.get(&meta.version.value()).cloned())
+            .context("Loaded runtime object not in cache")?;
+
+        unchanged.insert(*id, obj);
+    }
+
+    for (id, kind) in effects.unchanged_consensus_objects() {
+        let UnchangedConsensusKind::ReadOnlyRoot((v, _)) = kind else {
             continue;
         };
 
-        reads.insert(
-            change.id,
-            object_cache
-                .get(&change.id)
-                .and_then(|vs| vs.get(&input.value()).cloned())
-                .context("Input object not in cache")?,
-        );
+        let obj = object_cache
+            .get(&id)
+            .and_then(|vs| vs.get(&v.value()).cloned())
+            .context("Unchanged consensus object not in cache")?;
+
+        unchanged.insert(id, obj);
     }
 
-    for (id, meta) in &inner_store.loaded_runtime_objects {
-        reads.insert(
-            *id,
-            object_cache
-                .get(&id)
-                .and_then(|vs| vs.get(&meta.version.value()).cloned())
-                .context("Runtime loaded object not in cache")?,
-        );
+    let mut reads = unchanged.clone();
+    let mut writes = unchanged.clone();
+    for change in effects.object_changes() {
+        if let Some(input) = change.input_version {
+            reads.insert(
+                change.id,
+                object_cache
+                    .get(&change.id)
+                    .and_then(|vs| vs.get(&input.value()).cloned())
+                    .context("Input object not in cache")?,
+            );
+        };
+
+        if let Some(output) = change.output_version {
+            let object = inner_store
+                .written
+                .get(&change.id)
+                .context("Written object not in inner store")?;
+
+            ensure!(
+                object.version() == output,
+                "Written object version mismatch"
+            );
+
+            writes.insert(change.id, object.clone());
+        };
     }
 
     #[allow(clippy::disallowed_methods)]
     let mut address_balance_changes = futures::executor::block_on(balance_changes(
         &reads,
-        &inner_store.written,
+        &writes,
         ObjectCache(object_cache.clone()),
     ))
     .context("Failed to compute balance changes")?;
@@ -481,16 +532,13 @@ struct ObjectCache(BTreeMap<ObjectID, BTreeMap<u64, Object>>);
 
 async fn balance_changes(
     read: &BTreeMap<ObjectID, Object>,
-    written: &BTreeMap<ObjectID, Object>,
+    write: &BTreeMap<ObjectID, Object>,
     cache: ObjectCache,
 ) -> anyhow::Result<Vec<BalanceChange>> {
     let package_resolver = Resolver::new(cache);
 
     let balance_in = root_balances(read, &package_resolver).await?;
-
-    let mut write_set = read.clone();
-    write_set.extend(written.clone());
-    let balance_out = root_balances(&write_set, &package_resolver).await?;
+    let balance_out = root_balances(write, &package_resolver).await?;
 
     let mut balance_changes = BTreeMap::new();
     for ((address, coin_type), amount) in balance_out {
@@ -503,10 +551,12 @@ async fn balance_changes(
 
     Ok(balance_changes
         .into_iter()
-        .map(|((address, coin_type), amount)| BalanceChange {
-            address,
-            coin_type,
-            amount,
+        .filter_map(|((address, coin_type), amount)| {
+            (amount != 0).then_some(BalanceChange {
+                address,
+                coin_type,
+                amount,
+            })
         })
         .collect())
 }
