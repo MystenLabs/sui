@@ -3,7 +3,6 @@
 
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    build::BuildCmdConfig,
     data_stores::{
         data_store::DataStore, file_system_store::FileSystemStore, in_memory_store::InMemoryStore,
         read_through_store::ReadThroughStore,
@@ -13,7 +12,7 @@ use crate::{
     replay_txn::replay_transaction,
 };
 use anyhow::{anyhow, bail};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, ValueEnum};
 use similar::{ChangeTag, TextDiff};
 use std::{
     io::Write,
@@ -24,7 +23,6 @@ use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
 
 pub mod artifacts;
-pub mod build;
 #[path = "data-stores/mod.rs"]
 pub mod data_stores;
 pub mod displays;
@@ -51,18 +49,8 @@ const TESTNET_GQL_URL: &str = "https://public-rpc.sui-testnet.mystenlabs.com/gra
     rename_all = "kebab-case"
 )]
 pub struct Config {
-    #[command(subcommand)]
-    pub command: Option<Commands>,
-
     #[command(flatten)]
     pub replay: ReplayConfig,
-}
-
-#[derive(Subcommand, Clone, Debug)]
-pub enum Commands {
-    /// Build and prepare replay data
-    #[clap(alias = "b")]
-    Build(BuildCmdConfig),
 }
 
 /// Arguments for replay
@@ -88,7 +76,7 @@ pub struct ReplayConfig {
     #[arg(long, default_value = "false")]
     pub terminate_early: bool,
     /// Show transaction effects.
-    #[arg(long, short, default_value = "false")]
+    #[arg(long, short = 'e', default_value = "false")]
     pub show_effects: bool,
     /// Whether existing artifacts that were generated from a previous replay of the transaction
     /// should be overwritten or an error raised if they already exist.
