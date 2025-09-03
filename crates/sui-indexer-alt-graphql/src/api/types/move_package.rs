@@ -18,6 +18,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
+use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
 use sui_sql_macro::query;
 use sui_types::{
@@ -44,6 +45,7 @@ use crate::{
 use super::{
     balance::{self, Balance},
     linkage::Linkage,
+    move_module::MoveModule,
     move_object::MoveObject,
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
@@ -52,12 +54,16 @@ use super::{
     type_origin::TypeOrigin,
 };
 
+#[derive(Clone)]
 pub(crate) struct MovePackage {
     /// Representation of this Move Package as a generic Object.
     super_: Object,
 
     /// Move package specific data, lazily loaded from the super object.
     native: Arc<OnceCell<Option<NativeMovePackage>>>,
+
+    /// In-memory indices that help find components of the package quickly.
+    parsed: Arc<OnceCell<Option<ParsedMovePackage>>>,
 }
 
 /// Identifies a specific version of a package.
@@ -162,8 +168,24 @@ impl MovePackage {
         self.super_.default_suins_name(ctx).await
     }
 
-    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
-    /// name, followed by module bytes), in alphabetic order by module name.
+    /// The module named `name` in this package.
+    async fn module(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<MoveModule>, RpcError> {
+        let Some(parsed) = self.parsed(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        if parsed.module(&name).is_err() {
+            return Ok(None);
+        }
+
+        Ok(Some(MoveModule::with_fq_name(self.clone(), name)))
+    }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module name, followed by module bytes), in alphabetic order by module name.
     async fn module_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
         let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
@@ -415,6 +437,20 @@ impl MovePackage {
 }
 
 impl MovePackage {
+    /// Construct a package that is represented by just its address. This does not check that the
+    /// object exists, or is a package, so should not be used to "fetch" an address provided as
+    /// user input. When the package's contents are fetched from the latest version of that object
+    /// as of the current checkpoint.
+    pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
+        // TODO: Look for the package in the scope (just-published packages).
+        let super_ = Object::with_address(scope, address);
+        Self {
+            super_,
+            native: Arc::new(OnceCell::new()),
+            parsed: Arc::new(OnceCell::new()),
+        }
+    }
+
     /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
     /// is not a package. This is more efficient when you already have the native object.
     pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
@@ -424,6 +460,7 @@ impl MovePackage {
         Some(Self {
             super_,
             native: Arc::new(OnceCell::from(Some(package))),
+            parsed: Arc::new(OnceCell::new()),
         })
     }
 
@@ -444,6 +481,7 @@ impl MovePackage {
         Ok(Some(Self {
             super_: object.clone(),
             native: Arc::new(OnceCell::from(Some(package))),
+            parsed: Arc::new(OnceCell::new()),
         }))
     }
 
@@ -574,6 +612,7 @@ impl MovePackage {
         Ok(Some(Self {
             super_,
             native: Arc::new(OnceCell::from(Some(package))),
+            parsed: Arc::new(OnceCell::new()),
         }))
     }
 
@@ -790,6 +829,25 @@ impl MovePackage {
                     .context("Object is not a MovePackage")?;
 
                 Ok(Some(native.clone()))
+            })
+            .await
+    }
+
+    /// Get the parsed representation of this package, loading it lazily if needed.
+    pub(crate) async fn parsed(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<ParsedMovePackage>, RpcError> {
+        self.parsed
+            .get_or_try_init(async || {
+                let Some(native) = self.native(ctx).await?.as_ref() else {
+                    return Ok(None);
+                };
+
+                let parsed = ParsedMovePackage::read_from_package(native)
+                    .context("Failed to parse MovePackage")?;
+
+                Ok(Some(parsed))
             })
             .await
     }

@@ -31,8 +31,8 @@ mod lookups;
 
 use super::{
     address::Address, checkpoint::filter::checkpoint_bounds, event::filter::pg_tx_bounds,
-    move_type::MoveType, move_value::MoveValue, transaction::filter::tx_bounds,
-    transaction::Transaction,
+    move_module::MoveModule, move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::filter::tx_bounds, transaction::Transaction,
 };
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
@@ -57,7 +57,6 @@ pub(crate) struct Event {
     pub(crate) timestamp_ms: u64,
 }
 
-// TODO(DVX-1200): Support sendingModule - MoveModule
 #[Object]
 impl Event {
     /// The Move value emitted for this event.
@@ -101,6 +100,15 @@ impl Event {
         Some(Transaction::with_id(
             self.scope.clone(),
             self.transaction_digest,
+        ))
+    }
+
+    /// The module containing the function that was called in the programmable transaction, that resulted in this event being emitted.
+    async fn transaction_module(&self) -> Option<MoveModule> {
+        let package = MovePackage::with_address(self.scope.clone(), self.native.package_id.into());
+        Some(MoveModule::with_fq_name(
+            package,
+            self.native.transaction_module.to_string(),
         ))
     }
 }

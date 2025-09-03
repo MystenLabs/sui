@@ -36,7 +36,7 @@ task 5, line 47:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 49-74:
+task 6, lines 49-78:
 //# run-graphql
 Response: {
   "data": {
@@ -65,6 +65,12 @@ Response: {
             },
             "transaction": {
               "digest": "3QXGQcUWzKsiqfcdrZwMXp6jFZDErSc59PyvJ7osufCf"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+              },
+              "name": "events_test"
             }
           }
         ]
@@ -73,7 +79,7 @@ Response: {
   }
 }
 
-task 7, lines 76-101:
+task 7, lines 80-109:
 //# run-graphql
 Response: {
   "data": {
@@ -102,6 +108,12 @@ Response: {
             },
             "transaction": {
               "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+              },
+              "name": "events_test"
             }
           },
           {
@@ -122,6 +134,12 @@ Response: {
             },
             "transaction": {
               "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+              },
+              "name": "events_test"
             }
           }
         ]
@@ -130,7 +148,7 @@ Response: {
   }
 }
 
-task 8, lines 103-128:
+task 8, lines 111-140:
 //# run-graphql
 Response: {
   "data": {
@@ -159,6 +177,12 @@ Response: {
             },
             "transaction": {
               "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+              },
+              "name": "events_test"
             }
           }
         ]
@@ -167,7 +191,7 @@ Response: {
   }
 }
 
-task 9, lines 130-155:
+task 9, lines 142-171:
 //# run-graphql
 Response: {
   "data": {
@@ -196,6 +220,12 @@ Response: {
             },
             "transaction": {
               "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+              },
+              "name": "events_test"
             }
           }
         ]
@@ -204,7 +234,7 @@ Response: {
   }
 }
 
-task 10, lines 157-182:
+task 10, lines 173-202:
 //# run-graphql
 Response: {
   "data": {

@@ -1098,6 +1098,10 @@ type Event {
 	The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
 	"""
 	transaction: Transaction
+	"""
+	The module containing the function that was called in the programmable transaction, that resulted in this event being emitted.
+	"""
+	transactionModule: MoveModule
 }
 
 type EventConnection {
@@ -1517,6 +1521,30 @@ type MoveCallCommand {
 }
 
 """
+Modules are a unit of code organization in Move.
+
+Modules belong to packages, and contain type and function definitions.
+"""
+type MoveModule {
+	"""
+	Base64 encoded bytes of the serialized CompiledModule.
+	"""
+	bytes: Base64
+	"""
+	Bytecode format version.
+	"""
+	fileFormatVersion: Int
+	"""
+	The module's unqualified name.
+	"""
+	name: String!
+	"""
+	The package that this module was defined in.
+	"""
+	package: MovePackage
+}
+
+"""
 A MoveObject is a kind of Object that reprsents data stored on-chain.
 """
 type MoveObject implements IAddressable & IObject & IMoveObject {
@@ -1690,8 +1718,11 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	linkage: [Linkage!]
 	"""
-	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
-	name, followed by module bytes), in alphabetic order by module name.
+	The module named `name` in this package.
+	"""
+	module(name: String!): MoveModule
+	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module name, followed by module bytes), in alphabetic order by module name.
 	"""
 	moduleBcs: Base64
 	"""
