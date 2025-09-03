@@ -162,6 +162,17 @@ mod tests {
         // 6th submission should trigger spam weight
         let spam_weight = cache.increment_submission_count(&digest);
         assert_eq!(spam_weight.map(|(w, _)| w), Some(Weight::one()));
+
+        // Additional submissions should also trigger spam weight
+        for i in 6..10 {
+            let spam_weight = cache.increment_submission_count(&digest);
+            assert_eq!(
+                spam_weight.map(|(w, _)| w),
+                Some(Weight::one()),
+                "Submission {} should trigger spam weight",
+                i + 1
+            );
+        }
     }
 
     #[test]
