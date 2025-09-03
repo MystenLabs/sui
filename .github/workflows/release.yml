@@ -94,28 +94,31 @@ jobs:
           export os_type="${system_os}-${arch}"
           echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV     
 
-      - name: Check if archive have already been published
+      - name: Check if archive for this version has already been published
         continue-on-error: true
         shell: bash
         run: |
-          echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
+          echo "s3_existing_archive=$(for network in mainnet testnet devnet; do \
+            if curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${network}-v${{ env.sui_version }}-${{ env.os_type }}.tgz \
+            | head -n1 | grep -q '200 OK'; then echo "releases/sui-${network}-v${{ env.sui_version }}-${{ env.os_type }}.tgz"; \
+            break; fi; done)" >> $GITHUB_ENV
 
       - name: Download archive, if it exists
-        if: ${{ env.s3_archive_exist != '' }}
+        if: ${{ env.s3_existing_archive != '' }}
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
-          aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
-          tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}     
+          aws s3 cp s3://sui-releases/${{ env.s3_existing_archive }} ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
+          tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
 
       - name: Install nexttest (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_existing_archive == '' }}
         uses: taiki-e/install-action@7bf3bbf3104a2e9a77906ccbdf6d4aa6a87b0210 # pin@2.52.5
         with:
           tool: cargo-hack
 
       - name: Install postgres (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_existing_archive == '' }}
         shell: bash
         run: |
           choco install postgresql12 --force --params '/Password:root'
@@ -126,7 +129,7 @@ jobs:
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
       - name: Install postgres (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_existing_archive == '' }}
         shell: bash
         env:
           PQ_LIB_DIR: "$(brew --prefix libpq)/lib"
@@ -137,13 +140,13 @@ jobs:
           brew install postgresql
 
       - name: Install postgres (Ubuntu arm64)
-        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_archive_exist == '' }}
+        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_existing_archive == '' }}
         shell: bash
         run: |
           sudo apt update && sudo apt install libpq-dev
 
       - name: Remove unused apps (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_existing_archive == '' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -156,13 +159,13 @@ jobs:
           df -h /
 
       - name: Cargo build for ${{ matrix.os }} platform
-        if: ${{ env.s3_archive_exist == '' }}
+        if: ${{ env.s3_existing_archive == '' }}
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
-        if: ${{ env.s3_archive_exist == '' }}
+        if: ${{ env.s3_existing_archive == '' }}
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
