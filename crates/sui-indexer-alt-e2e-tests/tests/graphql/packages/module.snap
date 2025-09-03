@@ -1,0 +1,72 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-13:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5798800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 15:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 17-28:
+//# upgrade --package P --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6505600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, line 30:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, lines 32-81:
+//# run-graphql
+Response: {
+  "data": {
+    "cp1": {
+      "query": {
+        "package": {
+          "m": {
+            "name": "M",
+            "fileFormatVersion": 6,
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2ZvbxaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBioAAAAAAAAAAgA="
+          },
+          "n": {
+            "name": "N",
+            "fileFormatVersion": 6,
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhchaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBisAAAAAAAAAAgA="
+          },
+          "o": null
+        }
+      }
+    },
+    "cp2": {
+      "query": {
+        "package": {
+          "m": {
+            "name": "M",
+            "fileFormatVersion": 6,
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2ZvbxaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBioAAAAAAAAAAgA="
+          },
+          "n": {
+            "name": "N",
+            "fileFormatVersion": 6,
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhchaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBisAAAAAAAAAAgA="
+          },
+          "o": {
+            "name": "O",
+            "fileFormatVersion": 6,
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFPA2JhehaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBiwAAAAAAAAAAgA="
+          }
+        }
+      }
+    }
+  }
+}
