@@ -19,7 +19,7 @@ public struct Wrapper has key {
 }
 
 #[test]
-fun test_wrap_unwrap() {
+fun wrap_unwrap() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -45,7 +45,7 @@ fun test_wrap_unwrap() {
 }
 
 #[test]
-fun test_remove_then_return() {
+fun remove_then_return() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -68,7 +68,7 @@ fun test_remove_then_return() {
 }
 
 #[test]
-fun test_return_and_update() {
+fun return_and_update() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -93,7 +93,7 @@ fun test_return_and_update() {
 }
 
 #[test]
-fun test_remove_during_tx() {
+fun remove_during_tx() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -106,9 +106,8 @@ fun test_remove_during_tx() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
-fun test_double_remove() {
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
+fun double_remove() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -127,7 +126,7 @@ fun test_double_remove() {
 }
 
 #[test]
-fun test_three_owners() {
+fun three_owners() {
     // make sure an object that goes from addr1 -> addr2 -> addr3 can only be accessed by
     // the appropriate owner at each stage
     let addr1 = @0x0;
@@ -176,7 +175,7 @@ fun test_three_owners() {
 }
 
 #[test]
-fun test_transfer_then_delete() {
+fun transfer_then_delete() {
     let tx1_sender = @0x0;
     let tx2_sender = @0x1;
     let mut scenario = test_scenario::begin(tx1_sender);
@@ -209,7 +208,7 @@ fun test_transfer_then_delete() {
 }
 
 #[test]
-fun test_get_owned_obj_ids() {
+fun get_owned_obj_ids() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -233,7 +232,7 @@ fun test_get_owned_obj_ids() {
 }
 
 #[test]
-fun test_take_owned_by_id() {
+fun take_owned_by_id() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -266,7 +265,7 @@ fun test_take_owned_by_id() {
 }
 
 #[test]
-fun test_get_last_created_object_id() {
+fun get_last_created_object_id() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -281,7 +280,7 @@ fun test_get_last_created_object_id() {
 }
 
 #[test]
-fun test_take_shared_by_id() {
+fun take_shared_by_id() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -314,7 +313,7 @@ fun test_take_shared_by_id() {
 }
 
 #[test]
-fun test_take_shared() {
+fun take_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -333,7 +332,7 @@ fun test_take_shared() {
 }
 
 #[test]
-fun test_delete_shared() {
+fun delete_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -353,7 +352,7 @@ fun test_delete_shared() {
 }
 
 #[test]
-fun test_take_immutable_by_id() {
+fun take_immutable_by_id() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -386,7 +385,7 @@ fun test_take_immutable_by_id() {
 }
 
 #[test]
-fun test_take_immutable() {
+fun take_immutable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -407,7 +406,7 @@ fun test_take_immutable() {
 // Happy path test: Receive two objects from the same object in the same
 // transaction.
 #[test]
-fun test_receive_object() {
+fun receive_object() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -444,7 +443,7 @@ fun test_receive_object() {
 
 // Happy path test: Receive a single object from an object in a transaction.
 #[test]
-fun test_receive_for_object() {
+fun receive_for_object() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -474,7 +473,7 @@ fun test_receive_for_object() {
 // and don't need to deallocate the receiving ticket and underlying object
 // at the end of the transaction.
 #[test]
-fun test_receive_object_multiple_in_row() {
+fun receive_object_multiple_in_row() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -514,7 +513,7 @@ fun test_receive_object_multiple_in_row() {
 // object after allocating a ticket, and then receiving it in the next
 // transaction.
 #[test]
-fun test_no_receive_object_then_use_next_tx() {
+fun no_receive_object_then_use_next_tx() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -550,9 +549,8 @@ fun test_no_receive_object_then_use_next_tx() {
 
 // Try to receive an object that has been shared. We should be unable to
 // allocate the receiving ticket for this object.
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
-fun test_receive_object_shared() {
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
+fun receive_object_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -570,9 +568,8 @@ fun test_receive_object_shared() {
 
 // Try to allocate multiple receiving tickets for the same object in a
 // single transaction. We should be unable to allocate the second ticket.
-#[test]
-#[expected_failure(abort_code = test_scenario::EReceivingTicketAlreadyAllocated)]
-fun test_receive_object_double_allocate_ticket() {
+#[test, expected_failure(abort_code = test_scenario::EReceivingTicketAlreadyAllocated)]
+fun receive_object_double_allocate_ticket() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -592,7 +589,7 @@ fun test_receive_object_double_allocate_ticket() {
 // Test that we can allocate a receiving ticket, return it, and then
 // allocate it again within the same transaction.
 #[test]
-fun test_receive_double_allocate_ticket_return_between() {
+fun receive_double_allocate_ticket_return_between() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -614,7 +611,7 @@ fun test_receive_double_allocate_ticket_return_between() {
 // allocate it again, and the resulting ticket is valid and works as
 // expected.
 #[test]
-fun test_receive_double_allocate_ticket_return_between_then_use() {
+fun receive_double_allocate_ticket_return_between_then_use() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -656,7 +653,7 @@ fun test_receive_double_allocate_ticket_return_between_then_use() {
 // return, and then transfer the objects.
 // Then read the mutated object and verify that the mutation persisted to the object.
 #[test]
-fun test_receive_double_allocate_ticket_return_between_then_use_then_check() {
+fun receive_double_allocate_ticket_return_between_then_use_then_check() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -702,7 +699,7 @@ fun test_receive_double_allocate_ticket_return_between_then_use_then_check() {
 
 // Test that we can allocate a receiving ticket, and then drop it.
 #[test]
-fun test_unused_receive_ticket() {
+fun unused_receive_ticket() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -728,7 +725,7 @@ fun test_unused_receive_ticket() {
 }
 
 #[test]
-fun test_unreturned_objects() {
+fun unreturned_objects() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid1 = scenario.new_object();
@@ -754,7 +751,7 @@ fun test_unreturned_objects() {
 }
 
 #[test]
-fun test_later_epoch() {
+fun later_epoch() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
 
@@ -788,9 +785,8 @@ fun test_later_epoch() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
-fun test_invalid_shared_usage() {
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+fun invalid_shared_usage() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -804,12 +800,11 @@ fun test_invalid_shared_usage() {
         transfer::public_freeze_object(obj1);
     };
     scenario.next_tx(sender);
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
-fun test_invalid_immutable_usage() {
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+fun invalid_immutable_usage() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -823,12 +818,11 @@ fun test_invalid_immutable_usage() {
         transfer::public_transfer(obj1, @0x0);
     };
     scenario.next_tx(sender);
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
-fun test_modify_immutable() {
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+fun modify_immutable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     {
@@ -843,137 +837,125 @@ fun test_modify_immutable() {
     scenario.next_tx(sender);
     test_scenario::return_immutable(obj1);
     scenario.next_tx(sender);
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::ECantReturnObject)]
-fun test_invalid_address_return() {
+#[test, expected_failure(abort_code = test_scenario::ECantReturnObject)]
+fun invalid_address_return() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let id = scenario.new_object();
     scenario.return_to_sender(Object { id, value: 10 });
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::ECantReturnObject)]
-fun test_invalid_shared_return() {
+#[test, expected_failure(abort_code = test_scenario::ECantReturnObject)]
+fun invalid_shared_return() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let id = scenario.new_object();
     test_scenario::return_shared(Object { id, value: 10 });
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::ECantReturnObject)]
-fun test_invalid_immutable_return() {
+#[test, expected_failure(abort_code = test_scenario::ECantReturnObject)]
+fun invalid_immutable_return() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let id = scenario.new_object();
     test_scenario::return_immutable(Object { id, value: 10 });
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
-fun test_empty_inventory() {
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
+fun empty_inventory() {
     let sender = @0x0;
     let scenario = test_scenario::begin(sender);
     scenario.return_to_sender(scenario.take_from_sender<Object>());
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
-fun test_empty_inventory_shared() {
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
+fun empty_inventory_shared() {
     let sender = @0x0;
     let scenario = test_scenario::begin(sender);
     scenario.return_to_sender(scenario.take_shared<Object>());
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
-fun test_empty_inventory_immutable() {
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
+fun empty_inventory_immutable() {
     let sender = @0x0;
     let scenario = test_scenario::begin(sender);
     scenario.return_to_sender(scenario.take_immutable<Object>());
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
-fun test_object_not_found() {
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
+fun object_not_found() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid = scenario.new_object();
     let id = uid.to_inner();
     scenario.return_to_sender(scenario.take_from_sender_by_id<Object>(id));
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
-fun test_object_not_found_shared() {
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
+fun object_not_found_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid = scenario.new_object();
     let id = uid.to_inner();
     scenario.return_to_sender(scenario.take_shared_by_id<Object>(id));
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
-fun test_object_not_found_immutable() {
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
+fun object_not_found_immutable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid = scenario.new_object();
     let id = uid.to_inner();
     scenario.return_to_sender(scenario.take_immutable_by_id<Object>(id));
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
-fun test_wrong_object_type() {
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
+fun wrong_object_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid = scenario.new_object();
     let id = uid.to_inner();
     transfer::public_transfer(Object { id: uid, value: 10 }, sender);
     scenario.return_to_sender(scenario.take_from_sender_by_id<Wrapper>(id));
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
-fun test_wrong_object_type_shared() {
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
+fun wrong_object_type_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid = scenario.new_object();
     let id = uid.to_inner();
     transfer::public_share_object(Object { id: uid, value: 10 });
     test_scenario::return_shared(scenario.take_shared_by_id<Wrapper>(id));
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
-fun test_wrong_object_type_immutable() {
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
+fun wrong_object_type_immutable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let uid = scenario.new_object();
     let id = uid.to_inner();
     transfer::public_freeze_object(Object { id: uid, value: 10 });
     test_scenario::return_immutable(scenario.take_immutable_by_id<Wrapper>(id));
-    abort 42
+    abort
 }
 
 #[test]
-fun test_dynamic_field_still_borrowed() {
+fun dynamic_field_still_borrowed() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
@@ -985,7 +967,7 @@ fun test_dynamic_field_still_borrowed() {
 }
 
 #[test]
-fun test_dynamic_object_field_still_borrowed() {
+fun dynamic_object_field_still_borrowed() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
@@ -998,7 +980,7 @@ fun test_dynamic_object_field_still_borrowed() {
 }
 
 #[test]
-fun test_dynamic_object_field_not_retrievable() {
+fun dynamic_object_field_not_retrievable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
@@ -1018,9 +1000,8 @@ fun test_dynamic_object_field_not_retrievable() {
     parent.delete();
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
-fun test_dynamic_field_shared_misuse() {
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+fun dynamic_field_shared_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
@@ -1034,12 +1015,11 @@ fun test_dynamic_field_shared_misuse() {
     // wraps the object
     dynamic_field::add(&mut parent, b"", obj);
     scenario.next_tx(sender);
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
-fun test_dynamic_field_immutable_misuse() {
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+fun dynamic_field_immutable_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
@@ -1053,12 +1033,11 @@ fun test_dynamic_field_immutable_misuse() {
     // wraps the object
     dynamic_field::add(&mut parent, b"", obj);
     scenario.next_tx(sender);
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
-fun test_dynamic_object_field_shared_misuse() {
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+fun dynamic_object_field_shared_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
@@ -1071,12 +1050,11 @@ fun test_dynamic_object_field_shared_misuse() {
     assert!(object::id(&obj) == id);
     dynamic_object_field::add(&mut parent, b"", obj);
     scenario.next_tx(sender);
-    abort 42
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
-fun test_dynamic_object_field_immutable_misuse() {
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+fun dynamic_object_field_immutable_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
@@ -1089,13 +1067,13 @@ fun test_dynamic_object_field_immutable_misuse() {
     assert!(object::id(&obj) == id);
     dynamic_object_field::add(&mut parent, b"", obj);
     scenario.next_tx(sender);
-    abort 42
+    abort
 }
 
 public struct E1(u64) has copy, drop;
 
 #[test]
-fun test_events() {
+fun events() {
     use sui::event;
     use sui::test_utils::assert_eq;
 
@@ -1124,7 +1102,7 @@ fun test_events() {
 }
 
 #[test]
-fun test_tx_context() {
+fun tx_context() {
     use std::unit_test::assert_eq;
 
     // check default values for context
@@ -1211,7 +1189,7 @@ fun test_tx_context() {
 }
 
 #[test]
-fun test_tx_context_with_builder() {
+fun tx_context_with_builder() {
     use std::unit_test::assert_eq;
 
     // begin with context builder
@@ -1258,9 +1236,8 @@ fun test_tx_context_with_builder() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
-fun test_tx_context_no_rgp() {
+#[test, expected_failure]
+fun tx_context_no_rgp() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
         .set_epoch_timestamp(1_000_000_000)
@@ -1272,9 +1249,8 @@ fun test_tx_context_no_rgp() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
-fun test_tx_context_bad_epoch() {
+#[test, expected_failure]
+fun tx_context_bad_epoch() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
         .set_epoch_timestamp(1_000_000_000)
@@ -1290,9 +1266,8 @@ fun test_tx_context_bad_epoch() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
-fun test_tx_context_bad_rgp_no_epoch_change() {
+#[test, expected_failure]
+fun tx_context_bad_rgp_no_epoch_change() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
         .set_epoch_timestamp(1_000_000_000)
@@ -1308,9 +1283,8 @@ fun test_tx_context_bad_rgp_no_epoch_change() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
-fun test_tx_context_bad_epoch_timestamp() {
+#[test, expected_failure]
+fun tx_context_bad_epoch_timestamp() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
         .set_epoch_timestamp(1_000_000_000)
@@ -1324,6 +1298,23 @@ fun test_tx_context_bad_epoch_timestamp() {
         ctx.epoch_timestamp_ms() - 1,
     );
     scenario.next_with_context(ctx_builder);
+
+    scenario.end();
+}
+
+#[test]
+fun create_system_objects() {
+    let mut scenario = test_scenario::begin(@0);
+    scenario.create_system_objects();
+
+    let clock = scenario.take_shared<sui::clock::Clock>();
+    test_scenario::return_shared(clock);
+
+    let random = scenario.take_shared<sui::random::Random>();
+    test_scenario::return_shared(random);
+
+    let deny_list = scenario.take_shared<sui::deny_list::DenyList>();
+    test_scenario::return_shared(deny_list);
 
     scenario.end();
 }

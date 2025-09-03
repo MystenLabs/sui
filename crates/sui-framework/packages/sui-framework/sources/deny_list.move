@@ -415,7 +415,7 @@ public fun reserved_addresses(): vector<address> {
 }
 
 #[test_only]
-public fun create_for_test(ctx: &mut TxContext) {
+public fun create_for_testing(ctx: &mut TxContext) {
     create(ctx);
 }
 
