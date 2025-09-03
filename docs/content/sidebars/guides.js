@@ -145,7 +145,6 @@ const guides = [
 					'guides/developer/advanced/custom-indexer/indexer-walrus',
 					'guides/developer/advanced/randomness-onchain',
 					'guides/developer/getting-started/graphql-rpc',
-					'guides/developer/advanced/graphql-migration',
 					'guides/developer/advanced/local-fee-markets',
 				],
 			},
