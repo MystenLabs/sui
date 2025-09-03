@@ -18,7 +18,7 @@ module sui::derived_object;
 use sui::dynamic_field as df;
 
 /// Tries to create an object twice with the same parent-key combination.
-#[error(code=0)]
+#[error(code = 0)]
 const EObjectAlreadyExists: vector<u8> = b"Derived object is already claimed.";
 
 /// Added as a DF to the parent's UID, to mark an ID as claimed.
