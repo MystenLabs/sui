@@ -1540,6 +1540,10 @@ type MoveModule {
 	"""
 	bytes: Base64
 	"""
+	Textual representation of the module's bytecode.
+	"""
+	disassembly: String
+	"""
 	Bytecode format version.
 	"""
 	fileFormatVersion: Int
@@ -2685,6 +2689,10 @@ type ServiceConfig {
 	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
 	defaultPageSize(type: String!, field: String!): Int
+	"""
+	Maximum output size of a disassembled MoveModule, in bytes.
+	"""
+	maxDisassembledModuleSize: Int
 	"""
 	Maximum depth of nested field access supported in display outputs.
 	"""
