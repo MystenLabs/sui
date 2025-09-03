@@ -47,10 +47,10 @@ jobs:
         os:
           [
             ubuntu-ghcloud, # ubuntu-x86_64
-            # ubuntu-arm64, # ubuntu-arm64
-            # windows-ghcloud, # windows-x86_64
-            # macos-latest-large, # macos-x86_64
-            # macos-latest-xlarge # macos-arm64
+            ubuntu-arm64, # ubuntu-arm64
+            windows-ghcloud, # windows-x86_64
+            macos-latest-large, # macos-x86_64
+            macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -203,20 +203,20 @@ jobs:
   #         choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
   #         choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
 
-  #     - name: Upload release artifacts for ${{ matrix.os }} platform
-  #       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # pin@4.4.3
-  #       with:
-  #         name: sui-binaries-${{ matrix.os }}
-  #         if-no-files-found: error
-  #         path: |
-  #           ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+      - name: Upload release artifacts for ${{ matrix.os }} platform
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # pin@4.4.3
+        with:
+          name: sui-binaries-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
-  #     - name: Attach artifacts to ${{ env.sui_tag }} release in GH
-  #       uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
-  #       with:
-  #         tag_name: ${{ env.sui_tag }}
-  #         files: |
-  #           ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+      - name: Attach artifacts to ${{ env.sui_tag }} release in GH
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
+        with:
+          tag_name: ${{ env.sui_tag }}
+          files: |
+            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
   # update-homebrew-formula:
   #   name: Run brew bump-formula-pr for sui on testnet releases
