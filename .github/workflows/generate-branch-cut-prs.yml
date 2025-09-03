@@ -1,0 +1,44 @@
+name: Generate Sui Branch Cut PRs
+run-name: Generate Sui Branch Cut PRs
+
+on:
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  snapshot:
+    name: Generate Snapshot PR
+    runs-on: ubuntu-ghcloud
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        shell: bash
+        run: |
+          ./scripts/gen_branch_cut_prs.sh snapshot
+
+  version-bump:
+    name: Generate Version Bump PR
+    runs-on: ubuntu-ghcloud
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        shell: bash
+        run: |
+          ./scripts/gen_branch_cut_prs.sh version-bump

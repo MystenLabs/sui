@@ -2,6 +2,7 @@
 title: Closed-Loop Token
 description: Closed-Loop tokens can only be used for a specific service or by authorized users. 
 keywords: [token::keep, token::join, token::split, token::zero, token::destroy_zero, token::transfer, token::to_coin, token::from_coin, token::spend, closed-loop, closed-loop tokens, closed loop, difference between closed-loop and coin, coin vs closed-loop ]
+pagination_prev: null
 ---
 
 Using the Closed-Loop Token standard, you can limit the applications that can use the token and set up custom policies for transfers, spends, and conversions. The [`sui::token` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md) in the Sui framework defines the standard.
@@ -50,7 +51,7 @@ flowchart LR
     B-- from_coin -->C;
 ```
 
-Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](./closed-loop-token/spending.mdx) section).
+Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, [it can be spent](./closed-loop-token/spending.mdx).
 
 ```move
 // defined in `sui::coin`

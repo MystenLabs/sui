@@ -9,6 +9,8 @@ Functionality for converting Move types into values. Use with care!
 -  [Constants](#@Constants_0)
 -  [Function `with_defining_ids`](#std_type_name_with_defining_ids)
 -  [Function `with_original_ids`](#std_type_name_with_original_ids)
+-  [Function `defining_id`](#std_type_name_defining_id)
+-  [Function `original_id`](#std_type_name_original_id)
 -  [Function `is_primitive`](#std_type_name_is_primitive)
 -  [Function `as_string`](#std_type_name_as_string)
 -  [Function `address_string`](#std_type_name_address_string)
@@ -191,6 +193,53 @@ the package, even if the type in question was introduced in a later upgrade).
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_with_original_ids">with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>;
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_defining_id"></a>
+
+## Function `defining_id`
+
+Like <code><a href="../std/type_name.md#std_type_name_with_defining_ids">with_defining_ids</a></code>, this accesses the package ID that original defined the type <code>T</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_defining_id">defining_id</a>&lt;T&gt;(): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_defining_id">defining_id</a>&lt;T&gt;(): <b>address</b>;
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_original_id"></a>
+
+## Function `original_id`
+
+Like <code><a href="../std/type_name.md#std_type_name_with_original_ids">with_original_ids</a></code>, this accesses the original ID of the package that defines type <code>T</code>,
+even if the type was introduced in a later version of the package.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_original_id">original_id</a>&lt;T&gt;(): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_original_id">original_id</a>&lt;T&gt;(): <b>address</b>;
 </code></pre>
 
 

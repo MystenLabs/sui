@@ -30,6 +30,8 @@ jobs:
   create-release:
     name: Create Release for ${{ inputs.network }}
     runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.sui.outputs.new_tag }}
 
     steps:
       - name: Checkout sui main branch
@@ -83,11 +85,14 @@ jobs:
 
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
         shell: bash
+        id: sui
         env:
           SUI_RELEASE_VERSION: ${{ env.sui_release_version }}
         run: |
           export release_tag="${{ inputs.network }}-v${{ env.SUI_RELEASE_VERSION }}"
           echo "release_tag=${release_tag}" >> $GITHUB_ENV
+          echo "new_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
@@ -153,6 +158,21 @@ jobs:
           body_path: ${{ env.RELEASE_NOTES_FILE }}
           draft: false
           prerelease: ${{ env.PRE_RELEASE }}
+
+  trigger-walrus-testnet-tag-update:
+    name: Trigger Walrus Testnet Tag Update
+    needs: create-release
+    if: ${{ inputs.network == 'testnet' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Dispatch Sui Testnet tag update in MystenLabs/walrus
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/walrus
+          token: ${{ secrets.WALRUS_REPO_DISPATCH }}
+          event-type: update-walrus-sui-testnet-tag
+          client-payload: '{"new_tag": "${{ needs.create-release.outputs.new_tag }}"}'
 
   announce-release:
     name: Announce Release in Discord

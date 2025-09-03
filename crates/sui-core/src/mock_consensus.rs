@@ -6,7 +6,7 @@ use crate::authority::{AuthorityMetrics, AuthorityState, ExecutionEnv};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::ExecutionSchedulerAPI;
+
 use consensus_types::block::BlockRef;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};

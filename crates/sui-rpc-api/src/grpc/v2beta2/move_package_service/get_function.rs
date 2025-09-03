@@ -55,7 +55,5 @@ pub fn get_function(
 
     let descriptor = convert_function(function_name, &func_def);
 
-    Ok(GetFunctionResponse {
-        function: Some(descriptor),
-    })
+    Ok(GetFunctionResponse::new(descriptor))
 }

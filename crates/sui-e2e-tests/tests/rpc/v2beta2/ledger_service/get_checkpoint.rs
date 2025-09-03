@@ -33,6 +33,7 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        ..
     } = client
         .get_checkpoint(GetCheckpointRequest::default())
         .await
@@ -56,10 +57,10 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        ..
     } = client
-        .get_checkpoint(GetCheckpointRequest {
-            checkpoint_id: None,
-            read_mask: Some(FieldMask::from_paths([
+        .get_checkpoint(
+            GetCheckpointRequest::latest().with_read_mask(FieldMask::from_paths([
                 "sequence_number",
                 "digest",
                 "summary",
@@ -67,7 +68,7 @@ async fn get_checkpoint() {
                 "contents",
                 "transactions",
             ])),
-        })
+        )
         .await
         .unwrap()
         .into_inner()
@@ -83,9 +84,10 @@ async fn get_checkpoint() {
 
     // Request by digest
     let response = client
-        .get_checkpoint(GetCheckpointRequest {
-            checkpoint_id: Some(CheckpointId::Digest(digest.clone().unwrap())),
-            read_mask: None,
+        .get_checkpoint({
+            let mut message = GetCheckpointRequest::default();
+            message.checkpoint_id = Some(CheckpointId::Digest(digest.clone().unwrap()));
+            message
         })
         .await
         .unwrap()
@@ -96,10 +98,9 @@ async fn get_checkpoint() {
 
     // Request by sequence_number
     let response = client
-        .get_checkpoint(GetCheckpointRequest {
-            checkpoint_id: Some(CheckpointId::SequenceNumber(sequence_number.unwrap())),
-            read_mask: None,
-        })
+        .get_checkpoint(GetCheckpointRequest::by_sequence_number(
+            sequence_number.unwrap(),
+        ))
         .await
         .unwrap()
         .into_inner()
@@ -110,10 +111,10 @@ async fn get_checkpoint() {
 
     // A Checkpoint that we know has a transaction that emitted an event
     let checkpoint = client
-        .get_transaction(GetTransactionRequest {
-            digest: Some(transaction_digest.to_string()),
-            read_mask: Some(FieldMask::from_paths(["checkpoint"])),
-        })
+        .get_transaction(
+            GetTransactionRequest::new(&transaction_digest)
+                .with_read_mask(FieldMask::from_paths(["checkpoint"])),
+        )
         .await
         .unwrap()
         .into_inner()
@@ -129,15 +130,13 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        ..
     } = client
-        .get_checkpoint(GetCheckpointRequest {
-            checkpoint_id: Some(CheckpointId::SequenceNumber(checkpoint)),
-            read_mask: Some(FieldMask::from_paths([
-                "sequence_number",
-                "digest",
-                "transactions.digest",
-            ])),
-        })
+        .get_checkpoint(
+            GetCheckpointRequest::by_sequence_number(checkpoint).with_read_mask(
+                FieldMask::from_paths(["sequence_number", "digest", "transactions.digest"]),
+            ),
+        )
         .await
         .unwrap()
         .into_inner()
@@ -162,6 +161,7 @@ async fn get_checkpoint() {
         checkpoint,
         timestamp,
         balance_changes,
+        ..
     } in transactions
     {
         assert!(digest.is_some());
@@ -189,18 +189,20 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        ..
     } = client
-        .get_checkpoint(GetCheckpointRequest {
-            checkpoint_id: Some(CheckpointId::SequenceNumber(checkpoint)),
-            read_mask: Some(FieldMask::from_paths([
-                "sequence_number",
-                "digest",
-                "summary",
-                "signature",
-                "contents",
-                "transactions",
-            ])),
-        })
+        .get_checkpoint(
+            GetCheckpointRequest::by_sequence_number(checkpoint).with_read_mask(
+                FieldMask::from_paths([
+                    "sequence_number",
+                    "digest",
+                    "summary",
+                    "signature",
+                    "contents",
+                    "transactions",
+                ]),
+            ),
+        )
         .await
         .unwrap()
         .into_inner()

@@ -82,7 +82,7 @@ module example::wrapped {
 
 The owner of `Outer` in this example must specify it as the transaction input and then access its `inner` field to read the instance of `Inner`. Validators refuse to sign transactions that directly specify wrapped objects (like the `inner` of an `Outer`) as inputs. As a result, you don't need to specify a wrapped object's version in a transaction that reads that object.
 
-Wrapped objects can eventually become "unwrapped", meaning that they are once again accessible at their ID:
+Wrapped objects can eventually become unwrapped, meaning that they are once again accessible at their ID:
 
 ```move
 module example::wrapped {

@@ -3,15 +3,15 @@ title: Migrating to GraphQL (Alpha)
 beta: testnet, devnet, mainnet
 ---
 
-{@include: ../../../snippets/migrate-to-graphql.mdx}
+<ImportContent source="migrate-to-graphql.mdx" mode="snippet" />
 
 For a comprehensive list of all available GraphQL features, consult the [reference](../../../references/sui-graphql).
 
 :::info
 
-{@include: ../../../snippets/data-serving-msg.mdx}
+<ImportContent source="data-serving-msg.mdx" mode="snippet" />
 
-{@include: ../../../snippets/data-serving-gql-alpha.mdx}
+<ImportContent source="data-serving-gql-alpha.mdx" mode="snippet" />
 
 :::
 
@@ -19,9 +19,9 @@ For a comprehensive list of all available GraphQL features, consult the [referen
 
 The goal is to get the total number of transaction blocks in the network.
 
-<Tabs groupId="migrating-json-rpc">
+<Tabs groupId="json-graphql">
 
-<TabItem value="json-rpc1" label="JSON-RPC">
+<TabItem value="json-rpc" label="JSON-RPC">
 
 ```json
 {
@@ -33,7 +33,7 @@ The goal is to get the total number of transaction blocks in the network.
 ```
 
 </TabItem>
-<TabItem value="graphql1" label="GraphQL">
+<TabItem value="graphql" label="GraphQL">
 
 ```graphql
 query {
@@ -49,9 +49,9 @@ query {
 ### Example 2: Get a specific transaction block
 The goal is to get the transaction block by its digest.
 
-<Tabs groupId="migrating-json-rpc">
+<Tabs groupId="json-graphql">
 
-<TabItem value="json-rpc2" label="JSON-RPC">
+<TabItem value="json-rpc" label="JSON-RPC">
 
 ```json
 {
@@ -73,7 +73,7 @@ The goal is to get the transaction block by its digest.
 ```
 
 </TabItem>
-<TabItem value="graphql2" label="GraphQL">
+<TabItem value="graphql" label="GraphQL">
 
 ```graphql
 query {
@@ -106,9 +106,9 @@ query {
 
 The goal is to return all `Coin<0x2::sui::SUI>` objects an address owns.
 
-<Tabs groupId="migrating-json-rpc">
+<Tabs groupId="json-graphql">
 
-<TabItem value="json-rpc3" label="JSON-RPC">
+<TabItem value="json-rpc" label="JSON-RPC">
 
 ```json
 query {
@@ -125,7 +125,7 @@ query {
 ```
 
 </TabItem>
-<TabItem value="graphql3" label="GraphQL">
+<TabItem value="graphql" label="GraphQL">
 
 ```graphql
 query {
@@ -193,6 +193,6 @@ query {
 
 ## Related links
   
-- [GraphQL reference](../../../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
-- [GraphQL quick-start](../getting-started/graphql-rpc.mdx): Querying Sui RPC with GraphQL gets you started using GraphQL to query the Sui RPC for on-chain data.
-- [GraphQL concepts](../../../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.
+<RelatedLink to="/references/sui-graphql.mdx" />
+<RelatedLink to="/guides/developer/getting-started/graphql-rpc.mdx" />
+<RelatedLink to="/concepts/graphql-rpc.mdx" />

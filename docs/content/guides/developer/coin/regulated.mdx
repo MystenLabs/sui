@@ -1,14 +1,14 @@
 ---
 title: Regulated Coin and Deny List
 description: You can create regulated coins on Sui, such as stablecoins. These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list.
-keywords: [ regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, sui token standards ]
+keywords: [ regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, SUI token standards ]
 ---
 
 You can create regulated coins on Sui, such as [stablecoins](../stablecoins.mdx). These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list. 
 
 When creating standard coins, you call the `create_currency` function in the `coin` package of the Sui framework, whether directly or via an SDK. When you create regulated coins, you call the `create_regulated_currency_v2` function in that same package instead. The `create_regulated_currency_v2` function actually leverages the `create_currency` function to create the coin, but adds an additional step that produces a `DenyCapV2` and transfers it to the publisher of the regulated coin package. The bearer of the transferrable `DenyCapV2` object can control access to the coin through a deny list. 
 
-## DenyList
+## `DenyList`
 
 The `DenyList` is a singleton, shared object that the bearer of a `DenyCapV2` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins.
 
@@ -18,7 +18,7 @@ The `DenyList` object is a system object that has the address `0x403`. You canno
 
 :::
 
-To learn about the features available, see the [Coin standard](../../../standards/coin.mdx) documentation and the `coin` module in the <a href="/references/framework/sui/coin" data-noBrokenLinkCheck='true'>Sui framework</a>.
+To learn about the features available, see the [Coin standard](../../../standards/coin.mdx) documentation and the `coin` module in the <UnsafeLink href="/references/framework/sui/coin">Sui framework</UnsafeLink>.
 
 ## Regulated coin example
 
@@ -57,17 +57,22 @@ Take care not to expose the secret key for your address to the public.
 | `TREASURY_CAP_ID` | The treasury cap object ID that allows the bearer to mint new coins. This data is part of the response that Sui provides on publish. |
 | `MODULE_NAME` | The name of the module you publish. |
 | `COIN_NAME` | The name of your regulated coin.  |
-| `SUI_FULLNODE_URL` | The URL to the Full node network that will process transactions. For Testnet this value is `https://fullnode.testnet.sui.io:443`. |
+| `SUI_FULLNODE_URL` | The URL to the full node network that will process transactions. For Testnet this value is `https://fullnode.testnet.sui.io:443`. |
 
 ## Smart contract
 
 The example uses a single file to create the smart contract for the project (`regulated_coin.move`). The contract defines the regulated coin when you publish it to the network. The treasury capability (`TreasuryCap`) and deny capability (`DenyCapV2`) are transferred to the address that publishes the contract. The `TreasuryCap` permits the bearer to mint or burn coins (`REGULATED_COIN` in this example), and the `DenyCapV2` bearer can add and remove addresses from the list of unauthorized users. 
 
 <details>
+
 <summary>
+
 `regulated_coin.move`
+
 </summary>
-{@inject: examples/regulated-coin/move/sources/regulated_coin.move}
+
+<ImportContent source="examples/regulated-coin/move/sources/regulated_coin.move" mode="code" />
+
 </details>
 
 ### Creating regulated coins
@@ -79,11 +84,15 @@ The TypeScript and Rust clients handle the call to the `coin` package's `mint` f
 <Tabs groupId="code-language">
 
 <TabItem label="TypeScript" value="typescript">
-{@inject: examples/regulated-coin/ts-client/src/main.ts#mint}
+
+<ImportContent source="examples/regulated-coin/ts-client/src/main.ts" mode="code" tag="mint" />
+
 </TabItem>
 
 <TabItem label="Rust" value="rust">
-{@inject: examples/regulated-coin/rust-client/src/tx_run/coin.rs#mint}
+
+<ImportContent source="examples/regulated-coin/rust-client/src/tx_run/coin.rs" mode="code" tag="mint" />
+
 </TabItem>
 
 </Tabs>
@@ -91,28 +100,50 @@ The TypeScript and Rust clients handle the call to the `coin` package's `mint` f
 For all `Coin` functions available, see the Sui framework [`coin` module documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md). The following functions are the most common. 
 
 <details>
+
 <summary>
+
   `coin::mint<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint}
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint" />
+
 </details>
 <details>
+
 <summary>
+
   `coin::mint_balance<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_balance}
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint_balance" />
+
 </details>
+
 <details>
+
 <summary>
+
   `coin::mint_and_transfer<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_and_transfer}
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint_and_transfer" />
+
 </details>
+
 <details>
+
 <summary>
+
   `coin::burn<T>`
+
 </summary>
-{@inject: crates/sui-framework/packages/sui-framework/sources/coin.move#fun=burn}
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="burn" />
+
 </details>
 
 ### Manage deny list
@@ -126,18 +157,22 @@ To use these functions, you pass the address you want to either add or remove. T
 <Tabs groupId="code-language">
 
 <TabItem label="TypeScript" value="typescript">
-{@inject: examples/regulated-coin/ts-client/src/main.ts#deny}
+
+<ImportContent source="examples/regulated-coin/ts-client/src/main.ts" mode="code" tag="deny" />
+
 </TabItem>
 
 <TabItem label="Rust" value="rust">
-{@inject: examples/regulated-coin/rust-client/src/tx_run/deny.rs#deny}
+
+<ImportContent source="examples/regulated-coin/rust-client/src/tx_run/deny.rs" mode="code" tag="deny" />
+
 </TabItem>
 
 </Tabs>
 
 ## Related links
 
-- [Closed Loop Token standard](../../../standards/closed-loop-token.mdx): Details for the standard used to create tokens on Sui.
-- [Source code](https://github.com/MystenLabs/sui/tree/main/examples/regulated-coin): The source code in GitHub for this example.
-- [In-Game Tokens](./in-game-token.mdx): Example of how to create tokens for use as in-game currency.
-- [Loyalty Tokens](./loyalty.mdx): Example of how to create tokens that reward brand or service loyalty on the Sui network.
+<RelatedLink to="/standards/closed-loop-token.mdx" />
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/regulated-coin" label="Source code" desc="The source code in GitHub for this example." />
+<RelatedLink to="/guides/developer/coin/in-game-token.mdx" />
+<RelatedLink to="/guides/developer/coin/loyalty.mdx" />

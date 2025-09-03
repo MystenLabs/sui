@@ -13,7 +13,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
-use crate::execution_scheduler::ExecutionSchedulerAPI;
+
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};

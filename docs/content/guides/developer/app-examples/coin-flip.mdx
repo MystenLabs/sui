@@ -1,10 +1,10 @@
 ---
 title: Coin Flip
 description: Learn Sui through a coin flip dApp that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui dApp.
-keywords: [ react app, react dapp, react example, verifiable random functions, vrfs, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, mev attack protection, mev attacks, example app, example dapp ] 
+keywords: [ react app, react dApp, react example, verifiable random functions, vrfs, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, mev attack protection, mev attacks, example app, example dApp ] 
 ---
 
-This example walks you through building a coin flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This coin flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
+This example walks you through building a Coin Flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This Coin Flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
 
 The guide is split into two parts:
 
@@ -46,7 +46,7 @@ To follow along with this guide, set your new Move package to `satoshi_flip`.
 
 :::
 
-### House module
+### `house_data` module
 
 This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game's data somewhere, and in this module you create a [shared object](concepts/object-ownership/shared.mdx) for all house data.
 
@@ -255,7 +255,7 @@ You have established the data structure of this module, but without the appropri
 
 And with that, your `house_data.move` code is complete.
 
-### Counter module
+### `counter_nft` module
 
 In the same `sources` directory, now create a file named `counter_nft.move`. A `Counter` object is used as the VRF input for every game that a player plays. First, populate the file with the following:
 
@@ -320,7 +320,7 @@ The `get_vrf_input_and_increment` function is the core of this module. The funct
 
 This code also adds a `count` function that returns the current count, and a test-only function that calls the `burn` function.
 
-### Game module
+### `single_player_satoshi` module
 
 Lastly, you need a game module and object that can create a new game, distribute funds after the game, and potentially cancel games. Because this is a one-player game, create an [address-owned object](concepts/object-ownership/address-owned.mdx) rather than a [shared object](/concepts/object-ownership/shared.mdx).
 
@@ -605,7 +605,7 @@ Now that you have written our contracts, it's time to deploy them.
 
 ### Deployment {#deployment}
 
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
 Next, configure the Sui CLI to use `testnet` as the active environment, as well. If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
@@ -619,7 +619,7 @@ Run the following command to activate the `testnet` environment:
 $ sui client switch --env testnet
 ```
 
-{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+<ImportContent source="publish-to-devnet-with-coins.mdx" mode="snippet" />
 
 The output of this command contains a `packageID` value that you need to save to use the package.
 
@@ -679,7 +679,7 @@ In this case, the `PackageID` is `0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf
 
 ### Next steps
 
-Well done. You have written and deployed the Move package! 🚀
+Well done. You have written and deployed the Move package. 🎉 
 
 To turn this into a complete dApp, you need to [create a frontend](#frontend).
 

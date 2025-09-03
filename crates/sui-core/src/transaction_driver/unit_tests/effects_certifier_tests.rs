@@ -17,6 +17,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
+use mysten_metrics::TxType;
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
@@ -258,11 +259,13 @@ async fn test_successful_certified_effects() {
     let executed_response_full = WaitForEffectsResponse::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
+        fast_path: false,
     };
 
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -291,6 +294,7 @@ async fn test_successful_certified_effects() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             submit_tx_resp,
             &options,
@@ -310,6 +314,7 @@ async fn test_successful_certified_effects() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -321,12 +326,14 @@ async fn test_successful_certified_effects() {
     let submit_tx_resp = SubmitTxResponse::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
+        fast_path: false,
     };
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             submit_tx_resp,
             &options,
@@ -389,6 +396,7 @@ async fn test_transaction_rejected_non_retriable() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -453,6 +461,7 @@ async fn test_transaction_rejected_retriable() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -523,6 +532,7 @@ async fn test_transaction_rejected_with_conflicts() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -583,6 +593,7 @@ async fn test_transaction_expired() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -665,6 +676,7 @@ async fn test_mixed_rejected_and_expired() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -705,6 +717,7 @@ async fn test_mixed_rejected_and_expired() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -795,6 +808,7 @@ async fn test_mixed_rejected_reasons() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
@@ -844,6 +858,7 @@ async fn test_mixed_rejected_reasons() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
@@ -891,6 +906,7 @@ async fn test_mixed_rejected_reasons() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
@@ -941,6 +957,7 @@ async fn test_mixed_rejected_reasons() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
@@ -987,6 +1004,7 @@ async fn test_mixed_rejected_reasons() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 *name,
                 SubmitTxResponse::Submitted { consensus_position },
                 &options,
@@ -1054,12 +1072,14 @@ async fn test_forked_execution() {
         let response = WaitForEffectsResponse::Executed {
             effects_digest: digest,
             details: None,
+            fast_path: false,
         };
         client.set_ack_response(tx_digest, response);
 
         let executed_response_full = WaitForEffectsResponse::Executed {
             effects_digest: digest,
             details: Some(Box::new(executed_data.clone())),
+            fast_path: false,
         };
         client.set_full_response(tx_digest, executed_response_full.clone());
     }
@@ -1069,6 +1089,7 @@ async fn test_forked_execution() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -1133,10 +1154,12 @@ async fn test_aborted_with_multiple_effects() {
             0 => WaitForEffectsResponse::Executed {
                 effects_digest: effects_digest_1, // from fastpath
                 details: None,
+                fast_path: false,
             },
             1 => WaitForEffectsResponse::Executed {
                 effects_digest: effects_digest_2, // from fastpath
                 details: None,
+                fast_path: false,
             },
             2 => WaitForEffectsResponse::Rejected {
                 error: Some(SuiError::ValidatorOverloadedRetryAfter {
@@ -1156,6 +1179,7 @@ async fn test_aborted_with_multiple_effects() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -1197,6 +1221,7 @@ async fn test_full_effects_retry_loop() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1229,6 +1254,7 @@ async fn test_full_effects_retry_loop() {
             let successful_response = WaitForEffectsResponse::Executed {
                 effects_digest,
                 details: Some(Box::new(executed_data.clone())),
+                fast_path: false,
             };
             client.set_full_response(tx_digest, successful_response);
         }
@@ -1248,6 +1274,7 @@ async fn test_full_effects_retry_loop() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -1284,6 +1311,7 @@ async fn test_full_effects_digest_mismatch() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest: certified_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1305,6 +1333,7 @@ async fn test_full_effects_digest_mismatch() {
             let mismatched_response = WaitForEffectsResponse::Executed {
                 effects_digest: mismatched_digest,
                 details: Some(Box::new(executed_data.clone())),
+                fast_path: false,
             };
             client.set_full_response(tx_digest, mismatched_response);
         } else {
@@ -1312,6 +1341,7 @@ async fn test_full_effects_digest_mismatch() {
             let correct_response = WaitForEffectsResponse::Executed {
                 effects_digest: certified_digest,
                 details: Some(Box::new(executed_data.clone())),
+                fast_path: false,
             };
             client.set_full_response(tx_digest, correct_response);
         }
@@ -1331,6 +1361,7 @@ async fn test_full_effects_digest_mismatch() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,
@@ -1365,6 +1396,7 @@ async fn test_request_retrier_exhaustion() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1404,6 +1436,7 @@ async fn test_request_retrier_exhaustion() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             *name,
             SubmitTxResponse::Submitted { consensus_position },
             &options,

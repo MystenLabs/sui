@@ -2,25 +2,25 @@
 title: Create Coins and Tokens
 description: Learn how to mint coins and tokens on the Sui network.
 keywords: [ mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins ]
+pagination_prev: null
 ---
 
 Coins and tokens on Sui are similar. In practice, the terms are used interchangeably, but there are some differences in their implementation. You can learn about these differences in the respective standard documentation, [Closed-Loop Token](../../standards/closed-loop-token.mdx) and [Coin](../../standards/coin.mdx).
 
 Publishing a coin on Sui is similar to publishing a new type. The main difference is the requirement of a one time witness when creating a coin.
 
-{@inject: examples/move/coin/sources/my_coin.move noComments}
+<ImportContent source="examples/move/coin/sources/my_coin.move" mode="code" />
 
 The `Coin<T>` is a generic implementation of a coin on Sui. Access to the `TreasuryCap` provides control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
 
 The example module includes a `mint` function. You pass the `TreasuryCap` created from the `init` function to the module's `mint` function. The function then uses the `mint` function from the `Coin` module to create (mint) a coin and then transfer it to an address. 
 
-{@inject: examples/move/coin/sources/my_coin.move#fun=mint noComments}
-
+<ImportContent source="examples/move/coin/sources/my_coin.move" mode="code" fun="mint" noComments />
 ### Sui CLI
 
 If you published the previous example to a Sui network, you can use the `sui client call` command to mint coins and deliver them to the address you provide. See [Sui CLI](../../references/cli.mdx) for more information on the command line interface.
 
-{@include: ../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 ```sh
 $ sui client call --function mint --module mycoin --package <PACKAGE-ID> --args <TREASURY-CAP-ID> <COIN-AMOUNT> <RECIPIENT-ADDRESS> --gas-budget <GAS-AMOUNT>
@@ -38,7 +38,7 @@ Amount: <COIN-AMOUNT>
 ...
 ```
 
-## DenyList
+## `DenyList`
 
 The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCapV2` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
 
@@ -60,15 +60,15 @@ Tokens reuse the `TreasuryCap` defined in the `sui::coin` module and therefore h
 
 Coin-like functions perform the minting and burning of tokens. Both require the `TreasuryCap`:
 
-- `token::mint` - mint a token
-- `token::burn` - burn a token
+- `token::mint`: Mint a token
+- `token::burn`: Burn a token
 
 See [Closed-Loop Token](../../standards/closed-loop-token.mdx) standard for complete details of working with tokens.
 
 ## Related links
 
-- [Regulated Coin and Deny List](./coin/regulated.mdx): Create a regulated coin and add or remove names from the deny list.
-- [Loyalty Token](./coin/loyalty.mdx): Create a token to reward user loyalty.
-- [In-Game Token](./coin/in-game-token.mdx): Create tokens that can be used only within a mobile game.
-- [Stablecoins](./stablecoins): The Sui network has native stablecoins, including USDC.
-- [One Time Witness](https://move-book.com/programmability/one-time-witness.html): The Move Book documentation of the one time witness pattern. 
+<RelatedLink to="/guides/developer/coin/regulated.mdx" />
+<RelatedLink to="/guides/developer/coin/loyalty.mdx" />
+<RelatedLink to="/guides/developer/coin/in-game-token.mdx" />
+<RelatedLink to="/guides/developer/stablecoins" />
+<RelatedLink href="https://move-book.com/programmability/one-time-witness.html" label="One Time Witness" desc="The Move Book documentation of the one time witness pattern. " />

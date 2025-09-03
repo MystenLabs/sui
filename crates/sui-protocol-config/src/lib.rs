@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 94;
+const MAX_PROTOCOL_VERSION: u64 = 95;
 
 // Record history of protocol version allocations here:
 //
@@ -258,6 +258,7 @@ const MAX_PROTOCOL_VERSION: u64 = 94;
 // Version 92: Disable checking shared object transfer restrictions per command = false
 // Version 93: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
 // Version 94: Decrease stored observations limit by 10% to stay within system object size limit.
+//             Enable party transfer on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1463,6 +1464,7 @@ pub struct ProtocolConfig {
     hash_sha3_256_legacy_min_input_len_cost: Option<u64>,
     type_name_get_base_cost: Option<u64>,
     type_name_get_per_byte_cost: Option<u64>,
+    type_name_id_base_cost: Option<u64>,
 
     string_check_utf8_base_cost: Option<u64>,
     string_check_utf8_per_byte_cost: Option<u64>,
@@ -2648,6 +2650,7 @@ impl ProtocolConfig {
             hash_sha3_256_legacy_min_input_len_cost: None,
             type_name_get_base_cost: None,
             type_name_get_per_byte_cost: None,
+            type_name_id_base_cost: None,
             string_check_utf8_base_cost: None,
             string_check_utf8_per_byte_cost: None,
             string_is_char_boundary_base_cost: None,
@@ -3951,6 +3954,15 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                             },
                         );
+
+                    // Enable party transfer on mainnet.
+                    cfg.feature_flags.enable_party_transfer = true;
+                }
+                95 => {
+                    cfg.type_name_id_base_cost = Some(52);
+
+                    // Reudce the frequency of checkpoint splitting under high TPS.
+                    cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
                 // Use this template when making changes:
                 //

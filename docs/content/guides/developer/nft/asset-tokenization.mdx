@@ -39,7 +39,7 @@ This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155
 
 As with all smart contracts on Sui, Move provides the logic that powers asset tokenization.
 
-### asset_tokenization package
+### `asset_tokenization` package
 
 :::info
 
@@ -287,7 +287,7 @@ The `proxy` module comprises methods that the type owner utilizes to execute pub
 
   This function leverages the publisher nested within the registry and the sender's publisher. It generates and returns a transfer policy and the associated transfer policy cap specific to the `TokenizedAsset<T>`. This type 'T' is derived from the `Publisher` object.
 
-  It also generates an empty transfer policy wrapped in a `ProtectedTP<T>` object, which is shared. You can use this functionality under specific conditions to override the kiosk lock rule.
+  It also generates an empty transfer policy wrapped in a `ProtectedTP<T>` object, which is shared. You can use this functionality under specific conditions to override the Kiosk lock rule.
 
   ```rust
   public fun setup_tp<T: drop>(
@@ -371,7 +371,7 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
 - `asset_from_kiosk_to_join`
 
-  This helper function is intended to facilitate the joining of tokenized assets locked in kiosk. It aids in unlocking the tokenized asset that is set for burning and ensures that another tokenized asset of the same type will eventually contain its balance by returning a `JoinPromise.`
+  This helper function is intended to facilitate the joining of tokenized assets locked in a kiosk. It aids in unlocking the tokenized asset that is set for burning and ensures that another tokenized asset of the same type will eventually contain its balance by returning a `JoinPromise.`
 
   ```rust
   public fun asset_from_kiosk_to_join<T>(
@@ -423,7 +423,7 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
 </Tabs>
 
-### template package
+### `template` package
 
 An example use case package that enables utilization of Rust WASM functionality to support seamless asset creation on the browser.
 
@@ -651,7 +651,7 @@ public fun burn_with_ticket<T>(
 
 # Deployment
 
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
 ## Publishing
 
@@ -689,7 +689,7 @@ For more details on publishing, please check the setup folder's [README](https:/
 
 Select a package for specific instructions.
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 <Tabs>
 

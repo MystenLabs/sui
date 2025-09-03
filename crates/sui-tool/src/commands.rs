@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(tidehunter))]
+use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use crate::{
-    check_completed_snapshot,
-    db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    download_db_snapshot, download_formal_snapshot, get_latest_available_epoch, get_object,
-    get_transaction_block, make_clients, restore_from_db_checkpoint, ConciseObjectOutput,
-    GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
+    check_completed_snapshot, download_db_snapshot, download_formal_snapshot,
+    get_latest_available_epoch, get_object, get_transaction_block, make_clients,
+    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode,
+    VerboseObjectOutput,
 };
 use anyhow::Result;
 use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
@@ -132,6 +133,7 @@ pub enum ToolCommand {
     },
 
     /// Tool to read validator & node db.
+    #[cfg(not(tidehunter))]
     #[command(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
@@ -576,6 +578,7 @@ impl ToolCommand {
                     get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
                 );
             }
+            #[cfg(not(tidehunter))]
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
                 match cmd {

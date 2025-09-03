@@ -12,14 +12,16 @@ use crate::{
 };
 
 use super::{
-    scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
+    scalars::{digest::Digest, sui_address::SuiAddress, type_filter::TypeInput, uint53::UInt53},
     types::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         epoch::Epoch,
-        move_package::PackageCheckpointFilter,
-        move_package::{self, MovePackage, PackageKey},
+        event::{filter::EventFilter, CEvent, Event},
+        move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
+        move_type::{self, MoveType},
         object::{self, Object, ObjectKey, VersionFilter},
+        object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{filter::TransactionFilter, CTransaction, Transaction},
@@ -94,6 +96,24 @@ impl Query {
     ) -> Result<Option<Epoch>, RpcError> {
         let scope = self.scope(ctx)?;
         Epoch::fetch(ctx, scope, epoch_id).await
+    }
+
+    /// Paginate events that are emitted in the network, optionally filtered by event filters.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CEvent>,
+        last: Option<u64>,
+        before: Option<CEvent>,
+        filter: Option<EventFilter>,
+    ) -> Result<Connection<String, Event>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "events");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -191,6 +211,23 @@ impl Query {
         try_join_all(effects).await
     }
 
+    /// Fetch types by their string representations.
+    ///
+    /// Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+    ///
+    /// Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
+    async fn multi_get_types(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Vec<Option<MoveType>>, RpcError<move_type::Error>> {
+        let types = keys
+            .into_iter()
+            .map(|t| async move { MoveType::canonicalize(t.into(), self.scope(ctx)?).await });
+
+        try_join_all(types).await
+    }
+
     /// Fetch an object by its address.
     ///
     /// If `version` is specified, the object will be fetched at that exact version.
@@ -227,6 +264,29 @@ impl Query {
             },
         )
         .await
+    }
+
+    /// Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
+    ///
+    /// - A filter on type (all live objects whose type matches that filter).
+    /// - Fetching all objects owned by an address or object, optionally filtered by type.
+    /// - Fetching all shared or immutable objects, filtered by type.
+    async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::CLive>,
+        last: Option<u64>,
+        before: Option<object::CLive>,
+        #[graphql(validator(custom = "OFValidator::default()"))] filter: ObjectFilter,
+    ) -> Result<Option<Connection<String, Object>>, RpcError<object::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "objects");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Ok(Some(
+            Object::paginate_live(ctx, self.scope(ctx)?, page, filter).await?,
+        ))
     }
 
     /// Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
@@ -400,6 +460,19 @@ impl Query {
         let filter = filter.unwrap_or_default();
 
         Transaction::paginate(ctx, scope, page, filter).await
+    }
+
+    /// Fetch a structured representation of a concrete type, including its layout information.
+    ///
+    /// Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+    ///
+    /// Fails if the type is malformed, returns `null` if a type mentioned does not exist.
+    async fn type_(
+        &self,
+        ctx: &Context<'_>,
+        type_: TypeInput,
+    ) -> Result<Option<MoveType>, RpcError<move_type::Error>> {
+        MoveType::canonicalize(type_.into(), self.scope(ctx)?).await
     }
 }
 

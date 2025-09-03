@@ -7,7 +7,7 @@
 #[test_only]
 module 0xA::type_name_tests;
 
-use std::type_name::with_defining_ids;
+use std::type_name::{with_defining_ids, defining_id};
 
 public struct TestStruct {}
 
@@ -129,4 +129,26 @@ fun test_get_address_aborts_with_primitive_generic() {
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
 fun test_get_module_aborts_with_primitive_generic() {
     with_defining_ids<vector<TestGenerics<std::ascii::String>>>().module_string();
+}
+
+#[test]
+fun test_defining_id() {
+    assert!(defining_id<std::ascii::String>() == @1);
+    assert!(defining_id<TestStruct>() == @0xa);
+    assert!(defining_id<TestGenerics<std::string::String>>() == @0xa);
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_defining_id_aborts_with_primitive() {
+    defining_id<u8>();
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_defining_id_aborts_with_primitive_generic() {
+    defining_id<vector<std::ascii::String>>();
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_defining_id_aborts_with_primitive_generic_nested() {
+    defining_id<vector<TestGenerics<std::ascii::String>>>();
 }

@@ -5,11 +5,11 @@ description: Correct configuration of your node ensures optimal performance and 
 keywords: [ bridge validator node, bridge node, bridge, bridge committee, metric data, metrics, metadata, committee registration, waf, web application firewall, bridge client, bridgeclient, bridge node monitoring, build bridge node, run bridge node ]
 ---
 
-Running a Bridge Validator Node (Bridge Node) requires registering your node with the bridge committee. Correct configuration of your node ensures optimal performance and valid metrics data. Follow this topic to make sure your Bridge Node is set up properly.
+Running a bridge validator node (bridge node) requires registering your node with the bridge committee. Correct configuration of your node ensures optimal performance and valid metrics data. Follow this topic to make sure your bridge node is set up properly.
 
 ## Prerequisites
 
-To set up and run a Bridge Node, you need to install `sui` and `sui-bridge-cli`. You can install them using one of the following options: 
+To set up and run a bridge node, you need to install `sui` and `sui-bridge-cli`. You can install them using one of the following options: 
 
 Install from tip of `main`:
 ```sh
@@ -29,7 +29,7 @@ To join the network you must first register with the bridge validator committee.
 The required metadata includes two things:
 
 - `BridgeAuthorityKey`, an ECDSA key to sign messages. Because this is a hot key that is kept in memory, it’s fine to use the following tool to generate one and write it to file.
-- A REST API URL where the Bridge Node listens to and serves requests. Example: `https://bridge.example-sui-validator.io:443`. Make sure the port is correct and the URL does not contain any invalid characters, like quotes for example.
+- A REST API URL where the bridge node listens to and serves requests. Example: `https://bridge.example-sui-validator.io:443`. Make sure the port is correct and the URL does not contain any invalid characters, like quotes for example.
 
 To create a `BridgeAuthorityKey`, run
 ```sh
@@ -84,11 +84,11 @@ Refer to [offline signing section](#offline-signing) in this page for how to sig
 Authority key rotation is not supported yet.
 
 
-## Bridge Node
+## Bridge node
 
-You have several options when configuring your Bridge Node for performance and metrics monitoring. Follow the instructions that follow to configure your node for best results in your environment.  
+You have several options when configuring your bridge node for performance and metrics monitoring. Follow the instructions that follow to configure your node for best results in your environment.  
 
-### Bridge Node hardware requirements
+### Bridge node hardware requirements
 
 Suggested hardware requirements:
 
@@ -97,7 +97,7 @@ Suggested hardware requirements:
 - Storage: 200GB
 - Network: 100Mbps
 
-### Web application firewall (WAF) protection for Bridge Node
+### Web application firewall (WAF) protection for bridge node
 
 To protect against distributed denial of service (DDoS) attacks and similar attacks intended to expend validator resources, you must provide rate limit protection for the bridge server. 
 
@@ -131,13 +131,13 @@ frontend http-in
     default_backend bridgevalidator
 
 backend bridgevalidator
-    # Note the port needs to match the value in Bridge Node config, default is 9191
+    # Note the port needs to match the value in bridge node config, default is 9191
     server bridgevalidator 0.0.0.0:9191
 ```
 
 If choosing to use an open source load balancing option, make sure to set up metrics collection and alerting on the service.
 
-### Bridge Node config
+### Bridge node config
 
 Use `sui-bridge-cli` command to create a template. If you want to run `BridgeClient` (see the following section), pass `--run-client` as a parameter.
 
@@ -150,10 +150,10 @@ The generated configuration includes the following parameters:
 
 | Parameter | Description |
 | --- | --- |
-| `server-listen-port` | The port that Bridge Node listens to for handling requests. |
+| `server-listen-port` | The port that bridge node listens to for handling requests. |
 | `metrics-port` | Port to export Prometheus metrics. |
 | `bridge-authority-key-path` | The path to the Bridge Validator key, generated from `sui-bridge-cli create-bridge-validator-key` command referenced previously. |
-| `run-client` | Whether Bridge Client should be enabled in Bridge Node (more instructions follow). |
+| `run-client` | Whether Bridge Client should be enabled in bridge node (more instructions follow). |
 | `approved-governance-actions` | A list of governance actions that you want to support. |
 | `sui:sui-rpc-url` | Sui RPC URL. |
 | `sui:sui-bridge-chain-id` | `0` for Sui Mainnet, `1` for Sui Testnet. |
@@ -191,9 +191,9 @@ $ sui-bridge-cli create-bridge-client-key <PATH_TO_BRIDGE_CLIENT_KEY>
 This prints the newly created Sui Address. Then we need to fund this address with some SUI for operations.
 
 
-### Build Bridge Node
+### Build bridge node
 
-Build or install Bridge Node in one of the following ways:
+Build or install bridge node in one of the following ways:
 
 - Use `cargo install`.
     ```sh
@@ -226,9 +226,9 @@ Build or install Bridge Node in one of the following ways:
 - Use pre-built Docker image. Pull from Docker Hub: `mysten/sui-tools:{SHA}`
 
 
-### Run Bridge Node
+### Run bridge node
 
-Running Bridge Node is similar to running a Sui node using systemd or Ansible. The command to start the Bridge Node is:
+Running bridge node is similar to running a Sui node using systemd or Ansible. The command to start the bridge node is:
 
 ```sh
 $ RUST_LOG=info,sui_bridge=debug sui-bridge --config-path {BRIDGE-NODE-CONFIG-PATH}
@@ -236,7 +236,7 @@ $ RUST_LOG=info,sui_bridge=debug sui-bridge --config-path {BRIDGE-NODE-CONFIG-PA
 
 ### Ingress
 
-Bridge Node listens for TCP connections over port `9191` (or the preferred port in the configuration file). You must allow incoming connections for that port on the host that is running Bridge Node.
+Bridge node listens for TCP connections over port `9191` (or the preferred port in the configuration file). You must allow incoming connections for that port on the host that is running bridge node.
 
 Test ingress with `curl` on a remote machine and expect a `200` response:
 
@@ -244,15 +244,15 @@ Test ingress with `curl` on a remote machine and expect a `200` response:
 $ curl -v {YOUR_BRIDGE_URL}
 ```
 
-### Bridge Node monitoring
+### Bridge node monitoring
 
 Use `uptime` to check if the node is running.
 
-You can find a full list of Bridge Node metrics and their descriptions in the [`sui-bridge` crate](https://github.com/MystenLabs/sui/blob/main/crates/sui-bridge/src/metrics.rs).
+You can find a full list of bridge node metrics and their descriptions in the [`sui-bridge` crate](https://github.com/MystenLabs/sui/blob/main/crates/sui-bridge/src/metrics.rs).
 
 #### When `run-client: false`
 
-In this case Bridge Node runs as a passive observer and does not proactively poll on-chain activities. Important metrics to monitor in this case are the request handling metrics, such as:
+In this case bridge node runs as a passive observer and does not proactively poll on-chain activities. Important metrics to monitor in this case are the request handling metrics, such as:
 
 - `bridge_requests_received`
 - `bridge_requests_ok`
@@ -289,9 +289,9 @@ metrics:
     push-url: https://metrics-proxy.[testnet|mainnet].sui.io:8443/publish/metrics
 ```
 
-The proxy authenticates pushed metrics by using the metrics key pair. It is similar to `sui-node` pushing metrics with `NetworkKey`. Unlike `NetworkKey`, the Bridge Node metrics key is not recorded on chain and can be ephemeral. The metrics key is loaded from the `metrics-key-pair` field in `BridgeNodeConfig` if provided, otherwise a new key pair is generated on the fly. The proxy queries node public keys periodically by hitting the metrics public API key of each node.
+The proxy authenticates pushed metrics by using the metrics key pair. It is similar to `sui-node` pushing metrics with `NetworkKey`. Unlike `NetworkKey`, the bridge node metrics key is not recorded on chain and can be ephemeral. The metrics key is loaded from the `metrics-key-pair` field in `BridgeNodeConfig` if provided, otherwise a new key pair is generated on the fly. The proxy queries node public keys periodically by hitting the metrics public API key of each node.
 
-When Bridge Node starts, it might log this line once:
+When bridge node starts, it might log this line once:
 
 ```
 unable to push metrics: error sending request for url (xyz); new client will be created
@@ -300,7 +300,7 @@ unable to push metrics: error sending request for url (xyz); new client will be 
 This is okay to ignore as long as it does not persist. Otherwise, try:
 
 ```sh
-$ curl -i  {your-bridge-node-url-onchain}/metrics_pub_key
+$ curl -i  {your-bridge-node-url-on-chain}/metrics_pub_key
 ```
 
 and make sure the public key is correctly returned.

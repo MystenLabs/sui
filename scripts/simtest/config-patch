@@ -1,18 +1,18 @@
 diff --git a/.cargo/config.toml b/.cargo/config.toml
-index a342267d27..47fd7e4ee1 100644
+index e813938e5b..6eb22f38d1 100644
 --- a/.cargo/config.toml
 +++ b/.cargo/config.toml
 @@ -29,4 +29,4 @@ move-clippy = [
  ]
 
  [build]
--rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]
-+rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "--cfg", "msim"]
+-rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "-A", "unknown_lints", "-A", "mismatched_lifetime_syntaxes"]
++rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "-A", "unknown_lints", "-A", "mismatched_lifetime_syntaxes", "--cfg", "msim"]
 diff --git a/Cargo.toml b/Cargo.toml
-index 4af4ba3596..0e6314d81d 100644
+index 2322475d08..0e9ccd0479 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -783,3 +783,5 @@ sui-execution = { path = "sui-execution" }
+@@ -798,3 +798,5 @@ sui-execution = { path = "sui-execution" }
  async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
  async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
  async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }

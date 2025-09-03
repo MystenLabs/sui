@@ -66,14 +66,13 @@ pub fn get_object(
         object_id,
         version,
         read_mask,
+        ..
     }: GetObjectRequest,
 ) -> Result<GetObjectResponse, RpcError> {
     let (requests, read_mask) =
         validate_get_object_requests(vec![(object_id, version)], read_mask)?;
     let (object_id, version) = requests[0];
-    get_object_impl(service, object_id, version, &read_mask).map(|object| GetObjectResponse {
-        object: Some(object),
-    })
+    get_object_impl(service, object_id, version, &read_mask).map(GetObjectResponse::new)
 }
 
 #[tracing::instrument(skip(service))]
@@ -82,6 +81,7 @@ pub fn batch_get_objects(
     BatchGetObjectsRequest {
         requests,
         read_mask,
+        ..
     }: BatchGetObjectsRequest,
 ) -> Result<BatchGetObjectsResponse, RpcError> {
     let requests = requests
@@ -97,7 +97,7 @@ pub fn batch_get_objects(
             Err(error) => GetObjectResult::new_error(error.into_status_proto()),
         })
         .collect();
-    Ok(BatchGetObjectsResponse { objects })
+    Ok(BatchGetObjectsResponse::new(objects))
 }
 
 #[tracing::instrument(skip(service))]

@@ -5,6 +5,12 @@ description: On Sui, you can transfer objects to objects in the same way you can
 
 You can transfer objects to an object ID in the same way you transfer objects to an address, using the same functions. This is because Sui does not distinguish between the 32-byte ID of an address and the 32-byte ID of an object (which are guaranteed not to overlap). The transfer to object operation takes advantage of this feature, allowing you to provide an object ID as the address input of a transfer operation.
 
+:::note
+
+The Transfer to Object mechanism is not supported for [Party Objects](../object-ownership/party.mdx) whose owning address corresponds to an object ID.
+
+:::
+
 Because of the identical ID structure, you can use an object ID for the address field when transferring an object. In fact, all functionality around address-owned objects works the same for objects owned by other objects, you just replace the address with the object ID.
 
 When you transfer an object to another object, you're basically establishing a form of parent-child authentication relationship. Objects that you have transferred to another object can be received by the (possibly transitive) owner of the parent object. The module that defines the type of the parent (receiving) object also defines the access control for receiving a child object.
@@ -128,7 +134,7 @@ When creating transactions, you interact with `Receiving` transaction inputs alm
 <TabItem label="TypeScript" value="typescript">
 
 ```ts
-... // Setup Typescript SDK as normal.
+... // Setup TypeScript SDK as normal.
 const tx = new Transaction();
 tx.moveCall({
   target: `${examplePackageId}::account::accept_payment`,
@@ -282,7 +288,7 @@ public fun transfer_account(account: Account, to: address, _ctx: &mut TxContext)
 
 ### Soul-bound objects {#soul-bound-example}
 
-The ability to control the rules about how and when an object can be received, and how and when it can be transferred allows us to define a type of "soul-bound" object that can be used by value in a transaction, but it must always stay in the same place, or be returned to the same object.
+The ability to control the rules about how and when an object can be received, and how and when it can be transferred allows us to define a type of _soul-bound_ object that can be used by value in a transaction, but it must always stay in the same place, or be returned to the same object.
 
 You can implement a simple version of this with the following module where the `get_object` function receives the soul-bound object and creates a receipt that must be destroyed in the transaction in order for it to execute successfully. However, in order to destroy the receipt, the object that was received must be transferred back to the object it was received from in the transaction using the `return_object` function.
 

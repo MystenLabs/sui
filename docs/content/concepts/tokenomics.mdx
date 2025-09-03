@@ -1,12 +1,13 @@
 ---
 title: Sui Tokenomics
 description: Sui's tokenomics is designed to support the long-term financial needs of Web3. It uses the native SUI coin as the currency of the network and to pay for the network's gas fees. 
-keywords: [ sui, SUI, sui coin, sui token, sui tokenomics, sui economy, sui gas fees, sui coin purpose, sui coin uses, sui token uses, sui token purpose, unlocking schedules, sui unlock schedul, sui validator rewards, validator rewards, validator and staking pools, sui staking pools, sui staking ] 
+keywords: [ sui, SUI, sui coin, SUI token, sui tokenomics, sui economy, sui gas fees, sui coin purpose, sui coin uses, SUI token uses, SUI token purpose, unlocking schedules, sui unlock schedul, sui validator rewards, validator rewards, validator and staking pools, sui staking pools, sui staking ] 
+pagination_prev: null
 ---
 
-The term "tokenomics" is a combination of two words, “token” and “economics”, that is generally used to describe the economic principles and behaviors of a blockchain. 
+The term _tokenomics_ is a combination of two words: token and economics. It is generally used to describe the economic principles and behaviors of a blockchain. 
 
-The “token” part of the tokenomics portmanteau refers to the native token (or native coin) of the blockchain. On Sui, the native coin is SUI, which acts as the currency of the network. SUI also pays for the computational cost of transactions (gas fees) and storage on the network. 
+The _token_ part of the tokenomics portmanteau refers to the native token (or native coin) of the blockchain. On Sui, the native coin is SUI, which acts as the currency of the network. SUI also pays for the computational cost of transactions (gas fees) and storage on the network. 
 
 ## Proof of stake
 
@@ -43,7 +44,7 @@ There is a finite supply of SUI. The balance must support all economic activitie
 
 At the beginning of each epoch, three important events happen:
 
-- SUI holders stake (some) of their tokens to validators and a new [committee](https://docs.sui.io/guides/operator/validator-committee) is formed.
+- SUI holders stake (some) of their tokens to validators and a new [committee](/guides/operator/validator/validator-committee) is formed.
 - The reference gas prices are set as described in [Sui Gas Pricing](https://docs.sui.io/concepts/tokenomics/gas-pricing).
 - The [storage fund](#storage-fund) size is adjusted using the net inflow of the previous epoch.
 
@@ -117,7 +118,7 @@ Exchange rate at E+1 = ( 1 + ( third-party staker rewards at E / third-party sta
 
 The distinction between third-party owned vs validator-owned rewards and stake is relevant in that validators earn commissions on the staking pool's tokens but third-party stakers do not. This accounting enables Sui to keep track of the rewards accrued by both validators and third-party token holders using a single global exchange rate table.
 
-{@include: ../snippets/staking-pool-reqs.mdx}
+<ImportContent source="staking-pool-reqs.mdx" mode="snippet" />
 
 #### Understanding the voting power formula
 
@@ -148,5 +149,5 @@ As the total network stake changes, the minimum required amount will adjust auto
 
 ## Related links
 
-- [The Sui Smart Contracts Platform: Economics and Incentives](https://docs.sui.io/paper/tokenomics.pdf): Whitepaper that details Sui tokenomics.
-- [Gas fees](https://docs.sui.io/concepts/tokenomics/gas-in-sui): Gas fees are charged on all network operations and used to reward participants of the proof-of-stake mechanism and prevent spam and denial-of-service attacks.
+<RelatedLink href="https://docs.sui.io/paper/tokenomics.pdf" label="The Sui Smart Contracts Platform: Economics and Incentives" desc="Whitepaper that details Sui tokenomics." />
+<RelatedLink to="/concepts/tokenomics/gas-in-sui" />

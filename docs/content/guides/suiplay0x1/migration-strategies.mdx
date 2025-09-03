@@ -1,10 +1,10 @@
 ---
 title: Broader Sui Ecosystem Support
 description: SuiPlay0X1 is part of the Sui gaming ecosystem. Users can migrate accounts between on-device and off-device versions of a game. 
-keywords: [ suiplayx01, playtron, sui dapp kit, off-device users, on-device users, sui gaming, on-device gaming, off-device gaming, playtron wallet, off-device play, on-device play, dapp kit, migrate off-device to on-device, migrate on-device to off-device ]
+keywords: [ suiplayx01, playtron, sui dApp kit, off-device users, on-device users, sui gaming, on-device gaming, off-device gaming, playtron wallet, off-device play, on-device play, dApp kit, migrate off-device to on-device, migrate on-device to off-device ]
 ---
 
-{@include: ../../snippets/suiplay.mdx}
+<ImportContent source="suiplay.mdx" mode="snippet" />
 
 The SuiPlay0X1 is one part of a larger ecosystem of Sui gaming. Users might play your game for the first time on the device, and later decide to continue playing your game on PC. Or, they might have already played your game before on PC with their own mnemonic wallet and want to continue playing on the device.
 
@@ -46,7 +46,7 @@ Examples where read-only is adequate:
 - An NFT representing membership access. 
 - An NFT representing an unlocked skin that can’t be transacted on while playing the game (but can be traded separately on a third-party NFT marketplace).
 
-Users login to the Playtron wallet via the companion web site ([https://wallet.playtron.one](https://wallet.playtron.one)) to link their Playtron wallet to their existing wallet. This works for tying the Playtron wallet to self-custody wallets. This doesn't work for tying to custodial wallets, but that shouldn't be necessary as your game's backend can track users' assets across devices (such as through a user id or Steam/EGS login).
+Users login to the Playtron wallet via the companion web site ([https://wallet.playtron.one](https://wallet.playtron.one)) to link their Playtron wallet to their existing wallet. This works for tying the Playtron wallet to self-custody wallets. This doesn't work for tying to custodial wallets, but that shouldn't be necessary as your game's backend can track users' assets across devices (such as through a user ID or Steam/EGS login).
 
 If you are using a game-specific zkLogin wallet, a properly configured [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect) can link your game-specific zkLogin wallet with the Playtron wallet.  
 
@@ -59,9 +59,9 @@ If your game requires the user to sign or approve transactions to act on assets 
 - Tokens that represent game currency and users can spend during the course of gameplay.
 - NFTs that can be traded from inside your game that require signed transactions.
 
-For self-custody and game-specific zkLogin wallets, users must transfer assets from original self-custody wallets to Playtron wallets. For custodial wallets, there is no need as your game backend can track the user’s assets across devices (such as through a user id or Steam/EGS login).
+For self-custody and game-specific zkLogin wallets, users must transfer assets from original self-custody wallets to Playtron wallets. For custodial wallets, there is no need as your game backend can track the user’s assets across devices (such as through a user ID or Steam/EGS login).
 
-Transfer enables full transaction capabilities on device. The companion web app provides user-friendly transfer flows  
+Transfer enables full transaction capabilities on-device. The companion web app provides user-friendly transfer flows  
 
 :::tip
 
@@ -71,8 +71,8 @@ If you are using a game-specific zkLogin wallet, to use the companion web app re
 
 ## Related links
 
-- [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
-- [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
-- [SuiPlay0X1 Discord](https://discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
-- [Companion web application](https://wallet.playtron.one) (in development): Support linking the Playtron wallet to other self-custodied wallets using Sui Link, enabling read-access of associated wallets while on the device.
-- [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect): With Enoki Connect, users can use their dApp-specific accounts across different dApps, enabling a more unified and consistent experience.
+<RelatedLink href="https://github.com/playtron-os/playtron-sdk" label="Playtron GameOS SDK" desc="The official Playtron OS SDK repository on GitHub." />
+<RelatedLink href="https://sdk.mystenlabs.com/dapp-kit" label="Sui dApp Kit documentation" desc="The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem." />
+<RelatedLink href="https://discord.gg/suiplay" label="SuiPlay0X1 Discord" desc="Follow announcements and connect with the community on the Discord channel for SuiPlay0X1." />
+<RelatedLink href="https://wallet.playtron.one) (in development" label="Companion web application" desc="Support linking the Playtron wallet to other self-custodied wallets using Sui Link, enabling read-access of associated wallets while on the device." />
+<RelatedLink href="https://docs.enoki.mystenlabs.com/enoki-connect" label="Enoki Connect" desc="With Enoki Connect, users can use their dApp-specific accounts across different dApps, enabling a more unified and consistent experience." />

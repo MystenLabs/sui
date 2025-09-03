@@ -1,12 +1,13 @@
 ---
 title: Your First Sui dApp
 description: Build your first dApp and publish it on chain. These guides demonstrate the basics you need to know to start your development journey on Sui.
-keywords: [ dapp, first dapp, example dapp, decentralized application, testnet, devnet, mainnet, local network, sui client, sui cli ]
+keywords: [ dApp, first dApp, example dApp, decentralized application, testnet, devnet, mainnet, local network, sui client, sui cli ]
+pagination_prev: null
 ---
 
 Before you can create your first dApp on the Sui network, you must have [Sui installed](./getting-started/sui-install.mdx).
 
-dApp stands for "decentralized application", which is an application that runs on a blockchain or decentralized network instead of a centralized server. Typical dApps do not run solely on the blockchain, but instead are composed of different pieces, like a TypeScript frontend that interacts with code that lives on a blockchain. Sui needs code written in Move for the pieces of a dApp that live on chain. These pieces are referred to as packages, modules, or smart contracts.
+dApp stands for _decentralized application_, which is an application that runs on a blockchain or decentralized network instead of a centralized server. Typical dApps do not run solely on the blockchain, but instead are composed of different pieces, like a TypeScript frontend that interacts with code that lives on a blockchain. Sui needs code written in Move for the pieces of a dApp that live on chain. These pieces are referred to as packages, modules, or smart contracts.
 
 The instructions in this section walk you through writing a basic package, debugging and testing your code, and publishing. You need to follow these instructions in the order they appear to complete the exercise.
 
@@ -34,7 +35,7 @@ If you already have a network config set up, switch your active environment to T
     ```sh
     $ sui client
     ```
-1. At the prompt, type <kbd>y</kbd> and press <kbd>Enter</kbd> to connect to a Sui Full node server.
+1. At the prompt, type <kbd>y</kbd> and press <kbd>Enter</kbd> to connect to a Sui full node server.
 1. At the following prompt, type the address of the Testnet server (`https://fullnode.testnet.sui.io:443`) and press <kbd>Enter</kbd>.
 1. At the following prompt, type `testnet` to give the network an alias and press <kbd>Enter</kbd>. You can use the alias in subsequent commands instead of typing the complete URL.
 1. At the following prompt, type `0` and press <kbd>Enter</kbd>. The selection creates an address in the `ed25519` signing scheme.
@@ -52,8 +53,8 @@ You are now connected to the Sui Testnet network and should have an account with
 
 ## Related links
 
-- [Write a Move Package](./first-app/write-package.mdx): Continue this example by creating the necessary Move code for your package.
-- [Connect to a Sui Network](./getting-started/connect.mdx): Connect to an available Sui network.
-- [Connect to a Local Network](./getting-started/local-network.mdx): Start and connect to a local Sui network.
-- [Get Sui Address](./getting-started/get-address.mdx): Get an address for the current Sui network.
-- [Get SUI Tokens](./getting-started/get-coins.mdx): Get SUI for the active address on Devnet, Testnet, or a local network.
+<RelatedLink to="/guides/developer/first-app/write-package.mdx" />
+<RelatedLink to="/guides/developer/getting-started/connect.mdx" />
+<RelatedLink to="/guides/developer/getting-started/local-network.mdx" />
+<RelatedLink to="/guides/developer/getting-started/get-address.mdx" />
+<RelatedLink to="/guides/developer/getting-started/get-coins.mdx" />

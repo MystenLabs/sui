@@ -44,7 +44,7 @@ pub async fn get_epoch(
     };
 
     let Some(epoch_info) = maybe_epoch_info else {
-        return Ok(GetEpochResponse { epoch: None });
+        return Ok(GetEpochResponse::default());
     };
 
     if read_mask.contains(Epoch::EPOCH_FIELD.name) {
@@ -84,7 +84,5 @@ pub async fn get_epoch(
             committee.into()
         });
     }
-    Ok(GetEpochResponse {
-        epoch: Some(message),
-    })
+    Ok(GetEpochResponse::new(message))
 }

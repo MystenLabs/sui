@@ -1,7 +1,7 @@
 ---
 title: Sui Exchange Integration Guide
 description: Learn the primary tasks necessary to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange.
-keywords: [ integrate sui, integrate with sui token, sui tokens, SUI, integrate sui into exchange, cryptocurrency exchange, decentralized exchange, dex, integrate with dex, sui balance transfer, staking functions, track balance, checkpoints, staking functions ]
+keywords: [ integrate sui, integrate with SUI token, sui tokens, SUI, integrate sui into exchange, cryptocurrency exchange, decentralized exchange, dex, integrate with dex, sui balance transfer, staking functions, track balance, checkpoints, staking functions ]
 ---
 
 This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking on the Sui network.
@@ -9,17 +9,17 @@ This topic describes how to integrate SUI, the token native to the Sui network, 
 ## Requirements to configure a SUI integration
 
 The requirements to configure a SUI integration include:
- - A Sui Full node. You can operate your own Sui Full node or use a Full node from a node operator.
- - Suggested hardware requirements to run a Sui Full node:
+ - A Sui full node. You can operate your own Sui full node or use a full node from a node operator.
+ - Suggested hardware requirements to run a Sui full node:
     - CPU: 8 physical cores / 16 vCPUs
     - RAM: 128 GB
     - Storage (SSD): 4 TB NVMe drive
 
-For best results, run Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also run a Full node on macOS.
+For best results, run Sui full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also run a full node on macOS.
 
-## Configure a Sui Full node
+## Configure a Sui full node
 
-You can set up and configure a [Sui Full node](./sui-full-node.mdx) using Docker or directly from source code in the Sui GitHub repository.
+You can set up and configure a [Sui full node](./sui-full-node.mdx) using Docker or directly from source code in the Sui GitHub repository.
 
 ## Set up Sui addresses
 
@@ -47,7 +47,7 @@ Sui supports both addresses with and without a `0x` prefix. Sui recommends that 
 
 You can track balance changes by calling `sui_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `sui_getBalance` requests.
 
-The following bash example demonstrates how to use `sui_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate Full node.
+The following bash example demonstrates how to use `sui_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate full node.
 
 ```sh
 rpc="https://fullnode.devnet.sui.io:443"

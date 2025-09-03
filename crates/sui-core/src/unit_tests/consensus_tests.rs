@@ -10,7 +10,7 @@ use crate::authority::ExecutionEnv;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::ExecutionSchedulerAPI;
+
 use crate::mock_consensus::with_block_status;
 use consensus_core::BlockStatus;
 use consensus_types::block::BlockRef;

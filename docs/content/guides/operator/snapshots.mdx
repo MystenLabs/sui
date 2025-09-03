@@ -1,12 +1,12 @@
 ---
 title: Database Snapshots
-description: Database snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis.
+description: Database snapshots of the Sui network enable full node operators a way to bootstrap a full node without having to execute all the transactions that occurred after genesis.
 keywords: [ node snapshots, database snapshots, full node snapshots, formal snapshots, rocksdb, rocksdb snapshot, restoring a node, restoring a full node, restoring from snapshot, managed snapshots, enabling snapshots ]
 ---
 
-Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for Full node operators.
+Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for full node operators.
 
-Snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis. You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you're more easily able to recover quickly from catastrophic failures in your system or hardware.
+Snapshots of the Sui network enable full node operators a way to bootstrap a full node without having to execute all the transactions that occurred after genesis. You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your full node. With snapshots stored in the cloud, you're more easily able to recover quickly from catastrophic failures in your system or hardware.
 
 To maintain a healthy Sui network, Sui encourages the Sui community to bring up additional snapshots to ensure stronger data availability across the network.
 
@@ -15,7 +15,7 @@ To maintain a healthy Sui network, Sui encourages the Sui community to bring up 
 Sui supports two types of snapshots:
 
 - **RocksDB snapshots** are a point-in-time view of a database store. This means that the snapshot keeps the state of the system at the moment it generates the snapshot, including non-pruned data, additional indices, and other data.
-- **Formal snapshots** are database agnostic with a minimalistic format, in other words they contain only the data necessary to restore a node to a valid state at the specified epoch, thus they have a much smaller storage footprint and are generally faster to restore from when compared to database snapshots. Formal snapshots are also supported natively by the Sui protocol. In this context, this means that we can cryptographically verify the contents of the formal snapshot against a commitment from the committee at the epoch we are restoring to. This verification happens automatically and by default during a Formal snapshot restore (unless explicitly bypassed). 
+- **Formal snapshots** are database agnostic with a minimalistic format. In other words, they contain only the data necessary to restore a node to a valid state at the specified epoch. Consequently, they have a much smaller storage footprint and are generally faster to restore from when compared to database snapshots. Formal snapshots are also supported natively by the Sui protocol. In this context, you can cryptographically verify the contents of the formal snapshot against a commitment from the committee at the epoch you are restoring to. This verification happens automatically and by default during a formal snapshot restore (unless explicitly bypassed). 
 
 :::info
 
@@ -23,8 +23,8 @@ Formal snapshots are not suitable for use if you are running an RPC node that do
 
 :::
 
-You can configure a Full node snapshot to generate a state snapshot at the end of each epoch.
-A single Full node can generate RocksDB snapshots, Formal snapshots, or both.
+You can configure a full node snapshot to generate a state snapshot at the end of each epoch.
+A single full node can generate RocksDB snapshots, formal snapshots, or both.
 
 ## Formal snapshots
 
@@ -34,9 +34,9 @@ Formal snapshots provide a mechanism for a node to restore to a canonical state 
 1. **Agnosticism:** Formal snapshots are by nature agnostic to the underlying database choice or implementation of the protocol. As the live object set is protocol defined, so is the formal snapshot.
 1. **Verifiability:** Formal snapshots have first-class support in the core Sui protocol. As such, they must be trustless/verifiable by the node operator upon download. To support this, the protocol signs a commitment to the live object state at end of epoch, which formal snapshots are checked against at restore time. If this verification fails, the node state is moved back to the state before the snapshot restore attempt.
 
-Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more efficiently.
+Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more efficiently.
 
-## Restoring a Full node using snapshots
+## Restoring a full node using snapshots
 
 ### Restoring using RocksDB snapshots
 
@@ -45,7 +45,7 @@ To restore from a RocksDB snapshot, follow these steps:
 1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
 1. Place the snapshot into the directory that the `db-path` value points to in your fullnode.yaml file. For example, if the `db-path` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
 
-   You can use the aws cli (provided you have credentials to associate with the download):
+   You can use the AWS CLI (provided you have credentials to associate with the download):
    `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive --request-payer requester`.
    
    An alternative is to use `sui-tool` to copy the files. The following example command is for reading from a snapshot bucket that you host:
@@ -58,12 +58,12 @@ To restore from a RocksDB snapshot, follow these steps:
    ```
    - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
    - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
-   - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--network`: Network to download snapshot for. Defaults to `mainnet`.
    - `--path`: Path to snapshot directory on local filesystem.
    - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and a static Cloudflare R2 bucket is used.
    - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`. This cannot be used with `--no-sign-request`.
    - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported. This cannot be used with `--no-sign-request`.
-   - `--skip-indexes`: Skips downloading the very large `indexes/` dir, used by jsonrpc on the fullnode
+   - `--skip-indexes`: Skips downloading the very large `indexes/` dir, used by jsonrpc on the full node
 
    The following environment variables are used if `--no-sign-request` is not set:
    * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
@@ -77,16 +77,16 @@ To restore from a RocksDB snapshot, follow these steps:
 
 :::info
 
-When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. When restoring a Validator node, you can shorten the database destination to `/opt/sui/db/authorities_db/live`. Check the `db_path` field of your Full node or Validator configs to confirm the path location.
+When you restore a full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. When restoring a validator node, you can shorten the database destination to `/opt/sui/db/authorities_db/live`. Check the `db_path` field of your full node or Validator configs to confirm the path location.
 
 :::
 
-### Restoring using Formal snapshots
+### Restoring using formal snapshots
 
-To restore using a Formal snapshot, use the `sui-tool` binary. `sui-tool` can be downloaded along with other sui binaries.
+To restore using a formal snapshot, use the `sui-tool` binary. You can download `sui-tool` along with other `sui` binaries.
 See [Install Sui](../developer/getting-started/sui-install.mdx) for more details.
 
-The following steps can be used to restore a node from a Formal snapshot:
+The following steps can be used to restore a node from a formal snapshot:
 
 1. If it's running, stop the node.
 2. Run the command:
@@ -98,7 +98,7 @@ The following steps can be used to restore a node from a Formal snapshot:
    - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
    - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
    - `--genesis`: The path to the location of the network's `genesis.blob`.
-   - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--network`: Network to download snapshot for. Defaults to `mainnet`.
    - `--path`: Path to snapshot directory on local filesystem.
    - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
    - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`. This cannot be used with `--no-sign-request`.
@@ -123,22 +123,27 @@ Mysten Labs hosts two tiers of snapshot storage access. **High throughput, Reque
 * These are currently hosted on Cloudflare R2, currently only in North America, but we plan on adding more regions soon.
 * Since the bucket is open to the internet, there's no need to provide any cloud credentials.
 
-### Bucket Names
+### Bucket names
+
 **S3**
+
 Testnet: `s3://mysten-testnet-snapshots/`, `s3://mysten-testnet-formal/`
+
 Mainnet: `s3://mysten-mainnet-snapshots/`,  `s3://mysten-mainnet-formal/`
 
 **GCS**
+
 Testnet: `gs://mysten-testnet-snapshots/`, `gs://mysten-testnet-formal/`
+
 Mainnet: `gs://mysten-mainnet-snapshots/`,  `gs://mysten-mainnet-formal/`
 
 ![Mysten Managed Snapshots](./images/mysten-cloud-snapshots.png "A diagram that shows the current architecture of Mysten snapshot availability")
 
 ## Enabling snapshots
 
-Full nodes do not take snapshots by default. To enable this feature you must apply specific configs to your Full node.
+Full nodes do not take snapshots by default. To enable this feature you must apply specific configs to your full node.
 
-Follow these steps to change the configs for a Full node:
+Follow these steps to change the configs for a full node:
 
 1. Stop your node, if it's running.
 2. Open your `fullnode.yaml` config file and apply config updates as the following sections show.
@@ -165,7 +170,7 @@ Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 se
    - `aws-region`: Region where bucket exists.
    - `object-store-connection-limit`: Number of simultaneous connections to the object store.
 
-### Enabling Formal snapshots
+### Enabling formal snapshots
 
  Add an entry to the config file for `state-snapshot-write-config`. Using Amazon's S3 service as an example:
    ```yaml

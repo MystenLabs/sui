@@ -59,7 +59,7 @@ use crate::{
     compiler_info::CompilerInfo,
     symbols::{
         compilation::{
-            CompiledPkgInfo, CompiledProgram, ParsedDefinitions, PrecomputedPkgInfo,
+            CachedPackages, CachedPkgInfo, CompiledPkgInfo, CompiledProgram, ParsedDefinitions,
             SymbolsComputationData, get_compiled_pkg,
         },
         cursor::CursorContext,
@@ -154,7 +154,7 @@ pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 /// the ones in `modified_files` (if `modified_paths` contains a path not representing
 /// a Move file but rather a directory, then we conservatively do not re-use any cached info).
 pub fn get_symbols(
-    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     modified_files: Option<Vec<PathBuf>>,
@@ -162,38 +162,64 @@ pub fn get_symbols(
     cursor_info: Option<(&PathBuf, Position)>,
     implicit_deps: Dependencies,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
-    let compilation_start = Instant::now();
-    let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
-        packages_info.clone(),
-        ide_files_root,
-        pkg_path,
-        modified_files,
-        lint,
-        implicit_deps,
-    )?;
-    eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
-    let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
-        return Ok((None, ide_diagnostics));
+    // helper function to avoid holding the lock for too long
+    let has_pkg_entry = || {
+        packages_info
+            .lock()
+            .unwrap()
+            .pkg_info
+            .contains_key(pkg_path)
     };
-    let analysis_start = Instant::now();
-    let symbols = compute_symbols(packages_info, compiled_pkg_info, cursor_info);
-    eprintln!("analysis complete in {:?}", analysis_start.elapsed());
-    eprintln!("get_symbols load complete");
 
-    Ok((Some(symbols), ide_diagnostics))
+    // If no attempt was yet made to cache symbols for this package,
+    // it means that we are symboliciating it for the first time.
+    // In this case, we should symbolicate twice - once to do full
+    // compilation and symbolication to get all the code and symbols
+    // that can be cached, and second time to actually use the cached
+    // values and drop the artifacts of full compilation/symbolication
+    // (or at least try to). If we don't do that, then after the first
+    // symbolication we will hold on to all the full compilation/symbolication
+    // artifacts which will keep memory footpring pretty high.
+    let mut should_retry = !has_pkg_entry();
+
+    loop {
+        let compilation_start = Instant::now();
+        let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
+            packages_info.clone(),
+            ide_files_root.clone(),
+            pkg_path,
+            modified_files.clone(),
+            lint,
+            implicit_deps.clone(),
+        )?;
+        eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
+        let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
+            return Ok((None, ide_diagnostics));
+        };
+        let analysis_start = Instant::now();
+        let symbols = compute_symbols(packages_info.clone(), compiled_pkg_info, cursor_info);
+        eprintln!("analysis complete in {:?}", analysis_start.elapsed());
+        eprintln!("get_symbols load complete");
+
+        if !should_retry {
+            return Ok((Some(symbols), ide_diagnostics));
+        }
+        should_retry = false;
+        eprintln!("Retrying compilation for {:?}", pkg_path);
+    }
 }
 
 /// Compute symbols for a given package from the parsed and typed ASTs,
 /// as well as other auxiliary data provided in `compiled_pkg_info`.
 pub fn compute_symbols(
-    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    packages_info: Arc<Mutex<CachedPackages>>,
     mut compiled_pkg_info: CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Symbols {
     let pkg_path = compiled_pkg_info.path.clone();
     let manifest_hash = compiled_pkg_info.manifest_hash;
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
-    let deps_hash = compiled_pkg_info.deps_hash.clone();
+    let dep_hashes = compiled_pkg_info.dep_hashes.clone();
     let edition = compiled_pkg_info.edition;
     let compiler_info = compiled_pkg_info.compiler_info.clone();
     let lsp_diags = compiled_pkg_info.lsp_diags.clone();
@@ -234,23 +260,27 @@ pub fn compute_symbols(
         if let Some(deps_symbols_data) = deps_symbols_data_opt {
             // dependencies may have changed or not, but we still need to update the cache
             // with new file hashes and user program info
-            pkg_deps.insert(
-                pkg_path,
-                PrecomputedPkgInfo {
+            pkg_deps.pkg_info.insert(
+                pkg_path.clone(),
+                Some(CachedPkgInfo {
                     manifest_hash,
-                    deps_hash,
+                    dep_hashes,
                     deps: cached_deps.program_deps.clone(),
+                    dep_names: cached_deps.dep_names.clone(),
                     deps_symbols_data,
                     program: Arc::new(program),
                     file_paths: Arc::new(file_paths),
-                    dep_hashes: cached_deps.dep_hashes,
                     edition,
                     compiler_info,
                     lsp_diags,
-                },
+                }),
             );
         }
     }
+    // record attempt at caching as some actions are taken
+    // on the first attempt to symbolicate and we need to
+    // know once this attempt is complete
+    pkg_deps.pkg_info.entry(pkg_path).or_insert(None);
     symbols
 }
 

@@ -347,6 +347,10 @@ pub trait TransactionEffectsAPI {
 
     fn object_changes(&self) -> Vec<ObjectChange>;
 
+    /// The set of object refs written by this transaction, including deleted and wrapped objects.
+    /// Unlike object_changes(), returns no information about the starting state of the object.
+    fn written(&self) -> Vec<ObjectRef>;
+
     fn accumulator_events(&self) -> Vec<AccumulatorEvent>;
 
     // TODO: We should consider having this function to return Option.
@@ -464,3 +468,7 @@ impl CertifiedTransactionEffects {
         Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
     }
 }
+
+#[cfg(test)]
+#[path = "../unit_tests/effects_tests.rs"]
+mod effects_tests;

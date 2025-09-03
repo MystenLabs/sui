@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, Registry,
 };
 
 /// Histogram buckets for the distribution of latency (time between sending a DB request and
@@ -16,20 +17,36 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 ];
 
 #[derive(Clone)]
-pub(crate) struct ReaderMetrics {
-    pub db_latency: Histogram,
-    pub db_requests_received: IntCounter,
-    pub db_requests_succeeded: IntCounter,
-    pub db_requests_failed: IntCounter,
+pub(crate) struct DbReaderMetrics {
+    pub latency: Histogram,
+    pub requests_received: IntCounter,
+    pub requests_succeeded: IntCounter,
+    pub requests_failed: IntCounter,
 }
 
-impl ReaderMetrics {
+#[derive(Clone)]
+pub(crate) struct ConsistentReaderMetrics {
+    pub latency: HistogramVec,
+    pub requests_received: IntCounterVec,
+    pub requests_succeeded: IntCounterVec,
+    pub requests_failed: IntCounterVec,
+}
+
+#[derive(Clone)]
+pub(crate) struct FullnodeClientMetrics {
+    pub latency: HistogramVec,
+    pub requests_received: IntCounterVec,
+    pub requests_succeeded: IntCounterVec,
+    pub requests_failed: IntCounterVec,
+}
+
+impl DbReaderMetrics {
     pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("db");
         let name = |n| format!("{prefix}_{n}");
 
         Arc::new(Self {
-            db_latency: register_histogram_with_registry!(
+            latency: register_histogram_with_registry!(
                 name("latency"),
                 "Time taken by the database to respond to queries",
                 LATENCY_SEC_BUCKETS.to_vec(),
@@ -37,23 +54,107 @@ impl ReaderMetrics {
             )
             .unwrap(),
 
-            db_requests_received: register_int_counter_with_registry!(
+            requests_received: register_int_counter_with_registry!(
                 name("requests_received"),
                 "Number of database requests sent by the service",
                 registry,
             )
             .unwrap(),
 
-            db_requests_succeeded: register_int_counter_with_registry!(
+            requests_succeeded: register_int_counter_with_registry!(
                 name("requests_succeeded"),
                 "Number of database requests that completed successfully",
                 registry,
             )
             .unwrap(),
 
-            db_requests_failed: register_int_counter_with_registry!(
+            requests_failed: register_int_counter_with_registry!(
                 name("requests_failed"),
                 "Number of database requests that completed with an error",
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
+impl ConsistentReaderMetrics {
+    pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("consistent_store");
+        let name = |n| format!("{prefix}_{n}");
+
+        Arc::new(Self {
+            latency: register_histogram_vec_with_registry!(
+                name("latency"),
+                "Time taken by the consistent store to respond to queries",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            requests_received: register_int_counter_vec_with_registry!(
+                name("requests_received"),
+                "Number of consistent store requests sent by the service",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_succeeded: register_int_counter_vec_with_registry!(
+                name("requests_succeeded"),
+                "Number of consistent store requests that completed successfully",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_failed: register_int_counter_vec_with_registry!(
+                name("requests_failed"),
+                "Number of consistent store requests that completed with an error",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
+impl FullnodeClientMetrics {
+    pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("fullnode_client");
+        let name = |n| format!("{prefix}_{n}");
+
+        Arc::new(Self {
+            latency: register_histogram_vec_with_registry!(
+                name("latency"),
+                "Time taken for full node gRPC operations",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            requests_received: register_int_counter_vec_with_registry!(
+                name("requests_received"),
+                "Number of full node requests received",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_succeeded: register_int_counter_vec_with_registry!(
+                name("requests_succeeded"),
+                "Number of successful full node requests",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_failed: register_int_counter_vec_with_registry!(
+                name("requests_failed"),
+                "Number of failed full node requests",
+                &["method"],
                 registry,
             )
             .unwrap(),

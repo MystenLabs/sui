@@ -16,7 +16,7 @@ In previous releases, Sui used a special `Signable` trait that attached the Rust
 The intent signing standard provides a compact domain separator to the data being signed for both user signatures and authority signatures. It has several benefits, including:
 
 - The intent scope is replaced by a u8 representation instead of a Rust struct tag name string.
-- In addition to the intent scope, other important domain separators can be committed as well (such as intent version and app id).
+- In addition to the intent scope, other important domain separators can be committed as well (such as intent version and app ID).
 - The data itself no longer needs to implement the `Signable` trait, it just needs to implement `Serialize`.
 - All signatures can adopt the same intent message structure, including both user signatures (only to commit to `TransactionData`) and authority signature (commits to all internal intent scopes such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`).
 
@@ -41,7 +41,9 @@ pub struct Intent {
 }
 ```
 
-To see a detailed definition for each field, see each enum definition [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs).
+For detailed field definitions, see the enum definitions in the source code:
+
+<ImportContent source="crates/shared-crypto/src/intent.rs" mode="code" enumeration="IntentScope,IntentVersion,AppId,HashingIntentScope" />
 
 The serialization of an `Intent` is a 3-byte array where each field is represented by a byte.
 
@@ -80,7 +82,7 @@ The authority signature is created using the protocol key. The data that it comm
 
 When an authority request to join the network, the protocol public key and its proof of possession (PoP) are required to be submitted. PoP is required to prevent [rogue key attack](https://crypto.stanford.edu/~dabo/pubs/papers/BLSmultisig.html).
 
-The proof of possession is a BLS signature created using the authority's protocol private key, committed over the following message: `intent || pubkey || address || epoch`. Here `intent` is serialized to `[5, 0, 0]` representing an intent with scope as "Proof of Possession", version as "V0" and app_id as "Sui". `pubkey` is the serialized public key bytes of the authority's BLS protocol key. `address` is the account address associated with the authority's account key. `epoch` is serialized to `[0, 0, 0, 0, 0, 0, 0, 0]`.
+The proof of possession is a BLS signature created using the authority's protocol private key, committed over the following message: `intent || pubkey || address || epoch`. Here `intent` is serialized to `[5, 0, 0]` representing an intent with scope as `Proof of Possession`, version as `V0` and app_id as `Sui`. `pubkey` is the serialized public key bytes of the authority's BLS protocol key. `address` is the account address associated with the authority's account key. `epoch` is serialized to `[0, 0, 0, 0, 0, 0, 0, 0]`.
 
 To generate a proof of possession in Rust, see implementation at `fn generate_proof_of_possession`. For test vectors, see `fn test_proof_of_possession`.
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use diesel::{
     sql_types::{BigInt, Bytea},
@@ -13,7 +13,7 @@ use tokio::{task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::{package_resolver::PackageResolver, pg_reader::PgReader};
+use crate::{package_resolver::PackageCache, pg_reader::PgReader};
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct SystemPackageTaskArgs {
@@ -28,8 +28,8 @@ pub struct SystemPackageTask {
     /// Access to the database
     pg_reader: PgReader,
 
-    /// Access to the package resolver
-    package_resolver: PackageResolver,
+    /// The cached store underlying the package resolver.
+    package_cache: Arc<PackageCache>,
 
     /// How long to wait between checks.
     interval: Duration,
@@ -48,12 +48,12 @@ impl SystemPackageTask {
     pub fn new(
         args: SystemPackageTaskArgs,
         pg_reader: PgReader,
-        package_resolver: PackageResolver,
+        package_cache: Arc<PackageCache>,
         cancel: CancellationToken,
     ) -> Self {
         Self {
             pg_reader,
-            package_resolver,
+            package_cache,
             interval: args.epoch_polling_interval(),
             cancel,
         }
@@ -69,7 +69,7 @@ impl SystemPackageTask {
         tokio::spawn(async move {
             let Self {
                 pg_reader,
-                package_resolver,
+                package_cache,
                 interval,
                 cancel,
             } = self;
@@ -185,7 +185,7 @@ impl SystemPackageTask {
                         };
 
                         info!(system_packages = ?system_packages, "Evicting...");
-                        package_resolver.package_store().evict(system_packages)
+                        package_cache.evict(system_packages)
                     }
                 }
             }

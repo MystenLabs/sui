@@ -27,6 +27,7 @@ url.workspace = true
 
 move-core-types.workspace = true
 
+sui-indexer-alt-consistent-api.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-kvstore.workspace = true

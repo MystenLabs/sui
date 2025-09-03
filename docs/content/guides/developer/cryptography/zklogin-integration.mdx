@@ -20,13 +20,13 @@ Let's dive into the specific implementation details.
 To use the zkLogin TypeScript SDK in your project, run the following command in your project root:
 
 ```sh npm2yarn
-npm install @mysten/sui
+$ npm install @mysten/sui
 ```
 
 If you want to use the latest experimental version:
 
 ```sh npm2yarn
-npm install @mysten/sui@experimental
+$ npm install @mysten/sui@experimental
 ```
 
 ## Get JWT
@@ -230,7 +230,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Run the proving service in your backend
 
-1. Install [Git Large File Storage](https://git-lfs.com/) (an open-source Git extension for large file versioning) before downloading the zkey.
+1. Install [Git Large File Storage](https://git-lfs.com/) (an open source Git extension for large file versioning) before downloading the zkey.
 
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/). There are zkeys available for all Sui networks. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated.
 
@@ -296,7 +296,7 @@ A few important things to note:
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
+First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional key pair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender` is also defined.
 
 ```typescript
 const ephemeralKeyPair = new Ed25519Keypair();
@@ -369,6 +369,6 @@ The prover that Mysten Labs maintains is set to auto-scale to handle traffic sur
 
 ## Related links
 
-- [zkLogin Concepts](../../../concepts/cryptography/zklogin.mdx)
-- [zkLogin Example](./zklogin-integration/zklogin-example.mdx)
-- [Configure OpenID Providers](./zklogin-integration/developer-account.mdx)
+<RelatedLink to="/concepts/cryptography/zklogin.mdx" />
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration/zklogin-example.mdx" />
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration/developer-account.mdx" />

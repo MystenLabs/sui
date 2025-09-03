@@ -846,6 +846,9 @@ pub fn make_stdlib_gas_params_for_protocol_config(
                 base: get_gas_cost_or_default!(type_name_get_base_cost_as_option),
                 per_byte: get_gas_cost_or_default!(type_name_get_per_byte_cost_as_option),
             },
+            id: MSN::type_name::IdGasParameters::new(
+                protocol_config.type_name_id_base_cost_as_option(),
+            ),
         },
         MSN::vector::GasParameters {
             empty: MSN::vector::EmptyGasParameters {
@@ -887,6 +890,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "accumulator",
             "emit_withdraw_event",
             make_native!(accumulator::emit_withdraw_event),
+        ),
+        (
+            "accumulator_settlement",
+            "record_settlement_sui_conservation",
+            make_native!(accumulator::record_settlement_sui_conservation),
         ),
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),

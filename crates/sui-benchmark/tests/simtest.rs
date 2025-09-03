@@ -686,6 +686,7 @@ mod test {
         let test_cluster = Arc::new(
             TestClusterBuilder::new()
                 .set_network_config(network_config)
+                .disable_fullnode_pruning()
                 .build()
                 .await,
         );
@@ -1058,7 +1059,6 @@ mod test {
             })
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
-            .disable_fullnode_pruning()
             .build()
             .await
             .into()
@@ -1073,6 +1073,7 @@ mod test {
                 "SIM_STRESS_TEST_NUM_VALIDATORS",
                 default_num_validators,
             ))
+            .disable_fullnode_pruning()
             .with_synthetic_execution_time_injection();
         if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
             eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
@@ -1183,7 +1184,7 @@ mod test {
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
                     &registry,
-                    Some(test_cluster.fullnode_handle.rpc_url.as_str()),
+                    &test_cluster.fullnode_handle.rpc_url,
                     test_cluster.transaction_driver_percentage(),
                 )
                 .await,
@@ -1395,7 +1396,7 @@ mod test {
                                 forked_validators.clone(),
                                 /* full_halt: */ true,
                                 effects_overrides.clone(),
-                                0.1f32, // default fork probability for this test
+                                0.1f32,
                             ))
                         }
                     });
@@ -1451,6 +1452,8 @@ mod test {
         )
         .await;
         info!("Fork recovery test: First load gen done");
+
+        assert!(forked_validators.lock().unwrap().len() > 1);
 
         clear_fail_point("simulate_fork_during_execution");
 

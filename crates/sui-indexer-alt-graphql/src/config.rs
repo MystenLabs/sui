@@ -127,6 +127,9 @@ pub struct Limits {
 
     /// Maximum nesting allowed in datatype fields when calculating the layout of a single type.
     pub max_move_value_depth: usize,
+
+    /// Maximum budget in bytes to spend when outputting a structured Move value.
+    pub max_move_value_bound: usize,
 }
 
 #[DefaultConfig]
@@ -148,6 +151,7 @@ pub struct LimitsLayer {
     pub max_type_argument_width: Option<usize>,
     pub max_type_nodes: Option<usize>,
     pub max_move_value_depth: Option<usize>,
+    pub max_move_value_bound: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -299,6 +303,9 @@ impl LimitsLayer {
             max_move_value_depth: self
                 .max_move_value_depth
                 .unwrap_or(base.max_move_value_depth),
+            max_move_value_bound: self
+                .max_move_value_bound
+                .unwrap_or(base.max_move_value_bound),
         }
     }
 }
@@ -343,6 +350,7 @@ impl From<Limits> for LimitsLayer {
             max_type_argument_width: Some(value.max_type_argument_width),
             max_type_nodes: Some(value.max_type_nodes),
             max_move_value_depth: Some(value.max_move_value_depth),
+            max_move_value_bound: Some(value.max_move_value_bound),
             extra: Default::default(),
         }
     }
@@ -409,6 +417,7 @@ impl Default for Limits {
             max_type_argument_width,
             max_type_nodes,
             max_move_value_depth,
+            max_move_value_bound: 1024 * 1024,
         }
     }
 }

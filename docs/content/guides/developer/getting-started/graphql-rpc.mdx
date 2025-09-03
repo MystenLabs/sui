@@ -1,14 +1,14 @@
 ---
 title: Querying Sui RPC with GraphQL (Alpha)
 description: Introductory guide to making queries of the Sui RPC using the GraphQL service.
-keywords: [ rpc, sui rpc, graphql, how to use graphql, schema, graphql schema, query transactions, query blocks, query block info, query dynamic field, execute transaction ]
+keywords: [ rpc, sui rpc, graphql, how to use graphql, schema, graphql schema, query transactions, query blocks, query block information, query dynamic field, execute transaction ]
 ---
 
 :::info
 
-{@include: ../../../snippets/data-serving-msg.mdx}
+<ImportContent source="data-serving-msg.mdx" mode="snippet" />
 
-{@include: ../../../snippets/data-serving-gql-alpha.mdx}
+<ImportContent source="data-serving-gql-alpha.mdx" mode="snippet" />
 
 :::
 
@@ -18,7 +18,7 @@ The online IDE is available for [Mainnet](https://sui-mainnet.mystenlabs.com/gra
 
 :::info
 - Any existing addresses/object IDs in these examples refer to `mainnet` data only.
-- Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
+- Both [Mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [Testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
 :::
 
 For more details about some concepts used in the examples below, please see the [GraphQL concepts](../../../concepts/graphql-rpc.mdx) page, and consult the [reference](../../../references/sui-graphql.mdx) for full documentation on the supported schema.
@@ -251,7 +251,7 @@ fragment MoveValueFields on MoveValue {
 
 ## Fetching all dynamic fields on an object
 
-This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx), by using the <a href="/references/sui-api/sui-graphql/reference/queries/owner" data-noBrokenLinkCheck='true'>owner</a> query, so can be used for iterating over the elements of on-chain data structures, like tables and bags. See [The Move Book](https://move-book.com/programmability/dynamic-collections.html) to learn more about dynamic collections available in Move.
+This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx), by using the <UnsafeLink href="/references/sui-api/sui-graphql/reference/queries/owner">owner</UnsafeLink> query, so can be used for iterating over the elements of on-chain data structures, like tables and bags. See [The Move Book](https://move-book.com/programmability/dynamic-collections.html) to learn more about dynamic collections available in Move.
 
 :::info
 This example uses [fragments](../../../concepts/graphql-rpc.mdx#fragments) and [variables](../../../concepts/graphql-rpc.mdx#variables).
@@ -378,8 +378,8 @@ Examples in the repository are designed to work with the version of GraphQL buil
 
 ## Related links
 
-- [GraphQL migration](../advanced/graphql-migration.mdx): Migrating to GraphQL guides you through migrating Sui RPC projects from JSON-RPC to GraphQL.
-- [GraphQL concepts](../../../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.
-- [GraphQL reference](../../../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
-- [Sui Testnet GraphiQL](https://sui-testnet.mystenlabs.com/graphql): Sui GraphiQL IDE for the Testnet network.
-- [Sui Mainnet GraphiQL](https://sui-mainnet.mystenlabs.com/graphql): Sui GraphiQL IDE for the Mainnet network.
+<RelatedLink to="/guides/developer/advanced/graphql-migration.mdx" />
+<RelatedLink to="/concepts/graphql-rpc.mdx" />
+<RelatedLink to="/references/sui-graphql.mdx" />
+<RelatedLink href="https://sui-testnet.mystenlabs.com/graphql" label="Sui Testnet GraphiQL" desc="Sui GraphiQL IDE for the Testnet network." />
+<RelatedLink href="https://sui-mainnet.mystenlabs.com/graphql" label="Sui Mainnet GraphiQL" desc="Sui GraphiQL IDE for the Mainnet network." />

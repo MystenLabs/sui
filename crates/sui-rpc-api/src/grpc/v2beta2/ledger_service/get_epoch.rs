@@ -110,9 +110,7 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
         );
     }
 
-    Ok(GetEpochResponse {
-        epoch: Some(message),
-    })
+    Ok(GetEpochResponse::new(message))
 }
 
 #[derive(Debug)]
@@ -193,9 +191,9 @@ pub fn protocol_config_to_proto(config: sui_protocol_config::ProtocolConfig) -> 
         })
         .collect();
     let feature_flags = config.feature_map().into_iter().collect();
-    ProtocolConfig {
-        protocol_version: Some(protocol_version),
-        feature_flags,
-        attributes,
-    }
+    let mut message = ProtocolConfig::default();
+    message.protocol_version = Some(protocol_version);
+    message.feature_flags = feature_flags;
+    message.attributes = attributes;
+    message
 }
