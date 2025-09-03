@@ -329,7 +329,7 @@ async fn test_submit_batched_transactions() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
-        ensure_same_block: false,
+        soft_bundle: false,
     };
 
     // Submit request with batched transactions.
@@ -366,7 +366,7 @@ async fn test_submit_soft_bundle_transactions() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
-        ensure_same_block: true,
+        soft_bundle: true,
     };
 
     // Submit request with batched transactions.
@@ -435,7 +435,7 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
-        ensure_same_block: true,
+        soft_bundle: true,
     };
 
     // Submit both transactions

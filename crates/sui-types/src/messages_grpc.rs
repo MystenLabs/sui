@@ -225,9 +225,12 @@ pub struct RawSubmitTxRequest {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub transactions: Vec<Bytes>,
 
-    /// Whether to ensure all transactions are in the same block.
+    /// When submitting multiple transactions, attempt to include them in
+    /// the same block with the same order (soft bundle), if true.
+    /// Otherwise, allow the transactions to be included separately and
+    /// out of order in blocks (batch).
     #[prost(bool, tag = "2")]
-    pub ensure_same_block: bool,
+    pub soft_bundle: bool,
 }
 
 #[derive(Clone, prost::Message)]

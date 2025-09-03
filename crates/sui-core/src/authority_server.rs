@@ -583,7 +583,7 @@ impl ValidatorService {
             .into());
         }
 
-        let max_num_transactions = if request.ensure_same_block {
+        let max_num_transactions = if request.soft_bundle {
             // Soft bundle cannot contain too many transactions.
             // Otherwise it is hard to include all of them in a single block.
             epoch_store.protocol_config().max_soft_bundle_size()
@@ -606,7 +606,7 @@ impl ValidatorService {
 
         let req_type = if request.transactions.len() == 1 {
             "single_transaction"
-        } else if request.ensure_same_block {
+        } else if request.soft_bundle {
             "soft_bundle"
         } else {
             "batch"
@@ -749,7 +749,7 @@ impl ValidatorService {
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
         // We do this to account for serialization overheads and to ensure that the soft bundle is not too large
         // when is attempted to be posted via consensus.
-        let max_transaction_bytes = if request.ensure_same_block {
+        let max_transaction_bytes = if request.soft_bundle {
             epoch_store
                 .protocol_config()
                 .consensus_max_transactions_in_block_bytes()
@@ -783,7 +783,7 @@ impl ValidatorService {
             .handle_submit_transaction_consensus_latency
             .start_timer();
 
-        let consensus_positions = if request.ensure_same_block {
+        let consensus_positions = if request.soft_bundle {
             self.handle_submit_to_consensus_for_position(
                 NonEmpty::from_vec(consensus_transactions).unwrap(),
                 &epoch_store,
