@@ -430,3 +430,9 @@ public fun new_for_testing(ctx: &mut TxContext): DenyList {
         lists,
     }
 }
+
+#[test_only]
+#[deprecated(note = b"Use `create_for_testing` instead")]
+public fun create_for_test(ctx: &mut TxContext) {
+    create_for_testing(ctx);
+}
