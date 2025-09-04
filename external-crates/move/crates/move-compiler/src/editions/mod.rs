@@ -142,11 +142,11 @@ pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
 static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
-const E2024_ALPHA_FEATURES: &[FeatureGate] = &[];
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[FeatureGate::ModuleExtension];
 
 const E2024_BETA_FEATURES: &[FeatureGate] = &[];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::ModuleExtension];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
