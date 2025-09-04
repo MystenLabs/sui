@@ -5,7 +5,9 @@
 use crate::{
     flavor::MoveFlavor,
     package::{EnvironmentName, paths::PackagePath},
-    schema::{OriginalID, ParsedPubs, Publication, PublishAddresses, PublishedID, RenderToml},
+    schema::{
+        OriginalID, ParsedPublishedFile, Publication, PublishAddresses, PublishedID, RenderToml,
+    },
 };
 use anyhow::{Result, anyhow, bail};
 use std::collections::BTreeMap;
@@ -72,7 +74,7 @@ pub fn convert_legacy_lockfile<F: MoveFlavor>(path: &PackagePath) -> Result<()> 
             )
         }
 
-        let pubfile = ParsedPubs { published };
+        let pubfile = ParsedPublishedFile { published };
         std::fs::write(path.publications_path(), pubfile.render_as_toml())?;
     }
 

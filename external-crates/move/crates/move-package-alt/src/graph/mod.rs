@@ -9,13 +9,14 @@ mod rename_from;
 mod to_lockfile;
 
 pub use linkage::LinkageError;
-pub use package_info::NamedAddress;
-pub use package_info::PackageInfo;
+pub use package_info::{NamedAddress, PackageInfo};
 pub use rename_from::RenameError;
-use tracing::debug;
+
+use tracing::{debug, warn};
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::schema::Publication;
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
@@ -140,5 +141,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .flat_map(|x| self.inner.node_weight(*x))
             .map(|x| x.name())
             .collect()
+    }
+
+    /// Update the address overrides for this package graph
+    pub(crate) fn add_publish_overrides(&mut self, overrides: BTreeMap<PackageID, Publication<F>>) {
+        for (id, publish) in overrides {
+            let Some(index) = self.package_ids.get_by_left(&id) else {
+                warn!("Ignoring unrecognized package identifier `{id}`");
+                continue;
+            };
+            self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish));
+        }
     }
 }
