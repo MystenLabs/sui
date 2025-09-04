@@ -1,5 +1,6 @@
 //! All of the types for serializing and deserializing lockfiles and manifests
 
+mod localpubs;
 mod lockfile;
 mod manifest;
 mod pubfile;
