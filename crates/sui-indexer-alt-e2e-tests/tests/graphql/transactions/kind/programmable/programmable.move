@@ -61,7 +61,13 @@ module test::simple {
           nodes {
             __typename
             ... on MoveCallCommand {
-              functionName
+              function {
+                module {
+                  package { address }
+                  name
+                }
+                name
+              }
             }
           }
         }
@@ -98,11 +104,17 @@ module test::simple {
           nodes {
             __typename
             ... on MoveCallCommand {
-              functionName
+              function {
+                module {
+                  package { address }
+                  name
+                }
+                name
+              }
             }
           }
         }
       }
     }
   }
-} 
+}

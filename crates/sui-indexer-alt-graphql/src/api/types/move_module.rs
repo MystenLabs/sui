@@ -20,8 +20,9 @@ use crate::{
     pagination::{Page, PaginationConfig},
 };
 
-use super::move_package::MovePackage;
+use super::{move_function::MoveFunction, move_package::MovePackage};
 
+#[derive(Clone)]
 pub(crate) struct MoveModule {
     /// The package that this module was defined in.
     package: MovePackage,
@@ -33,9 +34,9 @@ pub(crate) struct MoveModule {
     contents: Arc<OnceCell<Option<ModuleContents>>>,
 }
 
-struct ModuleContents {
+pub(crate) struct ModuleContents {
     native: Vec<u8>,
-    parsed: ParsedModule,
+    pub(crate) parsed: ParsedModule,
 }
 
 type CFriend = JsonCursor<usize>;
@@ -133,6 +134,27 @@ impl MoveModule {
 
         Ok(Some(conn))
     }
+
+    /// The function named `name` in this module.
+    async fn function(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<MoveFunction>, RpcError> {
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let Some(def) = contents
+            .parsed
+            .function_def(&name)
+            .context("Failed to get function definition")?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(MoveFunction::from_def(self.clone(), name, def)))
+    }
 }
 
 impl MoveModule {
@@ -148,7 +170,10 @@ impl MoveModule {
     }
 
     /// Get the native CompiledModule, loading it lazily if needed.
-    async fn contents(&self, ctx: &Context<'_>) -> Result<&Option<ModuleContents>, RpcError> {
+    pub(crate) async fn contents(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<ModuleContents>, RpcError> {
         self.contents
             .get_or_try_init(|| async {
                 let (native, parsed) = join!(self.package.native(ctx), self.package.parsed(ctx));
