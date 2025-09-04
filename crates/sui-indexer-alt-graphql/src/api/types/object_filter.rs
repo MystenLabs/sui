@@ -27,7 +27,9 @@ pub(crate) struct ObjectFilter {
     /// This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
     pub owner: Option<SuiAddress>,
 
-    /// Filter on the object's type. The filter can be one of:
+    /// Filter on the object's type.
+    ///
+    /// The filter can be one of:
     ///
     /// - A package address: `0x2`,
     /// - A module: `0x2::coin`,
