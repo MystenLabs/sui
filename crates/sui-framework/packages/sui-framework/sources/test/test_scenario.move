@@ -98,9 +98,9 @@ public struct TransactionEffects has drop {
     /// The objects deleted this transaction
     deleted: vector<ID>,
     /// The objects transferred to an account this transaction
-    transferred_to_account: VecMap<ID /* owner */, address>,
+    transferred_to_account: VecMap<ID, /* owner */ address>,
     /// The objects transferred to an object this transaction
-    transferred_to_object: VecMap<ID /* owner */, ID>,
+    transferred_to_object: VecMap<ID, /* owner */ ID>,
     /// The objects shared this transaction
     shared: vector<ID>,
     /// The objects frozen this transaction
@@ -349,12 +349,10 @@ public fun later_epoch(
 /// Advance the scenario to a future `epoch`. Will abort if the `epoch` is in the past.
 public fun skip_to_epoch(scenario: &mut Scenario, epoch: u64) {
     assert!(epoch >= scenario.ctx.epoch());
-    (epoch - scenario.ctx.epoch()).do!(
-        |_| {
-            scenario.ctx.increment_epoch_number();
-            end_transaction()
-        },
-    )
+    (epoch - scenario.ctx.epoch()).do!(|_| {
+        scenario.ctx.increment_epoch_number();
+        end_transaction()
+    })
 }
 
 /// Ends the test scenario

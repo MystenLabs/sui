@@ -4,6 +4,7 @@
 #[test_only]
 module sui::test_scenario_tests;
 
+use std::unit_test::assert_eq;
 use sui::dynamic_field;
 use sui::dynamic_object_field;
 use sui::test_scenario;
@@ -1075,7 +1076,6 @@ public struct E1(u64) has copy, drop;
 #[test]
 fun events() {
     use sui::event;
-    use sui::test_utils::assert_eq;
 
     // calling test_scenario::end should dump events emitted during previous txes
     let sender = @0x0;
@@ -1083,28 +1083,26 @@ fun events() {
     let e0 = E1(0);
     event::emit(e0);
     event::emit(e0);
-    assert_eq(event::num_events(), 2);
+    assert_eq!(event::num_events(), 2);
 
     // test scenario users should make assertions about events here, before calling
     // next_tx
     let effects = scenario.next_tx(sender);
-    assert_eq(effects.num_user_events(), 2);
-    assert_eq(event::num_events(), 0);
+    assert_eq!(effects.num_user_events(), 2);
+    assert_eq!(event::num_events(), 0);
 
     let e1 = E1(1);
     event::emit(e1);
-    assert_eq(event::num_events(), 1);
-    assert_eq(event::events_by_type<E1>()[0], e1);
+    assert_eq!(event::num_events(), 1);
+    assert_eq!(event::events_by_type<E1>()[0], e1);
     let effects = scenario.end();
     // end should also dump events
-    assert_eq(effects.num_user_events(), 1);
-    assert_eq(event::num_events(), 0);
+    assert_eq!(effects.num_user_events(), 1);
+    assert_eq!(event::num_events(), 0);
 }
 
 #[test]
 fun tx_context() {
-    use std::unit_test::assert_eq;
-
     // check default values for context
     let mut scenario = test_scenario::begin(@0xA);
     let ctx = scenario.ctx();
@@ -1190,8 +1188,6 @@ fun tx_context() {
 
 #[test]
 fun tx_context_with_builder() {
-    use std::unit_test::assert_eq;
-
     // begin with context builder
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
