@@ -2201,7 +2201,9 @@ input ObjectFilter {
 	"""
 	ownerKind: OwnerKind
 	"""
-	Filter on the object's type. The filter can be one of:
+	Filter on the object's type.
+	
+	The filter can be one of:
 	
 	- A package address: `0x2`,
 	- A module: `0x2::coin`,
