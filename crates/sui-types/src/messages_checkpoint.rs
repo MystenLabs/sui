@@ -1135,6 +1135,7 @@ mod tests {
     #[test]
     fn test_artifacts() {
         let mut artifacts = CheckpointArtifacts::new();
+        let o = CheckpointArtifact::ObjectStates(BTreeMap::new());
         assert!(artifacts.add_artifact(o.clone()).is_ok());
         assert!(artifacts.add_artifact(o.clone()).is_err());
     }
