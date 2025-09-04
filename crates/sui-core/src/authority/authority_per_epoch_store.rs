@@ -334,7 +334,7 @@ pub struct AuthorityPerEpochStore {
     /// until they are proven not to have forked by a certified checkpoint.
     pub(crate) consensus_quarantine: RwLock<ConsensusOutputQuarantine>,
     /// Holds variouis data from consensus_quarantine in a more easily accessible form.
-    consensus_output_cache: ConsensusOutputCache,
+    pub(crate) consensus_output_cache: ConsensusOutputCache,
 
     protocol_config: ProtocolConfig,
 
@@ -415,7 +415,7 @@ pub struct AuthorityPerEpochStore {
     /// Manages recording execution time observations and generating estimates.
     pub(crate) execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
     tx_local_execution_time: OnceCell<mpsc::Sender<LocalExecutionTimeData>>,
-    tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
+    pub(crate) tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 
@@ -2329,7 +2329,7 @@ impl AuthorityPerEpochStore {
             .collect()
     }
 
-    fn should_defer(
+    pub(crate) fn should_defer(
         &self,
         tx_cost: Option<u64>,
         cert: &VerifiedExecutableTransaction,
@@ -2583,12 +2583,11 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn has_received_end_of_publish_from(&self, authority: &AuthorityName) -> SuiResult<bool> {
-        Ok(self
-            .end_of_publish
+    pub fn has_received_end_of_publish_from(&self, authority: &AuthorityName) -> bool {
+        self.end_of_publish
             .try_lock()
             .expect("No contention on end_of_publish lock")
-            .contains_key(authority))
+            .contains_key(authority)
     }
 
     // Converts transaction keys to digests, waiting for digests to become available for any
@@ -4486,7 +4485,7 @@ impl AuthorityPerEpochStore {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_user_transaction");
 
         // TODO(commit-handler-rewrite): ignore transactions sent by validators that have already sent EOP
-        if self.has_received_end_of_publish_from(block_author)?
+        if self.has_received_end_of_publish_from(block_author)
             && !previously_deferred_tx_digests.contains_key(transaction.digest())
         {
             // This can not happen with valid authority

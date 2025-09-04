@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     hash::Hash,
     num::NonZeroUsize,
     sync::Arc,
@@ -29,8 +29,8 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, EpochId, SequenceNumber,
-        TransactionDigest,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, EpochId, ObjectID,
+        SequenceNumber, TransactionDigest,
     },
     crypto::RandomnessRound,
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
@@ -50,15 +50,17 @@ use tracing::{debug, error, info, instrument, trace, trace_span, warn};
 use crate::{
     authority::{
         authority_per_epoch_store::{
-            consensus_quarantine::ConsensusCommitOutput, AuthorityPerEpochStore, ConsensusStats,
-            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStats,
+            consensus_quarantine::ConsensusCommitOutput, AuthorityPerEpochStore,
+            CancelConsensusCertificateReason, ConsensusStats, ConsensusStatsAPI, ExecutionIndices,
+            ExecutionIndicesWithStats,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
         consensus_tx_status_cache::ConsensusTxStatus,
         epoch_start_configuration::EpochStartConfigTrait,
+        execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
         shared_object_version_manager::{AssignedTxAndVersions, Schedulable},
-        transaction_deferral::DeferralKey,
+        transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason},
         AuthorityMetrics, AuthorityState, ExecutionEnv,
     },
     checkpoints::{CheckpointService, CheckpointServiceNotify},
@@ -668,6 +670,13 @@ struct CommitHandlerState {
     dkg_failed: bool,
     randomness_round: Option<RandomnessRound>,
     output: ConsensusCommitOutput,
+    indirect_state_observer: IndirectStateObserver,
+}
+
+enum CongestionAction {
+    None(u64),
+    Defer(DeferralKey),
+    CancelOnCongestion(Vec<ObjectID>),
 }
 
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
@@ -763,6 +772,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             output: ConsensusCommitOutput::new(commit_info.round),
             dkg_failed: false,
             randomness_round: None,
+            indirect_state_observer: IndirectStateObserver::new(),
         };
 
         // DONE(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
@@ -788,15 +798,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.process_execution_time_observations(&mut state, execution_time_observations);
         self.process_checkpoint_signature_messages(checkpoint_signature_messages);
 
-        self.process_randomness_dkg_messages(
+        let randomness_state_updated = self.process_randomness_dkg_messages(
             randomness_manager.as_deref_mut(),
             randomness_dkg_messages,
-        );
-        self.process_randomness_dkg_confirmations(
+        ) | self.process_randomness_dkg_confirmations(
             &mut state,
             randomness_manager.as_deref_mut(),
             randomness_dkg_confirmations,
         );
+
+        // DONE(commit-handler-rewrite): [ssm] advance randomness state if needed
+        if randomness_state_updated {
+            if let Some(randomness_manager) = randomness_manager.as_mut() {
+                randomness_manager
+                    .advance_dkg(&mut state.output, commit_info.round)
+                    .await
+                    .expect("epoch ended");
+            }
+        }
 
         let pending_checkpoints = self.process_transactions(
             &mut state,
@@ -831,9 +850,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.merge_and_reorder_transactions(state, commit_info, user_transactions);
 
         // DONE(commit-handler-rewrite): initialize congestion trackers
-        let shared_object_congestion_tracker =
+        let mut shared_object_congestion_tracker =
             self.init_congestion_tracker(commit_info, false, &ordered_txns);
-        let shared_object_using_randomness_congestion_tracker =
+        let mut shared_object_using_randomness_congestion_tracker =
             self.init_congestion_tracker(commit_info, true, &ordered_randomness_txns);
 
         // DONE(commit-handler-rewrite): add randomness state update transaction
@@ -847,23 +866,109 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .try_lock()
             .expect("should only ever be called from the commit handler thread");
 
-        for transaction in ordered_txns {
-            let tx_cost = shared_object_congestion_tracker.get_tx_cost(
-                execution_time_estimator.as_ref(),
-                &transaction,
-                &mut state.indirect_state_observer,
-            );
+        let mut transactions_to_schedule = Vec::with_capacity(ordered_txns.len());
+        let mut randomness_transactions_to_schedule =
+            Vec::with_capacity(ordered_randomness_txns.len());
+        let mut deferred_txns = BTreeMap::new();
+        let mut cancelled_txns = BTreeMap::new();
 
-            let deferral_info = self.epoch_store.should_defer(
-                tx_cost,
-                &transaction,
+        for transaction in ordered_txns {
+            self.handle_congestion(
+                state,
+                &mut cancelled_txns,
+                &mut deferred_txns,
+                &mut transactions_to_schedule,
+                protocol_config,
                 commit_info,
-                state.dkg_failed,
-                state.randomness_round.is_some(),
+                transaction,
+                &mut shared_object_congestion_tracker,
                 &previously_deferred_tx_digests,
-                shared_object_congestion_tracker,
+                execution_time_estimator.as_ref(),
             );
         }
+
+        for transaction in ordered_randomness_txns {
+            // DONE(commit-handler-rewrite): cancel randomness-using txns if DKG failed
+            if state.dkg_failed {
+                debug!(
+                    "Canceling randomness-using transaction {:?} because DKG failed",
+                    transaction.digest(),
+                );
+                cancelled_txns.insert(
+                    *transaction.digest(),
+                    CancelConsensusCertificateReason::DkgFailed,
+                );
+                continue;
+            }
+            self.handle_congestion(
+                state,
+                &mut cancelled_txns,
+                &mut deferred_txns,
+                &mut randomness_transactions_to_schedule,
+                protocol_config,
+                commit_info,
+                transaction,
+                &mut shared_object_using_randomness_congestion_tracker,
+                &previously_deferred_tx_digests,
+                execution_time_estimator.as_ref(),
+            );
+        }
+
+        // DONE(commit-handler-rewrite): add deferred transactions to consensus output
+        let mut total_deferred_txns = 0;
+        {
+            let mut deferred_transactions = self
+                .epoch_store
+                .consensus_output_cache
+                .deferred_transactions
+                .lock();
+            for (key, txns) in deferred_txns.into_iter() {
+                total_deferred_txns += txns.len();
+                deferred_transactions.insert(key, txns.clone());
+                todo!("need to store VerifiedExecutableTransaction");
+                //state.output.defer_transactions(key, txns);
+            }
+        }
+
+        // DONE(commit-handler-rewrite): update metrics
+        self.metrics
+            .consensus_handler_deferred_transactions
+            .inc_by(total_deferred_txns as u64);
+        self.metrics
+            .consensus_handler_cancelled_transactions
+            .inc_by(cancelled_txns.len() as u64);
+        self.metrics
+            .consensus_handler_max_object_costs
+            .with_label_values(&["regular_commit"])
+            .set(shared_object_congestion_tracker.max_cost() as i64);
+        self.metrics
+            .consensus_handler_max_object_costs
+            .with_label_values(&["randomness_commit"])
+            .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
+
+        // DONE(commit-handler-rewrite): gather object debts, send them to ExecutionTimeObserver
+        let object_debts = shared_object_congestion_tracker.accumulated_debts(commit_info);
+        let randomness_object_debts =
+            shared_object_using_randomness_congestion_tracker.accumulated_debts(commit_info);
+        if let Some(tx_object_debts) = self.epoch_store.tx_object_debts.get() {
+            if let Err(e) = tx_object_debts.try_send(
+                object_debts
+                    .iter()
+                    .chain(randomness_object_debts.iter())
+                    .map(|(id, _)| *id)
+                    .collect(),
+            ) {
+                info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
+            }
+        }
+
+        // DONE(commit-handler-rewrite): commit object debts to output
+        state
+            .output
+            .set_congestion_control_object_debts(object_debts);
+        state
+            .output
+            .set_congestion_control_randomness_object_debts(randomness_object_debts);
 
         let schedulables = itertools::chain!(
             authenticator_state_update_transactions
@@ -879,6 +984,86 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
 
         txns
+    }
+
+    fn handle_congestion(
+        &self,
+        state: &mut CommitHandlerState,
+        cancelled_txns: &mut BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        deferred_txns: &mut BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>,
+        scheduled_txns: &mut Vec<VerifiedExecutableTransaction>,
+        protocol_config: &ProtocolConfig,
+        commit_info: &ConsensusCommitInfo,
+        transaction: VerifiedExecutableTransaction,
+        shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
+        previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
+        execution_time_estimator: Option<&ExecutionTimeEstimator>,
+    ) {
+        let tx_cost = shared_object_congestion_tracker.get_tx_cost(
+            execution_time_estimator,
+            &transaction,
+            &mut state.indirect_state_observer,
+        );
+
+        let deferral_info = self.epoch_store.should_defer(
+            tx_cost,
+            &transaction,
+            commit_info,
+            state.dkg_failed,
+            state.randomness_round.is_some(),
+            &previously_deferred_tx_digests,
+            &shared_object_congestion_tracker,
+        );
+
+        if let Some((deferral_key, deferral_reason)) = deferral_info {
+            debug!(
+                "Deferring consensus certificate for transaction {:?} until {:?}",
+                transaction.digest(),
+                deferral_key
+            );
+
+            match deferral_reason {
+                // DONE(commit-handler-rewrite): Always defer transaction due to randomness not ready.
+                DeferralReason::RandomnessNotReady => {
+                    deferred_txns
+                        .entry(deferral_key)
+                        .or_default()
+                        .push(transaction);
+                }
+                DeferralReason::SharedObjectCongestion(congested_objects) => {
+                    self.metrics.consensus_handler_congested_transactions.inc();
+                    // DONE(commit-handler-rewrite): when deferral limit is exceeded, cancel the transaction
+                    if transaction_deferral_within_limit(
+                        &deferral_key,
+                        protocol_config.max_deferral_rounds_for_congestion_control(),
+                    ) {
+                        deferred_txns
+                            .entry(deferral_key)
+                            .or_default()
+                            .push(transaction);
+                    } else {
+                        // Cancel the transaction that has been deferred for too long.
+                        debug!(
+                                "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
+                                transaction.digest(),
+                                deferral_key,
+                                congested_objects
+                            );
+                        cancelled_txns.insert(
+                            *transaction.digest(),
+                            CancelConsensusCertificateReason::CongestionOnObjects(
+                                congested_objects,
+                            ),
+                        );
+                    }
+                }
+            }
+        } else {
+            // DONE(commit-handler-rewrite): update object execution cost for all scheduled transactions
+            // This certificate will be scheduled. Update object execution cost.
+            shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &transaction);
+            scheduled_txns.push(transaction);
+        }
     }
 
     fn merge_and_reorder_transactions(
@@ -1170,28 +1355,33 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         randomness_manager: Option<&mut RandomnessManager>,
         randomness_dkg_messages: Vec<(AuthorityName, Vec<u8>)>,
-    ) {
+    ) -> bool /* randomness state updated */ {
         if randomness_dkg_messages.is_empty() {
-            return;
+            return false;
         }
         if !self.epoch_store.randomness_state_enabled() {
             debug_fatal!(
                 "received {} RandomnessDkgMessage messages when randomness is not enabled",
                 randomness_dkg_messages.len()
             );
-            return;
+            return false;
         }
 
         let randomness_manager =
             randomness_manager.expect("randomness manager should exist if randomness is enabled");
 
         // DONE(commit-handler-rewrite): [ssm] process dkg message
+        let mut randomness_state_updated = false;
         for (authority, bytes) in randomness_dkg_messages {
             match bcs::from_bytes(&bytes) {
-                Ok(message) => randomness_manager
-                    .add_message(&authority, message)
-                    // TODO: make infallible
-                    .expect("epoch ended"),
+                Ok(message) => {
+                    randomness_manager
+                        .add_message(&authority, message)
+                        // TODO: make infallible
+                        .expect("epoch ended");
+                    randomness_state_updated = true;
+                }
+
                 Err(e) => {
                     warn!(
                         "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
@@ -1200,6 +1390,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 }
             }
         }
+
+        randomness_state_updated
     }
 
     fn process_randomness_dkg_confirmations(
@@ -1207,29 +1399,31 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state: &mut CommitHandlerState,
         randomness_manager: Option<&mut RandomnessManager>,
         randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
-    ) {
+    ) -> bool /* randomness state updated */ {
         if randomness_dkg_confirmations.is_empty() {
-            return;
+            return false;
         }
         if !self.epoch_store.randomness_state_enabled() {
             debug_fatal!(
                 "received {} RandomnessDkgConfirmation messages when randomness is not enabled",
                 randomness_dkg_confirmations.len()
             );
-            return;
+            return false;
         }
 
         let randomness_manager =
             randomness_manager.expect("randomness manager should exist if randomness is enabled");
 
         // DONE(commit-handler-rewrite): [ssm] process dkg confirmation
+        let mut randomness_state_updated = false;
         for (authority, bytes) in randomness_dkg_confirmations {
             match bcs::from_bytes(&bytes) {
                 Ok(message) => {
                     randomness_manager
                         .add_confirmation(&mut state.output, &authority, message)
                         // TODO: make infallible
-                        .expect("epoch ended")
+                        .expect("epoch ended");
+                    randomness_state_updated = true;
                 }
                 Err(e) => {
                     warn!(
@@ -1239,6 +1433,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 }
             }
         }
+
+        randomness_state_updated
     }
 
     /// Returns true if we have collected a quorum of end of publish messages (either in this round or a previous round).
@@ -1798,17 +1994,30 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 }
 
                 // DONE(commit-handler-rewrite): ignore transactions sent by validators that have already sent EOP
-                match &parsed.transaction.kind {
+                if matches!(
+                    &parsed.transaction.kind,
                     ConsensusTransactionKind::MFPTransaction(_)
-                    | ConsensusTransactionKind::CertifiedTransaction(_) => {
-                        if self.epoch_store.has_received_end_of_publish_from(&author) {
-                            // This can not happen with valid authority
-                            // With some edge cases consensus might sometimes resend previously seen certificate after EndOfPublish
-                            // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
-                            // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
-                            warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen transaction {:?} after it sent EndOfPublish message to consensus", block_author.concise(), transaction.digest());
-                            continue;
-                        }
+                        | ConsensusTransactionKind::CertifiedTransaction(_)
+                ) {
+                    let author_name = self
+                        .epoch_store
+                        .committee()
+                        .authority_by_index(author as u32)
+                        .unwrap();
+                    if self
+                        .epoch_store
+                        .has_received_end_of_publish_from(&author_name)
+                    {
+                        // This can not happen with valid authority
+                        // With some edge cases consensus might sometimes resend previously seen certificate after EndOfPublish
+                        // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
+                        // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
+                        warn!(
+                                "[Byzantine authority] Authority {:?} sent a new, previously unseen transaction {:?} after it sent EndOfPublish message to consensus",
+                                author_name.concise(),
+                                parsed.transaction.key(),
+                            );
+                        continue;
                     }
                 }
 

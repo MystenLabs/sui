@@ -68,6 +68,8 @@ pub(crate) struct ConsensusCommitOutput {
     // TODO: If we delay committing consensus output until after all deferrals have been loaded,
     // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
+    // TODO: remove the original once we no longer need to support the old consensus handler
+    deferred_txns_v2: BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>,
     // deferred txns that have been loaded and can be removed
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
@@ -109,7 +111,7 @@ impl ConsensusCommitOutput {
     }
 
     pub fn has_deferred_transactions(&self) -> bool {
-        !self.deferred_txns.is_empty()
+        !self.deferred_txns.is_empty() || !self.deferred_txns_v2.is_empty()
     }
 
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
@@ -190,6 +192,14 @@ impl ConsensusCommitOutput {
         transactions: Vec<VerifiedSequencedConsensusTransaction>,
     ) {
         self.deferred_txns.push((key, transactions));
+    }
+
+    pub fn defer_transactions_v2(
+        &mut self,
+        key: DeferralKey,
+        transactions: Vec<VerifiedExecutableTransaction>,
+    ) {
+        self.deferred_txns_v2.insert(key, transactions);
     }
 
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
@@ -366,11 +376,12 @@ impl ConsensusCommitOutput {
 pub(crate) struct ConsensusOutputCache {
     // deferred transactions is only used by consensus handler so there should never be lock contention
     // - hence no need for a DashMap.
-    pub(super) deferred_transactions:
+    pub(crate) deferred_transactions:
         Mutex<BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>>,
+
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
     // The critical sections are small in both cases so a DashMap is probably not helpful.
-    pub(super) user_signatures_for_checkpoints:
+    pub(crate) user_signatures_for_checkpoints:
         Mutex<HashMap<TransactionDigest, Vec<GenericSignature>>>,
 
     executed_in_epoch: RwLock<DashMap<TransactionDigest, ()>>,
