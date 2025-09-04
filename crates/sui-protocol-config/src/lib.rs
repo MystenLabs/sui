@@ -2445,7 +2445,7 @@ impl ProtocolConfig {
             binary_variant_instantiation_handles: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
-            max_total_package_size: None,
+            max_total_linkage_size: None,
             max_publish_or_upgrade_per_ptb: None,
             max_tx_gas: Some(10_000_000_000),
             max_gas_price: Some(100_000),
@@ -4083,10 +4083,10 @@ impl ProtocolConfig {
                     cfg.feature_flags.generate_df_type_layouts = true;
                     cfg.max_package_dependencies = Some(100); // Relaxed
                     cfg.max_move_package_size = Some(1024 * 1024); // Relaxed to 1 MB
-                    cfg.max_total_package_size = Some(32 * 100 * 1024); // Product of the two from before.
                     cfg.max_package_dependencies = Some(100);
                     cfg.max_move_package_size = Some(1024 * 1024);
-                    cfg.max_total_package_size = Some(32 * 100 * 1024); // Product of previous package and dependency limits.
+                    // Product of previous package and dependency limits.
+                    cfg.max_total_linkage_size = Some(32 * 100 * 1024);
                 }
                 // Use this template when making changes:
                 //

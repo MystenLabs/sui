@@ -270,6 +270,7 @@ impl AdversarialTestPayload {
         match payload_type {
             AdversarialPayloadType::LargeObjects => AdversarialPayloadArgs {
                 fn_name: "create_max_size_shared_objects".to_owned(),
+                // TODO: Add test for max_total_package_size
                 args: [
                     // Use the maximum number of new ids which can be created
                     self.get_pct_of(protocol_config.max_num_new_move_object_ids())

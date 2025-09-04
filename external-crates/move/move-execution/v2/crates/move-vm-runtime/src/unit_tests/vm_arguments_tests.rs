@@ -13,7 +13,7 @@ use move_binary_format::{
         FunctionHandleIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex, Signature,
         SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation, TableIndex,
         TypeSignature, Visibility,
-    },
+    }, file_format_common::VERSION_6,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -143,7 +143,7 @@ impl RemoteStore {
     fn add_module(&mut self, compiled_module: CompiledModule) {
         let id = compiled_module.self_id();
         let mut bytes = vec![];
-        compiled_module.serialize(&mut bytes).unwrap();
+        compiled_module.serialize_with_version(VERSION_6, &mut bytes).unwrap();
         self.modules.insert(id, bytes);
     }
 }

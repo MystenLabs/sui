@@ -54,6 +54,7 @@ use std::{
 };
 use strum::IntoStaticStr;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
+use sui_sdk_types::MovePackage;
 use tap::Pipe;
 use tracing::trace;
 
@@ -1056,13 +1057,20 @@ impl Command {
                         value: config.max_modules_in_publish().to_string()
                     }
                 );
-                if let Some(max_package_dependencies) = config.max_package_dependencies_as_option()
-                {
+                if let Some(max_total_linkage_size) = config.max_total_linkage_size_as_option() {
+                    let max_move_package_size = config.max_move_package_size();
+                    let mut deps_size: u64 = 0;
+                    deps_size += deps
+                        .iter()
+                        .map(|id| size_of::<InputObjectKind>() as u64)
+                        .sum::<u64>()
+                        .min(max_move_package_size);
+
                     fp_ensure!(
-                        deps.len() < max_package_dependencies as usize,
+                        deps_size < max_total_linkage_size,
                         UserInputError::SizeLimitExceeded {
-                            limit: "maximum package dependencies".to_string(),
-                            value: max_package_dependencies.to_string()
+                            limit: "maximum linkage size".to_string(),
+                            value: max_total_linkage_size.to_string()
                         }
                     );
                 };
