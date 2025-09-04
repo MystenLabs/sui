@@ -7,7 +7,7 @@
 module test::move_call_test {
   use sui::coin::{Self, Coin};
   use sui::sui::SUI;
-  
+
   public struct TestObject has drop {
     value: u64,
   }
@@ -19,12 +19,12 @@ module test::move_call_test {
     }
   }
 
-  // Function that takes an object - demonstrates Result arguments  
+  // Function that takes an object - demonstrates Result arguments
   public fun get_object_value(obj: &TestObject): u64 {
     obj.value
   }
 
-  // Function that takes gas coin by reference - demonstrates GasCoin arguments  
+  // Function that takes gas coin by reference - demonstrates GasCoin arguments
   public fun check_gas_coin(coin: &Coin<SUI>): u64 {
     coin::value(coin)
   }
@@ -53,7 +53,13 @@ module test::move_call_test {
         commands(first: 10) {
           nodes {
             ... on MoveCallCommand {
-              functionName
+              function {
+                module {
+                  package { address }
+                  name
+                }
+                name
+              }
               arguments {
                 __typename
                 ... on Input { ix }
