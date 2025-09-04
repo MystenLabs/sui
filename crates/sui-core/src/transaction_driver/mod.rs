@@ -274,11 +274,7 @@ pub fn choose_transaction_driver_percentage() -> u8 {
         }
     }
 
-    // Default to 50% everywhere except mainnet and unit tests.
-    // if !cfg!(test) {
-    //     return 50;
-    // }
-
+    // Default to 50% everywhere except mainnet
     50
 }
 
