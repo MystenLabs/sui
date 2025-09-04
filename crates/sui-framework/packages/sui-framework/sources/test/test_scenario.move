@@ -238,6 +238,21 @@ public fun begin_with_context(ctx_builder: TxContextBuilder): Scenario {
     }
 }
 
+/// Creates and shares system objects, allowing `Random`, `Clock`, `DenyList`
+/// and other "native" objects, so they are available in the inventory.
+///
+/// NOTE: make sure to update this call when adding new system objects.
+public fun create_system_objects(scenario: &mut Scenario) {
+    let sender = scenario.ctx().sender();
+
+    // Force publishing as system - 0x0.
+    scenario.next_tx(@0x0);
+    sui::clock::create_for_testing(scenario.ctx()).share_for_testing();
+    sui::random::create_for_testing(scenario.ctx());
+    sui::deny_list::create_for_testing(scenario.ctx());
+    scenario.next_tx(sender);
+}
+
 /// Advance the scenario to a new transaction where `sender` is the transaction sender
 /// All objects transferred will be moved into the inventories of the account or the global
 /// inventory. In other words, in order to access an object with one of the various "take"
