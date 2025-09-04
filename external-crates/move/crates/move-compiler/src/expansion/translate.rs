@@ -361,10 +361,16 @@ impl<'env> Context<'env> {
                 def,
                 package: _,
                 named_address_map: _,
-                target_kind: _,
+                target_kind,
             } = module;
             let name = def.name;
             let loc = def.loc;
+
+            // Skip over all extensions that are not defined in the root package
+            if !matches!(target_kind, P::TargetKind::Source { is_root_package: true }) {
+                continue;
+            }
+
             ice_assert!(
                 self.reporter(),
                 def.is_extension,

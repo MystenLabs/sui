@@ -1,16 +1,15 @@
-module testing::a {
+module testing::m {
     public struct S {
         x: u64,
     }
 
-    fun make_s(x: u64): S {
+    public fun make_s(x: u64): S {
         S { x }
     }
 }
 
 #[test_only]
-extend testing::a {
-
+extend testing::m {
     // can only be destructured in the same module
     fun destroy_s(s: S) {
         let S { x: _x } = s;
