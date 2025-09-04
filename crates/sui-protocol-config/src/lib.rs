@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 95;
+const MAX_PROTOCOL_VERSION: u64 = 96;
 
 // Record history of protocol version allocations here:
 //
@@ -547,6 +547,10 @@ struct FeatureFlags {
     // Consensus network to use.
     #[serde(skip_serializing_if = "ConsensusNetwork::is_anemo")]
     consensus_network: ConsensusNetwork,
+
+    // If true, use the correct (<=) comparison for max_gas_payment_objects instead of (<)
+    #[serde(skip_serializing_if = "is_false")]
+    correct_gas_payment_limit_check: bool,
 
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1910,6 +1914,10 @@ impl ProtocolConfig {
 
     pub fn consensus_network(&self) -> ConsensusNetwork {
         self.feature_flags.consensus_network
+    }
+
+    pub fn correct_gas_payment_limit_check(&self) -> bool {
+        self.feature_flags.correct_gas_payment_limit_check
     }
 
     pub fn reshare_at_same_initial_version(&self) -> bool {
@@ -3964,6 +3972,9 @@ impl ProtocolConfig {
                     // Reudce the frequency of checkpoint splitting under high TPS.
                     cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
+                96 => {
+                    cfg.feature_flags.correct_gas_payment_limit_check = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4146,6 +4157,10 @@ impl ProtocolConfig {
     pub fn set_disallow_new_modules_in_deps_only_packages_for_testing(&mut self, val: bool) {
         self.feature_flags
             .disallow_new_modules_in_deps_only_packages = val;
+    }
+
+    pub fn set_correct_gas_payment_limit_check_for_testing(&mut self, val: bool) {
+        self.feature_flags.correct_gas_payment_limit_check = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
