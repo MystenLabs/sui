@@ -112,8 +112,8 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
     let z = $z;
     let max = $max;
     if (z == 1) {
-        assert_eq!(x.mul_div(y, z), x.mul(y));
-        assert_eq!(x.mul_div_ceil(y, z), x.mul(y));
+        assert_eq!(x.mul_div(y, z), x * y);
+        assert_eq!(x.mul_div_ceil(y, z), x * y);
     };
 
     if (x == 0 || y == 0) {
@@ -128,9 +128,9 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
         assert_lt!(y.mul_div(x, z), max);
     }; // TODO: Test abort_overflow
 
-    if (x <= max.div(y) || y <= max.div(x)) {
-        assert_eq!(x.mul_div(y, z), (x.mul(y)) / z);
-        assert_eq!(y.mul_div(x, z), (y.mul(x)) / z);
+    if (x <= max / y || y <= max / x) {
+        assert_eq!(x.mul_div(y, z), (x * y) / z);
+        assert_eq!(y.mul_div(x, z), (y * x) / z);
     };
 
     if (x % z == 0 || y % z == 0) {
