@@ -29,6 +29,12 @@ use crate::{
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_submitter_tests.rs"]
+mod transaction_submitter_tests;
+
+// Using a long timeout for transaction submission is ok, because good performing validators
+// are chosen first.
 const SUBMIT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct TransactionSubmitter {
@@ -54,9 +60,13 @@ impl TransactionSubmitter {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let start_time = Instant::now();
+
+        self.metrics
+            .submit_amplification_factor
+            .observe(amplification_factor as f64);
+
         let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
         let mut retries = 0;
-
         let mut requests = FuturesUnordered::new();
 
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
@@ -112,9 +122,6 @@ impl TransactionSubmitter {
                 }
             }
 
-            // Yield to prevent this retry loop from starving other tasks
-            tokio::task::yield_now().await;
-
             match requests.next().await {
                 Some((name, display_name, Ok(result))) => {
                     self.metrics
@@ -144,7 +151,7 @@ impl TransactionSubmitter {
                     retrier.add_error(name, e)?;
                 }
                 None => {
-                    // Runs out of targets.
+                    // All requests have been processed.
                     return Err(TransactionDriverError::Aborted {
                         submission_non_retriable_errors: aggregate_request_errors(
                             retrier
@@ -159,7 +166,10 @@ impl TransactionSubmitter {
                         },
                     });
                 }
-            }
+            };
+
+            // Yield to prevent this retry loop from starving other tasks.
+            tokio::task::yield_now().await;
         }
     }
 

@@ -25,7 +25,10 @@ use effects_certifier::*;
 use mysten_metrics::{monitored_future, TxType};
 use parking_lot::Mutex;
 use sui_types::{
-    committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
+    committee::EpochId,
+    digests::TransactionDigest,
+    error::{SuiError, UserInputError},
+    messages_grpc::RawSubmitTxRequest,
     transaction::TransactionDataAPI as _,
 };
 use tokio::{task::JoinSet, time::sleep};
@@ -120,10 +123,15 @@ where
         let amplification_factor = gas_price / reference_gas_price.max(1);
         if amplification_factor == 0 {
             return Err(TransactionDriverError::InvalidTransaction {
-                local_error: Some(format!(
-                    "Transaction {} gas price {} is below RGP {}",
-                    tx_digest, gas_price, reference_gas_price
-                )),
+                local_error: Some(
+                    SuiError::UserInputError {
+                        error: UserInputError::GasPriceUnderRGP {
+                            gas_price,
+                            reference_gas_price,
+                        },
+                    }
+                    .to_string(),
+                ),
                 submission_non_retriable_errors: AggregatedRequestErrors::default(),
                 submission_retriable_errors: AggregatedRequestErrors::default(),
             });
@@ -219,6 +227,8 @@ where
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
+        let amplification_factor =
+            amplification_factor.min(auth_agg.committee.num_members() as u64);
 
         let (name, submit_txn_result) = self
             .submitter
