@@ -651,6 +651,10 @@ impl ValidatorService {
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
                     .inc();
+                // Avoid breaking the soft bundle if one transaction is rejected.
+                if request.soft_bundle {
+                    return Err(error.into());
+                }
                 results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }
@@ -683,6 +687,15 @@ impl ValidatorService {
             {
                 let effects_digest = effects.digest();
                 if let Ok(executed_data) = self.complete_executed_data(effects, None).await {
+                    // Avoid breaking the soft bundle if one transaction has already been executed.
+                    if request.soft_bundle {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::AlreadyExecutedInSoftBundleError {
+                                digest: *tx_digest,
+                            },
+                        }
+                        .into());
+                    }
                     let executed_result = SubmitTxResult::Executed {
                         effects_digest,
                         details: Some(executed_data),
@@ -716,6 +729,15 @@ impl ValidatorService {
                         let effects_digest = effects.digest();
                         if let Ok(executed_data) = self.complete_executed_data(effects, None).await
                         {
+                            // Avoid breaking the soft bundle if one transaction has already been executed.
+                            if request.soft_bundle {
+                                return Err(SuiError::UserInputError {
+                                    error: UserInputError::AlreadyExecutedInSoftBundleError {
+                                        digest: *tx_digest,
+                                    },
+                                }
+                                .into());
+                            }
                             let executed_result = SubmitTxResult::Executed {
                                 effects_digest,
                                 details: Some(executed_data),
@@ -724,6 +746,10 @@ impl ValidatorService {
                             results[idx] = Some(executed_result);
                             continue;
                         }
+                    }
+                    // Avoid breaking the soft bundle if one transaction is rejected.
+                    if request.soft_bundle {
+                        return Err(e.into());
                     }
                     // Otherwise, record the error for the transaction.
                     results[idx] = Some(SubmitTxResult::Rejected { error: e });
@@ -1561,7 +1587,7 @@ impl ValidatorService {
             fp_ensure!(
                 !self.state.is_tx_already_executed(&tx_digest),
                 SuiError::UserInputError {
-                    error: UserInputError::AlreadyExecutedError { digest: tx_digest }
+                    error: UserInputError::AlreadyExecutedInSoftBundleError { digest: tx_digest }
                 }
                 .into()
             );

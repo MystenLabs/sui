@@ -275,7 +275,7 @@ pub enum UserInputError {
     #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
     NoSharedObjectError { digest: TransactionDigest },
     #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
-    AlreadyExecutedError { digest: TransactionDigest },
+    AlreadyExecutedInSoftBundleError { digest: TransactionDigest },
     #[error("At least one certificate in Soft Bundle has already been processed")]
     CertificateAlreadyProcessed,
     #[error(
