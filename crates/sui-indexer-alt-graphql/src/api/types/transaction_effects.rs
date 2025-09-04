@@ -414,7 +414,7 @@ impl TransactionEffects {
         let contents = NativeTransactionContents::ExecutedTransaction {
             effects: Box::new(response.effects),
             events: response.events.map(|events| events.data),
-            transaction_data,
+            transaction_data: Box::new(transaction_data),
             signatures,
         };
 

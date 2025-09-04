@@ -51,7 +51,7 @@ pub enum TransactionContents {
     ExecutedTransaction {
         effects: Box<TransactionEffects>,
         events: Option<Vec<Event>>,
-        transaction_data: TransactionData,
+        transaction_data: Box<TransactionData>,
         signatures: Vec<GenericSignature>,
     },
 }
@@ -222,7 +222,7 @@ impl TransactionContents {
             Self::Bigtable(kv) => Ok(kv.transaction.data().transaction_data().clone()),
             Self::ExecutedTransaction {
                 transaction_data, ..
-            } => Ok(transaction_data.clone()),
+            } => Ok(transaction_data.as_ref().clone()),
         }
     }
 
@@ -231,7 +231,7 @@ impl TransactionContents {
             Self::Pg(stored) => TransactionDigest::try_from(stored.tx_digest.clone())
                 .context("Failed to deserialize transaction digest"),
             Self::Bigtable(kv) => Ok(*kv.transaction.digest()),
-            Self::ExecutedTransaction { effects, .. } => Ok(*effects.transaction_digest()),
+            Self::ExecutedTransaction { effects, .. } => Ok(*effects.as_ref().transaction_digest()),
         }
     }
 
@@ -264,7 +264,7 @@ impl TransactionContents {
                 bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
             }
             Self::Bigtable(kv) => Ok(kv.effects.clone()),
-            Self::ExecutedTransaction { effects, .. } => Ok(*effects.clone()),
+            Self::ExecutedTransaction { effects, .. } => Ok(effects.as_ref().clone()),
         }
     }
 
@@ -285,7 +285,9 @@ impl TransactionContents {
                 .context("Failed to serialize transaction"),
             Self::ExecutedTransaction {
                 transaction_data, ..
-            } => bcs::to_bytes(transaction_data).context("Failed to serialize transaction"),
+            } => {
+                bcs::to_bytes(transaction_data.as_ref()).context("Failed to serialize transaction")
+            }
         }
     }
 
