@@ -1,0 +1,8 @@
+Command `test`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::access_field
+[ PASS    ] testing::a::destructure
+[ PASS    ] testing::a::ensure_test_poison
+Test result: OK. Total tests: 3; passed: 3; failed: 0
