@@ -153,12 +153,6 @@ impl CheckpointArtifact {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Self::ObjectStates(object_states) => object_states.is_empty(),
-        }
-    }
-
     pub fn artifact_type(&self) -> &'static str {
         match self {
             Self::ObjectStates(_) => "ObjectStates",
@@ -216,15 +210,7 @@ impl CheckpointArtifacts {
             })
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.artifacts.iter().all(|artifact| artifact.is_empty())
-    }
-
     pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
-        if self.is_empty() {
-            return Err(SuiError::from("Cannot compute digest for empty artifacts"));
-        }
-
         // Already sorted by BTreeSet!
         let digests = self
             .artifacts
@@ -1148,14 +1134,6 @@ mod tests {
 
     #[test]
     fn test_artifacts() {
-        // 1. Computing the digest of an empty artifact should fail
-        let o = CheckpointArtifact::ObjectStates(BTreeMap::new());
-        let mut artifacts = CheckpointArtifacts::new();
-        assert!(artifacts.add_artifact(o.clone()).is_ok());
-        assert!(artifacts.is_empty());
-        assert!(artifacts.digest().is_err());
-
-        // 2. Adding a second artifact with the same type should fail
         let mut artifacts = CheckpointArtifacts::new();
         assert!(artifacts.add_artifact(o.clone()).is_ok());
         assert!(artifacts.add_artifact(o.clone()).is_err());
