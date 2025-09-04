@@ -7,6 +7,7 @@ use mysten_common::moving_window::MovingWindow;
 use mysten_metrics::TxType;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
@@ -40,6 +41,8 @@ pub struct ClientObservedStats {
     pub global_stats: GlobalStats,
     /// Configuration parameters for scoring and exclusion policies
     pub config: ValidatorClientMonitorConfig,
+    /// Metrics for the client
+    pub metrics: Arc<ValidatorClientMetrics>,
 }
 
 /// Client-observed stats for a single validator.
@@ -104,11 +107,12 @@ pub struct GlobalStats {
 }
 
 impl ClientObservedStats {
-    pub fn new(config: ValidatorClientMonitorConfig) -> Self {
+    pub fn new(config: ValidatorClientMonitorConfig, metrics: Arc<ValidatorClientMetrics>) -> Self {
         Self {
             validator_stats: HashMap::new(),
             global_stats: GlobalStats::default(),
             config,
+            metrics,
         }
     }
 
@@ -188,16 +192,60 @@ impl ClientObservedStats {
                 ));
             }
         }
+        let max_latency = self
+            .global_stats
+            .max_latencies
+            .get(&operation)
+            .map(|ma| ma.get())
+            .unwrap();
+        self.metrics
+            .max_latencies
+            .with_label_values(&[operation.as_str()])
+            .observe(max_latency);
     }
 
     /// Get validator scores for all validators in the committee.
     ///
     /// Returns a map of all tracked validators to their scores.
     /// Score is 0 if the validator is excluded or has no stats.
-    pub fn get_all_validator_stats(&self, committee: &Committee) -> HashMap<AuthorityName, f64> {
+    pub fn get_all_validator_stats(
+        &self,
+        committee: &Committee,
+        tx_type: TxType,
+        display_name_map: &HashMap<AuthorityName, String>,
+    ) -> HashMap<AuthorityName, f64> {
+        // Find out the max latencies per operation type by iterating over all the authorities and finding the max latency for each operation type using
+        // each authority's calculated latency
+        let mut max_latencies = HashMap::new();
+
+        for op in OperationType::iter() {
+            let max_latency = committee
+                .names()
+                .map(|validator| {
+                    let stats = self.validator_stats.get(validator).unwrap();
+                    let is_excluded = if let Some(exclusion_time) = stats.exclusion_time {
+                        exclusion_time.elapsed() < self.config.failure_cooldown
+                    } else {
+                        false
+                    };
+                    if is_excluded {
+                        return 0.0;
+                    }
+                    stats
+                        .average_latencies
+                        .get(&op)
+                        .map(|mw| mw.get_average())
+                        .unwrap_or(0.0)
+                })
+                .reduce(f64::max)
+                .unwrap();
+            max_latencies.insert(op, max_latency);
+        }
+
         committee
             .names()
             .map(|validator| {
+                let display_name = display_name_map.get(validator).unwrap();
                 let score = if let Some(stats) = self.validator_stats.get(validator) {
                     let is_excluded = if let Some(exclusion_time) = stats.exclusion_time {
                         exclusion_time.elapsed() < self.config.failure_cooldown
@@ -207,7 +255,7 @@ impl ClientObservedStats {
                     if is_excluded {
                         0.0
                     } else {
-                        self.calculate_client_score(stats, &self.global_stats)
+                        self.calculate_client_score(stats, &max_latencies, display_name, tx_type)
                     }
                 } else {
                     0.0
@@ -233,7 +281,9 @@ impl ClientObservedStats {
     fn calculate_client_score(
         &self,
         stats: &ValidatorClientStats,
-        global_stats: &GlobalStats,
+        max_latencies: &HashMap<OperationType, f64>,
+        display_name: &str,
+        tx_type: TxType,
     ) -> f64 {
         let mut latency_score = 0.0;
         let mut total_weight = 0.0;
@@ -247,7 +297,7 @@ impl ClientObservedStats {
             };
 
             // Skip if global stats are missing for this operation
-            let Some(max_latency) = global_stats.max_latencies.get(&op).map(|ma| ma.get()) else {
+            let Some(max_latency) = max_latencies.get(&op) else {
                 continue;
             };
 
@@ -256,7 +306,12 @@ impl ClientObservedStats {
                 .average_latencies
                 .get(&op)
                 .map(|mw| mw.get_average())
-                .unwrap_or(max_latency);
+                .unwrap_or(*max_latency);
+
+            self.metrics
+                .average_latencies
+                .with_label_values(&[display_name, op.as_str(), tx_type.as_str()])
+                .observe(latency);
 
             // Lower latency ratios are better (inverted for scoring)
             let latency_ratio = (latency / max_latency).min(1.0);

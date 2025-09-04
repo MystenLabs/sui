@@ -11,7 +11,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
 ];
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ValidatorClientMetrics {
     /// Latency of operations per validator
     pub observed_latency: HistogramVec,
@@ -30,6 +30,12 @@ pub struct ValidatorClientMetrics {
 
     /// Time since last successful operation per validator
     pub time_since_last_success: GaugeVec,
+
+    /// Average latencies per validator and operation type
+    pub average_latencies: HistogramVec,
+
+    /// Max latencies per operation type
+    pub max_latencies: HistogramVec,
 }
 
 impl ValidatorClientMetrics {
@@ -38,6 +44,15 @@ impl ValidatorClientMetrics {
             observed_latency: register_histogram_vec_with_registry!(
                 "validator_client_observed_latency",
                 "Client-observed latency of operations per validator",
+                &["validator", "operation_type", "tx_type"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            average_latencies: register_histogram_vec_with_registry!(
+                "validator_client_average_latencies",
+                "Average latencies of operations per validator",
                 &["validator", "operation_type", "tx_type"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -80,6 +95,15 @@ impl ValidatorClientMetrics {
                 "validator_client_time_since_last_success",
                 "Time in seconds since last successful client interaction",
                 &["validator", "tx_type"],
+                registry,
+            )
+            .unwrap(),
+
+            max_latencies: register_histogram_vec_with_registry!(
+                "validator_client_max_latencies",
+                "Max latencies of operations per validator",
+                &["operation_type"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

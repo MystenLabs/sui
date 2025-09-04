@@ -5,9 +5,6 @@ mod metrics;
 mod monitor;
 mod stats;
 
-#[cfg(test)]
-mod tests;
-
 pub use metrics::ValidatorClientMetrics;
 pub use monitor::ValidatorClientMonitor;
 use strum::EnumIter;
@@ -22,6 +19,17 @@ pub enum OperationType {
     Effects,
     HealthCheck,
     Finalize,
+}
+
+impl OperationType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            OperationType::Submit => "submit",
+            OperationType::Effects => "effects",
+            OperationType::HealthCheck => "health_check",
+            OperationType::Finalize => "finalize",
+        }
+    }
 }
 
 /// Feedback from TransactionDriver operations

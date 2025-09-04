@@ -60,8 +60,8 @@ where
 
         let monitor = Arc::new(Self {
             config: config.clone(),
-            metrics,
-            client_stats: RwLock::new(ClientObservedStats::new(config)),
+            metrics: metrics.clone(),
+            client_stats: RwLock::new(ClientObservedStats::new(config, metrics)),
             authority_aggregator,
             cached_scores: RwLock::new(None),
             tx_type,
@@ -362,10 +362,13 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     fn update_cached_scores(&self) {
         let authority_agg = self.authority_aggregator.load();
         let committee = &authority_agg.committee;
-
-        let score_map = self.client_stats.read().get_all_validator_stats(committee);
-
         let tx_type = self.tx_type.as_str();
+
+        let score_map = self.client_stats.read().get_all_validator_stats(
+            committee,
+            self.tx_type,
+            &authority_agg.validator_display_names,
+        );
 
         for (validator, score) in score_map.iter() {
             debug!("Validator [{tx_type}] {}: score {}", validator, score);
