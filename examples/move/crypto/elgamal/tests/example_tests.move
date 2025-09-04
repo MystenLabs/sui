@@ -5,10 +5,10 @@
 module elgamal::tests;
 
 use elgamal::example;
+use std::unit_test::assert_eq;
 use sui::bls12381::{Self, Scalar, G1};
 use sui::group_ops::Element;
 use sui::random;
-use std::unit_test::assert_eq;
 
 #[test]
 fun test_elgamal_equality() {
