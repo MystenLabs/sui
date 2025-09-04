@@ -1548,6 +1548,10 @@ type MoveModule {
 	"""
 	fileFormatVersion: Int
 	"""
+	Modules that this module considers friends. These modules can call `public(package)` functions in this module.
+	"""
+	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	"""
 	The module's unqualified name.
 	"""
 	name: String!
