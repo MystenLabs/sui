@@ -367,7 +367,12 @@ impl<'env> Context<'env> {
             let loc = def.loc;
 
             // Skip over all extensions that are not defined in the root package
-            if !matches!(target_kind, P::TargetKind::Source { is_root_package: true }) {
+            if !matches!(
+                target_kind,
+                P::TargetKind::Source {
+                    is_root_package: true
+                }
+            ) {
                 continue;
             }
 
@@ -823,7 +828,7 @@ fn into_modules_and_extenions(
                     def,
                     target_kind,
                 };
-                return vec![(module_addr, pdef)];
+                vec![(module_addr, pdef)]
             }
             P::PackageDefinition {
                 package,
