@@ -777,10 +777,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         // DONE(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
         let transactions = self.filter_consensus_txns(&commit_info, &consensus_commit);
+        // DONE(commit-handler-rewrite): de-duplicate transactions
         let transactions = self.deduplicate_consensus_txns(&mut state, &commit_info, transactions);
 
         let mut randomness_manager = self.init_randomness(&mut state, &commit_info);
 
+        // DONE(commit-handler-rewrite): Split transactions into different types for processing.
         let CommitHandlerInput {
             authenticator_state_update_transactions,
             user_transactions,
@@ -908,6 +910,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 protocol_config,
                 commit_info,
                 transaction,
+                // DONE(commit-handler-rewrite): use correct congestion tracker for randomness vs non-randomness
                 &mut shared_object_using_randomness_congestion_tracker,
                 &previously_deferred_tx_digests,
                 execution_time_estimator.as_ref(),
@@ -999,6 +1002,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
     ) {
+        // DONE(commit-handler-rewrite): check if transaction should be deferred
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             &transaction,
@@ -1078,6 +1082,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let protocol_config = self.epoch_store.protocol_config();
 
+        // DONE(commit-handler-rewrite): deferred transactions have higher priority than new txns (if gas price is equal)
         let (mut txns, mut randomness_txns, previously_deferred_tx_digests) =
             self.load_deferred_transactions(state, commit_info);
 
@@ -1725,7 +1730,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // TODO(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
         transactions.extend(self.filter_consensus_txns(&commit_info, &consensus_commit));
 
-        // TODO(commit-handler-rewrite): de-duplicate and create SequencedConsensusTransaction
+        // TODO(commit-handler-rewrite): de-duplicate transactions
         let mut all_transactions = Vec::new();
         {
             // We need a set here as well, since the processed_cache is a LRU cache and can drop
@@ -1950,6 +1955,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 match &parsed.transaction.kind {
                     ConsensusTransactionKind::MFPTransaction(_) => {
+                        // DONE(commit-handler-rewrite): ignore mfp user transaction if mfp is disabled
                         if !self.epoch_store.protocol_config().mysticeti_fastpath() {
                             debug!(
                                 "Ignoring MFP transaction {:?} because MFP is disabled",
@@ -1978,6 +1984,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             "BUG: saw deprecated CapabilityNotification tx for commit round {}",
                             commit_info.round
                         );
+                        // DONE(commit-handler-rewrite): [ssm] can ignore capabilities v1 in rewrite
                         continue;
                     }
 
