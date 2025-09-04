@@ -23,6 +23,8 @@ use crate::dependency::ResolverError;
 use crate::git::GitError;
 use crate::graph::LinkageError;
 use crate::graph::RenameError;
+use crate::package::EnvironmentID;
+use crate::package::EnvironmentName;
 use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
 
@@ -75,6 +77,35 @@ pub enum PackageError {
         address: Identifier,
         package: String,
     },
+
+    #[error(
+        // TODO: add file path?
+        "Ephemeral publication file has `build-env = \"{file_build_env}\"`; it cannot be used to publish with `--build-env {passed_build_env}`"
+    )]
+    EphemeralEnvMismatch {
+        file_build_env: EnvironmentName,
+        passed_build_env: EnvironmentName,
+    },
+
+    #[error(
+        // TODO: add file path?
+        "Ephemeral publication file has chain-id `{file_chain_id}`; it cannot be used to publish to chain with id `{passed_chain_id}`"
+    )]
+    EphemeralChainMismatch {
+        file_chain_id: EnvironmentID,
+        passed_chain_id: EnvironmentID,
+    },
+
+    #[error(
+        // TODO: add file path?
+        // TODO: maybe not mention `--build-env` since that's CLI specific? Then we'll need to add
+        //       it elsewhere
+        "Ephemeral publication file does not have a `build-env` so you must pass `--build-env <env>`"
+    )]
+    EphemeralNoBuildEnv,
+
+    #[error("Cannot build with build-env `{build_env}`: the recognized environments are <TODO>")]
+    UnknownBuildEnv { build_env: EnvironmentName },
 }
 
 impl PackageError {

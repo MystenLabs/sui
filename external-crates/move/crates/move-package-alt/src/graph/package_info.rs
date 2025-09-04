@@ -31,11 +31,18 @@ pub enum NamedAddress {
 
 impl<F: MoveFlavor> PackageGraph<F> {
     pub fn root_package_info(&self) -> PackageInfo<F> {
-        self.package_info(self.root_index)
+        PackageGraph::<F>::package_info(&self, self.root_index)
     }
 
     pub(crate) fn package_info(&self, node: NodeIndex) -> PackageInfo<F> {
-        PackageInfo { graph: self, node }
+        PackageInfo::<F> { graph: self, node }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
+        self.package_ids
+            .get_by_left(id)
+            .map(|node| PackageGraph::<F>::package_info(&self, *node))
     }
 }
 
@@ -76,6 +83,8 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     }
 
     /// Returns the published address of this package, if it is published
+    ///
+    /// This applies the address overrides from the package graph - see [Self::set_overrides]
     pub fn published(&self) -> Option<&PublishAddresses> {
         self.package()
             .publication()
@@ -110,6 +119,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
 
     /// Return a dependency that resolves to this package
     pub(crate) fn dep_for_self(&self) -> &PinnedDependencyInfo {
+        // TODO: maybe pull this from the graph instead of storing it in the `Package`?
         self.package().dep_for_self()
     }
 
@@ -142,12 +152,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
             result.insert(self.package().name().clone(), self.node_to_addr(self.node));
         }
 
-        for edge in self.graph.inner.edges(self.node) {
-            let dep = Self {
-                graph: self.graph,
-                node: edge.target(),
-            };
-
+        for (_, dep) in self.direct_deps() {
             let transitive_result = dep.legacy_named_addresses()?;
 
             for (name, addr) in transitive_result {

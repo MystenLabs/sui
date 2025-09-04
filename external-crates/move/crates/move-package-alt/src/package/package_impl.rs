@@ -2,8 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    path::Path,
+    sync::{LazyLock, Mutex},
+};
 
+use derive_where::derive_where;
 use tracing::debug;
 
 use super::compute_digest;
@@ -13,7 +18,7 @@ use crate::compatibility::legacy::LegacyData;
 use crate::compatibility::legacy_parser::try_load_legacy_manifest;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
-use crate::schema::{ParsedManifest, ParsedPubs, Publication, ReplacementDependency};
+use crate::schema::{ParsedManifest, ParsedPublishedFile, Publication, ReplacementDependency};
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
@@ -21,7 +26,6 @@ use crate::{
     package::manifest::Digest,
     schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
 };
-use std::sync::{LazyLock, Mutex};
 
 // TODO: is this the right way to handle this?
 static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
@@ -33,6 +37,7 @@ pub type EnvironmentID = String;
 pub type AddressInfo = String;
 
 #[derive(Debug)]
+#[derive_where(Clone)]
 pub struct Package<F: MoveFlavor> {
     /// The environment of the loaded package.
     env: EnvironmentName,
@@ -140,6 +145,14 @@ impl<F: MoveFlavor> Package<F> {
         Ok(result)
     }
 
+    /// Create a copy of this package with the publication information replaced by `publish`
+    pub(crate) fn override_publish(&self, publish: Publication<F>) -> Self {
+        let mut result = self.clone();
+        debug!("updating address to {publish:?}");
+        result.publication = Some(publish);
+        result
+    }
+
     /// The path to the root directory of this package. This path is guaranteed to exist
     /// and contain a manifest file.
     pub fn path(&self) -> &PackagePath {
@@ -191,7 +204,8 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// Additional flavor-specific information that was recorded when this package was published
-    /// (in the `Move.published` file).
+    /// (in the `Move.published` file or the ephemeral publication file if this was created with
+    /// [Self::override_publish]).
     pub fn publication(&self) -> Option<&Publication<F>> {
         self.publication.as_ref()
     }
@@ -227,7 +241,7 @@ impl<F: MoveFlavor> Package<F> {
         };
 
         debug!("parsing\n---\n{}\n---", file.source());
-        let parsed = toml_edit::de::from_str::<ParsedPubs<F>>(file.source())?;
+        let parsed = toml_edit::de::from_str::<ParsedPublishedFile<F>>(file.source())?;
 
         let Some(publish) = parsed.published.get(env) else {
             debug!("no entry for {env:?} in {pubfile:?}");
