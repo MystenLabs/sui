@@ -1103,8 +1103,6 @@ fun events() {
 
 #[test]
 fun tx_context() {
-    use std::unit_test::assert_eq;
-
     // check default values for context
     let mut scenario = test_scenario::begin(@0xA);
     let ctx = scenario.ctx();
@@ -1190,8 +1188,6 @@ fun tx_context() {
 
 #[test]
 fun tx_context_with_builder() {
-    use std::unit_test::assert_eq;
-
     // begin with context builder
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
