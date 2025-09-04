@@ -43,7 +43,7 @@ use super::{
     gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
-    unchanged_consensus_object::{ExecutionContext, UnchangedConsensusObject},
+    unchanged_consensus_object::UnchangedConsensusObject,
 };
 
 /// The execution status of this transaction: success or failure.
@@ -349,17 +349,14 @@ impl EffectsContents {
         let cursors = page.paginate_indices(unchanged_consensus_objects.len());
 
         let effects = content.effects()?;
-        let execution_context = content
-            .cp_sequence_number()
-            .map(ExecutionContext::Checkpoint)
-            .unwrap_or_else(|| ExecutionContext::Epoch(effects.executed_epoch()));
+        let epoch = effects.executed_epoch();
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
             let unchanged_consensus_object = UnchangedConsensusObject::from_native(
                 self.scope.clone(),
                 unchanged_consensus_objects[*edge.cursor].clone(),
-                execution_context,
+                epoch,
             );
             conn.edges
                 .push(Edge::new(edge.cursor, unchanged_consensus_object));

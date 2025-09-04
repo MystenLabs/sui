@@ -22,15 +22,6 @@ use super::{
     object::{self, Object},
 };
 
-/// Context for transaction execution - either a specific checkpoint or an epoch
-#[derive(Copy, Clone)]
-pub(crate) enum ExecutionContext {
-    /// Transaction was executed at a specific checkpoint
-    Checkpoint(u64),
-    /// Transaction was executed in an epoch (for ExecutedTransaction)
-    Epoch(u64),
-}
-
 /// Reason why a transaction that attempted to access a consensus-managed object was cancelled.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ConsensusObjectCancellationReason {
@@ -95,30 +86,24 @@ pub(crate) struct ConsensusObjectCancelled {
 pub(crate) struct PerEpochConfig {
     scope: Scope,
     object_id: ObjectID,
-    /// The execution context (checkpoint or epoch) when the transaction was executed
-    execution_context: ExecutionContext,
+    /// The epoch when the transaction was executed
+    epoch: u64,
 }
 
 #[Object]
 impl PerEpochConfig {
     /// The per-epoch configuration object as of when the transaction was executed.
     async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError<object::Error>> {
-        let cp_num = match self.execution_context {
-            ExecutionContext::Checkpoint(cp_num) => cp_num,
-            ExecutionContext::Epoch(epoch) => {
-                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-                let Some(epoch_start) = pg_loader
-                    .load_one(EpochStartKey(epoch))
-                    .await
-                    .context("Failed to fetch epoch start information")?
-                else {
-                    return Ok(None);
-                };
-                epoch_start.cp_lo as u64
-            }
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let Some(epoch_start) = pg_loader
+            .load_one(EpochStartKey(self.epoch))
+            .await
+            .context("Failed to fetch epoch start information")?
+        else {
+            return Ok(None);
         };
 
-        let cp: UInt53 = cp_num.into();
+        let cp: UInt53 = (epoch_start.cp_lo as u64).into();
         Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
     }
 }
@@ -136,7 +121,7 @@ impl UnchangedConsensusObject {
     pub(crate) fn from_native(
         scope: Scope,
         native: (ObjectID, NativeUnchangedConsensusKind),
-        execution_context: ExecutionContext,
+        epoch: u64,
     ) -> Self {
         let (object_id, kind) = native;
 
@@ -180,7 +165,7 @@ impl UnchangedConsensusObject {
             NativeUnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig(PerEpochConfig {
                 scope,
                 object_id,
-                execution_context,
+                epoch,
             }),
         }
     }

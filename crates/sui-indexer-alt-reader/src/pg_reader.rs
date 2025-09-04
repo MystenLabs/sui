@@ -79,7 +79,7 @@ impl PgReader {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 
-    /// Check if this reader has a database connection available.
+    /// Check if this reader has a database available.
     pub fn has_database(&self) -> bool {
         self.db.is_some()
     }
