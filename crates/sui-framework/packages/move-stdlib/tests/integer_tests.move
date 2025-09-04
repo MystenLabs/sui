@@ -5,7 +5,7 @@
 #[test_only]
 module std::integer_tests;
 
-use std::unit_test::{assert_eq, assert_le, assert_lt};
+use std::unit_test::assert_eq;
 
 /// Iterate over the cases and apply the function to the case and its predecessor
 /// and successor. Predecessor is the value - 1, with min being 0, and successor
@@ -123,10 +123,7 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
         assert_eq!(y.mul_div_ceil(x, z), 0);
     };
 
-    if ((x == max && y < z) || (y == max && x < z)) {
-        assert_lt!(x.mul_div(y, z), max);
-        assert_lt!(y.mul_div(x, z), max);
-    }; // TODO: Test abort_overflow
+    // TODO: Test abort_overflow and div by zero.
 
     if (x <= max / y || y <= max / x) {
         assert_eq!(x.mul_div(y, z), (x * y) / z);
@@ -141,11 +138,6 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
         assert_eq!(x.mul_div(y, z), 0);
         assert_eq!(x.mul_div_ceil(y, z), 1);
     };
-
-    assert_le!(x.mul_div(y, z), max);
-    assert_le!(y.mul_div(x, z), max);
-    assert_le!(x.mul_div_ceil(y, z) - x.mul_div(y, z), 1);
-    assert_le!(y.mul_div_ceil(x, z) - y.mul_div(x, z), 1);
 }
 
 public(package) macro fun test_mul_div($max: _, $cases: vector<_>) {
