@@ -6,6 +6,7 @@ use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
 
 use crate::{
+    api::types::available_range::{self, AvailableRange, RetentionKey},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -412,6 +413,26 @@ impl Query {
             let scope = self.scope(ctx)?;
             ProtocolConfigs::latest(ctx, &scope).await
         }
+    }
+
+    /// Range of checkpoints for which data is available for a query type, field and optional filter.
+    async fn retention(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: String,
+        filter: Option<String>,
+    ) -> Result<AvailableRange, RpcError<available_range::Error>> {
+        let scope = self.scope(ctx)?;
+        AvailableRange::new(
+            ctx,
+            &scope,
+            RetentionKey {
+                type_,
+                field,
+                filter,
+            },
+        )
     }
 
     /// Configuration for this RPC service.
