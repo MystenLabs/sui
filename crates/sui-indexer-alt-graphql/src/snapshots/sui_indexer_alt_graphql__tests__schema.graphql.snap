@@ -1516,17 +1516,27 @@ type MoveCallCommand {
 	"""
 	arguments: [TransactionArgument!]!
 	"""
-	The name of the function being called.
+	The function being called.
 	"""
-	functionName: String
+	function: MoveFunction!
+}
+
+"""
+A function defined in a Move module.
+"""
+type MoveFunction {
 	"""
-	The name of the module the function being called is defined in.
+	Whether the function is marked `entry` or not.
 	"""
-	module: String
+	isEntry: Boolean
 	"""
-	The storage ID of the package the function being called is defined in.
+	The module that this function is defined in.
 	"""
-	package: SuiAddress
+	module: MoveModule!
+	"""
+	The function's unqualified name.
+	"""
+	name: String!
 }
 
 """
@@ -1551,6 +1561,10 @@ type MoveModule {
 	Modules that this module considers friends. These modules can call `public(package)` functions in this module.
 	"""
 	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	"""
+	The function named `name` in this module.
+	"""
+	function(name: String!): MoveFunction
 	"""
 	The module's unqualified name.
 	"""
