@@ -8,12 +8,17 @@ use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, Fullnod
 use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
+<<<<<<< HEAD
     api::mutation::TransactionInputError,
     api::{
         scalars::base64::Base64,
         types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects},
     },
     error::{bad_user_input, upcast, RpcError},
+=======
+    api::types::available_range::{self, AvailableRange, RetentionKey},
+    error::RpcError,
+>>>>>>> 17414d4e09 (graphql-alt: Query.retention)
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
@@ -455,6 +460,26 @@ impl Query {
             let scope = self.scope(ctx)?;
             ProtocolConfigs::latest(ctx, &scope).await
         }
+    }
+
+    /// Range of checkpoints for which data is available for a query type, field and optional filter.
+    async fn retention(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: String,
+        filter: Option<String>,
+    ) -> Result<AvailableRange, RpcError<available_range::Error>> {
+        let scope = self.scope(ctx)?;
+        AvailableRange::new(
+            ctx,
+            &scope,
+            RetentionKey {
+                type_,
+                field,
+                filter,
+            },
+        )
     }
 
     /// Configuration for this RPC service.

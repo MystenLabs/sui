@@ -1,0 +1,57 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 6:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, line 8:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 4, line 12:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 5, lines 14-29:
+//# run-graphql
+Response: {
+  "data": {
+    "queryTransactionsRetention": {
+      "first": {
+        "sequenceNumber": 0
+      },
+      "last": {
+        "sequenceNumber": 3
+      }
+    }
+  }
+}
+
+task 6, lines 31-41:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Retention range not found for: Query.invalid()",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "queryInvalidRetention"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
