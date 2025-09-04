@@ -292,7 +292,7 @@ impl EffectsContents {
         after: Option<CObjectChange>,
         last: Option<u64>,
         before: Option<CObjectChange>,
-    ) -> Result<Option<Connection<CObjectChange, ObjectChange>>, RpcError> {
+    ) -> Result<Option<Connection<String, ObjectChange>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("TransactionEffects", "objectChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -311,7 +311,8 @@ impl EffectsContents {
                 native: object_changes[*edge.cursor].clone(),
             };
 
-            conn.edges.push(Edge::new(edge.cursor, object_change))
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), object_change))
         }
 
         Ok(Some(conn))
