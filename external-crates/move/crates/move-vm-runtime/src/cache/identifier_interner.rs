@@ -42,21 +42,21 @@ fn global_interner() -> Arc<IdentifierInterner> {
 
 /// Get the interned identifier value. This may raise an invariant error if `try_get_or_intern`
 /// fails, but that's likely a serious OOM issue.
-pub fn intern_identifier(ident: &Identifier) -> PartialVMResult<IdentifierKey> {
+pub(crate) fn intern_identifier(ident: &Identifier) -> PartialVMResult<IdentifierKey> {
     let interner = global_interner();
     interner.get_or_intern_str_internal(ident.borrow_str())
 }
 
 /// Get the interned identifier string value. This may raise an invariant error if
 /// `get_or_intern` fails, but that's likely a serious OOM issue.
-pub fn intern_ident_str(ident_str: &IdentStr) -> PartialVMResult<IdentifierKey> {
+pub(crate) fn intern_ident_str(ident_str: &IdentStr) -> PartialVMResult<IdentifierKey> {
     let interner = global_interner();
     interner.get_or_intern_str_internal(ident_str.borrow_str())
 }
 
 /// Get the interned identifier value, using `key_type` in the error case. This may raise an invariant error if `try_get_or_intern`
 /// fails, but that's likely a serious OOM issue.
-pub fn intern_identifier_with_msg(
+pub(crate) fn intern_identifier_with_msg(
     ident: &Identifier,
     key_type: &str,
 ) -> PartialVMResult<IdentifierKey> {
@@ -69,7 +69,7 @@ pub fn intern_identifier_with_msg(
 /// Resolve an identifier in the interner or produce an invariant violation. This is for use
 /// when the key _must_ be there, as it produces an error when it is not found. The `key_type`
 /// is used to make a more-informative error message.
-pub fn resolve_interned(key: &IdentifierKey, key_type: &str) -> PartialVMResult<Identifier> {
+pub(crate) fn resolve_interned(key: &IdentifierKey, key_type: &str) -> PartialVMResult<Identifier> {
     let interner = global_interner();
     interner.resolve_ident(key, key_type)
 }
@@ -90,7 +90,8 @@ const IDENTIFIER_SLOTS: usize = 1_000_000_000;
 // used as keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct IdentifierKey(Spur);
+// Testing.
+pub(crate) struct IdentifierKey(Spur);
 
 // -------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------
@@ -123,11 +124,19 @@ impl IdentifierInterner {
         }
     }
 
-    pub fn get_or_intern_identifier(&self, ident: &Identifier) -> PartialVMResult<IdentifierKey> {
+    #[allow(dead_code)]
+    pub(crate) fn get_or_intern_identifier(
+        &self,
+        ident: &Identifier,
+    ) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident.borrow_str())
     }
 
-    pub fn get_or_intern_ident_str(&self, ident_str: &IdentStr) -> PartialVMResult<IdentifierKey> {
+    #[allow(dead_code)]
+    pub(crate) fn get_or_intern_ident_str(
+        &self,
+        ident_str: &IdentStr,
+    ) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
