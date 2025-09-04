@@ -3,17 +3,21 @@
 
 use std::sync::Arc;
 
-use anyhow::Context as _;
-use async_graphql::{Context, Object};
+use anyhow::{anyhow, Context as _};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    Context, Object,
+};
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 use sui_package_resolver::Module as ParsedModule;
 use tokio::{join, sync::OnceCell};
 
 use crate::{
-    api::scalars::base64::Base64,
+    api::scalars::{base64::Base64, cursor::JsonCursor},
     config::Limits,
     error::{resource_exhausted, RpcError},
+    pagination::{Page, PaginationConfig},
 };
 
 use super::move_package::MovePackage;
@@ -33,6 +37,8 @@ struct ModuleContents {
     native: Vec<u8>,
     parsed: ParsedModule,
 }
+
+type CFriend = JsonCursor<usize>;
 
 /// Modules are a unit of code organization in Move.
 ///
@@ -85,6 +91,47 @@ impl MoveModule {
         };
 
         Ok(Some(contents.parsed.bytecode().version()))
+    }
+
+    /// Modules that this module considers friends. These modules can call `public(package)` functions in this module.
+    async fn friends(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CFriend>,
+        last: Option<u64>,
+        before: Option<CFriend>,
+    ) -> Result<Option<Connection<String, MoveModule>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("MoveModule", "friends");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let bytecode = contents.parsed.bytecode();
+        let runtime_id = *bytecode.self_id().address();
+
+        let friends = bytecode.friend_decls();
+        let cursors = page.paginate_indices(friends.len());
+
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        for edge in cursors.edges {
+            let decl = &friends[*edge.cursor];
+            let friend_pkg = bytecode.address_identifier_at(decl.address);
+            let friend_mod = bytecode.identifier_at(decl.name);
+
+            if *friend_pkg != runtime_id {
+                return Err(anyhow!("Cross-package friend modules").into());
+            }
+
+            let friend = MoveModule::with_fq_name(self.package.clone(), friend_mod.to_string());
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), friend));
+        }
+
+        Ok(Some(conn))
     }
 }
 
