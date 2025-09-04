@@ -79,13 +79,10 @@ pub fn list_balances(
         None
     };
 
-    Ok(ListBalancesResponse {
-        balances: balances
-            .into_iter()
-            .map(balance_info_to_proto)
-            .collect::<Result<Vec<_>>>()?,
-        next_page_token,
-    })
+    let mut response = ListBalancesResponse::default();
+    response.balances = balances.into_iter().map(balance_info_to_proto).collect();
+    response.next_page_token = next_page_token;
+    Ok(response)
 }
 
 fn decode_page_token(page_token: &[u8]) -> Result<PageToken> {
@@ -103,13 +100,11 @@ fn encode_page_token(page_token: PageToken) -> Bytes {
 
 fn balance_info_to_proto(
     (coin_type, info): (move_core_types::language_storage::StructTag, BalanceInfo),
-) -> Result<Balance> {
-    Ok(Balance {
-        coin_type: Some(
-            sui_types::sui_sdk_types_conversions::struct_tag_core_to_sdk(coin_type)?.to_string(),
-        ),
-        balance: Some(info.balance),
-    })
+) -> Balance {
+    let mut balance = Balance::default();
+    balance.coin_type = Some(coin_type.to_canonical_string(true));
+    balance.balance = Some(info.balance);
+    balance
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

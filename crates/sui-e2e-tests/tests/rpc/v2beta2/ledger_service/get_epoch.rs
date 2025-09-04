@@ -17,10 +17,7 @@ async fn get_epoch() {
         .unwrap();
 
     let latest_epoch = client
-        .get_epoch(GetEpochRequest {
-            epoch: None,
-            read_mask: None,
-        })
+        .get_epoch(GetEpochRequest::latest())
         .await
         .unwrap()
         .into_inner()
@@ -28,10 +25,7 @@ async fn get_epoch() {
         .unwrap();
 
     let epoch_0 = client
-        .get_epoch(GetEpochRequest {
-            epoch: Some(0),
-            read_mask: None,
-        })
+        .get_epoch(GetEpochRequest::new(0))
         .await
         .unwrap()
         .into_inner()
@@ -48,10 +42,9 @@ async fn get_epoch() {
 
     //Ensure that fetching the system state for the epoch works
     let epoch = client
-        .get_epoch(GetEpochRequest {
-            epoch: None,
-            read_mask: Some(FieldMask::from_paths(["system_state"])),
-        })
+        .get_epoch(
+            GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"])),
+        )
         .await
         .unwrap()
         .into_inner()

@@ -1,0 +1,336 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-52:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7812800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 53-55:
+//# run test::events_test::emit_event --sender A --args 42
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 56-58:
+//# run test::events_test::emit_multiple_events --sender A
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent2"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 59-61:
+//# run test::events_test::emit_events_by_count --sender A --args 10
+events: Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 3, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 4, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 5, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 6, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 7, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 8, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 9, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events_test"), sender: A, type_: StructTag { address: test, module: Identifier("events_test"), name: Identifier("TestEvent"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 10, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 62-64:
+//# programmable --sender A --inputs 100 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 66:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 68-103:
+//# run-graphql
+Response: {
+  "data": {
+    "allEvents": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
+        "endCursor": "eyJ0Ijo0LCJlIjo5fQ==",
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB"
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "AHkCdH8CcARrLctt17VoafEezRtuCshmDzuLnKGvzMkw"
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "AHkCdH8CcARrLctt17VoafEezRtuCshmDzuLnKGvzMkw"
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 2,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 3,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 4,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 5,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 6,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 7,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 8,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 9,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        }
+      ]
+    },
+    "eventsHasNext": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
+        "endCursor": "eyJ0IjozLCJlIjowfQ==",
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB"
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "AHkCdH8CcARrLctt17VoafEezRtuCshmDzuLnKGvzMkw"
+          }
+        }
+      ]
+    },
+    "eventsHasPrevious": {
+      "pageInfo": {
+        "startCursor": "eyJ0Ijo0LCJlIjo4fQ==",
+        "endCursor": "eyJ0Ijo0LCJlIjo5fQ==",
+        "hasNextPage": false,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 8,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        },
+        {
+          "sequenceNumber": 9,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8, lines 105-113:
+//# run-graphql --cursors {"t":2,"e":0}
+Response: {
+  "data": {
+    "eventsAfterT2E0HasPreviousPage": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true
+      }
+    }
+  }
+}
+
+task 9, lines 115-123:
+//# run-graphql --cursors {"t":4,"e":9}
+Response: {
+  "data": {
+    "eventsBeforeT3E9HasNextPage": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      }
+    }
+  }
+}
+
+task 10, lines 125-150:
+//# run-graphql --cursors {"t":2,"e":0} {"t":4,"e":9}
+Response: {
+  "data": {
+    "firstEventBetweenT2E0AndT4E9": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "AHkCdH8CcARrLctt17VoafEezRtuCshmDzuLnKGvzMkw"
+          }
+        }
+      ]
+    },
+    "lastEventBetweenT2E0AndT4E9": {
+      "nodes": [
+        {
+          "sequenceNumber": 8,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "96WBMjZrq1ykYgk1AXL6seci2c7SVyV7UwMx21uKEqAY"
+          }
+        }
+      ]
+    },
+    "eventsBetweenInvalidCursors": {
+      "nodes": []
+    }
+  }
+}
+
+task 11, lines 153-168:
+//# run-graphql --cursors {"t":2,"e":0}
+Response: {
+  "data": {
+    "eventsAfterTransaction2AndEvent0": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJ0IjozLCJlIjowfQ==",
+        "hasNextPage": true,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "AHkCdH8CcARrLctt17VoafEezRtuCshmDzuLnKGvzMkw"
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 170-185:
+//# run-graphql --cursors {"t":3,"e":0}
+Response: {
+  "data": {
+    "eventsBeforeTransaction3AndEvent0": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
+        "endCursor": "eyJ0IjoyLCJlIjowfQ==",
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB"
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 187-202:
+//# run-graphql --cursors {"t":3,"e":1}
+Response: {
+  "data": {
+    "eventsBeforeTransaction3AndEvent1FromBack": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
+        "endCursor": "eyJ0IjozLCJlIjowfQ==",
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "6mKU5gn3GsfLtVngGZuA8ciSEy44JCzNRUxC4zsP7uuB"
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "timestamp": "1970-01-01T00:00:00Z",
+          "transaction": {
+            "digest": "AHkCdH8CcARrLctt17VoafEezRtuCshmDzuLnKGvzMkw"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -102,6 +102,12 @@ const config = {
                 },
               ],
             },
+            resolve: {
+              alias: {
+                "@repo": path.resolve(__dirname, "../../"),
+                "@docs": path.resolve(__dirname, "../content/"),
+              },
+            },
           };
         },
       };

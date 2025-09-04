@@ -2,8 +2,6 @@
 title: Soulbound NFT Example
 description: An example using Sui Move struct abilities and the Sui Framework's `transfer` module to make a NFT soulbound (non-transferable).
 keywords: [ERC-721, NFT, Soulbound]
-mdx:
-  format: md
 ---
 
 A soulbound NFT is an NFT that is non-transferable. After an NFT is minted to a Sui account, the NFT is _bounded_ to that account and cannot be transferred. This implementation leverages the custom logic of the Sui framework's transfer functions. The <UnsafeLink href="/references/framework/sui-framework/transfer">`sui::transfer` module</UnsafeLink> contains two functions that transfers objects: <UnsafeLink href="/references/framework/sui-framework/transfer#function-transfer">`transfer::transfer`</UnsafeLink> and <UnsafeLink href="/references/framework/sui-framework/transfer#function-public_transfer">`transfer::public_transfer`</UnsafeLink>.
@@ -16,13 +14,13 @@ It is also possible to create custom transfer logic for NFTs on Sui. The `transf
 
 The following example creates a basic soulbound NFT on Sui. The `TestnetSoulboundNFT` struct defines the NFT with an `id`, `name`, `description`, and `url` fields. 
 
-{@inject: ../../../../../examples/move/nft-soulbound/sources/testnet_soulbound_nft.move#struct=TestnetSoulboundNFT noComments}
+<ImportContent source="examples/move/nft-soulbound/sources/testnet_soulbound_nft.move" mode="code" struct="TestnetSoulboundNFT" noComments />
 
 This `TestnetSoulboundNFT` struct is defined with the `key` ability but without the `store` ability. This means you cannot transfer it with `transfer::public_transfer`. Instead, use `transfer::transfer` with custom transfer logic implemented in the same module. 
 
 This example also shows how to provide custom transfer logic using the `transfer::transfer` function. This is where you can add additional logic, such as resetting the NFT's stats or requiring a payment. Don't provide this functionality if the NFT is fully soulbound. 
 
-{@inject: ../../../../../examples/move/nft-soulbound/sources/testnet_soulbound_nft.move#fun=transfer}
+<ImportContent source="examples/move/nft-soulbound/sources/testnet_soulbound_nft.move" mode="code" fun="transfer" />
 
 <details>
 
@@ -32,12 +30,12 @@ This example also shows how to provide custom transfer logic using the `transfer
 
 </summary>
 
-{@inject: ../../../../../examples/move/nft-soulbound/sources/testnet_soulbound_nft.move}
+<ImportContent source="examples/move/nft-soulbound/sources/testnet_soulbound_nft.move" mode="code" />
 
 </details>
 
 ## Related links
 
-- [Soulbound NFT example source code](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-soulbound): The source code that this document references.
-- [NFT Rental](/guides/developer/nft/nft-rental.mdx): Example that rents NFTs using Kiosk Apps. 
-- [Asset Tokenization](/guides/developer/nft/asset-tokenization.mdx): Example that uses NFTs to tokenize real-world assets.
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/move/nft-soulbound" label="Soulbound NFT example source code" desc="The source code that this document references." />
+<RelatedLink to="/guides/developer/nft/nft-rental.mdx" />
+<RelatedLink to="/guides/developer/nft/asset-tokenization.mdx" />

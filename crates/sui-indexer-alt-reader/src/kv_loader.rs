@@ -7,7 +7,9 @@ use std::sync::Arc;
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
-use sui_kvstore::TransactionData as KVTransactionData;
+use sui_kvstore::{
+    TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
+};
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
@@ -22,8 +24,13 @@ use sui_types::{
 };
 
 use crate::{
-    bigtable_reader::BigtableReader, checkpoints::CheckpointKey, error::Error,
-    objects::VersionedObjectKey, pg_reader::PgReader, transactions::TransactionKey,
+    bigtable_reader::BigtableReader,
+    checkpoints::CheckpointKey,
+    error::Error,
+    events::{StoredTransactionEvents, TransactionEventsKey},
+    objects::VersionedObjectKey,
+    pg_reader::PgReader,
+    transactions::TransactionKey,
 };
 
 /// A loader for point lookups in kv stores backed by either Bigtable or Postgres.
@@ -41,6 +48,12 @@ pub enum KvLoader {
 pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
+}
+
+/// A wrapper for the contents of a transaction's events, either from Bigtable or Postgres.
+pub enum TransactionEventsContents {
+    Bigtable(KVTransactionEventsData),
+    Pg(StoredTransactionEvents),
 }
 
 impl KvLoader {
@@ -145,6 +158,54 @@ impl KvLoader {
             Self::Pg(loader) => Ok(loader.load_one(key).await?.map(TransactionContents::Pg)),
         }
     }
+
+    pub async fn load_many_transaction_events(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) -> Result<HashMap<TransactionDigest, TransactionEventsContents>, Arc<Error>> {
+        let keys = digests
+            .iter()
+            .map(|d| TransactionEventsKey(*d))
+            .collect::<Vec<_>>();
+        match self {
+            Self::Bigtable(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, TransactionEventsContents::Bigtable(stored)))
+                .collect()),
+            Self::Pg(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, TransactionEventsContents::Pg(stored)))
+                .collect()),
+        }
+    }
+
+    pub async fn load_many_transactions(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) -> Result<HashMap<TransactionDigest, TransactionContents>, Arc<Error>> {
+        let keys = digests
+            .iter()
+            .map(|d| TransactionKey(*d))
+            .collect::<Vec<_>>();
+        match self {
+            Self::Bigtable(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, TransactionContents::Bigtable(stored)))
+                .collect()),
+            Self::Pg(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, TransactionContents::Pg(stored)))
+                .collect()),
+        }
+    }
 }
 
 impl TransactionContents {
@@ -229,6 +290,24 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => stored.cp_sequence_number as u64,
             Self::Bigtable(kv) => kv.checkpoint_number,
+        }
+    }
+}
+
+impl TransactionEventsContents {
+    pub fn events(&self) -> anyhow::Result<Vec<Event>> {
+        match self {
+            Self::Pg(stored) => {
+                bcs::from_bytes(&stored.events).context("Failed to deserialize events")
+            }
+            Self::Bigtable(kv) => Ok(kv.events.clone()),
+        }
+    }
+
+    pub fn timestamp_ms(&self) -> u64 {
+        match self {
+            Self::Pg(stored) => stored.timestamp_ms as u64,
+            Self::Bigtable(kv) => kv.timestamp_ms,
         }
     }
 }

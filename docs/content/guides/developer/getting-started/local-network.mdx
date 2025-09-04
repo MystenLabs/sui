@@ -2,8 +2,6 @@
 title: Connect to a Local Network
 description: Connect to a Sui local network using the Sui CLI. Use local networks to test your applications and prepare for launching them on the Devnet or Testnet. 
 keywords: [ local network, testnet, devnet, test application, deploy app locally, customize local network, configure local network, use local network, local network state, local faucet, using the local faucet, local sui faucet ]
-mdx:
-  format: md
 ---
 
 Use a Sui local network to test your dApps against the latest changes to Sui, and to prepare for the next Sui release to the Devnet or Testnet network. Sui CLI provides the `sui start` command to start a local network. There are several services that can be started when using `sui start`, such as an indexer, a faucet, or a local instance of the GraphQL service (including the web-based GraphiQL IDE). You can use the included faucet to get test SUI to use on the local network.
@@ -191,7 +189,7 @@ For additional information about example data for testing, see [https://github.c
 
 Use a Sui network explorer to monitor your local network activity. You can build and run one locally or use the **Custom RPC URL** setting available on many online explorers to provide your local network's RPC URL (`http://127.0.0.1:9000` by default).
 
-{@include: ../../../snippets/lists/sui-explorers.mdx}
+<ImportContent source="lists/sui-explorers.mdx" mode="snippet" />
 
 ## Troubleshooting
 

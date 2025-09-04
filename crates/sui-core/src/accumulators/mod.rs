@@ -157,6 +157,9 @@ struct Update {
 pub(crate) struct AccumulatorSettlementTxBuilder {
     updates: HashMap<ObjectID, Update>,
     addresses: HashMap<ObjectID, AccumulatorAddress>,
+
+    total_input_sui: u64,
+    total_output_sui: u64,
 }
 
 impl AccumulatorSettlementTxBuilder {
@@ -167,6 +170,9 @@ impl AccumulatorSettlementTxBuilder {
         let mut updates = HashMap::<_, _>::new();
 
         let mut addresses = HashMap::<_, _>::new();
+
+        let mut total_input_sui = 0;
+        let mut total_output_sui = 0;
 
         for effect in ckpt_effects {
             let tx = effect.transaction_digest();
@@ -179,16 +185,23 @@ impl AccumulatorSettlementTxBuilder {
                 None => effect.accumulator_events(),
             };
 
-            for AccumulatorEvent {
-                accumulator_obj,
-                write:
-                    AccumulatorWriteV1 {
-                        operation,
-                        value,
-                        address,
-                    },
-            } in events
-            {
+            for event in events {
+                let (input_sui, output_sui) = event.total_sui_in_event();
+                // The input to the settlement is the sum of the outputs of accumulator events (i.e. deposits).
+                total_input_sui += output_sui;
+                // and the output of the settlement is the sum of the inputs (i.e. withdraws).
+                total_output_sui += input_sui;
+
+                let AccumulatorEvent {
+                    accumulator_obj,
+                    write:
+                        AccumulatorWriteV1 {
+                            operation,
+                            value,
+                            address,
+                        },
+                } = event;
+
                 if let Some(prev) = addresses.insert(accumulator_obj, address.clone()) {
                     debug_assert_eq!(prev, address);
                 }
@@ -212,7 +225,12 @@ impl AccumulatorSettlementTxBuilder {
             }
         }
 
-        Self { updates, addresses }
+        Self {
+            updates,
+            addresses,
+            total_input_sui,
+            total_output_sui,
+        }
     }
 
     pub fn num_updates(&self) -> usize {
@@ -268,13 +286,23 @@ impl AccumulatorSettlementTxBuilder {
         let epoch_arg = builder.pure(epoch).unwrap();
         let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
         let idx_arg = builder.pure(0u64).unwrap();
+        let total_input_sui_arg = builder.pure(self.total_input_sui).unwrap();
+        let total_output_sui_arg = builder.pure(self.total_output_sui).unwrap();
+        tracing::debug!("total_input_sui: {}", self.total_input_sui);
+        tracing::debug!("total_output_sui: {}", self.total_output_sui);
 
         builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             ACCUMULATOR_SETTLEMENT_MODULE.into(),
             ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
             vec![],
-            vec![epoch_arg, checkpoint_height_arg, idx_arg],
+            vec![
+                epoch_arg,
+                checkpoint_height_arg,
+                idx_arg,
+                total_input_sui_arg,
+                total_output_sui_arg,
+            ],
         );
 
         for (accumulator_obj, update) in self.updates {

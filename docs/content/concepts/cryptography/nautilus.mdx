@@ -1,8 +1,6 @@
 ---
 title: Nautilus
 description: Run secure, off-chain logic in trusted execution environments (TEEs), and verify it on chain to trigger safe smart contract workflows.
-mdx:
-  format: md
 ---
 
 Nautilus is a framework for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on chain through smart contract-based verification.
@@ -61,6 +59,6 @@ When used together, Nautilus and [Seal](https://github.com/MystenLabs/seal) enab
 
 Nautilus will support additional TEE providers in the future, such as [Intel TDX](https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/overview.html) and [AMD SEV](https://www.amd.com/en/developer/sev.html) possibly. Your suggestions on which platforms to prioritize or support is greatly appreciated.
 
-{@include: ../../snippets/contact-nautilus.mdx}
+<ImportContent source="contact-nautilus.mdx" mode="snippet" />
 
 Nautilus does not have a native, readily usable TEE network. Nautilus partners might provide such TEE networks, however. Apart from such networks, you are encouraged to deploy and manage your own TEEs for running off-chain Nautilus servers.

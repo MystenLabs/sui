@@ -147,6 +147,8 @@ pub fn end_transaction(
         created_object_ids,
         deleted_object_ids,
         accumulator_events: _,
+        settlement_input_sui: _,
+        settlement_output_sui: _,
     } = match results {
         Ok(res) => res,
         Err(_) => {

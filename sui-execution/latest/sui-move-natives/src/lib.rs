@@ -891,6 +891,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "emit_withdraw_event",
             make_native!(accumulator::emit_withdraw_event),
         ),
+        (
+            "accumulator_settlement",
+            "record_settlement_sui_conservation",
+            make_native!(accumulator::record_settlement_sui_conservation),
+        ),
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
