@@ -29,6 +29,7 @@ use super::{
     },
     types::{
         address::Address,
+        available_range::{self, AvailableRange, RetentionKey},
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         coin_metadata::CoinMetadata,
         epoch::Epoch,
@@ -480,6 +481,26 @@ impl Query {
             let scope = self.scope(ctx)?;
             ProtocolConfigs::latest(ctx, &scope).await
         }
+    }
+
+    /// Range of checkpoints for which data is available for a query type, field and optional filter.
+    async fn retention(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: String,
+        filter: Option<String>,
+    ) -> Result<AvailableRange, RpcError<available_range::Error>> {
+        let scope = self.scope(ctx)?;
+        AvailableRange::new(
+            ctx,
+            &scope,
+            RetentionKey {
+                type_,
+                field,
+                filter,
+            },
+        )
     }
 
     /// Configuration for this RPC service.

@@ -209,6 +209,20 @@ type AuthenticatorStateUpdateTransaction {
 }
 
 """
+Checkpoint range for which data is available.
+"""
+type AvailableRange {
+	"""
+	Inclusive lower checkpoint for which data is available.
+	"""
+	first: Checkpoint
+	"""
+	Inclusive upper checkpoint for which data is available.
+	"""
+	last: Checkpoint
+}
+
+"""
 The total balance for a particular coin type.
 """
 type Balance {
@@ -3232,6 +3246,10 @@ type Query {
 	Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
 	"""
 	protocolConfigs(version: UInt53): ProtocolConfigs
+	"""
+	Range of checkpoints for which data is available for a query type, field and optional filter.
+	"""
+	retention(type: String!, field: String!, filter: String): AvailableRange!
 	"""
 	Configuration for this RPC service.
 	"""
