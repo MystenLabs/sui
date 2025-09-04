@@ -68,6 +68,8 @@ public struct UpdateBridgeLimit has drop {
     limit: u64,
 }
 
+public struct UpdateBridgeMaxSkipLimiterSeqNum(u64) has drop;
+
 public struct UpdateAssetPrice has drop {
     token_id: u8,
     new_price: u64,
@@ -199,6 +201,17 @@ public fun extract_add_tokens_on_sui(message: &BridgeMessage): AddTokenOnSui {
         token_type_names,
         token_prices,
     }
+}
+
+public fun extract_update_bridge_max_skip_limiter_seq_num(
+    message: &BridgeMessage,
+): UpdateBridgeMaxSkipLimiterSeqNum {
+    let mut bcs = bcs::new(message.payload);
+    let new_max_skip_limited_seq_num = peel_u64_be(&mut bcs);
+
+    assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
+    UpdateBridgeMaxSkipLimiterSeqNum(new_max_skip_limited_seq_num)
 }
 
 public fun serialize_message(message: BridgeMessage): vector<u8> {
@@ -453,6 +466,10 @@ public fun token_amount(self: &TokenTransferPayload): u64 {
     self.amount
 }
 
+public fun max_skip_limiter_seq_num(self: &UpdateBridgeMaxSkipLimiterSeqNum): u64 {
+    self.0
+}
+
 // EmergencyOpPayload getters
 public fun emergency_op_type(self: &EmergencyOp): u8 {
     self.op_type
@@ -476,6 +493,10 @@ public fun update_bridge_limit_payload_receiving_chain(self: &UpdateBridgeLimit)
 
 public fun update_bridge_limit_payload_limit(self: &UpdateBridgeLimit): u64 {
     self.limit
+}
+
+public fun update_bridge_max_skip_limiter_seq_num(self: &UpdateBridgeMaxSkipLimiterSeqNum): u64 {
+    self.0
 }
 
 public fun update_asset_price_payload_token_id(self: &UpdateAssetPrice): u8 {
