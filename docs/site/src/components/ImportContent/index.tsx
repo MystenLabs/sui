@@ -29,7 +29,7 @@ function resolveMdxComponent(mod: AnyMod): ResolvedComp {
 
 const SNIPPET_MAP: Record<string, React.ComponentType<any>> = {};
 snippetReq.keys().forEach((k: string) => {
-  const Comp = resolveMdxComponent(snippetReq<AnyMod>(k));
+  const Comp = resolveMdxComponent(snippetReq(k) as AnyMod);
   if (!Comp) return;
   const key = k.replace(/^\.\//, ""); // "sub/x.mdx"
   SNIPPET_MAP[key] = Comp;
