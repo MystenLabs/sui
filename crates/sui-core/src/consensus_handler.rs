@@ -16,7 +16,9 @@ use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use itertools::Itertools as _;
 use lru::LruCache;
-use mysten_common::{debug_fatal, fatal, random_util::randomize_cache_capacity_in_tests};
+use mysten_common::{
+    assert_reachable, debug_fatal, fatal, random_util::randomize_cache_capacity_in_tests,
+};
 use mysten_metrics::{
     monitored_future,
     monitored_mpsc::{self, UnboundedReceiver},
@@ -24,13 +26,13 @@ use mysten_metrics::{
 };
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
-use sui_macros::{fail_point, fail_point_if};
+use sui_macros::{fail_point, fail_point_arg, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, EpochId, ObjectID,
-        SequenceNumber, TransactionDigest,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, SequenceNumber,
+        TransactionDigest,
     },
     crypto::RandomnessRound,
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
@@ -45,7 +47,7 @@ use sui_types::{
     transaction::{SenderSignedData, VerifiedCertificate, VerifiedTransaction},
 };
 use tokio::task::JoinSet;
-use tracing::{debug, error, info, instrument, trace, trace_span, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     authority::{
@@ -59,11 +61,13 @@ use crate::{
         epoch_start_configuration::EpochStartConfigTrait,
         execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
-        shared_object_version_manager::{AssignedTxAndVersions, Schedulable},
+        shared_object_version_manager::{AssignedTxAndVersions, Schedulable, SharedObjVerManager},
         transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason},
         AuthorityMetrics, AuthorityState, ExecutionEnv,
     },
-    checkpoints::{CheckpointService, CheckpointServiceNotify},
+    checkpoints::{
+        CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
+    },
     consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
@@ -164,7 +168,7 @@ mod additional_consensus_state {
     use std::marker::PhantomData;
 
     use fastcrypto::hash::HashFunction as _;
-    use sui_types::{committee, crypto::DefaultHash};
+    use sui_types::crypto::DefaultHash;
 
     use super::*;
     /// AdditionalConsensusState tracks any in-memory state that is retained by ConsensusHandler
@@ -670,7 +674,7 @@ struct CommitHandlerState {
     dkg_failed: bool,
     randomness_round: Option<RandomnessRound>,
     output: ConsensusCommitOutput,
-    indirect_state_observer: IndirectStateObserver,
+    indirect_state_observer: Option<IndirectStateObserver>,
 }
 
 enum CongestionAction {
@@ -708,6 +712,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // Assert all protocol config settings for which we don't support old behavior.
         assert!(protocol_config.ignore_execution_time_observations_after_certs_closed());
         assert!(protocol_config.record_time_estimate_processed());
+        assert!(protocol_config.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
 
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
@@ -772,7 +777,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             output: ConsensusCommitOutput::new(commit_info.round),
             dkg_failed: false,
             randomness_round: None,
-            indirect_state_observer: IndirectStateObserver::new(),
+            indirect_state_observer: Some(IndirectStateObserver::new()),
         };
 
         // DONE(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
@@ -819,8 +824,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let pending_checkpoints = self.process_transactions(
+        let mut execution_time_estimator = self
+            .epoch_store
+            .execution_time_estimator
+            .try_lock()
+            .expect("should only ever be called from the commit handler thread");
+
+        let (schedulables, randomness_schedulables, assigned_versions) = self.process_transactions(
             &mut state,
+            execution_time_estimator.as_mut(),
             &commit_info,
             authenticator_state_update_transactions,
             user_transactions,
@@ -828,21 +840,158 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let collected_eop =
             self.process_end_of_publish_transactions(&mut state, end_of_publish_transactions);
-        let (lock, final_round) = if collected_eop {
+        let (should_accept_tx, lock, final_round) = if collected_eop {
             // DONE(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
-            self.advance_eop_state_machine(&mut state)
+            let (lock, final_round) = self.advance_eop_state_machine(&mut state);
+            (lock.should_accept_tx(), Some(lock), final_round)
         } else {
-            (None, false)
+            (true, None, false)
         };
+
+        // DONE(commit-handler-rewrite): record execution time observations for next epoch
+        // If this is the final round, record execution time observations for storage in the
+        // end-of-epoch tx.
+        if final_round {
+            if let Some(estimator) = execution_time_estimator.as_mut() {
+                self.epoch_store.end_of_epoch_execution_time_observations
+                .set(estimator.take_observations())
+                .expect(
+                    "`stored_execution_time_observations` should only be set once at end of epoch",
+                );
+            }
+            drop(execution_time_estimator); // make sure this is not used after `take_observations`
+        }
+
+        let make_checkpoint = should_accept_tx || final_round;
+
+        // DONE(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
+        if make_checkpoint {
+            let checkpoint_height = self
+                .epoch_store
+                .calculate_pending_checkpoint_height(commit_info.round);
+
+            // DONE(commit-handler-rewrite): [ssm] write pending randomness checkpoint if we have a new randomness round, OR dkg failed while there are pending randomness txns
+
+            // Determine whether to write pending checkpoint for user tx with randomness.
+            // - If randomness is not generated for this commit, we will skip the
+            //   checkpoint with the associated height. Therefore checkpoint heights may
+            //   not be contiguous.
+            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
+            //   for randomness tx that are canceled.
+            let should_write_random_checkpoint = state.randomness_round.is_some()
+                || (state.dkg_failed && !randomness_schedulables.is_empty());
+
+            let pending_checkpoint = PendingCheckpoint {
+                roots: schedulables.iter().map(|s| s.key()).collect(),
+                details: PendingCheckpointInfo {
+                    timestamp_ms: commit_info.timestamp,
+                    last_of_epoch: final_round && !should_write_random_checkpoint,
+                    checkpoint_height,
+                },
+            };
+            self.epoch_store
+                .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
+                .expect("failed to write pending checkpoint");
+
+            if should_write_random_checkpoint {
+                let pending_checkpoint = PendingCheckpoint {
+                    roots: randomness_schedulables.iter().map(|s| s.key()).collect(),
+                    details: PendingCheckpointInfo {
+                        timestamp_ms: commit_info.timestamp,
+                        last_of_epoch: final_round,
+                        checkpoint_height: checkpoint_height + 1,
+                    },
+                };
+                self.epoch_store
+                    .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
+                    .expect("failed to write pending checkpoint");
+            }
+        }
+
+        let notifications: Vec<_> = state
+            .output
+            .get_consensus_messages_processed()
+            .cloned()
+            .collect();
+
+        // DONE(commit-handler-rewrite): send consensus output to quarantine
+        self.epoch_store
+            .consensus_quarantine
+            .write()
+            .push_consensus_output(state.output, &*self.epoch_store)
+            .expect("push_consensus_output should not fail");
+
+        // DONE(commit-handler-rewrite): notify checkpoint service
+        // Only after batch is written, notify checkpoint service to start building any new
+        // pending checkpoints.
+        if make_checkpoint {
+            debug!(
+                ?commit_info.round,
+                "Notifying checkpoint service about new pending checkpoint(s)",
+            );
+            self.checkpoint_service
+                .notify_checkpoint()
+                .expect("failed to notify checkpoint service");
+        }
+
+        // DONE(commit-handler-rewrite): Once commit processing is recorded, kick off randomness generation.
+        if let Some(randomness_round) = state.randomness_round {
+            randomness_manager
+                .as_ref()
+                .expect("randomness manager should exist if randomness round is provided")
+                .generate_randomness(epoch, randomness_round);
+        }
+
+        // DONE(commit-handler-rewrite): notify waiters that consensus transactions have been processed
+        self.epoch_store.process_notifications(notifications.iter());
+
+        // DONE(commit-handler-rewrite): log end of epoch
+        if final_round {
+            info!(
+                ?epoch,
+                // Accessing lock on purpose so that the compiler ensures
+                // the lock is not yet dropped.
+                lock=?lock.as_ref(),
+                final_round=?final_round,
+                "Notified last checkpoint"
+            );
+            self.epoch_store.record_end_of_message_quorum_time_metric();
+        }
+
+        // DONE(commit-handler-rewrite): update throughput calculator
+        // update the calculated throughput
+        self.throughput_calculator
+            .add_transactions(timestamp, schedulables.len() as u64);
+
+        // DONE(commit-handler-rewrite): fail points
+        fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
+            let key = [commit_sub_dag_index, epoch];
+            if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
+                sui_simulator::task::kill_current_node(None);
+            }
+        });
+
+        fail_point!("crash"); // for tests that produce random crashes
+
+        // DONE(commit-handler-rewrite): enqueue transactions
+        self.transaction_manager_sender.send(
+            schedulables,
+            assigned_versions,
+            SchedulingSource::NonFastPath,
+        );
+
+        // DONE(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
+        self.send_end_of_publish_if_needed().await;
     }
 
     fn process_transactions(
         &self,
         state: &mut CommitHandlerState,
+        execution_time_estimator: Option<&mut ExecutionTimeEstimator>,
         commit_info: &ConsensusCommitInfo,
         authenticator_state_update_transactions: Vec<VerifiedExecutableTransaction>,
         user_transactions: Vec<VerifiedExecutableTransaction>,
-    ) {
+    ) -> (Vec<Schedulable>, Vec<Schedulable>) {
         let protocol_config = self.epoch_store.protocol_config();
         let epoch = self.epoch_store.epoch();
 
@@ -862,12 +1011,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .randomness_round
             .map(|round| Schedulable::RandomnessStateUpdate(epoch, round));
 
-        let mut execution_time_estimator = self
-            .epoch_store
-            .execution_time_estimator
-            .try_lock()
-            .expect("should only ever be called from the commit handler thread");
-
         let mut transactions_to_schedule = Vec::with_capacity(ordered_txns.len());
         let mut randomness_transactions_to_schedule =
             Vec::with_capacity(ordered_randomness_txns.len());
@@ -885,7 +1028,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 transaction,
                 &mut shared_object_congestion_tracker,
                 &previously_deferred_tx_digests,
-                execution_time_estimator.as_ref(),
+                execution_time_estimator.as_deref(),
             );
         }
 
@@ -900,6 +1043,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     *transaction.digest(),
                     CancelConsensusCertificateReason::DkgFailed,
                 );
+                // TODO(commit-handler-rewrite): cancelled txns must be scheduled for execution
+                randomness_transactions_to_schedule.push(transaction);
                 continue;
             }
             self.handle_congestion(
@@ -913,7 +1058,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // DONE(commit-handler-rewrite): use correct congestion tracker for randomness vs non-randomness
                 &mut shared_object_using_randomness_congestion_tracker,
                 &previously_deferred_tx_digests,
-                execution_time_estimator.as_ref(),
+                execution_time_estimator.as_deref(),
             );
         }
 
@@ -973,20 +1118,114 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .output
             .set_congestion_control_randomness_object_debts(randomness_object_debts);
 
-        let schedulables = itertools::chain!(
-            authenticator_state_update_transactions
-                .into_iter()
+        // TODO(commit-handler-rewrite): add the consensus commit prologue transaction and root
+        // Add the consensus commit prologue transaction to the beginning of `verified_non_randomness_certificates`.
+        let consensus_commit_prologue = self.add_consensus_commit_prologue_transaction(
+            &mut state,
+            commit_info,
+            transactions_to_schedule
+                .iter()
                 .map(Schedulable::Transaction),
-            ordered_txns.into_iter().map(Schedulable::Transaction)
-        );
-        let randomness_schedulables = itertools::chain!(
-            randomness_state_update_transaction,
-            ordered_randomness_txns
-                .into_iter()
-                .map(Schedulable::Transaction)
+            &cancelled_txns,
         );
 
-        txns
+        let schedulables: Vec<_> = itertools::chain!(
+            consensus_commit_prologue.into_iter(),
+            transactions_to_schedule.into_iter(),
+        )
+        .map(Schedulable::Transaction)
+        .collect();
+
+        let randomness_schedulables: Vec<_> = randomness_transactions_to_schedule
+            .into_iter()
+            .map(Schedulable::Transaction)
+            .collect();
+
+        // DONE(commit-handler-rewrite): assign shared object versions
+        let assigned_versions = self
+            .epoch_store
+            .process_consensus_transaction_shared_object_versions(
+                self.cache_reader.as_ref(),
+                schedulables.iter(),
+                randomness_schedulables.iter(),
+                &cancelled_txns,
+                &mut state.output,
+            )
+            .expect("failed to assign shared object versions");
+
+        // DONE(commit-handler-rewrite): store all user signatures for use by checkpoint builder
+        self.epoch_store
+            .process_user_signatures(schedulables.iter().chain(randomness_schedulables.iter()));
+
+        (schedulables, randomness_schedulables, assigned_versions)
+    }
+
+    // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
+    // the system clock used in all transactions in the current consensus commit.
+    // Returns the root of the consensus commit prologue transaction if it was added to the input.
+    fn add_consensus_commit_prologue_transaction<'a>(
+        &'a self,
+        state: &'a mut CommitHandlerState,
+        commit_info: &'a ConsensusCommitInfo,
+        schedulables: impl Iterator<Item = Schedulable<&'a VerifiedExecutableTransaction>>,
+        cancelled_txns: &'a BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+    ) -> Option<VerifiedExecutableTransaction> {
+        {
+            if commit_info.skip_consensus_commit_prologue_in_test {
+                return None;
+            }
+        }
+
+        if !self
+            .epoch_store
+            .get_reconfig_state_read_lock_guard()
+            .should_accept_tx()
+        {
+            // DONE(commit-handler-rewrite): do not insert commit prologue if !should_accept_tx()
+            return None;
+        }
+
+        let mut version_assignment = Vec::new();
+        let mut shared_input_next_version = HashMap::new();
+        for txn in schedulables {
+            let key = txn.key();
+            match key.as_digest().and_then(|d| cancelled_txns.get(d)) {
+                Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
+                | Some(CancelConsensusCertificateReason::DkgFailed) => {
+                    assert_reachable!("cancelled transactions");
+                    let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
+                        &*self.epoch_store,
+                        &txn,
+                        &mut shared_input_next_version,
+                        cancelled_txns,
+                    );
+                    version_assignment.push((
+                        *key.unwrap_digest(),
+                        assigned_versions.shared_object_versions,
+                    ));
+                }
+                None => {}
+            }
+        }
+
+        fail_point_arg!(
+            "additional_cancelled_txns_for_tests",
+            |additional_cancelled_txns: Vec<(
+                TransactionDigest,
+                Vec<(ConsensusObjectSequenceKey, SequenceNumber)>
+            )>| {
+                version_assignment.extend(additional_cancelled_txns);
+            }
+        );
+
+        let transaction = commit_info.create_consensus_commit_prologue_transaction(
+            self.epoch_store.epoch(),
+            self.epoch_store.protocol_config(),
+            version_assignment,
+            commit_info,
+            state.indirect_state_observer.take().unwrap(),
+        );
+        Some(transaction)
     }
 
     fn handle_congestion(
@@ -1006,7 +1245,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             &transaction,
-            &mut state.indirect_state_observer,
+            state.indirect_state_observer.as_mut().unwrap(),
         );
 
         let deferral_info = self.epoch_store.should_defer(
@@ -1059,6 +1298,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 congested_objects,
                             ),
                         );
+                        // TODO(commit-handler-rewrite): cancelled txns must be scheduled for execution
+                        scheduled_txns.push(transaction);
                     }
                 }
             }
@@ -1487,7 +1728,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         state: &mut CommitHandlerState,
     ) -> (
-        Option<RwLockWriteGuard<ReconfigState>>,
+        RwLockWriteGuard<ReconfigState>,
         bool, // true if final round
     ) {
         let mut reconfig_state = self.epoch_store.get_reconfig_state_write_lock_guard();
@@ -1516,9 +1757,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         // DONE(commit-handler-rewrite): [ssm] only return final_round=true on the first round where we transition to RejectAllTx
         if !start_state_is_reject_all_tx && reconfig_state.is_reject_all_tx() {
-            (Some(reconfig_state), true)
+            (reconfig_state, true)
         } else {
-            (Some(reconfig_state), false)
+            (reconfig_state, false)
         }
     }
 
@@ -1625,7 +1866,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // TODO(commit-handler-rewrite): gather commit metadata
 
         /* (transaction, serialized length) */
-        let epoch = self.epoch_store.epoch();
         let mut transactions = vec![];
         let timestamp = consensus_commit.commit_timestamp_ms();
         let leader_author = consensus_commit.leader_author_index();
@@ -2214,8 +2454,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         }
                     }
                 }
-                // I think we can delete this, it was only used to inject randomness state update into the tx stream.
-                SequencedConsensusTransactionKind::System(verified_envelope) => unreachable!(),
+                // TODO: I think we can delete this, it was only used to inject randomness state update into the tx stream.
+                SequencedConsensusTransactionKind::System(_verified_envelope) => unreachable!(),
             }
         }
 

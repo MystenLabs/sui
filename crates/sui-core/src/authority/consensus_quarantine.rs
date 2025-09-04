@@ -178,6 +178,12 @@ impl ConsensusCommitOutput {
         self.consensus_messages_processed.insert(key);
     }
 
+    pub fn get_consensus_messages_processed(
+        &self,
+    ) -> impl Iterator<Item = &SequencedConsensusTransactionKey> {
+        self.consensus_messages_processed.iter()
+    }
+
     pub fn set_next_shared_object_versions(
         &mut self,
         next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
@@ -502,7 +508,7 @@ impl ConsensusOutputQuarantine {
 // There are only two sources! ConsensusHandler and CheckpointBuilder.
 impl ConsensusOutputQuarantine {
     // Push all data gathered from a consensus commit into the quarantine.
-    pub(super) fn push_consensus_output(
+    pub(crate) fn push_consensus_output(
         &mut self,
         output: ConsensusCommitOutput,
         epoch_store: &AuthorityPerEpochStore,

@@ -417,7 +417,7 @@ pub struct AuthorityPerEpochStore {
     tx_local_execution_time: OnceCell<mpsc::Sender<LocalExecutionTimeData>>,
     pub(crate) tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
-    end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
+    pub(crate) end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 
     pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
 
@@ -3630,7 +3630,11 @@ impl AuthorityPerEpochStore {
         }
 
         // TODO(commit-handler-rewrite): notify waiters that consensus transactions have been processed
-        self.process_notifications(&notifications, &end_of_publish_transactions);
+        let eop_keys: Vec<_> = end_of_publish_transactions
+            .into_iter()
+            .map(|tx| tx.0.transaction.key())
+            .collect();
+        self.process_notifications(notifications.iter().chain(eop_keys.iter()));
 
         // TODO(commit-handler-rewrite): log end of epoch
         if final_round {
@@ -3653,7 +3657,7 @@ impl AuthorityPerEpochStore {
         Ok((all_txns, assigned_versions))
     }
 
-    fn calculate_pending_checkpoint_height(&self, consensus_round: u64) -> u64 {
+    pub(crate) fn calculate_pending_checkpoint_height(&self, consensus_round: u64) -> u64 {
         if self.randomness_state_enabled() {
             consensus_round * 2
         } else {
@@ -3664,7 +3668,7 @@ impl AuthorityPerEpochStore {
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
     // the system clock used in all transactions in the current consensus commit.
     // Returns the root of the consensus commit prologue transaction if it was added to the input.
-    fn add_consensus_commit_prologue_transaction(
+    pub(crate) fn add_consensus_commit_prologue_transaction(
         &self,
         output: &mut ConsensusCommitOutput,
         transactions: &mut VecDeque<Schedulable<VerifiedExecutableTransaction>>,
@@ -3723,6 +3727,7 @@ impl AuthorityPerEpochStore {
                 transactions.push_front(Schedulable::Transaction(processed_tx.clone()));
                 Some(processed_tx.key())
             }
+            // TODO(commit-handler-rewrite): do not insert commit prologue if !should_accept_tx()
             ConsensusCertificateResult::IgnoredSystem => None,
             _ => unreachable!("process_consensus_system_transaction returned unexpected ConsensusCertificateResult."),
         };
@@ -3736,7 +3741,7 @@ impl AuthorityPerEpochStore {
     // Assigns shared object versions to transactions and updates the next shared object version state.
     // Shared object versions in cancelled transactions are assigned to special versions that will
     // cause the transactions to be cancelled in execution engine.
-    fn process_consensus_transaction_shared_object_versions<'a>(
+    pub(crate) fn process_consensus_transaction_shared_object_versions<'a>(
         &'a self,
         cache_reader: &dyn ObjectCacheRead,
         non_randomness_transactions: impl Iterator<Item = &'a Schedulable> + Clone,
@@ -3829,17 +3834,12 @@ impl AuthorityPerEpochStore {
         Ok(assigned_versions)
     }
 
-    fn process_notifications(
-        &self,
-        notifications: &[SequencedConsensusTransactionKey],
-        end_of_publish: &[VerifiedSequencedConsensusTransaction],
+    pub(crate) fn process_notifications<'a>(
+        &'a self,
+        notifications: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
     ) {
-        for key in notifications
-            .iter()
-            .cloned()
-            .chain(end_of_publish.iter().map(|tx| tx.0.transaction.key()))
-        {
-            self.consensus_notify_read.notify(&key, &());
+        for key in notifications {
+            self.consensus_notify_read.notify(key, &());
         }
     }
 
@@ -3967,7 +3967,8 @@ impl AuthorityPerEpochStore {
                     }
                 }
                 ConsensusCertificateResult::Cancelled((cert, reason)) => {
-                    // TODO(commit-handler-rewrite): cancelled txns must be recorded as processed, and scheduled for execution
+                    // TODO(commit-handler-rewrite): cancelled txns must be recorded as processed
+                    // TODO(commit-handler-rewrite): cancelled txns must be scheduled for execution
                     notifications.push(key.clone());
                     assert!(cancelled_txns.insert(*cert.digest(), reason).is_none());
                     verified_certificates.push_back(Schedulable::Transaction(cert));
