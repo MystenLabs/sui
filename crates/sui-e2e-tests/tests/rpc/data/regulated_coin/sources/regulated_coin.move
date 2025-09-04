@@ -5,32 +5,33 @@
 module regulated_coin::regulated_coin {
 	use sui::{
 		coin::{Self, TreasuryCap, DenyCapV2},
-		coin_registry::{Self, MetadataCap},
+		coin_registry::{Self, MetadataCap, CoinRegistry, Currency},
 		deny_list,
-		transfer,
+		transfer::{Self, Receiving},
 		tx_context::{Self, TxContext}
 	};
 
 	/// Name of the coin
 	public struct REGULATED_COIN has drop {}
 
-	/// Register the regulated currency using create_regulated_currency_v3 API
+	/// Register the regulated currency using new CoinRegistry API
 	fun init(witness: REGULATED_COIN, ctx: &mut TxContext) {
-		let (treasury_cap, metadata_cap, deny_cap, init_coin_data) = coin::create_regulated_currency_v3<
-			REGULATED_COIN,
-		>(
+		// Create the currency
+		let (mut currency_init, treasury_cap) = coin_registry::new_currency_with_otw<REGULATED_COIN>(
 			witness,
 			9, // decimals
 			b"REG".to_string(),
 			b"Regulated Coin".to_string(),
 			b"Regulated coin for testing GetCoinInfo with CoinRegistry".to_string(),
 			b"https://example.com/regulated.png".to_string(),
-			true, // allow_global_pause
 			ctx,
 		);
 
-		// Transfer to CoinRegistry
-		coin_registry::transfer_to_registry(init_coin_data);
+		// Make it regulated with a deny cap
+		let deny_cap = coin_registry::make_regulated(&mut currency_init, true, ctx);
+
+		// Finalize the currency registration and get the metadata cap
+		let metadata_cap = coin_registry::finalize(currency_init, ctx);
 
 		// Transfer caps to sender
 		transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
@@ -59,4 +60,3 @@ module regulated_coin::regulated_coin {
 		coin::deny_list_v2_add(deny_list, deny_cap, address_to_deny, ctx);
 	}
 }
-

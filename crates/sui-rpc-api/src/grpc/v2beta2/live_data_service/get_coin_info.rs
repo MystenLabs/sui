@@ -4,28 +4,31 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
-use dynamic_field::{DOFWrapper, Field};
-use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
+use sui_rpc::proto::sui::rpc::v2beta2::coin_metadata::MetadataCapState as ProtoMetadataCapState;
+use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState as RpcSupplyState;
+use sui_rpc::proto::sui::rpc::v2beta2::get_coin_info_response::RegulationState;
 use sui_rpc::proto::sui::rpc::v2beta2::CoinMetadata;
 use sui_rpc::proto::sui::rpc::v2beta2::CoinTreasury;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::MetadataCapDeleted;
+use sui_rpc::proto::sui::rpc::v2beta2::MetadataCapUnclaimed;
 use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
+use sui_rpc::proto::sui::rpc::v2beta2::UnknownRegulationState;
+use sui_rpc::proto::sui::rpc::v2beta2::UnregulatedState;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
-use sui_types::coin_registry::CoinDataKey;
-use sui_types::coin_registry::COIN_DATA_KEY_STRUCT_NAME;
-use sui_types::coin_registry::COIN_REGISTRY_MODULE_NAME;
-use sui_types::coin_registry::{self};
-use sui_types::dynamic_field::DYNAMIC_OBJECT_FIELD_MODULE_NAME;
-use sui_types::dynamic_field::DYNAMIC_OBJECT_FIELD_WRAPPER_STRUCT_NAME;
-use sui_types::dynamic_field::{self};
+use sui_types::coin_registry::{
+    self, Currency, CurrencyKey, CurrencyRegulatedState, MetadataCapState, SupplyState,
+};
+use sui_types::derived_object;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
 
 const SUI_COIN_TREASURY: CoinTreasury = {
     let mut treasury = CoinTreasury::const_default();
     treasury.total_supply = Some(sui_types::gas_coin::TOTAL_SUPPLY_MIST);
+    treasury.supply_state = Some(1); // RpcSupplyState::Fixed = 1
     treasury
 };
 
@@ -66,7 +69,7 @@ pub fn get_coin_info(
 
     let core_coin_type = struct_tag_sdk_to_core(coin_type.clone())?;
 
-    match get_coin_info_from_registry(service, indexes, &coin_type, &core_coin_type) {
+    match get_coin_info_from_registry(service, &coin_type, &core_coin_type) {
         Ok(Some(response)) => Ok(response),
         Ok(None) => get_coin_info_from_index(service, indexes, &coin_type, &core_coin_type)?
             .ok_or_else(|| CoinNotFoundError(coin_type).into()),
@@ -76,172 +79,144 @@ pub fn get_coin_info(
 
 fn get_coin_info_from_registry(
     service: &RpcService,
-    indexes: &dyn sui_types::storage::RpcIndexes,
     coin_type: &StructTag,
     core_coin_type: &move_core_types::language_storage::StructTag,
 ) -> Result<Option<GetCoinInfoResponse>> {
-    // For dynamic object fields, the key type is Wrapper<CoinDataKey<T>>
-    let coin_data_key_type = move_core_types::language_storage::StructTag {
+    let currency_key_type = move_core_types::language_storage::StructTag {
         address: move_core_types::account_address::AccountAddress::from_hex_literal("0x2").unwrap(),
-        module: move_core_types::identifier::Identifier::new(COIN_REGISTRY_MODULE_NAME.as_str())
-            .unwrap(),
-        name: move_core_types::identifier::Identifier::new(COIN_DATA_KEY_STRUCT_NAME.as_str())
-            .unwrap(),
+        module: move_core_types::identifier::Identifier::new(
+            coin_registry::COIN_REGISTRY_MODULE_NAME.as_str(),
+        )
+        .unwrap(),
+        name: move_core_types::identifier::Identifier::new(
+            coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str(),
+        )
+        .unwrap(),
         type_params: vec![TypeTag::Struct(Box::new(core_coin_type.clone()))],
     };
 
-    let wrapper_type_tag =
-        TypeTag::Struct(Box::new(move_core_types::language_storage::StructTag {
-            address: move_core_types::account_address::AccountAddress::from_hex_literal("0x2")
-                .unwrap(),
-            module: move_core_types::identifier::Identifier::new(
-                DYNAMIC_OBJECT_FIELD_MODULE_NAME.as_str(),
-            )
-            .unwrap(),
-            name: move_core_types::identifier::Identifier::new(
-                DYNAMIC_OBJECT_FIELD_WRAPPER_STRUCT_NAME.as_str(),
-            )
-            .unwrap(),
-            type_params: vec![TypeTag::Struct(Box::new(coin_data_key_type))],
-        }));
-
-    let coin_data_key_bytes = bcs::to_bytes(&CoinDataKey::new()).map_err(|e| {
+    let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).map_err(|e| {
         RpcError::new(
             tonic::Code::Internal,
-            format!("Failed to serialize CoinDataKey: {}", e),
+            format!("Failed to serialize CurrencyKey: {}", e),
         )
     })?;
 
-    let field_id = dynamic_field::derive_dynamic_field_id(
+    let currency_id = derived_object::derive_object_id(
         SUI_COIN_REGISTRY_OBJECT_ID,
-        &wrapper_type_tag,
-        &coin_data_key_bytes,
+        &TypeTag::Struct(Box::new(currency_key_type.clone())),
+        &currency_key_bytes,
     )
     .map_err(|e| {
         RpcError::new(
             tonic::Code::Internal,
             format!(
-                "Failed to derive dynamic field ID for coin type {}: {}",
+                "Failed to derive Currency ID for coin type {}: {}",
                 core_coin_type, e
             ),
         )
     })?;
 
     let object_store = service.reader.inner();
-    let field_obj = match object_store.get_object(&field_id) {
+    let currency_obj = match object_store.get_object(&currency_id) {
         Some(obj) => obj,
-        None => return Ok(None), // Coin not registered in CoinRegistry
+        None => {
+            return Ok(None); // Coin not registered in CoinRegistry
+        }
     };
 
-    let move_obj = field_obj.data.try_as_move().ok_or_else(|| {
+    let move_obj = currency_obj.data.try_as_move().ok_or_else(|| {
         RpcError::new(
             tonic::Code::Internal,
             format!(
-                "Dynamic field for coin type {} is not a Move object",
+                "Currency for coin type {} is not a Move object",
                 core_coin_type
             ),
         )
     })?;
 
-    // For dynamic object fields containing CoinDataKey, we have:
-    // Field<DOFWrapper<CoinDataKey<T>>, ObjectID>
-    // Since CoinDataKey is an empty struct, DOFWrapper<CoinDataKey<T>> serializes to just [0x00]
-    let field: Field<DOFWrapper<[u8; 1]>, SuiObjectID> = bcs::from_bytes(move_obj.contents())
-        .map_err(|e| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "Failed to deserialize dynamic field for coin type {}: {}",
-                    core_coin_type, e
-                ),
-            )
-        })?;
-
-    let coin_data_obj = object_store.get_object(&field.value).ok_or_else(|| {
+    let currency = bcs::from_bytes::<Currency>(move_obj.contents()).map_err(|e| {
         RpcError::new(
             tonic::Code::Internal,
             format!(
-                "CoinData object {} for coin type {} not found",
-                field.value, core_coin_type
+                "Failed to deserialize Currency for coin type {}: {}",
+                core_coin_type, e
             ),
         )
     })?;
-
-    let coin_data_move_obj = coin_data_obj.data.try_as_move().ok_or_else(|| {
-        RpcError::new(
-            tonic::Code::Internal,
-            format!(
-                "CoinData for coin type {} is not a Move object",
-                core_coin_type
-            ),
-        )
-    })?;
-
-    let coin_data = bcs::from_bytes::<coin_registry::CoinData>(coin_data_move_obj.contents())
-        .map_err(|e| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "Failed to deserialize CoinData for coin type {}: {}",
-                    core_coin_type, e
-                ),
-            )
-        })?;
     let metadata = {
         let mut metadata = CoinMetadata::default();
-        metadata.id = Some(Address::from(coin_data.id.id.bytes).to_string());
-        metadata.decimals = Some(coin_data.decimals.into());
-        metadata.name = Some(coin_data.name);
-        metadata.symbol = Some(coin_data.symbol);
-        metadata.description = Some(coin_data.description);
-        metadata.icon_url = Some(coin_data.icon_url);
-        metadata.metadata_cap_id = coin_data
-            .metadata_cap_id
-            .map(|id| Address::from(id).to_string());
+        metadata.id = Some(Address::from(currency.id.id.bytes).to_string());
+        metadata.decimals = Some(currency.decimals.into());
+        metadata.name = Some(currency.name);
+        metadata.symbol = Some(currency.symbol);
+        metadata.description = Some(currency.description);
+        metadata.icon_url = Some(currency.icon_url);
+        metadata.metadata_cap_state = match &currency.metadata_cap_id {
+            MetadataCapState::Claimed(id) => Some(ProtoMetadataCapState::Claimed(
+                Address::from(*id).to_string(),
+            )),
+            MetadataCapState::Unclaimed => Some(ProtoMetadataCapState::Unclaimed(
+                MetadataCapUnclaimed::default(),
+            )),
+            MetadataCapState::Deleted => {
+                Some(ProtoMetadataCapState::Deleted(MetadataCapDeleted::default()))
+            }
+        };
         Some(metadata)
     };
 
     let treasury = if sui_types::gas_coin::GAS::is_gas(core_coin_type) {
         Some(SUI_COIN_TREASURY)
     } else {
-        match &coin_data.supply {
-            Some(coin_registry::SupplyState::Fixed(supply)) => {
+        match &currency.supply {
+            Some(SupplyState::Fixed(supply)) => {
                 let mut treasury = CoinTreasury::default();
-                treasury.id = coin_data
+                treasury.id = currency
                     .treasury_cap_id
                     .map(|id| Address::from(id).to_string());
                 treasury.total_supply = Some(supply.value);
-                treasury.supply_state = Some(SupplyState::Fixed.into());
+                treasury.supply_state = Some(RpcSupplyState::Fixed.into());
+                Some(treasury)
+            }
+            Some(SupplyState::BurnOnly(supply)) => {
+                let mut treasury = CoinTreasury::default();
+                treasury.id = currency
+                    .treasury_cap_id
+                    .map(|id| Address::from(id).to_string());
+                treasury.total_supply = Some(supply.value);
+                treasury.supply_state = Some(RpcSupplyState::BurnOnly.into());
                 Some(treasury)
             }
             _ => {
                 // For unknown supply state, look up the treasury cap object
-                let treasury_cap_id = coin_data.treasury_cap_id.or_else(|| {
-                    // Fall back to legacy index lookup. This can happen if
-                    // coin::register_supply has not yet been called
-                    indexes
-                        .get_coin_info(core_coin_type)
-                        .ok()
-                        .flatten()
-                        .and_then(|info| info.treasury_object_id)
-                });
-                treasury_cap_id.and_then(|id| get_treasury_cap_info(service, id))
+                currency
+                    .treasury_cap_id
+                    .and_then(|id| get_treasury_cap_info(service, id))
             }
         }
     };
 
-    let regulated_metadata = match &coin_data.regulated {
-        coin_registry::RegulatedState::Regulated { cap, .. } => {
-            {
-                let mut regulated = RegulatedCoinMetadata::default();
-                regulated.id = None; // No separate RegulatedCoinMetadata object in CoinRegistry
-                regulated.coin_metadata_object =
-                    Some(Address::from(coin_data.id.id.bytes).to_string());
-                regulated.deny_cap_object = Some(Address::from(*cap).to_string());
-                Some(regulated)
-            }
+    let regulation_state = match &currency.regulated {
+        CurrencyRegulatedState::Regulated {
+            cap,
+            allow_global_pause,
+            variant,
+        } => {
+            let mut regulated = RegulatedCoinMetadata::default();
+            regulated.id = None;
+            regulated.coin_metadata_object = None;
+            regulated.deny_cap_object = Some(Address::from(*cap).to_string());
+            regulated.allow_global_pause = *allow_global_pause;
+            regulated.variant = Some(*variant as u32);
+            Some(RegulationState::Regulated(regulated))
         }
-        coin_registry::RegulatedState::Unknown => None,
+        CurrencyRegulatedState::Unregulated => {
+            Some(RegulationState::Unregulated(UnregulatedState::default()))
+        }
+        CurrencyRegulatedState::Unknown => {
+            Some(RegulationState::Unknown(UnknownRegulationState::default()))
+        }
     };
 
     {
@@ -249,7 +224,7 @@ fn get_coin_info_from_registry(
         response.coin_type = Some(coin_type.to_string());
         response.metadata = metadata;
         response.treasury = treasury;
-        response.regulated_metadata = regulated_metadata;
+        response.regulation_state = regulation_state;
         Ok(Some(response))
     }
 }
@@ -302,7 +277,7 @@ fn get_coin_info_from_index(
         None
     };
 
-    let regulated_metadata = if let Some(regulated_coin_metadata_object_id) =
+    let regulation_state = if let Some(regulated_coin_metadata_object_id) =
         coin_info.regulated_coin_metadata_object_id
     {
         service
@@ -327,10 +302,10 @@ fn get_coin_info_from_index(
                     Some(Address::from(value.coin_metadata_object.bytes).to_string());
                 regulated.deny_cap_object =
                     Some(Address::from(value.deny_cap_object.bytes).to_string());
-                regulated
+                RegulationState::Regulated(regulated)
             })
     } else {
-        None
+        Some(RegulationState::Unknown(UnknownRegulationState::default()))
     };
 
     {
@@ -338,7 +313,7 @@ fn get_coin_info_from_index(
         response.coin_type = Some(coin_type.to_string());
         response.metadata = metadata;
         response.treasury = treasury;
-        response.regulated_metadata = regulated_metadata;
+        response.regulation_state = regulation_state;
         Ok(Some(response))
     }
 }
@@ -351,9 +326,9 @@ fn get_treasury_cap_info(
 
     // Treasury caps owned by 0x0 indicate fixed supply
     let supply_state = if obj.owner == sui_types::object::Owner::AddressOwner(SuiAddress::ZERO) {
-        SupplyState::Fixed
+        RpcSupplyState::Fixed
     } else {
-        SupplyState::Unknown
+        RpcSupplyState::Unknown
     };
 
     sui_types::coin::TreasuryCap::try_from(obj)

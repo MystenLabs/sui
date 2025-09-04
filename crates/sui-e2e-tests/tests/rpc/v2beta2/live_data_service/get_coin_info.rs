@@ -6,28 +6,28 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2beta2::coin_metadata::MetadataCapState;
 use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
+use sui_rpc::proto::sui::rpc::v2beta2::get_coin_info_response::RegulationState;
+use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
 use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::{
-    ExecutedTransaction, GetCoinInfoRequest, GetCoinInfoResponse,
+    ExecutedTransaction, GetCoinInfoRequest, GetCoinInfoResponse, GetObjectRequest,
 };
-use sui_sdk_types::TypeTag as SdkTypeTag;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
-use sui_types::{
-    parse_sui_struct_tag, TypeTag, SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
-};
+use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 
+// SUI doesn't use the CoinRegistry - it was created before the CoinRegistry system existed and has
+// not been migrated.
 #[sim_test]
 async fn get_coin_info_sui() {
     let test_cluster = TestClusterBuilder::new().build().await;
-
-    // SUI's CoinData is created during genesis but needs migrate_receiving to be called
-    migrate_receiving(&test_cluster, "0x2::sui::SUI", None).await;
 
     let mut grpc_client = LiveDataServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
@@ -41,14 +41,16 @@ async fn get_coin_info_sui() {
         coin_type,
         metadata,
         treasury,
-        regulated_metadata,
+        regulation_state,
+        ..
     } = grpc_client
         .get_coin_info(request)
         .await
         .unwrap()
         .into_inner();
 
-    assert_eq!(coin_type, Some(coin_type_sdk.to_string()));
+    let expected_type = coin_type_sdk.to_canonical_string(true);
+    assert_eq!(coin_type, Some(expected_type));
 
     let metadata = metadata.unwrap();
 
@@ -58,8 +60,8 @@ async fn get_coin_info_sui() {
     assert_eq!(metadata.symbol, Some("SUI".to_owned()));
     assert_eq!(metadata.name, Some("Sui".to_string()));
     assert_eq!(metadata.description, Some("".to_string()));
-    assert!(metadata.icon_url.is_some());
-    assert!(metadata.metadata_cap_id.is_none());
+    assert!(metadata.icon_url.is_none());
+    assert!(metadata.metadata_cap_state.is_none());
 
     let treasury = treasury.unwrap();
     assert!(treasury.id.is_none());
@@ -73,7 +75,11 @@ async fn get_coin_info_sui() {
         "SUI should have Fixed supply state"
     );
 
-    assert!(regulated_metadata.is_none());
+    // SUI is not in CoinRegistry, so regulation state is Unknown
+    assert!(matches!(
+        regulation_state,
+        Some(RegulationState::Unknown(_))
+    ));
 }
 
 #[sim_test]
@@ -84,11 +90,13 @@ async fn test_get_coin_info_registry_coin() {
 
     let address = test_cluster.get_address_0();
 
-    // Publish coin package using create_currency_v2
-    let (package_id, treasury_cap, metadata_cap, publish_tx) =
+    // Publish coin package using new_currency_with_otw
+    let (package_id, treasury_cap, metadata_cap) =
         publish_registry_coin(&test_cluster, address).await;
 
     let coin_type = format!("{}::registry_coin::REGISTRY_COIN", package_id);
+
+    finalize_registration(&test_cluster, package_id, &coin_type).await;
 
     // Mint some coins to test Fixed supply state
     let mint_amount = 5_000_000u64;
@@ -128,25 +136,11 @@ async fn test_get_coin_info_registry_coin() {
     // Execute the mint transaction
     let _mint_tx = test_cluster.sign_and_execute_transaction(&tx_data).await;
 
-    migrate_receiving(&test_cluster, &coin_type, Some(&publish_tx)).await;
-
-    // Check dynamic fields of CoinRegistry after migrate_receiving
-    let _coin_registry_fields = grpc_client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(SuiAddress::from(SUI_COIN_REGISTRY_OBJECT_ID).to_string()),
-            read_mask: Some(FieldMask::from_str("object_id,version,object_type")),
-            ..Default::default()
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .objects;
-
-    // Now that wait_for_transaction waits for checkpoint inclusion,
-    // the coin registry index should be updated
     let response = grpc_client
-        .get_coin_info(GetCoinInfoRequest {
-            coin_type: Some(coin_type.clone()),
+        .get_coin_info({
+            let mut request = GetCoinInfoRequest::default();
+            request.coin_type = Some(coin_type.clone());
+            request
         })
         .await
         .unwrap()
@@ -155,7 +149,6 @@ async fn test_get_coin_info_registry_coin() {
     assert_eq!(response.coin_type, Some(coin_type.clone()));
 
     let metadata = response.metadata.expect("Expected metadata to be present");
-    // Verify metadata.id is a valid object ID
     let metadata_object_id = metadata.id.as_ref().unwrap();
     assert!(
         ObjectID::from_str(metadata_object_id).is_ok(),
@@ -172,11 +165,16 @@ async fn test_get_coin_info_registry_coin() {
         metadata.icon_url,
         Some("https://example.com/registry.png".to_string())
     );
-    assert!(
-        ObjectID::from_str(metadata.metadata_cap_id.as_ref().unwrap()).is_ok(),
-        "metadata.metadata_cap_id should be a valid ObjectID"
-    );
-    assert_eq!(metadata.metadata_cap_id.unwrap(), metadata_cap.to_string());
+    // Check that metadata cap is claimed with the correct ID
+    if let Some(MetadataCapState::Claimed(cap_id)) = &metadata.metadata_cap_state {
+        assert!(
+            ObjectID::from_str(cap_id).is_ok(),
+            "metadata_cap_state.claimed should be a valid ObjectID"
+        );
+        assert_eq!(cap_id, &metadata_cap.to_string());
+    } else {
+        panic!("Expected metadata_cap_state to be Claimed");
+    }
     assert!(response.treasury.is_some());
     let treasury = response.treasury.unwrap();
     assert!(
@@ -191,12 +189,13 @@ async fn test_get_coin_info_registry_coin() {
         "Treasury cap not owned by 0x0 should have Unknown supply state"
     );
 
-    // No regulated metadata for this coin
-    assert!(response.regulated_metadata.is_none());
+    assert!(matches!(
+        response.regulation_state,
+        Some(RegulationState::Unregulated(_))
+    ));
 
     // Phase 2: Register the supply (consuming the TreasuryCap) and verify RPC reflects the update
     // Get the CoinRegistry object's initial shared version
-    let registry_initial_version = SequenceNumber::from(1);
 
     // Get the updated treasury cap reference after minting
     let updated_treasury_cap_obj = test_cluster
@@ -208,11 +207,48 @@ async fn test_get_coin_info_registry_coin() {
     // Build a transaction to register the supply
     let mut ptb = ProgrammableTransactionBuilder::new();
 
-    // Add the CoinRegistry as a mutable shared object
-    let registry_arg = ptb
+    // Derive the Currency object ID using the same method as get_coin_info
+    let coin_type_tag = move_core_types::language_storage::StructTag {
+        address: package_id.into(),
+        module: move_core_types::identifier::Identifier::new("registry_coin").unwrap(),
+        name: move_core_types::identifier::Identifier::new("REGISTRY_COIN").unwrap(),
+        type_params: vec![],
+    };
+
+    let currency_key_type = move_core_types::language_storage::StructTag {
+        address: move_core_types::account_address::AccountAddress::from_hex_literal("0x2").unwrap(),
+        module: move_core_types::identifier::Identifier::new("coin_registry").unwrap(),
+        name: move_core_types::identifier::Identifier::new("CurrencyKey").unwrap(),
+        type_params: vec![TypeTag::Struct(Box::new(coin_type_tag.clone()))],
+    };
+
+    let currency_key_bytes = bcs::to_bytes(&sui_types::coin_registry::CurrencyKey::new()).unwrap();
+
+    let currency_id = sui_types::derived_object::derive_object_id(
+        SUI_COIN_REGISTRY_OBJECT_ID,
+        &TypeTag::Struct(Box::new(currency_key_type)),
+        &currency_key_bytes,
+    )
+    .unwrap();
+
+    // Get the Currency object to find its initial shared version
+    let currency_obj = test_cluster
+        .get_object_from_fullnode_store(&currency_id)
+        .await
+        .unwrap();
+
+    let initial_shared_version = match currency_obj.owner {
+        sui_types::object::Owner::Shared {
+            initial_shared_version,
+        } => initial_shared_version,
+        _ => panic!("Currency object should be shared"),
+    };
+
+    // Add the Currency object at the derived address as a shared object
+    let currency_arg = ptb
         .obj(ObjectArg::SharedObject {
-            id: SUI_COIN_REGISTRY_OBJECT_ID,
-            initial_shared_version: registry_initial_version,
+            id: currency_id,
+            initial_shared_version,
             mutable: true,
         })
         .unwrap();
@@ -222,13 +258,13 @@ async fn test_get_coin_info_registry_coin() {
         .obj(ObjectArg::ImmOrOwnedObject(updated_treasury_cap_ref))
         .unwrap();
 
-    // Call register_supply
+    // Call register_supply with Currency object instead of CoinRegistry
     ptb.programmable_move_call(
         package_id,
         "registry_coin".parse().unwrap(),
         "register_supply".parse().unwrap(),
         vec![],
-        vec![registry_arg, treasury_cap_arg],
+        vec![currency_arg, treasury_cap_arg],
     );
 
     let pt = ptb.finish();
@@ -245,8 +281,10 @@ async fn test_get_coin_info_registry_coin() {
 
     // Query coin info again to verify the supply is now registered
     let response = grpc_client
-        .get_coin_info(GetCoinInfoRequest {
-            coin_type: Some(coin_type.clone()),
+        .get_coin_info({
+            let mut request = GetCoinInfoRequest::default();
+            request.coin_type = Some(coin_type.clone());
+            request
         })
         .await
         .unwrap()
@@ -276,16 +314,19 @@ async fn test_regulated_coin_info() {
 
     let address = test_cluster.get_address_0();
 
-    let (package_id, treasury_cap, metadata_cap, deny_cap, publish_tx) =
+    let (package_id, treasury_cap, metadata_cap, deny_cap) =
         publish_regulated_coin(&test_cluster, address).await;
 
     let coin_type = format!("{}::regulated_coin::REGULATED_COIN", package_id);
 
-    migrate_receiving(&test_cluster, &coin_type, Some(&publish_tx)).await;
+    // Complete the registration by calling finalize_registration
+    finalize_registration(&test_cluster, package_id, &coin_type).await;
 
     let response = grpc_client
-        .get_coin_info(GetCoinInfoRequest {
-            coin_type: Some(coin_type.clone()),
+        .get_coin_info({
+            let mut request = GetCoinInfoRequest::default();
+            request.coin_type = Some(coin_type.clone());
+            request
         })
         .await
         .unwrap()
@@ -306,8 +347,16 @@ async fn test_regulated_coin_info() {
         metadata.icon_url,
         Some("https://example.com/regulated.png".to_string())
     );
-    assert!(ObjectID::from_str(metadata.metadata_cap_id.as_ref().unwrap()).is_ok(),);
-    assert_eq!(metadata.metadata_cap_id.unwrap(), metadata_cap.to_string());
+    // Check that metadata cap is claimed with the correct ID
+    if let Some(MetadataCapState::Claimed(cap_id)) = &metadata.metadata_cap_state {
+        assert!(
+            ObjectID::from_str(cap_id).is_ok(),
+            "metadata_cap_state.claimed should be a valid ObjectID"
+        );
+        assert_eq!(cap_id, &metadata_cap.to_string());
+    } else {
+        panic!("Expected metadata_cap_state to be Claimed");
+    }
     assert!(response.treasury.is_some());
     let treasury = response.treasury.unwrap();
     assert!(ObjectID::from_str(treasury.id.as_ref().unwrap()).is_ok(),);
@@ -315,9 +364,13 @@ async fn test_regulated_coin_info() {
     assert_eq!(treasury.total_supply.unwrap(), 0);
     assert_eq!(treasury.supply_state, Some(SupplyState::Unknown as i32),);
 
-    assert!(response.regulated_metadata.is_some());
-    let regulated = response.regulated_metadata.unwrap();
-    assert!(ObjectID::from_str(regulated.coin_metadata_object.as_ref().unwrap()).is_ok(),);
+    let regulated = match response.regulation_state {
+        Some(RegulationState::Regulated(metadata)) => metadata,
+        _ => panic!("Expected coin to be regulated"),
+    };
+    // CoinRegistry coins don't have separate RegulatedCoinMetadata objects
+    assert!(regulated.id.is_none());
+    assert!(regulated.coin_metadata_object.is_none());
     assert!(ObjectID::from_str(regulated.deny_cap_object.as_ref().unwrap()).is_ok(),);
     assert_eq!(regulated.deny_cap_object.unwrap(), deny_cap.to_string());
 }
@@ -329,7 +382,7 @@ async fn test_legacy_coin_from_registry() {
     let sender = test_cluster.get_address_0();
 
     // Publish the legacy coin package that uses create_currency (v1)
-    let (package_id, _metadata_id, treasury_cap_id, publish_tx) =
+    let (package_id, _metadata_id, treasury_cap_id) =
         publish_legacy_coin(&test_cluster, sender).await;
     let coin_type = format!("{}::legacy_coin::LEGACY_COIN", package_id);
 
@@ -368,11 +421,11 @@ async fn test_legacy_coin_from_registry() {
 
     let _mint_tx = test_cluster.sign_and_execute_transaction(&tx_data).await;
 
-    migrate_receiving(&test_cluster, &coin_type, Some(&publish_tx)).await;
-
     let response = grpc_client
-        .get_coin_info(GetCoinInfoRequest {
-            coin_type: Some(coin_type.clone()),
+        .get_coin_info({
+            let mut request = GetCoinInfoRequest::default();
+            request.coin_type = Some(coin_type.clone());
+            request
         })
         .await
         .unwrap()
@@ -394,7 +447,7 @@ async fn test_legacy_coin_from_registry() {
         metadata.icon_url,
         Some("https://example.com/legacy.png".to_string())
     );
-    assert!(metadata.metadata_cap_id.is_none());
+    assert!(metadata.metadata_cap_state.is_none());
 
     assert!(response.treasury.is_some());
     let treasury = response.treasury.unwrap();
@@ -414,7 +467,11 @@ async fn test_legacy_coin_from_registry() {
         "Legacy coin treasury cap not owned by 0x0 should have Unknown supply state"
     );
 
-    assert!(response.regulated_metadata.is_none());
+    // Legacy coins from index return Unknown regulation state
+    assert!(matches!(
+        response.regulation_state,
+        Some(RegulationState::Unknown(_))
+    ));
 
     // Phase 2: Send the treasury cap to 0x0 to make the supply Fixed the old fashioned way.
     let updated_treasury_cap_obj = test_cluster
@@ -449,8 +506,10 @@ async fn test_legacy_coin_from_registry() {
     let _transfer_tx = test_cluster.sign_and_execute_transaction(&tx_data).await;
 
     let response = grpc_client
-        .get_coin_info(GetCoinInfoRequest {
-            coin_type: Some(coin_type.clone()),
+        .get_coin_info({
+            let mut request = GetCoinInfoRequest::default();
+            request.coin_type = Some(coin_type.clone());
+            request
         })
         .await
         .unwrap()
@@ -484,9 +543,8 @@ async fn test_invalid_coin_type() {
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Test with malformed coin type
-    let request = GetCoinInfoRequest {
-        coin_type: Some("invalid::coin::type::format".to_string()),
-    };
+    let mut request = GetCoinInfoRequest::default();
+    request.coin_type = Some("invalid::coin::type::format".to_string());
 
     let result = grpc_client.get_coin_info(request).await;
     assert!(result.is_err());
@@ -497,9 +555,8 @@ async fn test_invalid_coin_type() {
     // Test with non-existent coin type
     let fake_coin_type =
         "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef::fakecoin::FAKECOIN";
-    let request = GetCoinInfoRequest {
-        coin_type: Some(fake_coin_type.to_string()),
-    };
+    let mut request = GetCoinInfoRequest::default();
+    request.coin_type = Some(fake_coin_type.to_string());
 
     let result = grpc_client.get_coin_info(request).await;
     assert!(result.is_err());
@@ -509,29 +566,259 @@ async fn test_invalid_coin_type() {
     assert!(error.message().contains("not found"));
 }
 
-async fn migrate_receiving(
-    test_cluster: &test_cluster::TestCluster,
-    coin_type: &str,
-    _publish_tx: Option<&ExecutedTransaction>,
-) {
-    let coin_type_tag: sui_types::TypeTag = coin_type.parse().unwrap();
+#[sim_test]
+async fn test_burnonly_coin_info() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
+    let address = test_cluster.get_address_0();
 
-    let registry_initial_version = SequenceNumber::from(1);
+    // Publish burnonly coin package
+    let (package_id, treasury_cap, metadata_cap) =
+        publish_burnonly_coin(&test_cluster, address).await;
 
-    let mut channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
-        .unwrap()
-        .connect()
+    let coin_type = format!("{}::burnonly_coin::BURNONLY_COIN", package_id);
+
+    // Complete the registration
+    finalize_registration(&test_cluster, package_id, &coin_type).await;
+
+    // First mint some coins before registering as BurnOnly
+    let initial_mint_amount = 10_000_000_000u64; // 10 coins with 9 decimals
+
+    let treasury_cap_obj = test_cluster
+        .get_object_from_fullnode_store(&treasury_cap)
         .await
         .unwrap();
-    let mut grpc_client = LiveDataServiceClient::new(channel.clone());
+    let treasury_cap_ref = treasury_cap_obj.compute_object_reference();
+
+    // Build a transaction to mint coins
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let treasury_cap_arg = ptb
+        .obj(ObjectArg::ImmOrOwnedObject(treasury_cap_ref))
+        .unwrap();
+    let amount_arg = ptb.pure(initial_mint_amount).unwrap();
+    let recipient_arg = ptb.pure(address).unwrap();
+
+    ptb.programmable_move_call(
+        package_id,
+        "burnonly_coin".parse().unwrap(),
+        "mint".parse().unwrap(),
+        vec![],
+        vec![treasury_cap_arg, amount_arg, recipient_arg],
+    );
+
+    let pt = ptb.finish();
+    let gas_price = test_cluster.get_reference_gas_price().await;
+    let gas = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(address)
+        .await
+        .unwrap()
+        .unwrap();
+    let tx_data = TransactionData::new_programmable(address, vec![gas], pt, 50_000_000, gas_price);
+
+    // Execute the mint transaction
+    let _mint_tx = test_cluster.sign_and_execute_transaction(&tx_data).await;
+
+    // Query coin info before registering as BurnOnly
+    let response_before = grpc_client
+        .get_coin_info({
+            let mut request = GetCoinInfoRequest::default();
+            request.coin_type = Some(coin_type.clone());
+            request
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(response_before.coin_type, Some(coin_type.clone()));
+
+    let metadata = response_before.metadata.expect("Expected metadata");
+    assert_eq!(metadata.decimals, Some(9));
+    assert_eq!(metadata.name, Some("BurnOnly Coin".to_string()));
+    assert_eq!(metadata.symbol, Some("BURNONLY".to_string()));
+    assert_eq!(
+        metadata.description,
+        Some(
+            "BurnOnly coin for testing GetCoinInfo with CoinRegistry BurnOnly supply state"
+                .to_string()
+        )
+    );
+    assert_eq!(
+        metadata.icon_url,
+        Some("https://example.com/burnonly.png".to_string())
+    );
+    // Check that metadata cap is claimed with the correct ID
+    if let Some(MetadataCapState::Claimed(cap_id)) = &metadata.metadata_cap_state {
+        assert_eq!(cap_id, &metadata_cap.to_string());
+    } else {
+        panic!("Expected metadata_cap_state to be Claimed");
+    }
+
+    let treasury_before = response_before.treasury.unwrap();
+    assert_eq!(treasury_before.total_supply.unwrap(), initial_mint_amount);
+    assert_eq!(
+        treasury_before.supply_state,
+        Some(SupplyState::Unknown as i32),
+        "Before registering as BurnOnly, supply state should be Unknown"
+    );
+
+    // Now register the supply as BurnOnly
+    // Get the updated treasury cap reference after minting
+    let updated_treasury_cap_obj = test_cluster
+        .get_object_from_fullnode_store(&treasury_cap)
+        .await
+        .unwrap();
+    let updated_treasury_cap_ref = updated_treasury_cap_obj.compute_object_reference();
+
+    // Derive the Currency object ID
+    let coin_type_tag = move_core_types::language_storage::StructTag {
+        address: package_id.into(),
+        module: move_core_types::identifier::Identifier::new("burnonly_coin").unwrap(),
+        name: move_core_types::identifier::Identifier::new("BURNONLY_COIN").unwrap(),
+        type_params: vec![],
+    };
+
+    let currency_key_type = move_core_types::language_storage::StructTag {
+        address: move_core_types::account_address::AccountAddress::from_hex_literal("0x2").unwrap(),
+        module: move_core_types::identifier::Identifier::new("coin_registry").unwrap(),
+        name: move_core_types::identifier::Identifier::new("CurrencyKey").unwrap(),
+        type_params: vec![TypeTag::Struct(Box::new(coin_type_tag.clone()))],
+    };
+
+    let currency_key_bytes = bcs::to_bytes(&sui_types::coin_registry::CurrencyKey::new()).unwrap();
+
+    let currency_id = sui_types::derived_object::derive_object_id(
+        SUI_COIN_REGISTRY_OBJECT_ID,
+        &TypeTag::Struct(Box::new(currency_key_type)),
+        &currency_key_bytes,
+    )
+    .unwrap();
+
+    // Get the Currency object to find its initial shared version
+    let currency_obj = test_cluster
+        .get_object_from_fullnode_store(&currency_id)
+        .await
+        .unwrap();
+
+    let initial_shared_version = match currency_obj.owner {
+        sui_types::object::Owner::Shared {
+            initial_shared_version,
+        } => initial_shared_version,
+        _ => panic!("Currency object should be shared"),
+    };
+
+    // Build a transaction to register supply as BurnOnly
+    let mut ptb = ProgrammableTransactionBuilder::new();
+
+    // Add the Currency object as a shared object
+    let currency_arg = ptb
+        .obj(ObjectArg::SharedObject {
+            id: currency_id,
+            initial_shared_version,
+            mutable: true,
+        })
+        .unwrap();
+
+    // Add the treasury cap as an owned object
+    let treasury_cap_arg = ptb
+        .obj(ObjectArg::ImmOrOwnedObject(updated_treasury_cap_ref))
+        .unwrap();
+
+    // Call register_supply_as_burnonly
+    ptb.programmable_move_call(
+        package_id,
+        "burnonly_coin".parse().unwrap(),
+        "register_supply_as_burnonly".parse().unwrap(),
+        vec![],
+        vec![currency_arg, treasury_cap_arg],
+    );
+
+    let pt = ptb.finish();
+    let gas = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(address)
+        .await
+        .unwrap()
+        .unwrap();
+    let tx_data = TransactionData::new_programmable(address, vec![gas], pt, 50_000_000, gas_price);
+
+    // Execute the register_supply_as_burnonly transaction
+    let _register_tx = test_cluster.sign_and_execute_transaction(&tx_data).await;
+
+    // Query coin info again to verify the supply is now BurnOnly
+    let response_after = grpc_client
+        .get_coin_info({
+            let mut request = GetCoinInfoRequest::default();
+            request.coin_type = Some(coin_type.clone());
+            request
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    let treasury_after = response_after.treasury.unwrap();
+
+    assert_eq!(
+        treasury_after.total_supply.unwrap(),
+        initial_mint_amount,
+        "Total supply should remain the same after registering as BurnOnly"
+    );
+    assert_eq!(
+        treasury_after.supply_state,
+        Some(SupplyState::BurnOnly as i32),
+        "After register_supply_as_burnonly, the supply state should be BurnOnly"
+    );
+
+    assert!(matches!(
+        response_after.regulation_state,
+        Some(RegulationState::Unregulated(_))
+    ));
+}
+
+async fn finalize_registration(
+    test_cluster: &test_cluster::TestCluster,
+    _package_id: ObjectID,
+    coin_type: &str,
+) {
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .expect("Failed to connect to ledger service");
+
+    // Get the CoinRegistry object info to find its initial version
+    let registry_obj_response = ledger_client
+        .get_object({
+            let mut request = GetObjectRequest::default();
+            request.object_id = Some(SUI_COIN_REGISTRY_OBJECT_ID.to_string());
+            request.read_mask = Some(FieldMask::from_str("version,owner"));
+            request
+        })
+        .await
+        .expect("Failed to get CoinRegistry object")
+        .into_inner();
+
+    let registry_initial_version = registry_obj_response
+        .object
+        .and_then(|obj| obj.owner)
+        .and_then(|owner| {
+            if owner.kind == Some(OwnerKind::Shared as i32) {
+                owner.version.map(SequenceNumber::from)
+            } else {
+                None
+            }
+        })
+        .expect("CoinRegistry should be a shared object with an initial version");
+
+    // Now find the Currency object that was transferred to the CoinRegistry
+    let mut grpc_client = get_grpc_client(test_cluster).await;
 
     let registry_owned = grpc_client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(SuiAddress::from(SUI_COIN_REGISTRY_OBJECT_ID).to_string()),
-            read_mask: Some(FieldMask::from_str(
+        .list_owned_objects({
+            let mut request = ListOwnedObjectsRequest::default();
+            request.owner = Some(SuiAddress::from(SUI_COIN_REGISTRY_OBJECT_ID).to_string());
+            request.read_mask = Some(FieldMask::from_str(
                 "object_id,version,digest,object_type,owner",
-            )),
-            ..Default::default()
+            ));
+            request
         })
         .await
         .unwrap()
@@ -541,63 +828,54 @@ async fn migrate_receiving(
     // Parse the target coin type for normalized comparison
     let target_coin_type: TypeTag = coin_type.parse().unwrap();
 
-    let coin_data = registry_owned
+    let currency = registry_owned
         .iter()
         .find(|obj| {
-            obj.object_type
-                .as_ref()
+            let obj_type = obj.object_type.as_ref();
+
+            obj_type
                 .and_then(|t| {
                     // Parse the object type as a struct tag
-                    parse_sui_struct_tag(t).ok().and_then(|struct_tag| {
-                        // Check if this is a CoinData type and extract the type parameter
-                        if struct_tag.module.as_str() == "coin_registry"
-                            && struct_tag.name.as_str() == "CoinData"
-                            && struct_tag.type_params.len() == 1
-                        {
-                            // Compare the normalized type parameters
-                            struct_tag.type_params.first().map(|type_param| {
-                                type_param.to_canonical_string(false)
-                                    == target_coin_type.to_canonical_string(false)
-                            })
-                        } else {
-                            None
+                    match sui_types::parse_sui_struct_tag(t) {
+                        Ok(struct_tag) => {
+                            // Check if this is a Currency type and extract the type parameter
+                            if struct_tag.module.as_str() == "coin_registry"
+                                && struct_tag.name.as_str() == "Currency"
+                                && struct_tag.type_params.len() == 1
+                            {
+                                // Compare the normalized type parameters
+                                let matches = struct_tag
+                                    .type_params
+                                    .first()
+                                    .map(|type_param| {
+                                        let param_str = type_param.to_canonical_string(false);
+                                        let target_str =
+                                            target_coin_type.to_canonical_string(false);
+                                        param_str == target_str
+                                    })
+                                    .unwrap_or(false);
+
+                                Some(matches)
+                            } else {
+                                None
+                            }
                         }
-                    })
+                        Err(_) => None,
+                    }
                 })
                 .unwrap_or(false)
         })
-        .unwrap_or_else(|| panic!("CoinData for {} not found in CoinRegistry", coin_type));
+        .unwrap_or_else(|| panic!("Currency for {} not found in CoinRegistry", coin_type));
 
-    let coin_data_id = ObjectID::from_str(coin_data.object_id.as_ref().unwrap()).unwrap();
-
-    let receiving_coin_data = registry_owned
-        .iter()
-        .find(|obj| {
-            obj.object_id
-                .as_ref()
-                .map(|id| id.parse::<ObjectID>().ok() == Some(coin_data_id))
-                .unwrap_or(false)
-        })
-        .expect("CoinData not found in CoinRegistry's owned objects");
-
-    let coin_data_object_ref = (
-        receiving_coin_data
-            .object_id
-            .as_ref()
-            .unwrap()
-            .parse()
-            .unwrap(),
-        SequenceNumber::from(receiving_coin_data.version.unwrap()),
-        receiving_coin_data
-            .digest
-            .as_ref()
-            .unwrap()
-            .parse()
-            .unwrap(),
+    let currency_object_ref = (
+        currency.object_id.as_ref().unwrap().parse().unwrap(),
+        SequenceNumber::from(currency.version.unwrap()),
+        currency.digest.as_ref().unwrap().parse().unwrap(),
     );
 
     let mut ptb = ProgrammableTransactionBuilder::new();
 
+    // Add the CoinRegistry as a mutable shared object
     let registry_arg = ptb
         .obj(ObjectArg::SharedObject {
             id: SUI_COIN_REGISTRY_OBJECT_ID,
@@ -606,53 +884,39 @@ async fn migrate_receiving(
         })
         .unwrap();
 
-    let receiving_arg = ptb.obj(ObjectArg::Receiving(coin_data_object_ref)).unwrap();
+    // Pass the Currency as a Receiving object
+    let receiving_arg = ptb.obj(ObjectArg::Receiving(currency_object_ref)).unwrap();
 
+    // Call finalize_registration directly in the framework
     ptb.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         "coin_registry".parse().unwrap(),
-        "migrate_receiving".parse().unwrap(),
-        vec![coin_type_tag],
+        "finalize_registration".parse().unwrap(),
+        vec![target_coin_type.clone()],
         vec![registry_arg, receiving_arg],
     );
 
     let pt = ptb.finish();
     let sender = test_cluster.get_address_0();
 
-    let gas_objects = grpc_client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(sender.to_string()),
-            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
-            ..Default::default()
-        })
+    let gas_price = test_cluster.get_reference_gas_price().await;
+
+    let gas = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(sender)
         .await
         .unwrap()
-        .into_inner()
-        .objects;
+        .unwrap();
 
-    let gas_object = gas_objects
-        .iter()
-        .find(|obj| {
-            obj.object_type
-                .as_ref()
-                .map(|t| t.contains("coin::Coin") && t.contains("sui::SUI"))
-                .unwrap_or(false)
-        })
-        .expect("Gas object not found");
+    let tx_data = TransactionData::new_programmable(sender, vec![gas], pt, 50_000_000, gas_price);
 
-    let gas_object_ref = (
-        gas_object.object_id.as_ref().unwrap().parse().unwrap(),
-        SequenceNumber::from(gas_object.version.unwrap()),
-        gas_object.digest.as_ref().unwrap().parse().unwrap(),
-    );
+    // Sign the transaction
+    let signed_tx = test_cluster.wallet.sign_transaction(&tx_data).await;
 
-    let tx_data =
-        TransactionData::new_programmable(sender, vec![gas_object_ref], pt, 50_000_000, 1000);
+    // Execute the finalize_registration transaction and wait for checkpoint
+    let mut client = sui_rpc::client::Client::new(test_cluster.rpc_url().to_owned()).unwrap();
 
-    let tx_response = test_cluster.sign_and_execute_transaction(&tx_data).await;
-
-    let _checkpoint_tx =
-        super::super::wait_for_transaction(&mut channel, &tx_response.digest.to_string()).await;
+    let _finalize_tx = super::super::execute_transaction(&mut client, &signed_tx).await;
 }
 
 async fn get_grpc_client(
@@ -666,7 +930,7 @@ async fn get_grpc_client(
 async fn publish_registry_coin(
     test_cluster: &test_cluster::TestCluster,
     address: SuiAddress,
-) -> (ObjectID, ObjectID, ObjectID, ExecutedTransaction) {
+) -> (ObjectID, ObjectID, ObjectID) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "registry_coin"]);
 
@@ -677,13 +941,13 @@ async fn publish_registry_coin(
     let treasury_cap = find_object_by_type(&transaction, "TreasuryCap");
     let metadata_cap = find_object_by_type(&transaction, "MetadataCap");
 
-    (package_id, treasury_cap, metadata_cap, transaction)
+    (package_id, treasury_cap, metadata_cap)
 }
 
 async fn publish_regulated_coin(
     test_cluster: &test_cluster::TestCluster,
     address: SuiAddress,
-) -> (ObjectID, ObjectID, ObjectID, ObjectID, ExecutedTransaction) {
+) -> (ObjectID, ObjectID, ObjectID, ObjectID) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "regulated_coin"]);
 
@@ -695,19 +959,13 @@ async fn publish_regulated_coin(
     let metadata_cap = find_object_by_type(&transaction, "MetadataCap");
     let deny_cap = find_object_by_type(&transaction, "DenyCapV2");
 
-    (
-        package_id,
-        treasury_cap,
-        metadata_cap,
-        deny_cap,
-        transaction,
-    )
+    (package_id, treasury_cap, metadata_cap, deny_cap)
 }
 
 async fn publish_legacy_coin(
     test_cluster: &test_cluster::TestCluster,
     address: SuiAddress,
-) -> (ObjectID, ObjectID, ObjectID, ExecutedTransaction) {
+) -> (ObjectID, ObjectID, ObjectID) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "legacy_coin"]);
 
@@ -718,7 +976,7 @@ async fn publish_legacy_coin(
     let treasury_cap = find_object_by_type(&transaction, "TreasuryCap");
     let metadata = find_object_by_type(&transaction, "CoinMetadata");
 
-    (package_id, metadata, treasury_cap, transaction)
+    (package_id, metadata, treasury_cap)
 }
 
 fn find_object_by_type(transaction: &ExecutedTransaction, type_substr: &str) -> ObjectID {
@@ -741,4 +999,21 @@ fn find_object_by_type(transaction: &ExecutedTransaction, type_substr: &str) -> 
                 type_substr
             )
         })
+}
+
+async fn publish_burnonly_coin(
+    test_cluster: &test_cluster::TestCluster,
+    address: SuiAddress,
+) -> (ObjectID, ObjectID, ObjectID) {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["tests", "rpc", "data", "burnonly_coin"]);
+
+    let (package_id, transaction) =
+        super::super::publish_package(test_cluster, address, path).await;
+
+    // Extract treasury cap and metadata cap from transaction
+    let treasury_cap = find_object_by_type(&transaction, "TreasuryCap");
+    let metadata_cap = find_object_by_type(&transaction, "MetadataCap");
+
+    (package_id, treasury_cap, metadata_cap)
 }

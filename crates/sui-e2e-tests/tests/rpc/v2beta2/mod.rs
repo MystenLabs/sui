@@ -54,56 +54,16 @@ async fn execute_transaction(
         .unwrap();
 
     // Assert that the txn was successful
-    assert!(transaction
+    let status = transaction
         .effects
         .as_ref()
         .unwrap()
         .status
         .as_ref()
-        .unwrap()
-        .success());
+        .unwrap();
+    assert!(status.success());
 
     transaction
-}
-
-async fn wait_for_transaction(
-    channel: &mut tonic::transport::Channel,
-    digest: &str,
-) -> tonic::Response<ExecutedTransaction> {
-    const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
-    const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
-    const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_millis(500);
-
-    let mut client = LedgerServiceClient::new(channel);
-
-    tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
-        // Apply a short delay to give the full node a chance to catch up.
-        tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
-
-        let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
-        loop {
-            interval.tick().await;
-
-            if let Ok(poll_response) = client
-                .get_transaction({
-                    let mut request = GetTransactionRequest::default();
-                    request.digest = Some(digest.to_owned());
-                    request
-                })
-                .await
-            {
-                // Only break if the transaction has been included in a checkpoint
-                if let Some(ref transaction) = poll_response.get_ref().transaction {
-                    if transaction.checkpoint.is_some() {
-                        break poll_response;
-                    }
-                }
-            }
-        }
-    })
-    .await
-    .unwrap()
-    .map(|response| response.transaction.unwrap())
 }
 
 async fn publish_package(
@@ -137,12 +97,8 @@ async fn publish_package(
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
     let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
 
-    let mut channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
-    let transaction = execute_transaction(&mut channel, &txn).await;
+    let mut client = Client::new(test_cluster.rpc_url().to_owned()).unwrap();
+    let transaction = execute_transaction(&mut client, &txn).await;
 
     let package_id = transaction
         .effects
