@@ -17,40 +17,55 @@ use sui::derived_object;
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
+/// Allows calling `.make_supply_fixed_init` on `CurrencyInitializer`.
+use fun make_supply_fixed_init as CurrencyInitializer.make_supply_fixed;
+
+/// Allows calling `.make_supply_burn_only` on `CurrencyInitializer`.
+use fun make_supply_burn_only_init as CurrencyInitializer.make_supply_burn_only;
+
 #[allow(unused_const)]
-/// No Currency found for this coin type.
-const ECurrencyNotFound: u64 = 0;
 /// Metadata cap already claimed
-const EMetadataCapAlreadyClaimed: u64 = 1;
+#[error(code = 0)]
+const EMetadataCapAlreadyClaimed: vector<u8> = b"Metadata cap already claimed.";
 /// Only the system address can create the registry
-const ENotSystemAddress: u64 = 2;
+#[error(code = 1)]
+const ENotSystemAddress: vector<u8> = b"Only the system can create the registry.";
 /// Currency for this coin type already exists
-const ECurrencyAlreadyExists: u64 = 3;
+#[error(code = 2)]
+const ECurrencyAlreadyExists: vector<u8> = b"Currency for this coin type already exists.";
 /// Attempt to set the deny list state permissionlessly while it has already been set.
-const EDenyListStateAlreadySet: u64 = 4;
-/// Tries to delete legacy metadata without having claimed the management capability.
-const EMetadataCapNotClaimed: u64 = 5;
+#[error(code = 3)]
+const EDenyListStateAlreadySet: vector<u8> =
+    b"Cannot set the deny list state as it has already been set.";
+#[error(code = 4)]
+const EMetadataCapNotClaimed: vector<u8> =
+    b"Cannot delete legacy metadata before claiming the `MetadataCap`.";
 /// Attempt to update `Currency` with legacy metadata after the `MetadataCap` has
 /// been claimed. Updates are only allowed if the `MetadataCap` has not yet been
 /// claimed or deleted.
-const ECannotUpdateManagedMetadata: u64 = 6;
+#[error(code = 5)]
+const ECannotUpdateManagedMetadata: vector<u8> =
+    b"Cannot update metadata whose `MetadataCap` has already been claimed.";
 /// Attempt to set the symbol to a non-ASCII printable character
-const EInvalidSymbol: u64 = 7;
-/// Attempt to set the deny cap twice.
-const EDenyCapAlreadyCreated: u64 = 8;
+#[error(code = 6)]
+const EInvalidSymbol: vector<u8> = b"Symbol has to be ASCII printable.";
+#[error(code = 7)]
+const EDenyCapAlreadyCreated: vector<u8> = b"Cannot claim the deny cap twice.";
 /// Attempt to migrate legacy metadata for a `Currency` that already exists.
-const ECurrencyAlreadyRegistered: u64 = 9;
-/// Fixing or making deflationary an empty Supply.
-const EEmptySupply: u64 = 10;
-/// Attempt to burn a `Currency` that is not deflationary.
-const ESupplyNotDeflationary: u64 = 11;
+#[error(code = 8)]
+const ECurrencyAlreadyRegistered: vector<u8> = b"Currency already registered.";
+#[error(code = 9)]
+const EEmptySupply: vector<u8> = b"Supply cannot be empty.";
+#[error(code = 10)]
+const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply..";
+#[error(code = 11)]
+const EInvariantViolation: vector<u8> = b"Code invariant violation.";
 
 /// Incremental identifier for regulated coin versions in the deny list.
-/// 0 here matches DenyCapV2 world.
-/// TODO: Fix wording here.
-const REGULATED_COIN_VARIANT: u8 = 0;
+/// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
+const REGULATED_COIN_VERSION: u8 = 0;
 
-/// System object found at address 0xc that stores coin data for all
+/// System object found at address `0xc` that stores coin data for all
 /// registered coin types. This is a shared object that acts as a central
 /// registry for coin metadata, supply information, and regulatory status.
 public struct CoinRegistry has key {
@@ -59,7 +74,7 @@ public struct CoinRegistry has key {
 
 /// Store only object that enables more flexible coin data
 /// registration, allowing for additional fields to be added
-/// without changing the Currency structure.
+/// without changing the `Currency` structure.
 #[allow(unused_field)]
 public struct ExtraField(TypeName, vector<u8>) has store;
 
@@ -77,13 +92,13 @@ public struct Currency<phantom T> has key {
     id: UID,
     /// Number of decimal places the coin uses for display purposes.
     decimals: u8,
-    /// Human-readable name for the token.
+    /// Human-readable name for the coin.
     name: String,
-    /// Short symbol/ticker for the token.
+    /// Short symbol/ticker for the coin.
     symbol: String,
-    /// Detailed description of the token.
+    /// Detailed description of the coin.
     description: String,
-    /// URL for the token's icon/logo.
+    /// URL for the coin's icon/logo.
     icon_url: String,
     /// Current supply state of the coin (fixed supply or unknown)
     /// Note: We're using `Option` because `SupplyState` does not have drop,
@@ -101,13 +116,13 @@ public struct Currency<phantom T> has key {
 
 /// Supply state marks the type of Currency Supply, which can be
 /// - Fixed: no minting or burning;
-/// - Deflationary: only burning;
+/// - BurnOnly: no minting, burning is allowed;
 /// - Unknown: flexible (supply is controlled by its `TreasuryCap`);
 public enum SupplyState<phantom T> has store {
     /// Coin has a fixed supply with the given Supply object.
     Fixed(Supply<T>),
     /// Coin has a supply that can ONLY decrease.
-    Deflationary(Supply<T>),
+    BurnOnly(Supply<T>),
     /// Supply information is not yet known or registered.
     Unknown,
 }
@@ -118,10 +133,11 @@ public enum SupplyState<phantom T> has store {
 /// - Unknown: the regulatory status is unknown.
 public enum RegulatedState has copy, drop, store {
     /// Coin is regulated with a deny cap for address restrictions.
-    Regulated { cap: ID, allow_global_pause: bool, variant: u8 },
+    /// `allow_global_pause` is `None` if the information is unknown (has not been migrated from `DenyCapV2`).
+    Regulated { cap: ID, allow_global_pause: Option<bool>, variant: u8 },
     /// The coin has been created without deny list.
     Unregulated,
-    /// Coin is not regulated or regulatory status is unknown.
+    /// Regulatory status is unknown.
     /// Result of a legacy migration for that coin (from `coin.move` constructors)
     Unknown,
 }
@@ -162,6 +178,7 @@ public fun new_currency<T: /* internal */ key>(
     ctx: &mut TxContext,
 ): (CurrencyInitializer<T>, TreasuryCap<T>) {
     assert!(!registry.exists<T>(), ECurrencyAlreadyExists);
+    assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
 
     let treasury_cap = coin::new_treasury_cap(ctx);
     let currency = Currency<T> {
@@ -250,14 +267,12 @@ public fun make_regulated<T>(
     init.currency.regulated =
         RegulatedState::Regulated {
             cap: object::id(&deny_cap),
-            allow_global_pause,
-            variant: REGULATED_COIN_VARIANT,
+            allow_global_pause: option::some(allow_global_pause),
+            variant: REGULATED_COIN_VERSION,
         };
 
     deny_cap
 }
-
-use fun make_supply_fixed_init as CurrencyInitializer.make_supply_fixed;
 
 /// Initializer function to make the supply fixed.
 /// Aborts if Supply is `0` to enforce minting during initialization.
@@ -266,40 +281,36 @@ public fun make_supply_fixed_init<T>(init: &mut CurrencyInitializer<T>, cap: Tre
     init.currency.make_supply_fixed(cap)
 }
 
-use fun make_supply_deflationary_init as CurrencyInitializer.make_supply_deflationary;
-
-/// Initializer function to make the supply deflationary.
+/// Initializer function to make the supply burn-only.
 /// Aborts if Supply is `0` to enforce minting during initialization.
-public fun make_supply_deflationary_init<T>(
-    init: &mut CurrencyInitializer<T>,
-    cap: TreasuryCap<T>,
-) {
+public fun make_supply_burn_only_init<T>(init: &mut CurrencyInitializer<T>, cap: TreasuryCap<T>) {
     assert!(cap.total_supply() > 0, EEmptySupply);
-    init.currency.make_supply_deflationary(cap)
+    init.currency.make_supply_burn_only(cap)
 }
 
 /// Freeze the supply by destroying the `TreasuryCap` and storing it in the `Currency`.
 public fun make_supply_fixed<T>(currency: &mut Currency<T>, cap: TreasuryCap<T>) {
     match (currency.supply.swap(SupplyState::Fixed(cap.into_supply()))) {
-        // Impossible: We cannot fix a supply or make a supply deflationary twice.
-        SupplyState::Fixed(_supply) | SupplyState::Deflationary(_supply) => abort,
+        // Impossible: We cannot fix a supply or make a supply burn-only twice.
+        SupplyState::Fixed(_supply) | SupplyState::BurnOnly(_supply) => abort EInvariantViolation,
         // We replaced "unknown" with fixed supply.
         SupplyState::Unknown => (),
     };
 }
 
-/// Make the supply "deflationary" by giving up the `TreasuryCap`, and allowing
+/// Make the supply `BurnOnly` by giving up the `TreasuryCap`, and allowing
 /// burning of Coins through the `Currency`.
-public fun make_supply_deflationary<T>(currency: &mut Currency<T>, cap: TreasuryCap<T>) {
-    match (currency.supply.swap(SupplyState::Deflationary(cap.into_supply()))) {
-        // Impossible: We cannot fix a supply or make a supply deflationary twice.
-        SupplyState::Fixed(_supply) | SupplyState::Deflationary(_supply) => abort,
+public fun make_supply_burn_only<T>(currency: &mut Currency<T>, cap: TreasuryCap<T>) {
+    match (currency.supply.swap(SupplyState::BurnOnly(cap.into_supply()))) {
+        // Impossible: We cannot fix a supply or make a supply burn-only twice.
+        SupplyState::Fixed(_supply) | SupplyState::BurnOnly(_supply) => abort EInvariantViolation,
         // We replaced "unknown" with frozen supply.
         SupplyState::Unknown => (),
     };
 }
 
 #[allow(lint(share_owned))]
+/// Finalize the coin initialization, returning `MetadataCap`
 public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): MetadataCap<T> {
     let CurrencyInitializer { mut currency, is_otw, extra_fields } = builder;
     extra_fields.destroy_empty();
@@ -362,17 +373,17 @@ public fun delete_metadata_cap<T>(currency: &mut Currency<T>, cap: MetadataCap<T
     id.delete();
 }
 
-/// Allows burning coins for deflationary
+/// Allows burning coins for burn-only currencies
 public fun burn<T>(currency: &mut Currency<T>, coin: Coin<T>) {
     currency.burn_balance(coin.into_balance());
 }
 
-/// Lower level function to burn a `Balance` of a deflationary `Currency`.
+/// Lower level function to burn a `Balance` of a burn-only `Currency`.
 public fun burn_balance<T>(currency: &mut Currency<T>, balance: Balance<T>) {
-    assert!(currency.is_supply_deflationary(), ESupplyNotDeflationary);
+    assert!(currency.is_supply_burn_only(), ESupplyNotBurnOnly);
     match (currency.supply.borrow_mut()) {
-        SupplyState::Deflationary(supply) => { supply.decrease_supply(balance); },
-        _ => abort,
+        SupplyState::BurnOnly(supply) => { supply.decrease_supply(balance); },
+        _ => abort EInvariantViolation,
     }
 }
 
@@ -465,7 +476,8 @@ public fun migrate_regulated_state_by_metadata<T>(
     currency.regulated =
         RegulatedState::Regulated {
             cap: metadata.deny_cap_id(),
-            variant: REGULATED_COIN_VARIANT,
+            allow_global_pause: option::none(),
+            variant: REGULATED_COIN_VERSION,
         };
 }
 
@@ -474,7 +486,8 @@ public fun migrate_regulated_state_by_cap<T>(currency: &mut Currency<T>, cap: &D
     currency.regulated =
         RegulatedState::Regulated {
             cap: object::id(cap),
-            variant: REGULATED_COIN_VARIANT,
+            allow_global_pause: option::some(cap.allow_global_pause()),
+            variant: REGULATED_COIN_VERSION,
         };
 }
 
@@ -505,6 +518,7 @@ public fun is_metadata_cap_claimed<T>(currency: &Currency<T>): bool {
     }
 }
 
+/// Get the metadata cap ID, or none if it has not been claimed.
 public fun metadata_cap_id<T>(currency: &Currency<T>): Option<ID> {
     match (currency.metadata_cap_id) {
         MetadataCapState::Claimed(id) => option::some(id),
@@ -521,8 +535,7 @@ public fun treasury_cap_id<T>(currency: &Currency<T>): Option<ID> {
 public fun deny_cap_id<T>(currency: &Currency<T>): Option<ID> {
     match (currency.regulated) {
         RegulatedState::Regulated { cap, .. } => option::some(cap),
-        RegulatedState::Unregulated => option::none(),
-        RegulatedState::Unknown => option::none(),
+        RegulatedState::Unregulated | RegulatedState::Unknown => option::none(),
     }
 }
 
@@ -534,10 +547,10 @@ public fun is_supply_fixed<T>(currency: &Currency<T>): bool {
     }
 }
 
-/// Check if the supply is deflationary.
-public fun is_supply_deflationary<T>(currency: &Currency<T>): bool {
+/// Check if the supply is burn-only.
+public fun is_supply_burn_only<T>(currency: &Currency<T>): bool {
     match (currency.supply.borrow()) {
-        SupplyState::Deflationary(_) => true,
+        SupplyState::BurnOnly(_) => true,
         _ => false,
     }
 }
@@ -551,11 +564,11 @@ public fun is_regulated<T>(currency: &Currency<T>): bool {
 }
 
 /// Get the total supply for the `Currency<T>` if the Supply is in fixed or
-/// deflationary state. Returns `None` if the SupplyState is Unknown.
+/// burn-only state. Returns `None` if the SupplyState is Unknown.
 public fun total_supply<T>(currency: &Currency<T>): Option<u64> {
     match (currency.supply.borrow()) {
         SupplyState::Fixed(supply) => option::some(supply.value()),
-        SupplyState::Deflationary(supply) => option::some(supply.value()),
+        SupplyState::BurnOnly(supply) => option::some(supply.value()),
         SupplyState::Unknown => option::none(),
     }
 }

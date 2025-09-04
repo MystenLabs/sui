@@ -9,6 +9,9 @@ module sui::balance;
 /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
 public use fun sui::coin::from_balance as Balance.into_coin;
 
+/// Allows calling `.value()` on a `Supply` to get the value.
+public use fun supply_value as Supply.value;
+
 /// For when trying to destroy a non-zero balance.
 const ENonZero: u64 = 0;
 /// For when an overflow is happening on Supply operations.
@@ -36,8 +39,6 @@ public struct Balance<phantom T> has store {
 public fun value<T>(self: &Balance<T>): u64 {
     self.value
 }
-
-public use fun supply_value as Supply.value;
 
 /// Get the `Supply` value.
 public fun supply_value<T>(supply: &Supply<T>): u64 {
