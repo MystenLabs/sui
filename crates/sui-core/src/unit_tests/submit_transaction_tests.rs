@@ -354,6 +354,80 @@ async fn test_submit_batched_transactions() {
 }
 
 #[tokio::test]
+async fn test_submit_batched_transactions_with_already_executed() {
+    let test_context = TestContext::new().await;
+
+    // Create 1st transaction and execute it
+    let tx1 = test_context.build_test_transaction();
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let verified_tx1 = VerifiedExecutableTransaction::new_from_checkpoint(
+        VerifiedTransaction::new_unchecked(tx1.clone()),
+        epoch_store.epoch(),
+        1,
+    );
+    test_context
+        .state
+        .try_execute_immediately(
+            &verified_tx1,
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            &epoch_store,
+        )
+        .await
+        .unwrap();
+
+    // Create 2nd transaction (not executed)
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2).await;
+
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    // Build request with both transactions
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        soft_bundle: false,
+    };
+
+    // Submit both transactions
+    let raw_response = test_context
+        .client
+        .submit_transaction(request, None)
+        .await
+        .unwrap();
+
+    // Verify we got results for both transactions
+    assert_eq!(raw_response.results.len(), 2);
+
+    // First should be already executed, second should be submitted
+    match &raw_response.results[0].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Executed(_)) => {
+            // Expected: first transaction was already executed
+        }
+        _ => panic!("Expected Executed status for first transaction"),
+    }
+
+    match &raw_response.results[1].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
+            // Expected: second transaction was submitted to consensus
+        }
+        _ => panic!("Expected Submitted status for second transaction"),
+    }
+}
+
+#[tokio::test]
 async fn test_submit_soft_bundle_transactions() {
     let test_context = TestContext::new().await;
 
@@ -438,28 +512,18 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
         soft_bundle: true,
     };
 
-    // Submit both transactions
-    let raw_response = test_context
+    // Submit request with batched transactions.
+    let error = test_context
         .client
         .submit_transaction(request, None)
         .await
-        .unwrap();
+        .unwrap_err();
 
-    // Verify we got results for both transactions
-    assert_eq!(raw_response.results.len(), 2);
-
-    // First should be already executed, second should be submitted
-    match &raw_response.results[0].inner {
-        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Executed(_)) => {
-            // Expected: first transaction was already executed
+    // Verify the error is AlreadyExecutedInSoftBundleError.
+    assert!(matches!(
+        error,
+        SuiError::UserInputError {
+            error: UserInputError::AlreadyExecutedInSoftBundleError { .. }
         }
-        _ => panic!("Expected Executed status for first transaction"),
-    }
-
-    match &raw_response.results[1].inner {
-        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
-            // Expected: second transaction was submitted to consensus
-        }
-        _ => panic!("Expected Submitted status for second transaction"),
-    }
+    ));
 }
