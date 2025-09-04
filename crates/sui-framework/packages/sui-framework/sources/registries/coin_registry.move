@@ -57,7 +57,7 @@ const ECurrencyAlreadyRegistered: vector<u8> = b"Currency already registered.";
 #[error(code = 9)]
 const EEmptySupply: vector<u8> = b"Supply cannot be empty.";
 #[error(code = 10)]
-const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply..";
+const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply.";
 #[error(code = 11)]
 const EInvariantViolation: vector<u8> = b"Code invariant violation.";
 
@@ -165,9 +165,7 @@ public struct CurrencyInitializer<phantom T> {
 /// Creates a new currency.
 ///
 /// Note: This constructor has no long term difference from `new_currency_with_otw`.
-/// The only change is that the first requires an OTW (one-time witness), while
-/// this one can be called dynamically from the module that defines `T`, enabling
-/// the creation of a new coin type.
+/// This can be called from the module that defines `T` any time after it has been published.
 public fun new_currency<T: /* internal */ key>(
     registry: &mut CoinRegistry,
     decimals: u8,
