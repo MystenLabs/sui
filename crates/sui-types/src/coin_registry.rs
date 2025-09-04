@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{base_types::ObjectID, id::UID};
 use crate::{
     base_types::SequenceNumber, error::SuiResult, error::SuiResult, id::UID, object::Owner,
     object::Owner, storage::ObjectStore, storage::ObjectStore, SequenceNumber,

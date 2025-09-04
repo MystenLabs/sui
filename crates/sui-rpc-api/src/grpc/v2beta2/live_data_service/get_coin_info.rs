@@ -187,29 +187,33 @@ fn get_coin_info_from_registry(
                 ),
             )
         })?;
-    let metadata = Some(CoinMetadata {
-        id: Some(Address::from(coin_data.id.id.bytes).to_string()),
-        decimals: Some(coin_data.decimals.into()),
-        name: Some(coin_data.name),
-        symbol: Some(coin_data.symbol),
-        description: Some(coin_data.description),
-        icon_url: Some(coin_data.icon_url),
-        metadata_cap_id: coin_data
+    let metadata = {
+        let mut metadata = CoinMetadata::default();
+        metadata.id = Some(Address::from(coin_data.id.id.bytes).to_string());
+        metadata.decimals = Some(coin_data.decimals.into());
+        metadata.name = Some(coin_data.name);
+        metadata.symbol = Some(coin_data.symbol);
+        metadata.description = Some(coin_data.description);
+        metadata.icon_url = Some(coin_data.icon_url);
+        metadata.metadata_cap_id = coin_data
             .metadata_cap_id
-            .map(|id| Address::from(id).to_string()),
-    });
+            .map(|id| Address::from(id).to_string());
+        Some(metadata)
+    };
 
     let treasury = if sui_types::gas_coin::GAS::is_gas(core_coin_type) {
         Some(SUI_COIN_TREASURY)
     } else {
         match &coin_data.supply {
-            Some(coin_registry::SupplyState::Fixed(supply)) => Some(CoinTreasury {
-                id: coin_data
+            Some(coin_registry::SupplyState::Fixed(supply)) => {
+                let mut treasury = CoinTreasury::default();
+                treasury.id = coin_data
                     .treasury_cap_id
-                    .map(|id| Address::from(id).to_string()),
-                total_supply: Some(supply.value),
-                supply_state: Some(SupplyState::Fixed.into()),
-            }),
+                    .map(|id| Address::from(id).to_string());
+                treasury.total_supply = Some(supply.value);
+                treasury.supply_state = Some(SupplyState::Fixed.into());
+                Some(treasury)
+            }
             _ => {
                 // For unknown supply state, look up the treasury cap object
                 let treasury_cap_id = coin_data.treasury_cap_id.or_else(|| {
@@ -228,21 +232,26 @@ fn get_coin_info_from_registry(
 
     let regulated_metadata = match &coin_data.regulated {
         coin_registry::RegulatedState::Regulated { cap, .. } => {
-            Some(RegulatedCoinMetadata {
-                id: None, // No separate RegulatedCoinMetadata object in CoinRegistry
-                coin_metadata_object: Some(Address::from(coin_data.id.id.bytes).to_string()),
-                deny_cap_object: Some(Address::from(*cap).to_string()),
-            })
+            {
+                let mut regulated = RegulatedCoinMetadata::default();
+                regulated.id = None; // No separate RegulatedCoinMetadata object in CoinRegistry
+                regulated.coin_metadata_object =
+                    Some(Address::from(coin_data.id.id.bytes).to_string());
+                regulated.deny_cap_object = Some(Address::from(*cap).to_string());
+                Some(regulated)
+            }
         }
         coin_registry::RegulatedState::Unknown => None,
     };
 
-    Ok(Some(GetCoinInfoResponse {
-        coin_type: Some(coin_type.to_string()),
-        metadata,
-        treasury,
-        regulated_metadata,
-    }))
+    {
+        let mut response = GetCoinInfoResponse::default();
+        response.coin_type = Some(coin_type.to_string());
+        response.metadata = metadata;
+        response.treasury = treasury;
+        response.regulated_metadata = regulated_metadata;
+        Ok(Some(response))
+    }
 }
 
 fn get_coin_info_from_index(
@@ -311,23 +320,27 @@ fn get_coin_info_from_index(
                     ),
                 )
             })?
-            .map(|value| RegulatedCoinMetadata {
-                id: Some(Address::from(value.id.id.bytes).to_string()),
-                coin_metadata_object: Some(
-                    Address::from(value.coin_metadata_object.bytes).to_string(),
-                ),
-                deny_cap_object: Some(Address::from(value.deny_cap_object.bytes).to_string()),
+            .map(|value| {
+                let mut regulated = RegulatedCoinMetadata::default();
+                regulated.id = Some(Address::from(value.id.id.bytes).to_string());
+                regulated.coin_metadata_object =
+                    Some(Address::from(value.coin_metadata_object.bytes).to_string());
+                regulated.deny_cap_object =
+                    Some(Address::from(value.deny_cap_object.bytes).to_string());
+                regulated
             })
     } else {
         None
     };
 
-    Ok(Some(GetCoinInfoResponse {
-        coin_type: Some(coin_type.to_string()),
-        metadata,
-        treasury,
-        regulated_metadata,
-    }))
+    {
+        let mut response = GetCoinInfoResponse::default();
+        response.coin_type = Some(coin_type.to_string());
+        response.metadata = metadata;
+        response.treasury = treasury;
+        response.regulated_metadata = regulated_metadata;
+        Ok(Some(response))
+    }
 }
 
 fn get_treasury_cap_info(
@@ -345,9 +358,11 @@ fn get_treasury_cap_info(
 
     sui_types::coin::TreasuryCap::try_from(obj)
         .ok()
-        .map(|treasury| CoinTreasury {
-            id: Some(Address::from(treasury.id.id.bytes).to_string()),
-            total_supply: Some(treasury.total_supply.value),
-            supply_state: Some(supply_state.into()),
+        .map(|treasury| {
+            let mut coin_treasury = CoinTreasury::default();
+            coin_treasury.id = Some(Address::from(treasury.id.id.bytes).to_string());
+            coin_treasury.total_supply = Some(treasury.total_supply.value);
+            coin_treasury.supply_state = Some(supply_state.into());
+            coin_treasury
         })
 }
