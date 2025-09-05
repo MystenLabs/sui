@@ -21,7 +21,7 @@ use crate::{
     pagination::{Page, PaginationConfig},
 };
 
-use super::{move_function::MoveFunction, move_package::MovePackage};
+use super::{move_datatype::MoveStruct, move_function::MoveFunction, move_package::MovePackage};
 
 #[derive(Clone)]
 pub(crate) struct MoveModule {
@@ -58,6 +58,9 @@ type CFriend = JsonCursor<usize>;
 
 /// Cursor for iterating over functioons in a module. Points to the function by its name.
 type CFunction = JsonCursor<String>;
+
+/// Cursor for iterating over structs in a module. Points to the struct by its name.
+type CStruct = JsonCursor<String>;
 
 /// Modules are a unit of code organization in Move.
 ///
@@ -217,6 +220,76 @@ impl MoveModule {
             conn.edges.push(Edge::new(
                 JsonCursor::new(function.to_owned()).encode_cursor(),
                 MoveFunction::with_fq_name(self.clone(), function.to_owned()),
+            ));
+        }
+
+        Ok(Some(conn))
+    }
+
+    /// The struct named `name` in this module.
+    async fn struct_(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<MoveStruct>, RpcError> {
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let Some(def) = contents
+            .parsed
+            .struct_def(&name)
+            .context("Failed to get struct definition")?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(MoveStruct::from_def(self.clone(), name, def)))
+    }
+
+    /// Paginate through this module's struct definitions.
+    async fn structs(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CStruct>,
+        last: Option<u64>,
+        before: Option<CStruct>,
+    ) -> Result<Option<Connection<String, MoveStruct>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("MoveModule", "structs");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let struct_range = contents.parsed.structs(
+            page.after().map(|c| c.as_ref()),
+            page.before().map(|c| c.as_ref()),
+        );
+
+        let mut conn = Connection::new(false, false);
+        let structs = if page.is_from_front() {
+            struct_range.take(page.limit()).collect()
+        } else {
+            let mut structs: Vec<_> = struct_range.rev().take(page.limit()).collect();
+            structs.reverse();
+            structs
+        };
+
+        conn.has_previous_page = structs
+            .first()
+            .is_some_and(|fst| contents.parsed.structs(None, Some(fst)).next().is_some());
+
+        conn.has_next_page = structs
+            .last()
+            .is_some_and(|lst| contents.parsed.structs(Some(lst), None).next().is_some());
+
+        for struct_name in structs {
+            conn.edges.push(Edge::new(
+                JsonCursor::new(struct_name.to_owned()).encode_cursor(),
+                MoveStruct::with_fq_name(self.clone(), struct_name.to_owned()),
             ));
         }
 

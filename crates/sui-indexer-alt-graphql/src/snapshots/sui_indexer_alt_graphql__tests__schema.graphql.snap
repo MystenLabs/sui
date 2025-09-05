@@ -1522,6 +1522,35 @@ type MoveCallCommand {
 }
 
 """
+Declaration of a type parameter on a Move struct.
+"""
+type MoveDatatypeTypeParameter {
+	"""
+	Ability constraints on this type parameter.
+	"""
+	constraints: [MoveAbility!]!
+	"""
+	Whether this type parameter is marked `phantom` or not.
+	
+	Phantom type parameters are not referenced in the struct's fields.
+	"""
+	isPhantom: Boolean!
+}
+
+type MoveField {
+	"""
+	The field's name.
+	"""
+	name: String
+	"""
+	The field's type.
+	
+	This type can reference type parameters introduced by the defining struct (see `typeParameters`).
+	"""
+	type: OpenMoveType
+}
+
+"""
 A function defined in a Move module.
 """
 type MoveFunction {
@@ -1634,6 +1663,14 @@ type MoveModule {
 	The package that this module was defined in.
 	"""
 	package: MovePackage
+	"""
+	The struct named `name` in this module.
+	"""
+	struct(name: String!): MoveStruct
+	"""
+	Paginate through this module's struct definitions.
+	"""
+	structs(first: Int, after: String, last: Int, before: String): MoveStructConnection
 }
 
 type MoveModuleConnection {
@@ -1945,6 +1982,65 @@ type MovePackageEdge {
 	The item at the end of the edge
 	"""
 	node: MovePackage!
+}
+
+"""
+Description of a struct type, defined in a Move module.
+"""
+type MoveStruct {
+	"""
+	Abilities on this struct definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The names and types of the struct's fields.
+	
+	Field types reference type parameters by their index in the defining struct's `typeParameters` list.
+	"""
+	fields: [MoveField!]
+	"""
+	The module that this struct is defined in.
+	"""
+	module: MoveModule!
+	"""
+	The struct's unqualified name.
+	"""
+	name: String!
+	"""
+	Constraints on the struct's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+}
+
+type MoveStructConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveStructEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveStruct!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveStructEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveStruct!
 }
 
 """
