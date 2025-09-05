@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_mode::ExecutionMode;
-use crate::programmable_transactions::execution::check_private_generics;
 use crate::sp;
+use crate::static_programmable_transactions::execution::context::check_private_generics;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
-use move_binary_format::{CompiledModule, file_format::Visibility};
+use move_binary_format::file_format::Visibility;
 use sui_types::{
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
@@ -163,7 +163,7 @@ fn move_call<Mode: ExecutionMode>(
     } = call;
     check_signature::<Mode>(function)?;
     check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
-    let (vis, is_entry) = check_visibility::<Mode>(env, function)?;
+    let (vis, is_entry) = check_visibility::<Mode>(function)?;
     let arg_dirties = args
         .iter()
         .map(|arg| argument(env, context, arg))
@@ -209,22 +209,9 @@ fn check_signature<Mode: ExecutionMode>(
 }
 
 fn check_visibility<Mode: ExecutionMode>(
-    env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(Visibility, /* is_entry */ bool), ExecutionError> {
-    let module = env.module_definition(&function.runtime_id, &function.linkage)?;
-    let module: &CompiledModule = module.as_ref();
-    let Some((_index, fdef)) = module.find_function_def_by_name(function.name.as_str()) else {
-        invariant_violation!(
-            "Could not resolve function '{}' in module {}. \
-            This should have been checked when linking",
-            &function.name,
-            module.self_id(),
-        );
-    };
-    let visibility = fdef.visibility;
-    let is_entry = fdef.is_entry;
-    match (visibility, is_entry) {
+    match (function.visibility, function.is_entry) {
         // can call entry
         (Visibility::Private | Visibility::Friend, true) => (),
         // can call public entry
@@ -241,5 +228,5 @@ fn check_visibility<Mode: ExecutionMode>(
             }
         }
     };
-    Ok((visibility, is_entry))
+    Ok((function.visibility, function.is_entry))
 }

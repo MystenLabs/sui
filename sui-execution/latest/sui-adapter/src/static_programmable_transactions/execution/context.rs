@@ -5,12 +5,16 @@ use crate::{
     adapter,
     data_store::linked_data_store::LinkedDataStore,
     execution_mode::ExecutionMode,
+    execution_value::ExecutionState,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
-    programmable_transactions as legacy_ptb, sp,
+    sp,
     static_programmable_transactions::{
         env::Env,
-        execution::values::{Local, Locals, Value},
+        execution::{
+            self,
+            values::{Local, Locals, Value},
+        },
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
         typing::ast::{self as T, Type},
     },
@@ -18,42 +22,65 @@ use crate::{
 use indexmap::{IndexMap, IndexSet};
 use move_binary_format::{
     CompiledModule,
-    errors::{Location, PartialVMError, VMResult},
+    compatibility::{Compatibility, InclusionCheck},
+    errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::FunctionDefinitionIndex,
-    file_format_common::VERSION_6,
+    normalized,
 };
 use move_core_types::{
-    account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
+    u256::U256,
 };
 use move_trace_format::format::MoveTraceBuilder;
-use move_vm_runtime::native_extensions::NativeContextExtensions;
-use move_vm_types::{
-    gas::GasMeter,
-    values::{VMValueCast, Value as VMValue},
+use move_vm_runtime::{
+    execution::{
+        Type as VMType, TypeSubst as _,
+        values::{VMValueCast, Value as VMValue},
+        vm::{LoadedFunctionInformation, MoveVM},
+    },
+    natives::extensions::NativeExtensions,
+    shared::gas::GasMeter as _,
 };
+use mysten_common::debug_fatal;
+use serde::{Deserialize, de::DeserializeSeed};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
+    fmt,
     rc::Rc,
     sync::Arc,
 };
 use sui_move_natives::object_runtime::{
-    self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+    self, LoadedRuntimeObject, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+    RuntimeResults, get_all_uids, max_event_error,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    TypeTag,
-    base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
-    error::{ExecutionError, ExecutionErrorKind},
-    execution::ExecutionResults,
+    SUI_FRAMEWORK_ADDRESS, TypeTag,
+    accumulator_event::AccumulatorEvent,
+    base_types::{
+        MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR, SequenceNumber,
+        SuiAddress, TxContext,
+    },
+    effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
+    error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+    event::Event,
+    execution::{ExecutionResults, ExecutionResultsV2},
     execution_config_utils::to_binary_config,
+    execution_status::{CommandArgumentError, PackageUpgradeError},
     metrics::LimitsMetrics,
-    move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
+    move_package::{
+        MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
+        normalize_deserialized_modules,
+    },
     object::{MoveObject, Object, Owner},
-    storage::PackageObject,
+    storage::{BackingPackageStore, DenyListResult, PackageObject, get_package_objects},
 };
-use sui_verifier::INIT_FN_NAME;
+use sui_verifier::{
+    INIT_FN_NAME,
+    private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
+};
 use tracing::instrument;
 
 macro_rules! unwrap {
@@ -68,13 +95,29 @@ macro_rules! unwrap {
     };
 }
 
-macro_rules! object_runtime_mut {
-    ($context:ident) => {{
+#[macro_export]
+macro_rules! object_runtime {
+    ($context:ident) => {
         $context
             .native_extensions
+            .read()
+            .get::<sui_move_natives::object_runtime::ObjectRuntime>()
+            .map_err(|e| {
+                $context
+                    .env
+                    .convert_vm_error(e.finish(move_binary_format::errors::Location::Undefined))
+            })
+    };
+}
+
+macro_rules! object_runtime_mut {
+    ($context:ident) => {
+        $context
+            .native_extensions
+            .write()
             .get_mut::<ObjectRuntime>()
             .map_err(|e| $context.env.convert_vm_error(e.finish(Location::Undefined)))
-    }};
+    };
 }
 
 macro_rules! charge_gas_ {
@@ -147,7 +190,7 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     pub env: &'env Env<'pc, 'vm, 'state, 'linkage>,
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<LimitsMetrics>,
-    pub native_extensions: NativeContextExtensions<'env>,
+    pub native_extensions: NativeExtensions<'env>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: Rc<RefCell<TxContext>>,
@@ -239,7 +282,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     ty,
                 )?;
                 let mut gas_locals = Locals::new([Some(gas_value)])?;
-                let gas_local = gas_locals.local(0)?;
+                let mut gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
                 let max_gas_in_balance = gas_charger.gas_budget();
@@ -341,7 +384,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
         let Self {
             env,
-            mut native_extensions,
+            native_extensions,
             tx_context,
             gas_charger,
             user_events,
@@ -352,6 +395,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let tx_digest = ref_context.borrow().digest();
 
         let object_runtime: ObjectRuntime = native_extensions
+            .write()
             .remove()
             .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))?;
 
@@ -445,7 +489,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
         }
 
-        legacy_ptb::context::finish(
+        execution::context::finish(
             env.protocol_config,
             env.state_view,
             gas_charger,
@@ -459,12 +503,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             user_events,
             accumulator_events,
         )
-    }
-
-    pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
-        self.native_extensions
-            .get::<ObjectRuntime>()
-            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
 
     pub fn take_user_events(
@@ -663,25 +701,52 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .iter()
             .enumerate()
             .map(|(idx, ty)| self.env.load_vm_type_argument_from_adapter_type(idx, ty))
-            .collect::<Result<_, _>>()?;
-        let gas_status = self.gas_charger.move_gas_status_mut();
-        let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
-        let values = self
+            .collect::<Result<Vec<_>, _>>()?;
+        let data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
+        let link_context = linkage.resolved_linkage.linkage_context();
+        let vm = self
             .env
             .vm
-            .get_runtime()
-            .execute_function_with_values_bypass_visibility(
-                runtime_id,
-                function_name,
-                ty_args,
-                args.into_iter().map(|v| v.0.into()).collect(),
-                &mut data_store,
-                &mut SuiGasMeter(gas_status),
-                &mut self.native_extensions,
-                tracer,
-            )
+            .make_vm(data_store, link_context)
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
-        Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
+        self.execute_function_bypass_visibility_with_vm(
+            &vm,
+            runtime_id,
+            function_name,
+            &ty_args,
+            args,
+            linkage,
+            tracer,
+        )
+    }
+
+    // TODO(vm-rewrite): Need to update the function call to pass deserialized args to the VM.
+    fn execute_function_bypass_visibility_with_vm(
+        &mut self,
+        _vm: &MoveVM<'env>,
+        _runtime_id: &ModuleId,
+        _function_name: &IdentStr,
+        _ty_args: &[VMType],
+        _args: Vec<CtxValue>,
+        _linkage: &RootedLinkage,
+        _tracer: Option<&mut MoveTraceBuilder>,
+    ) -> Result<Vec<CtxValue>, ExecutionError> {
+        // let gas_status = self.gas_charger.move_gas_status_mut();
+        // let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
+        // let values = vm
+        //     .execute_function_with_values_bypass_visibility(
+        //         runtime_id,
+        //         function_name,
+        //         ty_args,
+        //         args.into_iter().map(|v| v.0.into()).collect(),
+        //         &mut data_store,
+        //         &mut SuiGasMeter(gas_status),
+        //         &mut self.native_extensions,
+        //         tracer,
+        //     )
+        //     .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
+        // Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
+        todo!()
     }
 
     //
@@ -718,46 +783,34 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<PackageObject, ExecutionError> {
-        legacy_ptb::execution::fetch_package(&self.env.state_view, dependency_id)
+        fetch_package(&self.env.state_view, dependency_id)
     }
 
     fn fetch_packages(
         &mut self,
         dependency_ids: &[ObjectID],
     ) -> Result<Vec<PackageObject>, ExecutionError> {
-        legacy_ptb::execution::fetch_packages(&self.env.state_view, dependency_ids)
+        fetch_packages(&self.env.state_view, dependency_ids)
     }
 
     fn publish_and_verify_modules(
         &mut self,
         package_id: ObjectID,
+        pkg: &MovePackage,
         modules: &[CompiledModule],
         linkage: &RootedLinkage,
-    ) -> Result<(), ExecutionError> {
-        // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
-        let binary_version = self.env.protocol_config.move_binary_format_version();
-        let new_module_bytes: Vec<_> = modules
-            .iter()
-            .map(|m| {
-                let mut bytes = Vec::new();
-                let version = if binary_version > VERSION_6 {
-                    m.version
-                } else {
-                    VERSION_6
-                };
-                m.serialize_with_version(version, &mut bytes).unwrap();
-                bytes
-            })
-            .collect();
-        let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
-        self.env
+    ) -> Result<MoveVM<'env>, ExecutionError> {
+        let serialized_pkg = pkg.into_serialized_move_package();
+        let data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
+        let vm = self
+            .env
             .vm
-            .get_runtime()
-            .publish_module_bundle(
-                new_module_bytes,
-                AccountAddress::from(package_id),
-                &mut data_store,
+            .validate_package(
+                data_store,
+                *package_id,
+                serialized_pkg,
                 &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
+                self.native_extensions.clone(),
             )
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
 
@@ -775,11 +828,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             )?;
         }
 
-        Ok(())
+        Ok(vm.1)
     }
 
     fn init_modules(
         &mut self,
+        vm: MoveVM<'env>,
         package_id: ObjectID,
         modules: &[CompiledModule],
         linkage: &RootedLinkage,
@@ -807,7 +861,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             } else {
                 vec![CtxValue(tx_context)]
             };
-            let return_values = self.execute_function_bypass_visibility(
+            let return_values = self.execute_function_bypass_visibility_with_vm(
+                &vm,
                 &module.self_id(),
                 INIT_FN_NAME,
                 &[],
@@ -866,10 +921,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         // the last package we pushed is the one we are verifying and running the init from
         let linkage = RootedLinkage::new_for_publication(package_id, runtime_id, linkage);
 
-        self.env.linkable_store.push_package(package_id, package)?;
+        self.env
+            .linkable_store
+            .push_package(package_id, package.clone())?;
         let res = self
-            .publish_and_verify_modules(runtime_id, &modules, &linkage)
-            .and_then(|_| self.init_modules(package_id, &modules, &linkage, trace_builder_opt));
+            .publish_and_verify_modules(runtime_id, &package, &modules, &linkage)
+            .and_then(|vm| {
+                self.init_modules(vm, package_id, &modules, &linkage, trace_builder_opt)
+            });
         match res {
             Ok(()) => Ok(runtime_id),
             Err(e) => {
@@ -909,9 +968,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )?;
 
         let linkage = RootedLinkage::new_for_publication(storage_id, runtime_id, linkage);
-        self.publish_and_verify_modules(runtime_id, &modules, &linkage)?;
+        self.publish_and_verify_modules(runtime_id, &package, &modules, &linkage)?;
 
-        legacy_ptb::execution::check_compatibility(
+        check_compatibility(
             self.env.protocol_config,
             current_package.move_package(),
             &modules,
@@ -1002,8 +1061,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         &mut self,
         consumed_shared_objects: Vec<ObjectID>,
     ) -> Result<(), ExecutionError> {
-        let object_runtime = self.object_runtime()?;
-        legacy_ptb::context::check_shared_object_usage(object_runtime, &consumed_shared_objects)
+        check_shared_object_usage(object_runtime!(self)?, &consumed_shared_objects)
     }
 
     //
@@ -1312,4 +1370,612 @@ unsafe fn create_written_object<Mode: ExecutionMode>(
             Mode::packages_are_predefined(),
         )
     }
+}
+
+/// substitutes the type arguments into the parameter and return types
+pub fn subst_signature(
+    signature: LoadedFunctionInformation,
+    type_arguments: &[VMType],
+) -> VMResult<LoadedFunctionInformation> {
+    let LoadedFunctionInformation {
+        parameters,
+        return_,
+        is_entry,
+        is_native,
+        visibility,
+        index,
+        instruction_count,
+    } = signature;
+    let parameters = parameters
+        .into_iter()
+        .map(|ty| ty.subst(type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    let return_ = return_
+        .into_iter()
+        .map(|ty| ty.subst(type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    Ok(LoadedFunctionInformation {
+        parameters,
+        return_,
+        is_entry,
+        is_native,
+        visibility,
+        index,
+        instruction_count,
+    })
+}
+
+pub enum EitherError {
+    CommandArgument(CommandArgumentError),
+    Execution(ExecutionError),
+}
+
+impl From<ExecutionError> for EitherError {
+    fn from(e: ExecutionError) -> Self {
+        EitherError::Execution(e)
+    }
+}
+
+impl From<CommandArgumentError> for EitherError {
+    fn from(e: CommandArgumentError) -> Self {
+        EitherError::CommandArgument(e)
+    }
+}
+
+impl EitherError {
+    pub fn into_execution_error(self, command_index: usize) -> ExecutionError {
+        match self {
+            EitherError::CommandArgument(e) => command_argument_error(e, command_index),
+            EitherError::Execution(e) => e,
+        }
+    }
+}
+
+/***************************************************************************************************
+ * Special serialization formats
+ **************************************************************************************************/
+
+/// Special enum for values that need additional validation, in other words
+/// There is validation to do on top of the BCS layout. Currently only needed for
+/// strings
+#[derive(Debug)]
+pub enum PrimitiveArgumentLayout {
+    /// An option
+    Option(Box<PrimitiveArgumentLayout>),
+    /// A vector
+    Vector(Box<PrimitiveArgumentLayout>),
+    /// An ASCII encoded string
+    Ascii,
+    /// A UTF8 encoded string
+    UTF8,
+    // needed for Option validation
+    Bool,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    U256,
+    Address,
+}
+
+impl PrimitiveArgumentLayout {
+    /// returns true iff all BCS compatible bytes are actually values for this type.
+    /// For example, this function returns false for Option and Strings since they need additional
+    /// validation.
+    pub fn bcs_only(&self) -> bool {
+        match self {
+            // have additional restrictions past BCS
+            PrimitiveArgumentLayout::Option(_)
+            | PrimitiveArgumentLayout::Ascii
+            | PrimitiveArgumentLayout::UTF8 => false,
+            // Move primitives are BCS compatible and do not need additional validation
+            PrimitiveArgumentLayout::Bool
+            | PrimitiveArgumentLayout::U8
+            | PrimitiveArgumentLayout::U16
+            | PrimitiveArgumentLayout::U32
+            | PrimitiveArgumentLayout::U64
+            | PrimitiveArgumentLayout::U128
+            | PrimitiveArgumentLayout::U256
+            | PrimitiveArgumentLayout::Address => true,
+            // vector only needs validation if it's inner type does
+            PrimitiveArgumentLayout::Vector(inner) => inner.bcs_only(),
+        }
+    }
+}
+
+/// Checks the bytes against the `SpecialArgumentLayout` using `bcs`. It does not actually generate
+/// the deserialized value, only walks the bytes. While not necessary if the layout does not contain
+/// special arguments (e.g. Option or String) we check the BCS bytes for predictability
+pub fn bcs_argument_validate(
+    bytes: &[u8],
+    idx: u16,
+    layout: PrimitiveArgumentLayout,
+) -> Result<(), ExecutionError> {
+    bcs::from_bytes_seed(&layout, bytes).map_err(|_| {
+        ExecutionError::new_with_source(
+            ExecutionErrorKind::command_argument_error(CommandArgumentError::InvalidBCSBytes, idx),
+            format!("Function expects {layout} but provided argument's value does not match",),
+        )
+    })
+}
+
+impl<'d> serde::de::DeserializeSeed<'d> for &PrimitiveArgumentLayout {
+    type Value = ();
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        use serde::de::Error;
+        match self {
+            PrimitiveArgumentLayout::Ascii => {
+                let s: &str = serde::Deserialize::deserialize(deserializer)?;
+                if !s.is_ascii() {
+                    Err(D::Error::custom("not an ascii string"))
+                } else {
+                    Ok(())
+                }
+            }
+            PrimitiveArgumentLayout::UTF8 => {
+                deserializer.deserialize_string(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::Option(layout) => {
+                deserializer.deserialize_option(OptionElementVisitor(layout))
+            }
+            PrimitiveArgumentLayout::Vector(layout) => {
+                deserializer.deserialize_seq(VectorElementVisitor(layout))
+            }
+            // primitive move value cases, which are hit to make sure the correct number of bytes
+            // are removed for elements of an option/vector
+            PrimitiveArgumentLayout::Bool => {
+                deserializer.deserialize_bool(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::U8 => {
+                deserializer.deserialize_u8(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::U16 => {
+                deserializer.deserialize_u16(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::U32 => {
+                deserializer.deserialize_u32(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::U64 => {
+                deserializer.deserialize_u64(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::U128 => {
+                deserializer.deserialize_u128(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::U256 => {
+                U256::deserialize(deserializer)?;
+                Ok(())
+            }
+            PrimitiveArgumentLayout::Address => {
+                SuiAddress::deserialize(deserializer)?;
+                Ok(())
+            }
+        }
+    }
+}
+
+struct VectorElementVisitor<'a>(&'a PrimitiveArgumentLayout);
+
+impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Vector")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'d>,
+    {
+        while seq.next_element_seed(self.0)?.is_some() {}
+        Ok(())
+    }
+}
+
+struct OptionElementVisitor<'a>(&'a PrimitiveArgumentLayout);
+
+impl<'d> serde::de::Visitor<'d> for OptionElementVisitor<'_> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Option")
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(())
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'d>,
+    {
+        self.0.deserialize(deserializer)
+    }
+}
+
+impl fmt::Display for PrimitiveArgumentLayout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PrimitiveArgumentLayout::Vector(inner) => {
+                write!(f, "vector<{inner}>")
+            }
+            PrimitiveArgumentLayout::Option(inner) => {
+                write!(f, "std::option::Option<{inner}>")
+            }
+            PrimitiveArgumentLayout::Ascii => {
+                write!(f, "std::{}::{}", RESOLVED_ASCII_STR.1, RESOLVED_ASCII_STR.2)
+            }
+            PrimitiveArgumentLayout::UTF8 => {
+                write!(f, "std::{}::{}", RESOLVED_UTF8_STR.1, RESOLVED_UTF8_STR.2)
+            }
+            PrimitiveArgumentLayout::Bool => write!(f, "bool"),
+            PrimitiveArgumentLayout::U8 => write!(f, "u8"),
+            PrimitiveArgumentLayout::U16 => write!(f, "u16"),
+            PrimitiveArgumentLayout::U32 => write!(f, "u32"),
+            PrimitiveArgumentLayout::U64 => write!(f, "u64"),
+            PrimitiveArgumentLayout::U128 => write!(f, "u128"),
+            PrimitiveArgumentLayout::U256 => write!(f, "u256"),
+            PrimitiveArgumentLayout::Address => write!(f, "address"),
+        }
+    }
+}
+
+pub fn check_private_generics(
+    module_id: &ModuleId,
+    function: &IdentStr,
+) -> Result<(), ExecutionError> {
+    let module_ident = (module_id.address(), module_id.name());
+    if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            format!("Cannot directly call functions in sui::{}", EVENT_MODULE),
+        ));
+    }
+
+    if module_ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE)
+        && PRIVATE_TRANSFER_FUNCTIONS.contains(&function)
+    {
+        let msg = format!(
+            "Cannot directly call sui::{m}::{f}. \
+                Use the public variant instead, sui::{m}::public_{f}",
+            m = TRANSFER_MODULE,
+            f = function
+        );
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            msg,
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn finish(
+    protocol_config: &ProtocolConfig,
+    state_view: &dyn ExecutionState,
+    gas_charger: &mut GasCharger,
+    tx_context: &TxContext,
+    by_value_shared_objects: &BTreeSet<ObjectID>,
+    consensus_owner_objects: &BTreeMap<ObjectID, Owner>,
+    loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
+    written_objects: BTreeMap<ObjectID, Object>,
+    created_object_ids: IndexSet<ObjectID>,
+    deleted_object_ids: IndexSet<ObjectID>,
+    user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+    accumulator_events: Vec<MoveAccumulatorEvent>,
+) -> Result<ExecutionResults, ExecutionError> {
+    // Before finishing, ensure that any shared object taken by value by the transaction is either:
+    // 1. Mutated (and still has a shared ownership); or
+    // 2. Deleted.
+    // Otherwise, the shared object operation is not allowed and we fail the transaction.
+    for id in by_value_shared_objects {
+        // If it's been written it must have been reshared so must still have an ownership
+        // of `Shared`.
+        if let Some(obj) = written_objects.get(id) {
+            if !obj.is_shared() {
+                if protocol_config.per_command_shared_object_transfer_rules() {
+                    invariant_violation!(
+                        "There should be no shared objects unaccounted for when \
+                            per_command_shared_object_transfer_rules is enabled"
+                    )
+                } else {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                     cannot be frozen, transferred, or wrapped",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            }
+        } else {
+            // If it's not in the written objects, the object must have been deleted. Otherwise
+            // it's an error.
+            if !deleted_object_ids.contains(id) {
+                if protocol_config.per_command_shared_object_transfer_rules() {
+                    invariant_violation!(
+                        "There should be no shared objects unaccounted for when \
+                            per_command_shared_object_transfer_rules is enabled"
+                    )
+                } else {
+                    return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!("Shared object operation on {} not allowed: \
+                                         shared objects used by value must be re-shared if not deleted", id).into(),
+                            ),
+                        ));
+                }
+            }
+        }
+    }
+
+    // Before finishing, enforce auth restrictions on consensus objects.
+    for (id, original_owner) in consensus_owner_objects {
+        let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
+            panic!(
+                "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
+            );
+        };
+        // Already verified in pre-execution checks that tx sender is the object owner.
+        // Owner is allowed to do anything with the object.
+        if tx_context.sender() != *owner {
+            debug_fatal!(
+                "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+            );
+            if protocol_config.per_command_shared_object_transfer_rules() {
+                invariant_violation!(
+                    "Shared object operation on {} not allowed: \
+                        transaction with singly owned input object must be sent by the owner",
+                    id,
+                );
+            } else {
+                return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed: \
+                                             transaction with singly owned input object must be sent by the owner", id).into(),
+                                ),
+                            ));
+            }
+        }
+        // If an Owner type is implemented with support for more fine-grained authorization,
+        // checks should be performed here. For example, transfers and wraps can be detected
+        // by comparing `original_owner` with:
+        // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+        //
+        // Deletions can be detected with:
+        // let deleted = deleted_object_ids.contains(&id);
+    }
+
+    if protocol_config.enable_coin_deny_list_v2() {
+        let DenyListResult {
+            result,
+            num_non_gas_coin_owners,
+        } = state_view.check_coin_deny_list(&written_objects);
+        gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+        result?;
+    }
+
+    let user_events = user_events
+        .into_iter()
+        .map(|(module_id, tag, contents)| {
+            Event::new(
+                module_id.address(),
+                module_id.name(),
+                tx_context.sender(),
+                tag,
+                contents,
+            )
+        })
+        .collect();
+
+    let accumulator_events = accumulator_events
+        .into_iter()
+        .map(|accum_event| match accum_event.value {
+            MoveAccumulatorValue::U64(amount) => {
+                let value = AccumulatorValue::Integer(amount);
+                let address =
+                    AccumulatorAddress::new(accum_event.target_addr.into(), accum_event.target_ty);
+
+                let write = AccumulatorWriteV1 {
+                    address,
+                    operation: accum_event.action.into_sui_accumulator_action(),
+                    value,
+                };
+
+                AccumulatorEvent::new(accum_event.accumulator_id, write)
+            }
+        })
+        .collect();
+
+    Ok(ExecutionResults::V2(ExecutionResultsV2 {
+        written_objects,
+        modified_objects: loaded_runtime_objects
+            .into_iter()
+            .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
+            .collect(),
+        created_object_ids: created_object_ids.into_iter().collect(),
+        deleted_object_ids: deleted_object_ids.into_iter().collect(),
+        user_events,
+        accumulator_events,
+    }))
+}
+
+pub fn fetch_package(
+    state_view: &impl BackingPackageStore,
+    package_id: &ObjectID,
+) -> Result<PackageObject, ExecutionError> {
+    let mut fetched_packages = fetch_packages(state_view, vec![package_id])?;
+    assert_invariant!(
+        fetched_packages.len() == 1,
+        "Number of fetched packages must match the number of package object IDs if successful."
+    );
+    match fetched_packages.pop() {
+        Some(pkg) => Ok(pkg),
+        None => invariant_violation!(
+            "We should always fetch a package for each object or return a dependency error."
+        ),
+    }
+}
+
+pub fn fetch_packages<'ctx, 'state>(
+    state_view: &'state impl BackingPackageStore,
+    package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
+) -> Result<Vec<PackageObject>, ExecutionError> {
+    let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
+    match get_package_objects(state_view, package_ids) {
+        Err(e) => Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::PublishUpgradeMissingDependency,
+            e,
+        )),
+        Ok(Err(missing_deps)) => {
+            let msg = format!(
+                "Missing dependencies: {}",
+                missing_deps
+                    .into_iter()
+                    .map(|dep| format!("{}", dep))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PublishUpgradeMissingDependency,
+                msg,
+            ))
+        }
+        Ok(Ok(pkgs)) => Ok(pkgs),
+    }
+}
+
+pub fn check_compatibility(
+    protocol_config: &ProtocolConfig,
+    existing_package: &MovePackage,
+    upgrading_modules: &[CompiledModule],
+    policy: u8,
+) -> Result<(), ExecutionError> {
+    // Make sure this is a known upgrade policy.
+    let Ok(policy) = UpgradePolicy::try_from(policy) else {
+        return Err(ExecutionError::from_kind(
+            ExecutionErrorKind::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy },
+            },
+        ));
+    };
+
+    let pool = &mut normalized::RcPool::new();
+    let binary_config = to_binary_config(protocol_config);
+    let Ok(current_normalized) =
+        existing_package.normalize(pool, &binary_config, /* include code */ true)
+    else {
+        invariant_violation!("Tried to normalize modules in existing package but failed")
+    };
+
+    let existing_modules_len = current_normalized.len();
+    let upgrading_modules_len = upgrading_modules.len();
+    let disallow_new_modules = protocol_config.disallow_new_modules_in_deps_only_packages()
+        && policy as u8 == UpgradePolicy::DEP_ONLY;
+
+    if disallow_new_modules && existing_modules_len != upgrading_modules_len {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+            },
+            format!(
+                "Existing package has {existing_modules_len} modules, but new package has \
+                     {upgrading_modules_len}. Adding or removing a module to a deps only package is not allowed."
+            ),
+        ));
+    }
+
+    let mut new_normalized = normalize_deserialized_modules(
+        pool,
+        upgrading_modules.iter(),
+        /* include code */ true,
+    );
+    for (name, cur_module) in current_normalized {
+        let Some(new_module) = new_normalized.remove(&name) else {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PackageUpgradeError {
+                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+                },
+                format!("Existing module {name} not found in next version of package"),
+            ));
+        };
+
+        check_module_compatibility(&policy, &cur_module, &new_module)?;
+    }
+
+    // If we disallow new modules double check that there are no modules left in `new_normalized`.
+    debug_assert!(!disallow_new_modules || new_normalized.is_empty());
+
+    Ok(())
+}
+
+fn check_module_compatibility(
+    policy: &UpgradePolicy,
+    cur_module: &move_binary_format::compatibility::Module,
+    new_module: &move_binary_format::compatibility::Module,
+) -> Result<(), ExecutionError> {
+    match policy {
+        UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
+        UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
+        UpgradePolicy::Compatible => {
+            let compatibility = Compatibility::upgrade_check();
+
+            compatibility.check(cur_module, new_module)
+        }
+    }
+    .map_err(|e| {
+        ExecutionError::new_with_source(
+            ExecutionErrorKind::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+            },
+            e,
+        )
+    })
+}
+
+/// Check for valid shared object usage, either deleted or re-shared, at the end of a command
+pub fn check_shared_object_usage<'a>(
+    object_runtime: &ObjectRuntime,
+    consumed_shared_objects: impl IntoIterator<Item = &'a ObjectID>,
+) -> Result<(), ExecutionError> {
+    for id in consumed_shared_objects {
+        // valid if done deleted or re-shared
+        let is_valid_usage = object_runtime.is_deleted(id)
+            || matches!(
+                object_runtime.is_transferred(id),
+                Some(Owner::Shared { .. })
+            );
+        if !is_valid_usage {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                format!(
+                    "Shared object operation on {} not allowed: \
+                        cannot be frozen, transferred, or wrapped",
+                    id
+                ),
+            ));
+        }
+    }
+    Ok(())
 }

@@ -4,11 +4,12 @@
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::account_address::AccountAddress;
-use move_vm_types::{
-    values::{
-        self, Locals as VMLocals, Struct, VMValueCast, Value as VMValue, VectorSpecialization,
-    },
-    views::ValueView,
+// TODO(vm-rewrite): Use the correct BaseHeap instead of MachineHeap
+use move_vm_runtime::execution::interpreter::locals as fix_me_locals;
+use move_vm_runtime::shared::views::ValueVisitor;
+use move_vm_runtime::{
+    execution::values::{self, Struct, VMValueCast, Value as VMValue, VectorSpecialization},
+    shared::views::ValueView,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -33,7 +34,7 @@ pub enum ByteValue {
 pub struct Local<'a>(&'a mut Locals, u16);
 
 /// A set of memory locations that can be borrowed or moved from. Used for inputs and results
-pub struct Locals(VMLocals);
+pub struct Locals(fix_me_locals::StackFrame);
 
 #[derive(Debug)]
 pub struct Value(VMValue);
@@ -47,22 +48,32 @@ impl Locals {
         let values = values.into_iter();
         let n = values.len();
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
-        let mut locals = VMLocals::new(n);
-        for (i, value_opt) in values.enumerate() {
-            let Some(value) = value_opt else {
-                // If the value is None, we leave the local invalid
-                continue;
-            };
-            locals
-                .store_loc(i, value.0, /* violation check */ true)
-                .map_err(iv("store loc"))?;
-        }
-        Ok(Self(locals))
+        let mut locals = fix_me_locals::MachineHeap::new();
+        // If the value is None, we leave the local invalid
+        let values = values
+            .map(|v| {
+                if let Some(v) = v {
+                    v.0
+                } else {
+                    VMValue::invalid()
+                }
+            })
+            .collect::<Vec<_>>();
+        let frame = locals
+            .allocate_stack_frame(values, n)
+            .map_err(iv("allocate stack frame"))?;
+        Ok(Self(frame))
     }
 
     pub fn new_invalid(n: usize) -> Result<Self, ExecutionError> {
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
-        Ok(Self(VMLocals::new(n)))
+        let mut locals = fix_me_locals::MachineHeap::new();
+        let values = (0..n).map(|_| VMValue::invalid()).collect::<Vec<_>>();
+        Ok(Self(
+            locals
+                .allocate_stack_frame(values, n)
+                .map_err(iv("allocate stack frame"))?,
+        ))
     }
 
     pub fn local(&mut self, index: u16) -> Result<Local, ExecutionError> {
@@ -82,7 +93,7 @@ impl Local<'_> {
     pub fn store(&mut self, value: Value) -> Result<(), ExecutionError> {
         self.0
             .0
-            .store_loc(self.1 as usize, value.0, /* violation check */ true)
+            .store_loc(self.1 as usize, value.0)
             .map_err(iv("store loc"))
     }
 
@@ -90,10 +101,7 @@ impl Local<'_> {
     pub fn move_(&mut self) -> Result<Value, ExecutionError> {
         assert_invariant!(!self.is_invalid()?, "cannot move invalid local");
         Ok(Value(
-            self.0
-                .0
-                .move_loc(self.1 as usize, /* violation check */ true)
-                .map_err(iv("move loc"))?,
+            self.0.0.move_loc(self.1 as usize).map_err(iv("move loc"))?,
         ))
     }
 
@@ -106,7 +114,7 @@ impl Local<'_> {
     }
 
     /// Borrow the local, creating a reference to the value
-    pub fn borrow(&self) -> Result<Value, ExecutionError> {
+    pub fn borrow(&mut self) -> Result<Value, ExecutionError> {
         assert_invariant!(!self.is_invalid()?, "cannot borrow invalid local");
         Ok(Value(
             self.0
@@ -127,7 +135,7 @@ impl Local<'_> {
 
 impl Value {
     pub fn copy(&self) -> Result<Self, ExecutionError> {
-        Ok(Value(self.0.copy_value().map_err(iv("copy"))?))
+        Ok(Value(self.0.copy_value()))
     }
 
     /// Read the value, giving an invariant violation if the value is not a reference
@@ -178,7 +186,7 @@ impl VMValueCast<Value> for VMValue {
 }
 
 impl ValueView for Value {
-    fn visit(&self, visitor: &mut impl move_vm_types::views::ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) {
         self.0.visit(visitor)
     }
 }
@@ -307,11 +315,7 @@ fn coin_ref_modify_balance(
     modify: impl FnOnce(u64) -> Result<u64, ExecutionError>,
 ) -> Result<(), ExecutionError> {
     let balance_value_ref = borrow_coin_ref_balance_value(coin_ref)?;
-    let reference: values::Reference = balance_value_ref
-        .copy_value()
-        .map_err(iv("copy"))?
-        .cast()
-        .map_err(iv("cast"))?;
+    let reference: values::Reference = balance_value_ref.copy_value().cast().map_err(iv("cast"))?;
     let balance: u64 = reference
         .read_ref()
         .map_err(iv("read ref"))?
