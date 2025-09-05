@@ -74,7 +74,7 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
     --base main \
     --head "$BRANCH" \
     --title "$BODY" \
-    --reviewer "MystenLabs/mysten-pe" \
+    --reviewer "ebmifa,pei-mysten,tharbert" \
     --body "$BODY" 2>&1); then
     
     # Extract PR URL from output
@@ -128,7 +128,7 @@ elif [[ "$PR_TYPE" == *version-bump* ]]; then
     --base main \
     --head "$BRANCH" \
     --title "$BODY" \
-    --reviewer "MystenLabs/mysten-pe" \
+    --reviewer "ebmifa,pei-mysten,tharbert" \
     --body "$BODY" 2>&1); then
     
     # Extract PR URL from output
