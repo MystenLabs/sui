@@ -3,8 +3,10 @@
 
 use crate::{
     execution_mode::ExecutionMode,
-    programmable_transactions::execution::{PrimitiveArgumentLayout, bcs_argument_validate},
     sp,
+    static_programmable_transactions::execution::context::{
+        PrimitiveArgumentLayout, bcs_argument_validate,
+    },
     static_programmable_transactions::{
         env::Env,
         loading::ast::Type,

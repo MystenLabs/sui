@@ -5,7 +5,9 @@ use crate::static_programmable_transactions::linkage::resolved_linkage::{
     ResolvedLinkage, RootedLinkage,
 };
 use indexmap::IndexSet;
-use move_binary_format::file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex};
+use move_binary_format::file_format::{
+    AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility,
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
@@ -127,6 +129,9 @@ pub struct LoadedFunction {
     pub linkage: RootedLinkage,
     pub instruction_length: CodeOffset,
     pub definition_index: FunctionDefinitionIndex,
+    pub visibility: Visibility,
+    pub is_entry: bool,
+    pub is_native: bool,
 }
 
 #[derive(Debug)]
