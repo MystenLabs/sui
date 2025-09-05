@@ -19,7 +19,7 @@ const TOTAL_SUPPLY: u64 = 1000000000_000000;
 // tag of kind: `Coin<package_object::currency::MyCoin>`
 public struct MyCoin has key { id: UID }
 
-#[allow(lint(self_transfer))] 
+#[allow(lint(self_transfer))]
 /// Creates a new currency with a non-OTW proof of uniqueness.
 public fun new_currency(registry: &mut CoinRegistry, ctx: &mut TxContext): Coin<MyCoin> {
     let (mut builder, mut treasury_cap) = coin_registry::new_currency(
@@ -33,7 +33,7 @@ public fun new_currency(registry: &mut CoinRegistry, ctx: &mut TxContext): Coin<
     );
 
     let total_supply = treasury_cap.mint(TOTAL_SUPPLY, ctx);
-    builder.make_supply_deflationary(treasury_cap);
+    builder.make_supply_burn_only(treasury_cap);
 
     let metadata_cap = builder.finalize(ctx);
     transfer::public_transfer(metadata_cap, ctx.sender());

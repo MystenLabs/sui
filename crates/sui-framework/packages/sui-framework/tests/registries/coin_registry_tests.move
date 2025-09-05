@@ -39,7 +39,7 @@ fun default_scenario() {
 
     // Check supply state.
     assert!(!currency.is_supply_fixed());
-    assert!(!currency.is_supply_deflationary());
+    assert!(!currency.is_supply_burn_only());
     assert!(!currency.is_regulated());
 
     destroy(metadata_cap);
@@ -146,13 +146,13 @@ fun fixed_supply() {
 
     assert!(currency.total_supply().is_none());
     assert!(!currency.is_supply_fixed());
-    assert!(!currency.is_supply_deflationary());
+    assert!(!currency.is_supply_burn_only());
 
     let amount = 10_000;
     t_cap.mint(amount, ctx).burn_for_testing();
     currency.make_supply_fixed(t_cap);
 
-    assert!(!currency.is_supply_deflationary());
+    assert!(!currency.is_supply_burn_only());
     assert!(currency.total_supply().is_some_and!(|total| total == amount));
     assert!(currency.is_supply_fixed());
 
@@ -160,7 +160,7 @@ fun fixed_supply() {
     destroy(currency);
 }
 
-#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotBurnOnly)]
 fun burn_fixed_supply() {
     let ctx = &mut tx_context::dummy();
     let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
@@ -173,7 +173,7 @@ fun burn_fixed_supply() {
     abort
 }
 
-#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotBurnOnly)]
 fun burn_unknown_supply() {
     let ctx = &mut tx_context::dummy();
     let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
@@ -184,7 +184,7 @@ fun burn_unknown_supply() {
     abort
 }
 
-#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotBurnOnly)]
 fun burn_balance_fixed_supply() {
     let ctx = &mut tx_context::dummy();
     let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
@@ -197,7 +197,7 @@ fun burn_balance_fixed_supply() {
     abort
 }
 
-#[test, expected_failure(abort_code = coin_registry::ESupplyNotDeflationary)]
+#[test, expected_failure(abort_code = coin_registry::ESupplyNotBurnOnly)]
 fun burn_balance_unknown_supply() {
     let ctx = &mut tx_context::dummy();
     let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
@@ -211,26 +211,26 @@ fun burn_balance_unknown_supply() {
 #[test]
 // Scenario:
 // 1. create a new Currency and mint some coins
-// 2. make the supply deflationary
+// 2. make the supply burn-only
 // 3. burn all coins
-fun deflationary_supply() {
+fun burn_only_supply() {
     let ctx = &mut tx_context::dummy();
     let (builder, mut t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
     let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
 
     assert!(currency.total_supply().is_none());
     assert!(!currency.is_supply_fixed());
-    assert!(!currency.is_supply_deflationary());
+    assert!(!currency.is_supply_burn_only());
 
     let amount = 10_000;
     let mut coins = t_cap.mint(amount, ctx);
-    currency.make_supply_deflationary(t_cap);
+    currency.make_supply_burn_only(t_cap);
 
     assert!(!currency.is_supply_fixed());
     assert!(currency.total_supply().is_some_and!(|total| total == amount));
-    assert!(currency.is_supply_deflationary());
+    assert!(currency.is_supply_burn_only());
 
-    // Perform a burn operation on deflationary supply.
+    // Perform a burn operation on burn-only supply.
     // And check the total supply value.
     currency.burn(coins.split(5_000, ctx));
     currency.burn_balance(coins.into_balance()); // Another way to burn.
@@ -246,13 +246,13 @@ fun deflationary_supply() {
 fun dynamic_currency_default() {
     let ctx = &mut tx_context::dummy();
     let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let (builder, t_cap) = new_builder().build_dynamic<TestDynamic>(&mut registry, ctx);
+    let (builder, t_cap) = new_builder().build_dynamic(&mut registry, ctx);
     let (currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
 
     assert!(registry.exists<TestDynamic>());
     assert!(currency.is_metadata_cap_claimed());
     assert!(!currency.is_supply_fixed());
-    assert!(!currency.is_supply_deflationary());
+    assert!(!currency.is_supply_burn_only());
     assert!(!currency.is_regulated());
 
     // Check metadata parameters (ignored in other tests!)
@@ -272,8 +272,8 @@ fun dynamic_currency_default() {
 fun dynamic_currency_duplicate() {
     let ctx = &mut tx_context::dummy();
     let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let (_builder, _t_cap) = new_builder().build_dynamic<TestDynamic>(&mut registry, ctx);
-    let (_builder2, _t_cap2) = new_builder().build_dynamic<TestDynamic>(&mut registry, ctx);
+    let (_builder, _t_cap) = new_builder().build_dynamic(&mut registry, ctx);
+    let (_builder2, _t_cap2) = new_builder().build_dynamic(&mut registry, ctx);
 
     abort
 }
@@ -496,12 +496,12 @@ public fun symbol(mut b: MetadataBuilder, symbol: String): MetadataBuilder {
     b
 }
 
-public fun build_dynamic<T: key>(
+public fun build_dynamic(
     b: MetadataBuilder,
     registry: &mut CoinRegistry,
     ctx: &mut TxContext,
-): (CurrencyInitializer<T>, TreasuryCap<T>) {
-    registry.new_currency<T>(
+): (CurrencyInitializer<TestDynamic>, TreasuryCap<TestDynamic>) {
+    registry.new_currency<TestDynamic>(
         b.decimals,
         b.symbol,
         b.name,

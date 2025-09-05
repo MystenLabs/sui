@@ -25,6 +25,9 @@ public use fun sui::pay::split_and_transfer as Coin.split_and_transfer;
 // Allows calling `.divide_and_keep(n, ctx)` on `coin`
 public use fun sui::pay::divide_and_keep as Coin.divide_and_keep;
 
+/// Allows calling `.into_supply()` on `TreasuryCap`
+public use fun treasury_into_supply as TreasuryCap.into_supply;
+
 /// A type passed to create_supply is not a one-time witness.
 const EBadWitness: u64 = 0;
 /// Invalid arguments are passed to a function.
@@ -95,9 +98,6 @@ public struct DenyCapV2<phantom T> has key, store {
 public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
     balance::supply_value(&cap.total_supply)
 }
-
-/// Unwrap `TreasuryCap` getting the `Supply`.
-public use fun treasury_into_supply as TreasuryCap.into_supply;
 
 /// Unwrap `TreasuryCap` getting the `Supply`.
 ///
@@ -510,6 +510,10 @@ public(package) fun new_treasury_cap<T>(ctx: &mut TxContext): TreasuryCap<T> {
         id: object::new(ctx),
         total_supply: balance::create_supply_internal(),
     }
+}
+
+public(package) fun allow_global_pause<T>(cap: &DenyCapV2<T>): bool {
+    cap.allow_global_pause
 }
 
 // === Test-only code ===

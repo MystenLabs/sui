@@ -37,7 +37,7 @@ fun init(witness: DEFLATIONARY_SUPPLY, ctx: &mut TxContext) {
     let total_supply = treasury_cap.mint(TOTAL_SUPPLY, ctx);
 
     // Make the supply deflationary by giving up TreasuryCap.
-    builder.make_supply_deflationary(treasury_cap);
+    builder.make_supply_burn_only(treasury_cap);
 
     // Finalize the building process and claim the metadata cap.
     let metadata_cap = builder.finalize(ctx);
