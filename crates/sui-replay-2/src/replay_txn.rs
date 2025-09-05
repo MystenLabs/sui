@@ -10,6 +10,7 @@
 //! `get_input_objects_for_replay` is used by the `execution.rs` module but could be moved
 //! in this module and saved in the `ReplayTransaction` instance.
 
+use crate::summary_metrics::{log_replay_metrics, tx_metrics_reset};
 use crate::{
     artifacts::{Artifact, ArtifactManager},
     execution::{execute_transaction_to_effects, ReplayExecutor},
@@ -21,6 +22,7 @@ use crate::{
 use anyhow::{anyhow, bail, Context};
 use move_trace_format::format::MoveTraceBuilder;
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::time::Instant;
 use sui_types::{base_types::SequenceNumber, TypeTag};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -38,10 +40,12 @@ use sui_types::{
     gas::SuiGasStatusAPI,
     transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
-use tracing::{debug, trace};
+use tracing::{debug, error, info, info_span, trace};
 
 pub type ObjectVersion = u64;
 pub type PackageVersion = u64;
+
+// moved to summary_metrics.rs
 
 // `ReplayTransaction` contains all the data needed to replay a transaction.
 // The `object_cache` will contain all the objects and packages touched by the transaction.
@@ -64,7 +68,10 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     data_store: &S,
     trace: bool,
 ) -> anyhow::Result<()> {
+    let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
     // load a `ReplayTransaction`
+    let total_t0 = Instant::now();
+    tx_metrics_reset();
     let replay_txn = match ReplayTransaction::load(tx_digest, data_store, data_store, data_store) {
         Ok(replay_txn) => replay_txn,
         Err(e) => {
@@ -75,8 +82,10 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     // replay the transaction
     let mut trace_builder_opt = trace.then(MoveTraceBuilder::new);
 
+    let exec_t0 = Instant::now();
     let (result, context_and_effects) =
         execute_transaction_to_effects(replay_txn, data_store, data_store, &mut trace_builder_opt)?;
+    let exec_ms = exec_t0.elapsed().as_millis();
 
     // TODO: make tracing better abstracted? different tracers?
     if let Some(trace_builder) = trace_builder_opt {
@@ -90,12 +99,15 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     }
 
     // Save results
-    tracing::info!(
-        "Executed transaction {}: {:?}. Saving artifacts under {}",
-        tx_digest,
-        result,
-        artifact_manager.base_path.display()
+    info!(
+        tx_digest = %tx_digest,
+        result = ?result,
+        output_dir = %artifact_manager.base_path.display(),
+        "Executed transaction",
     );
+
+    let total_ms = total_t0.elapsed().as_millis();
+    log_replay_metrics(tx_digest, total_ms, exec_ms);
 
     artifact_manager
         .member(Artifact::TransactionEffects)
@@ -124,9 +136,9 @@ fn verify_txn_and_save_forked_effects(
     effects: &TransactionEffects,
 ) -> anyhow::Result<()> {
     if effects != expected_effects {
-        tracing::error!(
-            "Transaction effects do not match expected effects for transaction {}. Saving to ",
-            effects.transaction_digest()
+        error!(
+            tx_digest = %effects.transaction_digest(),
+            "Transaction effects do not match expected effects; saving forked effects",
         );
         artifact_manager
             .member(Artifact::ForkedTransactionEffects)
@@ -150,7 +162,7 @@ impl ReplayTransaction {
         epoch_store: &dyn EpochStore,
         object_store: &dyn ObjectStore,
     ) -> Result<Self, anyhow::Error> {
-        debug!("Start load transaction");
+        debug!(op = "load_tx", phase = "start", tx_digest = %tx_digest, "load transaction");
 
         let digest = tx_digest
             .parse()
@@ -174,13 +186,20 @@ impl ReplayTransaction {
         //
         // instantiate the executor
         let epoch = effects.executed_epoch();
-        let protocol_config = epoch_store
-            .protocol_config(epoch)
-            .unwrap_or_else(|e| panic!("Failed to get protocol config: {:?}", e))
-            .unwrap_or_else(|| panic!("Protocol config missing for epoch {}", epoch));
+        let protocol_config = match epoch_store.protocol_config(epoch) {
+            Ok(Some(pc)) => pc,
+            Ok(None) => {
+                tracing::error!("Protocol config missing for epoch {}", epoch);
+                return Err(anyhow!("Protocol config missing for epoch {}", epoch));
+            }
+            Err(e) => {
+                tracing::error!("Failed to get protocol config for epoch {}: {:?}", epoch, e);
+                return Err(e);
+            }
+        };
         let executor = ReplayExecutor::new(protocol_config).unwrap_or_else(|e| panic!("{:?}", e));
 
-        debug!("End load transaction");
+        debug!(op = "load_tx", phase = "end", tx_digest = %tx_digest, "load transaction");
 
         Ok(Self {
             digest,
@@ -345,9 +364,9 @@ fn load_packages(
             version_query: VersionQuery::AtCheckpoint(checkpoint),
         })
         .collect::<Vec<_>>();
-    debug!("Start load_packages");
+    debug!(op = "load_packages", phase = "start", "load_packages");
     let (objects, packages) = load_objects(&pkg_object_keys, object_store)?;
-    debug!("End load_packages");
+    debug!(op = "load_packages", phase = "end", "load_packages");
     debug_assert!(
         packages.is_empty(),
         "Packages should be empty from packages load, there is no type parameter in packages"
