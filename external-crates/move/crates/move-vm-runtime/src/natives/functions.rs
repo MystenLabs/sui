@@ -32,7 +32,7 @@ use move_core_types::{
     identifier::Identifier, language_storage::TypeTag, runtime_value as R, vm_status::StatusType,
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
@@ -63,7 +63,7 @@ macro_rules! pop_arg {
             None => {
                 return Err(PartialVMError::new(
                     StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                ))
+                ));
             }
             Some(Err(e)) => return Err(e),
             Some(Ok(v)) => v,

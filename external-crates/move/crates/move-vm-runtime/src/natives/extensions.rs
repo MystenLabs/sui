@@ -5,7 +5,8 @@
 use better_any::{Tid, TidExt};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
-use std::{any::TypeId, collections::HashMap};
+use parking_lot::RwLock;
+use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 /// A data type to represent a heterogeneous collection of extensions which are available to
 /// native functions. A value to this is passed into the session function execution.
@@ -18,6 +19,23 @@ use std::{any::TypeId, collections::HashMap};
 #[derive(Default)]
 pub struct NativeContextExtensions<'a> {
     map: HashMap<TypeId, Box<dyn Tid<'a>>>,
+}
+
+#[derive(Default, Clone)]
+pub struct NativeExtensions<'a>(pub Arc<RwLock<NativeContextExtensions<'a>>>);
+
+impl<'a> NativeExtensions<'a> {
+    // NB: `&mut` not necessary since we use a `RwLock` internally, however we use it to enforce
+    // the correct mutability semantics at the API level.
+    pub fn write<'b>(
+        &'b mut self,
+    ) -> parking_lot::RwLockWriteGuard<'b, NativeContextExtensions<'a>> {
+        self.0.write()
+    }
+
+    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, NativeContextExtensions<'a>> {
+        self.0.read()
+    }
 }
 
 /// A marker trait that is used to identify a native extension. We use this as opposed to `TidAble`

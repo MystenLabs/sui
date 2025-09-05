@@ -3,7 +3,7 @@
 
 use crate::{
     execution::vm::MoveVM,
-    natives::extensions::NativeContextExtensions,
+    natives::extensions::NativeExtensions,
     runtime::MoveRuntime,
     shared::{
         linkage_context::LinkageContext,
@@ -58,7 +58,7 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
     fn make_vm_with_native_extensions<'extensions>(
         &self,
         linkage_context: LinkageContext,
-        native_extensions: NativeContextExtensions<'extensions>,
+        native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>>;
 
     /// Generate a linkage context for a given version ID, original ID, and list of compiled modules.
