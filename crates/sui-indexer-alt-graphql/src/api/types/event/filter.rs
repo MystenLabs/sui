@@ -75,7 +75,7 @@ impl EventFilter {
 
     /// Builds a SQL query to select and filter events based on sender, module, and type filters.
     /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
-    pub(crate) fn query(&self, tx_bounds_subquery: Query<'static>) -> Result<Query, RpcError> {
+    pub(crate) fn query<'q>(&self, tx_bounds_subquery: Query<'q>) -> Result<Query<'q>, RpcError> {
         let table = match (&self.module, &self.type_) {
             (Some(_), Some(_)) => {
                 return Err(feature_unavailable(
