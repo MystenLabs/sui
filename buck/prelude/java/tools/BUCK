@@ -1,0 +1,83 @@
+prelude = native
+
+prelude.python_bootstrap_binary(
+    name = "gen_class_to_source_map",
+    main = "gen_class_to_source_map.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "merge_class_to_source_maps",
+    main = "merge_class_to_source_maps.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_binary(
+    name = "compile_and_package",
+    main = "compile_and_package.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":compile_and_package_lib",
+    ],
+)
+
+prelude.python_binary(
+    name = "fat_jar",
+    main = "fat_jar.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":fat_jar_lib",
+        ":utils_lib",
+    ],
+)
+
+prelude.python_binary(
+    name = "list_class_names",
+    main = "list_class_names.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":list_class_names_lib",
+    ],
+)
+
+prelude.python_library(
+    name = "fat_jar_lib",
+    srcs = [
+        "fat_jar.py",
+    ],
+    deps = [
+        ":utils_lib",
+    ],
+)
+
+prelude.python_library(
+    name = "compile_and_package_lib",
+    srcs = [
+        "compile_and_package.py",
+    ],
+    deps = [
+        ":utils_lib",
+    ],
+)
+
+prelude.python_library(
+    name = "list_class_names_lib",
+    srcs = [
+        "list_class_names.py",
+    ],
+    deps = [
+        ":utils_lib",
+    ],
+)
+
+prelude.python_library(
+    name = "utils_lib",
+    srcs = [
+        "utils.py",
+    ],
+    visibility = [
+        "prelude//android/tools/...",
+        "prelude//kotlin/tools/...",
+        "prelude//java/tools/...",
+    ],
+)
