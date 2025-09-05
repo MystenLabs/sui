@@ -62,7 +62,7 @@ module P1::M1 {
       ...E
     }
   }
-  eventsOfP1M1EventAByDigest: events(first: 50, filter: {type: "@{P1}::M1::EventA", digest: "@{digest_6}"}) {
+  eventsOfP1M1EventAByDigest: events(first: 50, filter: {type: "@{P1}::M1::EventA", transactionDigest: "@{digest_6}"}) {
     nodes {
       ...E
     }

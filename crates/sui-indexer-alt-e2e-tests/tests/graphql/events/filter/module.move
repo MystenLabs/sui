@@ -110,7 +110,7 @@ module P2::M2 {
       ...E
     }
   }
-  eventsOfP2ByDigest: events(first: 50, filter: {module: "@{P2}", digest: "@{digest_6}"}) {
+  eventsOfP2ByDigest: events(first: 50, filter: {module: "@{P2}", transactionDigest: "@{digest_6}"}) {
     nodes {
       ...E
     }
