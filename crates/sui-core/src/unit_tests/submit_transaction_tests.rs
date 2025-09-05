@@ -54,11 +54,15 @@ impl TestContext {
 
         // Create a server with mocked consensus.
         // This ensures transactions submitted to consensus will get processed.
+        // We add extra mock responses to handle multiple transactions in tests
         let adapter = make_consensus_adapter_for_test(
             authority.clone(),
             HashSet::new(),
             true,
             vec![
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
                 with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
                 with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
             ],

@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
     base_types::AuthorityName, digests::TransactionDigest, error::SuiError,
     messages_grpc::RawSubmitTxRequest,
@@ -18,13 +19,22 @@ use crate::{
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
     transaction_driver::{
-        error::{TransactionDriverError, TransactionRequestError},
+        error::{
+            aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
+            TransactionRequestError,
+        },
         request_retrier::RequestRetrier,
         SubmitTransactionOptions, SubmitTxResult, TransactionDriverMetrics,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_submitter_tests.rs"]
+mod transaction_submitter_tests;
+
+// Using a long timeout for transaction submission is ok, because good performing validators
+// are chosen first.
 const SUBMIT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct TransactionSubmitter {
@@ -42,6 +52,7 @@ impl TransactionSubmitter {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
+        amplification_factor: u64,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<(AuthorityName, SubmitTxResult), TransactionDriverError>
@@ -49,30 +60,70 @@ impl TransactionSubmitter {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let start_time = Instant::now();
+
+        self.metrics
+            .submit_amplification_factor
+            .observe(amplification_factor as f64);
+
         let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
         let mut retries = 0;
+        let mut requests = FuturesUnordered::new();
 
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
         // or all feasible targets returned errors or timed out.
         loop {
-            let (name, client) = retrier.next_target()?;
-            let display_name = authority_aggregator.get_display_name(&name);
-            self.metrics
-                .validator_selections
-                .with_label_values(&[&display_name])
-                .inc();
-            match self
-                .submit_transaction_once(
-                    client,
-                    &raw_request,
-                    options,
-                    client_monitor,
-                    name,
-                    display_name.clone(),
-                )
-                .await
-            {
-                Ok(result) => {
+            // Try to fill up to amplification_factor concurrent requests
+            while requests.len() < amplification_factor as usize {
+                match retrier.next_target() {
+                    Ok((name, client)) => {
+                        let display_name = authority_aggregator.get_display_name(&name);
+                        self.metrics
+                            .validator_selections
+                            .with_label_values(&[&display_name])
+                            .inc();
+
+                        // Create a future that returns the name and display_name along with the result
+                        let submit_fut = self.submit_transaction_once(
+                            client,
+                            &raw_request,
+                            options,
+                            client_monitor,
+                            name,
+                            display_name.clone(),
+                        );
+
+                        let wrapped_fut = async move {
+                            let result = submit_fut.await;
+                            (name, display_name, result)
+                        };
+
+                        requests.push(wrapped_fut);
+                    }
+                    Err(_) if requests.is_empty() => {
+                        // No more targets and no requests in flight
+                        return Err(TransactionDriverError::Aborted {
+                            submission_non_retriable_errors: aggregate_request_errors(
+                                retrier
+                                    .non_retriable_errors_aggregator
+                                    .status_by_authority(),
+                            ),
+                            submission_retriable_errors: aggregate_request_errors(
+                                retrier.retriable_errors_aggregator.status_by_authority(),
+                            ),
+                            observed_effects_digests: AggregatedEffectsDigests {
+                                digests: Vec::new(),
+                            },
+                        });
+                    }
+                    Err(_) => {
+                        // No more targets but still have requests in flight
+                        break;
+                    }
+                }
+            }
+
+            match requests.next().await {
+                Some((name, display_name, Ok(result))) => {
                     self.metrics
                         .validator_submit_transaction_successes
                         .with_label_values(&[&display_name])
@@ -85,7 +136,7 @@ impl TransactionSubmitter {
 
                     return Ok((name, result));
                 }
-                Err(e) => {
+                Some((name, display_name, Err(e))) => {
                     let error_type = if e.is_submission_retriable() {
                         "retriable"
                     } else {
@@ -99,8 +150,25 @@ impl TransactionSubmitter {
                     retries += 1;
                     retrier.add_error(name, e)?;
                 }
+                None => {
+                    // All requests have been processed.
+                    return Err(TransactionDriverError::Aborted {
+                        submission_non_retriable_errors: aggregate_request_errors(
+                            retrier
+                                .non_retriable_errors_aggregator
+                                .status_by_authority(),
+                        ),
+                        submission_retriable_errors: aggregate_request_errors(
+                            retrier.retriable_errors_aggregator.status_by_authority(),
+                        ),
+                        observed_effects_digests: AggregatedEffectsDigests {
+                            digests: Vec::new(),
+                        },
+                    });
+                }
             };
-            // Yield to prevent this retry loop from starving other tasks under heavy load
+
+            // Yield to prevent this retry loop from starving other tasks.
             tokio::task::yield_now().await;
         }
     }

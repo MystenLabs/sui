@@ -25,7 +25,11 @@ use effects_certifier::*;
 use mysten_metrics::{monitored_future, TxType};
 use parking_lot::Mutex;
 use sui_types::{
-    committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
+    committee::EpochId,
+    digests::TransactionDigest,
+    error::{SuiError, UserInputError},
+    messages_grpc::RawSubmitTxRequest,
+    transaction::TransactionDataAPI as _,
 };
 use tokio::{task::JoinSet, time::sleep};
 use tracing::instrument;
@@ -35,6 +39,7 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    transaction_driver::error::AggregatedRequestErrors,
     validator_client_monitor::{ValidatorClientMetrics, ValidatorClientMonitor},
 };
 use sui_config::NodeConfig;
@@ -112,6 +117,26 @@ where
         } else {
             TxType::SingleWriter
         };
+
+        let gas_price = request.transaction.transaction_data().gas_price();
+        let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
+        let amplification_factor = gas_price / reference_gas_price.max(1);
+        if amplification_factor == 0 {
+            return Err(TransactionDriverError::InvalidTransaction {
+                local_error: Some(
+                    SuiError::UserInputError {
+                        error: UserInputError::GasPriceUnderRGP {
+                            gas_price,
+                            reference_gas_price,
+                        },
+                    }
+                    .to_string(),
+                ),
+                submission_non_retriable_errors: AggregatedRequestErrors::default(),
+                submission_retriable_errors: AggregatedRequestErrors::default(),
+            });
+        }
+
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
@@ -129,7 +154,13 @@ where
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
-                    .drive_transaction_once(tx_digest, tx_type, raw_request.clone(), &options)
+                    .drive_transaction_once(
+                        tx_digest,
+                        tx_type,
+                        amplification_factor,
+                        raw_request.clone(),
+                        &options,
+                    )
                     .await
                 {
                     Ok(resp) => {
@@ -191,10 +222,13 @@ where
         &self,
         tx_digest: &TransactionDigest,
         tx_type: TxType,
+        amplification_factor: u64,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
+        let amplification_factor =
+            amplification_factor.min(auth_agg.committee.num_members() as u64);
 
         let (name, submit_txn_result) = self
             .submitter
@@ -202,6 +236,7 @@ where
                 &auth_agg,
                 &self.client_monitor,
                 tx_digest,
+                amplification_factor,
                 raw_request,
                 options,
             )

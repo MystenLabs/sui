@@ -72,6 +72,7 @@ pub enum TransactionDriverError {
     /// Over validity threshold of validators rejected the transaction as invalid.
     /// Non-retriable.
     InvalidTransaction {
+        local_error: Option<String>,
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
     },
@@ -135,6 +136,7 @@ impl TransactionDriverError {
 
     fn display_invalid_transaction(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let TransactionDriverError::InvalidTransaction {
+            local_error,
             submission_non_retriable_errors,
             submission_retriable_errors,
         } = self
@@ -142,9 +144,14 @@ impl TransactionDriverError {
             return Ok(());
         };
         let mut msgs = vec!["Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable).".to_string()];
-        msgs.push(format!(
-            "Non-retriable errors: [{submission_non_retriable_errors}]."
-        ));
+        if let Some(local_error) = local_error {
+            msgs.push(format!("Local error: [{local_error}]."));
+        }
+        if submission_non_retriable_errors.total_stake > 0 {
+            msgs.push(format!(
+                "Non-retriable errors: [{submission_non_retriable_errors}]."
+            ));
+        }
         if submission_retriable_errors.total_stake > 0 {
             msgs.push(format!(
                 "Retriable errors: [{submission_retriable_errors}]."
@@ -218,7 +225,7 @@ impl std::fmt::Debug for TransactionDriverError {
 
 impl std::error::Error for TransactionDriverError {}
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Default)]
 pub struct AggregatedRequestErrors {
     pub errors: Vec<(String, Vec<AuthorityName>, StakeUnit)>,
     pub total_stake: StakeUnit,
