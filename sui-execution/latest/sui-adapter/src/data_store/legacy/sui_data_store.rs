@@ -7,6 +7,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
     resolver::ModuleResolver, vm_status::StatusCode,
 };
+use move_vm_runtime::shared::data_store::DataStore;
 use move_vm_types::data_store::DataStore;
 use std::rc::Rc;
 use sui_types::{base_types::ObjectID, error::SuiResult, move_package::MovePackage};
@@ -41,64 +42,6 @@ impl<'state, 'a> SuiDataStore<'state, 'a> {
             }
         }
         None
-    }
-}
-
-// TODO: `DataStore` will be reworked and this is likely to disappear.
-//       Leaving this comment around until then as testament to better days to come...
-impl DataStore for SuiDataStore<'_, '_> {
-    fn link_context(&self) -> PartialVMResult<AccountAddress> {
-        self.linkage_view.link_context().map_err(|e| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(e.to_string())
-        })
-    }
-
-    fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
-        self.linkage_view.relocate(module_id).map_err(|err| {
-            PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Error relocating {module_id}: {err:?}"))
-        })
-    }
-
-    fn defining_module(
-        &self,
-        runtime_id: &ModuleId,
-        struct_: &IdentStr,
-    ) -> PartialVMResult<ModuleId> {
-        self.linkage_view
-            .defining_module(runtime_id, struct_)
-            .map_err(|err| {
-                PartialVMError::new(StatusCode::LINKER_ERROR).with_message(format!(
-                    "Error finding defining module for {runtime_id}::{struct_}: {err:?}"
-                ))
-            })
-    }
-
-    fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-        if let Some(bytes) = self.get_module(module_id) {
-            return Ok(bytes.clone());
-        }
-        match self.linkage_view.get_module(module_id) {
-            Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find {:?} in data cache", module_id))
-                .finish(Location::Undefined)),
-            Err(err) => {
-                let msg = format!("Unexpected storage error: {:?}", err);
-                Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(msg)
-                        .finish(Location::Undefined),
-                )
-            }
-        }
-    }
-
-    fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
-        // we cannot panic here because during execution and publishing this is
-        // currently called from the publish flow in the Move runtime
-        Ok(())
     }
 }
 

@@ -5,7 +5,7 @@ use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
 use indexmap::IndexSet;
-use move_vm_types::values::VectorSpecialization;
+use move_vm_runtime::execution::values::VectorSpecialization;
 use std::cell::OnceCell;
 use sui_types::base_types::{ObjectID, ObjectRef};
 

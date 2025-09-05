@@ -4,7 +4,7 @@
 use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
-    programmable_transactions::context::EitherError,
+    static_programmable_transactions::execution::context::EitherError,
     static_programmable_transactions::{
         loading::ast::{self as L, Type},
         spanned::sp,

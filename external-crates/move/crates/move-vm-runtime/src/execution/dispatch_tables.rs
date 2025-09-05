@@ -9,6 +9,7 @@
 
 use crate::{
     cache::identifier_interner::{self, IdentifierKey, intern_identifier, resolve_interned},
+    execution::vm::DatatypeInfo,
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
@@ -378,6 +379,43 @@ impl VMDispatchTables {
                 )
             }
         }
+    }
+
+    pub(crate) fn datatype_information(&self, ty: &Type) -> PartialVMResult<Option<DatatypeInfo>> {
+        Ok(match ty {
+            Type::Bool
+            | Type::U8
+            | Type::U64
+            | Type::U128
+            | Type::Address
+            | Type::Signer
+            | Type::Vector(_)
+            | Type::Reference(_)
+            | Type::MutableReference(_)
+            | Type::TyParam(_)
+            | Type::U16
+            | Type::U32
+            | Type::U256 => None,
+            Type::Datatype(vtable_key) => {
+                let descriptor = self.resolve_type(vtable_key)?.to_ref();
+                Some(DatatypeInfo {
+                    original_id: *descriptor.runtime_id.address(),
+                    defining_id: *descriptor.defining_id.address(),
+                    module_name: descriptor.defining_id.name(),
+                    type_name: resolve_interned(&descriptor.name, "type name")?,
+                })
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (idx, _) = &**inst;
+                let descriptor = self.resolve_type(idx)?.to_ref();
+                Some(DatatypeInfo {
+                    original_id: *descriptor.runtime_id.address(),
+                    defining_id: *descriptor.defining_id.address(),
+                    module_name: descriptor.defining_id.name(),
+                    type_name: resolve_interned(&descriptor.name, "type name")?,
+                })
+            }
+        })
     }
 
     // -------------------------------------------
