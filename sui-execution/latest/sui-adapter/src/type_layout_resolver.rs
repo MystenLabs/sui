@@ -4,7 +4,6 @@
 use crate::data_store::cached_package_store::CachedPackageStore;
 use crate::data_store::linked_data_store::LinkedDataStore;
 use crate::static_programmable_transactions::linkage::analysis::type_linkage;
-use crate::static_programmable_transactions::linkage::resolved_linkage::RootedLinkage;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::runtime::MoveRuntime;
@@ -37,7 +36,6 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         &mut self,
         struct_tag: &StructTag,
     ) -> Result<A::MoveDatatypeLayout, SuiError> {
-        let root_address = struct_tag.address.into();
         let ids = struct_tag
             .all_addresses()
             .into_iter()
@@ -45,8 +43,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
             .collect::<Vec<_>>();
         let tag_linkage = type_linkage(&ids, &self.resolver)?;
         let link_context = tag_linkage.linkage_context();
-        let rooted_linkage = RootedLinkage::new(root_address, tag_linkage);
-        let data_store = LinkedDataStore::new(&rooted_linkage, &self.resolver);
+        let data_store = LinkedDataStore::new(&tag_linkage, &self.resolver);
         let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
             return Err(SuiError::FailObjectLayout {
                 st: format!("{}", struct_tag),

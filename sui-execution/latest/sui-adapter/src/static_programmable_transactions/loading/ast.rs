@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::linkage::resolved_linkage::{
-    ResolvedLinkage, RootedLinkage,
+    ExecutableLinkage, ResolvedLinkage,
 };
 use indexmap::IndexSet;
 use move_binary_format::file_format::{
@@ -126,7 +126,7 @@ pub struct LoadedFunction {
     pub name: Identifier,
     pub type_arguments: Vec<Type>,
     pub signature: LoadedFunctionInstantiation,
-    pub linkage: RootedLinkage,
+    pub linkage: ExecutableLinkage,
     pub instruction_length: CodeOffset,
     pub definition_index: FunctionDefinitionIndex,
     pub visibility: Visibility,

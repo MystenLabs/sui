@@ -3,7 +3,7 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::resolved_linkage::RootedLinkage,
+    static_programmable_transactions::linkage::resolved_linkage::ExecutableLinkage,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -19,12 +19,12 @@ use sui_types::error::{SuiError, SuiResult};
 /// construct a valid `DataStore` for execution in the VM as it needs to be able to resolve modules
 /// under a specific linkage.
 pub struct LinkedDataStore<'a> {
-    pub linkage: &'a RootedLinkage,
+    pub linkage: &'a ExecutableLinkage,
     pub store: &'a dyn PackageStore,
 }
 
 impl<'a> LinkedDataStore<'a> {
-    pub fn new(linkage: &'a RootedLinkage, store: &'a dyn PackageStore) -> Self {
+    pub fn new(linkage: &'a ExecutableLinkage, store: &'a dyn PackageStore) -> Self {
         Self { linkage, store }
     }
 
