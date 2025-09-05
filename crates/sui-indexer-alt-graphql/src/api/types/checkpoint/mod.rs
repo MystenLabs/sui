@@ -199,12 +199,14 @@ impl CheckpointContents {
 
 impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
-    /// Returns `None` if `sequence_number` is `None`, or if the checkpoint is set in the future
-    /// relative to the current scope's checkpoint, or when no checkpoint is set in scope
-    /// (e.g. execution scope, where checkpoint queries return None to prevent temporal inconsistency).
+    ///
+    /// If no sequence_number is provided, defaults to the scope's checkpoint.
+    /// Returns `None` if the checkpoint is set in the future relative to the current scope's
+    /// checkpoint, or when no checkpoint is set in scope (e.g. execution scope, where checkpoint
+    /// queries return None to prevent temporal inconsistency).
     pub(crate) fn with_sequence_number(scope: Scope, sequence_number: Option<u64>) -> Option<Self> {
-        let sequence_number = sequence_number?;
         let scope_checkpoint = scope.checkpoint_viewed_at()?;
+        let sequence_number = sequence_number.unwrap_or(scope_checkpoint);
 
         (sequence_number <= scope_checkpoint).then_some(Self {
             scope,

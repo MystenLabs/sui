@@ -73,7 +73,7 @@ impl Mutation {
             .await
         {
             Ok(response) => {
-                let scope = Scope::new_execution_output(ctx)?;
+                let scope = Scope::with_execution_output(ctx)?;
                 let effects = TransactionEffects::from_execution_response(
                     scope,
                     response,
