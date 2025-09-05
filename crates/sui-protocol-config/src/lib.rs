@@ -4171,6 +4171,14 @@ impl ProtocolConfig {
         self.feature_flags.record_time_estimate_processed = val;
     }
 
+    pub fn set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = val;
+    }
+
     pub fn push_aliased_addresses_for_testing(
         &mut self,
         original: [u8; 32],
@@ -4187,6 +4195,22 @@ impl ProtocolConfig {
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed = val;
+    }
+
+    pub fn set_consensus_checkpoint_signature_key_includes_digest_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest = val;
     }
 }
 
