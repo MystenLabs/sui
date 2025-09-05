@@ -93,6 +93,22 @@ public fun destroy_zero<T>(balance: Balance<T>) {
     let Balance { value: _ } = balance;
 }
 
+public(package) fun send_funds<T>(balance: Balance<T>, recipient: address) {
+    sui::funds_accumulator::add_impl(balance, recipient);
+}
+
+public(package) fun withdraw_funds<T>(
+    withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
+): Balance<T> {
+    withdrawal.settle()
+}
+
+public(package) fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Balance<T> {
+    sui::funds_accumulator::withdraw_from_object(obj, value as u256)
+}
+
+// === SUI specific operations ===
+
 const SUI_TYPE_NAME: vector<u8> =
     b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
 
@@ -127,6 +143,8 @@ public(package) fun destroy_supply<T>(self: Supply<T>): u64 {
     let Supply { value } = self;
     value
 }
+
+// === Test functions ===
 
 #[test_only]
 /// Create a `Balance` of any coin for testing purposes.

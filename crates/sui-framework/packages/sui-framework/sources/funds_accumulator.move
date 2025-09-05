@@ -1,13 +1,17 @@
 // Accumulator but with lots of private generics
 module sui::funds_accumulator;
 
+/// Allows calling `.split()` on a `Withdrawal` create a sub withdrawal from it.
 public use fun withdrawal_split as Withdrawal.split;
 
+/// Allows calling `.join()` on a `Withdrawal` to combine two withdrawals.
+public use fun withdrawal_join as Withdrawal.join;
+
+/// Allows calling `.limit()` on a `Withdrawal` to get its remaining limit.
 public use fun withdrawal_limit as Withdrawal.limit;
 
+/// Allows calling `.owner()` on a `Withdrawal` to get its owner address.
 public use fun withdrawal_owner as Withdrawal.owner;
-
-public use fun withdraw_from as Withdrawal.withdraw;
 
 public struct Withdrawal<phantom T: store> has drop {
     // Owner? Controller? Account?
@@ -39,13 +43,11 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 // TODO When this becomes `public` we need
 // - custom verifier rules for `T`
 // - private generic rules for `T`
-public(package) fun withdraw_from</* internal */ T: store>(
-    withdrawal: &mut Withdrawal<T>,
-    value: u256,
+public(package) fun settle</* internal */ T: store>(
+    withdrawal: Withdrawal<T>,
 ): T {
-    assert!(withdrawal.limit >= value);
-    withdrawal.limit = withdrawal.limit - value;
-    withdraw_impl(withdrawal.owner, value)
+    let Withdrawal { owner, limit: value } = withdrawal;
+    withdraw_impl(owner, value)
 }
 
 // TODO When this becomes `public` we need
@@ -56,14 +58,26 @@ public(package) fun withdraw_from_object</* internal */ T: store>(obj: &mut UID,
     withdraw_impl(obj.to_address(), value)
 }
 
+// TODO when funds become public, we likely need to wrap T
+public(package) fun add_impl<T: store>(value: T, recipient: address) {
+    let accumulator = sui::accumulator::accumulator_address<T>(recipient);
+    add_to_accumulator_address<T>(value, accumulator)
+}
+
+// TODO when funds become public, we likely need to wrap T
+fun withdraw_impl<T: store>(owner: address, value: u256): T {
+    let accumulator = sui::accumulator::accumulator_address<T>(owner);
+    withdraw_from_accumulator_address<T>(accumulator, value)
+}
+
 // TODO when this becomes public we will need
 // - custom verifier rules for `T` that it is a struct with a single unsigned integer field.
 //   Or a struct with a single field that satisfies this property recursively.
 // - private generic rules for `T`
-public(package) native fun add_impl<T: store>(value: T, recipient: address);
+native fun add_to_accumulator_address<T: store>(value: T, accumulator: address);
 
 // aborts if the value is greater than the amount in the withdrawal
 // Do we need to charge a small fee since we cannot charge storage fees?
 // We should limit withdraws to `u*::max` for a `owner`
 // in a given transaction for the given `u*` in `T`
-native fun withdraw_impl<T>(owner: address, value: u256): T;
+native fun withdraw_from_accumulator_address<T: store>(accumulator: address, value: u256): T;
