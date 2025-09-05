@@ -71,7 +71,7 @@ impl Scope {
     }
 
     /// Create a new scope for execution context (freshly executed transaction).
-    pub(crate) fn new_execution_context<E: std::error::Error>(
+    pub(crate) fn new_execution_output<E: std::error::Error>(
         ctx: &Context<'_>,
     ) -> Result<Self, RpcError<E>> {
         let package_store: &Arc<PackageCache> = ctx.data()?;

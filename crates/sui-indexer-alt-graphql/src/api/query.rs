@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
 use async_graphql::{connection::Connection, Context, Object};
 use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
@@ -77,12 +76,9 @@ impl Query {
         sequence_number: Option<UInt53>,
     ) -> Result<Option<Checkpoint>, RpcError> {
         let scope = self.scope(ctx)?;
-        let sequence_number = match sequence_number {
-            Some(s) => s.into(),
-            None => scope
-                .checkpoint_viewed_at()
-                .context("Query scope should always have checkpoint context")?,
-        };
+        let sequence_number = sequence_number
+            .map(|s| Some(s.into()))
+            .unwrap_or(scope.checkpoint_viewed_at());
 
         Ok(Checkpoint::with_sequence_number(scope, sequence_number))
     }
@@ -148,7 +144,7 @@ impl Query {
         let scope = self.scope(ctx)?;
         Ok(keys
             .into_iter()
-            .map(|k| Checkpoint::with_sequence_number(scope.clone(), k.into()))
+            .map(|k| Checkpoint::with_sequence_number(scope.clone(), Some(k.into())))
             .collect())
     }
 

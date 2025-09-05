@@ -486,7 +486,7 @@ impl Epoch {
         epoch_id: Option<UInt53>,
     ) -> Result<Option<Self>, RpcError> {
         // In execution scope, epoch queries return None
-        let Some(scope_cp) = scope.checkpoint_viewed_at() else {
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
 
@@ -498,15 +498,13 @@ impl Epoch {
                 .await
                 .context("Failed to fetch epoch start information by start key")?,
             None => pg_loader
-                .load_one(CheckpointBoundedEpochStartKey(scope_cp))
+                .load_one(CheckpointBoundedEpochStartKey(checkpoint_viewed_at))
                 .await
                 .context(
                     "Failed to fetch epoch start information by checkpoint bounded start key",
                 )?,
-        };
-
-        // Filter based on checkpoint bounds
-        let stored = stored.filter(|start| start.cp_lo as u64 <= scope_cp);
+        }
+        .filter(|start| start.cp_lo as u64 <= checkpoint_viewed_at);
 
         Ok(stored.map(|start| Self {
             epoch_id: start.epoch as u64,
@@ -517,7 +515,14 @@ impl Epoch {
         }))
     }
 
+    /// Get the epoch start information.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     async fn start(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochStart>, Error> {
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(&None);
+        };
+
         self.start
             .get_or_try_init(async || {
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
@@ -526,9 +531,7 @@ impl Epoch {
                     .load_one(EpochStartKey(self.epoch_id))
                     .await
                     .context("Failed to fetch epoch start information")?
-                    .filter(|start| {
-                        start.cp_lo as u64 <= self.scope.checkpoint_viewed_at().unwrap_or(u64::MAX)
-                    });
+                    .filter(|start| start.cp_lo as u64 <= checkpoint_viewed_at);
 
                 Ok(stored)
             })
@@ -550,14 +553,13 @@ impl Epoch {
     /// response if the epoch has not ended yet, as of the checkpoint being viewed, or when
     /// no checkpoint is set in scope (e.g. execution scope).
     async fn end(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochEnd>, Error> {
+        let Some(checkpoint_bound) = self.scope.checkpoint_viewed_at_exclusive_bound() else {
+            return Ok(&None);
+        };
+
         self.end
             .get_or_try_init(async || {
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-
-                let Some(checkpoint_bound) = self.scope.checkpoint_viewed_at_exclusive_bound()
-                else {
-                    return Ok(None);
-                };
                 let stored = pg_loader
                     .load_one(EpochEndKey(self.epoch_id))
                     .await

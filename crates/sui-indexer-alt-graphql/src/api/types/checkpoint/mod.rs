@@ -199,17 +199,17 @@ impl CheckpointContents {
 
 impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
-    /// Returns `None` if the checkpoint is set in the future relative to the current scope's
-    /// checkpoint, or when no checkpoint is set in scope (e.g. execution scope, where
-    /// checkpoint queries return None to prevent temporal inconsistency).
-    pub(crate) fn with_sequence_number(scope: Scope, sequence_number: u64) -> Option<Self> {
-        scope
-            .checkpoint_viewed_at()
-            .is_some_and(|cp| sequence_number <= cp)
-            .then_some(Self {
-                scope,
-                sequence_number,
-            })
+    /// Returns `None` if `sequence_number` is `None`, or if the checkpoint is set in the future
+    /// relative to the current scope's checkpoint, or when no checkpoint is set in scope
+    /// (e.g. execution scope, where checkpoint queries return None to prevent temporal inconsistency).
+    pub(crate) fn with_sequence_number(scope: Scope, sequence_number: Option<u64>) -> Option<Self> {
+        let sequence_number = sequence_number?;
+        let scope_checkpoint = scope.checkpoint_viewed_at()?;
+
+        (sequence_number <= scope_checkpoint).then_some(Self {
+            scope,
+            sequence_number,
+        })
     }
 
     /// Paginate through checkpoints with filters applied.
@@ -254,7 +254,7 @@ impl Checkpoint {
         for (cursor, cp_sequence_number) in results {
             conn.edges.push(Edge::new(
                 cursor.encode_cursor(),
-                Self::with_sequence_number(scope.clone(), cp_sequence_number).unwrap(),
+                Self::with_sequence_number(scope.clone(), Some(cp_sequence_number)).unwrap(),
             ));
         }
 

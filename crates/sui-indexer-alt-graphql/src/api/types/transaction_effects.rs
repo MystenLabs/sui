@@ -102,9 +102,7 @@ impl EffectsContents {
             return None;
         };
 
-        content
-            .cp_sequence_number()
-            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), cp))
+        Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
     }
 
     /// Whether the transaction executed successfully or not.
@@ -466,8 +464,6 @@ impl EffectsContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
-
-        // Skip checkpoint bounds check when no checkpoint is set in scope (e.g. execution scope).
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(self.clone());
         };

@@ -58,12 +58,11 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-
-        let consistent_reader: &ConsistentReader = ctx.data()?;
         let Some(checkpoint) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
 
+        let consistent_reader: &ConsistentReader = ctx.data()?;
         let (coin_type, total_balance) = consistent_reader
             .get_balance(
                 checkpoint,
@@ -90,12 +89,11 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-
-        let consistent_reader: &ConsistentReader = ctx.data()?;
         let Some(checkpoint) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
 
+        let consistent_reader: &ConsistentReader = ctx.data()?;
         let balances = consistent_reader
             .batch_get_balances(
                 checkpoint,
@@ -130,6 +128,9 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
@@ -141,13 +142,7 @@ impl Balance {
             (Some(a), Some(b)) if a.0 != b.0 => {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
-
-            (None, None) => {
-                let Some(cp) = scope.checkpoint_viewed_at() else {
-                    return Ok(Connection::new(false, false));
-                };
-                cp
-            }
+            (None, None) => checkpoint_viewed_at,
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 

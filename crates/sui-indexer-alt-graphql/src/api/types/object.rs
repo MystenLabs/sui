@@ -469,7 +469,6 @@ impl Object {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
             let Some(cp) = scope.checkpoint_viewed_at() else {
-                // Object queries return None in execution scope without explicit version
                 return Ok(None);
             };
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
@@ -527,12 +526,18 @@ impl Object {
     /// Load the object at the given ID and version from the store, and return it fully inflated
     /// (with contents already fetched). Returns `None` if the object does not exist (either never
     /// existed, was pruned from the store, or did not exist at the checkpoint being viewed).
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn at_version(
         ctx: &Context<'_>,
         scope: Scope,
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
+
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let contents = contents(ctx, address, version);
@@ -546,9 +551,7 @@ impl Object {
 
         if stored_version
             .context("Failed to get object version")?
-            .is_none_or(|s| {
-                s.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX)
-            })
+            .is_none_or(|s| s.cp_sequence_number as u64 > checkpoint_viewed_at)
         {
             return Ok(None);
         }
@@ -585,10 +588,16 @@ impl Object {
 
     /// Construct a GraphQL representation of an `Object` from versioning information. This
     /// representation does not pre-fetch object contents.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     fn from_stored_version(
         scope: Scope,
         stored: StoredObjVersion,
     ) -> Result<Option<Self>, RpcError<Error>> {
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
+
         // Lack of an object digest indicates that the object was deleted or wrapped at this
         // version.
         let Some(digest) = stored.object_digest else {
@@ -597,7 +606,7 @@ impl Object {
 
         // If the object's version is from a later checkpoint than is being viewed currently, then
         // discard this result.
-        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX) {
+        if stored.cp_sequence_number as u64 > checkpoint_viewed_at {
             return Ok(None);
         }
 
@@ -617,6 +626,8 @@ impl Object {
     }
 
     /// Paginate through versions of an object (identified by its address).
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_by_version(
         ctx: &Context<'_>,
         scope: Scope,
@@ -625,6 +636,10 @@ impl Object {
         filter: VersionFilter,
     ) -> Result<Connection<String, Object>, RpcError<Error>> {
         use obj_versions::dsl as v;
+
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
         let mut conn = Connection::new(false, false);
 
@@ -646,7 +661,7 @@ impl Object {
                         m.object_version DESC
                     LIMIT 1)
                 "#,
-                scope.checkpoint_viewed_at().unwrap_or(u64::MAX) as i64,
+                checkpoint_viewed_at as i64,
             ))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
@@ -715,6 +730,9 @@ impl Object {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
@@ -726,13 +744,7 @@ impl Object {
             (Some(a), Some(b)) if a.0 != b.0 => {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
-
-            (None, None) => {
-                let Some(cp) = scope.checkpoint_viewed_at() else {
-                    return Ok(Connection::new(false, false));
-                };
-                cp
-            }
+            (None, None) => checkpoint_viewed_at,
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 

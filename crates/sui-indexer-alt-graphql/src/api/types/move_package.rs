@@ -515,11 +515,16 @@ impl MovePackage {
 
     /// Construct a GraphQL representation of a `MovePackage` from its representation in the
     /// database.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) fn from_stored(
         scope: Scope,
         stored: StoredPackage,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX) {
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
+        if stored.cp_sequence_number as u64 > checkpoint_viewed_at {
             return Ok(None);
         }
 
@@ -539,6 +544,8 @@ impl MovePackage {
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
     /// any package on-chain that has that original ID.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_by_version(
         ctx: &Context<'_>,
         scope: Scope,
@@ -547,6 +554,10 @@ impl MovePackage {
         filter: VersionFilter,
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
+
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
         let mut conn = Connection::new(false, false);
 
@@ -565,15 +576,12 @@ impl MovePackage {
 
         // The original ID record exists but points to a package that is not visible at the
         // checkpoint being viewed.
-        if original_id.cp_sequence_number as u64 > scope.checkpoint_viewed_at().unwrap_or(u64::MAX)
-        {
+        if original_id.cp_sequence_number as u64 > checkpoint_viewed_at {
             return Ok(conn);
         }
 
         let mut query = p::kv_packages
-            .filter(
-                p::cp_sequence_number.le(scope.checkpoint_viewed_at().unwrap_or(u64::MAX) as i64),
-            )
+            .filter(p::cp_sequence_number.le(checkpoint_viewed_at as i64))
             .filter(p::original_id.eq(original_id.original_id))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
@@ -635,6 +643,8 @@ impl MovePackage {
     }
 
     /// Paginate through all packages published in a range of checkpoints.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_by_checkpoint(
         ctx: &Context<'_>,
         scope: Scope,
@@ -643,14 +653,16 @@ impl MovePackage {
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
+
         let mut conn = Connection::new(false, false);
 
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
-            .filter(
-                p::cp_sequence_number.le(scope.checkpoint_viewed_at().unwrap_or(u64::MAX) as i64),
-            )
+            .filter(p::cp_sequence_number.le(checkpoint_viewed_at as i64))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
 
