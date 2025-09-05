@@ -76,11 +76,10 @@ impl Query {
         sequence_number: Option<UInt53>,
     ) -> Result<Option<Checkpoint>, RpcError> {
         let scope = self.scope(ctx)?;
-        let sequence_number = sequence_number
-            .map(|s| s.into())
-            .unwrap_or(scope.checkpoint_viewed_at());
-
-        Ok(Checkpoint::with_sequence_number(scope, sequence_number))
+        Ok(Checkpoint::with_sequence_number(
+            scope,
+            sequence_number.map(|s| s.into()),
+        ))
     }
 
     /// Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
@@ -144,7 +143,7 @@ impl Query {
         let scope = self.scope(ctx)?;
         Ok(keys
             .into_iter()
-            .map(|k| Checkpoint::with_sequence_number(scope.clone(), k.into()))
+            .map(|k| Checkpoint::with_sequence_number(scope.clone(), Some(k.into())))
             .collect())
     }
 

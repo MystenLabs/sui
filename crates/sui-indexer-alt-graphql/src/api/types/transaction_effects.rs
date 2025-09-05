@@ -104,7 +104,7 @@ impl EffectsContents {
 
         content
             .cp_sequence_number()
-            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), cp))
+            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)))
     }
 
     /// Whether the transaction executed successfully or not.
@@ -466,6 +466,9 @@ impl EffectsContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(self.clone());
+        };
 
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
@@ -476,11 +479,12 @@ impl EffectsContents {
             return Ok(self.clone());
         };
 
-        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        if let Some(cp_num) = transaction.cp_sequence_number() {
-            if cp_num > self.scope.checkpoint_viewed_at() {
-                return Ok(self.clone());
-            }
+        let cp_num = transaction
+            .cp_sequence_number()
+            .context("Fetched transaction should have checkpoint sequence number")?;
+
+        if cp_num > checkpoint_viewed_at {
+            return Ok(self.clone());
         }
 
         Ok(Self {

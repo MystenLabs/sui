@@ -50,8 +50,8 @@ use super::{
     field(
         name = "multi_get_balances",
         arg(name = "keys", ty = "Vec<TypeInput>"),
-        ty = "Result<Vec<Balance>, RpcError<balance::Error>>",
-        desc = "Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.\n\nIf the address does not own any coins of a given type, a balance of zero is returned for that type.",
+        ty = "Result<Option<Vec<Balance>>, RpcError<balance::Error>>",
+        desc = "Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.\n\nReturns `null` when no checkpoint is set in scope (e.g. execution scope). If the address does not own any coins of a given type, a balance of zero is returned for that type.",
     ),
     field(
         name = "objects",
@@ -105,15 +105,14 @@ impl Address {
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
     ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     /// If the address does not own any coins of that type, a balance of zero is returned.
     pub(crate) async fn balance(
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
     ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        Balance::fetch_one(ctx, &self.scope, self.address, coin_type.into())
-            .await
-            .map(Some)
+        Balance::fetch_one(ctx, &self.scope, self.address, coin_type.into()).await
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -228,12 +227,13 @@ impl Address {
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
     ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
     pub(crate) async fn multi_get_balances(
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
         let coin_types = keys.into_iter().map(|k| k.into()).collect();
         Balance::fetch_many(ctx, &self.scope, self.address, coin_types).await
     }

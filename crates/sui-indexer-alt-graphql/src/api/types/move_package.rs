@@ -167,7 +167,7 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
         self.super_.multi_get_balances(ctx, keys).await
     }
 
@@ -418,7 +418,8 @@ impl MovePackage {
     }
 
     /// Fetch a package by its key. The key can either specify an exact version to fetch, an
-    /// upperbound against a checkpoint, or neither.
+    /// upperbound against a checkpoint, or neither. Returns `None` when no checkpoint is set
+    /// in scope (e.g. execution scope) and no explicit version is provided.
     pub(crate) async fn by_key(
         ctx: &Context<'_>,
         scope: Scope,
@@ -432,9 +433,10 @@ impl MovePackage {
             Ok(Self::at_version(ctx, scope, key.address, v).await?)
         } else if let Some(cp) = key.at_checkpoint {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+        } else if let Some(cp) = scope.checkpoint_viewed_at() {
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
         } else {
-            let cp: UInt53 = scope.checkpoint_viewed_at().into();
-            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+            Ok(None)
         }
     }
 
@@ -512,11 +514,16 @@ impl MovePackage {
 
     /// Construct a GraphQL representation of a `MovePackage` from its representation in the
     /// database.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) fn from_stored(
         scope: Scope,
         stored: StoredPackage,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+        if scope
+            .checkpoint_viewed_at()
+            .is_none_or(|cp| stored.cp_sequence_number as u64 > cp)
+        {
             return Ok(None);
         }
 
@@ -536,6 +543,8 @@ impl MovePackage {
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
     /// any package on-chain that has that original ID.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_by_version(
         ctx: &Context<'_>,
         scope: Scope,
@@ -544,6 +553,10 @@ impl MovePackage {
         filter: VersionFilter,
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
+
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
         let mut conn = Connection::new(false, false);
 
@@ -562,12 +575,12 @@ impl MovePackage {
 
         // The original ID record exists but points to a package that is not visible at the
         // checkpoint being viewed.
-        if original_id.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+        if original_id.cp_sequence_number as u64 > checkpoint_viewed_at {
             return Ok(conn);
         }
 
         let mut query = p::kv_packages
-            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(p::cp_sequence_number.le(checkpoint_viewed_at as i64))
             .filter(p::original_id.eq(original_id.original_id))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
@@ -629,6 +642,8 @@ impl MovePackage {
     }
 
     /// Paginate through all packages published in a range of checkpoints.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_by_checkpoint(
         ctx: &Context<'_>,
         scope: Scope,
@@ -637,12 +652,16 @@ impl MovePackage {
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
+
         let mut conn = Connection::new(false, false);
 
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
-            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(p::cp_sequence_number.le(checkpoint_viewed_at as i64))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
 
