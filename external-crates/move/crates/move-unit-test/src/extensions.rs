@@ -6,7 +6,7 @@
 //! Such extensions are enabled by cfg features and must be compiled into the test
 //! to be usable.
 
-use move_vm_runtime::natives::extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeExtensions};
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
@@ -32,10 +32,10 @@ pub fn set_extension_hook(p: Box<dyn Fn(&mut NativeContextExtensions<'_>) + Send
 
 /// Create all available native context extensions.
 #[allow(unused_mut, clippy::let_and_return)]
-pub(crate) fn new_extensions<'a>() -> NativeContextExtensions<'a> {
-    let mut e = NativeContextExtensions::default();
+pub(crate) fn new_extensions<'a>() -> NativeExtensions<'a> {
+    let mut e = NativeExtensions::default();
     if let Some(h) = &*EXTENSION_HOOK.lock().unwrap() {
-        (*h)(&mut e)
+        (*h)(&mut e.write());
     }
     e
 }
@@ -51,7 +51,7 @@ mod tests {
     fn test_extension_hook() {
         set_extension_hook(Box::new(my_hook));
         let ext = new_extensions();
-        let _e = ext.get::<TestExtension>();
+        let _e = ext.read().get::<TestExtension>();
     }
 
     #[derive(Tid)]

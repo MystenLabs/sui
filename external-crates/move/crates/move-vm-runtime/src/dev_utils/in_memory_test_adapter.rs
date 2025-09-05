@@ -8,7 +8,7 @@ use crate::{
         vm_test_adapter::VMTestAdapter,
     },
     execution::vm::MoveVM,
-    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
+    natives::{extensions::NativeExtensions, functions::NativeFunctions},
     runtime::MoveRuntime,
     shared::{
         linkage_context::LinkageContext,
@@ -130,7 +130,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
             original_id,
             package.clone(),
             &mut gas_meter,
-            NativeContextExtensions::default(),
+            NativeExtensions::default(),
         )
     }
 
@@ -161,7 +161,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     fn make_vm_with_native_extensions<'extensions>(
         &self,
         linkage_context: LinkageContext,
-        native_extensions: NativeContextExtensions<'extensions>,
+        native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>> {
         let Self { runtime, storage } = self;
         runtime.make_vm_with_native_extensions(storage, linkage_context, native_extensions)

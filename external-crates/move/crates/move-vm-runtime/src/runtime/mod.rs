@@ -6,7 +6,7 @@ use crate::{
     dbg_println,
     execution::{dispatch_tables::VMDispatchTables, interpreter::locals::BaseHeap, vm::MoveVM},
     jit,
-    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
+    natives::{extensions::NativeExtensions, functions::NativeFunctions},
     shared::{gas::GasMeter, linkage_context::LinkageContext, types::OriginalId},
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
@@ -86,18 +86,14 @@ impl MoveRuntime {
         data_cache: DataCache,
         link_context: LinkageContext,
     ) -> VMResult<MoveVM<'extensions>> {
-        self.make_vm_with_native_extensions(
-            data_cache,
-            link_context,
-            NativeContextExtensions::default(),
-        )
+        self.make_vm_with_native_extensions(data_cache, link_context, NativeExtensions::default())
     }
 
     pub fn make_vm_with_native_extensions<'extensions, DataCache: ModuleResolver>(
         &self,
         data_cache: DataCache,
         link_context: LinkageContext,
-        native_extensions: NativeContextExtensions<'extensions>,
+        native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>> {
         let all_packages = link_context.all_packages()?;
 
@@ -128,7 +124,7 @@ impl MoveRuntime {
             virtual_tables,
             vm_config: self.vm_config.clone(),
             link_context,
-            native_extensions,
+            native_extensions: native_extensions.clone(),
             base_heap,
         };
         Ok(instance)
@@ -155,7 +151,7 @@ impl MoveRuntime {
         original_id: OriginalId,
         pkg: SerializedPackage,
         _gas_meter: &mut impl GasMeter,
-        native_extensions: NativeContextExtensions<'extensions>,
+        native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
         let version_id = pkg.storage_id;
         dbg_println!("\n\nPublishing module at {version_id} (=> {original_id})\n\n");
@@ -207,7 +203,7 @@ impl MoveRuntime {
             virtual_tables,
             vm_config: self.vm_config.clone(),
             link_context,
-            native_extensions,
+            native_extensions: native_extensions.clone(),
             base_heap,
         };
         Ok((verified_pkg, instance))
