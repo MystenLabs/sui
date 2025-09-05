@@ -8,7 +8,7 @@ use crate::{
         config::ResolutionConfig,
         legacy_linkage,
         resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
-        resolved_linkage::ResolvedLinkage,
+        resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
     },
 };
 use sui_protocol_config::ProtocolConfig;
@@ -51,7 +51,7 @@ pub fn linkage_analysis_for_protocol_config<Mode: ExecutionMode>(
 pub fn type_linkage(
     ids: &[ObjectID],
     store: &dyn PackageStore,
-) -> Result<ResolvedLinkage, ExecutionError> {
+) -> Result<ExecutableLinkage, ExecutionError> {
     let mut resolution_table = ResolutionTable::empty();
     for id in ids {
         let pkg = get_package(id, store)?;
@@ -77,5 +77,7 @@ pub fn type_linkage(
         }
     }
 
-    Ok(ResolvedLinkage::from_resolution_table(resolution_table))
+    Ok(ExecutableLinkage::new(
+        ResolvedLinkage::from_resolution_table(resolution_table),
+    ))
 }
