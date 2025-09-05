@@ -1,0 +1,52 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-50:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6771600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 51-55:
+//# programmable --sender A --inputs 0 --dev-inspect
+//> 0: test::m::public_take_and_return_pure(Input(0));
+//> 1: test::m::entry_take_pure(Result(0));
+// Object tainted
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+
+task 3, lines 56-60:
+//# programmable --sender A --inputs 0 --dev-inspect
+//> 0: test::m::create_object();
+//> 1: test::m::entry_take_object(Result(0));
+// Pass a value created by a public function
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+
+task 4, lines 61-65:
+//# programmable --sender A --dev-inspect
+//> 0: test::m::public_pure_return_value();
+//> 1: test::m::entry_take_pure(Result(0));
+// Use input on each call instead of result is allowed for pure inputs
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+
+task 5, lines 66-70:
+//# programmable --sender A --inputs 0 --dev-inspect
+//> 0: test::m::public_take_pure(Input(0));
+//> 1: test::m::entry_take_pure(Input(0));
+// Entry to entry
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, lines 71-73:
+//# programmable --sender A --dev-inspect
+//> 0: test::m::entry_return_u64();
+//> 1: test::m::entry_take_pure(Result(0));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1

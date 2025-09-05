@@ -1,0 +1,398 @@
+// Move bytecode v6
+module 1.vector {
+
+native public empty<Ty0>(): vector<Ty0>;
+
+native public length<Ty0>(Arg0: &vector<Ty0>): u64;
+
+native public borrow<Ty0>(Arg0: &vector<Ty0>, Arg1: u64): &Ty0;
+
+native public push_back<Ty0>(Arg0: &mut vector<Ty0>, Arg1: Ty0);
+
+native public borrow_mut<Ty0>(Arg0: &mut vector<Ty0>, Arg1: u64): &mut Ty0;
+
+native public pop_back<Ty0>(Arg0: &mut vector<Ty0>): Ty0;
+
+native public destroy_empty<Ty0>(Arg0: vector<Ty0>);
+
+native public swap<Ty0>(Arg0: &mut vector<Ty0>, Arg1: u64, Arg2: u64);
+
+public singleton<Ty0>(Arg0: Ty0): vector<Ty0> {
+L1:	loc0: vector<Ty0>
+B0:
+	0: VecPack(10, 0)
+	1: StLoc[1](loc0: vector<Ty0>)
+	2: MutBorrowLoc[1](loc0: vector<Ty0>)
+	3: MoveLoc[0](Arg0: Ty0)
+	4: VecPushBack(10)
+	5: MoveLoc[1](loc0: vector<Ty0>)
+	6: Ret
+}
+
+public reverse<Ty0>(Arg0: &mut vector<Ty0>) {
+L1:	loc0: u64
+L2:	loc1: u64
+L3:	loc2: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	1: FreezeRef
+	2: VecLen(10)
+	3: StLoc[3](loc2: u64)
+	4: CopyLoc[3](loc2: u64)
+	5: LdU64(0)
+	6: Eq
+	7: BrFalse(11)
+B1:
+	8: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	9: Pop
+	10: Ret
+B2:
+	11: LdU64(0)
+	12: StLoc[2](loc1: u64)
+	13: MoveLoc[3](loc2: u64)
+	14: LdU64(1)
+	15: Sub
+	16: StLoc[1](loc0: u64)
+B3:
+	17: CopyLoc[2](loc1: u64)
+	18: CopyLoc[1](loc0: u64)
+	19: Lt
+	20: BrFalse(34)
+B4:
+	21: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	22: CopyLoc[2](loc1: u64)
+	23: CopyLoc[1](loc0: u64)
+	24: VecSwap(10)
+	25: MoveLoc[2](loc1: u64)
+	26: LdU64(1)
+	27: Add
+	28: StLoc[2](loc1: u64)
+	29: MoveLoc[1](loc0: u64)
+	30: LdU64(1)
+	31: Sub
+	32: StLoc[1](loc0: u64)
+	33: Branch(17)
+B5:
+	34: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	35: Pop
+	36: Ret
+}
+
+public append<Ty0>(Arg0: &mut vector<Ty0>, Arg1: vector<Ty0>) {
+L2:	loc0: u64
+L3:	loc1: Ty0
+L4:	loc2: u64
+L5:	loc3: u64
+L6:	loc4: vector<Ty0>
+B0:
+	0: MoveLoc[1](Arg1: vector<Ty0>)
+	1: StLoc[6](loc4: vector<Ty0>)
+	2: MutBorrowLoc[6](loc4: vector<Ty0>)
+	3: Call reverse<Ty0>(&mut vector<Ty0>)
+	4: ImmBorrowLoc[6](loc4: vector<Ty0>)
+	5: VecLen(10)
+	6: StLoc[2](loc0: u64)
+	7: LdU64(0)
+	8: StLoc[4](loc2: u64)
+	9: MoveLoc[2](loc0: u64)
+	10: StLoc[5](loc3: u64)
+B1:
+	11: CopyLoc[4](loc2: u64)
+	12: CopyLoc[5](loc3: u64)
+	13: Lt
+	14: BrFalse(28)
+B2:
+	15: CopyLoc[4](loc2: u64)
+	16: Pop
+	17: MutBorrowLoc[6](loc4: vector<Ty0>)
+	18: VecPopBack(10)
+	19: StLoc[3](loc1: Ty0)
+	20: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	21: MoveLoc[3](loc1: Ty0)
+	22: VecPushBack(10)
+	23: MoveLoc[4](loc2: u64)
+	24: LdU64(1)
+	25: Add
+	26: StLoc[4](loc2: u64)
+	27: Branch(11)
+B3:
+	28: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	29: Pop
+	30: MoveLoc[6](loc4: vector<Ty0>)
+	31: VecUnpack(10, 0)
+	32: Ret
+}
+
+public is_empty<Ty0>(Arg0: &vector<Ty0>): bool {
+B0:
+	0: MoveLoc[0](Arg0: &vector<Ty0>)
+	1: VecLen(10)
+	2: LdU64(0)
+	3: Eq
+	4: Ret
+}
+
+public contains<Ty0>(Arg0: &vector<Ty0>, Arg1: &Ty0): bool {
+L2:	loc0: u64
+L3:	loc1: u64
+B0:
+	0: LdU64(0)
+	1: StLoc[2](loc0: u64)
+	2: CopyLoc[0](Arg0: &vector<Ty0>)
+	3: VecLen(10)
+	4: StLoc[3](loc1: u64)
+B1:
+	5: CopyLoc[2](loc0: u64)
+	6: CopyLoc[3](loc1: u64)
+	7: Lt
+	8: BrFalse(27)
+B2:
+	9: Branch(10)
+B3:
+	10: CopyLoc[0](Arg0: &vector<Ty0>)
+	11: CopyLoc[2](loc0: u64)
+	12: VecImmBorrow(10)
+	13: CopyLoc[1](Arg1: &Ty0)
+	14: Eq
+	15: BrFalse(22)
+B4:
+	16: MoveLoc[0](Arg0: &vector<Ty0>)
+	17: Pop
+	18: MoveLoc[1](Arg1: &Ty0)
+	19: Pop
+	20: LdTrue
+	21: Ret
+B5:
+	22: MoveLoc[2](loc0: u64)
+	23: LdU64(1)
+	24: Add
+	25: StLoc[2](loc0: u64)
+	26: Branch(5)
+B6:
+	27: MoveLoc[0](Arg0: &vector<Ty0>)
+	28: Pop
+	29: MoveLoc[1](Arg1: &Ty0)
+	30: Pop
+	31: LdFalse
+	32: Ret
+}
+
+public index_of<Ty0>(Arg0: &vector<Ty0>, Arg1: &Ty0): bool * u64 {
+L2:	loc0: u64
+L3:	loc1: u64
+B0:
+	0: LdU64(0)
+	1: StLoc[2](loc0: u64)
+	2: CopyLoc[0](Arg0: &vector<Ty0>)
+	3: VecLen(10)
+	4: StLoc[3](loc1: u64)
+B1:
+	5: CopyLoc[2](loc0: u64)
+	6: CopyLoc[3](loc1: u64)
+	7: Lt
+	8: BrFalse(28)
+B2:
+	9: Branch(10)
+B3:
+	10: CopyLoc[0](Arg0: &vector<Ty0>)
+	11: CopyLoc[2](loc0: u64)
+	12: VecImmBorrow(10)
+	13: CopyLoc[1](Arg1: &Ty0)
+	14: Eq
+	15: BrFalse(23)
+B4:
+	16: MoveLoc[0](Arg0: &vector<Ty0>)
+	17: Pop
+	18: MoveLoc[1](Arg1: &Ty0)
+	19: Pop
+	20: LdTrue
+	21: MoveLoc[2](loc0: u64)
+	22: Ret
+B5:
+	23: MoveLoc[2](loc0: u64)
+	24: LdU64(1)
+	25: Add
+	26: StLoc[2](loc0: u64)
+	27: Branch(5)
+B6:
+	28: MoveLoc[0](Arg0: &vector<Ty0>)
+	29: Pop
+	30: MoveLoc[1](Arg1: &Ty0)
+	31: Pop
+	32: LdFalse
+	33: LdU64(0)
+	34: Ret
+}
+
+public remove<Ty0>(Arg0: &mut vector<Ty0>, Arg1: u64): Ty0 {
+L2:	loc0: u64
+L3:	loc1: &mut vector<Ty0>
+L4:	loc2: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	1: FreezeRef
+	2: VecLen(10)
+	3: StLoc[4](loc2: u64)
+	4: CopyLoc[1](Arg1: u64)
+	5: CopyLoc[4](loc2: u64)
+	6: Ge
+	7: BrFalse(12)
+B1:
+	8: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	9: Pop
+	10: LdConst[0](u64: 131072)
+	11: Abort
+B2:
+	12: MoveLoc[4](loc2: u64)
+	13: LdU64(1)
+	14: Sub
+	15: StLoc[4](loc2: u64)
+B3:
+	16: CopyLoc[1](Arg1: u64)
+	17: CopyLoc[4](loc2: u64)
+	18: Lt
+	19: BrFalse(33)
+B4:
+	20: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	21: StLoc[3](loc1: &mut vector<Ty0>)
+	22: CopyLoc[1](Arg1: u64)
+	23: StLoc[2](loc0: u64)
+	24: MoveLoc[1](Arg1: u64)
+	25: LdU64(1)
+	26: Add
+	27: StLoc[1](Arg1: u64)
+	28: MoveLoc[3](loc1: &mut vector<Ty0>)
+	29: MoveLoc[2](loc0: u64)
+	30: CopyLoc[1](Arg1: u64)
+	31: VecSwap(10)
+	32: Branch(16)
+B5:
+	33: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	34: VecPopBack(10)
+	35: Ret
+}
+
+public insert<Ty0>(Arg0: &mut vector<Ty0>, Arg1: Ty0, Arg2: u64) {
+L3:	loc0: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	1: FreezeRef
+	2: VecLen(10)
+	3: StLoc[3](loc0: u64)
+	4: CopyLoc[2](Arg2: u64)
+	5: CopyLoc[3](loc0: u64)
+	6: Gt
+	7: BrFalse(12)
+B1:
+	8: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	9: Pop
+	10: LdConst[0](u64: 131072)
+	11: Abort
+B2:
+	12: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	13: MoveLoc[1](Arg1: Ty0)
+	14: VecPushBack(10)
+B3:
+	15: CopyLoc[2](Arg2: u64)
+	16: CopyLoc[3](loc0: u64)
+	17: Lt
+	18: BrFalse(28)
+B4:
+	19: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	20: CopyLoc[2](Arg2: u64)
+	21: CopyLoc[3](loc0: u64)
+	22: VecSwap(10)
+	23: MoveLoc[2](Arg2: u64)
+	24: LdU64(1)
+	25: Add
+	26: StLoc[2](Arg2: u64)
+	27: Branch(15)
+B5:
+	28: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	29: Pop
+	30: Ret
+}
+
+public swap_remove<Ty0>(Arg0: &mut vector<Ty0>, Arg1: u64): Ty0 {
+L2:	loc0: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	1: FreezeRef
+	2: VecLen(10)
+	3: LdU64(0)
+	4: Neq
+	5: BrFalse(7)
+B1:
+	6: Branch(11)
+B2:
+	7: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	8: Pop
+	9: LdConst[0](u64: 131072)
+	10: Abort
+B3:
+	11: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	12: FreezeRef
+	13: VecLen(10)
+	14: LdU64(1)
+	15: Sub
+	16: StLoc[2](loc0: u64)
+	17: CopyLoc[0](Arg0: &mut vector<Ty0>)
+	18: MoveLoc[1](Arg1: u64)
+	19: MoveLoc[2](loc0: u64)
+	20: VecSwap(10)
+	21: MoveLoc[0](Arg0: &mut vector<Ty0>)
+	22: VecPopBack(10)
+	23: Ret
+}
+
+public flatten<Ty0>(Arg0: vector<vector<Ty0>>): vector<Ty0> {
+L1:	loc0: u64
+L2:	loc1: u64
+L3:	loc2: vector<Ty0>
+L4:	loc3: u64
+L5:	loc4: vector<Ty0>
+L6:	loc5: vector<vector<Ty0>>
+B0:
+	0: VecPack(10, 0)
+	1: StLoc[3](loc2: vector<Ty0>)
+	2: MoveLoc[0](Arg0: vector<vector<Ty0>>)
+	3: StLoc[6](loc5: vector<vector<Ty0>>)
+	4: MutBorrowLoc[6](loc5: vector<vector<Ty0>>)
+	5: Call reverse<vector<Ty0>>(&mut vector<vector<Ty0>>)
+	6: ImmBorrowLoc[6](loc5: vector<vector<Ty0>>)
+	7: VecLen(1)
+	8: StLoc[1](loc0: u64)
+	9: LdU64(0)
+	10: StLoc[2](loc1: u64)
+	11: MoveLoc[1](loc0: u64)
+	12: StLoc[4](loc3: u64)
+B1:
+	13: CopyLoc[2](loc1: u64)
+	14: CopyLoc[4](loc3: u64)
+	15: Lt
+	16: BrFalse(30)
+B2:
+	17: CopyLoc[2](loc1: u64)
+	18: Pop
+	19: MutBorrowLoc[6](loc5: vector<vector<Ty0>>)
+	20: VecPopBack(1)
+	21: StLoc[5](loc4: vector<Ty0>)
+	22: MutBorrowLoc[3](loc2: vector<Ty0>)
+	23: MoveLoc[5](loc4: vector<Ty0>)
+	24: Call append<Ty0>(&mut vector<Ty0>, vector<Ty0>)
+	25: MoveLoc[2](loc1: u64)
+	26: LdU64(1)
+	27: Add
+	28: StLoc[2](loc1: u64)
+	29: Branch(13)
+B3:
+	30: MoveLoc[6](loc5: vector<vector<Ty0>>)
+	31: VecUnpack(1, 0)
+	32: MoveLoc[3](loc2: vector<Ty0>)
+	33: Ret
+}
+
+Constants [
+	0 => u64: 131072
+]
+}

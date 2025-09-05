@@ -4,12 +4,14 @@
 /// Example of using tlock or IBE decryption in Move.
 module ibe::example;
 
-use sui::{bls12381::{Self, G1, G2}, group_ops::{bytes, equal, Element}, hash::blake2b256};
+use sui::bls12381::{Self, G1, G2};
+use sui::group_ops::{bytes, equal, Element};
+use sui::hash::blake2b256;
 
 const EInvalidLength: u64 = 1;
 
 /// An encryption of 32 bytes message following https://eprint.iacr.org/2023/189.pdf.
-public struct IbeEncryption has store, drop, copy {
+public struct IbeEncryption has copy, drop, store {
     u: Element<G2>,
     v: vector<u8>,
     w: vector<u8>,

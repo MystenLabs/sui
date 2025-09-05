@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/typing/match_loop_return.move:7:23
+   │  
+ 7 │               match (v) {
+   │ ╭───────────────────────^
+ 8 │ │                 255 => return 'search false,
+ 9 │ │                 0 => return 'search true,
+10 │ │                 _ => return 'search true,
+11 │ │             }
+   │ ╰─────────────^ Expected a value. Any code surrounding or after this expression will not be reached
+   │  
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

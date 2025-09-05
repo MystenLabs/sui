@@ -4,11 +4,11 @@
 
 use super::core::{self, Subst, TParamSubst};
 use crate::{
-    diagnostics::{codes::TypeSafety, Diagnostic},
+    diagnostics::{Diagnostic, codes::TypeSafety},
     expansion::ast::ModuleIdent,
     naming::ast::{self as N, TParam, TParamID, Type, Type_},
     parser::ast::FunctionName,
-    shared::{unique_map::UniqueMap, CompilationEnv},
+    shared::{CompilationEnv, unique_map::UniqueMap},
     typing::ast as T,
 };
 use move_ir_types::location::*;
@@ -79,7 +79,7 @@ impl<'a> Context<'a> {
         use N::Type_::*;
         match targ_ {
             Var(_) => panic!("ICE tvar after expansion"),
-            Unit | Anything | UnresolvedError => (),
+            Unit | Anything | Void | UnresolvedError => (),
             Ref(_, t) => {
                 let info = EdgeInfo {
                     edge: Edge::Nested,

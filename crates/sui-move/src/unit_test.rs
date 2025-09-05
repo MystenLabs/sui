@@ -43,13 +43,14 @@ impl Test {
         build_config: BuildConfig,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
-        if !cfg!(debug_assertions) && compute_coverage {
+        if !cfg!(feature = "tracing") && compute_coverage {
             return Err(anyhow::anyhow!(
-                "The --coverage flag is currently supported only in debug builds. Please build the Sui CLI from source in debug mode."
+                "The --coverage flag is currently supported only in builds built with the `tracing` feature enabled. \
+                Please build the Sui CLI from source with `--features tracing` to use this flag."
             ));
         }
         // save disassembly if trace execution is enabled
-        let save_disassembly = self.test.trace_execution.is_some();
+        let save_disassembly = self.test.trace_execution;
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
@@ -135,6 +136,7 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         &SuiAddress::ZERO,
         &TransactionDigest::default(),
         &0,
+        0,
         0,
         0,
         0,

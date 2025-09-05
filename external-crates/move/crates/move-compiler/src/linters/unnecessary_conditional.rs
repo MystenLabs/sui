@@ -42,8 +42,7 @@ simple_visitor!(
                 ));
             }
             (v1, v2) if v1 == v2 => {
-                let msg =
-                    "Detected a redundant conditional expression 'if (..) v else v', where each \
+                let msg = "Detected a redundant conditional expression 'if (..) v else v', where each \
                     branch results in the same value 'v'. Consider using the value directly";
                 self.add_diag(diag!(
                     StyleCodes::UnnecessaryConditional.diag_info(),

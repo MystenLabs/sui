@@ -6,7 +6,7 @@ module 0x42::m {
         C(T)
     }
 
-    fun t0(abc: &ABC): u64 {
+    fun t0(abc: &ABC<u64>): u64 {
         match (abc) {
             ABC::C(x) => x,
             ABC::A(x) => x,

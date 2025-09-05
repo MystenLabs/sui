@@ -104,7 +104,7 @@ where
     let mut cursor = Cursor::new(buffer);
 
     while cursor.has_remaining() {
-        let len = cursor.get_u64_varint().unwrap() as usize;
+        let len = cursor.try_get_u64_varint().unwrap() as usize;
 
         if cursor.remaining() < len {
             return Err(io::Error::new(

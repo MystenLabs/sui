@@ -9,6 +9,7 @@
 // Bounds checks are implemented in the `vm` crate.
 pub mod ability_cache;
 pub mod ability_field_requirements;
+pub mod absint;
 pub mod check_duplication;
 pub mod code_unit_verifier;
 pub mod constants;
@@ -31,7 +32,7 @@ pub use code_unit_verifier::CodeUnitVerifier;
 pub use data_defs::RecursiveDataDefChecker;
 pub use instruction_consistency::InstructionConsistency;
 pub use script_signature::{
-    legacy_script_signature_checks, no_additional_script_signature_checks, FnCheckScriptSignature,
+    FnCheckScriptSignature, legacy_script_signature_checks, no_additional_script_signature_checks,
 };
 pub use signature::SignatureChecker;
 pub use verifier::{

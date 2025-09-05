@@ -10,13 +10,13 @@ use crate::{
     cfgir::absint::*,
     diag,
     diagnostics::{
-        codes::{DiagnosticCode, ReferenceSafety},
         Diagnostic, Diagnostics,
+        codes::{DiagnosticCode, ReferenceSafety},
     },
     expansion::ast::Mutability,
     hlir::{
         ast::{self as H, *},
-        translate::{display_var, DisplayVar},
+        translate::{DisplayVar, display_var},
     },
     parser::ast::Field,
     shared::{unique_map::UniqueMap, *},

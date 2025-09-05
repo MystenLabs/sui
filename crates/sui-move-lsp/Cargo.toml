@@ -11,4 +11,6 @@ clap = { version = "4.1.4", features = ["derive"] }
 
 bin-version.workspace = true
 move-analyzer.workspace = true
+sui-move-build.workspace = true
+sui-package-management.workspace = true
 

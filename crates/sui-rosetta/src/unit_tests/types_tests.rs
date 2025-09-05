@@ -97,7 +97,8 @@ async fn test_metadata_total_coin_value_js_conversion_for_large_balance() {
 
     let prod_metadata = ConstructionMetadata {
         sender: Default::default(),
-        coins: vec![],
+        gas_coins: vec![],
+        extra_gas_coins: vec![],
         objects: vec![],
         total_coin_value: 65_000_004_233_578_496,
         gas_price: 0,

@@ -3,8 +3,8 @@
 
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use prometheus::{
-    register_histogram_with_registry, register_int_gauge_with_registry, Histogram, IntGauge,
-    Registry,
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use std::sync::Arc;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -48,6 +48,12 @@ impl Metrics {
         }
     }
 
+    pub fn update_checkpoints_synced_from_archive(&self) {
+        if let Some(inner) = &self.0 {
+            inner.checkpoints_synced_from_archive.inc();
+        }
+    }
+
     pub fn checkpoint_summary_age_metrics(&self) -> Option<(&Histogram, &MystenHistogram)> {
         if let Some(inner) = &self.0 {
             return Some((
@@ -63,6 +69,7 @@ struct Inner {
     highest_known_checkpoint: IntGauge,
     highest_verified_checkpoint: IntGauge,
     highest_synced_checkpoint: IntGauge,
+    checkpoints_synced_from_archive: IntCounter,
     checkpoint_summary_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     checkpoint_summary_age_ms: MystenHistogram,
@@ -91,7 +98,12 @@ impl Inner {
                 registry
             )
             .unwrap(),
-
+            checkpoints_synced_from_archive: register_int_counter_with_registry!(
+                "checkpoints_synced_from_archive",
+                "Checkpoints synced from archive",
+                registry
+            )
+            .unwrap(),
             checkpoint_summary_age: register_histogram_with_registry!(
                 "checkpoint_summary_age",
                 "Age of checkpoints summaries when they arrive and are verified.",

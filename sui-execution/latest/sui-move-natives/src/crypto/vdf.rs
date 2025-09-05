@@ -14,10 +14,7 @@ use move_vm_runtime::{
         values::{Value, VectorRef},
         Type,
     },
-    natives::{
-        extensions::NativeContextMut,
-        functions::{NativeResult, PartialVMError},
-    },
+    natives::functions::{NativeResult, PartialVMError},
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -27,13 +24,12 @@ use std::collections::VecDeque;
 pub const INVALID_INPUT_ERROR: u64 = 0;
 pub const NOT_SUPPORTED_ERROR: u64 = 1;
 
-fn is_supported(context: &NativeContext) -> bool {
-    context
+fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
-        .borrow()
+        .get::<ObjectRuntime>()?
         .protocol_config
-        .enable_vdf()
+        .enable_vdf())
 }
 
 #[derive(Clone)]
@@ -59,14 +55,14 @@ pub fn vdf_verify_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
     // Load the cost parameters from the protocol config
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .vdf_cost_params
         .clone();
 
@@ -129,14 +125,14 @@ pub fn hash_to_input_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
     // Load the cost parameters from the protocol config
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .vdf_cost_params
         .clone();
 

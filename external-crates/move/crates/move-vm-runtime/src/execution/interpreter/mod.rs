@@ -14,7 +14,6 @@ use crate::{
 };
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
-use move_vm_profiler::{profile_close_frame, profile_open_frame};
 use std::sync::Arc;
 
 mod eval;
@@ -44,7 +43,6 @@ pub(crate) fn run(
             &args,
         )
     });
-    profile_open_frame!(gas_meter, fun_ref.pretty_string());
 
     if fun_ref.is_native() {
         let return_result = eval::call_native_with_args(
@@ -64,7 +62,6 @@ pub(crate) fn run(
         trace(tracer, |tracer| {
             tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
         });
-        profile_close_frame!(gas_meter, fun_ref.pretty_string());
         return_result.map(|values| values.into_iter().collect())
     } else {
         let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {

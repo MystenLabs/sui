@@ -1,0 +1,29 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-37:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7075600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 39:
+//# run a::m::t1 --sender A
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 41:
+//# run a::m::t2 --sender A --args object(2,1)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object (function index 11) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(11), 0)] }), command: Some(0) } }
+
+task 4, line 43:
+//# run a::m::t3 --sender A --args object(2,1)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object_mut (function index 12) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 12, instruction: 0, function_name: Some("borrow_child_object_mut") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }

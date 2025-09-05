@@ -8,9 +8,8 @@ fn main() {
     // Generate documentation
     {
         time_it("Generating stdlib documentation", || {
-            std::fs::remove_dir_all(move_stdlib::move_stdlib_docs_full_path()).unwrap_or(());
-            //std::fs::create_dir_all(&move_stdlib::move_stdlib_docs_full_path()).unwrap();
-            move_stdlib::build_stdlib_doc(move_stdlib::move_stdlib_docs_full_path()).unwrap();
+            std::fs::remove_dir_all(move_stdlib::docs_full_path()).unwrap_or(());
+            move_stdlib::build_doc(move_stdlib::docs_full_path()).unwrap();
         });
     }
 }

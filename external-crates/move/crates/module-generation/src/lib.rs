@@ -8,7 +8,7 @@ mod padding;
 mod utils;
 
 pub use generator::{
-    generate_module, generate_modules, generate_verified_modules, ModuleGenerator,
+    ModuleGenerator, generate_module, generate_modules, generate_verified_modules,
 };
 pub use options::ModuleGeneratorOptions;
 pub use padding::Pad;

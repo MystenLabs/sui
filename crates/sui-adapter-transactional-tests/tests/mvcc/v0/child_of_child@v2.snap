@@ -1,0 +1,110 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-66:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9218800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 68-70:
+//# programmable --sender A --inputs @A
+//> 0: test::m::new();
+//> TransferObjects([Result(0)], Input(0))
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 9750800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 72:
+//# view-object 2,4
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,4),
+        },
+    },
+    value: 0u64,
+}
+
+task 4, lines 74-75:
+//# programmable --sender A --inputs object(2,4) 1 2 3
+//> test::m::set(Input(0), Input(1), Input(2), Input(3))
+mutated: object(0,0), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 4841200,  storage_rebate: 4792788, non_refundable_storage_fee: 48412
+
+task 5, line 77:
+//# view-object 2,4
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,4),
+        },
+    },
+    value: 1u64,
+}
+
+task 6, lines 79-80:
+//# programmable --sender A --inputs object(2,4)
+//> test::m::remove(Input(0))
+mutated: object(0,0), object(2,4)
+deleted: object(2,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 5951484, non_refundable_storage_fee: 60116
+
+task 7, lines 82-85:
+//# view-object 2,4
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,4),
+        },
+    },
+    value: 1u64,
+}
+
+task 8, lines 87-88:
+//# programmable --sender A --inputs object(2,4)@2 0 0 vector[0] --dev-inspect
+//> test::m::check(Input(0), Input(1), Input(2), Input(3))
+mutated: object(_), object(2,4)
+gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+
+task 9, lines 90-91:
+//# programmable --sender A --inputs object(2,4)@3 1 2 vector[3] --dev-inspect
+//> test::m::check(Input(0), Input(1), Input(2), Input(3))
+mutated: object(_), object(2,4)
+gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+
+task 10, lines 93-97:
+//# programmable --sender A --inputs object(2,4)@4 1 2 vector[] --dev-inspect
+//> test::m::check(Input(0), Input(1), Input(2), Input(3))
+// dev-inspect with 'check' and _incorrect_ values
+mutated: object(_), object(2,4)
+gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+
+task 11, lines 99-100:
+//# programmable --sender A --inputs object(2,4)@3 0 0 vector[0] --dev-inspect
+//> test::m::check(Input(0), Input(1), Input(2), Input(3))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 10, function_name: Some("check") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 10, function_name: Some("check") }, 0) in command 0
+
+task 12, lines 102-103:
+//# programmable --sender A --inputs object(2,4)@4 1 2 vector[3] --dev-inspect
+//> test::m::check(Input(0), Input(1), Input(2), Input(3))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+
+task 13, lines 105-106:
+//# programmable --sender A --inputs object(2,4)@2 1 2 vector[] --dev-inspect
+//> test::m::check(Input(0), Input(1), Input(2), Input(3))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 10, function_name: Some("check") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 10, function_name: Some("check") }, 0) in command 0

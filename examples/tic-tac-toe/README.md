@@ -2,14 +2,14 @@
 
 This is an end-to-end example for on-chain tic-tac-toe. It includes:
 
-- A [Move package](./move), containing two protocols for running a game of
-  tic-tac-toe. One that uses shared objects and consensus and another
-  that uses owned objects, and the fast path (no consensus).
-- A [React front-end](./ui), in TypeScript built on top of
-  `create-react-dapp`, using the TS SDK and `dapp-kit`.
-- A [Rust CLI](./cli), using the Rust SDK.
-- [Scripts](./scripts) to publish packages and update configs used
-  while building the front-end and CLI.
+-   A [Move package](./move), containing two protocols for running a game of
+    tic-tac-toe. One that uses shared objects and consensus and another
+    that uses owned objects, and the fast path (no consensus).
+-   A [React front-end](./ui), in TypeScript built on top of
+    `create-react-dapp`, using the TS SDK and `dapp-kit`.
+-   A [Rust CLI](./cli), using the Rust SDK.
+-   [Scripts](./scripts) to publish packages and update configs used
+    while building the front-end and CLI.
 
 ## Shared tic tac toe
 
@@ -23,7 +23,7 @@ Validation rules in the Move package ensure that the sender of each
 move corresponds to the address of the next player, and the game can
 only be `burn`-ed if it has ended.
 
-``` mermaid
+```mermaid
 sequenceDiagram
     Player X->>Game: new
     Player X->>Game: place_mark
@@ -56,7 +56,7 @@ to any winning player. Unlike the shared protocol, only the admin can
 clean-up the Game once it has finished, because only they have access
 to it.
 
-``` mermaid
+```mermaid
 sequenceDiagram
     activate Player X
     Player X->>Admin: new: Game

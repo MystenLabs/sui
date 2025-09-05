@@ -3,6 +3,6 @@ source: crates/move-package/tests/test_runner.rs
 ---
 When resolving dependencies for package Root, conflicting dependencies found:
 At A -> C
-	D = { local = "deps_only/D-loc-1", addr_subst = { "P1N" = "N" } }
+	D = { local = "deps_only/D-loc-1", addr_subst = { "P1N" = "N" } } # version 1
 At B -> C
-	D = { local = "deps_only/D-loc-2" }
+	D = { local = "deps_only/D-loc-2" } # version 1

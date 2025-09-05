@@ -5,21 +5,15 @@
 
 // This test is checking details about the test runner:
 //
-// (1) It does not support GraphQL queries.
-// (2) Tests will fail if the JSON-RPC query does not contian methods or
+// (1) Tests will fail if the JSON-RPC query does not contain methods or
 //     params.
 //     - No JSON object.
 //     - Missing params.
 //     - Extra trailing comma (tricky!)
-// (3) Displaying response headers is supported.
+// (2) Displaying response headers is supported.
 //
 // The test description is at the top because the JSON does not have explicit
 // syntax for comments.
-
-//# run-graphql
-{
-  chainIdentifier
-}
 
 //# run-jsonrpc
 

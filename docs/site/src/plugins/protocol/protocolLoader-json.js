@@ -119,6 +119,9 @@ const protocolInject = async function (source) {
       )}\n</div>`,
     );
     content.push("<div className='ml-4'>");
+    if (file.messages.length > 0){
+      content.push(`<h4 className="mt-8">Messages</h4>`);
+    }
     for (const message of file.messages) {
       let fields = [];
       let oneofFields = [];
@@ -139,7 +142,7 @@ const protocolInject = async function (source) {
       }
       fields = messageSort(fields);
       oneofFields = messageSort(oneofFields);
-      content.push(`<div className="pt-8"></div>`);
+      content.push(`<div className="mt-4"></div>`);
       content.push(`\n### ${message.name} {#${createId(message.fullName)}}`);
       content.push(
         `<div className="text-lg">\n${handleCurlies(message.description)
@@ -268,10 +271,10 @@ const protocolInject = async function (source) {
     }
     if (file.enums.length > 0) {
       const cellDesc = "mt-4";
-
+      content.push(`<h4 className="mt-8">Enums</h4>`);
       for (const num of file.enums) {
         content.push(
-          `<h4 className="" id="${createId(num.fullName)}">${num.name}</h4>`,
+          `<h4 className="mt-4" id="${createId(num.fullName)}">${num.name}</h4>`,
         );
         content.push(
           `<div class="${cellDesc}">${handleCurlies(num.description)
@@ -286,9 +289,10 @@ const protocolInject = async function (source) {
           content.push(
             `<div className="${colHeaderStyle}"><code>${val.name}</code></div>`,
           );
-          content.push(``);
+          //
           content.push(
-            `<div className="${colCellStyle}">${val.description}</div>`,
+            `<div className="${colCellStyle}">${handleCurlies(val.description).replace(/\n+\/?/g, " ")
+              .replace(/<(http.*)>/g, "$1")}</div>`,
           );
         }
         content.push(`</div>`);

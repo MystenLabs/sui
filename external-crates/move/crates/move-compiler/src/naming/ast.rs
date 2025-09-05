@@ -5,13 +5,13 @@
 use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
-        ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
-        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, Value,
-        Value_, Visibility,
+        AbilitySet, Attributes, DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent,
+        Mutability, Value, Value_, Visibility, ability_constraints_ast_debug,
+        ability_modifiers_ast_debug,
     },
     parser::ast::{
-        self as P, Ability_, BinOp, ConstantName, DatatypeName, DocComment, Field, FunctionName,
-        TargetKind, UnaryOp, VariantName, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        self as P, Ability_, BinOp, ConstantName, DatatypeName, DocComment, ENTRY_MODIFIER, Field,
+        FunctionName, MACRO_MODIFIER, NATIVE_MODIFIER, TargetKind, UnaryOp, VariantName,
     },
     shared::{
         ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
@@ -145,6 +145,8 @@ pub struct ModuleDefinition {
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
+    /// The named address map used by this module during `expansion`.
+    pub named_address_map: Arc<NamedAddressMap>,
     pub attributes: Attributes,
     pub target_kind: TargetKind,
     pub use_funs: UseFuns,
@@ -291,7 +293,7 @@ pub enum BuiltinTypeName_ {
 }
 pub type BuiltinTypeName = Spanned<BuiltinTypeName_>;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
 pub enum TypeName_ {
     // exp-list/tuple type
@@ -324,6 +326,7 @@ pub enum Type_ {
     Fun(Vec<Type>, Box<Type>),
     Var(TVar),
     Anything,
+    Void,
     UnresolvedError,
 }
 pub type Type = Spanned<Type_>;
@@ -396,6 +399,12 @@ pub struct Lambda {
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
+    // Collected during macro expansion. These additional annotations can come from `Annotate` or
+    // more subtly by passing a lambda from one macro to another.
+    // Conceptually we could handle this by eta-expanding the lambda
+    // invocation, so that `$f` becomes `|...|$f(...)`, but due to the limited nature here, just
+    // collecting the annotations is easier
+    pub extra_annotations: Vec<Spanned<(Vec<Type>, Type)>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -775,7 +784,7 @@ impl TypeName_ {
     pub fn single_type(&self) -> Option<TypeName_> {
         match self {
             TypeName_::Multiple(_) => None,
-            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(self.clone()),
+            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(*self),
         }
     }
 
@@ -904,26 +913,28 @@ impl Type_ {
     }
 
     pub fn abilities(&self, loc: Loc) -> Option<AbilitySet> {
+        use Type_ as T;
         match self {
-            Type_::Apply(abilities, _, _) => abilities.clone(),
-            Type_::Param(tp) => Some(tp.abilities.clone()),
-            Type_::Unit => Some(AbilitySet::collection(loc)),
-            Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
-            Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
-            Type_::Fun(_, _) => Some(AbilitySet::functions(loc)),
-            Type_::Var(_) => None,
+            T::Apply(abilities, _, _) => abilities.clone(),
+            T::Param(tp) => Some(tp.abilities.clone()),
+            T::Unit => Some(AbilitySet::collection(loc)),
+            T::Ref(_, _) => Some(AbilitySet::references(loc)),
+            T::Anything | T::Void | T::UnresolvedError => Some(AbilitySet::all(loc)),
+            T::Fun(_, _) => Some(AbilitySet::functions(loc)),
+            T::Var(_) => None,
         }
     }
 
     pub fn has_ability_(&self, ability: Ability_) -> Option<bool> {
+        use Type_ as T;
         match self {
-            Type_::Apply(abilities, _, _) => abilities.as_ref().map(|s| s.has_ability_(ability)),
-            Type_::Param(tp) => Some(tp.abilities.has_ability_(ability)),
-            Type_::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
-            Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
-            Type_::Anything | Type_::UnresolvedError => Some(true),
-            Type_::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
-            Type_::Var(_) => None,
+            T::Apply(abilities, _, _) => abilities.as_ref().map(|s| s.has_ability_(ability)),
+            T::Param(tp) => Some(tp.abilities.has_ability_(ability)),
+            T::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
+            T::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
+            T::Anything | T::Void | T::UnresolvedError => Some(true),
+            T::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
+            T::Var(_) => None,
         }
     }
 
@@ -939,6 +950,7 @@ impl Type_ {
             | Type_::Fun(_, _)
             | Type_::Var(_)
             | Type_::Anything
+            | Type_::Void
             | Type_::UnresolvedError => None,
         }
     }
@@ -953,6 +965,7 @@ impl Type_ {
             | Type_::Fun(_, _)
             | Type_::Var(_)
             | Type_::Anything
+            | Type_::Void
             | Type_::UnresolvedError => self.clone(),
         }
     }
@@ -1202,6 +1215,7 @@ impl AstDebug for ModuleDefinition {
             loc: _,
             warning_filter,
             package_name,
+            named_address_map: _,
             attributes,
             target_kind,
             use_funs,
@@ -1577,6 +1591,7 @@ impl AstDebug for Type_ {
             }
             Type_::Var(tv) => w.write(format!("#{}", tv.0)),
             Type_::Anything => w.write("_"),
+            Type_::Void => w.write("_"),
             Type_::UnresolvedError => w.write("_|_"),
         }
     }
@@ -1840,22 +1855,40 @@ impl AstDebug for Exp_ {
 
 impl AstDebug for Lambda {
     fn ast_debug(&self, w: &mut AstWriter) {
+        struct LambdaAnnot<'a>(&'a (Vec<Type>, Type));
+        impl AstDebug for LambdaAnnot<'_> {
+            fn ast_debug(&self, w: &mut AstWriter) {
+                let (args, result) = &self.0;
+                w.write("|");
+                w.comma(args, |w, ty| ty.ast_debug(w));
+                w.write("|");
+                result.ast_debug(w);
+            }
+        }
+
         let Lambda {
             parameters: sp!(_, bs),
             return_type,
             return_label,
             use_fun_color,
             body: e,
+            extra_annotations,
         } = self;
         return_label.ast_debug(w);
         w.write(": ");
-        bs.ast_debug(w);
-        if let Some(ty) = return_type {
-            w.write(" -> ");
-            ty.ast_debug(w);
+        let mut display: Box<dyn FnOnce(&mut AstWriter)> = Box::new(|w: &mut AstWriter| {
+            bs.ast_debug(w);
+            if let Some(ty) = return_type {
+                w.write(" -> ");
+                ty.ast_debug(w);
+            }
+            w.write(format!("use_funs#{}", use_fun_color));
+            e.ast_debug(w);
+        });
+        for sp!(_, annot) in extra_annotations {
+            display = Box::new(|w: &mut AstWriter| w.annotate(display, &LambdaAnnot(annot)));
         }
-        w.write(format!("use_funs#{}", use_fun_color));
-        e.ast_debug(w);
+        display(w)
     }
 }
 

@@ -1,0 +1,109 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-15:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4666400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-18:
+//# programmable
+//> test::m1::copy_(Input(0))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 3, lines 19-20:
+//# programmable --inputs 0
+//> test::m1::copy_(Input(1))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }
+
+task 4, lines 22-23:
+//# programmable
+//> test::m1::take(Input(0))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 5, lines 24-25:
+//# programmable --inputs 0
+//> test::m1::take(Input(2))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 2 } }, source: None, command: Some(0) } }
+
+task 6, lines 27-28:
+//# programmable
+//> test::m1::by_imm(Input(0))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 7, lines 29-30:
+//# programmable --inputs 0
+//> test::m1::by_imm(Input(1))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }
+
+task 8, lines 32-33:
+//# programmable
+//> test::m1::by_mut(Input(0))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 9, lines 34-35:
+//# programmable --inputs 0
+//> test::m1::by_mut(Input(1))
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }
+
+task 10, lines 37-38:
+//# programmable
+//> MakeMoveVec([Input(0)])
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 11, lines 39-40:
+//# programmable --inputs 0
+//> MakeMoveVec<u64>([Input(0), Input(1)])
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }
+
+task 12, lines 42-43:
+//# programmable
+//> SplitCoins(Input(0), [Gas])
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 13, lines 44-45:
+//# programmable --inputs 0
+//> SplitCoins(Gas, [Input(1)])
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }
+
+task 14, lines 47-48:
+//# programmable
+//> MergeCoins(Input(0), [Gas])
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 15, lines 49-50:
+//# programmable --inputs 0
+//> MergeCoins(Gas, [Input(1), Input(0)])
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }
+
+task 16, lines 52-53:
+//# programmable
+//> TransferObjects([Input(0)], Gas)
+Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds access to input or result vector 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: IndexOutOfBounds { idx: 0 } }, source: None, command: Some(0) } }
+
+task 17, lines 54-55:
+//# programmable --inputs 0
+//> TransferObjects([Gas], Input(1))
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }

@@ -22,11 +22,11 @@ title: Module `bridge::message_types`
 ## Constants
 
 
-<a name="bridge_message_types_ADD_TOKENS_ON_SUI"></a>
+<a name="bridge_message_types_TOKEN"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/message_types.md#bridge_message_types_ADD_TOKENS_ON_SUI">ADD_TOKENS_ON_SUI</a>: u8 = 6;
+<pre><code><b>const</b> <a href="../bridge/message_types.md#bridge_message_types_TOKEN">TOKEN</a>: u8 = 0;
 </code></pre>
 
 
@@ -49,11 +49,11 @@ title: Module `bridge::message_types`
 
 
 
-<a name="bridge_message_types_TOKEN"></a>
+<a name="bridge_message_types_UPDATE_BRIDGE_LIMIT"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/message_types.md#bridge_message_types_TOKEN">TOKEN</a>: u8 = 0;
+<pre><code><b>const</b> <a href="../bridge/message_types.md#bridge_message_types_UPDATE_BRIDGE_LIMIT">UPDATE_BRIDGE_LIMIT</a>: u8 = 3;
 </code></pre>
 
 
@@ -67,11 +67,11 @@ title: Module `bridge::message_types`
 
 
 
-<a name="bridge_message_types_UPDATE_BRIDGE_LIMIT"></a>
+<a name="bridge_message_types_ADD_TOKENS_ON_SUI"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/message_types.md#bridge_message_types_UPDATE_BRIDGE_LIMIT">UPDATE_BRIDGE_LIMIT</a>: u8 = 3;
+<pre><code><b>const</b> <a href="../bridge/message_types.md#bridge_message_types_ADD_TOKENS_ON_SUI">ADD_TOKENS_ON_SUI</a>: u8 = 6;
 </code></pre>
 
 

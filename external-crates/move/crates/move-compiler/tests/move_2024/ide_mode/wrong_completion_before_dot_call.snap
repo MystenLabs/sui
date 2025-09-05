@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:16:9
+   │  
+16 │ ╭         some_struct.
+17 │ │         some_struct.bar()
+   │ ╰───────────────────^ Unbound field 'some_struct' in 'a::m::SomeStruct'

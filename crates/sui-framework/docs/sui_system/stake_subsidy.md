@@ -20,6 +20,7 @@ title: Module `sui_system::stake_subsidy`
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -31,12 +32,14 @@ title: Module `sui_system::stake_subsidy`
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
 <b>use</b> <a href="../sui/url.md#sui_url">sui::url</a>;
+<b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 <b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 </code></pre>
 
@@ -106,20 +109,20 @@ title: Module `sui_system::stake_subsidy`
 ## Constants
 
 
-<a name="sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
-</code></pre>
-
-
-
 <a name="sui_system_stake_subsidy_ESubsidyDecreaseRateTooLarge"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 
@@ -192,9 +195,11 @@ Advance the epoch counter and draw down the subsidy for the epoch.
     self.distribution_counter = self.distribution_counter + 1;
     // Decrease the subsidy amount only when the current period ends.
     <b>if</b> (self.distribution_counter % self.stake_subsidy_period_length == 0) {
-        <b>let</b> decrease_amount = self.current_distribution_amount <b>as</b> u128
+        <b>let</b> decrease_amount =
+            self.current_distribution_amount <b>as</b> u128
             * (self.stake_subsidy_decrease_rate <b>as</b> u128) / <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
-        self.current_distribution_amount = self.current_distribution_amount - (decrease_amount <b>as</b> u64)
+        self.current_distribution_amount =
+            self.current_distribution_amount - (decrease_amount <b>as</b> u64)
     };
     <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy">stake_subsidy</a>
 }

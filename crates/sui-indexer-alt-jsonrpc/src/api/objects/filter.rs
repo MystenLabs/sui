@@ -15,8 +15,9 @@ use sui_json_rpc_types::{Page as PageResponse, SuiObjectDataOptions};
 use sui_sql_macro::sql;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
+    dynamic_field::{DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME},
     sui_serde::SuiStructTag,
-    Identifier, TypeTag,
+    Identifier, TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::{
@@ -73,13 +74,13 @@ enum RawFilter {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct ObjectCursor {
+pub(crate) struct ObjectCursor {
     object_id: Vec<u8>,
     cp_sequence_number: u64,
 }
 
-type Cursor = BcsCursor<ObjectCursor>;
-type ObjectIDs = PageResponse<ObjectID, String>;
+pub(crate) type Cursor = BcsCursor<ObjectCursor>;
+pub(crate) type ObjectIDs = PageResponse<ObjectID, String>;
 
 impl SuiObjectDataFilter {
     /// Whether this is a compound filter (which is implemented using sequential scan), or a simple
@@ -248,7 +249,7 @@ impl RawFilter {
 }
 
 /// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` and
-/// pagination parameters. Returns the digests and a cursor pointing to the last result (if there are
+/// pagination parameters. Returns the IDs and a cursor pointing to the last result (if there are
 /// any results).
 pub(super) async fn owned_objects(
     ctx: &Context,
@@ -261,8 +262,35 @@ pub(super) async fn owned_objects(
         Some(f) if f.is_compound() => {
             by_sequential_scan(ctx, owner, &f.to_raw(ctx)?, cursor, limit).await
         }
-        filter => by_type_indices(ctx, owner, filter, cursor, limit).await,
+        filter => {
+            by_type_indices(ctx, owner, StoredOwnerKind::Address, filter, cursor, limit).await
+        }
     }
+}
+
+/// Fetch ObjectIDs for a page of dynamic fields owned by parent object `owner`. The returned IDs
+/// all point to `sui::dynamic_field::Field<K, V>` objects. Returns the IDs and a cursor pointing
+/// to the last result (if there are any results).
+pub(crate) async fn dynamic_fields(
+    ctx: &Context,
+    owner: ObjectID,
+    cursor: Option<String>,
+    limit: Option<usize>,
+) -> Result<ObjectIDs, RpcError<Error>> {
+    by_type_indices(
+        ctx,
+        owner.into(),
+        StoredOwnerKind::Object,
+        &Some(SuiObjectDataFilter::StructType(StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: DYNAMIC_FIELD_MODULE_NAME.to_owned(),
+            name: DYNAMIC_FIELD_FIELD_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        })),
+        cursor,
+        limit,
+    )
+    .await
 }
 
 /// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given compound
@@ -424,11 +452,12 @@ async fn owned_obj_info(
 
 /// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` which is
 /// assumed to be a simple type filter that can be served by indices in the database, as well as
-/// the pagination parameters. Returns the digests and a cursor pointing to the last result (if
+/// the pagination parameters. Returns the IDs and a cursor pointing to the last result (if
 /// there are any results).
 async fn by_type_indices(
     ctx: &Context,
     owner: SuiAddress,
+    kind: StoredOwnerKind,
     filter: &Option<SuiObjectDataFilter>,
     cursor: Option<String>,
     limit: Option<usize>,
@@ -466,7 +495,7 @@ async fn by_type_indices(
                 .and(candidates!(cp_sequence_number).lt(newer!(cp_sequence_number)))),
         )
         .filter(newer!(object_id).is_null())
-        .filter(candidates!(owner_kind).eq(StoredOwnerKind::Address))
+        .filter(candidates!(owner_kind).eq(kind))
         .filter(candidates!(owner_id).eq(owner.to_inner()))
         .order_by(candidates!(cp_sequence_number).desc())
         .then_order_by(candidates!(object_id).desc())

@@ -1,0 +1,58 @@
+Command `test`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::move_test
+[ PASS    ] testing::a::test_move
+[ PASS    ] testing::a::test_movemore
+Test result: OK. Total tests: 3; passed: 3; failed: 0
+Command `test testing`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::move_test
+[ PASS    ] testing::a::test_move
+[ PASS    ] testing::a::test_movemore
+Test result: OK. Total tests: 3; passed: 3; failed: 0
+Command `test testing::a::test_move`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::test_move
+[ PASS    ] testing::a::test_movemore
+Test result: OK. Total tests: 2; passed: 2; failed: 0
+Command `test a`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::move_test
+[ PASS    ] testing::a::test_move
+[ PASS    ] testing::a::test_movemore
+Test result: OK. Total tests: 3; passed: 3; failed: 0
+Command `test move`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::move_test
+[ PASS    ] testing::a::test_move
+[ PASS    ] testing::a::test_movemore
+Test result: OK. Total tests: 3; passed: 3; failed: 0
+Command `test ^move`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+Test result: OK. Total tests: 0; passed: 0; failed: 0
+Command `test move$`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::test_move
+Test result: OK. Total tests: 1; passed: 1; failed: 0
+Command `test ^test`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING testing
+Running Move unit tests
+[ PASS    ] testing::a::move_test
+[ PASS    ] testing::a::test_move
+[ PASS    ] testing::a::test_movemore
+Test result: OK. Total tests: 3; passed: 3; failed: 0

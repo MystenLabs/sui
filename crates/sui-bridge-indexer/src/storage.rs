@@ -11,11 +11,12 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 
-use crate::models::ProgressStore;
 use crate::postgres_manager::PgPool;
-use crate::schema::progress_store::{columns, dsl};
-use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
-use crate::{schema, ProcessedTxnData};
+use crate::ProcessedTxnData;
+use sui_bridge_schema::models::ProgressStore;
+use sui_bridge_schema::schema;
+use sui_bridge_schema::schema::progress_store::{columns, dsl};
+use sui_bridge_schema::schema::{sui_error_transactions, token_transfer, token_transfer_data};
 use sui_indexer_builder::indexer_builder::{IndexerProgressStore, Persistent};
 use sui_indexer_builder::{
     progress::ProgressSavingPolicy, Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT,

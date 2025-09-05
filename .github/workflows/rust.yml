@@ -135,7 +135,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
+          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)' -E 'package(sui-indexer-alt-graphql)'
       - name: benchmark (smoke)
         run: |
           cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
@@ -171,8 +171,8 @@ jobs:
           ./crates/sui-indexer-alt-schema/generate_schema.sh
       - name: Indexer Alt Framework schema
         run: |
-          ./crates/sui-indexer-alt-framework/generate_schema.sh
-          cargo fmt -- crates/sui-indexer-alt-framework/src/schema.rs
+          ./crates/sui-pg-db/generate_schema.sh
+          cargo fmt -- crates/sui-pg-db/src/schema.rs
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -215,7 +215,34 @@ jobs:
     timeout-minutes: 45
     runs-on: [ ubuntu-ghcloud ]
     env:
-      MSIM_WATCHDOG_TIMEOUT_MS: 60000
+      MSIM_WATCHDOG_TIMEOUT_MS: 300000
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+      - name: cargo simtest
+        run: |
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+      - name: check new tests for flakiness
+        run: |
+          scripts/simtest/stress-new-tests.sh
+
+  simtest-mainnet:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
+    timeout-minutes: 45
+    runs-on: [ ubuntu-ghcloud ]
+    env:
+      MSIM_WATCHDOG_TIMEOUT_MS: 300000
+      SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
@@ -406,19 +433,3 @@ jobs:
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
         run: cargo build -p sui-execution
-
-  check-protos:
-    runs-on: [ ubuntu-ghcloud ]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      # Install buf
-      - name: Install buf
-        uses: bufbuild/buf-setup-action@v1.24.0
-        with:
-          version: 1.47.2
-      - name: lint protos
-        run: cd crates/sui-rpc-api && buf lint
-      - name: format protos
-        run: cd crates/sui-rpc-api && buf format --diff --exit-code

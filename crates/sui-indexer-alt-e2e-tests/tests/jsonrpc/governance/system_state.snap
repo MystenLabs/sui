@@ -198,7 +198,7 @@ Response: {
 
 task 6, line 26:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 7, lines 28-32:
 //# run-jsonrpc
@@ -391,7 +391,7 @@ Response: {
 
 task 11, line 45:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 12, lines 47-51:
 //# run-jsonrpc

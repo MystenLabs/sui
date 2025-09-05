@@ -6,9 +6,9 @@
 //! - a constant's type only refers to primitive types
 //! - a constant's data serializes correctly for that type
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMResult, VMResult},
-    file_format::{CompiledModule, Constant, SignatureToken, TableIndex},
     IndexKind,
+    errors::{Location, PartialVMResult, VMResult, verification_error},
+    file_format::{CompiledModule, Constant, SignatureToken, TableIndex},
 };
 use move_core_types::vm_status::StatusCode;
 

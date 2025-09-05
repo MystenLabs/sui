@@ -4,10 +4,10 @@
 
 use crate::{borrow_graph::BorrowGraph, error::VMError};
 use move_binary_format::file_format::{
-    empty_module, Ability, AbilitySet, CompiledModule, FieldInstantiation, FieldInstantiationIndex,
+    Ability, AbilitySet, CompiledModule, FieldInstantiation, FieldInstantiationIndex,
     FunctionHandleIndex, FunctionInstantiation, FunctionInstantiationIndex, Signature,
     SignatureIndex, SignatureToken, StructDefInstantiation, StructDefInstantiationIndex,
-    StructDefinitionIndex, TableIndex,
+    StructDefinitionIndex, TableIndex, empty_module,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -588,7 +588,7 @@ impl AbstractState {
                     SignatureToken::Reference(Box::new(abstract_value.token.clone()))
                 }
                 Mutability::Either => {
-                    return Err(VMError::new("Mutability cannot be Either".to_string()))
+                    return Err(VMError::new("Mutability cannot be Either".to_string()));
                 }
             };
             self.register = Some(AbstractValue::new_reference(

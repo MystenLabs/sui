@@ -12,6 +12,7 @@ use anyhow::Result;
 use colored::*;
 
 use move_binary_format::{
+    binary_config::BinaryConfig,
     errors::{Location, VMResult},
     file_format::CompiledModule,
 };
@@ -24,15 +25,15 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    runtime_value::{serialize_values, MoveValue},
+    runtime_value::{MoveValue, serialize_values},
     u256::U256,
     vm_status::StatusCode,
 };
-use move_trace_format::format::MoveTraceBuilder;
+use move_trace_format::format::{MoveTraceBuilder, TRACE_FILE_EXTENSION};
 use move_vm_runtime::{dev_utils::storage::StoredPackage, shared::gas::GasMeter};
 use move_vm_runtime::{
     dev_utils::{
-        gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
+        gas_schedule::{CostTable, Gas, GasStatus, unit_cost_schedule},
         in_memory_test_adapter::InMemoryTestAdapter,
         storage::InMemoryStorage,
         vm_test_adapter::VMTestAdapter,
@@ -40,8 +41,9 @@ use move_vm_runtime::{
     natives::functions::{NativeFunctionTable, NativeFunctions},
     runtime::MoveRuntime,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
+use regex::Regex;
 use std::{
     collections::BTreeMap,
     io::Write,
@@ -139,7 +141,7 @@ impl TestRunner {
     ) -> Result<Self> {
         // If we want to trace the execution, check that the tracing compilation feature is
         // enabled, otherwise we won't generate a trace.
-        move_vm_profiler::tracing_feature_disabled! {
+        move_vm_config::tracing_feature_disabled! {
             if trace_location.is_some() {
                 return Err(anyhow::anyhow!(
                     "Tracing is enabled but the binary was not compiled with the `tracing` \
@@ -156,7 +158,12 @@ impl TestRunner {
             )
         });
         let native_functions = NativeFunctions::new(native_function_table)?;
-        let runtime = MoveRuntime::new_with_default_config(native_functions);
+        // Allow loading of unpublishable modules for the purpose of running tests.
+        let vm_config = move_vm_config::runtime::VMConfig {
+            binary_config: BinaryConfig::new_unpublishable(),
+            ..Default::default()
+        };
+        let runtime = MoveRuntime::new(native_functions, vm_config);
 
         let mut vm_test_adapter = InMemoryTestAdapter::new_with_runtime(runtime);
 
@@ -212,7 +219,8 @@ impl TestRunner {
             })
     }
 
-    pub fn filter(&mut self, test_name_slice: &str) {
+    pub fn filter(&mut self, test_name_slice: &str) -> Result<()> {
+        let regex = Regex::new(test_name_slice)?;
         for (module_id, module_test) in self.tests.module_tests.iter_mut() {
             if module_id.name().as_str().contains(test_name_slice) {
                 continue;
@@ -221,13 +229,17 @@ impl TestRunner {
                 module_test.tests = tests
                     .into_iter()
                     .filter(|(test_name, _)| {
-                        let full_name =
-                            format!("{}::{}", module_id.name().as_str(), test_name.as_str());
-                        full_name.contains(test_name_slice)
+                        let full_name = format!(
+                            "{}::{}",
+                            format_module_id(&self.tests.module_info, module_id),
+                            test_name.as_str()
+                        );
+                        regex.is_match(&full_name)
                     })
                     .collect();
             }
         }
+        Ok(())
     }
 }
 
@@ -287,7 +299,6 @@ impl SharedTestingConfig {
         fn do_call<'extensions>(
             test_config: &SharedTestingConfig,
             gas_meter: &mut impl GasMeter,
-            // TODO: Plumb tracing in
             tracer: Option<&mut MoveTraceBuilder>,
             module_id: ModuleId,
             function_name: &str,
@@ -331,15 +342,6 @@ impl SharedTestingConfig {
         };
 
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        move_vm_profiler::tracing_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            use move_vm_runtime::shared::gas::GasMeter;
-            gas_meter.set_profiler(GasProfiler::init_default_cfg(
-                function_name.to_owned(),
-                self.execution_bound,
-            ));
-        }
-
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
         let now = Instant::now();
         let module_id = test_plan.module_id.clone();
@@ -451,14 +453,14 @@ impl SharedTestingConfig {
     fn generate_value_for_typetag(rng: &mut StdRng, ty: &TypeTag) -> MoveValue {
         match ty {
             TypeTag::Address => {
-                MoveValue::Address(AccountAddress::from_bytes(rng.gen::<[u8; 32]>()).unwrap())
+                MoveValue::Address(AccountAddress::from_bytes(rng.r#gen::<[u8; 32]>()).unwrap())
             }
-            TypeTag::U8 => MoveValue::U8(rng.gen::<u8>()),
-            TypeTag::U16 => MoveValue::U16(rng.gen::<u16>()),
-            TypeTag::U32 => MoveValue::U32(rng.gen::<u32>()),
-            TypeTag::U64 => MoveValue::U64(rng.gen::<u64>()),
-            TypeTag::U128 => MoveValue::U128(rng.gen::<u128>()),
-            TypeTag::U256 => MoveValue::U256(rng.gen::<U256>()),
+            TypeTag::U8 => MoveValue::U8(rng.r#gen::<u8>()),
+            TypeTag::U16 => MoveValue::U16(rng.r#gen::<u16>()),
+            TypeTag::U32 => MoveValue::U32(rng.r#gen::<u32>()),
+            TypeTag::U64 => MoveValue::U64(rng.r#gen::<u64>()),
+            TypeTag::U128 => MoveValue::U128(rng.r#gen::<u128>()),
+            TypeTag::U256 => MoveValue::U256(rng.r#gen::<U256>()),
             TypeTag::Vector(ty) => {
                 let len = rng.gen_range(0..1024);
                 let values = (0..len)
@@ -466,11 +468,11 @@ impl SharedTestingConfig {
                     .collect();
                 MoveValue::Vector(values)
             }
-            TypeTag::Bool => MoveValue::Bool(rng.gen::<bool>()),
+            TypeTag::Bool => MoveValue::Bool(rng.r#gen::<bool>()),
             TypeTag::Struct(_) => {
                 unreachable!(
                     "Structs are not supported as generated values \
-                             in unit tests and cannot get to this point"
+                     in unit tests and cannot get to this point"
                 )
             }
             TypeTag::Signer => unreachable!("Signer arguments not allowed"),
@@ -496,7 +498,7 @@ impl SharedTestingConfig {
         // enabled).
         if let Some(location) = &self.trace_location {
             let trace_file_location = format!(
-                "{}/{}__{}{}.json",
+                "{}/{}__{}{}.{}",
                 location,
                 format_module_id(output.test_info, &output.test_plan.module_id).replace("::", "__"),
                 function_name,
@@ -504,7 +506,8 @@ impl SharedTestingConfig {
                     format!("_seed_{}", seed)
                 } else {
                     "".to_string()
-                }
+                },
+                TRACE_FILE_EXTENSION,
             );
             if let Err(e) = test_run_info.save_trace(&trace_file_location) {
                 eprintln!("Unable to save trace to {trace_file_location} -- {:?}", e);

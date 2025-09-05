@@ -1,0 +1,23 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-31:
+//# upgrade --package v0 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Attempted to used feature that is not supported yet
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("`init` in new modules on upgrade is not yet supported"), command: Some(1) } }
+
+task 3, lines 33-51:
+//# upgrade --package v0 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Attempted to used feature that is not supported yet
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("`init` in new modules on upgrade is not yet supported"), command: Some(1) } }

@@ -9,7 +9,8 @@
 /// 3) Verify a Secp256k1 signature, produce an event for whether it is verified.
 module ecdsa_k1::example;
 
-use sui::{ecdsa_k1, event};
+use sui::ecdsa_k1;
+use sui::event;
 
 // === Object Types ===
 

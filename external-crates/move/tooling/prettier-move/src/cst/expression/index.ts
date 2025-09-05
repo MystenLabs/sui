@@ -44,42 +44,42 @@ import vector_expression from './vector_expression';
 import while_expression from './while_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	// route to separated functions
-	const result =
-		abort_expression(path) ||
-		annotation_expression(path) ||
-		assign_expression(path) ||
-		binary_expression(path) ||
-		block_item(path) ||
-		block(path) ||
-		borrow_expression(path) ||
-		break_expression(path) ||
-		call_expression(path) ||
-		cast_expression(path) ||
-		continue_expression(path) ||
-		dereference_expression(path) ||
-		dot_expression(path) ||
-		expression_list(path) ||
-		if_expression(path) ||
-		identified_expression(path) ||
-		index_expression(path) ||
-		lambda_expression(path) ||
-		let_statement(path) ||
-		loop_expression(path) ||
-		macro_call_expression(path) ||
-		match_expression(path) ||
-		move_or_copy_expression(path) ||
-		name_expression(path) ||
-		pack_expression(path) ||
-		return_expression(path) ||
-		unary_expression(path) ||
-		unit_expression(path) ||
-		vector_expression(path) ||
-		while_expression(path);
+    // route to separated functions
+    const result =
+        abort_expression(path) ||
+        annotation_expression(path) ||
+        assign_expression(path) ||
+        binary_expression(path) ||
+        block_item(path) ||
+        block(path) ||
+        borrow_expression(path) ||
+        break_expression(path) ||
+        call_expression(path) ||
+        cast_expression(path) ||
+        continue_expression(path) ||
+        dereference_expression(path) ||
+        dot_expression(path) ||
+        expression_list(path) ||
+        if_expression(path) ||
+        identified_expression(path) ||
+        index_expression(path) ||
+        lambda_expression(path) ||
+        let_statement(path) ||
+        loop_expression(path) ||
+        macro_call_expression(path) ||
+        match_expression(path) ||
+        move_or_copy_expression(path) ||
+        name_expression(path) ||
+        pack_expression(path) ||
+        return_expression(path) ||
+        unary_expression(path) ||
+        unit_expression(path) ||
+        vector_expression(path) ||
+        while_expression(path);
 
-	if (result !== null) {
-		return result;
-	}
+    if (result !== null) {
+        return result;
+    }
 
-	return null;
+    return null;
 }

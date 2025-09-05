@@ -11,7 +11,7 @@ const EEpochNotYetEnded: u64 = 1;
 
 /// Holder of an epoch number that can only be discarded in the epoch or
 /// after the epoch has passed.
-public struct EpochTimeLock has store, copy {
+public struct EpochTimeLock has copy, store {
     epoch: u64,
 }
 

@@ -56,28 +56,28 @@ fun test_create() {
 
     // Create a ColorObject and transfer it to its owner.
     {
-        ts::next_tx(&mut ts, alice);
-        let color = new(255, 0, 255, ts::ctx(&mut ts));
+        ts.next_tx(alice);
+        let color = new(255, 0, 255, ts.ctx());
         transfer::public_transfer(color, alice);
     };
 
     // Check that @not_owner does not own the just-created ColorObject.
     {
-        ts::next_tx(&mut ts, bob);
-        assert!(!ts::has_most_recent_for_sender<ColorObject>(&ts), 0);
+        ts.next_tx(bob);
+        assert!(!ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
     // Check that owner indeed owns the just-created ColorObject.
     // Also checks the value fields of the object.
     {
-        ts::next_tx(&mut ts, alice);
-        let object: ColorObject = ts::take_from_sender(&ts);
-        let (red, green, blue) = get_color(&object);
+        ts.next_tx(alice);
+        let object: ColorObject = ts.take_from_sender();
+        let (red, green, blue) = object.get_color();
         assert!(red == 255 && green == 0 && blue == 255, 0);
-        ts::return_to_sender(&ts, object);
+        ts.return_to_sender(object)
     };
 
-    ts::end(ts);
+    ts.end();
 }
 
 // === Tests covered in Chapter 2 ===
@@ -89,45 +89,41 @@ fun test_copy_into() {
 
     // Create two ColorObjects owned by `owner`, and obtain their IDs.
     let (id1, id2) = {
-        ts::next_tx(&mut ts, owner);
-        let ctx = ts::ctx(&mut ts);
+        ts.next_tx(owner);
+        let ctx = ts.ctx();
 
         let c = new(255, 255, 255, ctx);
         transfer::public_transfer(c, owner);
-        let id1 = object::id_from_address(
-            tx_context::last_created_object_id(ctx),
-        );
+        let id1 = object::id_from_address(ctx.last_created_object_id());
 
         let c = new(0, 0, 0, ctx);
         transfer::public_transfer(c, owner);
-        let id2 = object::id_from_address(
-            tx_context::last_created_object_id(ctx),
-        );
+        let id2 = object::id_from_address(ctx.last_created_object_id());
 
         (id1, id2)
     };
 
     {
-        ts::next_tx(&mut ts, owner);
-        let mut obj1: ColorObject = ts::take_from_sender_by_id(&ts, id1);
-        let obj2: ColorObject = ts::take_from_sender_by_id(&ts, id2);
-        let (red, green, blue) = get_color(&obj1);
+        ts.next_tx(owner);
+        let mut obj1: ColorObject = ts.take_from_sender_by_id(id1);
+        let obj2: ColorObject = ts.take_from_sender_by_id(id2);
+        let (red, green, blue) = obj1.get_color();
         assert!(red == 255 && green == 255 && blue == 255, 0);
 
-        copy_into(&obj2, &mut obj1);
-        ts::return_to_sender(&ts, obj1);
-        ts::return_to_sender(&ts, obj2);
+        obj2.copy_into(&mut obj1);
+        ts.return_to_sender(obj1);
+        ts.return_to_sender(obj2);
     };
 
     {
-        ts::next_tx(&mut ts, owner);
-        let obj1: ColorObject = ts::take_from_sender_by_id(&ts, id1);
-        let (red, green, blue) = get_color(&obj1);
+        ts.next_tx(owner);
+        let obj1: ColorObject = ts.take_from_sender_by_id(id1);
+        let (red, green, blue) = obj1.get_color();
         assert!(red == 0 && green == 0 && blue == 0, 0);
-        ts::return_to_sender(&ts, obj1);
+        ts.return_to_sender(obj1);
     };
 
-    ts::end(ts);
+    ts.end();
 }
 
 #[test]
@@ -137,25 +133,25 @@ fun test_delete() {
 
     // Create a ColorObject and transfer it to owner.
     {
-        ts::next_tx(&mut ts, owner);
-        let c = new(255, 0, 255, ts::ctx(&mut ts));
+        ts.next_tx(owner);
+        let c = new(255, 0, 255, ts.ctx());
         transfer::public_transfer(c, owner);
     };
 
     // Delete the ColorObject we just created.
     {
-        ts::next_tx(&mut ts, owner);
-        let object: ColorObject = ts::take_from_sender(&ts);
+        ts.next_tx(owner);
+        let object: ColorObject = ts.take_from_sender();
         delete(object);
     };
 
     // Verify that the object was indeed deleted.
     {
-        ts::next_tx(&mut ts, owner);
-        assert!(!ts::has_most_recent_for_sender<ColorObject>(&ts), 0);
+        ts.next_tx(owner);
+        assert!(!ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
-    ts::end(ts);
+    ts.end();
 }
 
 #[test]
@@ -166,31 +162,31 @@ fun test_transfer() {
 
     // Create a ColorObject and transfer it to sender.
     {
-        ts::next_tx(&mut ts, sender);
-        let c = new(255, 0, 255, ts::ctx(&mut ts));
+        ts.next_tx(sender);
+        let c = new(255, 0, 255, ts.ctx());
         transfer::public_transfer(c, @0xA);
     };
 
     // Transfer the object to recipient.
     {
-        ts::next_tx(&mut ts, sender);
-        let object: ColorObject = ts::take_from_sender(&ts);
+        ts.next_tx(sender);
+        let object: ColorObject = ts.take_from_sender();
         transfer::public_transfer(object, recipient);
     };
 
     // Check that sender no longer owns the object.
     {
-        ts::next_tx(&mut ts, sender);
-        assert!(!ts::has_most_recent_for_sender<ColorObject>(&ts), 0);
+        ts.next_tx(sender);
+        assert!(!ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
     // Check that recipient now owns the object.
     {
-        ts::next_tx(&mut ts, recipient);
-        assert!(ts::has_most_recent_for_sender<ColorObject>(&ts), 0);
+        ts.next_tx(recipient);
+        assert!(ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
-    ts::end(ts);
+    ts.end();
 }
 
 // === Tests covered in Chapter 3 ===
@@ -202,25 +198,25 @@ fun test_immutable() {
     let bob = @0xB;
 
     {
-        ts::next_tx(&mut ts, alice);
-        let c = new(255, 0, 255, ts::ctx(&mut ts));
+        ts.next_tx(alice);
+        let c = new(255, 0, 255, ts.ctx());
         transfer::public_freeze_object(c);
     };
 
     // take_owned does not work for immutable objects.
     {
-        ts::next_tx(&mut ts, alice);
-        assert!(!ts::has_most_recent_for_sender<ColorObject>(&ts), 0);
+        ts.next_tx(alice);
+        assert!(!ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
     // Any sender can work.
     {
-        ts::next_tx(&mut ts, bob);
-        let object: ColorObject = ts::take_immutable(&ts);
-        let (red, green, blue) = get_color(&object);
+        ts.next_tx(bob);
+        let object: ColorObject = ts.take_immutable();
+        let (red, green, blue) = object.get_color();
         assert!(red == 255 && green == 0 && blue == 255, 0);
         ts::return_immutable(object);
     };
 
-    ts::end(ts);
+    ts.end();
 }

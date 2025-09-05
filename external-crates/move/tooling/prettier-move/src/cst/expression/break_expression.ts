@@ -10,24 +10,24 @@ const { join } = doc.builders;
 export const NODE_TYPE = 'break_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printBreakExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printBreakExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `break_expression` node.
  */
 export function printBreakExpression(
-	path: AstPath<Node>,
-	options: MoveOptions,
-	print: printFn,
+    path: AstPath<Node>,
+    options: MoveOptions,
+    print: printFn,
 ): Doc {
-	if (path.node.nonFormattingChildren.length > 0) {
-		return join(' ', ['break', ...path.map(print, 'nonFormattingChildren')]);
-	}
+    if (path.node.nonFormattingChildren.length > 0) {
+        return join(' ', ['break', ...path.map(print, 'nonFormattingChildren')]);
+    }
 
-	return 'break';
+    return 'break';
 }

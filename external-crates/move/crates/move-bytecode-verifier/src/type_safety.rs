@@ -7,9 +7,11 @@
 
 use std::{cmp::max, num::NonZeroU64};
 
-use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
+use crate::absint::FunctionContext;
+use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
+    CompiledModule,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, DatatypeHandleIndex, EnumDefinition, FieldHandleIndex,
@@ -17,7 +19,7 @@ use move_binary_format::{
         SignatureToken, SignatureToken as ST, StructDefinition, StructDefinitionIndex,
         StructFieldInformation, VariantDefinition, VariantJumpTable,
     },
-    safe_unwrap_err, CompiledModule,
+    safe_unwrap_err,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
@@ -154,12 +156,13 @@ pub(crate) fn verify<'env>(
 ) -> PartialVMResult<()> {
     let mut checker = TypeSafetyChecker::new(module, function_context, ability_cache);
     let verifier = &mut checker;
+    let jump_tables = &verifier.function_context.code().jump_tables;
 
     for block_id in function_context.cfg().blocks() {
-        for offset in function_context.cfg().instr_indexes(block_id) {
-            let code = &verifier.function_context.code();
-            let instr = &code.code[offset as usize];
-            let jump_tables = &code.jump_tables;
+        for (offset, instr) in function_context
+            .cfg()
+            .instructions(&function_context.code().code, block_id)
+        {
             verify_instr(verifier, instr, jump_tables, offset, meter)?
         }
     }
@@ -797,7 +800,7 @@ fn verify_instr(
                 _ => {
                     return Err(
                         verifier.error(StatusCode::WRITEREF_NO_MUTABLE_REFERENCE_ERROR, offset)
-                    )
+                    );
                 }
             };
             if !verifier.abilities(meter, &ref_inner_signature)?.has_drop() {

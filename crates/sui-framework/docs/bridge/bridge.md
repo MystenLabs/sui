@@ -53,6 +53,7 @@ title: Module `bridge::bridge`
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -71,7 +72,7 @@ title: Module `bridge::bridge`
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/object_bag.md#sui_object_bag">sui::object_bag</a>;
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
-<b>use</b> <a href="../sui/pay.md#sui_pay">sui::pay</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/priority_queue.md#sui_priority_queue">sui::priority_queue</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
@@ -447,209 +448,20 @@ title: Module `bridge::bridge`
 ## Constants
 
 
-<a name="bridge_bridge_CURRENT_VERSION"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EBridgeAlreadyPaused"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>: u64 = 13;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EBridgeNotPaused"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeNotPaused">EBridgeNotPaused</a>: u64 = 14;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EBridgeUnavailable"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeUnavailable">EBridgeUnavailable</a>: u64 = 8;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EInvalidBridgeRoute"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>: u64 = 16;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EInvalidEvmAddress"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidEvmAddress">EInvalidEvmAddress</a>: u64 = 18;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>: u64 = 10;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EMalformedMessageError"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMalformedMessageError">EMalformedMessageError</a>: u64 = 2;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EMessageNotFoundInRecords"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>: u64 = 11;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EMustBeTokenMessage"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 17;
-</code></pre>
-
-
-
-<a name="bridge_bridge_ENotSystemAddress"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ENotSystemAddress">ENotSystemAddress</a>: u64 = 5;
-</code></pre>
-
-
-
-<a name="bridge_bridge_ETokenAlreadyClaimedOrHitLimit"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenAlreadyClaimedOrHitLimit">ETokenAlreadyClaimedOrHitLimit</a>: u64 = 15;
-</code></pre>
-
-
-
-<a name="bridge_bridge_ETokenValueIsZero"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenValueIsZero">ETokenValueIsZero</a>: u64 = 19;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnauthorisedClaim"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedChainID"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedChainID">EUnexpectedChainID</a>: u64 = 4;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedMessageType"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedMessageVersion"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>: u64 = 12;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedOperation"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedOperation">EUnexpectedOperation</a>: u64 = 9;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedSeqNum"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedSeqNum">EUnexpectedSeqNum</a>: u64 = 6;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedTokenType"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EVM_ADDRESS_LENGTH"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EVM_ADDRESS_LENGTH">EVM_ADDRESS_LENGTH</a>: u64 = 20;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EWrongInnerVersion"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 7;
-</code></pre>
-
-
-
 <a name="bridge_bridge_MESSAGE_VERSION"></a>
 
 
 
 <pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="bridge_bridge_TRANSFER_STATUS_PENDING"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>: u8 = 0;
 </code></pre>
 
 
@@ -681,11 +493,200 @@ title: Module `bridge::bridge`
 
 
 
-<a name="bridge_bridge_TRANSFER_STATUS_PENDING"></a>
+<a name="bridge_bridge_EVM_ADDRESS_LENGTH"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>: u8 = 0;
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EVM_ADDRESS_LENGTH">EVM_ADDRESS_LENGTH</a>: u64 = 20;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedMessageType"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnauthorisedClaim"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EMalformedMessageError"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMalformedMessageError">EMalformedMessageError</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedTokenType"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedChainID"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedChainID">EUnexpectedChainID</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="bridge_bridge_ENotSystemAddress"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ENotSystemAddress">ENotSystemAddress</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedSeqNum"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedSeqNum">EUnexpectedSeqNum</a>: u64 = 6;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EWrongInnerVersion"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EBridgeUnavailable"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeUnavailable">EBridgeUnavailable</a>: u64 = 8;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedOperation"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedOperation">EUnexpectedOperation</a>: u64 = 9;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>: u64 = 10;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EMessageNotFoundInRecords"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>: u64 = 11;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedMessageVersion"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>: u64 = 12;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EBridgeAlreadyPaused"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>: u64 = 13;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EBridgeNotPaused"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeNotPaused">EBridgeNotPaused</a>: u64 = 14;
+</code></pre>
+
+
+
+<a name="bridge_bridge_ETokenAlreadyClaimedOrHitLimit"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenAlreadyClaimedOrHitLimit">ETokenAlreadyClaimedOrHitLimit</a>: u64 = 15;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EInvalidBridgeRoute"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>: u64 = 16;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EMustBeTokenMessage"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 17;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EInvalidEvmAddress"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidEvmAddress">EInvalidEvmAddress</a>: u64 = 18;
+</code></pre>
+
+
+
+<a name="bridge_bridge_ETokenValueIsZero"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenValueIsZero">ETokenValueIsZero</a>: u64 = 19;
+</code></pre>
+
+
+
+<a name="bridge_bridge_CURRENT_VERSION"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
 </code></pre>
 
 
@@ -749,16 +750,18 @@ title: Module `bridge::bridge`
     <a href="../bridge/bridge.md#bridge_bridge">bridge</a>: &<b>mut</b> <a href="../bridge/bridge.md#bridge_bridge_Bridge">Bridge</a>,
     active_validator_voting_power: VecMap&lt;<b>address</b>, u64&gt;,
     min_stake_participation_percentage: u64,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../bridge/bridge.md#bridge_bridge_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> inner = <a href="../bridge/bridge.md#bridge_bridge_load_inner_mut">load_inner_mut</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>);
     <b>if</b> (inner.<a href="../bridge/committee.md#bridge_committee">committee</a>.committee_members().is_empty()) {
-        inner.<a href="../bridge/committee.md#bridge_committee">committee</a>.try_create_next_committee(
-            active_validator_voting_power,
-            min_stake_participation_percentage,
-            ctx,
-        )
+        inner
+            .<a href="../bridge/committee.md#bridge_committee">committee</a>
+            .try_create_next_committee(
+                active_validator_voting_power,
+                min_stake_participation_percentage,
+                ctx,
+            )
     }
 }
 </code></pre>
@@ -787,7 +790,7 @@ title: Module `bridge::bridge`
     system_state: &<b>mut</b> SuiSystemState,
     bridge_pubkey_bytes: vector&lt;u8&gt;,
     http_rest_url: vector&lt;u8&gt;,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     <a href="../bridge/bridge.md#bridge_bridge_load_inner_mut">load_inner_mut</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>)
         .<a href="../bridge/committee.md#bridge_committee">committee</a>
@@ -844,9 +847,7 @@ title: Module `bridge::bridge`
     uc: UpgradeCap,
     metadata: &CoinMetadata&lt;T&gt;,
 ) {
-    <a href="../bridge/bridge.md#bridge_bridge_load_inner_mut">load_inner_mut</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>)
-        .<a href="../bridge/treasury.md#bridge_treasury">treasury</a>
-        .<a href="../bridge/bridge.md#bridge_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(tc, uc, metadata)
+    <a href="../bridge/bridge.md#bridge_bridge_load_inner_mut">load_inner_mut</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>).<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.<a href="../bridge/bridge.md#bridge_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(tc, uc, metadata)
 }
 </code></pre>
 
@@ -874,7 +875,7 @@ title: Module `bridge::bridge`
     target_chain: u8,
     target_address: vector&lt;u8&gt;,
     token: Coin&lt;T&gt;,
-    ctx: &<b>mut</b> TxContext
+    ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> inner = <a href="../bridge/bridge.md#bridge_bridge_load_inner_mut">load_inner_mut</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>);
     <b>assert</b>!(!inner.paused, <a href="../bridge/bridge.md#bridge_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
@@ -897,26 +898,26 @@ title: Module `bridge::bridge`
     // burn / escrow token, unsupported coins will fail in this step
     inner.<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.burn(token);
     // Store pending <a href="../bridge/bridge.md#bridge_bridge">bridge</a> request
-    inner.token_transfer_records.push_back(
-        <a href="../bridge/message.md#bridge_message">message</a>.key(),
-        <a href="../bridge/bridge.md#bridge_bridge_BridgeRecord">BridgeRecord</a> {
-            <a href="../bridge/message.md#bridge_message">message</a>,
-            verified_signatures: option::none(),
-            claimed: <b>false</b>,
-        },
-    );
+    inner
+        .token_transfer_records
+        .push_back(
+            <a href="../bridge/message.md#bridge_message">message</a>.key(),
+            <a href="../bridge/bridge.md#bridge_bridge_BridgeRecord">BridgeRecord</a> {
+                <a href="../bridge/message.md#bridge_message">message</a>,
+                verified_signatures: option::none(),
+                claimed: <b>false</b>,
+            },
+        );
     // emit event
-    emit(
-        <a href="../bridge/bridge.md#bridge_bridge_TokenDepositedEvent">TokenDepositedEvent</a> {
-            seq_num: bridge_seq_num,
-            source_chain: inner.chain_id,
-            sender_address: address::to_bytes(ctx.sender()),
-            target_chain,
-            target_address,
-            token_type: token_id,
-            amount: token_amount,
-        },
-    );
+    event::emit(<a href="../bridge/bridge.md#bridge_bridge_TokenDepositedEvent">TokenDepositedEvent</a> {
+        seq_num: bridge_seq_num,
+        source_chain: inner.chain_id,
+        sender_address: address::to_bytes(ctx.sender()),
+        target_chain,
+        target_address,
+        token_type: token_id,
+        amount: token_amount,
+    });
 }
 </code></pre>
 
@@ -966,7 +967,7 @@ title: Module `bridge::bridge`
         // If record already <b>has</b> verified signatures, it means the <a href="../bridge/message.md#bridge_message">message</a> <b>has</b> been approved
         // Then we exit early.
         <b>if</b> (record.verified_signatures.is_some()) {
-            emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferAlreadyApproved">TokenTransferAlreadyApproved</a> { message_key });
+            event::emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferAlreadyApproved">TokenTransferAlreadyApproved</a> { message_key });
             <b>return</b>
         };
         // Store approval
@@ -976,20 +977,22 @@ title: Module `bridge::bridge`
         // it's already approved because we only add a <a href="../bridge/message.md#bridge_message">message</a> to token_transfer_records
         // after verifying the signatures
         <b>if</b> (inner.token_transfer_records.contains(message_key)) {
-            emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferAlreadyApproved">TokenTransferAlreadyApproved</a> { message_key });
+            event::emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferAlreadyApproved">TokenTransferAlreadyApproved</a> { message_key });
             <b>return</b>
         };
         // Store <a href="../bridge/message.md#bridge_message">message</a> and approval
-        inner.token_transfer_records.push_back(
-            message_key,
-            <a href="../bridge/bridge.md#bridge_bridge_BridgeRecord">BridgeRecord</a> {
-                <a href="../bridge/message.md#bridge_message">message</a>,
-                verified_signatures: option::some(signatures),
-                claimed: <b>false</b>
-            },
-        );
+        inner
+            .token_transfer_records
+            .push_back(
+                message_key,
+                <a href="../bridge/bridge.md#bridge_bridge_BridgeRecord">BridgeRecord</a> {
+                    <a href="../bridge/message.md#bridge_message">message</a>,
+                    verified_signatures: option::some(signatures),
+                    claimed: <b>false</b>,
+                },
+            );
     };
-    emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferApproved">TokenTransferApproved</a> { message_key });
+    event::emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferApproved">TokenTransferApproved</a> { message_key });
 }
 </code></pre>
 
@@ -1140,16 +1143,12 @@ title: Module `bridge::bridge`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../bridge/bridge.md#bridge_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(
-    <a href="../bridge/bridge.md#bridge_bridge">bridge</a>: &<a href="../bridge/bridge.md#bridge_bridge_Bridge">Bridge</a>,
-    source_chain: u8,
-    bridge_seq_num: u64,
-): u8 {
+<pre><code><b>fun</b> <a href="../bridge/bridge.md#bridge_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>: &<a href="../bridge/bridge.md#bridge_bridge_Bridge">Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8 {
     <b>let</b> inner = <a href="../bridge/bridge.md#bridge_bridge_load_inner">load_inner</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>);
     <b>let</b> key = <a href="../bridge/message.md#bridge_message_create_key">message::create_key</a>(
         source_chain,
         <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(),
-        bridge_seq_num
+        bridge_seq_num,
     );
     <b>if</b> (!inner.token_transfer_records.contains(key)) {
         <b>return</b> <a href="../bridge/bridge.md#bridge_bridge_TRANSFER_STATUS_NOT_FOUND">TRANSFER_STATUS_NOT_FOUND</a>
@@ -1193,7 +1192,7 @@ title: Module `bridge::bridge`
     <b>let</b> key = <a href="../bridge/message.md#bridge_message_create_key">message::create_key</a>(
         source_chain,
         <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(),
-        bridge_seq_num
+        bridge_seq_num,
     );
     <b>if</b> (!inner.token_transfer_records.contains(key)) {
         <b>return</b> option::none()
@@ -1222,9 +1221,7 @@ title: Module `bridge::bridge`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../bridge/bridge.md#bridge_bridge_load_inner">load_inner</a>(
-    <a href="../bridge/bridge.md#bridge_bridge">bridge</a>: &<a href="../bridge/bridge.md#bridge_bridge_Bridge">Bridge</a>,
-): &<a href="../bridge/bridge.md#bridge_bridge_BridgeInner">BridgeInner</a> {
+<pre><code><b>fun</b> <a href="../bridge/bridge.md#bridge_bridge_load_inner">load_inner</a>(<a href="../bridge/bridge.md#bridge_bridge">bridge</a>: &<a href="../bridge/bridge.md#bridge_bridge_Bridge">Bridge</a>): &<a href="../bridge/bridge.md#bridge_bridge_BridgeInner">BridgeInner</a> {
     <b>let</b> version = <a href="../bridge/bridge.md#bridge_bridge">bridge</a>.inner.version();
     // TODO: Replace this with a lazy update function when we add a new version of the inner object.
     <b>assert</b>!(version == <a href="../bridge/bridge.md#bridge_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="../bridge/bridge.md#bridge_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
@@ -1296,10 +1293,7 @@ title: Module `bridge::bridge`
     // retrieve approved <a href="../bridge/bridge.md#bridge_bridge">bridge</a> <a href="../bridge/message.md#bridge_message">message</a>
     <b>let</b> record = &<b>mut</b> inner.token_transfer_records[key];
     // ensure this is a token <a href="../bridge/bridge.md#bridge_bridge">bridge</a> <a href="../bridge/message.md#bridge_message">message</a>
-    <b>assert</b>!(
-        &record.<a href="../bridge/message.md#bridge_message">message</a>.message_type() == <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(),
-        <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>,
-    );
+    <b>assert</b>!(&record.<a href="../bridge/message.md#bridge_message">message</a>.message_type() == <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(), <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>);
     // Ensure it's signed
     <b>assert</b>!(record.verified_signatures.is_some(), <a href="../bridge/bridge.md#bridge_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>);
     // extract token <a href="../bridge/message.md#bridge_message">message</a>
@@ -1308,7 +1302,7 @@ title: Module `bridge::bridge`
     <b>let</b> owner = address::from_bytes(token_payload.token_target_address());
     // If already claimed, exit early
     <b>if</b> (record.claimed) {
-        emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferAlreadyClaimed">TokenTransferAlreadyClaimed</a> { message_key: key });
+        event::emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferAlreadyClaimed">TokenTransferAlreadyClaimed</a> { message_key: key });
         <b>return</b> (option::none(), owner)
     };
     <b>let</b> target_chain = token_payload.token_target_chain();
@@ -1326,23 +1320,24 @@ title: Module `bridge::bridge`
     );
     <b>let</b> amount = token_payload.token_amount();
     // Make sure transfer is within limit.
-    <b>if</b> (!inner
-        .<a href="../bridge/limiter.md#bridge_limiter">limiter</a>
-        .check_and_record_sending_transfer&lt;T&gt;(
-        &inner.<a href="../bridge/treasury.md#bridge_treasury">treasury</a>,
-        clock,
-        route,
-        amount,
-    )
+    <b>if</b> (
+        !inner
+            .<a href="../bridge/limiter.md#bridge_limiter">limiter</a>
+            .check_and_record_sending_transfer&lt;T&gt;(
+                &inner.<a href="../bridge/treasury.md#bridge_treasury">treasury</a>,
+                clock,
+                route,
+                amount,
+            )
     ) {
-        emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferLimitExceed">TokenTransferLimitExceed</a> { message_key: key });
+        event::emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferLimitExceed">TokenTransferLimitExceed</a> { message_key: key });
         <b>return</b> (option::none(), owner)
     };
     // claim from <a href="../bridge/treasury.md#bridge_treasury">treasury</a>
     <b>let</b> token = inner.<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.mint&lt;T&gt;(amount, ctx);
     // Record changes
     record.claimed = <b>true</b>;
-    emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferClaimed">TokenTransferClaimed</a> { message_key: key });
+    event::emit(<a href="../bridge/bridge.md#bridge_bridge_TokenTransferClaimed">TokenTransferClaimed</a> { message_key: key });
     (option::some(token), owner)
 }
 </code></pre>
@@ -1371,11 +1366,11 @@ title: Module `bridge::bridge`
     <b>if</b> (op == <a href="../bridge/message.md#bridge_message_emergency_op_pause">message::emergency_op_pause</a>()) {
         <b>assert</b>!(!inner.paused, <a href="../bridge/bridge.md#bridge_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>);
         inner.paused = <b>true</b>;
-        emit(<a href="../bridge/bridge.md#bridge_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>true</b> });
+        event::emit(<a href="../bridge/bridge.md#bridge_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>true</b> });
     } <b>else</b> <b>if</b> (op == <a href="../bridge/message.md#bridge_message_emergency_op_unpause">message::emergency_op_unpause</a>()) {
         <b>assert</b>!(inner.paused, <a href="../bridge/bridge.md#bridge_bridge_EBridgeNotPaused">EBridgeNotPaused</a>);
         inner.paused = <b>false</b>;
-        emit(<a href="../bridge/bridge.md#bridge_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>false</b> });
+        event::emit(<a href="../bridge/bridge.md#bridge_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>false</b> });
     } <b>else</b> {
         <b>abort</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedOperation">EUnexpectedOperation</a>
     };
@@ -1406,12 +1401,14 @@ title: Module `bridge::bridge`
     <b>assert</b>!(receiving_chain == inner.chain_id, <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
     <b>let</b> route = <a href="../bridge/chain_ids.md#bridge_chain_ids_get_route">chain_ids::get_route</a>(
         payload.update_bridge_limit_payload_sending_chain(),
-        receiving_chain
+        receiving_chain,
     );
-    inner.<a href="../bridge/limiter.md#bridge_limiter">limiter</a>.update_route_limit(
-        &route,
-        payload.update_bridge_limit_payload_limit()
-    )
+    inner
+        .<a href="../bridge/limiter.md#bridge_limiter">limiter</a>
+        .update_route_limit(
+            &route,
+            payload.update_bridge_limit_payload_limit(),
+        )
 }
 </code></pre>
 
@@ -1435,10 +1432,12 @@ title: Module `bridge::bridge`
 
 
 <pre><code><b>fun</b> <a href="../bridge/bridge.md#bridge_bridge_execute_update_asset_price">execute_update_asset_price</a>(inner: &<b>mut</b> <a href="../bridge/bridge.md#bridge_bridge_BridgeInner">BridgeInner</a>, payload: UpdateAssetPrice) {
-    inner.<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.update_asset_notional_price(
-        payload.update_asset_price_payload_token_id(),
-        payload.update_asset_price_payload_new_price()
-    )
+    inner
+        .<a href="../bridge/treasury.md#bridge_treasury">treasury</a>
+        .update_asset_notional_price(
+            payload.update_asset_price_payload_token_id(),
+            payload.update_asset_price_payload_new_price(),
+        )
 }
 </code></pre>
 
@@ -1538,7 +1537,7 @@ title: Module `bridge::bridge`
     <b>let</b> key = <a href="../bridge/message.md#bridge_message_create_key">message::create_key</a>(
         source_chain,
         <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(),
-        bridge_seq_num
+        bridge_seq_num,
     );
     <b>if</b> (!inner.token_transfer_records.contains(key)) {
         <b>return</b> option::none()

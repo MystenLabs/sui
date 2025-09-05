@@ -30,7 +30,7 @@ module tto::M1 {
 
 // Can't transfer a receiving argument
 //# programmable --inputs receiving(2,1) @tto
-//> TransferObjects([Input(0)], Input(2))
+//> TransferObjects([Input(0)], Input(1))
 
 //# programmable --inputs receiving(2,1) 10
 //> SplitCoins(Input(0), [Input(1)])

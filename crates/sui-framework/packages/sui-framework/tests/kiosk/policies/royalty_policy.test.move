@@ -4,14 +4,9 @@
 #[test_only]
 /// A `TransferPolicy` Rule which implements percentage-based royalty fee.
 module sui::royalty_policy {
-    use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::transfer_policy::{
-        Self as policy,
-        TransferPolicy,
-        TransferPolicyCap,
-        TransferRequest
-    };
+    use sui::sui::SUI;
+    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap, TransferRequest};
 
     /// The `amount_bp` passed is more than 100%.
     const EIncorrectArgument: u64 = 0;
@@ -25,15 +20,15 @@ module sui::royalty_policy {
     public struct Rule has drop {}
 
     /// Configuration for the Rule.
-    public struct Config has store, drop {
-        amount_bp: u16
+    public struct Config has drop, store {
+        amount_bp: u16,
     }
 
     /// Creator action: Set the Royalty policy for the `T`.
     public fun set<T: key + store>(
         policy: &mut TransferPolicy<T>,
         cap: &TransferPolicyCap<T>,
-        amount_bp: u16
+        amount_bp: u16,
     ) {
         assert!(amount_bp < MAX_BPS, EIncorrectArgument);
         policy::add_rule(Rule {}, policy, cap, Config { amount_bp })
@@ -44,7 +39,7 @@ module sui::royalty_policy {
         policy: &mut TransferPolicy<T>,
         request: &mut TransferRequest<T>,
         payment: &mut Coin<SUI>,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ) {
         let config: &Config = policy::get_rule(Rule {}, policy);
         let paid = policy::paid(request);
@@ -61,8 +56,8 @@ module sui::royalty_policy {
 #[test_only]
 module sui::royalty_policy_tests {
     use sui::coin;
-    use sui::sui::SUI;
     use sui::royalty_policy;
+    use sui::sui::SUI;
     use sui::transfer_policy as policy;
     use sui::transfer_policy_tests as test;
 

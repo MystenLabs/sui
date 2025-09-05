@@ -5,4 +5,14 @@ info:
   edition: legacy
   lint: false
 ---
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:22:43
+   │
+22 │     #[expected_failure(major_status=4016, minor_code=0)]
+   │                                           ^^^^^^^^^^ Unknown field 'minor_code' for 'expected_failure'. Expected one of: 'abort_code', 'arithmetic_error', 'location', 'major_status', 'minor_status', 'out_of_gas', or 'vector_error'
 
+error[E02015]: invalid attribute
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:38:59
+   │
+38 │     #[expected_failure(major_status=4016, minor_status=0, location=0)]
+   │                                                           ^^^^^^^^ Field 'location' must be a module identifier

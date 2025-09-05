@@ -151,7 +151,7 @@ public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V
     value
 }
 
-/// Removes the front of the table `table: &mut LinkedTable<K, V>` and returns the value.
+/// Removes the front of the table `table: &mut LinkedTable<K, V>`, returns the key and value.
 /// Aborts with `ETableIsEmpty` if the table is empty
 public fun pop_front<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
     assert!(table.head.is_some(), ETableIsEmpty);
@@ -159,7 +159,7 @@ public fun pop_front<K: copy + drop + store, V: store>(table: &mut LinkedTable<K
     (head, table.remove(head))
 }
 
-/// Removes the back of the table `table: &mut LinkedTable<K, V>` and returns the value.
+/// Removes the back of the table `table: &mut LinkedTable<K, V>`, returns the key and value.
 /// Aborts with `ETableIsEmpty` if the table is empty
 public fun pop_back<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
     assert!(table.tail.is_some(), ETableIsEmpty);

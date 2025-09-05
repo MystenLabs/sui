@@ -1,0 +1,29 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 2, line 8:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 10-29:
+//# run-graphql
+Response: {
+  "data": {
+    "consensusCommitPrologueTransaction": {
+      "digest": "2RfSVhowkzr4JQQVD42D4XgUbtyLoVsm8ns8vAJPWMDx",
+      "kind": {
+        "__typename": "ConsensusCommitPrologueTransaction",
+        "epoch": {
+          "epochId": 0
+        },
+        "round": 0,
+        "commitTimestamp": "1970-01-01T00:00:00.001Z",
+        "consensusCommitDigest": "11111111111111111111111111111111",
+        "subDagIndex": null,
+        "additionalStateDigest": null
+      }
+    }
+  }
+}

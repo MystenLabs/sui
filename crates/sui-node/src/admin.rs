@@ -19,7 +19,9 @@ use std::{
 use sui_types::{
     base_types::AuthorityName,
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
+    digests::TransactionDigest,
     error::SuiError,
+    traffic_control::TrafficControlReconfigParams,
 };
 use telemetry_subscribers::TracingHandle;
 use tokio::sync::oneshot;
@@ -68,6 +70,13 @@ use tracing::info;
 // Inject a full signature from another node, bypassing validity checks.
 //
 //  $ curl 'http://127.0.0.1:1337/randomness-inject-full-sig?round=123&sigs=base64encodedsig'
+//
+// Get the estimated cost of a transaction
+//
+//  $ curl 'http://127.0.0.1:1337/get-tx-cost?tx=<tx_digest>'
+// Reconfigure traffic control policy
+//
+//  $ curl 'http://127.0.0.1:1337/traffic-control?error_threshold=100&spam_threshold=100&dry_run=true'
 
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";
@@ -80,6 +89,9 @@ const NODE_CONFIG: &str = "/node-config";
 const RANDOMNESS_PARTIAL_SIGS_ROUTE: &str = "/randomness-partial-sigs";
 const RANDOMNESS_INJECT_PARTIAL_SIGS_ROUTE: &str = "/randomness-inject-partial-sigs";
 const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
+const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
+const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
+const TRAFFIC_CONTROL: &str = "/traffic-control";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -119,6 +131,12 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
             RANDOMNESS_INJECT_FULL_SIG_ROUTE,
             post(randomness_inject_full_sig),
         )
+        .route(GET_TX_COST_ROUTE, get(get_tx_cost))
+        .route(
+            DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE,
+            get(dump_consensus_tx_cost_estimates),
+        )
+        .route(TRAFFIC_CONTROL, post(traffic_control))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -441,5 +459,67 @@ async fn randomness_inject_full_sig(
         Ok(Ok(())) => (StatusCode::OK, "full signature injected\n".to_string()),
         Ok(Err(e)) => (StatusCode::BAD_REQUEST, e.to_string()),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct GetTxCost {
+    tx_digest: String,
+}
+
+async fn get_tx_cost(
+    State(state): State<Arc<AppState>>,
+    args: Query<GetTxCost>,
+) -> (StatusCode, String) {
+    let Query(GetTxCost { tx_digest }) = args;
+    let tx_digest = TransactionDigest::from_str(tx_digest.as_str()).unwrap();
+
+    let Some(transaction) = state
+        .node
+        .state()
+        .get_transaction_cache_reader()
+        .get_transaction_block(&tx_digest)
+    else {
+        return (StatusCode::BAD_REQUEST, "Transaction not found".to_string());
+    };
+
+    let Some(cost) = state
+        .node
+        .state()
+        .load_epoch_store_one_call_per_task()
+        .get_estimated_tx_cost(transaction.transaction_data())
+        .await
+    else {
+        return (StatusCode::BAD_REQUEST, "No estimate available".to_string());
+    };
+
+    (StatusCode::OK, cost.to_string())
+}
+
+async fn dump_consensus_tx_cost_estimates(
+    State(state): State<Arc<AppState>>,
+) -> (StatusCode, String) {
+    let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
+    let estimates = epoch_store.get_consensus_tx_cost_estimates().await;
+    (StatusCode::OK, format!("{:#?}", estimates))
+}
+
+async fn traffic_control(
+    State(state): State<Arc<AppState>>,
+    args: Query<TrafficControlReconfigParams>,
+) -> (StatusCode, String) {
+    let Query(params) = args;
+    match state.node.state().reconfigure_traffic_control(params).await {
+        Ok(updated_state) => (
+            StatusCode::OK,
+            format!(
+                "Traffic control configured with:\n\
+                 Error threshold: {:?}\n\
+                 Spam threshold: {:?}\n\
+                 Dry run: {:?}\n",
+                updated_state.error_threshold, updated_state.spam_threshold, updated_state.dry_run
+            ),
+        ),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }

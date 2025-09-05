@@ -13,21 +13,21 @@ use move_ir_types::location::*;
 
 use crate::{
     cfgir::{
+        CFGContext, MemberName,
         absint::JoinResult,
         cfg::ImmForwardCFG,
         visitor::{
-            calls_special_function, LocalState, SimpleAbsInt, SimpleAbsIntConstructor,
-            SimpleDomain, SimpleExecutionContext,
+            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
+            SimpleExecutionContext, calls_special_function,
         },
-        CFGContext, MemberName,
     },
     diag,
     diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
         Diagnostic, Diagnostics,
+        codes::{DiagnosticInfo, Severity, custom},
     },
     hlir::ast::{
-        BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, TypeName_, Type_, Var,
+        BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, Type_, TypeName_, Var,
     },
     parser::ast::Ability_,
     shared::Identifier,
@@ -36,7 +36,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    LinterDiagnosticCategory, LinterDiagnosticCode, FREEZE_FUN, INVALID_LOC, LINT_WARNING_PREFIX,
+    FREEZE_FUN, INVALID_LOC, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
     RECEIVE_FUN, SHARE_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 

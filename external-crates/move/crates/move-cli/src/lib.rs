@@ -4,9 +4,9 @@
 
 use base::{
     build::Build, coverage::Coverage, disassemble::Disassemble, docgen::Docgen, info::Info,
-    migrate::Migrate, new::New, test::Test,
+    migrate::Migrate, new::New, summary::Summary, test::Test,
 };
-use move_package::BuildConfig;
+use move_package::{BuildConfig, resolution::resolution_graph::ResolvedGraph};
 
 pub mod base;
 pub mod sandbox;
@@ -22,6 +22,8 @@ use clap::Parser;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_vm_runtime::{dev_utils::gas_schedule::CostTable, natives::functions::NativeFunction};
 use std::path::PathBuf;
+
+use crate::base::profile::Profile;
 
 type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunction);
 
@@ -63,6 +65,7 @@ pub enum Command {
     Migrate(Migrate),
     New(New),
     Test(Test),
+    Profile(Profile),
     /// Execute a sandbox command.
     #[clap(name = "sandbox")]
     Sandbox {
@@ -73,6 +76,7 @@ pub enum Command {
         #[clap(subcommand)]
         cmd: sandbox::cli::SandboxCommand,
     },
+    Summary(Summary),
 }
 
 pub fn run_cli(
@@ -102,9 +106,17 @@ pub fn run_cli(
             natives,
             Some(cost_table.clone()),
         ),
+        Command::Profile(c) => c.execute(),
         Command::Sandbox { storage_dir, cmd } => {
             cmd.handle_command(natives, cost_table, &move_args, &storage_dir)
         }
+        Command::Summary(summary) => summary
+            .execute::<(), fn(&mut ResolvedGraph) -> anyhow::Result<()>>(
+                move_args.package_path.as_deref(),
+                move_args.build_config,
+                None,
+                None,
+            ),
     }
 }
 

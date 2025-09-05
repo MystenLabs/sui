@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
+    CompiledModule,
     file_format::{
-        empty_module, AbilitySet, AddressIdentifierIndex,
+        AbilitySet, AddressIdentifierIndex,
         Bytecode::{self, *},
         CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex, FieldDefinition,
         FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex, ModuleHandle,
@@ -11,8 +12,8 @@ use move_binary_format::{
         SignatureToken::{self, *},
         StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeSignature, Visibility,
         Visibility::*,
+        empty_module,
     },
-    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
@@ -120,6 +121,7 @@ fn too_many_locals() {
         .collect::<Vec<_>>();
     let module = CompiledModule {
         version: 5,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),
@@ -173,6 +175,7 @@ fn too_many_locals() {
 fn borrow_graph() {
     let module = CompiledModule {
         version: 5,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),
@@ -274,6 +277,7 @@ fn indirect_code() {
     assert_eq!(code.len(), (u16::MAX as usize));
     let module = CompiledModule {
         version: 5,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),

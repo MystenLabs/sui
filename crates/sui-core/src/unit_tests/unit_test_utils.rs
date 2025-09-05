@@ -39,8 +39,7 @@ async fn init_genesis(
     let pkg = Object::new_package(
         &modules,
         TransactionDigest::genesis_marker(),
-        config.max_move_package_size(),
-        config.move_binary_format_version(),
+        &config,
         &genesis_move_packages,
     )
     .unwrap();
@@ -142,7 +141,6 @@ pub async fn init_local_authorities_with_genesis(
     let timeouts = TimeoutConfig {
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
-        serial_authority_request_interval: Duration::from_secs(1),
     };
     AuthorityAggregatorBuilder::from_genesis(genesis)
         .with_timeouts_config(timeouts)

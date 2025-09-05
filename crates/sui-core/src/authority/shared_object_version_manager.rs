@@ -2,98 +2,259 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityPerEpochStore;
 use crate::execution_cache::ObjectCacheRead;
+use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
+use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::storage::{
     transaction_non_shared_input_object_keys, transaction_receiving_object_keys, ObjectKey,
 };
-use sui_types::transaction::{
-    SenderSignedData, SharedInputObject, TransactionDataAPI, TransactionKey,
-};
+use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
-use tracing::{debug, trace};
+use tracing::trace;
+
+use super::epoch_start_configuration::EpochStartConfigTrait;
 
 pub struct SharedObjVerManager {}
 
-pub type AssignedTxAndVersions = Vec<(
-    TransactionKey,
-    Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-)>;
+/// Represents whether a transaction involves balance withdraws
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WithdrawType {
+    #[default]
+    NonWithdraw,
+    Withdraw(SequenceNumber), // Accumulator version for withdraw
+}
+
+/// Version assignments for a single transaction
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AssignedVersions {
+    pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+    pub withdraw_type: WithdrawType,
+}
+
+impl AssignedVersions {
+    pub fn new(
+        shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+        withdraw_type: WithdrawType,
+    ) -> Self {
+        Self {
+            shared_object_versions,
+            withdraw_type,
+        }
+    }
+
+    pub fn non_withdraw(
+        shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+    ) -> Self {
+        Self::new(shared_object_versions, WithdrawType::NonWithdraw)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
+        self.shared_object_versions.iter()
+    }
+
+    pub fn as_slice(&self) -> &[(ConsensusObjectSequenceKey, SequenceNumber)] {
+        &self.shared_object_versions
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct AssignedTxAndVersions(pub Vec<(TransactionKey, AssignedVersions)>);
+
+impl AssignedTxAndVersions {
+    pub fn new(assigned_versions: Vec<(TransactionKey, AssignedVersions)>) -> Self {
+        Self(assigned_versions)
+    }
+
+    pub fn into_map(self) -> HashMap<TransactionKey, AssignedVersions> {
+        self.0.into_iter().collect()
+    }
+}
+
+/// A wrapper around things that can be scheduled for execution by the assigning of
+/// shared object versions.
+#[derive(Clone)]
+pub enum Schedulable<T = VerifiedExecutableTransaction> {
+    Transaction(T),
+    RandomnessStateUpdate(EpochId, RandomnessRound),
+    AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
+}
+
+impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
+    fn from(tx: VerifiedExecutableTransaction) -> Self {
+        Schedulable::Transaction(tx)
+    }
+}
+
+// AsTx is like Deref, in that it allows us to use either refs or values in Schedulable.
+// Deref does not work because it conflicts with the impl of Deref for VerifiedExecutableTransaction.
+pub trait AsTx {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction;
+}
+
+impl AsTx for VerifiedExecutableTransaction {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self
+    }
+}
+
+impl AsTx for &'_ VerifiedExecutableTransaction {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self
+    }
+}
+
+impl Schedulable<&'_ VerifiedExecutableTransaction> {
+    // Cannot use the blanket ToOwned trait impl because it just calls clone.
+    pub fn to_owned_schedulable(&self) -> Schedulable<VerifiedExecutableTransaction> {
+        match self {
+            Schedulable::Transaction(tx) => Schedulable::Transaction((*tx).clone()),
+            Schedulable::RandomnessStateUpdate(epoch, round) => {
+                Schedulable::RandomnessStateUpdate(*epoch, *round)
+            }
+            Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
+                Schedulable::AccumulatorSettlement(*epoch, *checkpoint_height)
+            }
+        }
+    }
+}
+
+impl<T> Schedulable<T> {
+    pub fn as_tx(&self) -> Option<&VerifiedExecutableTransaction>
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => Some(tx.as_tx()),
+            Schedulable::RandomnessStateUpdate(_, _) => None,
+            Schedulable::AccumulatorSettlement(_, _) => None,
+        }
+    }
+
+    pub fn shared_input_objects(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> impl Iterator<Item = SharedInputObject> + '_
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => Either::Left(tx.as_tx().shared_input_objects()),
+            Schedulable::RandomnessStateUpdate(_, _) => {
+                Either::Right(std::iter::once(SharedInputObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: epoch_store
+                        .epoch_start_config()
+                        .randomness_obj_initial_shared_version()
+                        .expect("randomness obj initial shared version should be set"),
+                    mutable: true,
+                }))
+            }
+            Schedulable::AccumulatorSettlement(_, _) => {
+                Either::Right(std::iter::once(SharedInputObject {
+                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    initial_shared_version: epoch_store
+                        .epoch_start_config()
+                        .accumulator_root_obj_initial_shared_version()
+                        .expect("accumulator root obj initial shared version should be set"),
+                    mutable: true,
+                }))
+            }
+        }
+    }
+
+    pub fn non_shared_input_object_keys(&self) -> Vec<ObjectKey>
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => transaction_non_shared_input_object_keys(tx.as_tx())
+                .expect("Transaction input should have been verified"),
+            Schedulable::RandomnessStateUpdate(_, _) => vec![],
+            Schedulable::AccumulatorSettlement(_, _) => vec![],
+        }
+    }
+
+    pub fn receiving_object_keys(&self) -> Vec<ObjectKey>
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
+            Schedulable::RandomnessStateUpdate(_, _) => vec![],
+            Schedulable::AccumulatorSettlement(_, _) => vec![],
+        }
+    }
+
+    pub fn key(&self) -> TransactionKey
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => tx.as_tx().key(),
+            Schedulable::RandomnessStateUpdate(epoch, round) => {
+                TransactionKey::RandomnessRound(*epoch, *round)
+            }
+            Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
+                TransactionKey::AccumulatorSettlement(*epoch, *checkpoint_height)
+            }
+        }
+    }
+}
 
 #[must_use]
-#[derive(Default)]
+#[derive(Default, Eq, PartialEq, Debug)]
 pub struct ConsensusSharedObjVerAssignment {
     pub shared_input_next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     pub assigned_versions: AssignedTxAndVersions,
 }
 
 impl SharedObjVerManager {
-    pub fn assign_versions_from_consensus(
+    pub fn assign_versions_from_consensus<'a, T>(
         epoch_store: &AuthorityPerEpochStore,
         cache_reader: &dyn ObjectCacheRead,
-        certificates: &[VerifiedExecutableTransaction],
-        randomness_round: Option<RandomnessRound>,
+        assignables: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> SuiResult<ConsensusSharedObjVerAssignment> {
+    ) -> SuiResult<ConsensusSharedObjVerAssignment>
+    where
+        T: AsTx + 'a,
+    {
         let mut shared_input_next_versions = get_or_init_versions(
-            certificates.iter().map(|cert| cert.data()),
+            assignables
+                .clone()
+                .flat_map(|a| a.shared_input_objects(epoch_store)),
             epoch_store,
             cache_reader,
-            randomness_round.is_some(),
         )?;
         let mut assigned_versions = Vec::new();
-        // We must update randomness object version first before processing any transaction,
-        // so that all reads are using the next version.
-        // TODO: Add a test that actually check this, i.e. if we change the order, some test should fail.
-        if let Some(round) = randomness_round {
-            // If we're generating randomness, update the randomness state object version.
-            let randomness_obj_initial_shared_version = epoch_store
-                .epoch_start_config()
-                .randomness_obj_initial_shared_version()
-                .expect("randomness state obj must exist");
-            let version = shared_input_next_versions
-                .get_mut(&(
-                    SUI_RANDOMNESS_STATE_OBJECT_ID,
-                    randomness_obj_initial_shared_version,
-                ))
-                .expect("randomness state object must have been added in get_or_init_versions()");
-            debug!("assigning shared object versions for randomness: epoch {}, round {round:?} -> version {version:?}", epoch_store.epoch());
-            assigned_versions.push((
-                TransactionKey::RandomnessRound(epoch_store.epoch(), round),
-                vec![(
-                    (
-                        SUI_RANDOMNESS_STATE_OBJECT_ID,
-                        randomness_obj_initial_shared_version,
-                    ),
-                    *version,
-                )],
-            ));
-            version.increment();
-        }
-        for cert in certificates {
-            if !cert.contains_shared_object() {
-                continue;
-            }
+        for assignable in assignables {
+            assert!(
+                !matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
+                    || epoch_store.accumulators_enabled(),
+                "AccumulatorSettlement should not be scheduled when accumulators are disabled"
+            );
+
             let cert_assigned_versions = Self::assign_versions_for_certificate(
-                cert,
+                epoch_store,
+                assignable,
                 &mut shared_input_next_versions,
                 cancelled_txns,
             );
-            assigned_versions.push((cert.key(), cert_assigned_versions));
+            assigned_versions.push((assignable.key(), cert_assigned_versions));
         }
 
         Ok(ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
-            assigned_versions,
+            assigned_versions: AssignedTxAndVersions::new(assigned_versions),
         })
     }
 
@@ -103,17 +264,18 @@ impl SharedObjVerManager {
         cache_reader: &dyn ObjectCacheRead,
     ) -> AssignedTxAndVersions {
         // We don't care about the results since we can use effects to assign versions.
-        // But we must call it to make sure whenever a shared object is touched the first time
+        // But we must call it to make sure whenever a consensus object is touched the first time
         // during an epoch, either through consensus or through checkpoint executor,
         // its next version must be initialized. This is because we initialize the next version
-        // of a shared object in an epoch by reading the current version from the object store.
+        // of a consensus object in an epoch by reading the current version from the object store.
         // This must be done before we mutate it the first time, otherwise we would be initializing
         // it with the wrong version.
         let _ = get_or_init_versions(
-            certs_and_effects.iter().map(|(cert, _)| cert.data()),
+            certs_and_effects
+                .iter()
+                .flat_map(|(cert, _)| cert.transaction_data().shared_input_objects().into_iter()),
             epoch_store,
             cache_reader,
-            false,
         );
         let mut assigned_versions = Vec::new();
         for (cert, effects) in certs_and_effects {
@@ -124,7 +286,7 @@ impl SharedObjVerManager {
                 .map(|input| input.into_id_and_version())
                 .collect();
             let cert_assigned_versions: Vec<_> = effects
-                .input_shared_objects()
+                .input_consensus_objects()
                 .into_iter()
                 .map(|iso| {
                     let (id, version) = iso.id_and_version();
@@ -138,22 +300,57 @@ impl SharedObjVerManager {
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
-                "locking shared objects from effects"
+                "assigned consensus object versions from effects"
             );
-            assigned_versions.push((tx_key, cert_assigned_versions));
+            assigned_versions.push((
+                tx_key,
+                // For transactions scheduled from effects, we do not need to schedule balance withdraws
+                // since we already know the result from effects.
+                AssignedVersions::non_withdraw(cert_assigned_versions),
+            ));
         }
-        assigned_versions
+        AssignedTxAndVersions::new(assigned_versions)
     }
 
     pub fn assign_versions_for_certificate(
-        cert: &VerifiedExecutableTransaction,
+        epoch_store: &AuthorityPerEpochStore,
+        assignable: &Schedulable<impl AsTx>,
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> Vec<(ConsensusObjectSequenceKey, SequenceNumber)> {
-        let tx_digest = cert.digest();
+    ) -> AssignedVersions {
+        let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
+
+        let withdraw_type =
+            assignable.as_tx().and_then(|tx| {
+                if tx.transaction_data().has_balance_withdraws() {
+                    let accumulator_initial_version = epoch_store
+                        .epoch_start_config()
+                        .accumulator_root_obj_initial_shared_version()
+                        .expect("accumulator root obj initial shared version should be set when accumulators are enabled");
+
+                    let accumulator_version = *shared_input_next_versions
+                        .get(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_initial_version))
+                        .expect("accumulator object must be in shared_input_next_versions when withdraws are enabled");
+
+                    Some(accumulator_version)
+                } else {
+                    None
+                }
+            })
+            .map(WithdrawType::Withdraw)
+            .unwrap_or_default();
+
+        if shared_input_objects.is_empty() {
+            // No shared object used by this transaction. No need to assign versions.
+            return AssignedVersions::new(vec![], withdraw_type);
+        }
+
+        let tx_key = assignable.key();
 
         // Check if the transaction is cancelled due to congestion.
-        let cancellation_info = cancelled_txns.get(tx_digest);
+        let cancellation_info = tx_key
+            .as_digest()
+            .and_then(|tx_digest| cancelled_txns.get(tx_digest));
         let congested_objects_info: Option<HashSet<_>> =
             if let Some(CancelConsensusCertificateReason::CongestionOnObjects(congested_objects)) =
                 &cancellation_info
@@ -164,15 +361,11 @@ impl SharedObjVerManager {
             };
         let txn_cancelled = cancellation_info.is_some();
 
-        // Make an iterator to update the locks of the transaction's shared objects.
-        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
-
-        let mut input_object_keys = transaction_non_shared_input_object_keys(cert)
-            .expect("Transaction input should have been verified");
+        let mut input_object_keys = assignable.non_shared_input_object_keys();
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
         let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
         // Record receiving object versions towards the shared version computation.
-        let receiving_object_keys = transaction_receiving_object_keys(cert);
+        let receiving_object_keys = assignable.receiving_object_keys();
         input_object_keys.extend(receiving_object_keys);
 
         if txn_cancelled {
@@ -261,43 +454,25 @@ impl SharedObjVerManager {
         }
 
         trace!(
-            ?tx_digest,
+            ?tx_key,
             ?assigned_versions,
             ?next_version,
             ?txn_cancelled,
             "locking shared objects"
         );
 
-        assigned_versions
+        AssignedVersions::new(assigned_versions, withdraw_type)
     }
 }
 
 fn get_or_init_versions<'a>(
-    transactions: impl Iterator<Item = &'a SenderSignedData>,
+    shared_input_objects: impl Iterator<Item = SharedInputObject> + 'a,
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
-    generate_randomness: bool,
 ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
-    let mut shared_input_objects: Vec<_> = transactions
-        .flat_map(|tx| {
-            tx.transaction_data()
-                .shared_input_objects()
-                .into_iter()
-                .map(|so| so.into_id_and_version())
-        })
+    let mut shared_input_objects: Vec<_> = shared_input_objects
+        .map(|so| so.into_id_and_version())
         .collect();
-
-    if generate_randomness {
-        shared_input_objects.push((
-            SUI_RANDOMNESS_STATE_OBJECT_ID,
-            epoch_store
-                .epoch_start_config()
-                .randomness_obj_initial_shared_version()
-                .expect(
-                    "randomness_obj_initial_shared_version should exist if randomness is enabled",
-                ),
-        ));
-    }
 
     shared_input_objects.sort();
     shared_input_objects.dedup();
@@ -314,31 +489,33 @@ mod tests {
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
     };
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::authority::AuthorityState;
     use std::collections::{BTreeMap, HashMap};
+    use std::sync::Arc;
+    use sui_protocol_config::ProtocolConfig;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-    use sui_types::crypto::RandomnessRound;
+    use sui_types::crypto::{get_account_key_pair, RandomnessRound};
     use sui_types::digests::ObjectDigest;
     use sui_types::effects::TestEffectsBuilder;
     use sui_types::executable_transaction::{
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
-    use sui_types::object::{Object, Owner};
+
+    use sui_types::object::Object;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{ObjectArg, SenderSignedData, TransactionKey};
-    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
+
+    use sui_types::gas_coin::GAS;
+    use sui_types::transaction::BalanceWithdrawArg;
+    use sui_types::type_input::TypeInput;
+    use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
     #[tokio::test]
     async fn test_assign_versions_from_consensus_basic() {
         let shared_object = Object::shared_for_testing();
         let id = shared_object.id();
-        let init_shared_version = match shared_object.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
+        let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[shared_object.clone()])
             .build()
@@ -350,14 +527,17 @@ mod tests {
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 11),
         ];
         let epoch_store = authority.epoch_store_for_testing();
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            &certs,
-            None,
+            assignables.iter(),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -379,23 +559,35 @@ mod tests {
         // using lamport version, hence the next transaction will use the same version number.
         // In the following case, certs[2] has the same assignment as certs[1] for this reason.
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
-                    vec![((id, init_shared_version), init_shared_version),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        init_shared_version
+                    )])
                 ),
                 (
                     certs[1].key(),
-                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        SequenceNumber::from_u64(4)
+                    )])
                 ),
                 (
                     certs[2].key(),
-                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        SequenceNumber::from_u64(4)
+                    )])
                 ),
                 (
                     certs[3].key(),
-                    vec![((id, init_shared_version), SequenceNumber::from_u64(10)),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        SequenceNumber::from_u64(10)
+                    )])
                 ),
             ]
         );
@@ -410,6 +602,15 @@ mod tests {
             .randomness_obj_initial_shared_version()
             .unwrap();
         let certs = vec![
+            VerifiedExecutableTransaction::new_system(
+                VerifiedTransaction::new_randomness_state_update(
+                    epoch_store.epoch(),
+                    RandomnessRound::new(1),
+                    vec![],
+                    randomness_obj_version,
+                ),
+                epoch_store.epoch(),
+            ),
             generate_shared_objs_tx_with_gas_version(
                 &[(
                     SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -428,14 +629,17 @@ mod tests {
                 5,
             ),
         ];
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            &certs,
-            Some(RandomnessRound::new(1)),
+            assignables.iter(),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -456,30 +660,30 @@ mod tests {
             )])
         );
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
-                    TransactionKey::RandomnessRound(0, RandomnessRound::new(1)),
-                    vec![(
+                    certs[0].key(),
+                    AssignedVersions::non_withdraw(vec![(
                         (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                         randomness_obj_version
-                    ),]
-                ),
-                (
-                    certs[0].key(),
-                    // It is critical that the randomness object version is updated before the assignment.
-                    vec![(
-                        (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
-                        next_randomness_obj_version
-                    )]
+                    )])
                 ),
                 (
                     certs[1].key(),
                     // It is critical that the randomness object version is updated before the assignment.
-                    vec![(
+                    AssignedVersions::non_withdraw(vec![(
                         (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                         next_randomness_obj_version
-                    )]
+                    )])
+                ),
+                (
+                    certs[2].key(),
+                    // It is critical that the randomness object version is updated before the assignment.
+                    AssignedVersions::non_withdraw(vec![(
+                        (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                        next_randomness_obj_version
+                    )])
                 ),
             ]
         );
@@ -492,20 +696,8 @@ mod tests {
         let shared_object_2 = Object::shared_for_testing();
         let id1 = shared_object_1.id();
         let id2 = shared_object_2.id();
-        let init_shared_version_1 = match shared_object_1.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
-        let init_shared_version_2 = match shared_object_2.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
+        let init_shared_version_1 = shared_object_1.owner.start_version().unwrap();
+        let init_shared_version_2 = shared_object_2.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[shared_object_1.clone(), shared_object_2.clone()])
             .build()
@@ -585,6 +777,11 @@ mod tests {
         .into_iter()
         .collect();
 
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
+
         // Run version assignment logic.
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -592,8 +789,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            &certs,
-            None,
+            assignables.iter(),
             &cancelled_txns,
         )
         .unwrap();
@@ -614,42 +810,45 @@ mod tests {
 
         // Check that the version assignment for each transaction is correct.
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
-                    vec![
+                    AssignedVersions::non_withdraw(vec![
                         ((id1, init_shared_version_1), init_shared_version_1),
                         ((id2, init_shared_version_2), init_shared_version_2)
-                    ]
+                    ])
                 ),
                 (
                     certs[1].key(),
-                    vec![
+                    AssignedVersions::non_withdraw(vec![
                         ((id1, init_shared_version_1), SequenceNumber::CONGESTED),
                         ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ),
-                    ]
+                    ])
                 ),
                 (
                     certs[2].key(),
-                    vec![((id1, init_shared_version_1), SequenceNumber::from_u64(4)),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id1, init_shared_version_1),
+                        SequenceNumber::from_u64(4)
+                    )])
                 ),
                 (
                     certs[3].key(),
-                    vec![
+                    AssignedVersions::non_withdraw(vec![
                         ((id1, init_shared_version_1), SequenceNumber::CANCELLED_READ),
                         ((id2, init_shared_version_2), SequenceNumber::CONGESTED)
-                    ]
+                    ])
                 ),
                 (
                     certs[4].key(),
-                    vec![
+                    AssignedVersions::non_withdraw(vec![
                         (
                             (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             SequenceNumber::RANDOMNESS_UNAVAILABLE
                         ),
                         ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ)
-                    ]
+                    ])
                 ),
             ]
         );
@@ -659,13 +858,7 @@ mod tests {
     async fn test_assign_versions_from_effects() {
         let shared_object = Object::shared_for_testing();
         let id = shared_object.id();
-        let init_shared_version = match shared_object.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
+        let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[shared_object.clone()])
             .build()
@@ -706,23 +899,35 @@ mod tests {
             init_shared_version
         );
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
-                    vec![((id, init_shared_version), init_shared_version),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        init_shared_version
+                    )])
                 ),
                 (
                     certs[1].key(),
-                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        SequenceNumber::from_u64(4)
+                    )])
                 ),
                 (
                     certs[2].key(),
-                    vec![((id, init_shared_version), SequenceNumber::from_u64(4)),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        SequenceNumber::from_u64(4)
+                    )])
                 ),
                 (
                     certs[3].key(),
-                    vec![((id, init_shared_version), SequenceNumber::from_u64(10)),]
+                    AssignedVersions::non_withdraw(vec![(
+                        (id, init_shared_version),
+                        SequenceNumber::from_u64(10)
+                    )])
                 ),
             ]
         );
@@ -762,5 +967,317 @@ mod tests {
             tx,
             CertificateProof::new_system(0),
         ))
+    }
+
+    struct WithdrawTestContext {
+        authority: Arc<AuthorityState>,
+        assignables: Vec<Schedulable<VerifiedExecutableTransaction>>,
+        shared_objects: Vec<Object>,
+    }
+
+    impl WithdrawTestContext {
+        pub async fn new() -> Self {
+            // Create a shared object for testing
+            let shared_objects = vec![Object::shared_for_testing()];
+            let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+            config.enable_accumulators_for_testing();
+            let authority = TestAuthorityBuilder::new()
+                .with_starting_objects(&shared_objects)
+                .with_protocol_config(config)
+                .build()
+                .await;
+            Self {
+                authority,
+                assignables: vec![],
+                shared_objects,
+            }
+        }
+
+        pub fn add_withdraw_transaction(&mut self) -> TransactionKey {
+            let mut ptb_builder = ProgrammableTransactionBuilder::new();
+            ptb_builder
+                .balance_withdraw(BalanceWithdrawArg::new_with_amount(
+                    200,
+                    TypeInput::from(GAS::type_tag()),
+                ))
+                .unwrap();
+            // Generate random sender and gas object for each transaction
+            let (sender, keypair) = get_account_key_pair();
+            let gas_object = Object::with_owner_for_testing(sender);
+            let gas_object_ref = gas_object.compute_object_reference();
+            // Generate a unique gas price to make the transaction unique.
+            let gas_price = (self.assignables.len() + 1) as u64;
+            let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
+                .programmable(ptb_builder.finish())
+                .build();
+            let cert = VerifiedExecutableTransaction::new_for_testing(tx_data, &keypair);
+            let key = cert.key();
+            self.assignables.push(Schedulable::Transaction(cert));
+            key
+        }
+
+        pub fn add_settlement_transaction(&mut self) -> TransactionKey {
+            let height = (self.assignables.len() + 1) as u64;
+            let settlement = Schedulable::AccumulatorSettlement(0, height);
+            let key = settlement.key();
+            self.assignables.push(settlement);
+            key
+        }
+
+        pub fn add_withdraw_with_shared_object_transaction(&mut self) -> TransactionKey {
+            let mut ptb_builder = ProgrammableTransactionBuilder::new();
+            // Add shared object to the transaction
+            if let Some(shared_obj) = self.shared_objects.first() {
+                let id = shared_obj.id();
+                let init_version = shared_obj.owner.start_version().unwrap();
+                ptb_builder
+                    .obj(ObjectArg::SharedObject {
+                        id,
+                        initial_shared_version: init_version,
+                        mutable: true,
+                    })
+                    .unwrap();
+            }
+            // Add balance withdraw
+            ptb_builder
+                .balance_withdraw(BalanceWithdrawArg::new_with_amount(
+                    200,
+                    TypeInput::from(GAS::type_tag()),
+                ))
+                .unwrap();
+            // Generate random sender and gas object for each transaction
+            let (sender, keypair) = get_account_key_pair();
+            let gas_object = Object::with_owner_for_testing(sender);
+            let gas_object_ref = gas_object.compute_object_reference();
+            // Generate a unique gas price to make the transaction unique.
+            let gas_price = (self.assignables.len() + 1) as u64;
+            let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
+                .programmable(ptb_builder.finish())
+                .build();
+            let cert = VerifiedExecutableTransaction::new_for_testing(tx_data, &keypair);
+            let key = cert.key();
+            self.assignables.push(Schedulable::Transaction(cert));
+            key
+        }
+
+        pub fn assign_versions_from_consensus(&self) -> ConsensusSharedObjVerAssignment {
+            let epoch_store = self.authority.epoch_store_for_testing();
+            SharedObjVerManager::assign_versions_from_consensus(
+                &epoch_store,
+                self.authority.get_object_cache_reader().as_ref(),
+                self.assignables.iter(),
+                &BTreeMap::new(),
+            )
+            .unwrap()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_assign_versions_from_consensus_with_withdraws_simple() {
+        // Note that we don't need a shared object to trigger withdraw version assignment.
+        // In fact it is important that this works without a shared object.
+        let mut ctx = WithdrawTestContext::new().await;
+
+        let acc_version = ctx
+            .authority
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .await
+            .unwrap()
+            .version();
+
+        let withdraw_key = ctx.add_withdraw_transaction();
+        let settlement_key = ctx.add_settlement_transaction();
+
+        let assigned_versions = ctx.assign_versions_from_consensus();
+        assert_eq!(
+            assigned_versions,
+            ConsensusSharedObjVerAssignment {
+                assigned_versions: AssignedTxAndVersions::new(vec![
+                    (
+                        withdraw_key,
+                        AssignedVersions {
+                            shared_object_versions: vec![],
+                            withdraw_type: WithdrawType::Withdraw(acc_version),
+                        }
+                    ),
+                    (
+                        settlement_key,
+                        AssignedVersions {
+                            shared_object_versions: vec![(
+                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                                acc_version
+                            )],
+                            withdraw_type: WithdrawType::NonWithdraw,
+                        }
+                    ),
+                ]),
+                shared_input_next_versions: HashMap::from([(
+                    (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                    acc_version.next()
+                )]),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_assign_versions_from_consensus_with_multiple_withdraws_and_settlements() {
+        // Test with multiple withdrawals and multiple settlements, with settlement as the last transaction
+        let mut ctx = WithdrawTestContext::new().await;
+
+        let acc_version = ctx
+            .authority
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .await
+            .unwrap()
+            .version();
+
+        // First withdrawal and settlement
+        let withdraw_key1 = ctx.add_withdraw_transaction();
+        let settlement_key1 = ctx.add_settlement_transaction();
+
+        // Second withdrawal and settlement
+        let withdraw_key2 = ctx.add_withdraw_transaction();
+        let settlement_key2 = ctx.add_settlement_transaction();
+
+        // Third withdrawal and final settlement
+        let withdraw_key3 = ctx.add_withdraw_transaction();
+        let settlement_key3 = ctx.add_settlement_transaction();
+
+        let assigned_versions = ctx.assign_versions_from_consensus();
+        assert_eq!(
+            assigned_versions,
+            ConsensusSharedObjVerAssignment {
+                assigned_versions: AssignedTxAndVersions::new(vec![
+                    (
+                        withdraw_key1,
+                        AssignedVersions {
+                            shared_object_versions: vec![],
+                            withdraw_type: WithdrawType::Withdraw(acc_version),
+                        }
+                    ),
+                    (
+                        settlement_key1,
+                        AssignedVersions {
+                            shared_object_versions: vec![(
+                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                                acc_version
+                            )],
+                            withdraw_type: WithdrawType::NonWithdraw,
+                        }
+                    ),
+                    (
+                        withdraw_key2,
+                        AssignedVersions {
+                            shared_object_versions: vec![],
+                            withdraw_type: WithdrawType::Withdraw(acc_version.next()),
+                        }
+                    ),
+                    (
+                        settlement_key2,
+                        AssignedVersions {
+                            shared_object_versions: vec![(
+                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                                acc_version.next()
+                            )],
+                            withdraw_type: WithdrawType::NonWithdraw,
+                        }
+                    ),
+                    (
+                        withdraw_key3,
+                        AssignedVersions {
+                            shared_object_versions: vec![],
+                            withdraw_type: WithdrawType::Withdraw(acc_version.next().next()),
+                        }
+                    ),
+                    (
+                        settlement_key3,
+                        AssignedVersions {
+                            shared_object_versions: vec![(
+                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                                acc_version.next().next()
+                            )],
+                            withdraw_type: WithdrawType::NonWithdraw,
+                        }
+                    ),
+                ]),
+                shared_input_next_versions: HashMap::from([(
+                    (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                    acc_version.next().next().next()
+                )]),
+            }
+        );
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "accumulator object must be in shared_input_next_versions")]
+    async fn test_assign_versions_from_consensus_with_withdraw_no_settlement_panics() {
+        // Test that having a withdrawal without a settlement should panic
+        // because the accumulator object version is not initialized properly
+        let mut ctx = WithdrawTestContext::new().await;
+
+        let _withdraw_key = ctx.add_withdraw_transaction();
+        // No settlement added - this should cause a panic because the accumulator
+        // object is not properly initialized in shared_input_next_versions
+
+        let _ = ctx.assign_versions_from_consensus();
+    }
+
+    #[tokio::test]
+    async fn test_assign_versions_from_consensus_with_withdraw_and_shared_object() {
+        // Test that a transaction can have both a withdrawal and use a shared object
+        let mut ctx = WithdrawTestContext::new().await;
+
+        // Get the shared object info from the context
+        let shared_obj_id = ctx.shared_objects[0].id();
+        let shared_obj_version = ctx.shared_objects[0].owner.start_version().unwrap();
+
+        let acc_version = ctx
+            .authority
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .await
+            .unwrap()
+            .version();
+
+        let withdraw_with_shared_key = ctx.add_withdraw_with_shared_object_transaction();
+        let settlement_key = ctx.add_settlement_transaction();
+
+        let assigned_versions = ctx.assign_versions_from_consensus();
+        assert_eq!(
+            assigned_versions,
+            ConsensusSharedObjVerAssignment {
+                assigned_versions: AssignedTxAndVersions::new(vec![
+                    (
+                        withdraw_with_shared_key,
+                        AssignedVersions {
+                            shared_object_versions: vec![(
+                                (shared_obj_id, shared_obj_version),
+                                shared_obj_version
+                            )],
+                            withdraw_type: WithdrawType::Withdraw(acc_version),
+                        }
+                    ),
+                    (
+                        settlement_key,
+                        AssignedVersions {
+                            shared_object_versions: vec![(
+                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                                acc_version
+                            )],
+                            withdraw_type: WithdrawType::NonWithdraw,
+                        }
+                    ),
+                ]),
+                shared_input_next_versions: HashMap::from([
+                    (
+                        (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                        acc_version.next()
+                    ),
+                    (
+                        (shared_obj_id, shared_obj_version),
+                        shared_obj_version.next()
+                    ),
+                ]),
+            }
+        );
     }
 }

@@ -1,0 +1,15 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== colon_colon.move ========================================================
+-- test 0 -------------------
+CODE ACTION: Qualify as `Autofix::dep::PubStruct`
+CODE ACTION: Import as `Autofix::dep::PubStruct`
+-- test 1 -------------------
+CODE ACTION: Qualify as `Autofix::dep::create_struct`
+CODE ACTION: Import as `Autofix::dep::create_struct`
+-- test 2 -------------------
+CODE ACTION: Qualify as `Autofix::another_dep`
+CODE ACTION: Import as `Autofix::another_dep`
+-- test 3 -------------------
+CODE ACTION: Qualify as `Autofix::another_dep::AnotherDepStruct`

@@ -1,17 +1,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use crate::{
+    PreCompiledProgramInfo,
     cfgir::{
-        absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
+        CFGContext,
+        absint::{AbstractDomain, JoinResult, TransferFunctions, analyze_function},
         ast as G,
         cfg::ImmForwardCFG,
-        CFGContext,
     },
     command_line::compiler::Visitor,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, Diagnostics},
+    diagnostics::{Diagnostic, Diagnostics, warning_filters::WarningFilters},
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, Field, FunctionName},
@@ -25,7 +26,12 @@ pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
 pub trait CFGIRVisitor: Send + Sync {
-    fn visit(&self, env: &CompilationEnv, program: &G::Program);
+    fn visit(
+        &self,
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    );
 
     fn visitor(self) -> Visitor
     where
@@ -53,10 +59,18 @@ pub trait AbstractInterpreterVisitor: Send + Sync {
 pub trait CFGIRVisitorConstructor: Send {
     type Context<'a>: Sized + CFGIRVisitorContext;
 
-    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a>;
+    fn context<'a>(
+        env: &'a CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) -> Self::Context<'a>;
 
-    fn visit(env: &CompilationEnv, program: &G::Program) {
-        let mut context = Self::context(env, program);
+    fn visit(
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) {
+        let mut context = Self::context(env, pre_compiled_program, program);
         context.visit(program);
     }
 }
@@ -318,8 +332,13 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
 }
 
 impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
-    fn visit(&self, env: &CompilationEnv, program: &G::Program) {
-        Self::visit(env, program)
+    fn visit(
+        &self,
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) {
+        Self::visit(env, pre_compiled_program, program)
     }
 }
 
@@ -336,7 +355,11 @@ macro_rules! simple_visitor {
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
-            fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
+            fn context<'a>(
+                env: &'a crate::shared::CompilationEnv,
+                _pre_compiled_program: Option<std::sync::Arc<crate::command_line::compiler::PreCompiledProgramInfo>>,
+                _program: &crate::cfgir::ast::Program,
+            ) -> Self::Context<'a> {
                 let reporter = env.diagnostic_reporter_at_top_level();
                 Context {
                     env,
@@ -523,7 +546,7 @@ pub trait SimpleAbsIntConstructor: Sized {
         let Some(mut ai) = Self::new(context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
-        let (final_state, ds) = ai.analyze_function(cfg, init_state);
+        let (final_state, ds) = analyze_function(&mut ai, cfg, init_state);
         ai.finish(final_state, ds)
     }
 }
@@ -798,7 +821,6 @@ impl<V: SimpleAbsInt> TransferFunctions for V {
         self.finish_command(context, pre)
     }
 }
-impl<V: SimpleAbsInt> AbstractInterpreter for V {}
 
 impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
     fn from(value: V) -> Self {

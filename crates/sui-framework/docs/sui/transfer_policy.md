@@ -58,6 +58,7 @@ of the type at once.
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -70,12 +71,14 @@ of the type at once.
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
 <b>use</b> <a href="../sui/url.md#sui_url">sui::url</a>;
+<b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 <b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 </code></pre>
 
@@ -297,6 +300,16 @@ Key to store "Rule" configuration for a specific <code><a href="../sui/transfer_
 ## Constants
 
 
+<a name="sui_transfer_policy_EPolicyNotSatisfied"></a>
+
+The number of receipts does not match the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> requirement.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="sui_transfer_policy_EIllegalRule"></a>
 
 A completed rule is not set in the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
@@ -307,32 +320,12 @@ A completed rule is not set in the <code><a href="../sui/transfer_policy.md#sui_
 
 
 
-<a name="sui_transfer_policy_ENotEnough"></a>
+<a name="sui_transfer_policy_EUnknownRequirement"></a>
 
-Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> more than there is.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>: u64 = 5;
-</code></pre>
+A Rule is not set.
 
 
-
-<a name="sui_transfer_policy_ENotOwner"></a>
-
-Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> or <code>close_and_withdraw</code> with a wrong Cap.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
-</code></pre>
-
-
-
-<a name="sui_transfer_policy_EPolicyNotSatisfied"></a>
-
-The number of receipts does not match the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> requirement.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: u64 = 2;
 </code></pre>
 
 
@@ -347,12 +340,22 @@ Attempting to create a Rule that is already set.
 
 
 
-<a name="sui_transfer_policy_EUnknownRequirement"></a>
+<a name="sui_transfer_policy_ENotOwner"></a>
 
-A Rule is not set.
+Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> or <code>close_and_withdraw</code> with a wrong Cap.
 
 
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_transfer_policy_ENotEnough"></a>
+
+Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> more than there is.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>: u64 = 5;
 </code></pre>
 
 
@@ -552,7 +555,7 @@ Kiosk trades will not be possible.
     <b>let</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a> { <a href="../sui/transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_from">from</a>, receipts } = request;
     <b>let</b> <b>mut</b> completed = receipts.into_keys();
     <b>let</b> <b>mut</b> total = completed.length();
-    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
+    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.length(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
     <b>while</b> (total &gt; 0) {
         <b>let</b> rule_type = completed.pop_back();
         <b>assert</b>!(self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="../sui/transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>);
@@ -599,7 +602,7 @@ even if graceful unpacking has not been implemented in a "rule module".
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(!<a href="../sui/transfer_policy.md#sui_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="../sui/transfer_policy.md#sui_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>);
     df::add(&<b>mut</b> policy.id, <a href="../sui/transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {}, cfg);
-    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.insert(type_name::get&lt;Rule&gt;())
+    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -679,7 +682,7 @@ confirming that the policy requirements are satisfied.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_add_receipt">add_receipt</a>&lt;T, Rule: drop&gt;(_: Rule, request: &<b>mut</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;) {
-    request.receipts.insert(type_name::get&lt;Rule&gt;())
+    request.receipts.insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -734,7 +737,7 @@ Remove the Rule from the <code><a href="../sui/transfer_policy.md#sui_transfer_p
 ) {
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
     <b>let</b> _: Config = df::remove(&<b>mut</b> policy.id, <a href="../sui/transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {});
-    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.remove(&type_name::get&lt;Rule&gt;());
+    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.remove(&type_name::with_defining_ids&lt;Rule&gt;());
 }
 </code></pre>
 

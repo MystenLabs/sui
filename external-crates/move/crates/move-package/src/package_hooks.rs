@@ -27,7 +27,7 @@ pub trait PackageHooks {
     ) -> anyhow::Result<()>;
 
     fn custom_resolve_pkg_id(&self, manifest: &SourceManifest)
-        -> anyhow::Result<PackageIdentifier>;
+    -> anyhow::Result<PackageIdentifier>;
 
     fn resolve_version(&self, manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>>;
 }

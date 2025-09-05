@@ -38,7 +38,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             std::thread::spawn(|| {
                 use sui_protocol_config::ProtocolConfig;
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
-                ::sui_simulator::sui_types::execution::get_denied_certificates();
+                ::sui_simulator::sui_types::execution_params::get_denied_certificates_for_sim_test();
                 ::sui_simulator::sui_framework::BuiltInFramework::all_package_ids();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
                 ::sui_simulator::sui_execution::init_vm_for_msim();
@@ -61,7 +61,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
                     let mut build_config = BuildConfig::new_for_testing();
 
-                    build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
+                    build_config.config.install_dir = Some(TempDir::new().unwrap().keep());
                     let _all_module_bytes = build_config
                         .build(&path)
                         .unwrap()

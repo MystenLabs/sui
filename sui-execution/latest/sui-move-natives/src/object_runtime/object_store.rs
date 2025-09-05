@@ -149,7 +149,7 @@ macro_rules! fetch_child_object_unbounded {
                 Owner::AddressOwner(_)
                 | Owner::Immutable
                 | Owner::Shared { .. }
-                | Owner::ConsensusV2 { .. } => {
+                | Owner::ConsensusAddressOwner { .. } => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!(
                             "Bad owner for {}. \
@@ -187,15 +187,7 @@ impl Inner<'_> {
     ) -> PartialVMResult<LoadedWithMetadataResult<MoveObject>> {
         let child_opt = self
             .resolver
-            .get_object_received_at_version(
-                &owner,
-                &child,
-                version,
-                self.current_epoch_id,
-                self.protocol_config
-                    .use_object_per_epoch_marker_table_v2_as_option()
-                    .unwrap_or(false),
-            )
+            .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
             .map_err(|msg| {
                 PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
             })?;
@@ -311,7 +303,7 @@ impl Inner<'_> {
         child: ObjectID,
         child_ty_layout: &R::MoveTypeLayout,
         child_ty_fully_annotated_layout: &A::MoveTypeLayout,
-        child_move_type: MoveObjectType,
+        child_move_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<(MoveObjectType, GlobalValue, ObjectFingerprint)>> {
         // we copy the reference to the protocol config ahead of time for lifetime reasons
         let protocol_config = self.protocol_config;
@@ -327,7 +319,7 @@ impl Inner<'_> {
             Some(obj) => obj,
         };
         // object exists, but the type does not match
-        if obj.type_() != &child_move_type {
+        if obj.type_() != child_move_type {
             return Ok(ObjectResult::MismatchedType);
         }
         // deserialize the value
@@ -342,7 +334,13 @@ impl Inner<'_> {
         };
         // save a fingerprint
         let fingerprint =
-            ObjectFingerprint::preexisting(protocol_config, &parent, &child_move_type, &v);
+            ObjectFingerprint::preexisting(protocol_config, &parent, child_move_type, &v).map_err(
+                |e| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                        format!("Failed to fingerprint value for object {child}. Error: {e}"),
+                    )
+                },
+            )?;
         // generate a global value
         let global_value =
             match GlobalValue::cached(v) {
@@ -371,7 +369,7 @@ impl Inner<'_> {
             }
         }
         Ok(ObjectResult::Loaded((
-            child_move_type,
+            child_move_type.clone(),
             global_value,
             fingerprint,
         )))
@@ -518,7 +516,7 @@ impl<'a> ChildObjectStore<'a> {
                     child,
                     child_layout,
                     child_fully_annotated_layout,
-                    child_move_type,
+                    &child_move_type,
                 )? {
                     ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
                     ObjectResult::Loaded(res) => res,
@@ -546,6 +544,11 @@ impl<'a> ChildObjectStore<'a> {
                         ));
                 };
 
+                debug_assert_eq!(
+                    ty, child_move_type,
+                    "Child object type mismatch. \
+                    Expected {child_move_type} but found {ty}"
+                );
                 e.insert(ChildObject {
                     owner: parent,
                     ty,

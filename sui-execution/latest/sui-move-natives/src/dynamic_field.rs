@@ -13,6 +13,7 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     vm_status::StatusCode,
 };
+use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -22,7 +23,6 @@ use move_vm_runtime::{
     natives::functions::NativeResult,
     pop_arg,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, natives::extensions::NativeContextMut};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
@@ -33,7 +33,7 @@ const E_FIELD_TYPE_MISMATCH: u64 = 2;
 const E_BCS_SERIALIZATION_FAILURE: u64 = 3;
 
 macro_rules! get_or_fetch_object {
-    ($context:ident, $object_runtime:ident, $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
+    ($context:ident, $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
         let child_ty = $ty_args.pop().unwrap();
         native_charge_gas_early_exit!(
             $context,
@@ -52,7 +52,8 @@ macro_rules! get_or_fetch_object {
             }
         };
 
-        $object_runtime.get_or_fetch_child_object(
+        let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut()?;
+        object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
             &layout,
@@ -79,7 +80,6 @@ pub struct DynamicFieldHashTypeAndKeyCostParams {
  *              + dynamic_field_hash_type_and_key_type_tag_cost_per_byte * size_of(type_tag(k))    | covers cost of operating on the type tag of `K`
  **************************************************************************************************/
 #[instrument(level = "trace", skip_all)]
-#[allow(deprecated)]
 pub fn hash_type_and_key(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -90,7 +90,7 @@ pub fn hash_type_and_key(
 
     let dynamic_field_hash_type_and_key_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .dynamic_field_hash_type_and_key_cost_params
         .clone();
 
@@ -106,7 +106,6 @@ pub fn hash_type_and_key(
 
     // Get size info for costing for derivations, serializations, etc
     let k_ty_size = u64::from(k_ty.size());
-
     let k_value_size = u64::from(k.legacy_size());
     native_charge_gas_early_exit!(
         context,
@@ -134,7 +133,7 @@ pub fn hash_type_and_key(
         Ok(Some(layout)) => layout,
         _ => return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE)),
     };
-    let Some(k_bytes) = k.simple_serialize(&k_layout) else {
+    let Some(k_bytes) = k.typed_serialize(&k_layout) else {
         return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };
     let Ok(id) = derive_dynamic_field_id(parent, &k_tag, &k_bytes) else {
@@ -162,7 +161,6 @@ pub struct DynamicFieldAddChildObjectCostParams {
  *              + dynamic_field_add_child_object_struct_tag_cost_per_byte * size_of(struct)tag(Child))  | covers cost of operating on the struct tag of `Child`
  **************************************************************************************************/
 #[instrument(level = "trace", skip_all)]
-#[allow(deprecated)]
 pub fn add_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -173,7 +171,7 @@ pub fn add_child_object(
 
     let dynamic_field_add_child_object_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .dynamic_field_add_child_object_cost_params
         .clone();
 
@@ -231,13 +229,8 @@ pub fn add_child_object(
             * struct_tag_size.into()
     );
 
-    {
-        let object_runtime: &mut ObjectRuntime = &mut context
-            .extensions_mut()
-            .get::<NativeContextMut<ObjectRuntime>>()
-            .borrow_mut();
-        object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
-    };
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
@@ -258,7 +251,6 @@ pub struct DynamicFieldBorrowChildObjectCostParams {
  *              + dynamic_field_borrow_child_object_type_cost_per_byte  * size_of(Child)        | covers cost of operating on type `Child`
  **************************************************************************************************/
 #[instrument(level = "trace", skip_all)]
-#[allow(deprecated)]
 pub fn borrow_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -269,7 +261,7 @@ pub fn borrow_child_object(
 
     let dynamic_field_borrow_child_object_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .dynamic_field_borrow_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -288,16 +280,8 @@ pub fn borrow_child_object(
         .into();
 
     assert!(args.is_empty());
-    // NB: We need to borrow the runtime and grab the mutable reference and then pass this into
-    // `get_or_fetch_object` so that the lifetime of the returned object is tied to the lifetime of
-    // the runtime reference we are creating here and the borrow checker will be happy with us.
-    let object_runtime: &mut ObjectRuntime = &mut context
-        .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
-        .borrow_mut();
     let global_value_result = get_or_fetch_object!(
         context,
-        object_runtime,
         ty_args,
         parent,
         child_id,
@@ -343,7 +327,6 @@ pub struct DynamicFieldRemoveChildObjectCostParams {
  *              + dynamic_field_remove_child_object_child_cost_per_byte  * size_of(child)     | covers cost of fetching and returning value of type `Child`
  **************************************************************************************************/
 #[instrument(level = "trace", skip_all)]
-#[allow(deprecated)]
 pub fn remove_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -354,7 +337,7 @@ pub fn remove_child_object(
 
     let dynamic_field_remove_child_object_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .dynamic_field_remove_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -365,16 +348,8 @@ pub fn remove_child_object(
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
-    // NB: We need to borrow the runtime and grab the mutable reference and then pass this into
-    // `get_or_fetch_object` so that the lifetime of the returned object is tied to the lifetime of
-    // the runtime reference we are creating here and the borrow checker will be happy with us.
-    let object_runtime: &mut ObjectRuntime = &mut context
-        .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
-        .borrow_mut();
     let global_value_result = get_or_fetch_object!(
         context,
-        object_runtime,
         ty_args,
         parent,
         child_id,
@@ -425,7 +400,7 @@ pub fn has_child_object(
 
     let dynamic_field_has_child_object_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .dynamic_field_has_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -435,14 +410,8 @@ pub fn has_child_object(
 
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
-    let has_child = {
-        let object_runtime: &mut ObjectRuntime = &mut context
-            .extensions()
-            .get::<NativeContextMut<ObjectRuntime>>()
-            .borrow_mut();
-        object_runtime.child_object_exists(parent, child_id)?
-    };
-
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let has_child = object_runtime.child_object_exists(parent, child_id)?;
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(has_child)],
@@ -473,7 +442,7 @@ pub fn has_child_object_with_ty(
 
     let dynamic_field_has_child_object_with_ty_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .dynamic_field_has_child_object_with_ty_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -511,18 +480,12 @@ pub fn has_child_object_with_ty(
             * u64::from(tag.abstract_size_for_gas_metering()).into()
     );
 
-    let has_child = {
-        let object_runtime: &mut ObjectRuntime = &mut context
-            .extensions()
-            .get::<NativeContextMut<ObjectRuntime>>()
-            .borrow_mut();
-        object_runtime.child_object_exists_and_has_type(
-            parent,
-            child_id,
-            &MoveObjectType::from(tag),
-        )?
-    };
-
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let has_child = object_runtime.child_object_exists_and_has_type(
+        parent,
+        child_id,
+        &MoveObjectType::from(tag),
+    )?;
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(has_child)],

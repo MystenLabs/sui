@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter::Peekable;
+use std::{collections::BTreeMap, iter::Peekable};
 
 use move_core_types::parsing::{
     address::{NumericalAddress, ParsedAddress},
@@ -34,16 +34,27 @@ pub struct ProgramParser<'a, I: Iterator<Item = &'a str>> {
 struct ProgramParsingState {
     parsed: Vec<Spanned<ParsedPTBCommand>>,
     errors: Vec<PTBError>,
+    mvr_names_with_span: BTreeMap<String, Span>,
     preview_set: bool,
     summary_set: bool,
     warn_shadows_set: bool,
     serialize_unsigned_set: bool,
     serialize_signed_set: bool,
     json_set: bool,
+    tx_digest_set: bool,
     dry_run_set: bool,
     dev_inspect_set: bool,
-    gas_object_id: Option<Spanned<ObjectID>>,
+    gas_object_ids: Option<Vec<Spanned<ObjectID>>>,
     gas_budget: Option<Spanned<u64>>,
+    gas_price: Option<Spanned<u64>>,
+    gas_sponsor: Option<Spanned<NumericalAddress>>,
+    sender: Option<Spanned<NumericalAddress>>,
+}
+
+macro_rules! mvr_ident {
+    () => {
+        Token::Ident | Token::Number | Token::HexNumber
+    };
 }
 
 impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
@@ -57,16 +68,21 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             state: ProgramParsingState {
                 parsed: Vec::new(),
                 errors: Vec::new(),
+                mvr_names_with_span: BTreeMap::new(),
                 preview_set: false,
                 summary_set: false,
                 warn_shadows_set: false,
                 serialize_unsigned_set: false,
                 serialize_signed_set: false,
                 json_set: false,
+                tx_digest_set: false,
                 dry_run_set: false,
                 dev_inspect_set: false,
-                gas_object_id: None,
+                gas_object_ids: None,
                 gas_budget: None,
+                gas_price: None,
+                gas_sponsor: None,
+                sender: None,
             },
         })
     }
@@ -111,28 +127,57 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::SERIALIZE_SIGNED) => flag!(serialize_signed_set),
                 L(T::Command, A::SUMMARY) => flag!(summary_set),
                 L(T::Command, A::JSON) => flag!(json_set),
+                L(T::Command, A::TX_DIGEST) => flag!(tx_digest_set),
                 L(T::Command, A::DRY_RUN) => flag!(dry_run_set),
                 L(T::Command, A::DEV_INSPECT) => flag!(dev_inspect_set),
                 L(T::Command, A::PREVIEW) => flag!(preview_set),
                 L(T::Command, A::WARN_SHADOWS) => flag!(warn_shadows_set),
                 L(T::Command, A::GAS_COIN) => {
-                    let specifier = try_!(self.parse_gas_specifier());
-                    self.state.gas_object_id = Some(specifier);
+                    let coins = try_!(self.parse_gas_coins());
+                    self.state.gas_object_ids = Some(coins);
                 }
+                L(T::Command, A::GAS_SPONSOR) => {
+                    let sponsor = try_!(self.parse_address_literal());
+                    self.state.gas_sponsor = Some(sponsor);
+                }
+
                 L(T::Command, A::GAS_BUDGET) => {
-                    let budget = try_!(self.parse_gas_budget()).widen_span(sp);
+                    let budget = try_!(self.parse_gas_denomination()).widen_span(sp);
                     if let Some(other) = self.state.gas_budget.replace(budget) {
                         self.state.errors.extend([
                             err!(
                                 other.span,
                                 "Multiple gas budgets found. Gas budget first set here.",
                             ),
-                            err!(budget.span => help: {
-                                "PTBs must have exactly one gas budget set."
-                            },"Budget set again here."),
+                            err!(
+                                budget.span => help: { "PTBs must have exactly one gas budget set." },
+                                "Budget set again here."
+                            ),
                         ]);
                         self.fast_forward_to_next_command();
                     }
+                }
+
+                L(T::Command, A::GAS_PRICE) => {
+                    let price = try_!(self.parse_gas_denomination()).widen_span(sp);
+                    if let Some(other) = self.state.gas_price.replace(price) {
+                        self.state.errors.extend([
+                            err!(
+                                other.span,
+                                "Multiple gas prices found. Gas price first set here.",
+                            ),
+                            err!(
+                                price.span => help: { "PTBs must have at most one gas price set." },
+                                "Price set again here."
+                            ),
+                        ]);
+                        self.fast_forward_to_next_command();
+                    }
+                }
+
+                L(T::Command, A::SENDER) => {
+                    let sender = try_!(self.parse_address_literal());
+                    self.state.sender = Some(sender);
                 }
 
                 L(T::Command, A::TRANSFER_OBJECTS) => command!(self.parse_transfer_objects()),
@@ -207,11 +252,16 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     summary_set: self.state.summary_set,
                     serialize_unsigned_set: self.state.serialize_unsigned_set,
                     serialize_signed_set: self.state.serialize_signed_set,
-                    gas_object_id: self.state.gas_object_id,
+                    gas_object_ids: self.state.gas_object_ids,
                     json_set: self.state.json_set,
+                    tx_digest_set: self.state.tx_digest_set,
                     dry_run_set: self.state.dry_run_set,
                     dev_inspect_set: self.state.dev_inspect_set,
                     gas_budget: self.state.gas_budget,
+                    gas_price: self.state.gas_price,
+                    gas_sponsor: self.state.gas_sponsor,
+                    mvr_names: self.state.mvr_names_with_span,
+                    sender: self.state.sender,
                 },
             ))
         } else {
@@ -359,9 +409,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         Ok(sp.wrap(ParsedPTBCommand::MoveCall(function, ty_args, args)))
     }
 
-    /// Parse a gas-budget command.
-    /// The expected format is: `--gas-budget <u64>`
-    fn parse_gas_budget(&mut self) -> PTBResult<Spanned<u64>> {
+    /// Parse a quantity of gas, as a numeric literal that is or can be inferred to be a u64.
+    fn parse_gas_denomination(&mut self) -> PTBResult<Spanned<u64>> {
         Ok(match self.parse_argument()? {
             sp!(sp, Argument::U64(u)) => sp.wrap(u),
             sp!(sp, Argument::InferredNum(n)) => {
@@ -371,12 +420,16 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         })
     }
 
-    /// Parse a gas specifier.
-    /// The expected format is: `--gas-coin <address>`
-    fn parse_gas_specifier(&mut self) -> PTBResult<Spanned<ObjectID>> {
-        Ok(self
-            .parse_address_literal()?
-            .map(|a| ObjectID::from(a.into_inner())))
+    /// Parse the gas payment
+    /// The expected format is: `--gas-coin <address> [<address> ...]`
+    fn parse_gas_coins(&mut self) -> PTBResult<Vec<Spanned<ObjectID>>> {
+        // Need at least one gas coin.
+        let mut coins = vec![self.parse_object_id_literal()?];
+        while matches!(self.peek(), sp!(_, Lexeme(Token::At, _))) {
+            coins.push(self.parse_object_id_literal()?)
+        }
+
+        Ok(coins)
     }
 }
 
@@ -416,7 +469,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 self.parse_number(sp.wrap(&number))?
             }
 
-            L(T::At, _) => self.parse_address_literal()?.map(V::Address),
+            L(T::At, _) => self.parse_address_literal()?.map(V::Address).widen_span(sp),
 
             L(T::Ident, A::NONE) => {
                 self.bump();
@@ -486,7 +539,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 sp.wrap(ParsedType::Vector(Box::new(ty)))
             }
 
-            L(T::Ident | T::Number | T::HexNumber, _) => 'fq: {
+            L(T::At | T::Ident | T::Number | T::HexNumber, _) => 'fq: {
                 let sp!(_, module_access) = self.parse_module_access()?;
                 let sp!(_, address) = module_access.address;
                 let sp!(_, module_name) = module_access.module_name;
@@ -643,33 +696,134 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         })
     }
 
-    /// Parse a numerical or named address.
+    fn parse_mvr_address(
+        &mut self,
+        prefix: Option<Spanned<&str>>,
+    ) -> PTBResult<Spanned<ParsedAddress>> {
+        use Lexeme as L;
+        use Token as T;
+
+        let mut address = String::new();
+        let start_sp = prefix.map(|p| p.span).unwrap_or_else(|| self.peek().span);
+
+        // Step 1: parse before `/` in the MVR name
+        match prefix {
+            // No @ prefix
+            Some(sp!(_, prefix)) => {
+                address.push_str(prefix);
+                // parse .sui
+                self.expect(T::Dot)?;
+                address.push('.');
+                match self.peek() {
+                    sp!(sp, L(T::Ident, s)) => {
+                        if s != "sui" {
+                            error!(sp => help: { "Expected 'sui' extension" },
+                            "Expected a valid MVR top level domain"
+                            );
+                        }
+                        self.bump();
+                        address.push_str(s);
+                    }
+                    sp!(sp, l) => {
+                        error!(
+                            sp,
+                            "Expected a valid MVR domain extension ('.sui') but got {}", l
+                        )
+                    }
+                }
+            }
+            // @ prefixed MVR name
+            None => {
+                self.expect(T::At)?;
+                address.push('@');
+                match self.peek() {
+                    sp!(_, L(mvr_ident!(), nm)) => {
+                        self.bump();
+                        address.push_str(nm);
+                    }
+                    sp!(sp, l) => {
+                        error!(sp, "Expected a MVR domain name but got {l}")
+                    }
+                }
+            }
+        }
+
+        self.expect(T::ForwardSlash).map_err(|e| {
+            err!(e.span => help: {
+                "MVR packages must contain a slash and be in the format '(@<domain>|<domain>.sui)/<package>[/<version>]'"
+            }, "Invalid MVR package reference")
+        })?;
+        address.push('/');
+
+        // Step 2: post slash -- package name
+        match self.peek() {
+            sp!(_, L(mvr_ident!(), s)) => {
+                address.push_str(s);
+                self.bump();
+            }
+            sp!(sp, l) => {
+                error!(sp, "Expected a valid MVR package name, but got {l}")
+            }
+        }
+
+        // Step 3: post package name -- possible version
+        if let sp!(_, L(T::ForwardSlash, _)) = self.peek() {
+            address.push('/');
+            self.bump();
+            match self.peek() {
+                sp!(_, L(T::Number, s)) => {
+                    address.push_str(s);
+                    self.bump();
+                }
+                sp!(sp, l) => {
+                    error!(sp, "Expected a valid MVR version, but got {l}")
+                }
+            }
+        }
+        let end_sp = self.peek().span;
+
+        self.state
+            .mvr_names_with_span
+            .entry(address.clone())
+            .or_insert_with(|| start_sp.widen(end_sp));
+        Ok(start_sp.widen(end_sp).wrap(ParsedAddress::Named(address)))
+    }
+
+    /// Parse a numerical, named address, or mvr address.
     fn parse_address(&mut self) -> PTBResult<Spanned<ParsedAddress>> {
         use Lexeme as L;
         use Token as T;
 
         let sp!(sp, lexeme) = self.peek();
         let addr = match lexeme {
-            L(T::Ident, name) => {
+            L(T::At, _) => self.parse_mvr_address(None)?.value,
+            L(t @ (mvr_ident!()), contents) => {
                 self.bump();
-                ParsedAddress::Named(name.to_owned())
+                if let sp!(s, L(T::Dot, _)) = self.peek() {
+                    self.parse_mvr_address(Some(Spanned {
+                        span: s,
+                        value: contents,
+                    }))?
+                    .value
+                } else {
+                    match t {
+                        T::Ident => ParsedAddress::Named(contents.to_owned()),
+                        T::Number => {
+                            let number = contents.to_string();
+                            NumericalAddress::parse_str(&number)
+                                .map_err(|e| err!(sp, "Failed to parse address {number:?}: {e}"))
+                                .map(ParsedAddress::Numerical)?
+                        }
+                        T::HexNumber => {
+                            let number = format!("0x{contents}");
+                            NumericalAddress::parse_str(&number)
+                                .map_err(|e| err!(sp, "Failed to parse address {number:?}: {e}"))
+                                .map(ParsedAddress::Numerical)?
+                        }
+                        _ => unreachable!(),
+                    }
+                }
             }
-
-            L(T::Number, number) => {
-                self.bump();
-                NumericalAddress::parse_str(number)
-                    .map_err(|e| err!(sp, "Failed to parse address {number:?}: {e}"))
-                    .map(ParsedAddress::Numerical)?
-            }
-
-            L(T::HexNumber, number) => {
-                self.bump();
-                let number = format!("0x{number}");
-                NumericalAddress::parse_str(&number)
-                    .map_err(|e| err!(sp, "Failed to parse address {number:?}: {e}"))
-                    .map(ParsedAddress::Numerical)?
-            }
-
             unexpected => error!(
                 sp => help: {
                     "Value addresses can either be a variable in-scope, or a numerical address, \
@@ -697,6 +851,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 "Expected a numerical address but got a named address '{n}'",
             ),
         })
+    }
+
+    /// Parse a numeric address literal (must be prefixed by an `@` symbol) as an ObjectID.
+    fn parse_object_id_literal(&mut self) -> PTBResult<Spanned<ObjectID>> {
+        Ok(self.parse_address_literal()?.map(|a| a.into_inner().into()))
     }
 
     // Parse an array of arguments. Each element of the array is separated by a comma.
@@ -945,10 +1104,16 @@ mod tests {
             "--assign a vector[1, 2, 3]",
             "--assign a none",
             "--assign a some(1)",
-            // Gas-coin
+            // Gas coin
             "--gas-coin @0x1",
+            "--gas-coin @0x1 @0x2",
+            // Gas price
+            "--gas-price 1000",
+            // Gas sponsor
+            "--gas-sponsor @0x2",
             "--summary",
             "--json",
+            "--tx-digest",
             "--preview",
             "--warn-shadows",
         ];
@@ -1008,17 +1173,78 @@ mod tests {
             "--gas-budget [1]",
             "--gas-budget @0x1",
             "--gas-budget woah",
-            // Gas-coin
+            // Gas coin
             "--gas-coin nope",
             "--gas-coin",
-            "--gas-coin @0x1 @0x2",
             "--gas-coin 1",
+            // Gas price
+            "--gas-price nuhuh",
+            "--gas-price [1, 2, 3]",
+            "--gas-price @0x2",
+            "--gas-price 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            // Gas sponsor
+            "--gas-sponsor nope",
+            "--gas-sponsor",
+            "--gas-sponsor 42",
         ];
         let mut parsed = Vec::new();
         for input in inputs {
             let x = shlex::split(input).unwrap();
             let parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
             let result = parser.parse().unwrap_err();
+            parsed.push(result);
+        }
+        insta::assert_debug_snapshot!(parsed);
+    }
+
+    #[test]
+    fn parse_mvr_names_invalid() {
+        let invalid_inputs = vec![
+            "@0xab5",
+            "@0x1",
+            "@0x4@3",
+            "foo.sui",
+            "@foo.sui/bar",
+            "@",
+            "@@",
+            "@/",
+            "@@/",
+            "@@/@",
+            "@/@",
+            "/1",
+            "-",
+            "-/",
+            "-/-",
+            "@foo/bar/b",
+        ];
+        let mut parsed = Vec::new();
+        for input in invalid_inputs {
+            let x = shlex::split(input).unwrap();
+            let mut parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
+            let result = parser.parse_address().unwrap_err();
+            parsed.push(result);
+        }
+        insta::assert_debug_snapshot!(parsed);
+    }
+
+    #[test]
+    fn parse_mvr_names_valid() {
+        let valid_inputs = vec![
+            "@0x1/foo",
+            "0x1.sui/foo",
+            "0x1.sui/foo/1",
+            "0x1.sui/0x3/1",
+            "1.sui/0x3/1",
+            "@foo/bar",
+            "@foo/bar/1",
+            "foo.sui/bar",
+            "foo.sui/bar/1",
+        ];
+        let mut parsed = Vec::new();
+        for input in valid_inputs {
+            let x = shlex::split(input).unwrap();
+            let mut parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
+            let result = parser.parse_address().unwrap();
             parsed.push(result);
         }
         insta::assert_debug_snapshot!(parsed);

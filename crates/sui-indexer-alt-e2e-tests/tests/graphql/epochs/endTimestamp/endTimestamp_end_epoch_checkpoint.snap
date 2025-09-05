@@ -1,0 +1,26 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 6:
+//# advance-epoch
+Epoch advanced: 1
+
+task 2, lines 8-18:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": {
+        "epoch": {
+          "startTimestamp": "1970-01-01T00:00:00Z",
+          "endTimestamp": "1970-01-01T00:00:00Z"
+        }
+      }
+    }
+  }
+}

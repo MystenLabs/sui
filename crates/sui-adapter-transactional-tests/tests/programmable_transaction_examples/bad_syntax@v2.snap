@@ -1,0 +1,14 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 4-5:
+//# programmable
+// > 0: SplitCoins(Gas, [Input(0)]);
+Error: Remove whitespace between // and > to start a command
+
+task 1, lines 7-8:
+//# programmable
+//> 1: SplitCoins(Gas, [Input(0)]);
+Error: Actual command index of 0 does not match annotated index 1

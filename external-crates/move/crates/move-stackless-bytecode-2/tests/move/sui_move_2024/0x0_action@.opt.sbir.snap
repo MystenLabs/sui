@@ -1,0 +1,125 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
+---
+  Module: action
+    Function: test (entry: LBL_0)
+      Label LBL_0:
+        reg_2 : 0x0::action::Action = PackVariant<MoveTo>(Immediate(U64(20)), Immediate(U64(10)))
+        reg_4 : 0x0::action::Action = PackVariant<ChangeSpeed>(Immediate(U64(40)))
+        reg_7 : 0x0::action::Action = PackVariant<MoveTo>(Immediate(U64(20)), Immediate(U64(10)))
+        reg_8 : 0x0::action::Action = PackVariant<Stop>()
+        reg_10 : 0x0::action::Action = PackVariant<ChangeSpeed>(Immediate(U64(40)))
+        reg_11 : 0x0::action::Action = VecPack<0x0::action::Action>(reg_10 : 0x0::action::Action, reg_8 : 0x0::action::Action, reg_7 : 0x0::action::Action, reg_4 : 0x0::action::Action, reg_2 : 0x0::action::Action)
+        lcl_4 = reg_11 : 0x0::action::Action
+        lcl_9 = Immediate(U64(0))
+
+      Label LBL_15:
+        lcl_5 = Immediate(U64(0))
+        Jump(LBL_18)
+
+      Label LBL_18:
+        reg_14 : u64 = Copy(lcl_5)
+        reg_15 : &vector<0x0::action::Action> = ImmBorrow(lcl_4)
+        reg_16 : u64 = VecLen<0x0::action::Action>(reg_15 : &vector<0x0::action::Action>)
+        reg_17 : u64 = LessThan(reg_16 : u64, reg_14 : u64)
+        JumpIf(reg_17 : u64, LBL_23, LBL_15)
+
+      Label LBL_23:
+        Jump(LBL_24)
+
+      Label LBL_24:
+        reg_18 : &vector<0x0::action::Action> = ImmBorrow(lcl_4)
+        reg_19 : u64 = Copy(lcl_5)
+        reg_20 : &0x0::action::Action = VecImmBorrow<0x0::action::Action>(reg_19 : u64, reg_18 : &vector<0x0::action::Action>)
+        lcl_2 = reg_20 : &0x0::action::Action
+        reg_21 : &0x0::action::Action = Copy(lcl_2)
+        lcl_1 = reg_21 : &0x0::action::Action
+        reg_22 : &0x0::action::Action = Copy(lcl_1)
+        VariantSwitch(SUBJECT(reg_22 : &0x0::action::Action), LBL_(67), LBL_(32), LBL_(51))
+
+      Label LBL_32:
+        reg_23 : &0x0::action::Action = Move(lcl_1)
+        reg_24 : &0x0::action::Action, reg_25 : &0x0::action::Action = UnpackVariantImmRef<MoveTo>(reg_23 : &0x0::action::Action)
+        Drop(reg_25 : &0x0::action::Action)
+        Drop(reg_24 : &0x0::action::Action)
+        reg_26 : &0x0::action::Action = Move(lcl_2)
+        reg_27 : &0x0::action::Action, reg_28 : &0x0::action::Action = UnpackVariantImmRef<MoveTo>(reg_26 : &0x0::action::Action)
+        lcl_3 = reg_28 : &0x0::action::Action
+        lcl_11 = reg_27 : &0x0::action::Action
+        reg_29 : &u64 = Move(lcl_3)
+        lcl_12 = reg_29 : &u64
+        reg_30 : u64 = Move(lcl_9)
+        reg_31 : &u64 = Move(lcl_11)
+        reg_32 : u64 = ReadRef(reg_31 : &u64)
+        reg_33 : u64 = Add(reg_32 : u64, reg_30 : u64)
+        reg_34 : &u64 = Move(lcl_12)
+        reg_35 : u64 = ReadRef(reg_34 : &u64)
+        reg_36 : u64 = Add(reg_35 : u64, reg_33 : u64)
+        lcl_9 = reg_36 : u64
+        Jump(LBL_62)
+
+      Label LBL_51:
+        reg_37 : &0x0::action::Action = Move(lcl_1)
+        reg_38 : &0x0::action::Action = UnpackVariantImmRef<ChangeSpeed>(reg_37 : &0x0::action::Action)
+        Drop(reg_38 : &0x0::action::Action)
+        reg_39 : &0x0::action::Action = Move(lcl_2)
+        reg_40 : &0x0::action::Action = UnpackVariantImmRef<ChangeSpeed>(reg_39 : &0x0::action::Action)
+        lcl_7 = reg_40 : &0x0::action::Action
+        reg_41 : u64 = Move(lcl_9)
+        reg_42 : &u64 = Move(lcl_7)
+        reg_43 : u64 = ReadRef(reg_42 : &u64)
+        reg_44 : u64 = Add(reg_43 : u64, reg_41 : u64)
+        lcl_9 = reg_44 : u64
+
+      Label LBL_62:
+        reg_45 : u64 = Move(lcl_5)
+        reg_47 : u64 = Add(Immediate(U64(1)), reg_45 : u64)
+        lcl_5 = reg_47 : u64
+        Jump(LBL_18)
+
+      Label LBL_67:
+        reg_48 : &0x0::action::Action = Move(lcl_2)
+        Drop(reg_48 : &0x0::action::Action)
+        reg_49 : &0x0::action::Action = Move(lcl_1)
+        UnpackVariantImmRef<Stop>(reg_49 : &0x0::action::Action)
+        reg_50 : vector<0x0::action::Action> = Move(lcl_4)
+        lcl_10 = reg_50 : vector<0x0::action::Action>
+        reg_51 : &vector<0x0::action::Action> = ImmBorrow(lcl_10)
+        reg_52 : u64 = VecLen<0x0::action::Action>(reg_51 : &vector<0x0::action::Action>)
+        lcl_0 = reg_52 : u64
+        lcl_6 = Immediate(U64(0))
+        reg_54 : u64 = Move(lcl_0)
+        lcl_8 = reg_54 : u64
+
+      Label LBL_80:
+        reg_55 : u64 = Copy(lcl_6)
+        reg_56 : u64 = Copy(lcl_8)
+        reg_57 : u64 = LessThan(reg_56 : u64, reg_55 : u64)
+        JumpIf(reg_57 : u64, LBL_84, LBL_94)
+
+      Label LBL_84:
+        reg_58 : u64 = Copy(lcl_6)
+        Drop(reg_58 : u64)
+        reg_59 : &mut vector<0x0::action::Action> = MutBorrow(lcl_10)
+        reg_60 : 0x0::action::Action = VecPopBack<0x0::action::Action>(reg_59 : &mut vector<0x0::action::Action>)
+        Drop(reg_60 : 0x0::action::Action)
+        reg_61 : u64 = Move(lcl_6)
+        reg_63 : u64 = Add(Immediate(U64(1)), reg_61 : u64)
+        lcl_6 = reg_63 : u64
+        Jump(LBL_80)
+
+      Label LBL_94:
+        reg_64 : vector<0x0::action::Action> = Move(lcl_10)
+        VecUnpack<0x0::action::Action>(reg_64 : vector<0x0::action::Action>)
+        reg_65 : u64 = Move(lcl_9)
+        reg_67 : u64 = Equal(Immediate(U64(100)), reg_65 : u64)
+        JumpIf(reg_67 : u64, LBL_100, LBL_101)
+
+      Label LBL_100:
+        Jump(LBL_103)
+
+      Label LBL_101:
+        Abort(reg_68 : u64)
+
+      Label LBL_103:
+        Return()

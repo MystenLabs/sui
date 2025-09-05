@@ -1,0 +1,85 @@
+// tests that function calls require arguments references as disjoint
+
+//# publish
+
+module 0x2.eps1_freeze {
+    struct T has copy { f: u64 }
+
+    eps1(s: &Self.T, s2: &mut Self.T) {
+    label b0:
+        abort 0;
+    }
+
+    // reject call, i extends s
+    t_eps1(s: &mut Self.T) {
+        let i: &Self.T;
+    label l0:
+        i = freeze(copy(s));
+        Self.eps1(move(i), move(s));
+        return;
+    }
+}
+
+//# publish
+
+module 0x3.eps2_freeze {
+    struct T has copy { f: u64 }
+
+    eps2(s2: &mut Self.T, s: &Self.T) {
+    label b0:
+        abort 0;
+    }
+
+    // reject call, i extends s
+    t_eps(s: &mut Self.T) {
+        let i: &Self.T;
+    label l0:
+        i = freeze(copy(s));
+        Self.eps2(move(s), move(i));
+        return;
+    }
+}
+
+//# publish
+
+module 0x4.eps1_reborrow {
+    struct T has copy, drop { f: u64 }
+
+    eps1(s: &Self.T, s2: &mut Self.T) {
+    label b0:
+        abort 0;
+    }
+
+    // reject call, i extends s
+    t_eps1(x: Self.T) {
+        let s: &mut Self.T;
+        let i: &Self.T;
+    label l0:
+        i = &x;
+        s = &mut x;
+        Self.eps1(move(i), move(s));
+        return;
+    }
+}
+
+//# publish
+
+module 0x5.eps2_reborrow {
+    struct T has copy, drop { f: u64 }
+
+    eps2(s2: &mut Self.T, s: &Self.T) {
+    label b0:
+        abort 0;
+    }
+
+    // reject call, i extends s
+    t_eps(x: Self.T) {
+        let s: &mut Self.T;
+        let i: &Self.T;
+    label l0:
+        s = &mut x;
+        i = &x;
+        Self.eps2(move(s), move(i));
+        return;
+    }
+}

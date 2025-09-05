@@ -4,11 +4,12 @@
 use std::sync::Arc;
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
-    block::{genesis_blocks, BlockRef, BlockTimestampMs, Round, TestBlock, VerifiedBlock},
+    block::{genesis_blocks, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
     test_dag_builder::DagBuilder,
@@ -35,7 +36,7 @@ pub(crate) fn build_dag(
             );
             start
         }
-        None => genesis_blocks(context.clone())
+        None => genesis_blocks(context.as_ref())
             .iter()
             .map(|x| x.reference())
             .collect::<Vec<_>>(),

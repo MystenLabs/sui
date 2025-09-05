@@ -39,7 +39,7 @@ current frame stack:
         ]
         epoch : 0
         epoch_timestamp_ms : 0
-        ids_created : 1
+        ids_created : 0
       }
       type: 0x2::tx_context::TxContext
 

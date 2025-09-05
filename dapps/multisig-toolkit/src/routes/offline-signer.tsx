@@ -164,6 +164,15 @@ export default function OfflineSigner() {
 							</DryRunProvider>
 						)}
 
+						{dryRunData?.effects?.transactionDigest && (
+							<div>
+								<h4 className="text-lg font-semibold">Transaction Digest</h4>
+								<div className="border text-mono break-all rounded p-4">
+									{dryRunData.effects.transactionDigest}
+								</div>
+							</div>
+						)}
+
 						{ledgerTransactionHash && (
 							<div>
 								<h4 className="text-lg font-semibold">Ledger Transaction Hash</h4>

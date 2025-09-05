@@ -4,8 +4,9 @@
 use crate::NativesCostTable;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
+use move_vm_runtime::pop_arg;
 use move_vm_runtime::{
-    execution::values::Value, execution::Type, natives::functions::NativeResult, pop_arg,
+    execution::values::Value, execution::Type, natives::functions::NativeResult,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
@@ -33,7 +34,7 @@ pub fn validate_metadata_bcs(
 
     let validator_validate_metadata_bcs_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .validator_validate_metadata_bcs_cost_params
         .clone();
 

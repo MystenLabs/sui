@@ -15,13 +15,13 @@ use move_binary_format::{
     file_format::{Constant, SignatureToken, VariantTag},
 };
 use move_core_types::{
+    VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
     effects::Op,
     gas_algebra::AbstractMemorySize,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
-    vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
-    VARIANT_COUNT_MAX,
+    vm_status::{StatusCode, sub_status::NFE_VECTOR_ERROR_BASE},
 };
 use std::{
     fmt::{self, Debug, Display, Formatter},
@@ -1216,12 +1216,6 @@ impl Value {
     impl_vector_fn!(vector_u256, VecU256, u256::U256);
     impl_vector_fn!(vector_bool, VecBool, bool);
     impl_vector_fn!(vector_address, VecAddress, AccountAddress);
-
-    /// For testing only, construct a vector from an iterator of Values.
-    pub fn vector_for_testing_only(it: impl IntoIterator<Item = Value>) -> Self {
-        let vec: Vec<MemBox<Value>> = it.into_iter().map(MemBox::new).collect();
-        Value::Vec(vec)
-    }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -2125,35 +2119,69 @@ macro_rules! take_and_map {
     };
 }
 
-impl Vector {
-    pub fn pack(type_param: &Type, elements: Vec<Value>) -> PartialVMResult<Value> {
-        let container = match type_param {
-            Type::U8 => pack_vector!(elements, Value::vector_u8),
-            Type::U16 => pack_vector!(elements, Value::vector_u16),
-            Type::U32 => pack_vector!(elements, Value::vector_u32),
-            Type::U64 => pack_vector!(elements, Value::vector_u64),
-            Type::U128 => pack_vector!(elements, Value::vector_u128),
-            Type::U256 => pack_vector!(elements, Value::vector_u256),
-            Type::Bool => pack_vector!(elements, Value::vector_bool),
-            Type::Address => pack_vector!(elements, Value::vector_address),
+pub enum VectorSpecialization {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    U256,
+    Bool,
+    Address,
+    Container,
+}
 
-            Type::Signer | Type::Vector(_) | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
-                Value::Vec(elements.into_iter().map(MemBox::new).collect())
+impl TryFrom<&Type> for VectorSpecialization {
+    type Error = PartialVMError;
+
+    fn try_from(ty: &Type) -> Result<Self, Self::Error> {
+        Ok(match ty {
+            Type::U8 => VectorSpecialization::U8,
+            Type::U16 => VectorSpecialization::U16,
+            Type::U32 => VectorSpecialization::U32,
+            Type::U64 => VectorSpecialization::U64,
+            Type::U128 => VectorSpecialization::U128,
+            Type::U256 => VectorSpecialization::U256,
+            Type::Bool => VectorSpecialization::Bool,
+            Type::Address => VectorSpecialization::Address,
+            Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
+                VectorSpecialization::Container
             }
-
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("invalid type param for vector: {:?}", type_param)),
-                )
+                        .with_message(format!("invalid type param for vector: {:?}", ty)),
+                );
+            }
+        })
+    }
+}
+
+impl Vector {
+    pub fn pack(
+        specialization: VectorSpecialization,
+        elements: impl IntoIterator<Item = Value>,
+    ) -> PartialVMResult<Value> {
+        let container = match specialization {
+            VectorSpecialization::U8 => pack_vector!(elements, Value::vector_u8),
+            VectorSpecialization::U16 => pack_vector!(elements, Value::vector_u16),
+            VectorSpecialization::U32 => pack_vector!(elements, Value::vector_u32),
+            VectorSpecialization::U64 => pack_vector!(elements, Value::vector_u64),
+            VectorSpecialization::U128 => pack_vector!(elements, Value::vector_u128),
+            VectorSpecialization::U256 => pack_vector!(elements, Value::vector_u256),
+            VectorSpecialization::Bool => pack_vector!(elements, Value::vector_bool),
+            VectorSpecialization::Address => pack_vector!(elements, Value::vector_address),
+
+            VectorSpecialization::Container => {
+                Value::Vec(elements.into_iter().map(MemBox::new).collect())
             }
         };
 
         Ok(container)
     }
 
-    pub fn empty(type_param: &Type) -> PartialVMResult<Value> {
-        Self::pack(type_param, vec![])
+    pub fn empty(specialization: VectorSpecialization) -> PartialVMResult<Value> {
+        Self::pack(specialization, vec![])
     }
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
@@ -2179,7 +2207,7 @@ impl Vector {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(format!("{:?} is not a vector", value)),
-                )
+                );
             }
         };
         if expected_num as usize == elements.len() {
@@ -2357,7 +2385,7 @@ impl GlobalValueImpl {
         let value = std::mem::replace(self, Self::None);
         let value_box = match value {
             Self::None | Self::Deleted => {
-                return Err(PartialVMError::new(StatusCode::MISSING_DATA))
+                return Err(PartialVMError::new(StatusCode::MISSING_DATA));
             }
             Self::Fresh { container } => {
                 let previous = std::mem::replace(self, Self::None);
@@ -2382,7 +2410,7 @@ impl GlobalValueImpl {
                 return Err((
                     PartialVMError::new(StatusCode::RESOURCE_ALREADY_EXISTS),
                     val,
-                ))
+                ));
             }
             Self::None => *self = Self::fresh(val)?,
             Self::Deleted => {
@@ -2821,9 +2849,9 @@ pub mod debug {
  **************************************************************************************/
 
 use serde::{
+    Deserialize,
     de::Error as DeError,
     ser::{Error as SerError, SerializeSeq, SerializeTuple},
-    Deserialize,
 };
 
 impl Value {
@@ -2831,8 +2859,85 @@ impl Value {
         bcs::from_bytes_seed(SeedWrapper { layout }, blob).ok()
     }
 
-    pub fn simple_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
+    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
         Some(bcs::to_bytes(&AnnotatedValue { layout, val: self }).expect("BCS failed"))
+    }
+
+    pub fn serialize(&self) -> Option<Vec<u8>> {
+        bcs::to_bytes(self).ok()
+    }
+}
+
+impl serde::Serialize for Value {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Value::U8(x) => serializer.serialize_u8(*x),
+            Value::U16(x) => serializer.serialize_u16(*x),
+            Value::U32(x) => serializer.serialize_u32(*x),
+            Value::U64(x) => serializer.serialize_u64(*x),
+            Value::U128(x) => serializer.serialize_u128(**x),
+            Value::U256(x) => x.serialize(serializer),
+            Value::Bool(x) => serializer.serialize_bool(*x),
+            Value::Address(x) => x.serialize(serializer),
+
+            Value::Struct(struct_) => struct_.0.serialize(serializer),
+            Value::Variant(variant) => {
+                let tag = if variant.0.0 as u64 > VARIANT_TAG_MAX_VALUE {
+                    return Err(serde::ser::Error::custom(format!(
+                        "Variant tag {} is greater than the maximum allowed value of {}",
+                        variant.0.0, VARIANT_TAG_MAX_VALUE
+                    )));
+                } else {
+                    variant.0.0 as u8
+                };
+
+                let mut t = serializer.serialize_tuple(2)?;
+                t.serialize_element(&tag)?;
+                t.serialize_element(&variant.0.1)?;
+                t.end()
+            }
+
+            Value::PrimVec(prim_vec) => prim_vec.serialize(serializer),
+
+            Value::Vec(r) => {
+                let v = r;
+                let mut t = serializer.serialize_seq(Some(v.len()))?;
+                for val in v.iter() {
+                    let val = &*val.borrow();
+                    t.serialize_element(val)?;
+                }
+                t.end()
+            }
+            val @ (Value::Invalid | Value::Reference(_)) => Err(invariant_violation::<S>(format!(
+                "cannot serialize value {val:?}",
+            ))),
+        }
+    }
+}
+
+impl serde::Serialize for PrimVec {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            PrimVec::VecU8(r) => r.serialize(serializer),
+            PrimVec::VecU16(r) => r.serialize(serializer),
+            PrimVec::VecU32(r) => r.serialize(serializer),
+            PrimVec::VecU64(r) => r.serialize(serializer),
+            PrimVec::VecU128(r) => r.serialize(serializer),
+            PrimVec::VecU256(r) => r.serialize(serializer),
+            PrimVec::VecBool(r) => r.serialize(serializer),
+            PrimVec::VecAddress(r) => r.serialize(serializer),
+        }
+    }
+}
+
+impl serde::Serialize for FixedSizeVec {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut t = serializer.serialize_tuple(self.len())?;
+        for val in self.0.iter() {
+            let val = &*val.borrow();
+            t.serialize_element(val)?;
+        }
+        t.end()
     }
 }
 
@@ -2946,10 +3051,10 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, FixedSizeVec>
 impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, FixedSizeVec)> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (tag, values) = &self.val;
-        let tag = if *tag as u64 > VARIANT_COUNT_MAX {
+        let tag = if *tag as u64 > VARIANT_TAG_MAX_VALUE {
             return Err(serde::ser::Error::custom(format!(
                 "Variant tag {} is greater than the maximum allowed value of {}",
-                tag, VARIANT_COUNT_MAX
+                tag, VARIANT_TAG_MAX_VALUE
             )));
         } else {
             *tag as u8
@@ -3149,15 +3254,15 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
         A: serde::de::SeqAccess<'d>,
     {
         let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
-            Some(RuntimeValue::U8(tag)) if tag as u64 <= VARIANT_COUNT_MAX => tag as u16,
+            Some(RuntimeValue::U8(tag)) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
             Some(RuntimeValue::U8(tag)) => {
-                return Err(A::Error::invalid_length(tag as usize, &self))
+                return Err(A::Error::invalid_length(tag as usize, &self));
             }
             Some(val) => {
                 return Err(A::Error::invalid_type(
                     serde::de::Unexpected::Other(&format!("{val:?}")),
                     &self,
-                ))
+                ));
             }
             None => return Err(A::Error::invalid_length(0, &self)),
         };
@@ -3825,8 +3930,8 @@ impl Value {
 
 impl Reference {
     pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
-        use move_core_types::annotated_value::MoveTypeLayout as L;
         use AnnValue as AV;
+        use move_core_types::annotated_value::MoveTypeLayout as L;
         match self {
             // If the reference is a direct reference, delegate to the inner Value.
             Reference::Value(mem_box) => mem_box.borrow().as_annotated_move_value(layout),

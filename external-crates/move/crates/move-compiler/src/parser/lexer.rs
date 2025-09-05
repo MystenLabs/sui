@@ -5,7 +5,7 @@
 use crate::{
     diag,
     diagnostics::Diagnostic,
-    editions::{create_feature_error, Edition, FeatureGate},
+    editions::{Edition, FeatureGate, create_feature_error},
     parser::{syntax::make_loc, token_set::TokenSet},
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
@@ -950,7 +950,7 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
         "fun" => Tok::Fun,
         "friend" => Tok::Friend,
         "if" => Tok::If,
-        "invariant" => Tok::Invariant,
+        "invariant" if !edition.supports(FeatureGate::Move2024Keywords) => Tok::Invariant,
         "let" => Tok::Let,
         "loop" => Tok::Loop,
         "module" => Tok::Module,
@@ -958,7 +958,7 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
         "native" => Tok::Native,
         "public" => Tok::Public,
         "return" => Tok::Return,
-        "spec" => Tok::Spec,
+        "spec" if !edition.supports(FeatureGate::Move2024Keywords) => Tok::Spec,
         "struct" => Tok::Struct,
         "true" => Tok::True,
         "use" => Tok::Use,

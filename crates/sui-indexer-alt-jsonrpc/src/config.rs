@@ -3,6 +3,8 @@
 
 use std::mem;
 
+use anyhow::Context as _;
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -10,10 +12,15 @@ use tracing::warn;
 
 pub use sui_name_service::NameServiceConfig;
 
+pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
+
 #[derive(Debug)]
 pub struct RpcConfig {
     /// Configuration for object-related RPC methods.
     pub objects: ObjectsConfig,
+
+    /// Configuration for dynamic-field-related RPC methods.
+    pub dynamic_fields: DynamicFieldsConfig,
 
     /// Configuration for transaction-related RPC methods.
     pub transactions: TransactionsConfig,
@@ -24,11 +31,9 @@ pub struct RpcConfig {
     /// Configuration for coin-related RPC methods.
     pub coins: CoinsConfig,
 
-    /// Configuration for transaction execution RPC methods.
-    pub write: WriteConfig,
-
-    /// Configuration for bigtable kv store, if it is used.
-    pub bigtable: Option<BigtableConfig>,
+    /// Configuration for methods that require a fullnode RPC connection,
+    /// including transaction execution, dry-running, and delegation coin queries etc.
+    pub node: NodeConfig,
 
     /// Configuring limits for the package resolver.
     pub package_resolver: sui_package_resolver::Limits,
@@ -37,26 +42,12 @@ pub struct RpcConfig {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct RpcLayer {
-    /// Configuration for object-related RPC methods.
     pub objects: ObjectsLayer,
-
-    /// Configuration for transaction-related RPC methods.
+    pub dynamic_fields: DynamicFieldsLayer,
     pub transactions: TransactionsLayer,
-
-    /// Configuration for SuiNS related RPC methods.
     pub name_service: NameServiceLayer,
-
-    /// Configuration for coin-related RPC methods.
     pub coins: CoinsLayer,
-
-    /// Configuration for transaction execution RPC methods.
-    pub write: WriteLayer,
-
-    /// Configuration for bigtable kv store, if it is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bigtable: Option<BigtableConfig>,
-
-    /// Configuring limits for the package resolver.
+    pub node: NodeLayer,
     pub package_resolver: PackageResolverLayer,
 
     #[serde(flatten)]
@@ -71,7 +62,7 @@ pub struct ObjectsConfig {
     /// The default page size limit when querying objects, if none is provided.
     pub default_page_size: usize,
 
-    /// The largest acceptable page size when querying transactions. Requesting a page larger than
+    /// The largest acceptable page size when querying objects. Requesting a page larger than
     /// this is a user error.
     pub max_page_size: usize,
 
@@ -90,6 +81,13 @@ pub struct ObjectsConfig {
     /// The number of owned objects to fetch in one go when fulfilling a compound owned object
     /// filter.
     pub filter_scan_size: usize,
+
+    /// The number of times to retry a kv get operation. Retry is needed when a version of the object
+    /// is not yet found in the kv store due to the kv being behind the pg table's checkpoint watermark.
+    pub obj_retry_count: usize,
+
+    /// The interval between kv retry attempts in milliseconds.
+    pub obj_retry_interval_ms: u64,
 }
 
 #[DefaultConfig]
@@ -103,6 +101,28 @@ pub struct ObjectsLayer {
     pub max_filter_depth: Option<usize>,
     pub max_type_filters: Option<usize>,
     pub filter_scan_size: Option<usize>,
+    pub obj_retry_count: Option<usize>,
+    pub obj_retry_interval_ms: Option<u64>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
+#[derive(Debug, Clone)]
+pub struct DynamicFieldsConfig {
+    /// The default page size limit when querying dynamic fields, if none is provided.
+    pub default_page_size: usize,
+
+    /// The largest acceptable page size when querying dynamic fields. Requesting a page larger
+    /// than this is a user error.
+    pub max_page_size: usize,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct DynamicFieldsLayer {
+    pub default_page_size: Option<usize>,
+    pub max_page_size: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -116,6 +136,13 @@ pub struct TransactionsConfig {
     /// The largest acceptable page size when querying transactions. Requesting a page larger than
     /// this is a user error.
     pub max_page_size: usize,
+
+    /// The number of times to retry a read from kv or pg transaction tables. Retry is needed when a tx digest
+    /// is not yet found in the table due to it being behind other transaction table's checkpoint watermark.
+    pub tx_retry_count: usize,
+
+    /// The interval between tx_digest retry attempts in milliseconds.
+    pub tx_retry_interval_ms: u64,
 }
 
 #[DefaultConfig]
@@ -123,6 +150,8 @@ pub struct TransactionsConfig {
 pub struct TransactionsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
+    pub tx_retry_count: Option<usize>,
+    pub tx_retry_interval_ms: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -160,7 +189,7 @@ pub struct CoinsLayer {
 }
 
 #[derive(Clone, Debug)]
-pub struct WriteConfig {
+pub struct NodeConfig {
     /// The value of the header to be sent to the fullnode RPC, used to distinguish between different instances.
     pub header_value: String,
     /// The maximum size of the request body allowed.
@@ -169,19 +198,12 @@ pub struct WriteConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
-pub struct WriteLayer {
+pub struct NodeLayer {
     pub header_value: Option<String>,
     pub max_request_size: Option<u32>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
-}
-
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-pub struct BigtableConfig {
-    /// The instance id of the Bigtable instance to connect to.
-    pub instance_id: String,
 }
 
 #[DefaultConfig]
@@ -202,12 +224,12 @@ impl RpcLayer {
     pub fn example() -> Self {
         Self {
             objects: ObjectsConfig::default().into(),
+            dynamic_fields: DynamicFieldsConfig::default().into(),
             transactions: TransactionsConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
             coins: CoinsConfig::default().into(),
-            bigtable: None,
             package_resolver: PackageResolverLayer::default(),
-            write: WriteConfig::default().into(),
+            node: NodeConfig::default().into(),
             extra: Default::default(),
         }
     }
@@ -216,11 +238,11 @@ impl RpcLayer {
         check_extra("top-level", mem::take(&mut self.extra));
         RpcConfig {
             objects: self.objects.finish(ObjectsConfig::default()),
+            dynamic_fields: self.dynamic_fields.finish(DynamicFieldsConfig::default()),
             transactions: self.transactions.finish(TransactionsConfig::default()),
             name_service: self.name_service.finish(NameServiceConfig::default()),
             coins: self.coins.finish(CoinsConfig::default()),
-            write: self.write.finish(WriteConfig::default()),
-            bigtable: self.bigtable,
+            node: self.node.finish(NodeConfig::default()),
             package_resolver: self.package_resolver.finish(),
         }
     }
@@ -244,6 +266,20 @@ impl ObjectsLayer {
             max_filter_depth: self.max_filter_depth.unwrap_or(base.max_filter_depth),
             max_type_filters: self.max_type_filters.unwrap_or(base.max_type_filters),
             filter_scan_size: self.filter_scan_size.unwrap_or(base.filter_scan_size),
+            obj_retry_count: self.obj_retry_count.unwrap_or(base.obj_retry_count),
+            obj_retry_interval_ms: self
+                .obj_retry_interval_ms
+                .unwrap_or(base.obj_retry_interval_ms),
+        }
+    }
+}
+
+impl DynamicFieldsLayer {
+    pub fn finish(self, base: DynamicFieldsConfig) -> DynamicFieldsConfig {
+        check_extra("dynamic fields", self.extra);
+        DynamicFieldsConfig {
+            default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
+            max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
         }
     }
 }
@@ -254,6 +290,10 @@ impl TransactionsLayer {
         TransactionsConfig {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
+            tx_retry_count: self.tx_retry_count.unwrap_or(base.tx_retry_count),
+            tx_retry_interval_ms: self
+                .tx_retry_interval_ms
+                .unwrap_or(base.tx_retry_interval_ms),
         }
     }
 }
@@ -279,10 +319,26 @@ impl CoinsLayer {
     }
 }
 
-impl WriteLayer {
-    pub fn finish(self, base: WriteConfig) -> WriteConfig {
-        check_extra("write", self.extra);
-        WriteConfig {
+impl NodeConfig {
+    pub fn client(&self, fullnode_rpc_url: url::Url) -> anyhow::Result<HttpClient> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CLIENT_SDK_TYPE_HEADER,
+            HeaderValue::from_str(&self.header_value)?,
+        );
+
+        HttpClientBuilder::default()
+            .max_request_size(self.max_request_size)
+            .set_headers(headers.clone())
+            .build(&fullnode_rpc_url)
+            .context("Failed to initialize fullnode RPC client")
+    }
+}
+
+impl NodeLayer {
+    pub fn finish(self, base: NodeConfig) -> NodeConfig {
+        check_extra("node", self.extra);
+        NodeConfig {
             header_value: self.header_value.unwrap_or(base.header_value),
             max_request_size: self.max_request_size.unwrap_or(base.max_request_size),
         }
@@ -305,11 +361,11 @@ impl Default for RpcConfig {
     fn default() -> Self {
         Self {
             objects: ObjectsConfig::default(),
+            dynamic_fields: DynamicFieldsConfig::default(),
             transactions: TransactionsConfig::default(),
             name_service: NameServiceConfig::default(),
             coins: CoinsConfig::default(),
-            write: WriteConfig::default(),
-            bigtable: None,
+            node: NodeConfig::default(),
             package_resolver: PackageResolverLayer::default().finish(),
         }
     }
@@ -326,6 +382,17 @@ impl Default for ObjectsConfig {
             max_filter_depth: 3,
             max_type_filters: 10,
             filter_scan_size: 200,
+            obj_retry_count: 5,
+            obj_retry_interval_ms: 100,
+        }
+    }
+}
+
+impl Default for DynamicFieldsConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: 50,
+            max_page_size: 100,
         }
     }
 }
@@ -335,6 +402,8 @@ impl Default for TransactionsConfig {
         Self {
             default_page_size: 50,
             max_page_size: 100,
+            tx_retry_count: 5,
+            tx_retry_interval_ms: 100,
         }
     }
 }
@@ -348,7 +417,7 @@ impl Default for CoinsConfig {
     }
 }
 
-impl Default for WriteConfig {
+impl Default for NodeConfig {
     fn default() -> Self {
         Self {
             header_value: "sui-indexer-alt-jsonrpc".to_string(),
@@ -386,6 +455,18 @@ impl From<ObjectsConfig> for ObjectsLayer {
             max_filter_depth: Some(config.max_filter_depth),
             max_type_filters: Some(config.max_type_filters),
             filter_scan_size: Some(config.filter_scan_size),
+            obj_retry_count: Some(config.obj_retry_count),
+            obj_retry_interval_ms: Some(config.obj_retry_interval_ms),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<DynamicFieldsConfig> for DynamicFieldsLayer {
+    fn from(config: DynamicFieldsConfig) -> Self {
+        Self {
+            default_page_size: Some(config.default_page_size),
+            max_page_size: Some(config.max_page_size),
             extra: Default::default(),
         }
     }
@@ -396,6 +477,8 @@ impl From<TransactionsConfig> for TransactionsLayer {
         Self {
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
+            tx_retry_count: Some(config.tx_retry_count),
+            tx_retry_interval_ms: Some(config.tx_retry_interval_ms),
             extra: Default::default(),
         }
     }
@@ -422,8 +505,8 @@ impl From<CoinsConfig> for CoinsLayer {
     }
 }
 
-impl From<WriteConfig> for WriteLayer {
-    fn from(config: WriteConfig) -> Self {
+impl From<NodeConfig> for NodeLayer {
+    fn from(config: NodeConfig) -> Self {
         Self {
             header_value: Some(config.header_value),
             max_request_size: Some(config.max_request_size),

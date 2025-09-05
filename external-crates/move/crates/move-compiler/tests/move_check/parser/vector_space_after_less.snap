@@ -13,14 +13,11 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03008]: too few type arguments
+error[E04010]: cannot infer type
   ┌─ tests/move_check/parser/vector_space_after_less.move:4:17
   │
 4 │         let a = vector < 100;
-  │                 ^^^^^^------
-  │                 │
-  │                 Expected 1 type argument(s) but got 0
-  │                 Invalid 'vector' instantation
+  │                 ^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/vector_space_after_less.move:4:26

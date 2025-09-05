@@ -11,7 +11,7 @@ anyhow.workspace = true
 rand = "0.8.5"
 async-trait.workspace = true
 axum.workspace = true
-backoff.workspace = true
+backon.workspace = true
 bb8 = "0.8.5"
 bcs.workspace = true
 bytes.workspace = true
@@ -47,7 +47,6 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
 simulacrum.workspace = true
 sui-config.workspace = true
-sui-archival.workspace = true
 sui-core.workspace = true
 sui-data-ingestion-core.workspace = true
 sui-json.workspace = true

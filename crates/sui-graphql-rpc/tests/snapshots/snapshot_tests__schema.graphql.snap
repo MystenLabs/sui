@@ -2,6 +2,13 @@
 source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
+type AccumulatorRootCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 type ActiveJwk {
 	"""
 	The string (Issuing Authority) that identifies the OIDC provider.
@@ -177,11 +184,6 @@ enum AddressTransactionBlockRelationship {
 	"""
 	AFFECTED
 }
-
-"""
-An Authenticator represents the access control rules for a ConsensusV2 object.
-"""
-union Authenticator = Address
 
 """
 System transaction for creating the on-chain state used by zkLogin.
@@ -838,6 +840,14 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 }
 
 """
+Same as AddressOwner, but the object is versioned by consensus.
+"""
+type ConsensusAddressOwner {
+	startVersion: UInt53!
+	owner: Owner
+}
+
+"""
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting
 the current value of the clock, based on the timestamp from consensus.
 """
@@ -862,13 +872,62 @@ type ConsensusCommitPrologueTransaction {
 }
 
 """
-A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
-and allows different authentication modes based on the chosen authenticator.
-(Initially, only single-owner authentication is supported.)
+The transaction accpeted a consensus object as input, but its execution was cancelled.
 """
-type ConsensusV2 {
-	startVersion: UInt53!
-	authenticator: Authenticator
+type ConsensusObjectCancelled {
+	"""
+	ID of the consensus object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned consensus object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: UInt53!
+}
+
+"""
+The transaction accepted a consensus object as input, but only to read it.
+"""
+type ConsensusObjectRead {
+	"""
+	ID of the object being read.
+	"""
+	address: SuiAddress!
+	"""
+	Version of the object being read.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
+	digest: String!
+	"""
+	The object at this version.  May not be available due to pruning.
+	"""
+	object: Object
+}
+
+"""
+The transaction accepted a consensus object as input, but its consensus stream ended before the
+transaction executed. This can happen for ConsensusAddressOwner objects where the stream ends
+but the object itself is not deleted.
+"""
+type ConsensusObjectStreamEnded {
+	"""
+	ID of the consensus object.
+	"""
+	address: SuiAddress!
+	"""
+	The version of the consensus object that was assigned to this transaction during by consensus,
+	during sequencing.
+	"""
+	version: UInt53!
+	"""
+	Whether this transaction intended to use this consensus object mutably or not. See
+	`SharedInput.mutable` for further details.
+	"""
+	mutable: Boolean!
 }
 
 """
@@ -1050,7 +1109,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction | AccumulatorRootCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -2922,9 +2981,9 @@ enum ObjectKind {
 }
 
 """
-The object's owner type: Immutable, Shared, Parent, or Address.
+The object's owner type: Immutable, Shared, Parent, Address, or ConsensusAddress.
 """
-union ObjectOwner = Immutable | Shared | Parent | AddressOwner | ConsensusV2
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner | ConsensusAddressOwner
 
 input ObjectRef {
 	"""
@@ -3101,6 +3160,21 @@ object could be wrapped and therefore not directly accessible.
 """
 type Parent {
 	parent: Owner
+}
+
+"""
+ProgrammableSystemTransactionBlock is identical to ProgrammableTransactionBlock, but graphql
+does not allow multiple variants with the same type.
+"""
+type ProgrammableSystemTransactionBlock {
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
 }
 
 """
@@ -3640,64 +3714,6 @@ type SharedInput {
 }
 
 """
-The transaction accpeted a shared object as input, but its execution was cancelled.
-"""
-type SharedObjectCancelled {
-	"""
-	ID of the shared object.
-	"""
-	address: SuiAddress!
-	"""
-	The assigned shared object version. It is a special version indicating transaction cancellation reason.
-	"""
-	version: UInt53!
-}
-
-"""
-The transaction accepted a shared object as input, but it was deleted before the transaction
-executed.
-"""
-type SharedObjectDelete {
-	"""
-	ID of the shared object.
-	"""
-	address: SuiAddress!
-	"""
-	The version of the shared object that was assigned to this transaction during by consensus,
-	during sequencing.
-	"""
-	version: UInt53!
-	"""
-	Whether this transaction intended to use this shared object mutably or not. See
-	`SharedInput.mutable` for further details.
-	"""
-	mutable: Boolean!
-}
-
-"""
-The transaction accepted a shared object as input, but only to read it.
-"""
-type SharedObjectRead {
-	"""
-	ID of the object being read.
-	"""
-	address: SuiAddress!
-	"""
-	Version of the object being read.
-	"""
-	version: UInt53!
-	"""
-	32-byte hash that identifies the object's contents at this version, encoded as a Base58
-	string.
-	"""
-	digest: String!
-	"""
-	The object at this version.  May not be available due to pruning.
-	"""
-	object: Object
-}
-
-"""
 Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as
 many as there are amounts.)
 """
@@ -3972,7 +3988,7 @@ type StorageFund {
 	The portion of the storage fund that will never be refunded through storage rebates.
 	
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
-	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
+	equal to the sum of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
@@ -4303,6 +4319,10 @@ type TransactionBlockEffects {
 	"""
 	errors: String
 	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	"""
+	abortCode: BigInt
+	"""
 	Transactions whose outputs this transaction depends upon.
 	"""
 	dependencies(first: Int, after: String, last: Int, before: String): DependencyConnection!
@@ -4311,9 +4331,9 @@ type TransactionBlockEffects {
 	"""
 	gasEffects: GasEffects
 	"""
-	Shared objects that are referenced by but not changed by this transaction.
+	Consensus objects that are referenced by but not changed by this transaction.
 	"""
-	unchangedSharedObjects(first: Int, after: String, last: Int, before: String): UnchangedSharedObjectConnection!
+	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection!
 	"""
 	The effect this transaction had on objects on-chain.
 	"""
@@ -4401,7 +4421,7 @@ input TransactionBlockFilter {
 """
 The kind of transaction block, either a programmable transaction or a system transaction.
 """
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction | ProgrammableSystemTransactionBlock
 
 """
 An input filter selecting for either system or programmable transactions.
@@ -4451,7 +4471,7 @@ type TransactionInputEdge {
 
 """
 The optional extra data a user can provide to a transaction dry run.
-`sender` defaults to `0x0`. If gasObjects` is not present, or is an empty list,
+`sender` defaults to `0x0`. If `gasObjects` is not present, or is an empty list,
 it is substituted with a mock Coin object, `gasPrice` defaults to the reference
 gas price, `gasBudget` defaults to the max gas budget and `gasSponsor` defaults
 to the sender.
@@ -4504,14 +4524,14 @@ but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 scalar UInt53
 
 """
-Details pertaining to shared objects that are referenced by but not changed by a transaction.
+Details pertaining to consensus objects that are referenced by but not changed by a transaction.
 This information is considered part of the effects, because although the transaction specifies
-the shared object as input, consensus must schedule it and pick the version that is actually
+the consensus object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
+union UnchangedConsensusObject = ConsensusObjectRead | ConsensusObjectStreamEnded | ConsensusObjectCancelled
 
-type UnchangedSharedObjectConnection {
+type UnchangedConsensusObjectConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -4519,21 +4539,21 @@ type UnchangedSharedObjectConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [UnchangedSharedObjectEdge!]!
+	edges: [UnchangedConsensusObjectEdge!]!
 	"""
 	A list of nodes.
 	"""
-	nodes: [UnchangedSharedObject!]!
+	nodes: [UnchangedConsensusObject!]!
 }
 
 """
 An edge in a connection.
 """
-type UnchangedSharedObjectEdge {
+type UnchangedConsensusObjectEdge {
 	"""
 	The item at the end of the edge
 	"""
-	node: UnchangedSharedObject!
+	node: UnchangedConsensusObject!
 	"""
 	A cursor for use in pagination
 	"""

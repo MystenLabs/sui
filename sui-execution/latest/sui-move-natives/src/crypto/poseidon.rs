@@ -11,10 +11,7 @@ use move_vm_runtime::{
         values::{Value, VectorRef},
         Type,
     },
-    natives::{
-        extensions::NativeContextMut,
-        functions::{NativeResult, PartialVMError},
-    },
+    natives::functions::{NativeResult, PartialVMError},
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -25,13 +22,12 @@ use std::ops::Mul;
 pub const NON_CANONICAL_INPUT: u64 = 0;
 pub const NOT_SUPPORTED_ERROR: u64 = 1;
 
-fn is_supported(context: &NativeContext) -> bool {
-    context
+fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
-        .borrow()
+        .get::<ObjectRuntime>()?
         .protocol_config
-        .enable_poseidon()
+        .enable_poseidon())
 }
 
 #[derive(Clone)]
@@ -54,14 +50,14 @@ pub fn poseidon_bn254_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
     // Load the cost parameters from the protocol config
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .poseidon_bn254_cost_params
         .clone();
 

@@ -19,7 +19,7 @@ outer label to escape both loops at once:
 fun sum_until_threshold(input: &vector<vector<u64>>, threshold: u64): u64 {
     let mut sum = 0;
     let mut i = 0;
-    let input_size = vector::length(vec);
+    let input_size = vector::length(input);
 
     'outer: loop {
         // breaks to outer since it is the closest enclosing loop
@@ -37,9 +37,9 @@ fun sum_until_threshold(input: &vector<vector<u64>>, threshold: u64): u64 {
                 // the next element we saw would break the threshold,
                 // so we return the current sum
                 break 'outer sum
-            }
+            };
             j = j + 1;
-        }
+        };
         i = i + 1;
     }
 }

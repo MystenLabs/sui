@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    iter, mem,
+    iter,
     sync::Arc,
     time::Duration,
     vec,
@@ -12,6 +12,7 @@ use std::{
 #[cfg(test)]
 use consensus_config::{local_committee_and_keys, Stake};
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
+use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use itertools::Itertools as _;
 #[cfg(test)]
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -27,8 +28,8 @@ use tracing::{debug, info, trace, warn};
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
     block::{
-        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, ExtendedBlock, Round, SignedBlock,
-        Slot, VerifiedBlock, GENESIS_ROUND,
+        Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, SignedBlock, Slot, VerifiedBlock,
+        GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit::{
@@ -39,17 +40,18 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
-    round_prober::QuorumRound,
+    round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
+    transaction_certifier::TransactionCertifier,
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
 };
 #[cfg(test)]
 use crate::{
-    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore, CommitConsumer,
-    TransactionClient,
+    block::CertifiedBlocksOutput, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
+    CommitConsumerArgs, TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -60,6 +62,8 @@ pub(crate) struct Core {
     context: Arc<Context>,
     /// The consumer to use in order to pull transactions to be included for the next proposals
     transaction_consumer: TransactionConsumer,
+    /// This contains the reject votes on transactions which proposed blocks should include.
+    transaction_certifier: TransactionCertifier,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
@@ -74,7 +78,6 @@ pub(crate) struct Core {
     /// most likely this validator cannot broadcast  blocks to the network at all.
     /// Core stops proposing new blocks in this case.
     propagation_delay: Round,
-
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
     /// The last new round for which core has sent out a signal.
@@ -109,6 +112,11 @@ pub(crate) struct Core {
     // information to decide whether to include that authority block in the next
     // proposal or not.
     ancestor_state_manager: AncestorStateManager,
+    // The round tracker will keep track of the highest received and accepted rounds
+    // from all authorities. It will use this information to then calculate the
+    // quorum rounds periodically which is used across other components to make
+    // decisions about block proposals.
+    round_tracker: Arc<RwLock<PeerRoundTracker>>,
 }
 
 impl Core {
@@ -116,6 +124,7 @@ impl Core {
         context: Arc<Context>,
         leader_schedule: Arc<LeaderSchedule>,
         transaction_consumer: TransactionConsumer,
+        transaction_certifier: TransactionCertifier,
         block_manager: BlockManager,
         subscriber_exists: bool,
         commit_observer: CommitObserver,
@@ -123,6 +132,7 @@ impl Core {
         block_signer: ProtocolKeyPair,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
         let number_of_leaders = context
@@ -167,7 +177,8 @@ impl Core {
             .read()
             .reputation_scores
             .clone();
-        let mut ancestor_state_manager = AncestorStateManager::new(context.clone());
+        let mut ancestor_state_manager =
+            AncestorStateManager::new(context.clone(), dag_state.clone());
         ancestor_state_manager.set_propagation_scores(propagation_scores);
 
         Self {
@@ -177,6 +188,7 @@ impl Core {
             last_decided_leader,
             leader_schedule,
             transaction_consumer,
+            transaction_certifier,
             block_manager,
             subscriber_exists,
             propagation_delay: 0,
@@ -187,6 +199,7 @@ impl Core {
             dag_state,
             last_known_proposed_round: min_propose_round,
             ancestor_state_manager,
+            round_tracker,
         }
         .recover()
     }
@@ -199,22 +212,6 @@ impl Core {
             .scope_processing_time
             .with_label_values(&["Core::recover"])
             .start_timer();
-        // Ensure local time is after max ancestor timestamp.
-        let ancestor_blocks = self
-            .dag_state
-            .read()
-            .get_last_cached_block_per_authority(Round::MAX);
-        let max_ancestor_timestamp = ancestor_blocks
-            .iter()
-            .fold(0, |ts, (b, _)| ts.max(b.timestamp_ms()));
-        let wait_ms = max_ancestor_timestamp.saturating_sub(self.context.clock.timestamp_utc_ms());
-        if wait_ms > 0 {
-            warn!(
-                "Waiting for {} ms while recovering ancestors from storage",
-                wait_ms
-            );
-            std::thread::sleep(Duration::from_millis(wait_ms));
-        }
 
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit(vec![]).unwrap();
@@ -277,7 +274,7 @@ impl Core {
         let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
-            debug!(
+            trace!(
                 "Accepted blocks: {}",
                 accepted_blocks
                     .iter()
@@ -318,40 +315,28 @@ impl Core {
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_certified_commits");
 
-        // We want to enable the commit process logic when GC is enabled.
-        if self.dag_state.read().gc_enabled() {
-            let votes = certified_commits.votes().to_vec();
-            let commits = self
-                .validate_certified_commits(certified_commits.commits().to_vec())
-                .expect("Certified commits validation failed");
+        let votes = certified_commits.votes().to_vec();
+        let commits = self
+            .filter_new_commits(certified_commits.commits().to_vec())
+            .expect("Certified commits validation failed");
 
-            // Accept the certified commit votes. This is optimistically done to increase the chances of having votes available when this node
-            // will need to sync commits to other nodes.
-            self.block_manager.try_accept_blocks(votes);
+        // Try to accept the certified commit votes.
+        // Even if they may not be part of a future commit, these blocks are useful for certifying
+        // commits when helping peers sync commits.
+        let (_, missing_block_refs) = self.block_manager.try_accept_blocks(votes);
 
-            // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-            self.try_commit(commits)?;
+        // Try to commit the new blocks. Take into account the trusted commit that has been provided.
+        self.try_commit(commits)?;
 
-            // Try to propose now since there are new blocks accepted.
-            self.try_propose(false)?;
+        // Try to propose now since there are new blocks accepted.
+        self.try_propose(false)?;
 
-            // Now set up leader timeout if needed.
-            // This needs to be called after try_commit() and try_propose(), which may
-            // have advanced the threshold clock round.
-            self.try_signal_new_round();
+        // Now set up leader timeout if needed.
+        // This needs to be called after try_commit() and try_propose(), which may
+        // have advanced the threshold clock round.
+        self.try_signal_new_round();
 
-            return Ok(BTreeSet::new());
-        }
-
-        // If GC is not enabled then process blocks as usual.
-        let blocks = certified_commits
-            .commits()
-            .iter()
-            .flat_map(|commit| commit.blocks())
-            .cloned()
-            .collect::<Vec<_>>();
-
-        self.add_blocks(blocks)
+        Ok(missing_block_refs)
     }
 
     /// Checks if provided block refs have been accepted. If not, missing block refs are kept for synchronizations.
@@ -432,8 +417,9 @@ impl Core {
         Ok(None)
     }
 
-    /// Keeps only the certified commits that have a commit index > last commit index. It also ensures that the first commit in the list is the next one in line, otherwise it panics.
-    fn validate_certified_commits(
+    /// Keeps only the certified commits that have a commit index > last commit index.
+    /// It also ensures that the first commit in the list is the next one in line, otherwise it panics.
+    fn filter_new_commits(
         &mut self,
         commits: Vec<CertifiedCommit>,
     ) -> ConsensusResult<Vec<CertifiedCommit>> {
@@ -504,6 +490,11 @@ impl Core {
             let dag_state = self.dag_state.read();
             let clock_round = dag_state.threshold_clock_round();
             if clock_round <= dag_state.get_last_proposed_block().round() {
+                debug!(
+                    "Skipping block proposal for round {} as it is not higher than the last proposed block {}",
+                    clock_round,
+                    dag_state.get_last_proposed_block().round()
+                );
                 return None;
             }
             clock_round
@@ -526,6 +517,12 @@ impl Core {
                     .saturating_sub(self.last_proposed_timestamp_ms()),
             ) < self.context.parameters.min_round_delay
             {
+                debug!(
+                    "Skipping block proposal for round {} as it is too soon after the last proposed block timestamp {}; min round delay is {}ms",
+                    clock_round,
+                    self.last_proposed_timestamp_ms(),
+                    self.context.parameters.min_round_delay.as_millis(),
+                );
                 return None;
             }
         }
@@ -539,6 +536,10 @@ impl Core {
             assert!(
                 !force,
                 "Ancestors should have been returned if force is true!"
+            );
+            debug!(
+                "Skipping block proposal for round {} because no good ancestor is found",
+                clock_round,
             );
             return None;
         }
@@ -597,15 +598,18 @@ impl Core {
                 .observe(clock_round.saturating_sub(ancestor.round()).into());
         }
 
-        // Ensure ancestor timestamps are not more advanced than the current time.
-        // Also catch the issue if system's clock go backwards.
         let now = self.context.clock.timestamp_utc_ms();
         ancestors.iter().for_each(|block| {
-            assert!(
-                block.timestamp_ms() <= now,
-                "Violation: ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.",
-                block, block.timestamp_ms(), clock_round
-            );
+            if block.timestamp_ms() > now {
+                trace!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
+                let authority = &self.context.committee.authority(block.author()).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_ancestors_timestamp_drift_ms
+                    .with_label_values(&[authority])
+                    .inc_by(block.timestamp_ms().saturating_sub(now));
+            }
         });
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
@@ -623,17 +627,45 @@ impl Core {
             .write()
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
+        let transaction_votes = if self.context.protocol_config.mysticeti_fastpath() {
+            let hard_linked_ancestors = {
+                let mut dag_state = self.dag_state.write();
+                ancestors
+                    .iter()
+                    .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
+                    .collect()
+            };
+            self.transaction_certifier
+                .get_own_votes(hard_linked_ancestors)
+        } else {
+            vec![]
+        };
+
         // Create the block and insert to storage.
-        let block = Block::V1(BlockV1::new(
-            self.context.committee.epoch(),
-            clock_round,
-            self.context.own_index,
-            now,
-            ancestors.iter().map(|b| b.reference()).collect(),
-            transactions,
-            commit_votes,
-            vec![],
-        ));
+        let block = if self.context.protocol_config.mysticeti_fastpath() {
+            Block::V2(BlockV2::new(
+                self.context.committee.epoch(),
+                clock_round,
+                self.context.own_index,
+                now,
+                ancestors.iter().map(|b| b.reference()).collect(),
+                transactions,
+                commit_votes,
+                transaction_votes,
+                vec![],
+            ))
+        } else {
+            Block::V1(BlockV1::new(
+                self.context.committee.epoch(),
+                clock_round,
+                self.context.own_index,
+                now,
+                ancestors.iter().map(|b| b.reference()).collect(),
+                transactions,
+                commit_votes,
+                vec![],
+            ))
+        };
         let signed_block =
             SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
         let serialized = signed_block
@@ -671,6 +703,17 @@ impl Core {
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
+        // The block must be added to transaction certifier before it is broadcasted or added to DagState.
+        // Update proposed state of blocks in local DAG.
+        // TODO(fastpath): move this logic and the logic afterwards to proposed block handler.
+        if self.context.protocol_config.mysticeti_fastpath() {
+            self.transaction_certifier
+                .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
+            self.dag_state
+                .write()
+                .link_causal_history(verified_block.reference());
+        }
+
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
 
@@ -686,10 +729,17 @@ impl Core {
             .with_label_values(&[&force.to_string()])
             .inc();
 
-        Some(ExtendedBlock {
+        let extended_block = ExtendedBlock {
             block: verified_block,
             excluded_ancestors,
-        })
+        };
+
+        // Update round tracker with our own highest accepted blocks
+        self.round_tracker
+            .write()
+            .update_from_accepted_block(&extended_block);
+
+        Some(extended_block)
     }
 
     /// Runs commit rule to attempt to commit additional blocks from the DAG. If any `certified_commits` are provided, then
@@ -713,7 +763,7 @@ impl Core {
 
         if !certified_commits.is_empty() {
             info!(
-                "Will try to commit synced commits first : {:?}",
+                "Processing synced commits: {:?}",
                 certified_commits
                     .iter()
                     .map(|c| (c.index(), c.leader()))
@@ -759,12 +809,13 @@ impl Core {
             }
             assert!(commits_until_update > 0);
 
-            // Always try to process the synced commits first. If there are certified commits to process then the decided leaders and the commits will be returned.
-            let (mut decided_leaders, decided_certified_commits): (
+            // If there are certified commits to process, find out which leaders and commits from them
+            // are decided and use them as the next commits.
+            let (certified_leaders, decided_certified_commits): (
                 Vec<DecidedLeader>,
                 Vec<CertifiedCommit>,
             ) = self
-                .try_decide_certified(&mut certified_commits, commits_until_update)
+                .try_select_certified_leaders(&mut certified_commits, commits_until_update)
                 .into_iter()
                 .unzip();
 
@@ -781,16 +832,18 @@ impl Core {
                 .collect::<Vec<_>>();
             self.block_manager.try_accept_committed_blocks(blocks);
 
-            // If the certified `decided_leaders` is empty then try to run the decision rule.
-            if decided_leaders.is_empty() {
-                // TODO: limit commits by commits_until_update, which may be needed when leader schedule length is reduced.
-                decided_leaders = self.committer.try_decide(self.last_decided_leader);
-
+            // If there is no certified commit to process, run the decision rule.
+            let (decided_leaders, local) = if certified_leaders.is_empty() {
+                // TODO: limit commits by commits_until_update for efficiency, which may be needed when leader schedule length is reduced.
+                let mut decided_leaders = self.committer.try_decide(self.last_decided_leader);
                 // Truncate the decided leaders to fit the commit schedule limit.
                 if decided_leaders.len() >= commits_until_update {
                     let _ = decided_leaders.split_off(commits_until_update);
                 }
-            }
+                (decided_leaders, true)
+            } else {
+                (certified_leaders, false)
+            };
 
             // If the decided leaders list is empty then just break the loop.
             let Some(last_decided) = decided_leaders.last().cloned() else {
@@ -798,39 +851,35 @@ impl Core {
             };
 
             self.last_decided_leader = last_decided.slot();
-
-            let sequenced_leaders = decided_leaders
-                .into_iter()
-                .filter_map(|leader| leader.into_committed_block())
-                .collect::<Vec<_>>();
-
-            tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", sequenced_leaders.len());
-
             self.context
                 .metrics
                 .node_metrics
                 .last_decided_leader_round
                 .set(self.last_decided_leader.round as i64);
 
+            let sequenced_leaders = decided_leaders
+                .into_iter()
+                .filter_map(|leader| leader.into_committed_block())
+                .collect::<Vec<_>>();
             // It's possible to reach this point as the decided leaders might all of them be "Skip" decisions. In this case there is no
             // leader to commit and we should break the loop.
             if sequenced_leaders.is_empty() {
                 break;
             }
-
             tracing::info!(
-                "Committing {} leaders: {}",
+                "Committing {} leaders: {}; {} commits before next leader schedule change",
                 sequenced_leaders.len(),
                 sequenced_leaders
                     .iter()
                     .map(|b| b.reference().to_string())
-                    .join(",")
+                    .join(","),
+                commits_until_update,
             );
 
             // TODO: refcount subdags
-            let subdags = self.commit_observer.handle_commit(sequenced_leaders)?;
-
-            self.dag_state.write().add_scoring_subdags(subdags.clone());
+            let subdags = self
+                .commit_observer
+                .handle_commit(sequenced_leaders, local)?;
 
             // Try to unsuspend blocks if gc_round has advanced.
             self.block_manager
@@ -876,34 +925,8 @@ impl Core {
         self.subscriber_exists = exists;
     }
 
-    /// Sets the delay by round for propagating blocks to a quorum and the received
-    /// & accepted quorum rounds per authority for ancestor state manager.
-    pub(crate) fn set_propagation_delay_and_quorum_rounds(
-        &mut self,
-        delay: Round,
-        received_quorum_rounds: Vec<QuorumRound>,
-        accepted_quorum_rounds: Vec<QuorumRound>,
-    ) {
-        info!(
-            "Received quorum round per authority in ancestor state manager set to: {}",
-            self.context
-                .committee
-                .authorities()
-                .zip(received_quorum_rounds.iter())
-                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
-                .join(", ")
-        );
-        info!(
-            "Accepted quorum round per authority in ancestor state manager set to: {}",
-            self.context
-                .committee
-                .authorities()
-                .zip(accepted_quorum_rounds.iter())
-                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
-                .join(", ")
-        );
-        self.ancestor_state_manager
-            .set_quorum_rounds_per_authority(received_quorum_rounds, accepted_quorum_rounds);
+    /// Sets the delay by round for propagating blocks to a quorum.
+    pub(crate) fn set_propagation_delay(&mut self, delay: Round) {
         info!("Propagation round delay set to: {delay}");
         self.propagation_delay = delay;
     }
@@ -969,32 +992,32 @@ impl Core {
         true
     }
 
-    // Try to decide which of the certified commits will have to be committed next respecting the `limit`. If provided `limit` is zero, it will panic.
-    // The function returns the list of decided leaders and updates in place the remaining certified commits. If empty vector is returned, it means that
-    // there are no certified commits to be committed as `certified_commits` is either empty or all of the certified commits are already committed.
+    // Tries to select a prefix of certified commits to be committed next respecting the `limit`.
+    // If provided `limit` is zero, it will panic.
+    // The function returns a list of certified leaders and certified commits. If empty vector is returned, it means that
+    // there are no certified commits to be committed, as input `certified_commits` is either empty or all of the certified
+    // commits have been already committed.
     #[tracing::instrument(skip_all)]
-    fn try_decide_certified(
+    fn try_select_certified_leaders(
         &mut self,
         certified_commits: &mut Vec<CertifiedCommit>,
         limit: usize,
     ) -> Vec<(DecidedLeader, CertifiedCommit)> {
-        // If GC is disabled then should not run any of this logic.
-        if !self.dag_state.read().gc_enabled() {
-            return Vec::new();
-        }
-
         assert!(limit > 0, "limit should be greater than 0");
+        if certified_commits.is_empty() {
+            return vec![];
+        }
 
         let to_commit = if certified_commits.len() >= limit {
             // We keep only the number of leaders as dictated by the `limit`
             certified_commits.drain(..limit).collect::<Vec<_>>()
         } else {
             // Otherwise just take all of them and leave the `synced_commits` empty.
-            mem::take(certified_commits)
+            std::mem::take(certified_commits)
         };
 
         tracing::debug!(
-            "Decided {} certified leaders: {}",
+            "Selected {} certified leaders: {}",
             to_commit.len(),
             to_commit.iter().map(|c| c.leader().to_string()).join(",")
         );
@@ -1004,7 +1027,8 @@ impl Core {
             .map(|commit| {
                 let leader = commit.blocks().last().expect("Certified commit should have at least one block");
                 assert_eq!(leader.reference(), commit.leader(), "Last block of the committed sub dag should have the same digest as the leader of the commit");
-                let leader = DecidedLeader::Commit(leader.clone());
+                // There is no knowledge of direct commit with certified commits, so assuming indirect commit.
+                let leader = DecidedLeader::Commit(leader.clone(), /* direct */ false);
                 UniversalCommitter::update_metrics(&self.context, &leader, Decision::Certified);
                 (leader, commit)
             })
@@ -1040,7 +1064,11 @@ impl Core {
         );
 
         // Ensure ancestor state is up to date before selecting for proposal.
-        self.ancestor_state_manager.update_all_ancestors_state();
+        let accepted_quorum_rounds = self.round_tracker.read().compute_accepted_quorum_rounds();
+
+        self.ancestor_state_manager
+            .update_all_ancestors_state(&accepted_quorum_rounds);
+
         let ancestor_state_map = self.ancestor_state_manager.get_ancestor_states();
 
         let quorum_round = clock_round.saturating_sub(1);
@@ -1135,10 +1163,7 @@ impl Core {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
             // A quorum of validators reported to have accepted blocks from the excluded_author up to the low quorum round.
-            let mut accepted_low_quorum_round = self
-                .ancestor_state_manager
-                .accepted_quorum_round_per_authority[excluded_author]
-                .0;
+            let mut accepted_low_quorum_round = accepted_quorum_rounds[excluded_author].0;
             // If the accepted quorum round of this ancestor is greater than or equal
             // to the clock round then we want to make sure to set it to clock_round - 1
             // as that is the max round the new block can include as an ancestor.
@@ -1206,7 +1231,7 @@ impl Core {
 
         assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
 
-        info!(
+        debug!(
             "Included {} ancestors & excluded {} low performing or equivocating ancestors for proposal in round {clock_round}",
             ancestors_to_propose.len(),
             excluded_and_equivocating_ancestors.len()
@@ -1340,12 +1365,16 @@ impl CoreSignalsReceivers {
 /// Creates cores for the specified number of authorities for their corresponding stakes. The method returns the
 /// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
 #[cfg(test)]
-pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<CoreTextFixture> {
+pub(crate) async fn create_cores(
+    context: Context,
+    authorities: Vec<Stake>,
+) -> Vec<CoreTextFixture> {
     let mut cores = Vec::new();
 
     for index in 0..authorities.len() {
         let own_index = AuthorityIndex::new_for_test(index as u32);
-        let core = CoreTextFixture::new(context.clone(), authorities.clone(), own_index, false);
+        let core =
+            CoreTextFixture::new(context.clone(), authorities.clone(), own_index, false).await;
         cores.push(core);
     }
     cores
@@ -1353,17 +1382,19 @@ pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<Cor
 
 #[cfg(test)]
 pub(crate) struct CoreTextFixture {
-    pub core: Core,
-    pub signal_receivers: CoreSignalsReceivers,
-    pub block_receiver: broadcast::Receiver<ExtendedBlock>,
-    #[allow(unused)]
-    pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
-    pub store: Arc<MemStore>,
+    pub(crate) core: Core,
+    pub(crate) transaction_certifier: TransactionCertifier,
+    pub(crate) signal_receivers: CoreSignalsReceivers,
+    pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
+    pub(crate) _commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub(crate) _blocks_output_receiver: UnboundedReceiver<CertifiedBlocksOutput>,
+    pub(crate) dag_state: Arc<RwLock<DagState>>,
+    pub(crate) store: Arc<MemStore>,
 }
 
 #[cfg(test)]
 impl CoreTextFixture {
-    fn new(
+    async fn new(
         context: Context,
         authorities: Vec<Stake>,
         own_index: AuthorityIndex,
@@ -1382,52 +1413,70 @@ impl CoreTextFixture {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
                 .with_num_commits_per_schedule(10),
         );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            mysten_metrics::monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, commit_output_receiver, blocks_output_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         let block_signer = signers.remove(own_index.value()).1;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let core = Core::new(
             context,
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             true,
             commit_observer,
             signals,
             block_signer,
-            dag_state,
+            dag_state.clone(),
             sync_last_known_own_block,
+            round_tracker,
         );
 
         Self {
             core,
+            transaction_certifier,
             signal_receivers,
             block_receiver,
-            commit_receiver,
+            _commit_output_receiver: commit_output_receiver,
+            _blocks_output_receiver: blocks_output_receiver,
+            dag_state,
             store,
         }
+    }
+
+    pub(crate) fn add_blocks(
+        &mut self,
+        blocks: Vec<VerifiedBlock>,
+    ) -> ConsensusResult<BTreeSet<BlockRef>> {
+        self.transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
+        self.core.add_blocks(blocks)
     }
 }
 
@@ -1436,8 +1485,9 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_types::block::TransactionIndex;
     use futures::{stream::FuturesUnordered, StreamExt};
-    use rstest::rstest;
+    use mysten_metrics::monitored_mpsc;
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
 
@@ -1451,7 +1501,7 @@ mod test {
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
         transaction::{BlockStatus, TransactionClient},
-        CommitConsumer, CommitIndex,
+        CommitConsumerArgs, CommitIndex,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -1466,7 +1516,7 @@ mod test {
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
-        let mut last_round_blocks = genesis_blocks(context.clone());
+        let mut last_round_blocks = genesis_blocks(&context);
         let mut all_blocks: Vec<VerifiedBlock> = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -1496,24 +1546,26 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -1522,12 +1574,19 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             true,
             commit_observer,
@@ -1535,6 +1594,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // New round should be 5
@@ -1555,14 +1615,16 @@ mod test {
             assert_eq!(ancestor.round, 4);
         }
 
-        let last_commit = store
-            .read_last_commit()
-            .unwrap()
-            .expect("last commit should be set");
+        // Flush the DAG state to storage.
+        dag_state.write().flush();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
         // as soon as the new block for round 5 is proposed.
+        let last_commit = store
+            .read_last_commit()
+            .unwrap()
+            .expect("last commit should be set");
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
@@ -1588,7 +1650,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // Create test blocks for all authorities except our's (index = 0).
-        let mut last_round_blocks = genesis_blocks(context.clone());
+        let mut last_round_blocks = genesis_blocks(&context);
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -1618,24 +1680,26 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -1644,12 +1708,19 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier,
             block_manager,
             true,
             commit_observer,
@@ -1657,6 +1728,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // Clock round should have advanced to 5 during recovery because
@@ -1683,14 +1755,17 @@ mod test {
 
         // Run commit rule.
         core.try_commit(vec![]).ok();
-        let last_commit = store
-            .read_last_commit()
-            .unwrap()
-            .expect("last commit should be set");
+
+        // Flush the DAG state to storage.
+        core.dag_state.write().flush();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
         // as the new block for round 4 is proposed.
+        let last_commit = store
+            .read_last_commit()
+            .unwrap()
+            .expect("last commit should be set");
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
@@ -1711,13 +1786,13 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
@@ -1726,19 +1801,23 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier,
             block_manager,
             true,
             commit_observer,
@@ -1746,6 +1825,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // Send some transactions
@@ -1787,7 +1867,7 @@ mod test {
         assert!(total <= context.protocol_config.max_transactions_in_block_bytes());
 
         // genesis blocks should be referenced
-        let all_genesis = genesis_blocks(context);
+        let all_genesis = genesis_blocks(&context);
 
         for ancestor in extended_block.block.ancestors() {
             all_genesis
@@ -1800,6 +1880,9 @@ mod test {
         assert!(core.try_propose(false).unwrap().is_none());
         assert!(core.try_propose(true).unwrap().is_none());
 
+        // Flush the DAG state to storage.
+        dag_state.write().flush();
+
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
@@ -1809,49 +1892,18 @@ mod test {
     #[tokio::test]
     async fn test_core_propose_once_receiving_a_quorum() {
         telemetry_subscribers::init_for_testing();
-        let (context, mut key_pairs) = Context::new_for_test(4);
-        let context = Arc::new(context);
-
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-
-        let block_manager = BlockManager::new(
+        let (context, _key_pairs) = Context::new_for_test(4);
+        let mut core_fixture = CoreTextFixture::new(
             context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
-
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        // Need at least one subscriber to the block broadcast channel.
-        let _block_receiver = signal_receivers.block_broadcast_receiver();
-
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
-        let commit_observer = CommitObserver::new(
-            context.clone(),
-            commit_consumer,
-            dag_state.clone(),
-            store.clone(),
-            leader_schedule.clone(),
-        );
-
-        let mut core = Core::new(
-            context.clone(),
-            leader_schedule,
-            transaction_consumer,
-            block_manager,
-            true,
-            commit_observer,
-            signals,
-            key_pairs.remove(context.own_index.value()).1,
-            dag_state.clone(),
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
             false,
-        );
+        )
+        .await;
+        let transaction_certifier = &core_fixture.transaction_certifier;
+        let store = &core_fixture.store;
+        let dag_state = &core_fixture.dag_state;
+        let core = &mut core_fixture.core;
 
         let mut expected_ancestors = BTreeSet::new();
 
@@ -1861,6 +1913,7 @@ mod test {
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // add blocks to trigger proposal.
+        transaction_certifier.add_voted_blocks(vec![(block_1.clone(), vec![])]);
         _ = core.add_blocks(vec![block_1]);
 
         assert_eq!(core.last_proposed_round(), 1);
@@ -1869,12 +1922,13 @@ mod test {
         assert!(core.try_propose(false).unwrap().is_none());
 
         // Adding another block now forms a quorum for round 1, so block at round 2 will proposed
-        let block_3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
-        expected_ancestors.insert(block_3.reference());
+        let block_2 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        expected_ancestors.insert(block_2.reference());
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // add blocks to trigger proposal.
-        _ = core.add_blocks(vec![block_3]);
+        transaction_certifier.add_voted_blocks(vec![(block_2.clone(), vec![1, 4])]);
+        _ = core.add_blocks(vec![block_2.clone()]);
 
         assert_eq!(core.last_proposed_round(), 2);
 
@@ -1886,23 +1940,30 @@ mod test {
         let ancestors = ancestors.iter().cloned().collect::<BTreeSet<_>>();
         assert_eq!(ancestors, expected_ancestors);
 
+        let transaction_votes = proposed_block.transaction_votes();
+        assert_eq!(transaction_votes.len(), 1);
+        let transaction_vote = transaction_votes.first().unwrap();
+        assert_eq!(transaction_vote.block_ref, block_2.reference());
+        assert_eq!(transaction_vote.rejects, vec![1, 4]);
+
+        // Flush the DAG state to storage.
+        dag_state.write().flush();
+
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
         assert_eq!(dag_state.read().last_commit_index(), 0);
     }
 
-    #[rstest]
     #[tokio::test]
-    async fn test_commit_and_notify_for_block_status(#[values(0, 2)] gc_depth: u32) {
+    async fn test_commit_and_notify_for_block_status() {
         telemetry_subscribers::init_for_testing();
         let (mut context, mut key_pairs) = Context::new_for_test(4);
+        const GC_DEPTH: u32 = 2;
 
-        if gc_depth > 0 {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -1956,24 +2017,29 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
+
+        // Flush the DAG state to storage.
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -1982,12 +2048,19 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier,
             block_manager,
             true,
             commit_observer,
@@ -1995,7 +2068,11 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
+
+        // Flush the DAG state to storage.
+        dag_state.write().flush();
 
         let last_commit = store
             .read_last_commit()
@@ -2007,19 +2084,13 @@ mod test {
         while let Some(result) = block_status_subscriptions.next().await {
             let status = result.unwrap();
 
-            // If gc is enabled, then we expect some blocks to be garbage collected.
-            if gc_depth > 0 {
-                match status {
-                    BlockStatus::Sequenced(block_ref) => {
-                        assert!(block_ref.round == 1 || block_ref.round == 5);
-                    }
-                    BlockStatus::GarbageCollected(block_ref) => {
-                        assert!(block_ref.round == 2 || block_ref.round == 3);
-                    }
+            match status {
+                BlockStatus::Sequenced(block_ref) => {
+                    assert!(block_ref.round == 1 || block_ref.round == 5);
                 }
-            } else {
-                // otherwise all of them should be committed
-                assert!(matches!(status, BlockStatus::Sequenced(_)));
+                BlockStatus::GarbageCollected(block_ref) => {
+                    assert!(block_ref.round == 2 || block_ref.round == 3);
+                }
             }
         }
     }
@@ -2065,14 +2136,15 @@ mod test {
                 D -> [*],
             },
             Round 5 : { 
+                A -> [*],
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
             Round 6 : { 
-                B -> [A6, B6, C6, D1],
-                C -> [A6, B6, C6, D1],
-                D -> [A6, B6, C6, D1],
+                B -> [A5, B5, C5, D1],
+                C -> [A5, B5, C5, D1],
+                D -> [A5, B5, C5, D1],
             },
             Round 7 : { 
                 B -> [*],
@@ -2106,24 +2178,29 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
+
+        // Flush the DAG state to storage.
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -2132,12 +2209,18 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             true,
             commit_observer,
@@ -2145,6 +2228,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
         // We set the last known round to 4 so we avoid creating new blocks until then - otherwise it will crash as the already created DAG contains blocks for this
         // authority.
@@ -2155,14 +2239,16 @@ mod test {
         // However, our threshold clock is now at round 6 as the last quorum that we managed to process was the round 5.
         // As commits happen blocks of later rounds get accepted and more leaders get committed. Eventually the leader of round 9 gets committed and gc is moved to 9 - 2 = 7.
         // If our node attempts to produce a block for the threshold clock 6, that will make the acceptance checks fail as now gc has moved far past this round.
-        core.add_blocks(
-            dag_builder
-                .blocks(1..=11)
-                .into_iter()
-                .filter(|b| !(b.round() == 1 && b.author() == AuthorityIndex::new_for_test(3)))
-                .collect(),
-        )
-        .expect("Should not fail");
+        let mut all_blocks = dag_builder.blocks(1..=11);
+        all_blocks.sort_by_key(|b| b.round());
+        let voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)> =
+            all_blocks.iter().map(|b| (b.clone(), vec![])).collect();
+        transaction_certifier.add_voted_blocks(voted_blocks);
+        let blocks: Vec<VerifiedBlock> = all_blocks
+            .into_iter()
+            .filter(|b| !(b.round() == 1 && b.author() == AuthorityIndex::new_for_test(3)))
+            .collect();
+        core.add_blocks(blocks).expect("Should not fail");
 
         assert_eq!(core.last_proposed_round(), 12);
     }
@@ -2179,11 +2265,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
@@ -2192,22 +2274,30 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             true,
             commit_observer,
@@ -2215,6 +2305,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
 
         // No new block should have been produced
@@ -2234,7 +2325,24 @@ mod test {
         let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
 
         // Process all the blocks
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
+
+        core.round_tracker.write().update_from_probe(
+            vec![
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+            ],
+            vec![
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+            ],
+        );
 
         // Try to propose - no block should be produced.
         assert!(core.try_propose(true).unwrap().is_none());
@@ -2277,7 +2385,7 @@ mod test {
 
         let (context, _) = Context::new_for_test(4);
         // Create the cores for all authorities
-        let mut all_cores = create_cores(context, vec![1, 1, 1, 1]);
+        let mut all_cores = create_cores(context, vec![1, 1, 1, 1]).await;
 
         // Create blocks for rounds 1..=3 from all Cores except last Core of authority 3, so we miss the block from it. As
         // it will be the leader of round 3 then no-one will be able to progress to round 4 unless we explicitly trigger
@@ -2293,10 +2401,7 @@ mod test {
             for core_fixture in cores.iter_mut() {
                 wait_blocks(&last_round_blocks, &core_fixture.core.context).await;
 
-                core_fixture
-                    .core
-                    .add_blocks(last_round_blocks.clone())
-                    .unwrap();
+                core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
 
                 // Only when round > 1 and using non-genesis parents.
                 if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
@@ -2326,10 +2431,7 @@ mod test {
         for core_fixture in cores.iter_mut() {
             wait_blocks(&last_round_blocks, &core_fixture.core.context).await;
 
-            core_fixture
-                .core
-                .add_blocks(last_round_blocks.clone())
-                .unwrap();
+            core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
             assert!(core_fixture.core.try_propose(false).unwrap().is_none());
         }
 
@@ -2338,6 +2440,9 @@ mod test {
         for core_fixture in cores.iter_mut() {
             assert!(core_fixture.core.new_block(4, true).unwrap().is_some());
             assert_eq!(core_fixture.core.last_proposed_round(), 4);
+
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -2379,13 +2484,16 @@ mod test {
             sleep(wait_time).await;
         }
 
-        let (context, _) = Context::new_for_test(4);
+        let (mut context, _) = Context::new_for_test(5);
+        context
+            .protocol_config
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
         // Create the cores for all authorities
-        let mut all_cores = create_cores(context, vec![1, 1, 1, 1]);
+        let mut all_cores = create_cores(context, vec![1, 1, 1, 1, 1]).await;
         let (_last_core, cores) = all_cores.split_last_mut().unwrap();
 
-        // Create blocks for rounds 1..=30 from all Cores except last Core of authority 3.
+        // Create blocks for rounds 1..=30 from all Cores except last Core of authority 4.
         let mut last_round_blocks = Vec::<VerifiedBlock>::new();
         for round in 1..=30 {
             let mut this_round_blocks = Vec::new();
@@ -2393,10 +2501,24 @@ mod test {
             for core_fixture in cores.iter_mut() {
                 wait_blocks(&last_round_blocks, &core_fixture.core.context).await;
 
-                core_fixture
-                    .core
-                    .add_blocks(last_round_blocks.clone())
-                    .unwrap();
+                core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
+
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
+                    ],
+                    vec![
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
+                    ],
+                );
 
                 // Only when round > 1 and using non-genesis parents.
                 if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
@@ -2428,10 +2550,26 @@ mod test {
             for core_fixture in all_cores.iter_mut() {
                 wait_blocks(&last_round_blocks, &core_fixture.core.context).await;
 
-                core_fixture
-                    .core
-                    .add_blocks(last_round_blocks.clone())
-                    .unwrap();
+                core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
+
+                // Don't update probed rounds for authority 3 so it will remain
+                // excluded
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
+                    ],
+                    vec![
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
+                    ],
+                );
 
                 // Only when round > 1 and using non-genesis parents.
                 if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
@@ -2451,14 +2589,14 @@ mod test {
                 this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
 
                 for block in this_round_blocks.iter() {
-                    if block.author() != AuthorityIndex::new_for_test(3) {
-                        // Assert blocks created include only 3 ancestors per block as one
+                    if block.author() != AuthorityIndex::new_for_test(4) {
+                        // Assert blocks created include only 4 ancestors per block as one
                         // should be excluded
-                        assert_eq!(block.ancestors().len(), 3);
+                        assert_eq!(block.ancestors().len(), 4);
                     } else {
                         // Authority 3 is the low scoring authority so it will still include
                         // its own blocks.
-                        assert_eq!(block.ancestors().len(), 4);
+                        assert_eq!(block.ancestors().len(), 5);
                     }
                 }
             }
@@ -2470,7 +2608,10 @@ mod test {
     #[tokio::test]
     async fn test_smart_ancestor_selection() {
         telemetry_subscribers::init_for_testing();
-        let (context, mut key_pairs) = Context::new_for_test(7);
+        let (mut context, mut key_pairs) = Context::new_for_test(7);
+        context
+            .protocol_config
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context.with_parameters(Parameters {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
@@ -2479,11 +2620,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
                 .with_num_commits_per_schedule(10),
@@ -2491,23 +2628,31 @@ mod test {
 
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             true,
             commit_observer,
@@ -2515,6 +2660,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker.clone(),
         );
 
         // No new block should have been produced
@@ -2536,8 +2682,31 @@ mod test {
             .build();
         let blocks = builder.blocks(1..=12);
         // Process all the blocks
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         core.set_last_known_proposed_round(12);
+
+        round_tracker.write().update_from_probe(
+            vec![
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![0, 0, 0, 0, 0, 0, 0],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+            ],
+            vec![
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![0, 0, 0, 0, 0, 0, 0],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+                vec![12, 12, 12, 12, 12, 12, 12],
+            ],
+        );
 
         let block = core.try_propose(true).expect("No error").unwrap();
         assert_eq!(block.round(), 13);
@@ -2550,6 +2719,8 @@ mod test {
             .skip_block()
             .build();
         let blocks = builder.blocks(13..=14);
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
 
         // We now have triggered a leader schedule change so we should have
@@ -2560,6 +2731,7 @@ mod test {
 
         // Build blocks for a quorum of the network including the EXCLUDE authority (1)
         // which will trigger smart select and we will not propose a block
+        let round_14_ancestors = builder.last_ancestors.clone();
         builder
             .layer(15)
             .authorities(vec![
@@ -2578,6 +2750,8 @@ mod test {
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // Smart select should be triggered and no block should be proposed.
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 15);
 
@@ -2591,8 +2765,14 @@ mod test {
                 AuthorityIndex::new_for_test(4),
             ])
             .skip_block()
+            .override_last_ancestors(round_14_ancestors)
             .build();
         let blocks = builder.blocks(15..=15);
+        let round_15_ancestors: Vec<BlockRef> = blocks
+            .iter()
+            .filter(|block| block.round() == 15)
+            .map(|block| block.reference())
+            .collect();
         let included_block_references = iter::once(&core.last_proposed_block())
             .chain(blocks.iter())
             .filter(|block| block.author() != AuthorityIndex::new_for_test(1))
@@ -2600,6 +2780,8 @@ mod test {
             .collect::<Vec<_>>();
 
         // Have enough ancestor blocks to propose now.
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 16);
 
@@ -2636,11 +2818,14 @@ mod test {
                 AuthorityIndex::new_for_test(6),
             ])
             .skip_block()
+            .override_last_ancestors(round_15_ancestors)
             .build();
         let blocks = builder.blocks(16..=16);
         // Wait for leader timeout to force blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // Smart select should be triggered and no block should be proposed.
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 16);
 
@@ -2660,53 +2845,60 @@ mod test {
         assert_eq!(extended_block.block.ancestors().len(), 5);
         assert_eq!(extended_block.excluded_ancestors.len(), 0);
 
-        // Set quorum rounds for authority which will unlock the Excluded
-        // authority (1) and then we should be able to create a new layer of blocks
-        // which will then all be included as ancestors for the next proposal
-        core.set_propagation_delay_and_quorum_rounds(
-            0,
-            vec![
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-            ],
-            vec![
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-                (16, 16),
-            ],
-        );
-
+        // Excluded authority is locked until round 20, simulate enough rounds to
+        // unlock
         builder
-            .layer(17)
+            .layers(17..=22)
             .authorities(vec![AuthorityIndex::new_for_test(0)])
             .skip_block()
             .build();
-        let blocks = builder.blocks(17..=17);
+        let blocks = builder.blocks(17..=22);
+
+        // Simulate updating received and accepted rounds from prober.
+        // New quorum rounds for authority can then be computed which will unlock
+        // the Excluded authority (1) and then we should be able to create a new
+        // layer of blocks which will then all be included as ancestors for the
+        // next proposal
+        round_tracker.write().update_from_probe(
+            vec![
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+            ],
+            vec![
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+            ],
+        );
+
         let included_block_references = iter::once(&core.last_proposed_block())
             .chain(blocks.iter())
+            .filter(|block| block.round() == 22 || block.author() == core.context.own_index)
             .map(|block| block.reference())
             .collect::<Vec<_>>();
 
         // Have enough ancestor blocks to propose now.
         sleep(context.parameters.min_round_delay).await;
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().round(), 18);
+        assert_eq!(core.last_proposed_block().round(), 23);
 
         // Check that a new block has been proposed & signaled.
         let extended_block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(extended_block.block.round(), 18);
+        assert_eq!(extended_block.block.round(), 23);
         assert_eq!(extended_block.block.author(), core.context.own_index);
         assert_eq!(extended_block.block.ancestors().len(), 7);
         assert_eq!(extended_block.block.ancestors(), included_block_references);
@@ -2725,11 +2917,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
                 .with_num_commits_per_schedule(10),
@@ -2737,23 +2925,31 @@ mod test {
 
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             true,
             commit_observer,
@@ -2761,6 +2957,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
 
         // No new block should have been produced
@@ -2785,6 +2982,8 @@ mod test {
         let blocks = builder.blocks(1..=4);
 
         // Process all the blocks
+        transaction_certifier
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         core.set_last_known_proposed_round(3);
 
@@ -2811,11 +3010,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
@@ -2823,23 +3018,31 @@ mod test {
 
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             // Set to no subscriber exists initially.
             false,
@@ -2848,6 +3051,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker,
         );
 
         // There is no proposal during recovery because there is no subscriber.
@@ -2876,11 +3080,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
@@ -2889,22 +3089,30 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             // Set to no subscriber exists initially.
             false,
@@ -2913,6 +3121,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
+            round_tracker.clone(),
         );
 
         // There is no proposal during recovery because there is no subscriber.
@@ -2923,7 +3132,28 @@ mod test {
         );
 
         // Use a large propagation delay to disable proposing.
-        core.set_propagation_delay_and_quorum_rounds(1000, vec![], vec![]);
+        // This is done by accepting an own block at round 1000 to dag state and
+        // then simulating updating round tracker received rounds from probe where
+        // low quorum round for own index should get calculated to round 0.
+        let test_block = VerifiedBlock::new_for_test(TestBlock::new(1000, 0).build());
+        transaction_certifier.add_voted_blocks(vec![(test_block.clone(), vec![])]);
+        // Force accepting the block to dag state because its causal history is incomplete.
+        dag_state.write().accept_block(test_block);
+
+        round_tracker.write().update_from_probe(
+            vec![
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+            ],
+            vec![
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+            ],
+        );
 
         // Make propagation delay the only reason for not proposing.
         core.set_subscriber_exists(true);
@@ -2932,7 +3162,31 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Let Core know there is no propagation delay.
-        core.set_propagation_delay_and_quorum_rounds(0, vec![], vec![]);
+        // This is done by simulating updating round tracker recieved rounds from probe
+        // where low quorum round for own index should get calculated to round 1000.
+        round_tracker.write().update_from_probe(
+            vec![
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+            ],
+            vec![
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+                vec![1000, 1000, 1000, 1000],
+            ],
+        );
+
+        // Also add the necessary blocks from round 1000 so core will propose for
+        // round 1001
+        for author in 1..4 {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(1000, author).build());
+            transaction_certifier.add_voted_blocks(vec![(block.clone(), vec![])]);
+            // Force accepting the block to dag state because its causal history is incomplete.
+            dag_state.write().accept_block(block);
+        }
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());
@@ -2945,7 +3199,7 @@ mod test {
 
         let (context, _) = Context::new_for_test(4);
         // create the cores and their signals for all the authorities
-        let mut cores = create_cores(context, vec![1, 1, 1, 1]);
+        let mut cores = create_cores(context, vec![1, 1, 1, 1]).await;
 
         // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
         let mut last_round_blocks = Vec::new();
@@ -2958,10 +3212,22 @@ mod test {
             for core_fixture in &mut cores {
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
-                core_fixture
-                    .core
-                    .add_blocks(last_round_blocks.clone())
-                    .unwrap();
+                core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
+
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                );
 
                 // A "new round" signal should be received given that all the blocks of previous round have been processed
                 let new_round = receive(
@@ -3012,6 +3278,9 @@ mod test {
         }
 
         for core_fixture in cores {
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush();
+
             // Check commits have been persisted to store
             let last_commit = core_fixture
                 .store
@@ -3062,7 +3331,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_validate_certified_commits() {
+    async fn test_filter_new_commits() {
         telemetry_subscribers::init_for_testing();
 
         let (context, _key_pairs) = Context::new_for_test(4);
@@ -3072,7 +3341,7 @@ mod test {
         });
 
         let authority_index = AuthorityIndex::new_for_test(0);
-        let core = CoreTextFixture::new(context, vec![1, 1, 1, 1], authority_index, true);
+        let core = CoreTextFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
         let mut core = core.core;
 
         // No new block should have been produced
@@ -3119,7 +3388,7 @@ mod test {
             "Highest certified commit should older than the highest committed index."
         );
 
-        let certified_commits = core.validate_certified_commits(certified_commits).unwrap();
+        let certified_commits = core.filter_new_commits(certified_commits).unwrap();
 
         // No commits should be processed
         assert!(certified_commits.is_empty());
@@ -3133,9 +3402,7 @@ mod test {
             .map(|(_, c)| c.clone())
             .collect::<Vec<_>>();
 
-        let certified_commits = core
-            .validate_certified_commits(certified_commits.clone())
-            .unwrap();
+        let certified_commits = core.filter_new_commits(certified_commits.clone()).unwrap();
 
         // The certified commit of index 5 should be processed.
         assert_eq!(certified_commits.len(), 1);
@@ -3152,7 +3419,7 @@ mod test {
             .collect::<Vec<_>>();
 
         let err = core
-            .validate_certified_commits(certified_commits.clone())
+            .filter_new_commits(certified_commits.clone())
             .unwrap_err();
         match err {
             ConsensusError::UnexpectedCertifiedCommitIndex {
@@ -3174,7 +3441,7 @@ mod test {
         });
 
         let authority_index = AuthorityIndex::new_for_test(0);
-        let core = CoreTextFixture::new(context, vec![1, 1, 1, 1], authority_index, true);
+        let core = CoreTextFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
         let store = core.store.clone();
         let mut core = core.core;
 
@@ -3206,11 +3473,8 @@ mod test {
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
 
-        let last_commit = store
-            .read_last_commit()
-            .unwrap()
-            .expect("Last commit should be set");
-        assert_eq!(last_commit.reference().index, 4);
+        // Flush the DAG state to storage.
+        core.dag_state.write().flush();
 
         println!("Case 1. Provide no certified commits. No commit should happen.");
 
@@ -3239,6 +3503,9 @@ mod test {
         // The corresponding blocks of the certified commits should be accepted and stored before linearizing and committing the DAG.
         core.add_certified_commits(CertifiedCommits::new(certified_commits.clone(), vec![]))
             .expect("Should not fail");
+
+        // Flush the DAG state to storage.
+        core.dag_state.write().flush();
 
         let commits = store.scan_commits((6..=10).into()).unwrap();
 
@@ -3269,11 +3536,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
                 .with_num_commits_per_schedule(10),
@@ -3282,22 +3545,30 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
+            transaction_certifier.clone(),
             block_manager,
             true,
             commit_observer,
@@ -3305,6 +3576,7 @@ mod test {
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
+            round_tracker,
         );
 
         // No new block should have been produced
@@ -3394,10 +3666,10 @@ mod test {
             .protocol_config
             .set_mysticeti_num_leaders_per_round_for_testing(num_leaders_per_round);
         // create the cores and their signals for all the authorities
-        let mut cores = create_cores(context, vec![1, 1, 1, 1, 1, 1]);
+        let mut cores = create_cores(context, vec![1, 1, 1, 1, 1, 1]).await;
 
         // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
-        let mut last_round_blocks = Vec::new();
+        let mut last_round_blocks: Vec<VerifiedBlock> = Vec::new();
         for round in 1..=33 {
             let mut this_round_blocks = Vec::new();
 
@@ -3407,10 +3679,26 @@ mod test {
             for core_fixture in &mut cores {
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
-                core_fixture
-                    .core
-                    .add_blocks(last_round_blocks.clone())
-                    .unwrap();
+                core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
+
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                        vec![round, round, round, round, round, round],
+                    ],
+                );
 
                 // A "new round" signal should be received given that all the blocks of previous round have been processed
                 let new_round = receive(
@@ -3461,12 +3749,6 @@ mod test {
         }
 
         for core_fixture in cores {
-            // Check commits have been persisted to store
-            let last_commit = core_fixture
-                .store
-                .read_last_commit()
-                .unwrap()
-                .expect("last commit should be set");
             // There are 31 leader rounds with rounds completed up to and including
             // round 33. Round 33 blocks will only include their own blocks, so there
             // should only be 30 commits.
@@ -3482,6 +3764,16 @@ mod test {
                 Some(1) => 30,
                 _ => 31,
             };
+
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush();
+
+            // Check commits have been persisted to store
+            let last_commit = core_fixture
+                .store
+                .read_last_commit()
+                .unwrap()
+                .expect("last commit should be set");
             assert_eq!(last_commit.index(), expected_commit_count);
             let all_stored_commits = core_fixture
                 .store
@@ -3529,7 +3821,7 @@ mod test {
 
         let (context, _) = Context::new_for_test(4);
         // create the cores and their signals for all the authorities
-        let mut cores = create_cores(context, vec![1, 1, 1, 1]);
+        let mut cores = create_cores(context, vec![1, 1, 1, 1]).await;
 
         // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
         let mut last_round_blocks = Vec::new();
@@ -3542,10 +3834,22 @@ mod test {
             for core_fixture in &mut cores {
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
-                core_fixture
-                    .core
-                    .add_blocks(last_round_blocks.clone())
-                    .unwrap();
+                core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
+
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                );
 
                 // A "new round" signal should be received given that all the blocks of previous round have been processed
                 let new_round = receive(
@@ -3596,6 +3900,8 @@ mod test {
         }
 
         for core_fixture in cores {
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush();
             // Check commits have been persisted to store
             let last_commit = core_fixture
                 .store
@@ -3621,7 +3927,7 @@ mod test {
 
         let (context, _) = Context::new_for_test(4);
         // create the cores and their signals for all the authorities
-        let mut cores = create_cores(context, vec![1, 1, 1, 1]);
+        let mut cores = create_cores(context, vec![1, 1, 1, 1]).await;
 
         let mut last_round_blocks = Vec::new();
         let mut all_blocks = Vec::new();
@@ -3638,10 +3944,21 @@ mod test {
                 }
 
                 // try to propose to ensure that we are covering the case where we miss the leader authority 3
-                core_fixture
-                    .core
-                    .add_blocks(last_round_blocks.clone())
-                    .unwrap();
+                core_fixture.add_blocks(last_round_blocks.clone()).unwrap();
+                core_fixture.core.round_tracker.write().update_from_probe(
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                    vec![
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                        vec![round, round, round, round],
+                    ],
+                );
                 core_fixture.core.new_block(round, true).unwrap();
 
                 let block = core_fixture.core.last_proposed_block();
@@ -3662,7 +3979,7 @@ mod test {
         // Wait for min round delay to allow blocks to be proposed.
         sleep(default_params.min_round_delay).await;
         // add blocks to trigger proposal.
-        core_fixture.core.add_blocks(all_blocks).unwrap();
+        core_fixture.add_blocks(all_blocks).unwrap();
 
         // Assert that a block has been created for round 11 and it references to blocks of round 10 for the other peers, and
         // to round 1 for its own block (created after recovery).
@@ -3676,6 +3993,9 @@ mod test {
                 assert_eq!(block_ref.round, 10);
             }
         }
+
+        // Flush the DAG state to storage.
+        core_fixture.dag_state.write().flush();
 
         // Check commits have been persisted to store
         let last_commit = core_fixture
@@ -3695,14 +4015,15 @@ mod test {
     }
 
     #[tokio::test]
-    async fn try_decide_certified() {
+    async fn try_select_certified_leaders() {
         // GIVEN
         telemetry_subscribers::init_for_testing();
 
         let (context, _) = Context::new_for_test(4);
 
         let authority_index = AuthorityIndex::new_for_test(0);
-        let core = CoreTextFixture::new(context.clone(), vec![1, 1, 1, 1], authority_index, true);
+        let core =
+            CoreTextFixture::new(context.clone(), vec![1, 1, 1, 1], authority_index, true).await;
         let mut core = core.core;
 
         let mut dag_builder = DagBuilder::new(Arc::new(context.clone()));
@@ -3723,7 +4044,7 @@ mod test {
             .map(|(_, commit)| commit)
             .collect::<Vec<_>>();
 
-        let leaders = core.try_decide_certified(&mut certified_commits, limit);
+        let leaders = core.try_select_certified_leaders(&mut certified_commits, limit);
 
         // THEN
         assert_eq!(leaders.len(), 2);

@@ -86,7 +86,7 @@ public fun get<K: copy, V>(self: &VecMap<K, V>, key: &K): &V {
 /// Only works for a "copyable" value as references cannot be stored in `vector`.
 public fun try_get<K: copy, V: copy>(self: &VecMap<K, V>, key: &K): Option<V> {
     if (self.contains(key)) {
-        option::some(*get(self, key))
+        option::some(self[key])
     } else {
         option::none()
     }
@@ -98,13 +98,13 @@ public fun contains<K: copy, V>(self: &VecMap<K, V>, key: &K): bool {
 }
 
 /// Return the number of entries in `self`
-public fun size<K: copy, V>(self: &VecMap<K, V>): u64 {
+public fun length<K: copy, V>(self: &VecMap<K, V>): u64 {
     self.contents.length()
 }
 
 /// Return true if `self` has 0 elements, false otherwise
 public fun is_empty<K: copy, V>(self: &VecMap<K, V>): bool {
-    self.size() == 0
+    self.length() == 0
 }
 
 /// Destroy an empty map. Aborts if `self` is not empty
@@ -117,20 +117,13 @@ public fun destroy_empty<K: copy, V>(self: VecMap<K, V>) {
 /// Unpack `self` into vectors of its keys and values.
 /// The output keys and values are stored in insertion order, *not* sorted by key.
 public fun into_keys_values<K: copy, V>(self: VecMap<K, V>): (vector<K>, vector<V>) {
-    let VecMap { mut contents } = self;
-    // reverse the vector so the output keys and values will appear in insertion order
-    contents.reverse();
-    let mut i = 0;
-    let n = contents.length();
+    let VecMap { contents } = self;
     let mut keys = vector[];
     let mut values = vector[];
-    while (i < n) {
-        let Entry { key, value } = contents.pop_back();
+    contents.do!(|Entry { key, value }| {
         keys.push_back(key);
         values.push_back(value);
-        i = i + 1;
-    };
-    contents.destroy_empty();
+    });
     (keys, values)
 }
 
@@ -139,75 +132,59 @@ public fun into_keys_values<K: copy, V>(self: VecMap<K, V>): (vector<K>, vector<
 /// in `keys` is associated with the value at index i in `values`.
 /// The key value pairs are stored in insertion order (the original vectors ordering)
 /// and are *not* sorted.
-public fun from_keys_values<K: copy, V>(mut keys: vector<K>, mut values: vector<V>): VecMap<K, V> {
+public fun from_keys_values<K: copy, V>(keys: vector<K>, values: vector<V>): VecMap<K, V> {
     assert!(keys.length() == values.length(), EUnequalLengths);
-    keys.reverse();
-    values.reverse();
-    let mut map = empty();
-    while (keys.length() != 0) map.insert(keys.pop_back(), values.pop_back());
-    keys.destroy_empty();
-    values.destroy_empty();
-    map
+    let mut contents = VecMap { contents: vector[] };
+    keys.zip_do!(values, |key, value| contents.insert(key, value));
+    contents
 }
 
 /// Returns a list of keys in the map.
 /// Do not assume any particular ordering.
 public fun keys<K: copy, V>(self: &VecMap<K, V>): vector<K> {
-    let mut i = 0;
-    let n = self.contents.length();
-    let mut keys = vector[];
-    while (i < n) {
-        let entry = self.contents.borrow(i);
-        keys.push_back(entry.key);
-        i = i + 1;
-    };
-    keys
+    self.contents.map_ref!(|Entry { key, .. }| *key)
 }
 
 /// Find the index of `key` in `self`. Return `None` if `key` is not in `self`.
 /// Note that map entries are stored in insertion order, *not* sorted by key.
 public fun get_idx_opt<K: copy, V>(self: &VecMap<K, V>, key: &K): Option<u64> {
-    let mut i = 0;
-    let n = size(self);
-    while (i < n) {
-        if (&self.contents[i].key == key) {
-            return option::some(i)
-        };
-        i = i + 1;
-    };
-    option::none()
+    self.contents.find_index!(|Entry { key: k, .. }| k == key)
 }
 
 /// Find the index of `key` in `self`. Aborts if `key` is not in `self`.
 /// Note that map entries are stored in insertion order, *not* sorted by key.
 public fun get_idx<K: copy, V>(self: &VecMap<K, V>, key: &K): u64 {
-    let idx_opt = self.get_idx_opt(key);
-    assert!(idx_opt.is_some(), EKeyDoesNotExist);
-    idx_opt.destroy_some()
+    self.contents.find_index!(|Entry { key: k, .. }| k == key).destroy_or!(abort EKeyDoesNotExist)
 }
 
 /// Return a reference to the `idx`th entry of `self`. This gives direct access into the backing array of the map--use with caution.
 /// Note that map entries are stored in insertion order, *not* sorted by key.
-/// Aborts if `idx` is greater than or equal to `size(self)`
+/// Aborts if `idx` is greater than or equal to `self.length()`
 public fun get_entry_by_idx<K: copy, V>(self: &VecMap<K, V>, idx: u64): (&K, &V) {
-    assert!(idx < size(self), EIndexOutOfBounds);
+    assert!(idx < self.length(), EIndexOutOfBounds);
     let entry = &self.contents[idx];
     (&entry.key, &entry.value)
 }
 
 /// Return a mutable reference to the `idx`th entry of `self`. This gives direct access into the backing array of the map--use with caution.
 /// Note that map entries are stored in insertion order, *not* sorted by key.
-/// Aborts if `idx` is greater than or equal to `size(self)`
+/// Aborts if `idx` is greater than or equal to `self.length()`
 public fun get_entry_by_idx_mut<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (&K, &mut V) {
-    assert!(idx < size(self), EIndexOutOfBounds);
+    assert!(idx < self.length(), EIndexOutOfBounds);
     let entry = &mut self.contents[idx];
     (&entry.key, &mut entry.value)
 }
 
 /// Remove the entry at index `idx` from self.
-/// Aborts if `idx` is greater than or equal to `size(self)`
+/// Aborts if `idx` is greater than or equal to `self.length()`
 public fun remove_entry_by_idx<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (K, V) {
-    assert!(idx < size(self), EIndexOutOfBounds);
+    assert!(idx < self.length(), EIndexOutOfBounds);
     let Entry { key, value } = self.contents.remove(idx);
     (key, value)
+}
+
+#[deprecated(note = b"Renamed to `length` for consistency.")]
+/// Return the number of entries in `self`
+public fun size<K: copy, V>(self: &VecMap<K, V>): u64 {
+    self.contents.length()
 }

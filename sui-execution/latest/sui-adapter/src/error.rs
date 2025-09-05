@@ -4,28 +4,18 @@
 use move_binary_format::{
     errors::{Location, VMError},
     file_format::FunctionDefinitionIndex,
-    CompiledModule,
 };
 use move_core_types::{
     language_storage::ModuleId,
-    resolver::ModuleResolver,
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_runtime::shared::types::VersionId;
-use sui_protocol_config::ProtocolConfig;
-use sui_types::{base_types::ObjectID, error::ExecutionError, Identifier};
-use sui_types::{
-    execution_config_utils::to_binary_config,
-    execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt},
-};
+use sui_types::error::ExecutionError;
+use sui_types::execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt};
 
-use crate::linkage_resolution::ResolvedLinkage;
-
-pub(crate) fn convert_vm_error(
+pub(crate) fn convert_vm_error_impl(
     error: VMError,
-    resolution_linkage: &ResolvedLinkage,
-    state_view: &impl ModuleResolver,
-    protocol_config: &ProtocolConfig,
+    abort_module_id_relocation_fn: &impl Fn(&ModuleId) -> ModuleId,
+    function_name_resolution_fn: &impl Fn(&ModuleId, FunctionDefinitionIndex) -> Option<String>,
 ) -> ExecutionError {
     let kind = match (error.major_status(), error.sub_status(), error.location()) {
         (StatusCode::EXECUTED, _, _) => {
@@ -39,33 +29,14 @@ pub(crate) fn convert_vm_error(
             ExecutionFailureStatus::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-            let version_id = resolution_linkage
-                .linkage
-                .get(&ObjectID::from(*id.address()))
-                .map(|a| **a);
-
-            let abort_location_id = if protocol_config.resolve_abort_locations_to_package_id() {
-                version_id.unwrap_or_else(|| *id.address())
-            } else {
-                *id.address()
-            };
-
-            let module_id = ModuleId::new(abort_location_id, id.name().to_owned());
+            let abort_location_id = abort_module_id_relocation_fn(id);
             let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
-            let function_name = version_id.and_then(|version_id| {
-                load_module_function_name(
-                    version_id,
-                    id.name().to_owned(),
-                    FunctionDefinitionIndex(function),
-                    state_view,
-                    protocol_config,
-                )
-            });
+            let function_name = function_name_resolution_fn(id, FunctionDefinitionIndex(function));
             ExecutionFailureStatus::MoveAbort(
                 MoveLocation {
-                    module: module_id,
+                    module: abort_location_id,
                     function,
                     instruction,
                     function_name,
@@ -85,20 +56,8 @@ pub(crate) fn convert_vm_error(
                             "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
-                        let version_id = resolution_linkage
-                            .linkage
-                            .get(&ObjectID::from(*id.address()))
-                            .map(|a| **a);
-
-                        let function_name = version_id.and_then(|version_id| {
-                            load_module_function_name(
-                                version_id,
-                                id.name().to_owned(),
-                                FunctionDefinitionIndex(function),
-                                state_view,
-                                protocol_config,
-                            )
-                        });
+                        let function_name =
+                            function_name_resolution_fn(id, FunctionDefinitionIndex(function));
                         Some(MoveLocation {
                             module: id.clone(),
                             function,
@@ -118,25 +77,4 @@ pub(crate) fn convert_vm_error(
         },
     };
     ExecutionError::new_with_source(kind, error)
-}
-
-fn load_module_function_name(
-    package_version_id: VersionId,
-    module_name: Identifier,
-    function_index: FunctionDefinitionIndex,
-    state_view: &impl ModuleResolver,
-    protocol_config: &ProtocolConfig,
-) -> Option<String> {
-    state_view
-        .get_module(&ModuleId::new(package_version_id, module_name))
-        .ok()
-        .flatten()
-        .and_then(|m| {
-            CompiledModule::deserialize_with_config(&m, &to_binary_config(protocol_config)).ok()
-        })
-        .map(|module| {
-            let fdef = module.function_def_at(function_index);
-            let fhandle = module.function_handle_at(fdef.function);
-            module.identifier_at(fhandle.name).to_string()
-        })
 }

@@ -1,0 +1,289 @@
+// Move bytecode v6
+module 1.u8 {
+use 0000000000000000000000000000000000000000000000000000000000000001::string;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+public bitwise_not(Arg0: u8): u8 {
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: LdU8(255)
+	2: Xor
+	3: Ret
+}
+
+public max(Arg0: u8, Arg1: u8): u8 {
+L2:	loc0: u8
+L3:	loc1: u8
+L4:	loc2: u8
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: StLoc[3](loc1: u8)
+	2: MoveLoc[1](Arg1: u8)
+	3: StLoc[4](loc2: u8)
+	4: CopyLoc[3](loc1: u8)
+	5: CopyLoc[4](loc2: u8)
+	6: Gt
+	7: BrFalse(11)
+B1:
+	8: MoveLoc[3](loc1: u8)
+	9: StLoc[2](loc0: u8)
+	10: Branch(13)
+B2:
+	11: MoveLoc[4](loc2: u8)
+	12: StLoc[2](loc0: u8)
+B3:
+	13: MoveLoc[2](loc0: u8)
+	14: Ret
+}
+
+public min(Arg0: u8, Arg1: u8): u8 {
+L2:	loc0: u8
+L3:	loc1: u8
+L4:	loc2: u8
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: StLoc[3](loc1: u8)
+	2: MoveLoc[1](Arg1: u8)
+	3: StLoc[4](loc2: u8)
+	4: CopyLoc[3](loc1: u8)
+	5: CopyLoc[4](loc2: u8)
+	6: Lt
+	7: BrFalse(11)
+B1:
+	8: MoveLoc[3](loc1: u8)
+	9: StLoc[2](loc0: u8)
+	10: Branch(13)
+B2:
+	11: MoveLoc[4](loc2: u8)
+	12: StLoc[2](loc0: u8)
+B3:
+	13: MoveLoc[2](loc0: u8)
+	14: Ret
+}
+
+public diff(Arg0: u8, Arg1: u8): u8 {
+L2:	loc0: u8
+L3:	loc1: u8
+L4:	loc2: u8
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: StLoc[3](loc1: u8)
+	2: MoveLoc[1](Arg1: u8)
+	3: StLoc[4](loc2: u8)
+	4: CopyLoc[3](loc1: u8)
+	5: CopyLoc[4](loc2: u8)
+	6: Gt
+	7: BrFalse(13)
+B1:
+	8: MoveLoc[3](loc1: u8)
+	9: MoveLoc[4](loc2: u8)
+	10: Sub
+	11: StLoc[2](loc0: u8)
+	12: Branch(17)
+B2:
+	13: MoveLoc[4](loc2: u8)
+	14: MoveLoc[3](loc1: u8)
+	15: Sub
+	16: StLoc[2](loc0: u8)
+B3:
+	17: MoveLoc[2](loc0: u8)
+	18: Ret
+}
+
+public divide_and_round_up(Arg0: u8, Arg1: u8): u8 {
+L2:	loc0: u8
+L3:	loc1: u8
+L4:	loc2: u8
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: StLoc[3](loc1: u8)
+	2: MoveLoc[1](Arg1: u8)
+	3: StLoc[4](loc2: u8)
+	4: CopyLoc[3](loc1: u8)
+	5: CopyLoc[4](loc2: u8)
+	6: Mod
+	7: LdU8(0)
+	8: Eq
+	9: BrFalse(15)
+B1:
+	10: MoveLoc[3](loc1: u8)
+	11: MoveLoc[4](loc2: u8)
+	12: Div
+	13: StLoc[2](loc0: u8)
+	14: Branch(21)
+B2:
+	15: MoveLoc[3](loc1: u8)
+	16: MoveLoc[4](loc2: u8)
+	17: Div
+	18: LdU8(1)
+	19: Add
+	20: StLoc[2](loc0: u8)
+B3:
+	21: MoveLoc[2](loc0: u8)
+	22: Ret
+}
+
+public pow(Arg0: u8, Arg1: u8): u8 {
+L2:	loc0: u8
+L3:	loc1: u8
+L4:	loc2: u8
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: StLoc[2](loc0: u8)
+	2: MoveLoc[1](Arg1: u8)
+	3: StLoc[3](loc1: u8)
+	4: LdU8(1)
+	5: StLoc[4](loc2: u8)
+B1:
+	6: CopyLoc[3](loc1: u8)
+	7: LdU8(1)
+	8: Ge
+	9: BrFalse(35)
+B2:
+	10: Branch(11)
+B3:
+	11: CopyLoc[3](loc1: u8)
+	12: LdU8(2)
+	13: Mod
+	14: LdU8(0)
+	15: Eq
+	16: BrFalse(26)
+B4:
+	17: CopyLoc[2](loc0: u8)
+	18: MoveLoc[2](loc0: u8)
+	19: Mul
+	20: StLoc[2](loc0: u8)
+	21: MoveLoc[3](loc1: u8)
+	22: LdU8(2)
+	23: Div
+	24: StLoc[3](loc1: u8)
+	25: Branch(6)
+B5:
+	26: MoveLoc[4](loc2: u8)
+	27: CopyLoc[2](loc0: u8)
+	28: Mul
+	29: StLoc[4](loc2: u8)
+	30: MoveLoc[3](loc1: u8)
+	31: LdU8(1)
+	32: Sub
+	33: StLoc[3](loc1: u8)
+	34: Branch(6)
+B6:
+	35: MoveLoc[4](loc2: u8)
+	36: Ret
+}
+
+public sqrt(Arg0: u8): u8 {
+L1:	loc0: u16
+L2:	loc1: u16
+L3:	loc2: u8
+L4:	loc3: u16
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: StLoc[3](loc2: u8)
+	2: LdU16(256)
+	3: StLoc[1](loc0: u16)
+	4: LdU16(0)
+	5: StLoc[2](loc1: u16)
+	6: MoveLoc[3](loc2: u8)
+	7: CastU16
+	8: StLoc[4](loc3: u16)
+B1:
+	9: CopyLoc[1](loc0: u16)
+	10: LdU16(0)
+	11: Neq
+	12: BrFalse(42)
+B2:
+	13: Branch(14)
+B3:
+	14: CopyLoc[4](loc3: u16)
+	15: CopyLoc[2](loc1: u16)
+	16: CopyLoc[1](loc0: u16)
+	17: Add
+	18: Ge
+	19: BrFalse(33)
+B4:
+	20: MoveLoc[4](loc3: u16)
+	21: CopyLoc[2](loc1: u16)
+	22: CopyLoc[1](loc0: u16)
+	23: Add
+	24: Sub
+	25: StLoc[4](loc3: u16)
+	26: MoveLoc[2](loc1: u16)
+	27: LdU8(1)
+	28: Shr
+	29: CopyLoc[1](loc0: u16)
+	30: Add
+	31: StLoc[2](loc1: u16)
+	32: Branch(37)
+B5:
+	33: MoveLoc[2](loc1: u16)
+	34: LdU8(1)
+	35: Shr
+	36: StLoc[2](loc1: u16)
+B6:
+	37: MoveLoc[1](loc0: u16)
+	38: LdU8(2)
+	39: Shr
+	40: StLoc[1](loc0: u16)
+	41: Branch(9)
+B7:
+	42: MoveLoc[2](loc1: u16)
+	43: CastU8
+	44: Ret
+}
+
+public to_string(Arg0: u8): String {
+L1:	loc0: String
+L2:	loc1: vector<u8>
+L3:	loc2: u8
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: StLoc[3](loc2: u8)
+	2: CopyLoc[3](loc2: u8)
+	3: LdU8(0)
+	4: Eq
+	5: BrFalse(10)
+B1:
+	6: LdConst[0](vector<u8>: "0" ..)
+	7: Call string::utf8(vector<u8>): String
+	8: StLoc[1](loc0: String)
+	9: Branch(34)
+B2:
+	10: LdConst[1](vector<u8>: "" /..)
+	11: StLoc[2](loc1: vector<u8>)
+B3:
+	12: CopyLoc[3](loc2: u8)
+	13: LdU8(0)
+	14: Neq
+	15: BrFalse(29)
+B4:
+	16: MutBorrowLoc[2](loc1: vector<u8>)
+	17: LdU8(48)
+	18: CopyLoc[3](loc2: u8)
+	19: LdU8(10)
+	20: Mod
+	21: Add
+	22: CastU8
+	23: VecPushBack(0)
+	24: MoveLoc[3](loc2: u8)
+	25: LdU8(10)
+	26: Div
+	27: StLoc[3](loc2: u8)
+	28: Branch(12)
+B5:
+	29: MutBorrowLoc[2](loc1: vector<u8>)
+	30: Call vector::reverse<u8>(&mut vector<u8>)
+	31: MoveLoc[2](loc1: vector<u8>)
+	32: Call string::utf8(vector<u8>): String
+	33: StLoc[1](loc0: String)
+B6:
+	34: MoveLoc[1](loc0: String)
+	35: Ret
+}
+
+Constants [
+	0 => vector<u8>: "0" // interpreted as UTF8 string
+	1 => vector<u8>: "" // interpreted as UTF8 string
+]
+}

@@ -19,9 +19,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-use move_vm_profiler::{
-    profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
-};
 use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
@@ -115,8 +112,6 @@ impl Interpreter {
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
 
-        profile_open_frame!(gas_meter, function.pretty_string());
-
         if function.is_native() {
             for arg in args {
                 interpreter
@@ -140,8 +135,6 @@ impl Interpreter {
                     e.at_code_offset(function.index(), 0)
                         .finish(Location::Module(id.clone()))
                 })?;
-
-            profile_close_frame!(gas_meter, function.pretty_string());
 
             Ok(return_values.into_iter().collect())
         } else {
@@ -201,8 +194,6 @@ impl Interpreter {
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
 
-                    profile_close_frame!(gas_meter, current_frame.function.pretty_string());
-
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
                         current_frame = frame;
@@ -214,9 +205,6 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
-                    #[cfg(feature = "tracing")]
-                    let func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -234,7 +222,6 @@ impl Interpreter {
                     if func.is_native() {
                         self.call_native(&resolver, gas_meter, extensions, func, vec![])?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
-                        profile_close_frame!(gas_meter, func_name.clone());
                         continue;
                     }
                     let frame = self
@@ -255,9 +242,6 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
-                    #[cfg(feature = "tracing")]
-                    let func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -276,7 +260,6 @@ impl Interpreter {
                     if func.is_native() {
                         self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
-                        profile_close_frame!(gas_meter, func_name.clone());
 
                         continue;
                     }
@@ -1309,8 +1292,6 @@ impl Frame {
                     )
                 });
 
-                profile_open_instr!(gas_meter, format!("{:?}", instruction));
-
                 let r = Self::execute_instruction(
                     &mut self.pc,
                     &mut self.locals,
@@ -1321,8 +1302,6 @@ impl Frame {
                     gas_meter,
                     instruction,
                 )?;
-
-                profile_close_instr!(gas_meter, format!("{:?}", instruction));
 
                 match r {
                     InstrRet::Ok => (),

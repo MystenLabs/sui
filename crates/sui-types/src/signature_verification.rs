@@ -4,21 +4,24 @@
 use nonempty::NonEmpty;
 use shared_crypto::intent::Intent;
 
+use crate::base_types::SuiAddress;
 use crate::committee::EpochId;
-use crate::digests::ZKLoginInputsDigest;
+use crate::digests::{TransactionDigest, ZKLoginInputsDigest};
 use crate::error::{SuiError, SuiResult};
 use crate::signature::VerifyParams;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use lru::LruCache;
 use parking_lot::RwLock;
 use prometheus::IntCounter;
+use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
 
-// Cache up to 20000 verified certs. We will need to tune this number in the future - a decent
+// Cache up to this many verified certs. We will need to tune this number in the future - a decent
 // guess to start with is that it should be 10-20 times larger than peak transactions per second,
-// on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
-const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
+// on the assumption that we should see most certs twice within about 10-20 seconds at most:
+// Once via RPC, once via consensus.
+const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 100_000;
 
 pub struct VerifiedDigestCache<D> {
     inner: RwLock<LruCache<D, ()>>,
@@ -110,6 +113,7 @@ pub fn verify_sender_signed_data_message_signatures(
     current_epoch: EpochId,
     verify_params: &VerifyParams,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+    aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
 ) -> SuiResult {
     let intent_message = txn.intent_message();
     assert_eq!(intent_message.intent, Intent::sui_transaction());
@@ -120,8 +124,20 @@ pub fn verify_sender_signed_data_message_signatures(
         return Ok(());
     }
 
+    // Replace signers with their aliased addresses if they exist.
+    let mut signers: NonEmpty<_> = txn.intent_message().value.signers();
+    if let Some(aliased_addresses) = aliased_addresses {
+        for signer in signers.iter_mut() {
+            if let Some((aliased, allowed_digests)) = aliased_addresses.get(signer) {
+                let digest = intent_message.value.digest();
+                if allowed_digests.contains(&digest) {
+                    *signer = *aliased;
+                }
+            }
+        }
+    }
+
     // 2. One signature per signer is required.
-    let signers: NonEmpty<_> = txn.intent_message().value.signers();
     fp_ensure!(
         txn.inner().tx_signatures.len() == signers.len(),
         SuiError::SignerSignatureNumberMismatch {

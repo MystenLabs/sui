@@ -736,6 +736,7 @@ pub mod tests {
         let watermark = Watermark {
             hi_cp: 1,
             hi_cp_timestamp_ms: 1,
+            hi_tx: 1,
             epoch: 0,
             lo_cp: 0,
             lo_tx: 0,
@@ -874,7 +875,7 @@ pub mod tests {
             wallet.get_reference_gas_price().await.unwrap(),
         );
 
-        let tx = wallet.sign_transaction(&tx_data);
+        let tx = wallet.sign_transaction(&tx_data).await;
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         let signature_base64 = &signatures[0];
@@ -1146,6 +1147,10 @@ pub mod tests {
     #[tokio::test]
     pub async fn test_health_check() {
         let cluster = prep_executor_cluster().await;
+
+        cluster
+            .wait_for_checkpoint_catchup(6, Duration::from_secs(60))
+            .await;
 
         let url = format!(
             "http://{}:{}/health",

@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::{dry_run_or_execute_or_serialize, Opts, OptsWithGas, SuiClientCommandResult},
+    client_commands::{
+        dry_run_or_execute_or_serialize, GasDataArgs, SuiClientCommandResult, TxProcessingArgs,
+    },
     client_ptb::{
         ast::{ParsedProgram, Program},
-        builder::PTBBuilder,
-        error::{build_error_reports, PTBError},
+        builder::{resolve_package, PTBBuilder},
+        error::{build_error_reports, PTBError, Span},
         token::{Lexeme, Token},
     },
     displays::Pretty,
+    mvr_resolver::MvrResolver,
     sp,
 };
 
@@ -18,12 +21,15 @@ use anyhow::{anyhow, ensure, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::{wallet_context::WalletContext, SuiClient};
 use sui_types::{
+    base_types::ObjectID,
     digests::TransactionDigest,
     gas::GasCostSummary,
+    move_package::MovePackage,
     transaction::{ProgrammableTransaction, TransactionKind},
 };
 
@@ -44,6 +50,28 @@ pub struct Summary {
     pub digest: TransactionDigest,
     pub status: SuiExecutionStatus,
     pub gas_cost: GasCostSummary,
+}
+
+/// An enum holding either an account address or a move package information. The Move Package data
+/// is used to resolve the origin id for a typetag, in the `PTBBuilder`.
+#[derive(Clone, Debug)]
+pub enum AddressData {
+    /// The account address
+    AccountAddress(AccountAddress),
+    /// The MovePackage itself and the TypeOrigin table in a (module, type) -> origin ID map.
+    MovePackage((MovePackage, BTreeMap<(String, String), ObjectID>)),
+}
+
+impl AddressData {
+    /// Return the account address
+    pub fn address(&self) -> Option<AccountAddress> {
+        match self {
+            AddressData::AccountAddress(account_address) => Some(*account_address),
+            AddressData::MovePackage((pkg, _)) => {
+                AccountAddress::from_bytes(pkg.id().into_bytes()).ok()
+            }
+        }
+    }
 }
 
 impl PTB {
@@ -101,7 +129,37 @@ impl PTB {
 
         let client = context.get_client().await?;
 
-        let (res, warnings) = Self::build_ptb(program, context, client).await;
+        let mut starting_addresses: BTreeMap<String, AddressData> = context
+            .config
+            .keystore
+            .addresses_with_alias()
+            .into_iter()
+            .map(|(sa, alias)| {
+                (
+                    alias.alias.clone(),
+                    AddressData::AccountAddress(AccountAddress::from(*sa)),
+                )
+            })
+            .collect();
+
+        let mvr_names = program_metadata.mvr_names.clone();
+        let mvr_resolver = MvrResolver {
+            names: program_metadata.mvr_names.into_keys().collect(),
+        };
+        if mvr_resolver.should_resolve() {
+            let resolved = mvr_resolver.resolve_names(client.read_api()).await?;
+            let mut mvr_data: BTreeMap<String, AddressData> = BTreeMap::new();
+            for (name, package_id) in resolved.resolution {
+                let span = mvr_names.get(&name).unwrap_or(&Span { start: 0, end: 0 });
+                let pkg = resolve_package(client.read_api(), package_id.package_id, *span).await?;
+                let type_origin_id_map = pkg.type_origin_map();
+                mvr_data.insert(name, AddressData::MovePackage((pkg, type_origin_id_map)));
+            }
+
+            starting_addresses.extend(mvr_data);
+        }
+
+        let (res, warnings) = Self::build_ptb(program, starting_addresses, client.clone()).await;
 
         // Render warnings
         if !warnings.is_empty() {
@@ -125,19 +183,18 @@ impl PTB {
             Ok(x) => x,
         };
 
-        // get all the metadata needed for executing the PTB: sender, gas, signing tx
-        let gas = program_metadata.gas_object_id.map(|x| x.value);
+        let gas: Vec<_> = program_metadata
+            .gas_object_ids
+            .into_iter()
+            .flatten()
+            .map(|x| x.value)
+            .collect();
 
         // the sender is the gas object if gas is provided, otherwise the active address
-        let sender = match gas {
-            Some(gas) => context
-                .get_object_owner(&gas)
-                .await
-                .map_err(|_| anyhow!("Could not find owner for gas object ID"))?,
-            None => context
-                .config
-                .active_address
-                .ok_or_else(|| anyhow!("No active address, cannot execute PTB"))?,
+        let sender = if let Some(sender) = program_metadata.sender {
+            sender.value.into_inner().into()
+        } else {
+            context.infer_sender(&gas).await?
         };
 
         // build the tx kind
@@ -146,30 +203,41 @@ impl PTB {
             commands: ptb.commands,
         });
 
-        let opts = OptsWithGas {
-            gas: program_metadata.gas_object_id.map(|x| x.value),
-            rest: Opts {
-                dry_run: program_metadata.dry_run_set,
-                dev_inspect: program_metadata.dev_inspect_set,
-                gas_budget: program_metadata.gas_budget.map(|x| x.value),
-                serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
-                serialize_signed_transaction: program_metadata.serialize_signed_set,
-            },
+        let gas_data = GasDataArgs {
+            gas_budget: program_metadata.gas_budget.map(|x| x.value),
+            gas_price: program_metadata.gas_price.map(|x| x.value),
+            gas_sponsor: program_metadata
+                .gas_sponsor
+                .map(|x| x.value.into_inner().into()),
         };
 
+        let processing = TxProcessingArgs {
+            tx_digest: program_metadata.tx_digest_set,
+            dry_run: program_metadata.dry_run_set,
+            dev_inspect: program_metadata.dev_inspect_set,
+            serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
+            serialize_signed_transaction: program_metadata.serialize_signed_set,
+            sender: program_metadata.sender.map(|x| x.value.into_inner().into()),
+        };
+
+        let gas_payment = client.transaction_builder().input_refs(&gas).await?;
+
         let transaction_response = dry_run_or_execute_or_serialize(
-            sender, tx_kind, context, None, None, opts.gas, opts.rest,
+            sender,
+            tx_kind,
+            context,
+            gas_payment,
+            gas_data,
+            processing,
         )
         .await?;
 
         let transaction_response = match transaction_response {
-            SuiClientCommandResult::DryRun(_) => {
-                println!("{}", transaction_response);
-                return Ok(());
-            }
-            SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            SuiClientCommandResult::ComputeTransactionDigest(_)
+            | SuiClientCommandResult::DryRun(_)
+            | SuiClientCommandResult::SerializedUnsignedTransaction(_)
             | SuiClientCommandResult::SerializedSignedTransaction(_) => {
-                println!("{}", transaction_response);
+                println!("{transaction_response}");
                 return Ok(());
             }
             SuiClientCommandResult::TransactionBlock(response) => response,
@@ -219,27 +287,20 @@ impl PTB {
         Ok(())
     }
 
-    /// Exposed for testing
+    // Also used in testing, thus public
     pub async fn build_ptb(
         program: Program,
-        context: &WalletContext,
+        starting_addresses: BTreeMap<String, AddressData>,
         client: SuiClient,
     ) -> (
         Result<ProgrammableTransaction, Vec<PTBError>>,
         Vec<PTBError>,
     ) {
-        let starting_addresses = context
-            .config
-            .keystore
-            .addresses_with_alias()
-            .into_iter()
-            .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
-            .collect();
         let builder = PTBBuilder::new(starting_addresses, client.read_api());
         builder.build(program).await
     }
 
-    /// Exposed for testing
+    // Also used in testing, thus public
     pub fn parse_ptb_commands(args: Vec<String>) -> Result<ParsedProgram, Vec<PTBError>> {
         ProgramParser::new(args.iter().map(|s| s.as_str()))
             .map_err(|e| vec![e])
@@ -315,6 +376,16 @@ pub fn ptb_description() -> clap::Command {
             tool will first perform a dry run to estimate the gas cost, and then it will execute \
             the transaction. Please note that this incurs a small cost in performance due to the \
             additional dry run call."
+        ))
+        .arg(arg!(
+            --"gas-price" <MIST>
+            "An optional gas price for this PTB (in MIST). If not specified, the reference gas price \
+            is fetched from RPC."
+        ))
+        .arg(arg!(
+            --"gas-sponsor" <ADDRESS>
+            "An optional gas sponsor for this PTB. If not specified, the sender is used as the gas \
+            sponsor."
         ))
         .arg(arg!(
             --"make-move-vec" <MAKE_MOVE_VEC>
@@ -395,7 +466,15 @@ pub fn ptb_description() -> clap::Command {
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"preview"
-            "Preview the list of PTB transactions instead of executing them."
+            "Instead of executing the transaction, preview its PTB commands."
+        ))
+        .arg(arg!(
+            --"tx-digest"
+            "Instead of executing the transaction, print its digest."
+        ))
+        .arg(arg!(
+            --"sender" <SENDER>
+            "Set the sender to this address instead of the active address."
         ))
         .arg(arg!(
             --"serialize-unsigned-transaction"

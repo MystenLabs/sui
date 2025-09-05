@@ -1,0 +1,195 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-14:
+//# programmable --sender A --inputs object(1,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 4, lines 16-18:
+//# programmable --sender A --inputs object(1,0) 2
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 5, line 20:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 22:
+//# advance-epoch
+Epoch advanced: 1
+
+task 7, lines 24-26:
+//# programmable --sender A --inputs object(1,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 8, lines 28-30:
+//# programmable --sender A --inputs object(1,0) 2
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 9, line 32:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, lines 34-36:
+//# programmable --sender A --inputs object(1,0) 3
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 11, line 38:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 12, line 40:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 13, lines 42-63:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch0checkpoints": {
+      "totalCheckpoints": 4,
+      "checkpoints": {
+        "pageInfo": {
+          "startCursor": "MA==",
+          "endCursor": "Mw==",
+          "hasPreviousPage": false,
+          "hasNextPage": false
+        },
+        "edges": [
+          {
+            "node": {
+              "sequenceNumber": 0,
+              "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+              "epoch": {
+                "epochId": 0
+              }
+            }
+          },
+          {
+            "node": {
+              "sequenceNumber": 1,
+              "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
+              "epoch": {
+                "epochId": 0
+              }
+            }
+          },
+          {
+            "node": {
+              "sequenceNumber": 2,
+              "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+              "epoch": {
+                "epochId": 0
+              }
+            }
+          },
+          {
+            "node": {
+              "sequenceNumber": 3,
+              "digest": "BpHa37pAosru2sLoCShqJB9ya2QMAYApdwfnjZYzNZPR",
+              "epoch": {
+                "epochId": 0
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 14, lines 65-86:
+//# run-graphql --cursors 1
+Response: {
+  "data": {
+    "epoch0checkpointsAfterCursor1": {
+      "totalCheckpoints": 4,
+      "checkpoints": {
+        "pageInfo": {
+          "startCursor": "Mg==",
+          "endCursor": "Mw==",
+          "hasPreviousPage": true,
+          "hasNextPage": false
+        },
+        "edges": [
+          {
+            "node": {
+              "sequenceNumber": 2,
+              "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+              "epoch": {
+                "epochId": 0
+              }
+            }
+          },
+          {
+            "node": {
+              "sequenceNumber": 3,
+              "digest": "BpHa37pAosru2sLoCShqJB9ya2QMAYApdwfnjZYzNZPR",
+              "epoch": {
+                "epochId": 0
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 15, lines 88-109:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch0checkpointsAtEpoch2IsNone": {
+      "totalCheckpoints": 4,
+      "checkpoints": {
+        "pageInfo": {
+          "startCursor": null,
+          "endCursor": null,
+          "hasPreviousPage": false,
+          "hasNextPage": false
+        },
+        "edges": []
+      }
+    }
+  }
+}
+
+task 16, lines 111-132:
+//# run-graphql
+Response: {
+  "data": {
+    "nonexistentEpoch4checkpointsIsNone": null
+  }
+}

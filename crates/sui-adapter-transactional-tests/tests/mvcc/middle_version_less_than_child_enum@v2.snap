@@ -1,0 +1,145 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-76:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9317600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 78-82:
+//# programmable --sender A --inputs @A
+//> 0: test::m::new();
+//> TransferObjects([Result(0)], Input(0))
+// All 3 objects have version 2
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 84:
+//# view-object 2,0
+Owner: Object ID: ( _ )
+Version: 2
+Contents: sui::dynamic_field::Field<u64, test::m::Enum> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: 0u64,
+    value: test::m::Enum::V{
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: 0u64,
+    },
+}
+
+task 4, line 86:
+//# view-object 2,1
+Owner: Object ID: ( fake(2,2) )
+Version: 2
+Contents: sui::dynamic_field::Field<u64, test::m::Enum> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    name: 0u64,
+    value: test::m::Enum::V{
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: 0u64,
+    },
+}
+
+task 5, line 88:
+//# view-object 2,2
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
+
+task 6, lines 90-93:
+//# programmable --sender A --inputs object(2,2) 112
+//> test::m::set(Input(0), Input(1))
+// The middle object has version 2, while the root and modified leaf have version 3
+mutated: object(0,0), object(2,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 4294000,  storage_rebate: 4251060, non_refundable_storage_fee: 42940
+
+task 7, line 95:
+//# view-object 2,0
+Owner: Object ID: ( _ )
+Version: 3
+Contents: sui::dynamic_field::Field<u64, test::m::Enum> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: 0u64,
+    value: test::m::Enum::V{
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: 112u64,
+    },
+}
+
+task 8, line 97:
+//# view-object 2,1
+Owner: Object ID: ( fake(2,2) )
+Version: 2
+Contents: sui::dynamic_field::Field<u64, test::m::Enum> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    name: 0u64,
+    value: test::m::Enum::V{
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: 0u64,
+    },
+}
+
+task 9, lines 99-102:
+//# view-object 2,2
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
+
+task 10, lines 104-105:
+//# programmable --sender A --inputs object(2,2) 112
+//> test::m::check(Input(0), Input(1))
+mutated: object(0,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724

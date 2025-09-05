@@ -7,14 +7,11 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
     runtime_value as R, vm_status::StatusCode,
 };
+use move_vm_runtime::execution::values::{Struct, Vector};
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
-    execution::{
-        values::{Struct, Value, Vector},
-        Type,
-    },
+    execution::{values::Value, Type},
     natives::functions::NativeResult,
     pop_arg,
 };
@@ -32,7 +29,6 @@ pub struct ConfigReadSettingImplCostParams {
 }
 
 #[instrument(level = "trace", skip_all)]
-#[allow(deprecated)]
 pub fn read_setting_impl(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -46,7 +42,7 @@ pub fn read_setting_impl(
         config_read_setting_impl_cost_per_byte,
     } = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .config_read_setting_impl_cost_params
         .clone();
 
@@ -87,25 +83,19 @@ pub fn read_setting_impl(
             E_BCS_SERIALIZATION_FAILURE,
         ));
     };
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
-    let read_value_opt = {
-        let object_runtime: &mut ObjectRuntime = &mut context
-            .extensions_mut()
-            .get::<NativeContextMut<ObjectRuntime>>()
-            .borrow_mut();
-
-        consistent_value_before_current_epoch(
-            object_runtime,
-            field_setting_tag,
-            &field_setting_layout,
-            &setting_value_ty,
-            &setting_data_value_ty,
-            &value_ty,
-            config_addr,
-            name_df_addr,
-            current_epoch,
-        )?
-    };
+    let read_value_opt = consistent_value_before_current_epoch(
+        object_runtime,
+        field_setting_tag,
+        &field_setting_layout,
+        &setting_value_ty,
+        &setting_data_value_ty,
+        &value_ty,
+        config_addr,
+        name_df_addr,
+        current_epoch,
+    )?;
 
     native_charge_gas_early_exit!(
         context,
@@ -191,6 +181,6 @@ fn unpack_option(option: Value, type_param: &Type) -> PartialVMResult<Option<Val
 
 fn option_none(type_param: &Type) -> PartialVMResult<Value> {
     Ok(Value::struct_(Struct::pack(vec![Vector::empty(
-        type_param,
+        type_param.try_into()?,
     )?])))
 }

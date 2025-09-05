@@ -12,7 +12,7 @@ fun abort_expression() {
         10
     };
     abort 100 + 300;
-    abort if (condition) 100 else 200;
+    abort if (true) 100 else 200;
 
     abort if (condition) {
         100

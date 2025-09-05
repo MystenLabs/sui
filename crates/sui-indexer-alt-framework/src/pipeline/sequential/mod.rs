@@ -10,9 +10,8 @@ use tokio_util::sync::CancellationToken;
 use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
 
 use crate::{
-    db::{self, Db},
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
+    store::{CommitterWatermark, Store, TransactionalStore},
     types::full_checkpoint_content::CheckpointData,
 };
 
@@ -39,6 +38,8 @@ mod committer;
 /// checkpoints that can be received before the next checkpoint.
 #[async_trait::async_trait]
 pub trait Handler: Processor {
+    type Store: TransactionalStore;
+
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
@@ -58,7 +59,10 @@ pub trait Handler: Processor {
 
     /// Take a batch of values and commit them to the database, returning the number of rows
     /// affected.
-    async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> anyhow::Result<usize>;
+    async fn commit<'a>(
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize>;
 }
 
 /// Configuration for a sequential pipeline
@@ -98,9 +102,9 @@ pub struct SequentialConfig {
 /// channels close, or any of its independent tasks fail.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_watermark: Option<CommitterWatermark<'static>>,
+    initial_watermark: Option<CommitterWatermark>,
     config: SequentialConfig,
-    db: Db,
+    db: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
@@ -121,7 +125,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         initial_watermark,
         committer_rx,
         watermark_tx,
-        db.clone(),
+        db,
         metrics.clone(),
         cancel.clone(),
     );

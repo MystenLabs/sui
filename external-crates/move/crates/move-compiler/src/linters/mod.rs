@@ -7,7 +7,7 @@ use crate::{
     cfgir::visitor::CFGIRVisitor,
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
+        codes::{DiagnosticInfo, Severity, custom},
         warning_filters::WarningFilter,
     },
     typing::visitor::TypingVisitor,
@@ -175,7 +175,7 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
-    )
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";

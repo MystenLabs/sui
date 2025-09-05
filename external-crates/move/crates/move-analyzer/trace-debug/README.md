@@ -42,6 +42,8 @@ You can limit trace generation to the tests whose name contains a filter string 
 sui move test FILTER_STRING --trace-execution
 ```
 
+While this extension is geared towards being used with Sui, you can also use it to trace-debug programs written in other Move flavors. In particular, you can use it with "vanilla" Move flavor available via Move CLI (instead of Sui CLI). You need to build Move CLI with the `--features tracing` flag and, simlarly to how you generate traces with Sui CLI, execute    `move test --trace-execution` in the root directory of the package you want to trace-debug.
+
 ## Trace-debugging a test
 
 Once traces are generated, open a Move file containing the test you want to trace-debug and execute `Run->Start Debug` command. The first time you execute this command, you will have to choose the debugging configuration for Move files, of which there should be only one available. Then you will have to choose a test to trace-debug if there is more than one test in a file (otherwise a trace-debugging session for a single test will start automatically). You can switch between source (regular) view and the disassembly view (where you can inspect and step through disassembled bytecode for lower-level view for Move code execution) by using **Move: Toggle disassembly view** and **Move: Toggle source view** commands from VSCode's command palette.

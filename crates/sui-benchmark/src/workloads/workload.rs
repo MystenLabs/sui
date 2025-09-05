@@ -115,4 +115,5 @@ pub trait Workload<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<T>>;
+    fn name(&self) -> &str;
 }

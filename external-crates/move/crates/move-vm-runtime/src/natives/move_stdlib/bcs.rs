@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::values::{values_impl::Reference, Value},
+    execution::values::{Value, values_impl::Reference},
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::{
@@ -67,7 +67,7 @@ fn native_to_bytes(
     };
     // serialize value
     let val = ref_to_val.read_ref()?;
-    let serialized_value = match val.simple_serialize(&layout) {
+    let serialized_value = match val.typed_serialize(&layout) {
         Some(serialized_value) => serialized_value,
         None => {
             // If we run out of gas when charging for failure, we don't want the `OUT_OF_GAS` error

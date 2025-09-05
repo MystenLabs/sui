@@ -11,7 +11,7 @@ pub mod checked {
     use crate::temporary_store::TemporaryStore;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
-    use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
+    use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
     use sui_types::gas_model::gas_predicates::{
         charge_upgrades, dont_charge_budget_on_storage_oog,
     };
@@ -293,7 +293,18 @@ pub mod checked {
 
             if self.smashed_gas_coin.is_some() {
                 // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation() {
+                let is_move_abort = execution_result
+                    .as_ref()
+                    .err()
+                    .map(|err| {
+                        matches!(
+                            err.kind(),
+                            sui_types::execution_status::ExecutionFailureStatus::MoveAbort(_, _)
+                        )
+                    })
+                    .unwrap_or(false);
+                // bucketize computation cost
+                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort)) {
                     if execution_result.is_ok() {
                         *execution_result = Err(err);
                     }

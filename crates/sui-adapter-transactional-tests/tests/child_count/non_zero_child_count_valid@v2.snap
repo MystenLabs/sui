@@ -1,0 +1,77 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-45:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6976800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 47:
+//# run test::m::mint_and_share --sender A
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 49-53:
+//# view-object 2,1
+Owner: Shared( 2 )
+Version: 2
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 4, line 55:
+//# run test::m::mint --sender A
+created: object(4,0), object(4,1), object(4,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 57:
+//# run test::m::transfer --sender A --args object(4,2) @B
+mutated: object(0,0), object(4,2)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 6, lines 59-63:
+//# view-object 4,2
+Owner: Account Address ( B )
+Version: 4
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,2),
+        },
+    },
+}
+
+task 7, line 65:
+//# run test::m::mint --sender A
+created: object(7,0), object(7,1), object(7,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 67:
+//# transfer-object 7,1 --sender A --recipient B
+mutated: object(0,0), object(7,1)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 9, line 69:
+//# view-object 7,1
+Owner: Account Address ( B )
+Version: 6
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,1),
+        },
+    },
+}

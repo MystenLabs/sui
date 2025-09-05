@@ -32,9 +32,7 @@ use crate::authority_aggregator::{
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::{
-    spawn_monitored_task, GaugeGuard, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX,
-};
+use mysten_metrics::{spawn_monitored_task, GaugeGuard, TxType};
 use std::fmt::Write;
 use sui_macros::fail_point;
 use sui_types::error::{SuiError, SuiResult};
@@ -596,7 +594,11 @@ where
         } = task;
         let transaction = &request.transaction;
         let tx_digest = *transaction.digest();
-        let is_single_writer_tx = !transaction.contains_shared_object();
+        let tx_type = if transaction.is_consensus_tx() {
+            TxType::SingleWriter
+        } else {
+            TxType::SharedObject
+        };
 
         let timer = Instant::now();
         let (tx_cert, newly_formed) = match tx_cert {
@@ -679,17 +681,13 @@ where
             quorum_driver
                 .metrics
                 .settlement_finality_latency
-                .with_label_values(&[if is_single_writer_tx {
-                    TX_TYPE_SINGLE_WRITER_TX
-                } else {
-                    TX_TYPE_SHARED_OBJ_TX
-                }])
+                .with_label_values(&[tx_type.as_str()])
                 .observe(settlement_finality_latency);
             let is_out_of_expected_range =
                 settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1;
             debug!(
                 ?tx_digest,
-                ?is_single_writer_tx,
+                ?tx_type,
                 ?is_out_of_expected_range,
                 "QuorumDriver settlement finality latency: {:.3} seconds",
                 settlement_finality_latency
@@ -711,7 +709,7 @@ where
         let tx_digest = *request.transaction.digest();
         match err {
             None => {
-                debug!(?tx_digest, "Failed to {action} - Retrying");
+                info!(?tx_digest, "Failed to {action}: {err:?} - Retrying");
                 spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
                     request.clone(),
                     tx_cert,
@@ -727,7 +725,10 @@ where
                 // TODO: the txn can potentially be retried unlimited times, therefore, we need to bound the number
                 // of on going transactions in a quorum driver. When the limit is reached, the quorum driver should
                 // reject any new transaction requests.
-                debug!(?tx_digest, "Failed to {action} - Retrying");
+                info!(
+                    ?tx_digest,
+                    "Failed to {action} - Validator overloaded. Retrying"
+                );
                 spawn_monitored_task!(quorum_driver.backoff_and_enqueue(
                     request.clone(),
                     tx_cert,
@@ -737,7 +738,7 @@ where
                 ));
             }
             Some(qd_error) => {
-                debug!(?tx_digest, "Failed to {action}: {}", qd_error);
+                info!(?tx_digest, "Failed to {action}: {}", qd_error);
                 // non-retryable failure, this task reaches terminal state for now, notify waiter.
                 quorum_driver.notify(&request.transaction, &Err(qd_error), old_retry_times + 1);
             }

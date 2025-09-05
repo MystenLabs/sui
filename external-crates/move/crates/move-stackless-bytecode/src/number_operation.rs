@@ -33,11 +33,7 @@ impl NumOperation {
 
     /// Return the operation according to the partial order in NumOperation
     pub fn merge(&self, other: &NumOperation) -> NumOperation {
-        if self.ge(other) {
-            *self
-        } else {
-            *other
-        }
+        if self.ge(other) { *self } else { *other }
     }
 }
 

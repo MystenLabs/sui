@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use move_analyzer::analyzer;
+use std::collections::BTreeMap;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -13,5 +14,5 @@ fn main() {
     // For now, move-analyzer only responds to options built-in to clap,
     // such as `--help` or `--version`.
     Options::parse();
-    analyzer::run();
+    analyzer::run(BTreeMap::new());
 }

@@ -4,6 +4,7 @@
 
 extern crate core;
 
+pub mod accumulators;
 pub mod authority;
 pub mod authority_aggregator;
 pub mod authority_client;
@@ -20,7 +21,9 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;
+pub mod execution_scheduler;
 mod fallback_fetch;
+pub mod global_state_hasher;
 pub mod jsonrpc_index;
 pub mod metrics;
 pub mod mock_consensus;
@@ -34,16 +37,17 @@ pub mod rpc_index;
 pub mod safe_client;
 mod scoring_decision;
 mod stake_aggregator;
-pub mod state_accumulator;
+mod status_aggregator;
 pub mod storage;
 pub mod streamer;
 pub mod subscription_handler;
 pub mod test_utils;
 pub mod traffic_controller;
+pub mod transaction_driver;
 mod transaction_input_loader;
-mod transaction_manager;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
+pub mod validator_client_monitor;
 pub mod validator_tx_finalizer;
 pub mod verify_indexes;
 
@@ -68,6 +72,7 @@ mod pay_sui_tests;
 #[cfg(test)]
 #[path = "unit_tests/shared_object_deletion_tests.rs"]
 mod shared_object_deletion_tests;
+#[cfg(test)]
 pub mod test_authority_clients;
 #[cfg(test)]
 #[path = "unit_tests/transfer_to_object_tests.rs"]

@@ -39,6 +39,7 @@ B0:
 
 CompiledModule {
     version: 6,
+    publishable: true,
     self_module_handle_idx: ModuleHandleIndex(0),
     module_handles: [
         ModuleHandle {

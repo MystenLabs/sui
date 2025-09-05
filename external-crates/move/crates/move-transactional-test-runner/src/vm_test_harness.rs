@@ -3,18 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
+    framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
-    errors::{Location, VMError, VMResult},
     CompiledModule,
+    errors::{Location, VMError, VMResult},
 };
 use move_command_line_common::files::verify_and_create_named_address_mapping;
-use move_compiler::{editions::Edition, shared::PackagePaths, FullyCompiledProgram};
+use move_compiler::{PreCompiledProgramInfo, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
@@ -22,7 +22,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     runtime_value::MoveValue,
 };
-use move_stdlib::move_stdlib_named_addresses;
+use move_stdlib::named_addresses as move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
@@ -33,7 +33,7 @@ use move_vm_runtime::{
         vm_test_adapter::VMTestAdapter,
     },
     execution::vm::MoveVM,
-    natives::move_stdlib::{stdlib_native_functions, GasParameters},
+    natives::move_stdlib::{GasParameters, stdlib_native_functions},
     runtime::MoveRuntime,
     shared::{
         gas::GasMeter, linkage_context::LinkageContext, serialization::SerializedReturnValues,
@@ -164,7 +164,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
@@ -531,20 +531,22 @@ fn call_vm_function(
     result
 }
 
-pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: move_stdlib::move_stdlib_files(),
-            named_address_map: move_stdlib::move_stdlib_named_addresses(),
+            paths: move_stdlib::source_files(),
+            named_address_map: move_stdlib::named_addresses(),
         }],
         None,
+        None,
+        false,
         move_compiler::Flags::empty(),
         None,
     )
     .unwrap();
     match program_res {
-        Ok(stdlib) => stdlib,
+        Ok(modules_info) => modules_info,
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, errors)
@@ -555,9 +557,9 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
 static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     let (files, units_res) = move_compiler::Compiler::from_files(
         None,
-        move_stdlib::move_stdlib_files(),
+        move_stdlib::source_files(),
         vec![],
-        move_stdlib::move_stdlib_named_addresses(),
+        move_stdlib::named_addresses(),
     )
     .build()
     .unwrap();
@@ -586,6 +588,10 @@ fn test_vm_config() -> VMConfig {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SimpleRuntimeTestAdapter>(path, Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
-        .await
+    run_test_impl::<SimpleRuntimeTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        None,
+    )
+    .await
 }

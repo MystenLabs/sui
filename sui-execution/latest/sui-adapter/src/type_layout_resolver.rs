@@ -1,13 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 use crate::execution_value::SuiResolver;
 use crate::linkage_resolution::UnifiedLinkage;
 use crate::programmable_transactions::context::vm_for_struct_tags;
 use crate::programmable_transactions::datastore::SuiDataStore;
+||||||| 0f914b9774
+use crate::programmable_transactions::context::load_type_from_struct;
+use crate::programmable_transactions::linkage_view::LinkageView;
+use move_core_types::account_address::AccountAddress;
+=======
+use crate::data_store::cached_package_store::CachedPackageStore;
+use crate::data_store::legacy::linkage_view::LinkageView;
+use crate::programmable_transactions::context::load_type_from_struct;
+>>>>>>> origin/main
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
+<<<<<<< HEAD
 use move_vm_runtime::runtime::MoveRuntime;
+||||||| 0f914b9774
+use move_core_types::resolver::ResourceResolver;
+use move_vm_runtime::move_vm::MoveVM;
+=======
+use move_vm_runtime::move_vm::MoveVM;
+>>>>>>> origin/main
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiResult;
 use sui_types::execution::TypeLayoutStore;
@@ -29,7 +46,10 @@ struct NullSuiResolver<'state>(Box<dyn TypeLayoutStore + 'state>);
 
 impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
     pub fn new(vm: &'vm MoveRuntime, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
-        let resolver = NullSuiResolver(state_view);
+        let resolver = 
+        Box::new(CachedPackageStore::new(Box::new(
+                    NullSuiResolver(state_view),
+        )));
         // Since we do not include system packages by default, we can set this to false as no
         // loading will be done when creating the linkage resolver.
         let always_include_system_packages = false;

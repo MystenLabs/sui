@@ -15,6 +15,14 @@ pub fn local_committee_and_keys(
     epoch: Epoch,
     authorities_stake: Vec<Stake>,
 ) -> (Committee, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
+    local_committee_and_keys_with_test_options(epoch, authorities_stake, true)
+}
+
+pub fn local_committee_and_keys_with_test_options(
+    epoch: Epoch,
+    authorities_stake: Vec<Stake>,
+    unused_port: bool,
+) -> (Committee, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
     let mut authorities = vec![];
     let mut key_pairs = vec![];
     let mut rng = StdRng::from_seed([0; 32]);
@@ -24,7 +32,11 @@ pub fn local_committee_and_keys(
         let network_keypair = NetworkKeyPair::generate(&mut rng);
         authorities.push(Authority {
             stake,
-            address: get_available_local_address(),
+            address: if unused_port {
+                get_available_local_address()
+            } else {
+                "/ip4/127.0.0.1/udp/8081".parse().unwrap()
+            },
             hostname: format!("test_host_{i}").to_string(),
             authority_key: authority_keypair.public(),
             protocol_key: protocol_keypair.public(),

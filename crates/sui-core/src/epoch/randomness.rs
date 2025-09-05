@@ -10,6 +10,7 @@ use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
@@ -130,7 +131,7 @@ impl VersionedUsedProcessedMessages {
 // DKG protocol:
 // 1. This validator sends out a `Message` to all other validators.
 // 2. Once sufficient valid `Message`s are received from other validators via consensus and
-//    procesed, this validator sends out a `Confirmation` to all other validators.
+//    processed, this validator sends out a `Confirmation` to all other validators.
 // 3. Once sufficient `Confirmation`s are received from other validators via consensus and
 //    processed, they are combined to form a public VSS key and local private key shares.
 // 4. Randomness generation begins.
@@ -140,7 +141,7 @@ impl VersionedUsedProcessedMessages {
 // 2. This kicks off a process in RandomnessEventLoop to send partial signatures for the new
 //    round to all other validators.
 // 3. Once enough partial signautres for the round are collected, a RandomnessStateUpdate
-//    transaction is generated and injected into the TransactionManager.
+//    transaction is generated and injected into the ExecutionScheduler.
 // 4. Once the RandomnessStateUpdate transaction is seen in a certified checkpoint,
 //    `notify_randomness_in_checkpoint` is called to complete the round and stop sending
 //    partial signatures for it.
@@ -592,7 +593,9 @@ impl RandomnessManager {
             return Ok(());
         }
         let Some((_, party_id)) = self.authority_info.get(authority) else {
-            error!("random beacon: received DKG Message from unknown authority: {authority:?}");
+            debug_fatal!(
+                "random beacon: received DKG Message from unknown authority: {authority:?}"
+            );
             return Ok(());
         };
         if *party_id != msg.sender() {
@@ -815,7 +818,8 @@ mod tests {
         epoch::randomness::*,
         mock_consensus::with_block_status,
     };
-    use consensus_core::{BlockRef, BlockStatus};
+    use consensus_core::BlockStatus;
+    use consensus_types::block::BlockRef;
     use std::num::NonZeroUsize;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};
@@ -854,7 +858,12 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(with_block_status(BlockStatus::Sequenced(BlockRef::MIN))));
+                .returning(|_, _| {
+                    Ok((
+                        Vec::new(),
+                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
+                });
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
@@ -1002,9 +1011,10 @@ mod tests {
                     true
                 })
                 .returning(|_, _| {
-                    Ok(with_block_status(consensus_core::BlockStatus::Sequenced(
-                        BlockRef::MIN,
-                    )))
+                    Ok((
+                        Vec::new(),
+                        with_block_status(consensus_core::BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
                 });
 
             let state = TestAuthorityBuilder::new()

@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use move_coverage::coverage_map::{output_map_to_file, CoverageMap, TraceMap};
+use move_coverage::coverage_map::{CoverageMap, TraceMap, output_map_to_file};
 use std::path::Path;
 
 #[derive(Debug, Parser)]

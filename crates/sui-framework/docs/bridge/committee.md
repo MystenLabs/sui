@@ -33,6 +33,7 @@ title: Module `bridge::committee`
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
@@ -47,7 +48,7 @@ title: Module `bridge::committee`
 <b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="../sui/pay.md#sui_pay">sui::pay</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/priority_queue.md#sui_priority_queue">sui::priority_queue</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
@@ -299,29 +300,11 @@ title: Module `bridge::committee`
 ## Constants
 
 
-<a name="bridge_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH"></a>
+<a name="bridge_committee_ESignatureBelowThreshold"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>: u64 = 33;
-</code></pre>
-
-
-
-<a name="bridge_committee_ECommitteeAlreadyInitiated"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>: u64 = 7;
-</code></pre>
-
-
-
-<a name="bridge_committee_EDuplicatePubkey"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_EDuplicatePubkey">EDuplicatePubkey</a>: u64 = 8;
+<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>: u64 = 0;
 </code></pre>
 
 
@@ -331,15 +314,6 @@ title: Module `bridge::committee`
 
 
 <pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_EDuplicatedSignature">EDuplicatedSignature</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="bridge_committee_EInvalidPubkeyLength"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>: u64 = 6;
 </code></pre>
 
 
@@ -362,11 +336,11 @@ title: Module `bridge::committee`
 
 
 
-<a name="bridge_committee_ESenderIsNotInBridgeCommittee"></a>
+<a name="bridge_committee_EValidatorBlocklistContainsUnknownKey"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>: u64 = 9;
+<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_EValidatorBlocklistContainsUnknownKey">EValidatorBlocklistContainsUnknownKey</a>: u64 = 4;
 </code></pre>
 
 
@@ -380,20 +354,38 @@ title: Module `bridge::committee`
 
 
 
-<a name="bridge_committee_ESignatureBelowThreshold"></a>
+<a name="bridge_committee_EInvalidPubkeyLength"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>: u64 = 6;
 </code></pre>
 
 
 
-<a name="bridge_committee_EValidatorBlocklistContainsUnknownKey"></a>
+<a name="bridge_committee_ECommitteeAlreadyInitiated"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_EValidatorBlocklistContainsUnknownKey">EValidatorBlocklistContainsUnknownKey</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="bridge_committee_EDuplicatePubkey"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_EDuplicatePubkey">EDuplicatePubkey</a>: u64 = 8;
+</code></pre>
+
+
+
+<a name="bridge_committee_ESenderIsNotInBridgeCommittee"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>: u64 = 9;
 </code></pre>
 
 
@@ -403,6 +395,15 @@ title: Module `bridge::committee`
 
 
 <pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_SUI_MESSAGE_PREFIX">SUI_MESSAGE_PREFIX</a>: vector&lt;u8&gt; = vector[83, 85, 73, 95, 66, 82, 73, 68, 71, 69, 95, 77, 69, 83, 83, 65, 71, 69];
+</code></pre>
+
+
+
+<a name="bridge_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/committee.md#bridge_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>: u64 = 33;
 </code></pre>
 
 
@@ -505,7 +506,7 @@ title: Module `bridge::committee`
     system_state: &<b>mut</b> SuiSystemState,
     bridge_pubkey_bytes: vector&lt;u8&gt;,
     http_rest_url: vector&lt;u8&gt;,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     // We disallow registration after <a href="../bridge/committee.md#bridge_committee">committee</a> initiated in v1
     <b>assert</b>!(self.members.is_empty(), <a href="../bridge/committee.md#bridge_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>);
@@ -563,12 +564,12 @@ title: Module `bridge::committee`
     self: &<b>mut</b> <a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>,
     active_validator_voting_power: VecMap&lt;<b>address</b>, u64&gt;,
     min_stake_participation_percentage: u64,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> new_members = vec_map::empty();
     <b>let</b> <b>mut</b> stake_participation_percentage = 0;
-    <b>while</b> (i &lt; self.member_registrations.size()) {
+    <b>while</b> (i &lt; self.member_registrations.length()) {
         // retrieve registration
         <b>let</b> (_, registration) = self.member_registrations.get_entry_by_idx(i);
         // Find validator stake amount from system state
@@ -597,7 +598,7 @@ title: Module `bridge::committee`
         self.last_committee_update_epoch = ctx.epoch();
         emit(<a href="../bridge/committee.md#bridge_committee_CommitteeUpdateEvent">CommitteeUpdateEvent</a> {
             members: new_members,
-            stake_participation_percentage
+            stake_participation_percentage,
         })
     }
 }
@@ -632,7 +633,7 @@ title: Module `bridge::committee`
     <b>while</b> (list_idx &lt; list_len) {
         <b>let</b> target_address = &eth_addresses[list_idx];
         <b>let</b> <b>mut</b> found = <b>false</b>;
-        <b>while</b> (member_idx &lt; self.members.size()) {
+        <b>while</b> (member_idx &lt; self.members.length()) {
             <b>let</b> (pub_key, member) = self.members.get_entry_by_idx_mut(member_idx);
             <b>let</b> eth_address = <a href="../bridge/crypto.md#bridge_crypto_ecdsa_pub_key_to_eth_address">crypto::ecdsa_pub_key_to_eth_address</a>(pub_key);
             <b>if</b> (*target_address == eth_address) {
@@ -699,15 +700,19 @@ title: Module `bridge::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/committee.md#bridge_committee_update_node_url">update_node_url</a>(self: &<b>mut</b> <a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>, new_url: vector&lt;u8&gt;, ctx: &TxContext) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/committee.md#bridge_committee_update_node_url">update_node_url</a>(
+    self: &<b>mut</b> <a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>,
+    new_url: vector&lt;u8&gt;,
+    ctx: &TxContext,
+) {
     <b>let</b> <b>mut</b> idx = 0;
-    <b>while</b> (idx &lt; self.members.size()) {
+    <b>while</b> (idx &lt; self.members.length()) {
         <b>let</b> (_, member) = self.members.get_entry_by_idx_mut(idx);
         <b>if</b> (member.sui_address == ctx.sender()) {
             member.http_rest_url = new_url;
-            emit (<a href="../bridge/committee.md#bridge_committee_CommitteeMemberUrlUpdateEvent">CommitteeMemberUrlUpdateEvent</a> {
+            emit(<a href="../bridge/committee.md#bridge_committee_CommitteeMemberUrlUpdateEvent">CommitteeMemberUrlUpdateEvent</a> {
                 member: member.bridge_pubkey_bytes,
-                new_url
+                new_url,
             });
             <b>return</b>
         };
@@ -737,7 +742,7 @@ title: Module `bridge::committee`
 
 
 <pre><code><b>fun</b> <a href="../bridge/committee.md#bridge_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>, bridge_pubkey_bytes: vector&lt;u8&gt;) {
-    <b>let</b> <b>mut</b> count = self.member_registrations.size();
+    <b>let</b> <b>mut</b> count = self.member_registrations.length();
     // bridge_pubkey_bytes must be found once and once only
     <b>let</b> <b>mut</b> bridge_key_found = <b>false</b>;
     <b>while</b> (count &gt; 0) {

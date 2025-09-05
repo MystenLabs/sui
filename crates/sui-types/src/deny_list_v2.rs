@@ -240,7 +240,7 @@ fn read_config_setting<K, V>(
     cur_epoch: Option<EpochId>,
 ) -> Option<V>
 where
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+    K: Clone + MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
     V: Clone + Serialize + DeserializeOwned + fmt::Debug,
 {
     let setting: Setting<V> = {

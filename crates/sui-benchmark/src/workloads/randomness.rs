@@ -215,4 +215,8 @@ impl Workload<dyn Payload> for RandomnessWorkload {
             .collect();
         payloads
     }
+
+    fn name(&self) -> &str {
+        "Randomness"
+    }
 }

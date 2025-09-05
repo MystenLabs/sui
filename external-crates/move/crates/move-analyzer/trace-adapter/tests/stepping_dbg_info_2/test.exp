@@ -1,0 +1,20 @@
+current frame stack:
+  function: test (m.move:16)
+    scope 0 :
+  function: foo (m.move:11)
+    scope 0 :
+      p : 42
+      type: u64
+
+current frame stack:
+  function: test (m.move:17)
+    scope 0 :
+      _res : 84
+      type: u64
+
+current frame stack:
+  function: test (m.move:18)
+    scope 0 :
+      _res : 252
+      type: u64
+

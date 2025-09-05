@@ -1,0 +1,19 @@
+[package]
+name = "consensus-types"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+edition = "2021"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+fastcrypto.workspace = true
+serde.workspace = true
+base64.workspace = true
+consensus-config.workspace = true
+
+
+[dev-dependencies]

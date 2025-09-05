@@ -1,0 +1,77 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-39:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7478400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# run a::m::mint --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4157200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 43:
+//# run a::m::take_and_wrap --sender A --args object(2,0)
+created: object(3,1)
+mutated: object(0,0), object(2,0)
+unwrapped: object(3,0)
+deleted: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 4115628, non_refundable_storage_fee: 41572
+
+task 4, line 45:
+//# view-object 3,0
+Owner: Object ID: ( fake(3,1) )
+Version: 3
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 5, line 48:
+//# run a::m::mint --sender A
+created: object(5,0), object(5,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4157200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 50:
+//# run a::m::take_and_destroy --sender A --args object(5,0)
+mutated: object(0,0), object(5,0)
+deleted: object(5,1)
+unwrapped_then_deleted: object(_)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 4115628, non_refundable_storage_fee: 41572
+
+task 7, line 53:
+//# run a::m::mint --sender A
+created: object(7,0), object(7,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4157200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 56:
+//# run a::m::take_and_take --sender A --args object(7,0)
+mutated: object(0,0), object(7,0)
+unwrapped: object(8,0)
+deleted: object(7,1)
+gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 4115628, non_refundable_storage_fee: 41572
+
+task 9, line 58:
+//# view-object 7,0
+Owner: Account Address ( A )
+Version: 7
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}

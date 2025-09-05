@@ -18,7 +18,7 @@ use move_binary_format::file_format::{
     StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
 };
 use move_core_types::u256::U256;
-use rand::{rngs::StdRng, Rng};
+use rand::{Rng, rngs::StdRng};
 use tracing::{debug, error, warn};
 
 /// This type represents bytecode instructions that take a `LocalIndex`

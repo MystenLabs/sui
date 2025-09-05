@@ -6,7 +6,8 @@
 module random_nft::example;
 
 use std::string;
-use sui::{object::delete, random::{Random, new_generator}};
+use sui::object::delete;
+use sui::random::{Random, new_generator};
 
 const EInvalidParams: u64 = 0;
 
@@ -27,7 +28,6 @@ public struct MintingCapability has key {
     id: UID,
 }
 
-#[allow(unused_function)]
 fun init(ctx: &mut TxContext) {
     transfer::transfer(
         MintingCapability { id: object::new(ctx) },

@@ -13,14 +13,27 @@ use sui_indexer_alt::args::Command;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::setup_indexer;
-use sui_indexer_alt_framework::db::reset_database;
-use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::postgres::reset_database;
+use sui_indexer_alt_metrics::uptime;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio::fs;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
+
+static VERSION: &str = const_str::concat!(
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_PATCH"),
+    "-",
+    GIT_REVISION
+);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,7 +54,7 @@ async fn main() -> Result<()> {
             config,
         } => {
             let indexer_config = read_config(&config).await?;
-            info!("Starting indexer with config: {:?}", indexer_config);
+            info!("Starting indexer with config: {:#?}", indexer_config);
 
             let cancel = CancellationToken::new();
 
@@ -62,6 +75,11 @@ async fn main() -> Result<()> {
                     }
                 }
             });
+
+            metrics
+                .registry()
+                .register(uptime(VERSION)?)
+                .context("Failed to register uptime metric.")?;
 
             let h_indexer = setup_indexer(
                 database_url,
@@ -108,7 +126,7 @@ async fn main() -> Result<()> {
                 indexer_config =
                     indexer_config.merge(read_config(&file).await.with_context(|| {
                         format!("Failed to read configuration file: {}", file.display())
-                    })?);
+                    })?)?;
             }
 
             let config_toml = toml::to_string_pretty(&indexer_config)
@@ -125,7 +143,11 @@ async fn main() -> Result<()> {
             reset_database(
                 database_url,
                 db_args,
-                (!skip_migrations).then(|| Indexer::migrations(Some(&MIGRATIONS))),
+                if !skip_migrations {
+                    Some(&MIGRATIONS)
+                } else {
+                    None
+                },
             )
             .await?;
         }

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use crate::base_types::{AuthorityName, EpochId, ObjectRef, TransactionDigest};
 use crate::committee::StakeUnit;
@@ -43,6 +44,12 @@ pub enum QuorumDriverError {
     },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,
+    #[error("Transaction timed out before reaching finality. Last recorded retriable error: {last_error}")]
+    TimeoutBeforeFinalityWithErrors {
+        last_error: String,
+        attempts: u32,
+        timeout: Duration,
+    },
     #[error("Transaction failed to reach finality with transient error after {total_attempts} attempts.")]
     FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u32 },
     #[error("{NON_RECOVERABLE_ERROR_MSG}: {errors:?}.")]
@@ -60,6 +67,13 @@ pub enum QuorumDriverError {
         errors: GroupedErrors,
         retry_after_secs: u64,
     },
+
+    // Wrapped error from Transaction Driver.
+    #[error("Transaction processing failed. Retriable with new attempts: {retriable}. Details: {details}")]
+    TransactionFailed { retriable: bool, details: String },
+
+    #[error("Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results")]
+    PendingExecutionInTransactionOrchestrator,
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;

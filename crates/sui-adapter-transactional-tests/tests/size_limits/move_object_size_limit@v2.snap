@@ -1,0 +1,30 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-78:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9933200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 79-81:
+//# run Test::M1::transfer_object_with_size --args 256001 --sender A --gas-budget 10000000000000
+Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveObjectTooBig { object_size: 256001, max_object_size: 256000 }, source: None, command: None } }
+
+task 3, lines 82-84:
+//# run Test::M1::transfer_object_with_size --args 255999 --sender A --gas-budget 100000000000000
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1864000000, storage_cost: 1947553200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 85:
+//# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 100000000000000
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1864000000, storage_cost: 1947560800,  storage_rebate: 978120, non_refundable_storage_fee: 9880

@@ -1,0 +1,60 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/old_spec/spec_parsing_inside_fun.move:2:22
+  │
+2 │     fun specs_in_fun(x: u64, n: u64) {
+  │                      ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/old_spec/spec_parsing_inside_fun.move:2:30
+  │
+2 │     fun specs_in_fun(x: u64, n: u64) {
+  │                              ^ Unused parameter 'n'. Consider removing or prefixing with an underscore: '_n'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03004]: unbound type
+  ┌─ tests/move_2024/old_spec/spec_parsing_inside_fun.move:4:9
+  │
+4 │         spec {
+  │         ^^^^ Unbound type 'spec' in current scope
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/old_spec/spec_parsing_inside_fun.move:5:13
+  │
+5 │             assume x > 42;
+  │             ^^^^^^ Unbound variable 'assume'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_parsing_inside_fun.move:5:20
+  │
+5 │             assume x > 42;
+  │                    ^
+  │                    │
+  │                    Unexpected 'x'
+  │                    Expected ',' or '}'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_parsing_inside_fun.move:5:26
+  │
+4 │         spec {
+  │              - To match this '{'
+5 │             assume x > 42;
+  │                          ^ Expected '}'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_parsing_inside_fun.move:6:10
+  │
+6 │         };
+  │          ^
+  │          │
+  │          Unexpected ';'
+  │          Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

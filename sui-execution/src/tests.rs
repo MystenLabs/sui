@@ -35,6 +35,9 @@ fn test_encapsulation() {
     exec_crates.remove("move-bytecode-utils");
     exec_crates.remove("move-core-types");
     exec_crates.remove("move-vm-config");
+    // tracing is only enabled in client builds (built with `--features tracing` flag)
+    // and it does not have to be accessed via `sui-execution` as it can never cause a fork
+    exec_crates.remove("move-trace-format");
 
     // Capture problematic paths from roots to execution crates
     let mut examples = vec![];

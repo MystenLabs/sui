@@ -1,0 +1,686 @@
+// Move bytecode v6
+module 1.ascii {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+struct String has copy, drop, store {
+	bytes: vector<u8>
+}
+
+struct Char has copy, drop, store {
+	byte: u8
+}
+
+public char(Arg0: u8): Char {
+B0:
+	0: CopyLoc[0](Arg0: u8)
+	1: Call is_valid_char(u8): bool
+	2: BrFalse(4)
+B1:
+	3: Branch(6)
+B2:
+	4: LdConst[0](u64: 65536)
+	5: Abort
+B3:
+	6: MoveLoc[0](Arg0: u8)
+	7: Pack[1](Char)
+	8: Ret
+}
+
+public string(Arg0: vector<u8>): String {
+L1:	loc0: Option<String>
+B0:
+	0: MoveLoc[0](Arg0: vector<u8>)
+	1: Call try_string(vector<u8>): Option<String>
+	2: StLoc[1](loc0: Option<String>)
+	3: ImmBorrowLoc[1](loc0: Option<String>)
+	4: Call option::is_some<String>(&Option<String>): bool
+	5: BrFalse(7)
+B1:
+	6: Branch(9)
+B2:
+	7: LdConst[0](u64: 65536)
+	8: Abort
+B3:
+	9: MoveLoc[1](loc0: Option<String>)
+	10: Call option::destroy_some<String>(Option<String>): String
+	11: Ret
+}
+
+public try_string(Arg0: vector<u8>): Option<String> {
+L1:	loc0: u64
+L2:	loc1: bool
+L3:	loc2: Option<String>
+L4:	loc3: u64
+L5:	loc4: u64
+L6:	loc5: u64
+L7:	loc6: &vector<u8>
+B0:
+	0: ImmBorrowLoc[0](Arg0: vector<u8>)
+	1: StLoc[7](loc6: &vector<u8>)
+	2: CopyLoc[7](loc6: &vector<u8>)
+	3: VecLen(0)
+	4: StLoc[1](loc0: u64)
+	5: LdU64(0)
+	6: StLoc[5](loc4: u64)
+	7: MoveLoc[1](loc0: u64)
+	8: StLoc[6](loc5: u64)
+B1:
+	9: CopyLoc[5](loc4: u64)
+	10: CopyLoc[6](loc5: u64)
+	11: Lt
+	12: BrFalse(32)
+B2:
+	13: CopyLoc[5](loc4: u64)
+	14: StLoc[4](loc3: u64)
+	15: CopyLoc[7](loc6: &vector<u8>)
+	16: MoveLoc[4](loc3: u64)
+	17: VecImmBorrow(0)
+	18: ReadRef
+	19: Call is_valid_char(u8): bool
+	20: Not
+	21: BrFalse(27)
+B3:
+	22: MoveLoc[7](loc6: &vector<u8>)
+	23: Pop
+	24: LdFalse
+	25: StLoc[2](loc1: bool)
+	26: Branch(36)
+B4:
+	27: MoveLoc[5](loc4: u64)
+	28: LdU64(1)
+	29: Add
+	30: StLoc[5](loc4: u64)
+	31: Branch(9)
+B5:
+	32: MoveLoc[7](loc6: &vector<u8>)
+	33: Pop
+	34: LdTrue
+	35: StLoc[2](loc1: bool)
+B6:
+	36: MoveLoc[2](loc1: bool)
+	37: BrFalse(43)
+B7:
+	38: MoveLoc[0](Arg0: vector<u8>)
+	39: Pack[0](String)
+	40: Call option::some<String>(String): Option<String>
+	41: StLoc[3](loc2: Option<String>)
+	42: Branch(45)
+B8:
+	43: Call option::none<String>(): Option<String>
+	44: StLoc[3](loc2: Option<String>)
+B9:
+	45: MoveLoc[3](loc2: Option<String>)
+	46: Ret
+}
+
+public all_characters_printable(Arg0: &String): bool {
+L1:	loc0: u64
+L2:	loc1: bool
+L3:	loc2: u64
+L4:	loc3: u64
+L5:	loc4: u64
+L6:	loc5: &vector<u8>
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: StLoc[6](loc5: &vector<u8>)
+	3: CopyLoc[6](loc5: &vector<u8>)
+	4: VecLen(0)
+	5: StLoc[1](loc0: u64)
+	6: LdU64(0)
+	7: StLoc[4](loc3: u64)
+	8: MoveLoc[1](loc0: u64)
+	9: StLoc[5](loc4: u64)
+B1:
+	10: CopyLoc[4](loc3: u64)
+	11: CopyLoc[5](loc4: u64)
+	12: Lt
+	13: BrFalse(33)
+B2:
+	14: CopyLoc[4](loc3: u64)
+	15: StLoc[3](loc2: u64)
+	16: CopyLoc[6](loc5: &vector<u8>)
+	17: MoveLoc[3](loc2: u64)
+	18: VecImmBorrow(0)
+	19: ReadRef
+	20: Call is_printable_char(u8): bool
+	21: Not
+	22: BrFalse(28)
+B3:
+	23: MoveLoc[6](loc5: &vector<u8>)
+	24: Pop
+	25: LdFalse
+	26: StLoc[2](loc1: bool)
+	27: Branch(37)
+B4:
+	28: MoveLoc[4](loc3: u64)
+	29: LdU64(1)
+	30: Add
+	31: StLoc[4](loc3: u64)
+	32: Branch(10)
+B5:
+	33: MoveLoc[6](loc5: &vector<u8>)
+	34: Pop
+	35: LdTrue
+	36: StLoc[2](loc1: bool)
+B6:
+	37: MoveLoc[2](loc1: bool)
+	38: Ret
+}
+
+public push_char(Arg0: &mut String, Arg1: Char) {
+B0:
+	0: MoveLoc[0](Arg0: &mut String)
+	1: MutBorrowField[0](String.bytes: vector<u8>)
+	2: ImmBorrowLoc[1](Arg1: Char)
+	3: ImmBorrowField[1](Char.byte: u8)
+	4: ReadRef
+	5: VecPushBack(0)
+	6: Ret
+}
+
+public pop_char(Arg0: &mut String): Char {
+B0:
+	0: MoveLoc[0](Arg0: &mut String)
+	1: MutBorrowField[0](String.bytes: vector<u8>)
+	2: VecPopBack(0)
+	3: Pack[1](Char)
+	4: Ret
+}
+
+public length(Arg0: &String): u64 {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: Call as_bytes(&String): &vector<u8>
+	2: VecLen(0)
+	3: Ret
+}
+
+public append(Arg0: &mut String, Arg1: String) {
+B0:
+	0: MoveLoc[0](Arg0: &mut String)
+	1: MutBorrowField[0](String.bytes: vector<u8>)
+	2: MoveLoc[1](Arg1: String)
+	3: Call into_bytes(String): vector<u8>
+	4: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+	5: Ret
+}
+
+public insert(Arg0: &mut String, Arg1: u64, Arg2: String) {
+L3:	loc0: u64
+L4:	loc1: u8
+L5:	loc2: u64
+L6:	loc3: u64
+L7:	loc4: vector<u8>
+B0:
+	0: CopyLoc[1](Arg1: u64)
+	1: CopyLoc[0](Arg0: &mut String)
+	2: FreezeRef
+	3: Call length(&String): u64
+	4: Le
+	5: BrFalse(7)
+B1:
+	6: Branch(11)
+B2:
+	7: MoveLoc[0](Arg0: &mut String)
+	8: Pop
+	9: LdConst[1](u64: 65537)
+	10: Abort
+B3:
+	11: MoveLoc[2](Arg2: String)
+	12: Call into_bytes(String): vector<u8>
+	13: StLoc[7](loc4: vector<u8>)
+	14: ImmBorrowLoc[7](loc4: vector<u8>)
+	15: VecLen(0)
+	16: StLoc[3](loc0: u64)
+	17: LdU64(0)
+	18: StLoc[5](loc2: u64)
+	19: MoveLoc[3](loc0: u64)
+	20: StLoc[6](loc3: u64)
+B4:
+	21: CopyLoc[5](loc2: u64)
+	22: CopyLoc[6](loc3: u64)
+	23: Lt
+	24: BrFalse(40)
+B5:
+	25: CopyLoc[5](loc2: u64)
+	26: Pop
+	27: MutBorrowLoc[7](loc4: vector<u8>)
+	28: VecPopBack(0)
+	29: StLoc[4](loc1: u8)
+	30: CopyLoc[0](Arg0: &mut String)
+	31: MutBorrowField[0](String.bytes: vector<u8>)
+	32: MoveLoc[4](loc1: u8)
+	33: CopyLoc[1](Arg1: u64)
+	34: Call vector::insert<u8>(&mut vector<u8>, u8, u64)
+	35: MoveLoc[5](loc2: u64)
+	36: LdU64(1)
+	37: Add
+	38: StLoc[5](loc2: u64)
+	39: Branch(21)
+B6:
+	40: MoveLoc[0](Arg0: &mut String)
+	41: Pop
+	42: MoveLoc[7](loc4: vector<u8>)
+	43: VecUnpack(0, 0)
+	44: Ret
+}
+
+public substring(Arg0: &String, Arg1: u64, Arg2: u64): String {
+L3:	loc0: bool
+L4:	loc1: vector<u8>
+L5:	loc2: u64
+L6:	loc3: u64
+L7:	loc4: u64
+B0:
+	0: CopyLoc[1](Arg1: u64)
+	1: CopyLoc[2](Arg2: u64)
+	2: Le
+	3: BrFalse(10)
+B1:
+	4: CopyLoc[2](Arg2: u64)
+	5: CopyLoc[0](Arg0: &String)
+	6: Call length(&String): u64
+	7: Le
+	8: StLoc[3](loc0: bool)
+	9: Branch(12)
+B2:
+	10: LdFalse
+	11: StLoc[3](loc0: bool)
+B3:
+	12: MoveLoc[3](loc0: bool)
+	13: BrFalse(15)
+B4:
+	14: Branch(19)
+B5:
+	15: MoveLoc[0](Arg0: &String)
+	16: Pop
+	17: LdConst[1](u64: 65537)
+	18: Abort
+B6:
+	19: LdConst[2](vector<u8>: "" /..)
+	20: StLoc[4](loc1: vector<u8>)
+	21: MoveLoc[1](Arg1: u64)
+	22: StLoc[5](loc2: u64)
+	23: MoveLoc[2](Arg2: u64)
+	24: StLoc[7](loc4: u64)
+B7:
+	25: CopyLoc[5](loc2: u64)
+	26: CopyLoc[7](loc4: u64)
+	27: Lt
+	28: BrFalse(43)
+B8:
+	29: CopyLoc[5](loc2: u64)
+	30: StLoc[6](loc3: u64)
+	31: MutBorrowLoc[4](loc1: vector<u8>)
+	32: CopyLoc[0](Arg0: &String)
+	33: ImmBorrowField[0](String.bytes: vector<u8>)
+	34: MoveLoc[6](loc3: u64)
+	35: VecImmBorrow(0)
+	36: ReadRef
+	37: VecPushBack(0)
+	38: MoveLoc[5](loc2: u64)
+	39: LdU64(1)
+	40: Add
+	41: StLoc[5](loc2: u64)
+	42: Branch(25)
+B9:
+	43: MoveLoc[0](Arg0: &String)
+	44: Pop
+	45: MoveLoc[4](loc1: vector<u8>)
+	46: Pack[0](String)
+	47: Ret
+}
+
+public as_bytes(Arg0: &String): &vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: Ret
+}
+
+public into_bytes(Arg0: String): vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: String)
+	1: Unpack[0](String)
+	2: Ret
+}
+
+public byte(Arg0: Char): u8 {
+B0:
+	0: MoveLoc[0](Arg0: Char)
+	1: Unpack[1](Char)
+	2: Ret
+}
+
+public is_valid_char(Arg0: u8): bool {
+B0:
+	0: MoveLoc[0](Arg0: u8)
+	1: LdU8(127)
+	2: Le
+	3: Ret
+}
+
+public is_printable_char(Arg0: u8): bool {
+L1:	loc0: bool
+B0:
+	0: CopyLoc[0](Arg0: u8)
+	1: LdU8(32)
+	2: Ge
+	3: BrFalse(9)
+B1:
+	4: MoveLoc[0](Arg0: u8)
+	5: LdU8(126)
+	6: Le
+	7: StLoc[1](loc0: bool)
+	8: Branch(11)
+B2:
+	9: LdFalse
+	10: StLoc[1](loc0: bool)
+B3:
+	11: MoveLoc[1](loc0: bool)
+	12: Ret
+}
+
+public is_empty(Arg0: &String): bool {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: Call vector::is_empty<u8>(&vector<u8>): bool
+	3: Ret
+}
+
+public to_uppercase(Arg0: &String): String {
+L1:	loc0: u64
+L2:	loc1: u8
+L3:	loc2: &mut vector<u8>
+L4:	loc3: &u8
+L5:	loc4: u64
+L6:	loc5: u64
+L7:	loc6: vector<u8>
+L8:	loc7: u64
+L9:	loc8: &vector<u8>
+L10:	loc9: &vector<u8>
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: Call as_bytes(&String): &vector<u8>
+	2: StLoc[9](loc8: &vector<u8>)
+	3: LdConst[2](vector<u8>: "" /..)
+	4: StLoc[7](loc6: vector<u8>)
+	5: MoveLoc[9](loc8: &vector<u8>)
+	6: StLoc[10](loc9: &vector<u8>)
+	7: CopyLoc[10](loc9: &vector<u8>)
+	8: VecLen(0)
+	9: StLoc[1](loc0: u64)
+	10: LdU64(0)
+	11: StLoc[6](loc5: u64)
+	12: MoveLoc[1](loc0: u64)
+	13: StLoc[8](loc7: u64)
+B1:
+	14: CopyLoc[6](loc5: u64)
+	15: CopyLoc[8](loc7: u64)
+	16: Lt
+	17: BrFalse(38)
+B2:
+	18: CopyLoc[6](loc5: u64)
+	19: StLoc[5](loc4: u64)
+	20: CopyLoc[10](loc9: &vector<u8>)
+	21: MoveLoc[5](loc4: u64)
+	22: VecImmBorrow(0)
+	23: StLoc[4](loc3: &u8)
+	24: MutBorrowLoc[7](loc6: vector<u8>)
+	25: StLoc[3](loc2: &mut vector<u8>)
+	26: MoveLoc[4](loc3: &u8)
+	27: ReadRef
+	28: Call char_to_uppercase(u8): u8
+	29: StLoc[2](loc1: u8)
+	30: MoveLoc[3](loc2: &mut vector<u8>)
+	31: MoveLoc[2](loc1: u8)
+	32: VecPushBack(0)
+	33: MoveLoc[6](loc5: u64)
+	34: LdU64(1)
+	35: Add
+	36: StLoc[6](loc5: u64)
+	37: Branch(14)
+B3:
+	38: MoveLoc[10](loc9: &vector<u8>)
+	39: Pop
+	40: MoveLoc[7](loc6: vector<u8>)
+	41: Pack[0](String)
+	42: Ret
+}
+
+public to_lowercase(Arg0: &String): String {
+L1:	loc0: u64
+L2:	loc1: u8
+L3:	loc2: &mut vector<u8>
+L4:	loc3: &u8
+L5:	loc4: u64
+L6:	loc5: u64
+L7:	loc6: vector<u8>
+L8:	loc7: u64
+L9:	loc8: &vector<u8>
+L10:	loc9: &vector<u8>
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: Call as_bytes(&String): &vector<u8>
+	2: StLoc[9](loc8: &vector<u8>)
+	3: LdConst[2](vector<u8>: "" /..)
+	4: StLoc[7](loc6: vector<u8>)
+	5: MoveLoc[9](loc8: &vector<u8>)
+	6: StLoc[10](loc9: &vector<u8>)
+	7: CopyLoc[10](loc9: &vector<u8>)
+	8: VecLen(0)
+	9: StLoc[1](loc0: u64)
+	10: LdU64(0)
+	11: StLoc[6](loc5: u64)
+	12: MoveLoc[1](loc0: u64)
+	13: StLoc[8](loc7: u64)
+B1:
+	14: CopyLoc[6](loc5: u64)
+	15: CopyLoc[8](loc7: u64)
+	16: Lt
+	17: BrFalse(38)
+B2:
+	18: CopyLoc[6](loc5: u64)
+	19: StLoc[5](loc4: u64)
+	20: CopyLoc[10](loc9: &vector<u8>)
+	21: MoveLoc[5](loc4: u64)
+	22: VecImmBorrow(0)
+	23: StLoc[4](loc3: &u8)
+	24: MutBorrowLoc[7](loc6: vector<u8>)
+	25: StLoc[3](loc2: &mut vector<u8>)
+	26: MoveLoc[4](loc3: &u8)
+	27: ReadRef
+	28: Call char_to_lowercase(u8): u8
+	29: StLoc[2](loc1: u8)
+	30: MoveLoc[3](loc2: &mut vector<u8>)
+	31: MoveLoc[2](loc1: u8)
+	32: VecPushBack(0)
+	33: MoveLoc[6](loc5: u64)
+	34: LdU64(1)
+	35: Add
+	36: StLoc[6](loc5: u64)
+	37: Branch(14)
+B3:
+	38: MoveLoc[10](loc9: &vector<u8>)
+	39: Pop
+	40: MoveLoc[7](loc6: vector<u8>)
+	41: Pack[0](String)
+	42: Ret
+}
+
+public index_of(Arg0: &String, Arg1: &String): u64 {
+L2:	loc0: bool
+L3:	loc1: u64
+L4:	loc2: u64
+L5:	loc3: u64
+L6:	loc4: u64
+B0:
+	0: LdU64(0)
+	1: StLoc[3](loc1: u64)
+	2: CopyLoc[0](Arg0: &String)
+	3: Call length(&String): u64
+	4: CopyLoc[1](Arg1: &String)
+	5: Call length(&String): u64
+	6: StLoc[5](loc3: u64)
+	7: StLoc[6](loc4: u64)
+	8: CopyLoc[6](loc4: u64)
+	9: CopyLoc[5](loc3: u64)
+	10: Lt
+	11: BrFalse(18)
+B1:
+	12: MoveLoc[1](Arg1: &String)
+	13: Pop
+	14: MoveLoc[0](Arg0: &String)
+	15: Pop
+	16: MoveLoc[6](loc4: u64)
+	17: Ret
+B2:
+	18: CopyLoc[3](loc1: u64)
+	19: CopyLoc[6](loc4: u64)
+	20: CopyLoc[5](loc3: u64)
+	21: Sub
+	22: Le
+	23: BrFalse(71)
+B3:
+	24: LdU64(0)
+	25: StLoc[4](loc2: u64)
+B4:
+	26: CopyLoc[4](loc2: u64)
+	27: CopyLoc[5](loc3: u64)
+	28: Lt
+	29: BrFalse(46)
+B5:
+	30: Branch(31)
+B6:
+	31: CopyLoc[0](Arg0: &String)
+	32: ImmBorrowField[0](String.bytes: vector<u8>)
+	33: CopyLoc[3](loc1: u64)
+	34: CopyLoc[4](loc2: u64)
+	35: Add
+	36: VecImmBorrow(0)
+	37: ReadRef
+	38: CopyLoc[1](Arg1: &String)
+	39: ImmBorrowField[0](String.bytes: vector<u8>)
+	40: CopyLoc[4](loc2: u64)
+	41: VecImmBorrow(0)
+	42: ReadRef
+	43: Eq
+	44: StLoc[2](loc0: bool)
+	45: Branch(49)
+B7:
+	46: LdFalse
+	47: StLoc[2](loc0: bool)
+	48: Branch(49)
+B8:
+	49: MoveLoc[2](loc0: bool)
+	50: BrFalse(56)
+B9:
+	51: MoveLoc[4](loc2: u64)
+	52: LdU64(1)
+	53: Add
+	54: StLoc[4](loc2: u64)
+	55: Branch(26)
+B10:
+	56: MoveLoc[4](loc2: u64)
+	57: CopyLoc[5](loc3: u64)
+	58: Eq
+	59: BrFalse(66)
+B11:
+	60: MoveLoc[1](Arg1: &String)
+	61: Pop
+	62: MoveLoc[0](Arg0: &String)
+	63: Pop
+	64: MoveLoc[3](loc1: u64)
+	65: Ret
+B12:
+	66: MoveLoc[3](loc1: u64)
+	67: LdU64(1)
+	68: Add
+	69: StLoc[3](loc1: u64)
+	70: Branch(18)
+B13:
+	71: MoveLoc[1](Arg1: &String)
+	72: Pop
+	73: MoveLoc[0](Arg0: &String)
+	74: Pop
+	75: MoveLoc[6](loc4: u64)
+	76: Ret
+}
+
+char_to_uppercase(Arg0: u8): u8 {
+L1:	loc0: bool
+L2:	loc1: u8
+B0:
+	0: CopyLoc[0](Arg0: u8)
+	1: LdU8(97)
+	2: Ge
+	3: BrFalse(9)
+B1:
+	4: CopyLoc[0](Arg0: u8)
+	5: LdU8(122)
+	6: Le
+	7: StLoc[1](loc0: bool)
+	8: Branch(11)
+B2:
+	9: LdFalse
+	10: StLoc[1](loc0: bool)
+B3:
+	11: MoveLoc[1](loc0: bool)
+	12: BrFalse(18)
+B4:
+	13: MoveLoc[0](Arg0: u8)
+	14: LdU8(32)
+	15: Sub
+	16: StLoc[2](loc1: u8)
+	17: Branch(20)
+B5:
+	18: MoveLoc[0](Arg0: u8)
+	19: StLoc[2](loc1: u8)
+B6:
+	20: MoveLoc[2](loc1: u8)
+	21: Ret
+}
+
+char_to_lowercase(Arg0: u8): u8 {
+L1:	loc0: bool
+L2:	loc1: u8
+B0:
+	0: CopyLoc[0](Arg0: u8)
+	1: LdU8(65)
+	2: Ge
+	3: BrFalse(9)
+B1:
+	4: CopyLoc[0](Arg0: u8)
+	5: LdU8(90)
+	6: Le
+	7: StLoc[1](loc0: bool)
+	8: Branch(11)
+B2:
+	9: LdFalse
+	10: StLoc[1](loc0: bool)
+B3:
+	11: MoveLoc[1](loc0: bool)
+	12: BrFalse(18)
+B4:
+	13: MoveLoc[0](Arg0: u8)
+	14: LdU8(32)
+	15: Add
+	16: StLoc[2](loc1: u8)
+	17: Branch(20)
+B5:
+	18: MoveLoc[0](Arg0: u8)
+	19: StLoc[2](loc1: u8)
+B6:
+	20: MoveLoc[2](loc1: u8)
+	21: Ret
+}
+
+Constants [
+	0 => u64: 65536
+	1 => u64: 65537
+	2 => vector<u8>: "" // interpreted as UTF8 string
+]
+}

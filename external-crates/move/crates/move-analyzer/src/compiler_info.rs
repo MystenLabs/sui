@@ -38,7 +38,7 @@ impl CompilerInfo {
                     // TODO: should we check this is not also an expanded lambda?
                     // TODO: what if we find two macro calls?
                     if let Some(_old) = self.macro_info.insert(loc, *info) {
-                        eprintln!("Repeated macro info");
+                        //                        eprintln!("Repeated macro info");
                     }
                 }
                 CI::IDEAnnotation::ExpandedLambda => {
@@ -53,7 +53,7 @@ impl CompilerInfo {
                         .or_default()
                         .insert(loc, *info)
                     {
-                        eprintln!("Repeated autocomplete info");
+                        //                        eprintln!("Repeated autocomplete info");
                     }
                 }
                 CI::IDEAnnotation::MissingMatchArms(_) => {

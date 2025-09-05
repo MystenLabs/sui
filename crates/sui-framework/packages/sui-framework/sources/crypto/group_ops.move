@@ -19,7 +19,7 @@ const EInvalidBufferLength: u64 = 3;
 // The caller provides a type identifier that should match the types of enum [Groups] in group_ops.rs.
 
 // General wrapper for all group elements.
-public struct Element<phantom T> has store, copy, drop {
+public struct Element<phantom T> has copy, drop, store {
     bytes: vector<u8>,
 }
 
@@ -59,6 +59,8 @@ public(package) fun hash_to<G>(type_: u8, m: &vector<u8>): Element<G> {
 }
 
 /// Aborts with `EInputTooLong` if the vectors are too long.
+///
+/// This function is currently only enabled on Devnet.
 public(package) fun multi_scalar_multiplication<S, G>(
     type_: u8,
     scalars: &vector<Element<S>>,
@@ -88,7 +90,11 @@ public(package) fun pairing<G1, G2, G3>(
     Element<G3> { bytes: internal_pairing(type_, &e1.bytes, &e2.bytes) }
 }
 
-public(package) fun convert<From, To>(from_type_: u8, to_type_: u8, e: &Element<From>): Element<To> {
+public(package) fun convert<From, To>(
+    from_type_: u8,
+    to_type_: u8,
+    e: &Element<From>,
+): Element<To> {
     Element<To> { bytes: internal_convert(from_type_, to_type_, &e.bytes) }
 }
 

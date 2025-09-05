@@ -61,7 +61,7 @@ pub fn is_one_time_witness(
 
     let type_is_one_time_witness_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .type_is_one_time_witness_cost_params
         .clone();
 

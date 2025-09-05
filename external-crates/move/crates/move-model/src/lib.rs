@@ -20,14 +20,13 @@ use move_binary_format::file_format::{
     CompiledModule, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex,
 };
 use move_compiler::{
-    self,
+    self, Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
     compiled_unit::{self, AnnotatedCompiledUnit},
-    diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
+    diagnostics::{Diagnostics, warning_filters::WarningFiltersBuilder},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
     parser::ast::{self as P, TargetKind},
-    shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
+    shared::{NumericalAddress, PackagePaths, parse_named_address, unique_map::UniqueMap},
     typing::ast as T,
-    Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol as MoveSymbol;

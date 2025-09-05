@@ -5,7 +5,7 @@ authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Multiplexer to choose between multiple versions of sui and move execution crates."
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 sui-protocol-config.workspace = true

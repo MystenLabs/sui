@@ -1,0 +1,10 @@
+[package]
+name = "M"
+edition = "2024.beta"
+
+[dependencies]
+K = { local = "../K_v2", override = true }
+L = { local = "../L" }
+
+[addresses]
+m = "0x0"

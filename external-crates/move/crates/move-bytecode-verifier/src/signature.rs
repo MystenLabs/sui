@@ -6,6 +6,7 @@
 //! parameters, locals, and fields of structs are well-formed. References can only occur at the
 //! top-level in all tokens.  Additionally, references cannot occur at all in field types.
 use move_binary_format::{
+    IndexKind,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CodeUnit, CompiledModule, DatatypeTyParameter, EnumDefinition,
@@ -13,7 +14,6 @@ use move_binary_format::{
         StructDefinition, StructFieldInformation, TableIndex,
     },
     file_format_common::VERSION_6,
-    IndexKind,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;

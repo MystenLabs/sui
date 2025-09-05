@@ -18,7 +18,10 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{base_types::dbg_addr, crypto::get_key_pair};
+use sui_types::{
+    base_types::{dbg_addr, FullObjectRef},
+    crypto::get_key_pair,
+};
 
 // The cost table is used only to get the max budget available which is not dependent on
 // the gas price
@@ -278,7 +281,9 @@ async fn touch_gas_coins(
             .await
             .unwrap()
             .compute_object_reference();
-        builder.transfer_object(recipient, coin_ref).unwrap();
+        builder
+            .transfer_object(recipient, FullObjectRef::from_fastpath_ref(coin_ref))
+            .unwrap();
     }
     let pt = builder.finish();
     let kind = TransactionKind::ProgrammableTransaction(pt);
@@ -1049,7 +1054,10 @@ async fn execute_transfer_with_price(
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(recipient, object.compute_object_reference())
+            .transfer_object(
+                recipient,
+                FullObjectRef::from_fastpath_ref(object.compute_object_reference()),
+            )
             .unwrap();
         builder.finish()
     };
@@ -1081,4 +1089,81 @@ async fn execute_transfer_with_price(
         response,
         rgp,
     }
+}
+
+#[tokio::test]
+async fn test_gas_price_capping_for_aborted_transactions() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let authority_state = TestAuthorityBuilder::new().build().await;
+
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+    let max_gas_price_for_aborted_transactions = protocol_config
+        .max_gas_price_rgp_factor_for_aborted_transactions()
+        * authority_state.reference_gas_price_for_testing().unwrap();
+
+    // Test with gas price higher than max_gas_price_aborted_transactions
+    let high_gas_price = max_gas_price_for_aborted_transactions * 2; // Set to 2x cap
+    let budget = high_gas_price * 1000; // Sufficient budget
+
+    // Create gas coins
+    let gas_amount = budget * 10;
+    let gas_object_id = ObjectID::random();
+    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas_amount);
+    authority_state.insert_genesis_object(gas_coin).await;
+
+    // Publish the move_random package
+    let package =
+        publish_move_random_package(&authority_state, &sender, &sender_key, &gas_object_id).await;
+
+    // Create a transaction that will abort
+    let gas_coin_ref = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .compute_object_reference();
+
+    let data = TransactionData::new_move_call_with_gas_coins(
+        sender,
+        package,
+        ident_str!("move_random").to_owned(),
+        ident_str!("always_abort").to_owned(),
+        vec![],
+        vec![gas_coin_ref],
+        vec![],
+        budget,
+        high_gas_price,
+    )
+    .unwrap();
+
+    // sign and execute transaction
+    let tx = to_sender_signed_transaction(data, &sender_key);
+    let effects = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .unwrap()
+        .1
+        .into_data();
+
+    // check effects
+    assert!(matches!(
+        effects.status().clone().unwrap_err().0,
+        ExecutionFailureStatus::MoveAbort(_, 42)
+    ));
+
+    // Check that the gas cost is capped
+    let gas_cost = effects.gas_cost_summary();
+
+    // We round up gas used to the nearest gas_rounding_step as defined in protocol config
+    let gas_used_pre_gas_price = 1; //simulate cheap txn
+    let gas_used = ((gas_used_pre_gas_price / protocol_config.gas_rounding_step()) + 1)
+        * protocol_config.gas_rounding_step();
+
+    // The computation cost should be capped at max_gas_price_aborted_transactions
+    // rather than using the full high_gas_price
+    let expected_max_computation_cost = gas_used * max_gas_price_for_aborted_transactions; // bucket cost * capped price
+    assert!(gas_cost.computation_cost <= expected_max_computation_cost);
+
+    // The computation cost should be less than what it would be with full gas price
+    let uncapped_computation_cost = gas_used * high_gas_price; // bucket cost * full price
+    assert!(gas_cost.computation_cost < uncapped_computation_cost);
 }

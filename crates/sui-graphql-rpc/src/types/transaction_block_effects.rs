@@ -9,6 +9,7 @@ use async_graphql::{
     *,
 };
 use fastcrypto::encoding::{Base64 as FBase64, Encoding};
+use std::fmt::Write;
 use sui_indexer::models::transactions::StoredTransaction;
 use sui_package_resolver::{CleverError, ErrorConstants};
 use sui_types::{
@@ -28,6 +29,7 @@ use sui_types::{
 use super::{
     balance_change::BalanceChange,
     base64::Base64,
+    big_int::BigInt,
     checkpoint::{Checkpoint, CheckpointId},
     cursor::{JsonCursor, Page},
     date_time::DateTime,
@@ -38,7 +40,7 @@ use super::{
     object_change::ObjectChange,
     transaction_block::{TransactionBlock, TransactionBlockInner},
     uint53::UInt53,
-    unchanged_shared_object::UnchangedSharedObject,
+    unchanged_consensus_object::UnchangedConsensusObject,
 };
 
 /// Wraps the actual transaction block effects data with the checkpoint sequence number at which the
@@ -88,7 +90,7 @@ pub enum ExecutionStatus {
 struct DependencyConnectionNames;
 
 type CDependencies = JsonCursor<ConsistentIndexCursor>;
-type CUnchangedSharedObject = JsonCursor<ConsistentIndexCursor>;
+type CUnchangedConsensusObject = JsonCursor<ConsistentIndexCursor>;
 type CObjectChange = JsonCursor<ConsistentIndexCursor>;
 type CBalanceChange = JsonCursor<ConsistentIndexCursor>;
 type CEvent = JsonCursor<ConsistentIndexCursor>;
@@ -134,67 +136,108 @@ impl TransactionBlockEffects {
                 error,
                 command: Some(command),
             } => {
-                let error = 'error: {
-                    let ExecutionFailureStatus::MoveAbort(loc, code) = &error else {
-                        break 'error error.to_string();
-                    };
-                    let fname_string = if let Some(fname) = &loc.function_name {
-                        format!("::{}'", fname)
-                    } else {
-                        "'".to_string()
-                    };
-
-                    let Some(CleverError {
-                        module_id,
-                        source_line_number,
-                        error_info,
-                    }) = resolver
-                        .resolve_clever_error(loc.module.clone(), *code)
-                        .await
-                    else {
-                        break 'error format!(
-                            "from '{}{fname_string} (instruction {}), abort code: {code}",
-                            loc.module.to_canonical_display(true),
-                            loc.instruction,
-                        );
-                    };
-
-                    match error_info {
-                        ErrorConstants::Rendered {
-                            identifier,
-                            constant,
-                        } => {
-                            format!(
-                                "from '{}{fname_string} (line {source_line_number}), abort '{identifier}': {constant}",
-                                module_id.to_canonical_display(true)
-                            )
-                        }
-                        ErrorConstants::Raw { identifier, bytes } => {
-                            let const_str = FBase64::encode(bytes);
-                            format!(
-                                "from '{}{fname_string} (line {source_line_number}), abort '{identifier}': {const_str}",
-                                module_id.to_canonical_display(true)
-                            )
-                        }
-                        ErrorConstants::None => {
-                            format!(
-                                "from '{}{fname_string} (line {source_line_number})",
-                                module_id.to_canonical_display(true)
-                            )
-                        }
-                    }
-                };
-                // Convert the command index into an ordinal.
                 let command = command + 1;
                 let suffix = match command % 10 {
-                    1 => "st",
-                    2 => "nd",
-                    3 => "rd",
+                    1 if command % 100 != 11 => "st",
+                    2 if command % 100 != 12 => "nd",
+                    3 if command % 100 != 13 => "rd",
                     _ => "th",
                 };
-                Ok(Some(format!("Error in {command}{suffix} command, {error}")))
+
+                let mut msg = String::new();
+                write!(msg, "Error in {command}{suffix} command, ")?;
+
+                let ExecutionFailureStatus::MoveAbort(loc, code) = &error else {
+                    write!(msg, "{error}")?;
+                    return Ok(Some(msg));
+                };
+
+                write!(msg, "from '{}", loc.module.to_canonical_display(true))?;
+                if let Some(fname) = &loc.function_name {
+                    write!(msg, "::{}'", fname)?;
+                } else {
+                    write!(msg, "'")?;
+                }
+
+                let Some(CleverError {
+                    source_line_number,
+                    error_info,
+                    error_code,
+                    ..
+                }) = resolver
+                    .resolve_clever_error(loc.module.clone(), *code)
+                    .await
+                else {
+                    write!(
+                        msg,
+                        " (instruction {}), abort code: {code}",
+                        loc.instruction,
+                    )?;
+                    return Ok(Some(msg));
+                };
+
+                let error_code_str = match error_code {
+                    Some(code) => format!("(code = {code})"),
+                    _ => String::new(),
+                };
+
+                match &error_info {
+                    ErrorConstants::Rendered {
+                        identifier,
+                        constant,
+                    } => {
+                        write!(
+                            msg,
+                            " (line {source_line_number}), abort{error_code_str} '{identifier}': {constant}"
+                        )?;
+                    }
+                    ErrorConstants::Raw { identifier, bytes } => {
+                        let const_str = FBase64::encode(bytes);
+                        write!(
+                            msg,
+                            " (line {source_line_number}), abort{error_code_str} '{identifier}': {const_str}"
+                        )?;
+                    }
+                    ErrorConstants::None => {
+                        write!(
+                            msg,
+                            " (line {source_line_number}){}",
+                            match error_code {
+                                Some(code) => format!(" abort(code = {code})"),
+                                _ => String::new(),
+                            }
+                        )?;
+                    }
+                }
+
+                Ok(Some(msg))
             }
         }
+    }
+
+    /// The error code of the Move abort, populated if this transaction failed with a Move abort.
+    async fn abort_code(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
+        let resolver: &PackageResolver = ctx.data_unchecked();
+        let status = self.resolve_native_status_impl(resolver).await?;
+        let NativeExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(loc, code),
+            ..
+        } = status
+        else {
+            return Ok(None);
+        };
+
+        let Some(CleverError {
+            error_code: Some(error_code),
+            ..
+        }) = resolver
+            .resolve_clever_error(loc.module.clone(), code)
+            .await
+        else {
+            return Ok(Some(BigInt::from(code)));
+        };
+
+        Ok(Some(BigInt::from(error_code as u64)))
     }
 
     /// Transactions whose outputs this transaction depends upon.
@@ -266,22 +309,24 @@ impl TransactionBlockEffects {
         Some(GasEffects::from(self.native(), self.checkpoint_viewed_at))
     }
 
-    /// Shared objects that are referenced by but not changed by this transaction.
-    async fn unchanged_shared_objects(
+    /// Consensus objects that are referenced by but not changed by this transaction.
+    async fn unchanged_consensus_objects(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<CUnchangedSharedObject>,
+        after: Option<CUnchangedConsensusObject>,
         last: Option<u64>,
-        before: Option<CUnchangedSharedObject>,
-    ) -> Result<Connection<String, UnchangedSharedObject>> {
+        before: Option<CUnchangedConsensusObject>,
+    ) -> Result<Connection<String, UnchangedConsensusObject>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let input_shared_objects = self.native().input_shared_objects();
+        let input_consensus_objects = self.native().input_consensus_objects();
 
-        let Some((prev, next, _, cs)) = page
-            .paginate_consistent_indices(input_shared_objects.len(), self.checkpoint_viewed_at)?
+        let Some((prev, next, _, cs)) = page.paginate_consistent_indices(
+            input_consensus_objects.len(),
+            self.checkpoint_viewed_at,
+        )?
         else {
             return Ok(connection);
         };
@@ -290,14 +335,15 @@ impl TransactionBlockEffects {
         connection.has_next_page = next;
 
         for c in cs {
-            let result = UnchangedSharedObject::try_from(input_shared_objects[c.ix].clone(), c.c);
+            let result =
+                UnchangedConsensusObject::try_from(input_consensus_objects[c.ix].clone(), c.c);
             match result {
-                Ok(unchanged_shared_object) => {
+                Ok(unchanged_consensus_object) => {
                     connection
                         .edges
-                        .push(Edge::new(c.encode_cursor(), unchanged_shared_object));
+                        .push(Edge::new(c.encode_cursor(), unchanged_consensus_object));
                 }
-                Err(_shared_object_changed) => continue, // Only add unchanged shared objects to the connection.
+                Err(_consensus_object_changed) => continue, // Only add unchanged consensus objects to the connection.
             }
         }
 

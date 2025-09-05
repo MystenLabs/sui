@@ -4,6 +4,7 @@
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 
 pub mod checkpoints;
+pub mod cp_sequence_numbers;
 pub mod displays;
 pub mod epochs;
 pub mod events;

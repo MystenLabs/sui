@@ -30,7 +30,7 @@ module test.m {
 //# publish
 module 0x0.m {
     import 0x2.object;
-    // Enums cannot have key 
+    // Enums cannot have key
     enum StoreEnum has key {
         V { id: object.UID },
     }
@@ -88,6 +88,19 @@ module 0x0.u {
     }
 }
 
+//# publish --dependencies test
+module 0x0.u {
+    import test.m;
+    import 0x2.transfer;
+    import 0x2.party;
+
+    f(x: m.KeyStruct, p: party.Party) {
+        label l0:
+        transfer.party_transfer<m.KeyStruct>(move(x), move(p));
+        return;
+    }
+}
+
 // Key + store struct not defined in current module
 
 //# publish --dependencies test
@@ -140,6 +153,19 @@ module 0x0.u {
     }
 }
 
+//# publish --dependencies test
+module 0x0.u {
+    import test.m;
+    import 0x2.transfer;
+    import 0x2.party;
+
+    f(x: m.KeyStoreStruct, p: party.Party) {
+        label l0:
+        transfer.party_transfer<m.KeyStoreStruct>(move(x), move(p));
+        return;
+    }
+}
+
 // Store enum not defined in current module
 
 //# publish --dependencies test
@@ -189,5 +215,18 @@ module 0x0.u {
         label l0:
         c = transfer.receive<m.StoreEnum>(move(uid), move(x));
         return move(c);
+    }
+}
+
+//# publish --dependencies test
+module 0x0.u {
+    import test.m;
+    import 0x2.transfer;
+    import 0x2.party;
+
+    f(x: m.StoreEnum, p: party.Party) {
+        label l0:
+        transfer.party_transfer<m.StoreEnum>(move(x), move(p));
+        return;
     }
 }

@@ -1,0 +1,9 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{ vector<vector<u8>> \\\n             | vector<0x1::string::String> \\\n             | vector<0x2::coin::Coin< 0x2::sui::SUI >> \\\n             | vector<3::validator::Validator> }\")"
+---
+{ vector<vector<u8>> []
+| vector<0x0000000000000000000000000000000000000000000000000000000000000001::string::String> []
+| vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>> []
+| vector<0x0000000000000000000000000000000000000000000000000000000000000003::validator::Validator> []
+}

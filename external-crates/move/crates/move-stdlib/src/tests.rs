@@ -11,9 +11,9 @@ use walkdir::{DirEntry, WalkDir};
 fn check_that_docs_are_updated() {
     let temp_dir = tempdir().unwrap();
 
-    crate::build_stdlib_doc(temp_dir.path().to_string_lossy().to_string()).unwrap();
+    crate::build_doc(temp_dir.path().to_string_lossy().to_string()).unwrap();
 
-    let res = check_dirs_not_diff(&temp_dir, crate::move_stdlib_docs_full_path());
+    let res = check_dirs_not_diff(&temp_dir, crate::docs_full_path());
     assert!(
         res.is_ok(),
         "Generated docs differ from the ones checked in. {}",

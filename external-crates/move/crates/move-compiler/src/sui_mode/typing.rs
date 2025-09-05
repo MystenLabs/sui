@@ -8,18 +8,18 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
     editions::Flavor,
     expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
     naming::ast::{
-        self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
+        self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, Type_, TypeName_, Var,
     },
     parser::ast::{Ability_, DatatypeName, DocComment, FunctionName, TargetKind},
-    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    shared::{CompilationEnv, Identifier, program_info::TypingProgramInfo},
     sui_mode::*,
     typing::{
         ast::{self as T, ModuleCall},
-        core::{ability_not_satisfied_tips, error_format, error_format_, Subst},
+        core::{Subst, ability_not_satisfied_tips, error_format, error_format_},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
@@ -727,6 +727,7 @@ fn is_mut_clock(param_ty: &Type) -> bool {
         | Type_::Param(_)
         | Type_::Var(_)
         | Type_::Anything
+        | Type_::Void
         | Type_::UnresolvedError
         | Type_::Fun(_, _) => false,
     }
@@ -745,6 +746,7 @@ fn is_mut_random(param_ty: &Type) -> bool {
         | Type_::Param(_)
         | Type_::Var(_)
         | Type_::Anything
+        | Type_::Void
         | Type_::UnresolvedError
         | Type_::Fun(_, _) => false,
     }
@@ -809,7 +811,11 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
         Type_::Unit => false,
 
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Fun(_, _) => true,
+        Type_::UnresolvedError
+        | Type_::Anything
+        | Type_::Void
+        | Type_::Var(_)
+        | Type_::Fun(_, _) => true,
     }
 }
 
@@ -841,6 +847,7 @@ fn is_entry_object_ty_inner(param_ty: &Type) -> bool {
         // Error case nothing to do
         Type_::UnresolvedError
         | Type_::Anything
+        | Type_::Void
         | Type_::Var(_)
         | Type_::Unit
         | Type_::Fun(_, _) => true,
@@ -904,7 +911,11 @@ fn entry_return(
             }
         }
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Fun(_, _) => (),
+        Type_::UnresolvedError
+        | Type_::Anything
+        | Type_::Void
+        | Type_::Var(_)
+        | Type_::Fun(_, _) => (),
         // Unreachable cases
         Type_::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
     }

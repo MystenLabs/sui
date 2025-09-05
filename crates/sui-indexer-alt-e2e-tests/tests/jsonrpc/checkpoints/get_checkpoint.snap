@@ -32,7 +32,7 @@ Checkpoint created: 2
 
 task 6, line 20:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 7, lines 22-24:
 //# programmable --inputs 42 @A

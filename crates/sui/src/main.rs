@@ -3,7 +3,7 @@
 
 use clap::*;
 use colored::Colorize;
-use sui::client_commands::SuiClientCommands::{ProfileTransaction, ReplayBatch, ReplayTransaction};
+use sui::client_commands::SuiClientCommands::{ReplayBatch, ReplayTransaction};
 use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
@@ -32,7 +32,7 @@ async fn main() {
 
     let args = Args::parse();
     let _guard = match args.command {
-        SuiCommand::Console { .. } | SuiCommand::KeyTool { .. } | SuiCommand::Move { .. } => {
+        SuiCommand::KeyTool { .. } | SuiCommand::Move { .. } => {
             telemetry_subscribers::TelemetryConfig::new()
                 .with_log_level("error")
                 .with_env()
@@ -63,16 +63,6 @@ async fn main() {
                 config = config.with_trace_target("replay_ptb_info");
             }
             config.init()
-        }
-
-        SuiCommand::Client {
-            cmd: Some(ProfileTransaction { .. }),
-            ..
-        } => {
-            // enable full logging for ProfileTransaction and ReplayTransaction
-            telemetry_subscribers::TelemetryConfig::new()
-                .with_env()
-                .init()
         }
 
         _ => telemetry_subscribers::TelemetryConfig::new()

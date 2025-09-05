@@ -93,15 +93,7 @@ impl Inner<'_> {
     ) -> PartialVMResult<LoadedWithMetadataResult<MoveObject>> {
         let child_opt = self
             .resolver
-            .get_object_received_at_version(
-                &owner,
-                &child,
-                version,
-                self.current_epoch_id,
-                self.protocol_config
-                    .use_object_per_epoch_marker_table_v2_as_option()
-                    .unwrap_or(false),
-            )
+            .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
             .map_err(|msg| {
                 PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
             })?;
@@ -199,8 +191,8 @@ impl Inner<'_> {
                             Expected an id owner {parent} but found an address, immutable, or shared owner")
                         ))
                     }
-                    Owner::ConsensusV2 { .. } => {
-                        unimplemented!("ConsensusV2 does not exist for this execution version")
+                    Owner::ConsensusAddressOwner { .. } => {
+                        unimplemented!("ConsensusAddressOwner does not exist for this execution version")
                     }
                 };
                 match object.data {

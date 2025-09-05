@@ -3,10 +3,10 @@
 
 #[test_only]
 module sui::kiosk_marketplace_ext {
-    use sui::sui::SUI;
     use sui::coin::Coin;
-    use sui::kiosk_extension as ext;
     use sui::kiosk::{Self, KioskOwnerCap, Kiosk, PurchaseCap};
+    use sui::kiosk_extension as ext;
+    use sui::sui::SUI;
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferRequest};
 
     /// Trying to access an owner-only action.
@@ -22,7 +22,7 @@ module sui::kiosk_marketplace_ext {
     public struct Ext<phantom Market> has drop {}
 
     /// A Bid on an item of type `T`.
-    public struct Bid<phantom T> has copy, store, drop {}
+    public struct Bid<phantom T> has copy, drop, store {}
 
     /// Add the `Marketplace` extension to the given `Kiosk`.
     ///
@@ -36,9 +36,7 @@ module sui::kiosk_marketplace_ext {
     /// Collection bidding: the Kiosk Owner offers a bid (in SUI) for an item of type `T`.
     ///
     /// There can be only one bid per type.
-    public fun bid<Market, T: key + store>(
-        kiosk: &mut Kiosk, cap: &KioskOwnerCap, bid: Coin<SUI>
-    ) {
+    public fun bid<Market, T: key + store>(kiosk: &mut Kiosk, cap: &KioskOwnerCap, bid: Coin<SUI>) {
         assert!(kiosk.has_access(cap), ENotOwner);
         assert!(ext::is_installed<Ext<Market>>(kiosk), ENotInstalled);
 
@@ -51,13 +49,15 @@ module sui::kiosk_marketplace_ext {
         source: &mut Kiosk,
         purchase_cap: PurchaseCap<T>,
         policy: &TransferPolicy<T>,
-        lock: bool
+        lock: bool,
     ): (TransferRequest<T>, TransferRequest<Market>) {
         let bid: Coin<SUI> = ext::storage_mut(Ext<Market> {}, destination).remove(Bid<T> {});
 
         // form the request while we have all the data (not yet consumed)
         let market_request = policy::new_request(
-            kiosk::purchase_cap_item(&purchase_cap), bid.value(), object::id(source)
+            kiosk::purchase_cap_item(&purchase_cap),
+            bid.value(),
+            object::id(source),
         );
 
         assert!(kiosk::purchase_cap_kiosk(&purchase_cap) == object::id(source), EIncorrectKiosk);
@@ -70,17 +70,18 @@ module sui::kiosk_marketplace_ext {
         if (lock) ext::lock(Ext<Market> {}, destination, item, policy)
         else ext::place(Ext<Market> {}, destination, item, policy);
 
-        (
-            request,
-            market_request
-        )
+        (request, market_request)
     }
 
     // === List / Delist / Purchase ===
 
     /// List an item for sale.
     public fun list<Market, T: key + store>(
-        kiosk: &mut Kiosk, cap: &KioskOwnerCap, item_id: ID, price: u64, ctx: &mut TxContext
+        kiosk: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        item_id: ID,
+        price: u64,
+        ctx: &mut TxContext,
     ) {
         let purchase_cap = kiosk.list_with_purchase_cap<T>(cap, item_id, price, ctx);
 
@@ -99,32 +100,23 @@ module sui::kiosk_marketplace_ext {
         let market_request = policy::new_request(item_id, payment.value(), object::id(kiosk));
         let (item, request) = kiosk.purchase_with_cap(purchase_cap, payment);
 
-        (
-            item,
-            request,
-            market_request
-        )
+        (item, request, market_request)
     }
 
     /// Delist an item.
     /// Note: the extension needs to be "trusted" - i.e. having PurchaseCap stored
     /// in the extension storage is not absolutely secure.
-    public fun delist<Market, T: key + store>(
-        kiosk: &mut Kiosk,
-        cap: &KioskOwnerCap,
-        item_id: ID,
-    ) {
+    public fun delist<Market, T: key + store>(kiosk: &mut Kiosk, cap: &KioskOwnerCap, item_id: ID) {
         assert!(kiosk.has_access(cap), ENotOwner);
         let purchase_cap: PurchaseCap<T> = ext::storage_mut(Ext<Market> {}, kiosk).remove(item_id);
         kiosk.return_purchase_cap(purchase_cap);
     }
 }
 
-
 #[test_only]
 module sui::kiosk_extensions_tests {
-    use sui::kiosk_test_utils::{Self as test};
     use sui::kiosk_extension as ext;
+    use sui::kiosk_test_utils as test;
 
     /// The `Ext` witness to use for testing.
     public struct Extension has drop {}
@@ -219,7 +211,7 @@ module sui::kiosk_extensions_tests {
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_policy(policy, policy_cap, ctx);
-        test::return_assets(vector[ asset ]);
+        test::return_assets(vector[asset]);
     }
 
     // === EExtensionNotInstalled ===

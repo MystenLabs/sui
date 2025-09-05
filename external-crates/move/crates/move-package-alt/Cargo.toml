@@ -1,0 +1,57 @@
+[package]
+name = "move-package-alt"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+default-run = "move-package-alt"
+
+[dependencies]
+anyhow.workspace = true
+append-only-vec.workspace = true
+clap.workspace = true
+codespan-reporting.workspace = true
+derive-where.workspace = true
+futures.workspace = true
+indoc.workspace = true
+itertools.workspace = true
+jsonrpc.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+once_cell.workspace = true
+path-clean.workspace = true
+petgraph.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_spanned.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+git2 = "0.20.2"
+datatest-stable.workspace = true
+insta.workspace = true
+test-log.workspace = true
+url.workspace = true
+walkdir.workspace = true
+heck.workspace = true
+
+[[bin]]
+name = "mock-resolver"
+path = "src/mocks/mock-resolver.rs"
+
+[[bin]]
+name = "mock-resolver-2"
+path = "src/mocks/mock-resolver-2.rs"
+
+[[test]]
+name = "test_runner"
+harness = false

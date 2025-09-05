@@ -1,0 +1,8 @@
+// Move bytecode v6
+module 1.debug {
+
+native public print<Ty0>(Arg0: &Ty0);
+
+native public print_stack_trace();
+
+}

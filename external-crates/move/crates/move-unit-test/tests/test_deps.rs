@@ -12,11 +12,11 @@ use std::path::PathBuf;
 #[test]
 fn test_deps_arent_tested() {
     let mut testing_config = UnitTestingConfig::default_with_bound(None)
-        .with_named_addresses(move_stdlib::move_stdlib_named_addresses());
+        .with_named_addresses(move_stdlib::named_addresses());
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let a_path = path.join("tests/sources/A.move");
     let b_path = path.join("tests/sources/B.move");
-    let mut deps = move_stdlib::move_stdlib_files();
+    let mut deps = move_stdlib::source_files();
     deps.push(a_path.to_string_lossy().to_string());
 
     testing_config.source_files = vec![b_path.to_str().unwrap().to_owned()];

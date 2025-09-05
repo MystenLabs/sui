@@ -1,0 +1,6 @@
+[package]
+name = "Counter"
+edition = "2024.beta"
+
+[addresses]
+counter = "0x0"

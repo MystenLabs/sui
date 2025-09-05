@@ -1,0 +1,30 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 8-26:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4522000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 28:
+//# run Test::M::t2
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` or `public` functions"), command: Some(0) } }
+
+task 3, line 30:
+//# run Test::M::t3
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` or `public` functions"), command: Some(0) } }
+
+task 4, line 32:
+//# run Test::M::t4 --args 0
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+
+task 5, line 34:
+//# run Test::M::t5 --args 0
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }

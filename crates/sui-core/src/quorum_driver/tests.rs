@@ -383,15 +383,18 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
 
     let res = quorum_driver
         .submit_transaction(ExecuteTransactionRequestV3::new_v2(tx3))
-        .await
-        .unwrap()
+        .await?
         .await;
 
     if let Err(QuorumDriverError::ObjectsDoubleUsed { conflicting_txes }) = res {
-        assert_eq!(conflicting_txes.len(), 2);
         let tx_stake = conflicting_txes.get(tx.digest()).unwrap().1;
-        assert!(tx_stake == 2500 || tx_stake == 5000);
-        assert_eq!(conflicting_txes.get(tx2.digest()).unwrap().1, 2500);
+        if tx_stake == 5000 {
+            assert_eq!(conflicting_txes.len(), 1);
+        } else {
+            assert_eq!(conflicting_txes.len(), 2);
+            assert_eq!(tx_stake, 2500);
+            assert_eq!(conflicting_txes.get(tx2.digest()).unwrap().1, 2500);
+        }
     } else {
         panic!(
             "expect Err(QuorumDriverError::ObjectsDoubleUsed) but got {:?}",

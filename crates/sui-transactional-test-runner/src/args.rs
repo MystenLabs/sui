@@ -47,6 +47,8 @@ pub struct SuiPublishArgs {
     pub dependencies: Vec<String>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
+    #[clap(long = "dry-run")]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -121,11 +123,13 @@ pub struct ProgrammableTransactionCommand {
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
     #[clap(long = "gas-payment", value_parser = parse_fake_id)]
-    pub gas_payment: Option<FakeID>,
+    pub gas_payment: Option<Vec<FakeID>>,
     #[clap(long = "dev-inspect")]
     pub dev_inspect: bool,
     #[clap(long = "dry-run")]
     pub dry_run: bool,
+    #[clap(long = "expiration")]
+    pub expiration: Option<u64>,
     #[clap(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
@@ -147,6 +151,8 @@ pub struct UpgradePackageCommand {
     pub sender: String,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "dry-run")]
+    pub dry_run: bool,
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
     #[clap(long = "policy", default_value="compatible", value_parser = parse_policy)]
@@ -172,8 +178,10 @@ pub struct SetAddressCommand {
 
 #[derive(Debug, clap::Parser)]
 pub struct AdvanceClockCommand {
+    #[clap(long = "duration")]
+    pub duration: Option<String>,
     #[clap(long = "duration-ns")]
-    pub duration_ns: u64,
+    pub duration_ns: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -208,6 +216,32 @@ pub struct AdvanceEpochCommand {
     pub count: Option<u64>,
     #[clap(long = "create-random-state")]
     pub create_random_state: bool,
+    #[clap(long = "create-authenticator-state")]
+    pub create_authenticator_state: bool,
+    #[clap(long = "create-authenticator-state-expire")]
+    pub create_authenticator_state_expire: bool,
+    #[clap(long = "create-deny-list-state")]
+    pub create_deny_list_state: bool,
+    #[clap(long = "create-bridge-state")]
+    pub create_bridge_state: bool,
+    #[clap(long = "create-bridge-committee")]
+    pub create_bridge_committee: bool,
+    #[clap(long = "system-packages-snapshot")]
+    pub system_packages_snapshot: Option<u64>,
+}
+
+impl From<&AdvanceEpochCommand> for simulacrum::AdvanceEpochConfig {
+    fn from(cmd: &AdvanceEpochCommand) -> Self {
+        Self {
+            create_random_state: cmd.create_random_state,
+            create_authenticator_state: cmd.create_authenticator_state,
+            create_authenticator_state_expire: cmd.create_authenticator_state_expire,
+            create_deny_list_state: cmd.create_deny_list_state,
+            create_bridge_state: cmd.create_bridge_state,
+            create_bridge_committee: cmd.create_bridge_committee,
+            system_packages_snapshot: cmd.system_packages_snapshot,
+        }
+    }
 }
 
 #[derive(Debug, clap::Parser)]
@@ -218,6 +252,18 @@ pub struct SetRandomStateCommand {
     pub random_bytes: String,
     #[clap(long = "randomness-initial-version")]
     pub randomness_initial_version: u64,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct AuthenticatorStateUpdateCommand {
+    #[clap(long = "round")]
+    pub round: u64,
+    /// List of JWK issuers (e.g., "google.com,microsoft.com").
+    /// Key IDs will be automatically generated as "key1", "key2", etc.
+    #[clap(long = "jwk-iss", action = clap::ArgAction::Append)]
+    pub jwk_iss: Vec<String>,
+    #[clap(long = "authenticator-obj-initial-shared-version")]
+    pub authenticator_obj_initial_shared_version: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -233,6 +279,7 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     AdvanceEpoch(AdvanceEpochCommand),
     AdvanceClock(AdvanceClockCommand),
     SetRandomState(SetRandomStateCommand),
+    AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand),
     ViewCheckpoint,
     RunGraphql(RunGraphqlCommand),
     RunJsonRpc(RunJsonRpcCommand),
@@ -277,6 +324,11 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
             Some(("set-random-state", matches)) => {
                 SuiSubcommand::SetRandomState(SetRandomStateCommand::from_arg_matches(matches)?)
             }
+            Some(("authenticator-state-update", matches)) => {
+                SuiSubcommand::AuthenticatorStateUpdate(
+                    AuthenticatorStateUpdateCommand::from_arg_matches(matches)?,
+                )
+            }
             Some(("view-checkpoint", _)) => SuiSubcommand::ViewCheckpoint,
             Some(("run-graphql", matches)) => {
                 SuiSubcommand::RunGraphql(RunGraphqlCommand::from_arg_matches(matches)?)
@@ -319,6 +371,9 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(AdvanceEpochCommand::command().name("advance-epoch"))
             .subcommand(AdvanceClockCommand::command().name("advance-clock"))
             .subcommand(SetRandomStateCommand::command().name("set-random-state"))
+            .subcommand(
+                AuthenticatorStateUpdateCommand::command().name("authenticator-state-update"),
+            )
             .subcommand(clap::Command::new("view-checkpoint"))
             .subcommand(RunGraphqlCommand::command().name("run-graphql"))
             .subcommand(RunJsonRpcCommand::command().name("run-jsonrpc"))
@@ -509,7 +564,7 @@ impl SuiValue {
             Owner::Shared {
                 initial_shared_version,
             }
-            | Owner::ConsensusV2 {
+            | Owner::ConsensusAddressOwner {
                 start_version: initial_shared_version,
                 ..
             } => Ok(ObjectArg::SharedObject {

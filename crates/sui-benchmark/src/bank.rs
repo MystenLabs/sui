@@ -51,7 +51,7 @@ impl BenchmarkBank {
         let mut new_gas_coins: Vec<Gas> = vec![];
         let chunked_coin_configs = all_coin_configs.chunks(chunk_size as usize);
 
-        // Split off the initlization coin for this workload, to reduce contention
+        // Split off the initialization coin for this workload, to reduce contention
         // of main gas coin used by other instances of this tool.
         let total_gas_needed: u64 = all_coin_configs.iter().map(|c| c.amount).sum();
         let mut init_coin = self
@@ -121,7 +121,8 @@ impl BenchmarkBank {
             MAX_BUDGET,
         );
 
-        let effects = self.proxy.execute_transaction_block(tx).await?;
+        let (_, execution_result) = self.proxy.execute_transaction_block(tx).await;
+        let effects = execution_result?;
 
         if !effects.is_ok() {
             effects.print_gas_summary();
@@ -172,7 +173,8 @@ impl BenchmarkBank {
             gas_price,
         );
 
-        let effects = self.proxy.execute_transaction_block(tx).await?;
+        let (_, execution_result) = self.proxy.execute_transaction_block(tx).await;
+        let effects = execution_result?;
 
         if !effects.is_ok() {
             effects.print_gas_summary();

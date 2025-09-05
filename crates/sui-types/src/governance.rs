@@ -16,15 +16,21 @@ use crate::SUI_SYSTEM_ADDRESS;
 use serde::Deserialize;
 use serde::Serialize;
 
+// === Pre SIP-39 Constants ===
+
 /// Maximum number of active validators at any moment.
 /// We do not allow the number of validators in any epoch to go above this.
 pub const MAX_VALIDATOR_COUNT: u64 = 150;
 
+#[deprecated(note = "SIP-39 removes min barreier for joining the validator set")]
 /// Lower-bound on the amount of stake required to become a validator.
 ///
 /// 30 million SUI
 pub const MIN_VALIDATOR_JOINING_STAKE_MIST: u64 = 30_000_000 * MIST_PER_SUI;
 
+#[deprecated(note = "SIP-39 removes low barreier for joining the validator set")]
+/// Deprecated: with SIP-39 there is no longer a minimum stake requirement.
+///
 /// Validators with stake amount below `validator_low_stake_threshold` are considered to
 /// have low stake and will be escorted out of the validator set after being below this
 /// threshold for more than `validator_low_stake_grace_period` number of epochs.
@@ -32,11 +38,63 @@ pub const MIN_VALIDATOR_JOINING_STAKE_MIST: u64 = 30_000_000 * MIST_PER_SUI;
 /// 20 million SUI
 pub const VALIDATOR_LOW_STAKE_THRESHOLD_MIST: u64 = 20_000_000 * MIST_PER_SUI;
 
+#[deprecated(note = "SIP-39 removes very low barreier for joining the validator set")]
 /// Validators with stake below `validator_very_low_stake_threshold` will be removed
 /// immediately at epoch change, no grace period.
 ///
 /// 15 million SUI
 pub const VALIDATOR_VERY_LOW_STAKE_THRESHOLD_MIST: u64 = 15_000_000 * MIST_PER_SUI;
+
+/// Number of epochs for a single phase of SIP-39 since the change
+pub const SIP_39_PHASE_LENGTH: u64 = 14;
+
+// === Post SIP-39 (Phase 1) ===
+
+/// Minimum amount of voting power required to become a validator in Phase 1.
+/// .12% of voting power
+pub const VALIDATOR_MIN_POWER_PHASE_1: u64 = 12;
+
+/// Low voting power threshold for validators in Phase 1.
+/// Validators below this threshold fall into the "at risk" group.
+/// .08% of voting power
+pub const VALIDATOR_LOW_POWER_PHASE_1: u64 = 8;
+
+/// Very low voting power threshold for validators in Phase 1.
+/// Validators below this threshold will be removed immediately at epoch change.
+/// .04% of voting power
+pub const VALIDATOR_VERY_LOW_POWER_PHASE_1: u64 = 4;
+
+// === Post SIP-39 (Phase 2) ===
+
+/// Minimum amount of voting power required to become a validator in Phase 2.
+/// .12% of voting power
+pub const VALIDATOR_MIN_POWER_PHASE_2: u64 = 6;
+
+/// Low voting power threshold for validators in Phase 2.
+/// Validators below this threshold fall into the "at risk" group.
+/// .08% of voting power
+pub const VALIDATOR_LOW_POWER_PHASE_2: u64 = 4;
+
+/// Very low voting power threshold for validators in Phase 2.
+/// Validators below this threshold will be removed immediately at epoch change.
+/// .04% of voting power
+pub const VALIDATOR_VERY_LOW_POWER_PHASE_2: u64 = 2;
+
+// === Post SIP-39 (Phase 3) ===
+
+/// Minimum amount of voting power required to become a validator in Phase 3.
+/// .03% of voting power
+pub const VALIDATOR_MIN_POWER_PHASE_3: u64 = 3;
+
+/// Low voting power threshold for validators in Phase 3.
+/// Validators below this threshold fall into the "at risk" group.
+/// .02% of voting power
+pub const VALIDATOR_LOW_POWER_PHASE_3: u64 = 2;
+
+/// Very low voting power threshold for validators in Phase 3.
+/// Validators below this threshold will be removed immediately at epoch change.
+/// .01% of voting power
+pub const VALIDATOR_VERY_LOW_POWER_PHASE_3: u64 = 1;
 
 /// A validator can have stake below `validator_low_stake_threshold`
 /// for this many epochs before being kicked out.

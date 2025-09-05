@@ -1,0 +1,11 @@
+[package]
+name = "slow"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+slow =  "0x0"
+sui =  "0000000000000000000000000000000000000000000000000000000000000002"

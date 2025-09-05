@@ -47,11 +47,12 @@ async fn direct_commit() {
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
-    if let DecidedLeader::Commit(ref block) = sequence[0] {
+    if let DecidedLeader::Commit(ref block, direct) = sequence[0] {
         assert_eq!(
             block.author(),
             test_setup.committer.get_leaders(leader_round_wave_1)[0]
-        )
+        );
+        assert!(direct);
     } else {
         panic!("Expected a committed leader")
     };
@@ -77,7 +78,7 @@ async fn idempotence() {
     let first_sequence = committer.try_decide(last_decided);
     assert_eq!(first_sequence.len(), 1);
 
-    if let DecidedLeader::Commit(ref block) = first_sequence[0] {
+    if let DecidedLeader::Commit(ref block, _direct) = first_sequence[0] {
         assert_eq!(first_sequence[0].round(), leader_round_wave_1);
         assert_eq!(
             block.author(),
@@ -92,7 +93,7 @@ async fn idempotence() {
     let first_sequence = committer.try_decide(last_decided);
 
     assert_eq!(first_sequence.len(), 1);
-    if let DecidedLeader::Commit(ref block) = first_sequence[0] {
+    if let DecidedLeader::Commit(ref block, _direct) = first_sequence[0] {
         assert_eq!(first_sequence[0].round(), leader_round_wave_1);
         assert_eq!(
             block.author(),
@@ -123,7 +124,7 @@ async fn idempotence() {
     tracing::info!("Commit sequence: {second_sequence:#?}");
 
     assert_eq!(second_sequence.len(), 1);
-    if let DecidedLeader::Commit(ref block) = second_sequence[0] {
+    if let DecidedLeader::Commit(ref block, _direct) = second_sequence[0] {
         assert_eq!(second_sequence[0].round(), leader_round_wave_2);
         assert_eq!(
             block.author(),
@@ -158,9 +159,10 @@ async fn multiple_direct_commit() {
         tracing::info!("Commit sequence: {sequence:#?}");
 
         assert_eq!(sequence.len(), 1);
-        if let DecidedLeader::Commit(ref block) = sequence[0] {
+        if let DecidedLeader::Commit(ref block, direct) = sequence[0] {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
+            assert!(direct);
         } else {
             panic!("Expected a committed leader")
         }
@@ -196,9 +198,10 @@ async fn direct_commit_late_call() {
     assert_eq!(sequence.len(), num_waves - 1_usize);
     for (i, leader_block) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(i as u32 + 1);
-        if let DecidedLeader::Commit(ref block) = leader_block {
+        if let DecidedLeader::Commit(ref block, direct) = leader_block {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
+            assert!(direct);
         } else {
             panic!("Expected a committed leader")
         };
@@ -388,7 +391,7 @@ async fn indirect_commit() {
     for (idx, decided_leader) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(idx as u32 + 1);
         let expected_leader = committer.get_leaders(leader_round)[0];
-        if let DecidedLeader::Commit(ref block) = decided_leader {
+        if let DecidedLeader::Commit(ref block, _direct) = decided_leader {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), expected_leader);
         } else {
@@ -468,7 +471,7 @@ async fn indirect_skip() {
     // Ensure we commit the leader of wave 1 directly.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let leader_wave_1 = committer.get_leaders(leader_round_wave_1)[0];
-    if let DecidedLeader::Commit(ref block) = sequence[0] {
+    if let DecidedLeader::Commit(ref block, _direct) = sequence[0] {
         assert_eq!(block.round(), leader_round_wave_1);
         assert_eq!(block.author(), leader_wave_1);
     } else {
@@ -489,7 +492,7 @@ async fn indirect_skip() {
     // Ensure we commit the 3rd leader directly.
     let leader_round_wave_3 = committer.committers[0].leader_round(3);
     let leader_wave_3 = committer.get_leaders(leader_round_wave_3)[0];
-    if let DecidedLeader::Commit(ref block) = sequence[2] {
+    if let DecidedLeader::Commit(ref block, _direct) = sequence[2] {
         assert_eq!(block.round(), leader_round_wave_3);
         assert_eq!(block.author(), leader_wave_3);
     } else {
@@ -696,11 +699,12 @@ async fn test_byzantine_direct_commit() {
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 4);
-    if let DecidedLeader::Commit(ref block) = sequence[3] {
+    if let DecidedLeader::Commit(ref block, direct) = sequence[3] {
         assert_eq!(
             block.author(),
             committer.get_leaders(leader_round_wave_4)[0]
-        )
+        );
+        assert!(direct);
     } else {
         panic!("Expected a committed leader")
     };

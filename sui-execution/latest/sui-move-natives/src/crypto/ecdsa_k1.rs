@@ -82,7 +82,7 @@ pub fn ecrecover(
 
     // Load the cost parameters from the protocol config
     let (ecdsa_k1_ecrecover_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.ecdsa_k1_ecrecover_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -117,8 +117,8 @@ pub fn ecrecover(
     let msg = pop_arg!(args, VectorRef);
     let signature = pop_arg!(args, VectorRef);
 
-    let msg_ref = &*msg.as_bytes_ref();
-    let signature_ref = &*signature.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref();
+    let signature_ref = signature.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
@@ -129,13 +129,13 @@ pub fn ecrecover(
 
     let cost = context.gas_used();
 
-    let Ok(sig) = <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(signature_ref) else {
+    let Ok(sig) = <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) else {
         return Ok(NativeResult::err(cost, INVALID_SIGNATURE));
     };
 
     let pk = match hash {
-        KECCAK256 => sig.recover_with_hash::<Keccak256>(msg_ref),
-        SHA256 => sig.recover_with_hash::<Sha256>(msg_ref),
+        KECCAK256 => sig.recover_with_hash::<Keccak256>(&msg_ref),
+        SHA256 => sig.recover_with_hash::<Sha256>(&msg_ref),
         _ => Err(FastCryptoError::InvalidInput), // We should never reach here
     };
 
@@ -163,7 +163,7 @@ pub fn decompress_pubkey(
     // Load the cost parameters from the protocol config
     let ecdsa_k1_decompress_pubkey_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .ecdsa_k1_decompress_pubkey_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -173,11 +173,11 @@ pub fn decompress_pubkey(
     );
 
     let pubkey = pop_arg!(args, VectorRef);
-    let pubkey_ref = &*pubkey.as_bytes_ref();
+    let pubkey_ref = pubkey.as_bytes_ref();
 
     let cost = context.gas_used();
 
-    match Secp256k1PublicKey::from_bytes(pubkey_ref) {
+    match Secp256k1PublicKey::from_bytes(&pubkey_ref) {
         Ok(pubkey) => {
             let uncompressed = &pubkey.pubkey.serialize_uncompressed();
             Ok(NativeResult::ok(
@@ -228,7 +228,7 @@ pub fn secp256k1_verify(
 
     // Load the cost parameters from the protocol config
     let (ecdsa_k1_secp256k1_verify_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.ecdsa_k1_secp256k1_verify_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -269,9 +269,9 @@ pub fn secp256k1_verify(
     let public_key_bytes = pop_arg!(args, VectorRef);
     let signature_bytes = pop_arg!(args, VectorRef);
 
-    let msg_ref = &*msg.as_bytes_ref();
-    let public_key_bytes_ref = &*public_key_bytes.as_bytes_ref();
-    let signature_bytes_ref = &*signature_bytes.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
@@ -282,17 +282,17 @@ pub fn secp256k1_verify(
 
     let cost = context.gas_used();
 
-    let Ok(sig) = <Secp256k1Signature as ToFromBytes>::from_bytes(signature_bytes_ref) else {
+    let Ok(sig) = <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let Ok(pk) = <Secp256k1PublicKey as ToFromBytes>::from_bytes(public_key_bytes_ref) else {
+    let Ok(pk) = <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     let result = match hash {
-        KECCAK256 => pk.verify_with_hash::<Keccak256>(msg_ref, &sig).is_ok(),
-        SHA256 => pk.verify_with_hash::<Sha256>(msg_ref, &sig).is_ok(),
+        KECCAK256 => pk.verify_with_hash::<Keccak256>(&msg_ref, &sig).is_ok(),
+        SHA256 => pk.verify_with_hash::<Sha256>(&msg_ref, &sig).is_ok(),
         _ => false,
     };
 
@@ -323,10 +323,10 @@ pub fn secp256k1_sign(
     let msg = pop_arg!(args, VectorRef);
     let private_key_bytes = pop_arg!(args, VectorRef);
 
-    let msg_ref = &*msg.as_bytes_ref();
-    let private_key_bytes_ref = &*private_key_bytes.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref();
+    let private_key_bytes_ref = private_key_bytes.as_bytes_ref();
 
-    let sk = match <Secp256k1PrivateKey as ToFromBytes>::from_bytes(private_key_bytes_ref) {
+    let sk = match <Secp256k1PrivateKey as ToFromBytes>::from_bytes(&private_key_bytes_ref) {
         Ok(sk) => sk,
         Err(_) => return Ok(NativeResult::err(cost, INVALID_PRIVKEY)),
     };
@@ -335,15 +335,15 @@ pub fn secp256k1_sign(
 
     let signature = match (hash, recoverable) {
         (KECCAK256, true) => kp
-            .sign_recoverable_with_hash::<Keccak256>(msg_ref)
+            .sign_recoverable_with_hash::<Keccak256>(&msg_ref)
             .as_bytes()
             .to_vec(),
-        (KECCAK256, false) => kp.sign_with_hash::<Keccak256>(msg_ref).as_bytes().to_vec(),
+        (KECCAK256, false) => kp.sign_with_hash::<Keccak256>(&msg_ref).as_bytes().to_vec(),
         (SHA256, true) => kp
-            .sign_recoverable_with_hash::<Sha256>(msg_ref)
+            .sign_recoverable_with_hash::<Sha256>(&msg_ref)
             .as_bytes()
             .to_vec(),
-        (SHA256, false) => kp.sign_with_hash::<Sha256>(msg_ref).as_bytes().to_vec(),
+        (SHA256, false) => kp.sign_with_hash::<Sha256>(&msg_ref).as_bytes().to_vec(),
         _ => return Ok(NativeResult::err(cost, INVALID_HASH_FUNCTION)),
     };
 
@@ -372,13 +372,13 @@ pub fn secp256k1_keypair_from_seed(
     let cost = 0.into();
 
     let seed = pop_arg!(args, VectorRef);
-    let seed_ref = &*seed.as_bytes_ref();
+    let seed_ref = seed.as_bytes_ref();
 
     if seed_ref.len() != SEED_LENGTH {
         return Ok(NativeResult::err(cost, INVALID_SEED));
     }
     let mut seed_array = [0u8; SEED_LENGTH];
-    seed_array.clone_from_slice(seed_ref);
+    seed_array.clone_from_slice(&seed_ref);
 
     let kp = Secp256k1KeyPair::generate(&mut StdRng::from_seed(seed_array));
 

@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_parsing_emits_fail.move:2:5
+  │
+2 │     spec with_emits {
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

@@ -29,6 +29,8 @@ This is the root document for the Move stdlib module documentation. The Move std
 -  [`u32`](../std/u32.md#std_u32)
 -  [`u64`](../std/u64.md#std_u64)
 -  [`u8`](../std/u8.md#std_u8)
+-  [`uq32_32`](../std/uq32_32.md#std_uq32_32)
+-  [`uq64_64`](../std/uq64_64.md#std_uq64_64)
 -  [`vector`](../std/vector.md#std_vector)
 
 

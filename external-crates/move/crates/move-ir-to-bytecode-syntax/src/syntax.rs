@@ -352,7 +352,7 @@ fn parse_copyable_val(tokens: &mut Lexer) -> Result<CopyableVal, ParseError<Loc,
             return Err(ParseError::InvalidToken {
                 location: current_token_loc(tokens),
                 message: format!("unrecognized token kind {:?}", t),
-            })
+            });
         }
     };
     let end_loc = tokens.previous_end_loc();
@@ -502,7 +502,7 @@ fn parse_qualified_function_name(
                     "unrecognized token kind for qualified function name {:?}",
                     t
                 ),
-            })
+            });
         }
     };
     let end_loc = tokens.previous_end_loc();
@@ -1310,7 +1310,7 @@ fn parse_ability(tokens: &mut Lexer) -> Result<(Ability, Loc), ParseError<Loc, a
             return Err(ParseError::InvalidToken {
                 location: current_token_loc(tokens),
                 message: "could not parse ability".to_string(),
-            })
+            });
         }
     };
     tokens.advance()?;
@@ -1393,7 +1393,7 @@ fn parse_type(tokens: &mut Lexer) -> Result<Type, ParseError<Loc, anyhow::Error>
             return Err(ParseError::InvalidToken {
                 location: current_token_loc(tokens),
                 message: format!("invalid token kind for type {:?}", t),
-            })
+            });
         }
     };
     let end_loc = tokens.previous_end_loc();
@@ -1874,6 +1874,7 @@ fn parse_import_decl(
 }
 
 // pub Module : ModuleDefinition = {
+//     ["unpublishable"]
 //     "module" <n: Name> "{"
 //         <friends: (FriendDecl)*>
 //         <imports: (ImportDecl)*>
@@ -1893,6 +1894,13 @@ fn is_enum_decl(tokens: &mut Lexer) -> bool {
 }
 
 fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
+    let publishable =
+        if matches!(tokens.peek(), Tok::NameValue) && tokens.content() == "unpublishable" {
+            tokens.advance()?;
+            false
+        } else {
+            true
+        };
     let start_loc = tokens.start_loc();
     consume_token(tokens, Tok::Module)?;
     let identifier = parse_module_ident(tokens)?;
@@ -1929,6 +1937,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
     Ok(ModuleDefinition::new(
         None,
         loc,
+        publishable,
         identifier,
         friends,
         imports,

@@ -1,4 +1,0 @@
-# Returns the chain identifier for the chain that the server is tracking
-{
-  chainIdentifier
-}

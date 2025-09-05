@@ -6,7 +6,7 @@ mod state;
 
 use super::{
     absint::*,
-    cfg::{MutForwardCFG, MutReverseCFG, ReverseCFG, CFG},
+    cfg::{CFG, MutForwardCFG, MutReverseCFG, ReverseCFG},
     locals,
 };
 use crate::{
@@ -63,8 +63,6 @@ impl TransferFunctions for Liveness {
     }
 }
 
-impl AbstractInterpreter for Liveness {}
-
 //**************************************************************************************************
 // Analysis
 //**************************************************************************************************
@@ -76,7 +74,7 @@ fn analyze(
     let reverse = &mut ReverseCFG::new(cfg, infinite_loop_starts);
     let initial_state = LivenessState::initial();
     let mut liveness = Liveness::new(reverse);
-    let (final_invariants, errors) = liveness.analyze_function(reverse, initial_state);
+    let (final_invariants, errors) = analyze_function(&mut liveness, reverse, initial_state);
     assert!(errors.is_empty());
     (final_invariants, liveness.states)
 }
@@ -186,11 +184,11 @@ mod last_usage {
     use move_proc_macros::growing_stack;
 
     use crate::{
-        cfgir::{liveness::state::LivenessState, CFGContext},
+        cfgir::{CFGContext, liveness::state::LivenessState},
         diag,
         hlir::{
             ast::*,
-            translate::{display_var, DisplayVar},
+            translate::{DisplayVar, display_var},
         },
     };
     use std::collections::{BTreeSet, VecDeque};

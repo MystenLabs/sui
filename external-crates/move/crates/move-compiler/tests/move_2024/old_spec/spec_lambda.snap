@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_lambda.move:2:5
+  │
+2 │     spec fun do(f: ||) { }
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/old_spec/spec_lambda.move:2:17
+  │
+2 │     spec fun do(f: ||) { }
+  │                 ^ Unused parameter 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04030]: invalid usage of lambda type
+  ┌─ tests/move_2024/old_spec/spec_lambda.move:2:20
+  │
+2 │     spec fun do(f: ||) { }
+  │                    ^^ Unexpected lambda type. Lambdas can only be used with 'macro' functions, as parameters or direct arguments

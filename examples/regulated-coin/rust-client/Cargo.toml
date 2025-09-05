@@ -1,0 +1,20 @@
+[package]
+name = "rust-client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.79"
+bcs = "0.1.6"
+clap = { version = "4.4.18", features = ["derive"] }
+dotenvy = "0.15.7"
+move-core-types = { git = "https://github.com/MystenLabs/sui", branch="main" }
+shared-crypto = { git = "https://github.com/MystenLabs/sui", branch = "main" } 
+sui-config = { git = "https://github.com/MystenLabs/sui", branch="main" }
+sui-keys = { git = "https://github.com/MystenLabs/sui", branch="main" }
+sui-sdk = { git = "https://github.com/MystenLabs/sui", branch="main" }
+tokio = { version = "1.35.1", features = ["full"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

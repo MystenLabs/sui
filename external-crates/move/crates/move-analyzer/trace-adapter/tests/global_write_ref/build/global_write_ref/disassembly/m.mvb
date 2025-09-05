@@ -1,0 +1,74 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000002::linked_table;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+
+foo(table#0#0: &LinkedTable<u64, u8>): u64 {
+L1:	key#1#0: u64
+L2:	option_key#1#0: &Option<u64>
+L3:	res#1#0: u64
+B0:
+	0: LdU64(0)
+	1: StLoc[3](res#1#0: u64)
+	2: CopyLoc[0](table#0#0: &LinkedTable<u64, u8>)
+	3: Call linked_table::front<u64, u8>(&LinkedTable<u64, u8>): &Option<u64>
+	4: StLoc[2](option_key#1#0: &Option<u64>)
+B1:
+	5: CopyLoc[2](option_key#1#0: &Option<u64>)
+	6: Call option::is_some<u64>(&Option<u64>): bool
+	7: BrFalse(22)
+B2:
+	8: Branch(9)
+B3:
+	9: MoveLoc[2](option_key#1#0: &Option<u64>)
+	10: Call option::borrow<u64>(&Option<u64>): &u64
+	11: ReadRef
+	12: StLoc[1](key#1#0: u64)
+	13: MoveLoc[3](res#1#0: u64)
+	14: CopyLoc[1](key#1#0: u64)
+	15: Add
+	16: StLoc[3](res#1#0: u64)
+	17: CopyLoc[0](table#0#0: &LinkedTable<u64, u8>)
+	18: MoveLoc[1](key#1#0: u64)
+	19: Call linked_table::next<u64, u8>(&LinkedTable<u64, u8>, u64): &Option<u64>
+	20: StLoc[2](option_key#1#0: &Option<u64>)
+	21: Branch(5)
+B4:
+	22: MoveLoc[0](table#0#0: &LinkedTable<u64, u8>)
+	23: Pop
+	24: MoveLoc[2](option_key#1#0: &Option<u64>)
+	25: Pop
+	26: MoveLoc[3](res#1#0: u64)
+	27: Ret
+}
+
+test() {
+L0:	%#1: TxContext
+L1:	table#1#0: LinkedTable<u64, u8>
+B0:
+	0: Call tx_context::dummy(): TxContext
+	1: StLoc[0](%#1: TxContext)
+	2: MutBorrowLoc[0](%#1: TxContext)
+	3: Call linked_table::new<u64, u8>(&mut TxContext): LinkedTable<u64, u8>
+	4: StLoc[1](table#1#0: LinkedTable<u64, u8>)
+	5: MutBorrowLoc[1](table#1#0: LinkedTable<u64, u8>)
+	6: LdU64(7)
+	7: LdU8(42)
+	8: Call linked_table::push_back<u64, u8>(&mut LinkedTable<u64, u8>, u64, u8)
+	9: ImmBorrowLoc[1](table#1#0: LinkedTable<u64, u8>)
+	10: Call foo(&LinkedTable<u64, u8>): u64
+	11: Pop
+	12: MoveLoc[1](table#1#0: LinkedTable<u64, u8>)
+	13: Call linked_table::drop<u64, u8>(LinkedTable<u64, u8>)
+	14: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

@@ -5,7 +5,8 @@
 module ibe::tests;
 
 use ibe::example;
-use sui::{bcs, bls12381};
+use sui::bcs;
+use sui::bls12381;
 
 #[test_only]
 use std::hash::sha2_256;

@@ -4,12 +4,13 @@
 use crate::{
     check_completed_snapshot,
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
-    get_latest_available_epoch, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    download_db_snapshot, download_formal_snapshot, get_latest_available_epoch, get_object,
+    get_transaction_block, make_clients, restore_from_db_checkpoint, ConciseObjectOutput,
     GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
 };
 use anyhow::Result;
+use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
+use consensus_core::{BlockAPI, CommitAPI, CommitRange};
 use futures::{future::join_all, StreamExt};
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
@@ -18,6 +19,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
 use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
+use sui_types::messages_consensus::ConsensusTransaction;
 use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
@@ -26,7 +28,6 @@ use sui_types::{
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
-use sui_archival::{read_manifest_as_json, write_manifest_from_json};
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
@@ -44,6 +45,16 @@ pub enum Verbosity {
 
 #[derive(Parser)]
 pub enum ToolCommand {
+    #[command(name = "scan-consensus-commits")]
+    ScanConsensusCommits {
+        #[arg(long = "db-path")]
+        db_path: String,
+        #[arg(long = "start-commit")]
+        start_commit: Option<u32>,
+        #[arg(long = "end-commit")]
+        end_commit: Option<u32>,
+    },
+
     /// Inspect if a specific object is or all gas objects owned by an address are locked by validators
     #[command(name = "locked-object")]
     LockedObject {
@@ -129,53 +140,6 @@ pub enum ToolCommand {
         #[command(subcommand)]
         cmd: Option<DbToolCommand>,
     },
-
-    /// Tool to verify the archive store
-    #[command(name = "verify-archive")]
-    VerifyArchive {
-        #[arg(long = "genesis")]
-        genesis: PathBuf,
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-        #[arg(default_value_t = 5)]
-        download_concurrency: usize,
-    },
-
-    /// Tool to print the archive manifest
-    #[command(name = "print-archive-manifest")]
-    PrintArchiveManifest {
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-    },
-    /// Tool to update the archive manifest
-    #[command(name = "update-archive-manifest")]
-    UpdateArchiveManifest {
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-        #[arg(long = "archive-path")]
-        archive_json_path: PathBuf,
-    },
-    /// Tool to verify the archive store by comparing file checksums
-    #[command(name = "verify-archive-from-checksums")]
-    VerifyArchiveByChecksum {
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-        #[arg(default_value_t = 5)]
-        download_concurrency: usize,
-    },
-
-    /// Tool to print archive contents in checkpoint range
-    #[command(name = "dump-archive")]
-    DumpArchiveByChecksum {
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-        #[arg(default_value_t = 0)]
-        start: u64,
-        end: u64,
-        #[arg(default_value_t = 80)]
-        max_content_length: usize,
-    },
-
     /// Download all packages to the local filesystem from a GraphQL service. Each package gets its
     /// own sub-directory, named for its ID on chain and version containing two metadata files
     /// (linkage.json and origins.json), a file containing the overall object and a file for every
@@ -484,6 +448,42 @@ impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
     pub async fn execute(self, tracing_handle: TracingHandle) -> Result<(), anyhow::Error> {
         match self {
+            ToolCommand::ScanConsensusCommits {
+                db_path,
+                start_commit,
+                end_commit,
+            } => {
+                let rocks_db_store = RocksDBStore::new(&db_path);
+
+                let start_commit = start_commit.unwrap_or(0);
+                let end_commit = end_commit.unwrap_or(u32::MAX);
+
+                let commits = rocks_db_store
+                    .scan_commits(CommitRange::new(start_commit..=end_commit))
+                    .unwrap();
+                println!("found {} consensus commits", commits.len());
+
+                for commit in commits {
+                    let inner = &*commit;
+                    let block_refs = inner.blocks();
+                    let blocks = rocks_db_store.read_blocks(block_refs).unwrap();
+
+                    for block in blocks.iter().flatten() {
+                        let data = block.transactions_data();
+                        println!(
+                            "\"index\": \"{}\", \"leader\": \"{}\", \"blocks\": \"{:#?}\", {} txs",
+                            inner.index(),
+                            inner.leader(),
+                            inner.blocks(),
+                            data.len()
+                        );
+                        for txns in &data {
+                            let tx: ConsensusTransaction = bcs::from_bytes(txns).unwrap();
+                            println!("\t{:?}", tx.key());
+                        }
+                    }
+                }
+            }
             ToolCommand::LockedObject {
                 id,
                 fullnode_rpc_url,
@@ -639,6 +639,17 @@ impl ToolCommand {
                         checkpoint,
                         contents,
                     } = resp;
+
+                    let summary = checkpoint.clone().unwrap().data().clone();
+                    // write summary to file
+                    let mut file = std::fs::File::create("/tmp/ckpt_summary")
+                        .expect("Failed to create /tmp/summary");
+                    let bytes =
+                        bcs::to_bytes(&summary).expect("Failed to serialize summary to BCS");
+                    use std::io::Write;
+                    file.write_all(&bytes)
+                        .expect("Failed to write summary to /tmp/ckpt_summary");
+
                     println!("Validator: {:?}\n", name.concise());
                     println!("Checkpoint: {:?}\n", checkpoint);
                     println!("Content: {:?}\n", contents);
@@ -769,89 +780,12 @@ impl ToolCommand {
                     }
                 };
 
-                let archive_bucket = Some(
-                    env::var("FORMAL_SNAPSHOT_ARCHIVE_BUCKET").unwrap_or_else(|_| match network {
-                        Chain::Mainnet => "mysten-mainnet-archives".to_string(),
-                        Chain::Testnet => "mysten-testnet-archives".to_string(),
-                        Chain::Unknown => {
-                            panic!("Cannot generate default archive bucket for unknown network");
-                        }
-                    }),
-                );
-
-                let mut custom_archive_enabled = false;
-                if let Ok(custom_archive_check) = env::var("CUSTOM_ARCHIVE_BUCKET") {
-                    if custom_archive_check == "true" {
-                        custom_archive_enabled = true;
-                    }
-                }
-                let archive_store_config = if custom_archive_enabled {
-                    let aws_region = Some(
-                        env::var("FORMAL_SNAPSHOT_ARCHIVE_REGION")
-                            .unwrap_or("us-west-2".to_string()),
-                    );
-
-                    let archive_bucket_type = env::var("FORMAL_SNAPSHOT_ARCHIVE_BUCKET_TYPE").expect("If setting `CUSTOM_ARCHIVE_BUCKET=true` Must set FORMAL_SNAPSHOT_ARCHIVE_BUCKET_TYPE, and credentials");
-                    match archive_bucket_type.to_ascii_lowercase().as_str()
-                    {
-                        "s3" => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::S3),
-                            bucket: archive_bucket.filter(|s| !s.is_empty()),
-                            aws_access_key_id: env::var("AWS_ARCHIVE_ACCESS_KEY_ID").ok(),
-                            aws_secret_access_key: env::var("AWS_ARCHIVE_SECRET_ACCESS_KEY").ok(),
-                            aws_region,
-                            aws_endpoint: env::var("AWS_ARCHIVE_ENDPOINT").ok(),
-                            aws_virtual_hosted_style_request: env::var(
-                                "AWS_ARCHIVE_VIRTUAL_HOSTED_REQUESTS",
-                            )
-                            .ok()
-                            .and_then(|b| b.parse().ok())
-                            .unwrap_or(false),
-                            object_store_connection_limit: 50,
-                            no_sign_request: false,
-                            ..Default::default()
-                        },
-                        "gcs" => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::GCS),
-                            bucket: archive_bucket,
-                            google_service_account: env::var(
-                                "GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH",
-                            )
-                            .ok(),
-                            object_store_connection_limit: 50,
-                            no_sign_request: false,
-                            ..Default::default()
-                        },
-                        "azure" => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::Azure),
-                            bucket: archive_bucket,
-                            azure_storage_account: env::var("AZURE_ARCHIVE_STORAGE_ACCOUNT").ok(),
-                            azure_storage_access_key: env::var("AZURE_ARCHIVE_STORAGE_ACCESS_KEY")
-                                .ok(),
-                            object_store_connection_limit: 50,
-                            no_sign_request: false,
-                            ..Default::default()
-                        },
-                        _ => panic!("If setting `CUSTOM_ARCHIVE_BUCKET=true` must set FORMAL_SNAPSHOT_ARCHIVE_BUCKET_TYPE to one of 'gcs', 'azure', or 's3' "),
-                    }
-                } else {
-                    // if not explicitly overridden, just default to the permissionless archive store
-                    ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::S3),
-                        bucket: archive_bucket.filter(|s| !s.is_empty()),
-                        aws_region: Some("us-west-2".to_string()),
-                        aws_endpoint: env::var("AWS_ARCHIVE_ENDPOINT").ok(),
-                        aws_virtual_hosted_style_request: env::var(
-                            "AWS_ARCHIVE_VIRTUAL_HOSTED_REQUESTS",
-                        )
-                        .ok()
-                        .and_then(|b| b.parse().ok())
-                        .unwrap_or(false),
-                        object_store_connection_limit: 200,
-                        no_sign_request: true,
-                        ..Default::default()
-                    }
+                let ingestion_url = match network {
+                    Chain::Mainnet => "https://checkpoints.mainnet.sui.io",
+                    Chain::Testnet => "https://checkpoints.testnet.sui.io",
+                    _ => panic!("Cannot generate default ingestion url for unknown network"),
                 };
+
                 let latest_available_epoch =
                     latest.then_some(get_latest_available_epoch(&snapshot_store_config).await?);
                 let epoch_to_download = epoch.or(latest_available_epoch).expect(
@@ -873,7 +807,7 @@ impl ToolCommand {
                     epoch_to_download,
                     &genesis,
                     snapshot_store_config,
-                    archive_store_config,
+                    ingestion_url,
                     num_parallel_downloads,
                     network,
                     verify,
@@ -1041,39 +975,6 @@ impl ToolCommand {
                 chain,
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
-                    .await?;
-            }
-            ToolCommand::VerifyArchive {
-                genesis,
-                object_store_config,
-                download_concurrency,
-            } => {
-                verify_archive(&genesis, object_store_config, download_concurrency, true).await?;
-            }
-            ToolCommand::PrintArchiveManifest {
-                object_store_config,
-            } => {
-                println!("{}", read_manifest_as_json(object_store_config).await?);
-            }
-            ToolCommand::UpdateArchiveManifest {
-                object_store_config,
-                archive_json_path,
-            } => {
-                write_manifest_from_json(object_store_config, archive_json_path).await?;
-            }
-            ToolCommand::VerifyArchiveByChecksum {
-                object_store_config,
-                download_concurrency,
-            } => {
-                verify_archive_by_checksum(object_store_config, download_concurrency).await?;
-            }
-            ToolCommand::DumpArchiveByChecksum {
-                object_store_config,
-                start,
-                end,
-                max_content_length,
-            } => {
-                dump_checkpoints_from_archive(object_store_config, start, end, max_content_length)
                     .await?;
             }
             ToolCommand::SignTransaction {

@@ -29,4 +29,9 @@ module examples::move_random {
             recipient
         )
     }
+    
+    // Function that always aborts to test gas price capping
+    public entry fun always_abort() {
+        abort(42)
+    }
 }

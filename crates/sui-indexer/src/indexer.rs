@@ -1,22 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::env;
 
 use anyhow::Result;
-use prometheus::Registry;
-use tokio::sync::oneshot;
-use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
-
-use async_trait::async_trait;
 use futures::future::try_join_all;
 use mysten_metrics::spawn_monitored_task;
+use prometheus::Registry;
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, WorkerPool,
+    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
 };
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use crate::build_json_rpc_server;
 use crate::config::{IngestionConfig, JsonRpcConfig, RetentionConfig, SnapshotLagConfig};
@@ -37,9 +33,8 @@ impl Indexer {
         store: PgIndexerStore,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
-        mut retention_config: Option<RetentionConfig>,
+        retention_config: Option<RetentionConfig>,
         cancel: CancellationToken,
-        mvr_mode: bool,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Writer (version {:?}) started...",
@@ -66,14 +61,6 @@ impl Indexer {
         )
         .await?;
 
-        if mvr_mode {
-            warn!("Indexer in MVR mode is configured to prune `objects_history` to 2 epochs. The other tables have a 2000 epoch retention.");
-            retention_config = Some(RetentionConfig {
-                epochs_to_keep: 2000, // epochs, roughly 5+ years. We really just care about pruning `objects_history` per the default 2 epochs.
-                overrides: Default::default(),
-            });
-        }
-
         if let Some(retention_config) = retention_config {
             let pruner = Pruner::new(store.clone(), retention_config, metrics.clone())?;
             let cancel_clone = cancel.clone();
@@ -99,15 +86,18 @@ impl Indexer {
             cancel.clone(),
             config.start_checkpoint,
             config.end_checkpoint,
-            mvr_mode,
         )
         .await?;
         // Ingestion task watermarks are snapshotted once on indexer startup based on the
         // corresponding watermark table before being handed off to the ingestion task.
-        let progress_store = ShimIndexerProgressStore::new(vec![
-            ("primary".to_string(), primary_watermark),
-            ("object_snapshot".to_string(), object_snapshot_watermark),
-        ]);
+        let progress_store = ShimIndexerProgressStore::new(
+            vec![
+                ("primary".to_string(), primary_watermark),
+                ("object_snapshot".to_string(), object_snapshot_watermark),
+            ]
+            .into_iter()
+            .collect(),
+        );
         let mut executor = IndexerExecutor::new(
             progress_store.clone(),
             2,
@@ -159,7 +149,7 @@ impl Indexer {
                     .sources
                     .data_ingestion_path
                     .clone()
-                    .unwrap_or(tempfile::tempdir().unwrap().into_path()),
+                    .unwrap_or(tempfile::tempdir().unwrap().keep()),
                 config
                     .sources
                     .remote_store_url
@@ -192,30 +182,6 @@ impl Indexer {
             .await
             .expect("Rpc server task failed");
 
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct ShimIndexerProgressStore {
-    watermarks: HashMap<String, CheckpointSequenceNumber>,
-}
-
-impl ShimIndexerProgressStore {
-    fn new(watermarks: Vec<(String, CheckpointSequenceNumber)>) -> Self {
-        Self {
-            watermarks: watermarks.into_iter().collect(),
-        }
-    }
-}
-
-#[async_trait]
-impl ProgressStore for ShimIndexerProgressStore {
-    async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber> {
-        Ok(*self.watermarks.get(&task_name).expect("missing watermark"))
-    }
-
-    async fn save(&mut self, _: String, _: CheckpointSequenceNumber) -> Result<()> {
         Ok(())
     }
 }

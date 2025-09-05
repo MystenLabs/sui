@@ -4,23 +4,30 @@
 //! Utility for generating programmable transactions, either by specifying a command or for
 //! migrating legacy transactions
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use indexmap::IndexMap;
 use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
 
 use crate::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     move_package::PACKAGE_MODULE_NAME,
-    transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction},
+    transaction::{
+        Argument, BalanceWithdrawArg, CallArg, Command, ObjectArg, ProgrammableTransaction,
+    },
     SUI_FRAMEWORK_PACKAGE_ID,
 };
+
+#[cfg(test)]
+#[path = "unit_tests/programmable_transaction_builder_tests.rs"]
+mod programmable_transaction_builder_tests;
 
 #[derive(PartialEq, Eq, Hash)]
 enum BuilderArg {
     Object(ObjectID),
     Pure(Vec<u8>),
     ForcedNonUniquePure(usize),
+    BalanceWithdraw(usize),
 }
 
 #[derive(Default)]
@@ -71,6 +78,9 @@ impl ProgrammableTransactionBuilder {
             let old_obj_arg = match old_value {
                 CallArg::Pure(_) => anyhow::bail!("invariant violation! object has pure argument"),
                 CallArg::Object(arg) => arg,
+                CallArg::BalanceWithdraw(_) => {
+                    anyhow::bail!("invariant violation! object has balance withdraw argument")
+                }
             };
             match (old_obj_arg, obj_arg) {
                 (
@@ -113,10 +123,19 @@ impl ProgrammableTransactionBuilder {
         Ok(Argument::Input(i as u16))
     }
 
+    pub fn balance_withdraw(&mut self, arg: BalanceWithdrawArg) -> anyhow::Result<Argument> {
+        let (i, _) = self.inputs.insert_full(
+            BuilderArg::BalanceWithdraw(self.inputs.len()),
+            CallArg::BalanceWithdraw(arg),
+        );
+        Ok(Argument::Input(i as u16))
+    }
+
     pub fn input(&mut self, call_arg: CallArg) -> anyhow::Result<Argument> {
         match call_arg {
             CallArg::Pure(bytes) => Ok(self.pure_bytes(bytes, /* force separate */ false)),
             CallArg::Object(obj) => self.obj(obj),
+            CallArg::BalanceWithdraw(arg) => self.balance_withdraw(arg),
         }
     }
 
@@ -223,10 +242,19 @@ impl ProgrammableTransactionBuilder {
     pub fn transfer_object(
         &mut self,
         recipient: SuiAddress,
-        object_ref: ObjectRef,
+        full_object_ref: FullObjectRef,
     ) -> anyhow::Result<()> {
         let rec_arg = self.pure(recipient).unwrap();
-        let obj_arg = self.obj(ObjectArg::ImmOrOwnedObject(object_ref));
+        let obj_arg = self.obj(match full_object_ref.0 {
+            FullObjectID::Fastpath(_) => {
+                ObjectArg::ImmOrOwnedObject(full_object_ref.as_object_ref())
+            }
+            FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable: true,
+            },
+        });
         self.commands
             .push(Command::TransferObjects(vec![obj_arg?], rec_arg));
         Ok(())
@@ -273,6 +301,32 @@ impl ProgrammableTransactionBuilder {
                 .collect(),
             recipient,
         ));
+    }
+
+    /// Merge `coins` into the `target` coin.
+    pub fn merge_coins(&mut self, target: ObjectRef, coins: Vec<ObjectRef>) -> anyhow::Result<()> {
+        let target_arg = self.obj(ObjectArg::ImmOrOwnedObject(target))?;
+        let coin_args = coins
+            .into_iter()
+            .map(|coin| self.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap())
+            .collect::<Vec<_>>();
+        self.command(Command::MergeCoins(target_arg, coin_args));
+        Ok(())
+    }
+
+    /// Merge all `coins` into the first coin in the vector.
+    /// Returns an `Argument` for the first coin.
+    pub fn smash_coins(&mut self, coins: Vec<ObjectRef>) -> anyhow::Result<Argument> {
+        let mut coins = coins.into_iter();
+        let Some(target) = coins.next() else {
+            bail!("coins vector is empty");
+        };
+        let target_arg = self.obj(ObjectArg::ImmOrOwnedObject(target))?;
+        let coin_args = coins
+            .map(|coin| self.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap())
+            .collect::<Vec<_>>();
+        self.command(Command::MergeCoins(target_arg, coin_args));
+        Ok(target_arg)
     }
 
     /// Will fail to generate if recipients and amounts do not have the same lengths.

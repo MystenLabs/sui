@@ -8,7 +8,13 @@ use crate::{
     shared::views::*,
 };
 use move_binary_format::errors::*;
-use move_core_types::{account_address::AccountAddress, u256::U256};
+use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
+
+#[cfg(test)]
+const SIZE_CONFIG: SizeConfig = SizeConfig {
+    traverse_references: false,
+    include_vector_size: false,
+};
 
 #[test]
 fn locals() -> PartialVMResult<()> {
@@ -177,19 +183,19 @@ fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
 
     locals.store_loc(0, Value::u128(0))?;
     let r = locals.borrow_loc(0)?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     locals.store_loc(1, Value::vector_u8([1, 2, 3]))?;
     let r = locals.borrow_loc(1)?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     let r: VectorRef = VMValueCast::cast(r)?;
     let r = r.borrow_elem(0, &Type::U8)?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     locals.store_loc(2, Value::make_struct(vec![]))?;
     let r: Reference = VMValueCast::cast(locals.borrow_loc(2)?)?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     Ok(())
 }
@@ -202,7 +208,7 @@ fn legacy_struct_abstract_memory_size_consistenty() -> PartialVMResult<()> {
     ];
 
     for s in &structs {
-        assert_eq!(s.legacy_abstract_memory_size(), s.legacy_size());
+        assert_eq!(s.abstract_memory_size(&SIZE_CONFIG), s.legacy_size());
     }
 
     Ok(())
@@ -227,8 +233,8 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
         Value::make_struct([]),
         Value::make_struct([Value::u8(0), Value::bool(false)]),
-        Value::vector_for_testing_only([]),
-        Value::vector_for_testing_only([Value::u8(0), Value::u8(1)]),
+        Vector::pack(VectorSpecialization::Container, [])?,
+        Vector::pack(VectorSpecialization::U8, [Value::u8(0), Value::u8(1)])?,
     ];
 
     let mut heap = MachineHeap::new();
@@ -237,14 +243,14 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
     for (idx, val) in vals.iter().enumerate() {
         locals.store_loc(idx, val.copy_value())?;
 
-        let val_size_new = val.legacy_abstract_memory_size();
+        let val_size_new = val.abstract_memory_size(&SIZE_CONFIG);
         #[allow(deprecated)]
         let val_size_old = val.legacy_size();
 
         assert_eq!(val_size_new, val_size_old);
 
         let ref_: Reference = VMValueCast::cast(locals.borrow_loc(idx)?)?;
-        let val_size_through_ref = ref_.value_view().legacy_abstract_memory_size();
+        let val_size_through_ref = ref_.value_view().abstract_memory_size(&SIZE_CONFIG);
 
         assert_eq!(
             val_size_through_ref, val_size_old,
@@ -262,4 +268,30 @@ fn test_vm_value_vector_u64_casting() {
         vec![1, 2, 3],
         VMValueCast::<Vec<u64>>::cast(Value::vector_u64([1, 2, 3])).unwrap()
     );
+}
+
+// TODO(bella-ciao-merge): Make sure we are happy with this size change (from 16 -> 32).
+#[test]
+fn assert_sizes() {
+    assert_eq!(size_of::<Value>(), 32);
+}
+
+#[test]
+fn signer_equivalence() -> PartialVMResult<()> {
+    let addr = AccountAddress::TWO;
+    let signer = Value::signer(addr);
+
+    assert_eq!(
+        signer.serialize(),
+        signer.typed_serialize(&runtime_value::MoveTypeLayout::Signer)
+    );
+
+    assert_eq!(
+        signer.serialize(),
+        signer.typed_serialize(&runtime_value::MoveTypeLayout::Struct(Box::new(
+            runtime_value::MoveStructLayout(Box::new(vec![runtime_value::MoveTypeLayout::Address]))
+        )))
+    );
+
+    Ok(())
 }

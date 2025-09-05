@@ -1,0 +1,34 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 6-32:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 34:
+//# run Test::f::f1
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 36:
+//# run Test::f::f2 --args 42
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [1, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 38:
+//# run Test::f::f3 --args 42 43
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [2, 42, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 40:
+//# run Test::f::f4 --args 42
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [3, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

@@ -53,7 +53,7 @@ impl Docgen {
 
         let docgen = move_docgen::Docgen::new(&model, &options);
 
-        for (file, content) in docgen.gen(&model)? {
+        for (file, content) in docgen.generate(&model)? {
             let path = PathBuf::from(&file);
             fs::create_dir_all(path.parent().unwrap())?;
             fs::write(path.as_path(), content)?;

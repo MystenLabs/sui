@@ -1,5 +1,24 @@
 # @mysten/prettier-plugin-move
 
+## 0.3.1
+
+### Patch Changes
+
+- migrate to better tree-sitter version
+
+## 0.3.0
+
+### Minor Changes
+
+- `dot_expression` now supports trailing comment in a list
+- a single element of an `arg_list` can have **trailing** line comment
+- a single element of an `arg_list` can have **leading** line comment
+- trailing comment no longer breaks `vector_expression`
+
+`if_expression`:
+- indentation fixed in certain places
+- `if-else` chain is a special behavior
+
 ## 0.2.2
 
 ### Patch Changes

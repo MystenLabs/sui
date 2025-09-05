@@ -160,6 +160,7 @@ public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
 
 // === Base Coin functionality ===
 
+#[allow(lint(public_entry))]
 /// Consume the coin `c` and add its value to `self`.
 /// Aborts if `c.value + self.value > U64_MAX`
 public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
@@ -178,16 +179,10 @@ public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext):
 /// `self`. Return newly created coins.
 public fun divide_into_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): vector<Coin<T>> {
     assert!(n > 0, EInvalidArg);
-    assert!(n <= value(self), ENotEnough);
+    assert!(n <= self.value(), ENotEnough);
 
-    let mut vec = vector[];
-    let mut i = 0;
-    let split_amount = value(self) / n;
-    while (i < n - 1) {
-        vec.push_back(self.split(split_amount, ctx));
-        i = i + 1;
-    };
-    vec
+    let split_amount = self.value() / n;
+    vector::tabulate!(n - 1, |_| self.split(split_amount, ctx))
 }
 
 /// Make any Coin with a zero value. Useful for placeholding
@@ -228,9 +223,9 @@ public fun create_currency<T: drop>(
         CoinMetadata {
             id: object::new(ctx),
             decimals,
-            name: string::utf8(name),
-            symbol: ascii::string(symbol),
-            description: string::utf8(description),
+            name: name.to_string(),
+            symbol: symbol.to_ascii_string(),
+            description: description.to_string(),
             icon_url,
         },
     )
@@ -285,8 +280,8 @@ public fun migrate_regulated_currency_to_v2<T>(
     ctx: &mut TxContext,
 ): DenyCapV2<T> {
     let DenyCap { id } = cap;
-    object::delete(id);
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    id.delete();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.migrate_v1_to_v2(DENY_LIST_COIN_INDEX, ty, ctx);
     DenyCapV2 {
         id: object::new(ctx),
@@ -310,6 +305,7 @@ public fun mint_balance<T>(cap: &mut TreasuryCap<T>, value: u64): Balance<T> {
     cap.total_supply.increase_supply(value)
 }
 
+#[allow(lint(public_entry))]
 /// Destroy the coin `c` and decrease the total supply in `cap`
 /// accordingly.
 public entry fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
@@ -327,7 +323,7 @@ public fun deny_list_v2_add<T>(
     addr: address,
     ctx: &mut TxContext,
 ) {
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_add(DENY_LIST_COIN_INDEX, ty, addr, ctx)
 }
 
@@ -340,7 +336,7 @@ public fun deny_list_v2_remove<T>(
     addr: address,
     ctx: &mut TxContext,
 ) {
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_remove(DENY_LIST_COIN_INDEX, ty, addr, ctx)
 }
 
@@ -351,7 +347,7 @@ public fun deny_list_v2_contains_current_epoch<T>(
     addr: address,
     ctx: &TxContext,
 ): bool {
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_contains_current_epoch(DENY_LIST_COIN_INDEX, ty, addr, ctx)
 }
 
@@ -359,7 +355,7 @@ public fun deny_list_v2_contains_current_epoch<T>(
 /// the next epoch will immediately be unable to use objects of this coin type as inputs. At the
 /// start of the next epoch, the address will be unable to receive objects of this coin type.
 public fun deny_list_v2_contains_next_epoch<T>(deny_list: &DenyList, addr: address): bool {
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_contains_next_epoch(DENY_LIST_COIN_INDEX, ty, addr)
 }
 
@@ -373,7 +369,7 @@ public fun deny_list_v2_enable_global_pause<T>(
     ctx: &mut TxContext,
 ) {
     assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_enable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
 }
 
@@ -387,7 +383,7 @@ public fun deny_list_v2_disable_global_pause<T>(
     ctx: &mut TxContext,
 ) {
     assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_disable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
 }
 
@@ -396,18 +392,19 @@ public fun deny_list_v2_is_global_pause_enabled_current_epoch<T>(
     deny_list: &DenyList,
     ctx: &TxContext,
 ): bool {
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_is_global_pause_enabled_current_epoch(DENY_LIST_COIN_INDEX, ty, ctx)
 }
 
 /// Check if the global pause is enabled for the given coin type in the next epoch.
 public fun deny_list_v2_is_global_pause_enabled_next_epoch<T>(deny_list: &DenyList): bool {
-    let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_is_global_pause_enabled_next_epoch(DENY_LIST_COIN_INDEX, ty)
 }
 
 // === Entrypoints ===
 
+#[allow(lint(public_entry))]
 /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
 public entry fun mint_and_transfer<T>(
     c: &mut TreasuryCap<T>,
@@ -415,11 +412,12 @@ public entry fun mint_and_transfer<T>(
     recipient: address,
     ctx: &mut TxContext,
 ) {
-    transfer::public_transfer(mint(c, amount, ctx), recipient)
+    transfer::public_transfer(c.mint(amount, ctx), recipient)
 }
 
 // === Update coin metadata ===
 
+#[allow(lint(public_entry))]
 /// Update name of the coin in `CoinMetadata`
 public entry fun update_name<T>(
     _treasury: &TreasuryCap<T>,
@@ -429,6 +427,7 @@ public entry fun update_name<T>(
     metadata.name = name;
 }
 
+#[allow(lint(public_entry))]
 /// Update the symbol of the coin in `CoinMetadata`
 public entry fun update_symbol<T>(
     _treasury: &TreasuryCap<T>,
@@ -438,6 +437,7 @@ public entry fun update_symbol<T>(
     metadata.symbol = symbol;
 }
 
+#[allow(lint(public_entry))]
 /// Update the description of the coin in `CoinMetadata`
 public entry fun update_description<T>(
     _treasury: &TreasuryCap<T>,
@@ -447,6 +447,7 @@ public entry fun update_description<T>(
     metadata.description = description;
 }
 
+#[allow(lint(public_entry))]
 /// Update the url of the coin in `CoinMetadata`
 public entry fun update_icon_url<T>(
     _treasury: &TreasuryCap<T>,

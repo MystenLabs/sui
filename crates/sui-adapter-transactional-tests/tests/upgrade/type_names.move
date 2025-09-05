@@ -47,12 +47,19 @@ module A2::m {
 
     entry fun canary<T>(use_original: bool, ctx: &mut TxContext) {
         let type_ = if (use_original) {
-            type_name::get_with_original_ids<T>()
+            type_name::with_original_ids<T>()
         } else {
-            type_name::get<T>()
+            type_name::with_defining_ids<T>()
         };
 
-        let addr = ascii::into_bytes(type_name::get_address(&type_));
+        let addr = ascii::into_bytes(type_name::address_string(&type_));
+
+        let addr_via_native = if (use_original) {
+            type_name::original_id<T>()
+        } else {
+            type_name::defining_id<T>()
+        };
+        assert!(addr_via_native == sui::address::from_ascii_bytes(&addr));
 
         transfer::transfer(
             Canary { id: object::new(ctx), addr },

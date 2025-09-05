@@ -48,9 +48,11 @@ Functions for operating on Move packages from within Move:
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
+<b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 </code></pre>
 
 
@@ -238,34 +240,23 @@ the end of the transaction that performed the upgrade.
 ## Constants
 
 
-<a name="sui_package_ADDITIVE"></a>
+<a name="sui_package_ENotOneTimeWitness"></a>
 
-Add new functions or types, or change dependencies, existing
-functions can't change.
+Tried to create a <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code> using a type that isn't a
+one-time witness.
 
 
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ADDITIVE">ADDITIVE</a>: u8 = 128;
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="sui_package_COMPATIBLE"></a>
+<a name="sui_package_ETooPermissive"></a>
 
-Update any part of the package (function implementations, add new
-functions or types, change dependencies)
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_COMPATIBLE">COMPATIBLE</a>: u8 = 0;
-</code></pre>
+Tried to set a less restrictive policy than currently in place.
 
 
-
-<a name="sui_package_DEP_ONLY"></a>
-
-Only be able to change dependencies.
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>: u64 = 1;
 </code></pre>
 
 
@@ -290,33 +281,44 @@ This <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></co
 
 
 
-<a name="sui_package_ENotOneTimeWitness"></a>
-
-Tried to create a <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code> using a type that isn't a
-one-time witness.
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="sui_package_ETooPermissive"></a>
-
-Tried to set a less restrictive policy than currently in place.
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="sui_package_EWrongUpgradeCap"></a>
 
 Trying to commit an upgrade to the wrong <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>.
 
 
 <pre><code><b>const</b> <a href="../sui/package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_package_COMPATIBLE"></a>
+
+Update any part of the package (function implementations, add new
+functions or types, change dependencies)
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_COMPATIBLE">COMPATIBLE</a>: u8 = 0;
+</code></pre>
+
+
+
+<a name="sui_package_ADDITIVE"></a>
+
+Add new functions or types, or change dependencies, existing
+functions can't change.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ADDITIVE">ADDITIVE</a>: u8 = 128;
+</code></pre>
+
+
+
+<a name="sui_package_DEP_ONLY"></a>
+
+Only be able to change dependencies.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
 </code></pre>
 
 
@@ -342,11 +344,11 @@ but multiple per package (!).
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="../sui/package.md#sui_package_Publisher">Publisher</a> {
     <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
-    <b>let</b> type_name = type_name::get_with_original_ids&lt;OTW&gt;();
+    <b>let</b> type_name = type_name::with_original_ids&lt;OTW&gt;();
     <a href="../sui/package.md#sui_package_Publisher">Publisher</a> {
         id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/package.md#sui_package">package</a>: type_name.get_address(),
-        module_name: type_name.get_module(),
+        <a href="../sui/package.md#sui_package">package</a>: type_name.address_string(),
+        module_name: type_name.module_string(),
     }
 }
 </code></pre>
@@ -426,7 +428,7 @@ Check whether type belongs to the same package as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>): bool {
-    type_name::get_with_original_ids&lt;T&gt;().get_address() == self.<a href="../sui/package.md#sui_package">package</a>
+    type_name::with_original_ids&lt;T&gt;().address_string() == self.<a href="../sui/package.md#sui_package">package</a>
 }
 </code></pre>
 
@@ -451,8 +453,8 @@ Check whether a type belongs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>): bool {
-    <b>let</b> type_name = type_name::get_with_original_ids&lt;T&gt;();
-    (type_name.get_address() == self.<a href="../sui/package.md#sui_package">package</a>) && (type_name.get_module() == self.module_name)
+    <b>let</b> type_name = type_name::with_original_ids&lt;T&gt;();
+    (type_name.address_string() == self.<a href="../sui/package.md#sui_package">package</a>) && (type_name.module_string() == self.module_name)
 }
 </code></pre>
 

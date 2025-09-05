@@ -2,22 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    analysis::{DefMap, add_member_use_def},
     symbols::{
-        add_member_use_def, ignored_function, parsed_address,
-        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key, CallInfo,
-        CursorContext, CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef,
-        UseDefMap,
+        compilation::ParsedDefinitions,
+        cursor::{CursorContext, CursorDefinition, CursorPosition},
+        ignored_function,
+        mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs},
+        parsed_address,
+        use_def::{References, UseDef, UseDefMap},
     },
-    utils::loc_start_to_lsp_position_opt,
+    utils::{loc_end_to_lsp_position_opt, loc_start_to_lsp_position_opt},
 };
 
 use lsp_types::Position;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     parser::ast as P,
-    shared::{files::MappedFiles, Identifier, Name, NamedAddressMap, NamedAddressMaps},
+    shared::{Identifier, Name, NamedAddressMap, files::MappedFiles},
 };
 use move_ir_types::location::*;
 
@@ -43,7 +46,7 @@ pub struct ParsingAnalysisContext<'a> {
     pub alias_lengths: BTreeMap<Position, usize>,
     /// A per-package mapping from package names to their addresses (needs to be appropriately set
     /// before the package processint starts)
-    pub pkg_addresses: &'a NamedAddressMap,
+    pub pkg_addresses: Arc<NamedAddressMap>,
     /// Cursor contextual information, computed as part of the traversal.
     pub cursor: Option<&'a mut CursorContext>,
 }
@@ -69,24 +72,25 @@ impl<'a> ParsingAnalysisContext<'a> {
     /// Get symbols for the whole program
     pub fn prog_symbols(
         &mut self,
-        prog: &'a P::Program,
+        prog: &'a ParsedDefinitions,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
+        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         prog.source_definitions.iter().for_each(|pkg_def| {
             self.pkg_symbols(
-                &prog.named_address_maps,
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
+                typed_mod_named_address_maps,
             )
         });
         prog.lib_definitions.iter().for_each(|pkg_def| {
             self.pkg_symbols(
-                &prog.named_address_maps,
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
+                typed_mod_named_address_maps,
             )
         });
     }
@@ -94,29 +98,83 @@ impl<'a> ParsingAnalysisContext<'a> {
     /// Get symbols for the whole package
     fn pkg_symbols(
         &mut self,
-        pkg_address_maps: &'a NamedAddressMaps,
         pkg_def: &P::PackageDefinition,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
+        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
-            let pkg_addresses = pkg_address_maps.get(pkg_def.named_address_map);
-            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses);
+            // when doing full standalone compilation (vs. pre-compiling dependencies)
+            // we may have a module at parsing but no longer at typing
+            // in case there is a name conflict with a dependency (and
+            // mod_named_address_maps comes from typing modules)
+            let Some(pkg_addresses) = typed_mod_named_address_maps.get(&mod_def.loc) else {
+                eprintln!(
+                    "no typing-level named address maps for module {}",
+                    mod_def.name.value()
+                );
+                return;
+            };
+            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses.clone());
             self.mod_symbols(mod_def, mod_use_defs, mod_to_alias_lengths);
             self.current_mod_ident_str = None;
             let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
         }
     }
 
-    fn attr_symbols(&mut self, sp!(_, attr): P::Attribute) {
+    fn attr_symbols(&mut self, sp!(_attr_loc, attr): &P::Attribute) {
         use P::Attribute_ as A;
+        // TODO: This is under-supported in the current cursor position system. We could make
+        // pretty good suggestions with a little work, though.
         match attr {
-            A::Name(_) => (),
-            A::Assigned(_, v) => {
-                update_cursor!(self.cursor, *v, Attribute);
+            A::BytecodeInstruction
+            | A::DefinesPrimitive(..)
+            | A::Deprecation { .. }
+            | A::Error { .. }
+            | A::Mode { .. }
+            | A::Syntax { .. }
+            | A::Allow { .. }
+            | A::LintAllow { .. } => (),
+            A::External { attrs } => {
+                // attrs: Spanned<Vec<ParsedAttribute>>
+                for parsed in &attrs.value {
+                    self.parsed_attr_symbols(parsed);
+                }
             }
-            A::Parameterized(_, sp!(_, attributes)) => {
-                attributes.iter().for_each(|a| self.attr_symbols(a.clone()))
+            A::Test | A::RandomTest => {}
+            A::ExpectedFailure {
+                minor_status,
+                failure_kind,
+                ..
+            } => {
+                let failure_kind = &failure_kind.as_ref().value;
+                match failure_kind {
+                    P::ExpectedFailureKind_::Empty => (),
+                    P::ExpectedFailureKind_::Name(_) => (),
+                    P::ExpectedFailureKind_::MajorStatus(_) => (),
+                    P::ExpectedFailureKind_::AbortCode(value) => {
+                        update_cursor!(self.cursor, *value, Attribute);
+                    }
+                }
+                if let Some(value) = minor_status {
+                    update_cursor!(self.cursor, *value, Attribute);
+                }
+            }
+        }
+    }
+
+    /// Walk a `ParsedAttribute` (used by `External`) similarly.
+    fn parsed_attr_symbols(&mut self, sp!(_loc, pattr): &P::ParsedAttribute) {
+        use P::ParsedAttribute_ as P;
+        match pattr {
+            P::Name(_) => (),
+            P::Assigned(_, boxed_val) => {
+                update_cursor!(self.cursor, **boxed_val, Attribute);
+            }
+            P::Parameterized(_, sp!(_, args)) => {
+                for arg in args {
+                    self.parsed_attr_symbols(arg);
+                }
             }
         }
     }
@@ -128,12 +186,35 @@ impl<'a> ParsingAnalysisContext<'a> {
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
+        fn latest_loc(latest_loc: Loc, new_loc: Loc) -> Loc {
+            if new_loc.end() > latest_loc.end() {
+                new_loc
+            } else {
+                latest_loc
+            }
+        }
+        fn earliest_loc(earliest_loc: Loc, new_loc: Loc) -> Loc {
+            if new_loc.start() < earliest_loc.start() {
+                new_loc
+            } else {
+                earliest_loc
+            }
+        }
         // parsing symbolicator is currently only responsible for processing use declarations
-        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses, mod_def) else {
+        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses.clone(), mod_def)
+        else {
             return;
         };
         assert!(self.current_mod_ident_str.is_none());
         self.current_mod_ident_str = Some(mod_ident_str.clone());
+
+        if mod_use_defs.get(&mod_ident_str).is_none() {
+            // when doing full standalone compilation (vs. pre-compiling dependencies)
+            // we may have a module at parsing but no longer at typing
+            // in case there is a name conflict with a dependency
+            eprintln!("no typing-level module for {:?}", mod_ident_str);
+            return;
+        }
 
         let use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         let old_defs = std::mem::replace(&mut self.use_defs, use_defs);
@@ -143,8 +224,16 @@ impl<'a> ParsingAnalysisContext<'a> {
         mod_def
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
+        // location of the latest use declaration (if any)
+        let mut latest_use_loc = Loc::new(mod_def.loc.file_hash(), 0, 0);
+        // location of the earliest member (if any)
+        let mut earliest_member_loc = Loc::new(mod_def.loc.file_hash(), u32::MAX, u32::MAX);
+        // we need this to avoid adding auto-imports for `use` declarations
+        // in "use blocks" that follow the follow the initial one (and come
+        // after other module members)
+        let mut non_use_member_after_use = false;
         for m in &mod_def.members {
             use P::ModuleMember as MM;
             match m {
@@ -152,7 +241,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                     if ignored_function(fun.name.value()) {
                         continue;
                     }
-
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, fun.doc.loc().unwrap_or(fun.loc));
                     // Unit returns span the entire function signature, so we process them first
                     // for cursor ordering.
                     self.type_symbols(&fun.signature.return_type);
@@ -170,7 +263,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     fun.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     for (_, x, t) in fun.signature.parameters.iter() {
@@ -189,6 +282,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
                 }
                 MM::Struct(sdef) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, sdef.doc.loc().unwrap_or(sdef.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -202,7 +300,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     sdef.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     match &sdef.fields {
@@ -217,6 +315,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Enum(edef) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, edef.doc.loc().unwrap_or(edef.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -230,7 +333,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     edef.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     let P::EnumDefinition { variants, .. } = edef;
@@ -248,9 +351,27 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     }
                 }
-                MM::Use(use_decl) => self.use_decl_symbols(use_decl),
-                MM::Friend(fdecl) => self.chain_symbols(&fdecl.friend),
+                MM::Use(use_decl) => {
+                    if !non_use_member_after_use {
+                        // update only if we have not seen a use that was already
+                        // followed by a non-use member
+                        latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    }
+                    self.use_decl_symbols(use_decl)
+                }
+                MM::Friend(fdecl) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc = earliest_loc(earliest_member_loc, fdecl.loc);
+                    self.chain_symbols(&fdecl.friend)
+                }
                 MM::Constant(c) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, c.doc.loc().unwrap_or(c.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -264,20 +385,71 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     c.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
-                MM::Spec(_) => (),
+                MM::Spec(s) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
+                }
             }
         }
+        self.add_import_insert_info(latest_use_loc, earliest_member_loc);
+
         self.current_mod_ident_str = None;
         let processed_defs = std::mem::replace(&mut self.use_defs, old_defs);
         mod_use_defs.insert(mod_ident_str.clone(), processed_defs);
         let processed_alias_lengths = std::mem::replace(&mut self.alias_lengths, old_alias_lengths);
         mod_to_alias_lengths.insert(mod_ident_str, processed_alias_lengths);
+    }
+
+    fn add_import_insert_info(&mut self, latest_use_loc: Loc, earliest_member_loc: Loc) {
+        let Some(mod_defs) = self
+            .mod_outer_defs
+            .get_mut(&self.current_mod_ident_str.clone().unwrap())
+        else {
+            return;
+        };
+        mod_defs.import_insert_info = if latest_use_loc.end() > 0 {
+            // imports exist, auto-imports position is at the end of the last
+            // auto import
+            if let Some(use_start) = loc_start_to_lsp_position_opt(self.files, &latest_use_loc) {
+                loc_end_to_lsp_position_opt(self.files, &latest_use_loc).map(|pos| {
+                    AutoImportInsertionInfo {
+                        kind: AutoImportInsertionKind::AfterLastImport,
+                        pos,
+                        tabulation: use_start.character as usize,
+                    }
+                })
+            } else {
+                None
+            }
+        } else if earliest_member_loc.start() < u32::MAX {
+            // Imports don't exist, but some members do, and auto-imports position
+            // is at the beginning of the line where the first member starts, with
+            // the intention to insert auto-imports on the same line pushing
+            // the member down. The reason why we don't insert auto-imports
+            // on the previous line is that if we are unlucky, we may
+            // hit a curly starting module or module declaration itself.
+            loc_start_to_lsp_position_opt(self.files, &earliest_member_loc).map(|pos| {
+                AutoImportInsertionInfo {
+                    kind: AutoImportInsertionKind::BeforeFirstMember,
+                    pos,
+                    tabulation: pos.character as usize,
+                }
+            })
+        } else {
+            // Otherwise it's unclear where to insert auto-imports.
+            // We could speculate here but this should not really happen
+            // since for auto-import to make sense we need some code
+            // in the module.
+            None
+        }
     }
 
     /// Get symbols for a sequence item
@@ -546,21 +718,21 @@ impl<'a> ParsingAnalysisContext<'a> {
         use_decl
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
         update_cursor!(self.cursor, sp(use_decl.loc, use_decl.use_.clone()), Use);
 
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str =
-                    parsing_mod_ident_to_map_key(self.pkg_addresses, &mod_ident.value);
+                    parsing_mod_ident_to_map_key(self.pkg_addresses.clone(), &mod_ident.value);
                 self.mod_name_symbol(&mod_ident.value.module, &mod_ident_str);
                 self.mod_use_symbols(mod_use, &mod_ident_str);
             }
             P::Use::NestedModuleUses(leading_name, uses) => {
                 for (mod_name, mod_use) in uses {
                     let mod_ident_str = parsing_leading_and_mod_names_to_map_key(
-                        self.pkg_addresses,
+                        self.pkg_addresses.clone(),
                         *leading_name,
                         *mod_name,
                     );
@@ -799,9 +971,37 @@ impl<'a> ParsingAnalysisContext<'a> {
 }
 
 /// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+pub fn parsing_mod_def_to_map_key(
+    pkg_addresses: Arc<NamedAddressMap>,
+    mod_def: &P::ModuleDefinition,
+) -> Option<String> {
+    // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
+    // standard practice) and while Move allows other ways of defining modules (i.e., with address
+    // preceding a sequence of modules), this method is now deprecated.
+    //
+    // TODO: make this function simply return String when the other way of defining modules is
+    // removed
+    mod_def
+        .address
+        .map(|a| parsing_leading_and_mod_names_to_map_key(pkg_addresses, a, mod_def.name))
+}
+
+/// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+fn parsing_leading_and_mod_names_to_map_key(
+    pkg_addresses: Arc<NamedAddressMap>,
+    ln: P::LeadingNameAccess,
+    name: P::ModuleName,
+) -> String {
+    let parsed_addr = parsed_address(ln, pkg_addresses);
+    format!("{}::{}", parsed_addr, name).to_string()
+}
+
+/// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST,
 fn parsing_mod_ident_to_map_key(
-    pkg_addresses: &NamedAddressMap,
+    pkg_addresses: Arc<NamedAddressMap>,
     mod_ident: &P::ModuleIdent_,
 ) -> String {
     format!(

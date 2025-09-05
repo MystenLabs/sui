@@ -13,9 +13,9 @@ use move_binary_format::{
     proptest_types::CompiledModuleStrategyGen,
 };
 use move_bytecode_verifier::{
+    DuplicationChecker, InstructionConsistency, RecursiveDataDefChecker, SignatureChecker,
     ability_cache::AbilityCache, ability_field_requirements, constants,
-    instantiation_loops::InstantiationLoopChecker, DuplicationChecker, InstructionConsistency,
-    RecursiveDataDefChecker, SignatureChecker,
+    instantiation_loops::InstantiationLoopChecker,
 };
 use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
@@ -165,9 +165,9 @@ proptest! {
 /// There are some potentially tricky edge cases around ranges that are captured here.
 #[test]
 fn valid_bounds_no_members() {
-    let mut gen = CompiledModuleStrategyGen::new(20);
-    gen.zeros_all();
-    proptest!(|(_module in gen.generate())| {
+    let mut rng = CompiledModuleStrategyGen::new(20);
+    rng.zeros_all();
+    proptest!(|(_module in rng.generate())| {
         // gen.generate() will panic if there are any bounds check issues.
     });
 }

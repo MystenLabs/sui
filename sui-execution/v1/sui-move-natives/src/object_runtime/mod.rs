@@ -116,11 +116,6 @@ pub(crate) struct LocalProtocolConfig {
 
 impl LocalProtocolConfig {
     fn new(config: &ProtocolConfig) -> Self {
-        // This should always be false for old protocol versions.
-        assert!(!config
-            .use_object_per_epoch_marker_table_v2_as_option()
-            .unwrap_or(false));
-
         Self {
             max_num_deleted_move_object_ids: config.max_num_deleted_move_object_ids(),
             max_num_event_emit: config.max_num_event_emit(),
@@ -665,8 +660,8 @@ fn check_circular_ownership(
                 }
                 object_owner_map.insert(id, new_owner);
             }
-            Owner::ConsensusV2 { .. } => {
-                unimplemented!("ConsensusV2 does not exist for this execution version")
+            Owner::ConsensusAddressOwner { .. } => {
+                unimplemented!("ConsensusAddressOwner does not exist for this execution version")
             }
         }
     }

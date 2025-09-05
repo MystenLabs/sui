@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
@@ -38,7 +38,9 @@ impl Processor for KvCheckpoints {
 
 #[async_trait::async_trait]
 impl Handler for KvCheckpoints {
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    type Store = Db;
+
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_checkpoints::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -46,11 +48,11 @@ impl Handler for KvCheckpoints {
             .await?)
     }
 
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         let filter = kv_checkpoints::table
             .filter(kv_checkpoints::sequence_number.between(from as i64, to_exclusive as i64 - 1));
@@ -68,9 +70,7 @@ mod tests {
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
-    async fn get_all_kv_checkpoints(
-        conn: &mut db::Connection<'_>,
-    ) -> Result<Vec<StoredCheckpoint>> {
+    async fn get_all_kv_checkpoints(conn: &mut Connection<'_>) -> Result<Vec<StoredCheckpoint>> {
         let query = kv_checkpoints::table.load(conn).await?;
         Ok(query)
     }
@@ -80,7 +80,7 @@ mod tests {
     #[tokio::test]
     async fn test_kv_checkpoints_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // Create 3 checkpoints
         let mut builder = TestCheckpointDataBuilder::new(0);

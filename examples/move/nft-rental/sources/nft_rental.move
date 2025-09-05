@@ -8,17 +8,15 @@
 module nft_rental::rentables_ext;
 
 use kiosk::kiosk_lock_rule::Rule as LockRule;
-use sui::{
-    bag,
-    balance::{Self, Balance},
-    clock::Clock,
-    coin::{Self, Coin},
-    kiosk::{Kiosk, KioskOwnerCap},
-    kiosk_extension,
-    package::Publisher,
-    sui::SUI,
-    transfer_policy::{Self, TransferPolicy, TransferPolicyCap, has_rule}
-};
+use sui::bag;
+use sui::balance::{Self, Balance};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::kiosk::{Kiosk, KioskOwnerCap};
+use sui::kiosk_extension;
+use sui::package::Publisher;
+use sui::sui::SUI;
+use sui::transfer_policy::{Self, TransferPolicy, TransferPolicyCap, has_rule};
 
 // === Imports ===
 
@@ -44,11 +42,11 @@ public struct Rentables has drop {}
 
 /// Struct representing a rented item.
 /// Used as a key for the Rentable that's placed in the Extension's Bag.
-public struct Rented has store, copy, drop { id: ID }
+public struct Rented has copy, drop, store { id: ID }
 
 /// Struct representing a listed item.
 /// Used as a key for the Rentable that's placed in the Extension's Bag.
-public struct Listed has store, copy, drop { id: ID }
+public struct Listed has copy, drop, store { id: ID }
 
 /// Promise struct for borrowing by value.
 public struct Promise {

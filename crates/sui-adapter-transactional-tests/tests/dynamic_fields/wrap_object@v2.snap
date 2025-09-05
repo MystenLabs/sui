@@ -1,0 +1,103 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-39:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7478400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# run a::m::mint --sender A
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 43:
+//# view-object 2,1
+Owner: Object ID: ( fake(2,2) )
+Version: 2
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 4, line 45:
+//# run a::m::take_and_wrap --sender A --args object(2,0)
+created: object(4,0)
+mutated: object(0,0), object(2,0)
+deleted: object(2,2)
+wrapped: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 4157200,  storage_rebate: 5831100, non_refundable_storage_fee: 58900
+
+task 5, line 48:
+//# run a::m::mint --sender A
+created: object(5,0), object(5,1), object(5,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 50:
+//# view-object 5,2
+Owner: Object ID: ( fake(5,1) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(5,0),
+    },
+}
+
+task 7, line 52:
+//# run a::m::take_and_destroy --sender A --args object(5,1)
+mutated: object(0,0), object(5,1)
+deleted: object(5,0), object(5,2)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 5831100, non_refundable_storage_fee: 58900
+
+task 8, line 55:
+//# run a::m::mint --sender A
+created: object(8,0), object(8,1), object(8,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 57:
+//# view-object 8,2
+Owner: Object ID: ( fake(8,0) )
+Version: 6
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(8,1),
+    },
+}
+
+task 10, line 59:
+//# run a::m::take_and_take --sender A --args object(8,0)
+mutated: object(0,0), object(8,0), object(8,1)
+deleted: object(8,2)
+gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 5831100, non_refundable_storage_fee: 58900
+
+task 11, line 61:
+//# view-object 8,2
+No object at id 8,2

@@ -21,7 +21,7 @@ Checkpoint created: 1
 
 task 4, line 29:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 5, line 31:
 //# run Test::M1::mutate --args object(2,0) 1
@@ -54,7 +54,7 @@ Response: {
 
 task 9, line 49:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 10, lines 51-53:
 //# create-checkpoint

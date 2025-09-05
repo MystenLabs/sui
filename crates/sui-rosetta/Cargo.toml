@@ -42,6 +42,7 @@ lru.workspace = true
 move-core-types.workspace = true
 
 telemetry-subscribers.workspace = true
+enum_dispatch.workspace = true
 
 [dev-dependencies]
 sui-sdk.workspace = true

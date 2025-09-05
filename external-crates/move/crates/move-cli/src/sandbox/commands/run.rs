@@ -3,20 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    NativeFunctionRecord,
     sandbox::utils::{
         contains_module, explain_execution_error, get_gas_status, is_bytecode_file,
         on_disk_state_view::OnDiskStateView,
     },
-    NativeFunctionRecord,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
-use move_core_types::{
-    identifier::IdentStr,
-    language_storage::TypeTag,
-    transaction_argument::{convert_txn_args, TransactionArgument},
-};
+use move_core_types::{identifier::IdentStr, language_storage::TypeTag, runtime_value::MoveValue};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
     dev_utils::gas_schedule::CostTable, natives::functions::NativeFunctions, runtime::MoveRuntime,
@@ -30,7 +26,7 @@ pub fn run(
     _package: &CompiledPackage,
     module_file: &Path,
     function: &str,
-    txn_args: &[TransactionArgument],
+    txn_args: &[MoveValue],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
     _dry_run: bool,
@@ -48,8 +44,13 @@ pub fn run(
     );
     let bytecode = fs::read(module_file)?;
 
-    // TODO: parse Value's directly instead of going through the indirection of TransactionArgument?
-    let vm_args: Vec<Vec<u8>> = convert_txn_args(txn_args);
+    let vm_args: Vec<Vec<u8>> = txn_args
+        .iter()
+        .map(|arg| {
+            arg.simple_serialize()
+                .expect("Transaction arguments must serialize")
+        })
+        .collect();
 
     let natives = NativeFunctions::new(natives)?;
     let runtime = MoveRuntime::new_with_default_config(natives);
@@ -64,18 +65,6 @@ pub fn run(
         // script fun. parse module, extract script ID to pass to VM
         let module = CompiledModule::deserialize_with_defaults(&bytecode)
             .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
-        move_vm_profiler::tracing_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            use move_vm_runtime::shared::gas::GasMeter;
-
-            let gas_rem: u64 = gas_status.remaining_gas().into();
-            gas_status.set_profiler(GasProfiler::init(
-                &runtime.vm_config().profiler_config,
-                function.to_owned(),
-                gas_rem,
-            ));
-        }
-
         let mut linkage = state.generate_linkage_context(module.address())?;
         linkage.add_type_arg_addresses_reflexive(&vm_type_tags);
 

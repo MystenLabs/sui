@@ -49,7 +49,7 @@ impl SurferTask {
             .unwrap();
         let all_live_objects: Vec<_> = node.with(|node| {
             node.state()
-                .get_accumulator_store()
+                .get_global_state_hash_store()
                 .iter_cached_live_object_set_for_testing(false)
                 .collect()
         });
@@ -70,8 +70,8 @@ impl SurferTask {
                             Owner::Shared {
                                 initial_shared_version,
                             }
-                            // TODO: Implement full support for ConsensusV2 objects in sui-surfer.
-                            | Owner::ConsensusV2 {
+                            // TODO: Implement full support for ConsensusAddressOwner objects in sui-surfer.
+                            | Owner::ConsensusAddressOwner {
                                 start_version: initial_shared_version,
                                 ..
                             } => {

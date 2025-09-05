@@ -35,18 +35,40 @@ pub use guards::*;
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TxType {
+    SingleWriter,
+    SharedObject,
+}
+
+impl TxType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TxType::SingleWriter => TX_TYPE_SINGLE_WRITER_TX,
+            TxType::SharedObject => TX_TYPE_SHARED_OBJ_TX,
+        }
+    }
+}
+
+/// Used when latency is most definitely sub-second.
 pub const SUBSECOND_LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3,
+    0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+    0.95, 1., 2., 5., 10., 20., 30., 60., 90.,
 ];
 
+/// Used when we don't care about fine-grained values.
 pub const COARSE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1., 2., 3., 5., 10., 20., 30., 60.,
+    90.,
 ];
 
+/// Used when latency is usually < 10s. Expensive because of the number of buckets.
 pub const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6,
-    0.7, 0.8, 0.9, 1., 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2., 2.5, 3., 3.5, 4., 4.5, 5.,
-    6., 7., 8., 9., 10., 15., 20., 25., 30., 60., 90.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3,
+    0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+    0.95, 1., 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2., 2.5, 3., 3.5, 4., 4.5, 5., 6., 7.,
+    8., 9., 10., 15., 20., 25., 30., 60., 90.,
 ];
 
 pub const COUNT_BUCKETS: &[f64] = &[
@@ -461,7 +483,7 @@ pub type RegistryID = Uuid;
 /// A service to manage the prometheus registries. This service allow us to create
 /// a new Registry on demand and keep it accessible for processing/polling.
 /// The service can be freely cloned/shared across threads.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RegistryService {
     // Holds a Registry that is supposed to be used
     default_registry: Registry,

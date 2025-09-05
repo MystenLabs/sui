@@ -10,15 +10,15 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     parser::ast as P,
     sui_mode::{SUI_ADDR_NAME, SUI_ADDR_VALUE},
     typing::{ast as T, visitor::simple_visitor},
 };
 
 use super::{
-    LinterDiagnosticCategory, LinterDiagnosticCode, BAG_MOD_NAME, BAG_STRUCT_NAME,
-    LINKED_TABLE_MOD_NAME, LINKED_TABLE_STRUCT_NAME, LINT_WARNING_PREFIX, OBJECT_BAG_MOD_NAME,
+    BAG_MOD_NAME, BAG_STRUCT_NAME, LINKED_TABLE_MOD_NAME, LINKED_TABLE_STRUCT_NAME,
+    LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode, OBJECT_BAG_MOD_NAME,
     OBJECT_BAG_STRUCT_NAME, OBJECT_TABLE_MOD_NAME, OBJECT_TABLE_STRUCT_NAME, TABLE_MOD_NAME,
     TABLE_STRUCT_NAME, TABLE_VEC_MOD_NAME, TABLE_VEC_STRUCT_NAME, VEC_MAP_MOD_NAME,
     VEC_MAP_STRUCT_NAME, VEC_SET_MOD_NAME, VEC_SET_STRUCT_NAME,

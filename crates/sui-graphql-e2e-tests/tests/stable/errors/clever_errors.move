@@ -35,6 +35,9 @@ module P0::m {
     #[error]
     const ImNotAString: vector<u64> = vector[1,2,3,4,5];
 
+    #[error(code=1)]
+    const StringWithCode: vector<u8> = b"This is a string with code attached";
+
     public fun callU8() {
         abort ImAU8
     }
@@ -71,6 +74,14 @@ module P0::m {
         abort ImNotAString
     }
 
+    public fun callStringWithCode() {
+        abort StringWithCode
+    }
+
+    public fun callNoCodeOrConst() {
+        abort
+    }
+
     public fun normalAbort() {
         abort 0
     }
@@ -98,6 +109,10 @@ module P0::m {
 
 //# run P0::m::callU64vec
 
+//# run P0::m::callStringWithCode
+
+//# run P0::m::callNoCodeOrConst
+
 //# run P0::m::normalAbort
 
 //# run P0::m::assertLineNo
@@ -106,11 +121,12 @@ module P0::m {
 
 //# run-graphql
 {
-  transactionBlocks(last: 11) {
+  transactionBlocks(last: 13) {
     nodes {
       effects {
         status
         errors
+        abortCode
       }
     }
   }
@@ -151,6 +167,9 @@ module P0::m {
     #[error]
     const ImNotAString: vector<u64> = vector[1,2,3,4,5,6];
 
+    #[error(code=1)]
+    const StringWithCode: vector<u8> = b"This is a string with code attached v2";
+
     public fun callU8() {
         abort ImAU8
     }
@@ -185,6 +204,14 @@ module P0::m {
 
     public fun callU64vec() {
         abort ImNotAString
+    }
+
+    public fun callStringWithCode() {
+        abort StringWithCode
+    }
+
+    public fun callNoCodeOrConst() {
+        abort
     }
 
     public fun normalAbort() {
@@ -227,6 +254,7 @@ module P0::m {
       effects {
         status
         errors
+        abortCode
       }
     }
   }

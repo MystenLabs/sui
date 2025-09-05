@@ -1,0 +1,71 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+foo(p#0#0: bool, val1#0#0: u64, val2#0#0: u64, shadowed_var#0#0: u64): u64 {
+L4:	res#1#0: u64
+L5:	shadowed_var#1#0: u64
+L6:	shadowed_var#2#0: u64
+B0:
+	0: LdU64(0)
+	1: StLoc[4](res#1#0: u64)
+	2: MoveLoc[0](p#0#0: bool)
+	3: BrFalse(32)
+B1:
+	4: MoveLoc[1](val1#0#0: u64)
+	5: CopyLoc[3](shadowed_var#0#0: u64)
+	6: Add
+	7: StLoc[5](shadowed_var#1#0: u64)
+	8: CopyLoc[5](shadowed_var#1#0: u64)
+	9: LdU64(42)
+	10: Lt
+	11: BrFalse(28)
+B2:
+	12: MoveLoc[2](val2#0#0: u64)
+	13: CopyLoc[5](shadowed_var#1#0: u64)
+	14: Add
+	15: StLoc[6](shadowed_var#2#0: u64)
+	16: CopyLoc[6](shadowed_var#2#0: u64)
+	17: LdU64(42)
+	18: Lt
+	19: BrFalse(24)
+B3:
+	20: LdU64(42)
+	21: CopyLoc[6](shadowed_var#2#0: u64)
+	22: Add
+	23: StLoc[4](res#1#0: u64)
+B4:
+	24: MoveLoc[4](res#1#0: u64)
+	25: MoveLoc[6](shadowed_var#2#0: u64)
+	26: Add
+	27: StLoc[4](res#1#0: u64)
+B5:
+	28: MoveLoc[4](res#1#0: u64)
+	29: MoveLoc[5](shadowed_var#1#0: u64)
+	30: Add
+	31: StLoc[4](res#1#0: u64)
+B6:
+	32: MoveLoc[4](res#1#0: u64)
+	33: MoveLoc[3](shadowed_var#0#0: u64)
+	34: Add
+	35: Ret
+}
+
+test() {
+B0:
+	0: LdTrue
+	1: LdU64(7)
+	2: LdU64(7)
+	3: LdU64(7)
+	4: Call foo(bool, u64, u64, u64): u64
+	5: Pop
+	6: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

@@ -4,8 +4,12 @@
 module locked_stake::locked_stake;
 
 use locked_stake::epoch_time_lock::{Self, EpochTimeLock};
-use sui::{balance::{Self, Balance}, coin, sui::SUI, vec_map::{Self, VecMap}};
-use sui_system::{staking_pool::StakedSui, sui_system::{Self, SuiSystemState}};
+use sui::balance::{Self, Balance};
+use sui::coin;
+use sui::sui::SUI;
+use sui::vec_map::{Self, VecMap};
+use sui_system::staking_pool::StakedSui;
+use sui_system::sui_system::{Self, SuiSystemState};
 
 const EInsufficientBalance: u64 = 0;
 const EStakeObjectNonExistent: u64 = 1;

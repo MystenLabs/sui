@@ -41,7 +41,7 @@ Contents: tto::M1::B {
 
 task 5, lines 32-33:
 //# programmable --inputs receiving(2,1) @tto
-//> TransferObjects([Input(0)], Input(2))
+//> TransferObjects([Input(0)], Input(1))
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
 

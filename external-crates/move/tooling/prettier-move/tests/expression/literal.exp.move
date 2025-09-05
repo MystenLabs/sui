@@ -32,4 +32,5 @@ fun uint() {
     10u8;
     200u256;
     10_00u128;
+    0xFFFFFFFFFu128;
 }

@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    sandbox::utils::{get_gas_status, on_disk_state_view::OnDiskStateView},
     NativeFunctionRecord,
+    sandbox::utils::{get_gas_status, on_disk_state_view::OnDiskStateView},
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
     dev_utils::{gas_schedule::CostTable, storage::StoredPackage},
@@ -46,7 +46,10 @@ pub fn publish(
 
     // We don't allow republishing of packages
     if state.has_package(&package_version_id) {
-        bail!("Tried to republish the package at  {}. You will need to provide a different 'publish-at' address for the package", package_version_id);
+        bail!(
+            "Tried to republish the package at  {}. You will need to provide a different 'publish-at' address for the package",
+            package_version_id
+        );
     }
 
     let compiled_modules = compiled_modules

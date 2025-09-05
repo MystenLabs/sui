@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(lint(public_entry))]
 module a::test {
     use sui::random::{Random, RandomGenerator};
 

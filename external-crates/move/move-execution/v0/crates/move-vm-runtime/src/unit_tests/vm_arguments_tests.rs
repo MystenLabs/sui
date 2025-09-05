@@ -55,6 +55,7 @@ fn make_module_with_function(
     };
     let module = CompiledModule {
         version: move_binary_format::file_format_common::VERSION_MAX,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),

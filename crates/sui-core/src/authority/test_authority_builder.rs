@@ -3,6 +3,7 @@
 
 use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
+use super::ExecutionEnv;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_tables::{
@@ -15,6 +16,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
+use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
@@ -24,7 +26,6 @@ use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::AuthorityOverloadConfig;
@@ -35,7 +36,7 @@ use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
 use sui_network::randomness;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
@@ -65,6 +66,7 @@ pub struct TestAuthorityBuilder<'a> {
     insert_genesis_checkpoint: bool,
     authority_overload_config: Option<AuthorityOverloadConfig>,
     cache_config: Option<ExecutionCacheConfig>,
+    chain_override: Option<Chain>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -166,7 +168,18 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
+    pub fn with_chain_override(mut self, chain: Chain) -> Self {
+        self.chain_override = Some(chain);
+        self
+    }
+
     pub async fn build(self) -> Arc<AuthorityState> {
+        // `_guard` must be declared here so it is not dropped before
+        // `AuthorityPerEpochStore::new` is called
+        let protocol_config = self.protocol_config.clone();
+        let _guard = protocol_config
+            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
+
         let mut local_network_config_builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
                 .with_accounts(self.accounts)
@@ -233,11 +246,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         let name: AuthorityName = secret.public().into();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-        // `_guard` must be declared here so it is not dropped before
-        // `AuthorityPerEpochStore::new` is called
-        let _guard = self
-            .protocol_config
-            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
         let epoch_flags = EpochFlag::default_flags_for_new_epoch(&config);
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
@@ -259,6 +267,12 @@ impl<'a> TestAuthorityBuilder<'a> {
             backpressure_manager.clone(),
         );
 
+        let chain_id = ChainIdentifier::from(*genesis.checkpoint().digest());
+        let chain = match self.chain_override {
+            Some(chain) => chain,
+            None => chain_id.chain(),
+        };
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -271,7 +285,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
-            ChainIdentifier::from(*genesis.checkpoint().digest()),
+            (chain_id, chain),
             checkpoint_store
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
@@ -301,19 +315,22 @@ impl<'a> TestAuthorityBuilder<'a> {
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
                 false,
-                &authority_store,
             )))
         };
         let rpc_index = if self.disable_indexer {
             None
         } else {
-            Some(Arc::new(RpcIndexStore::new(
-                &path,
-                &authority_store,
-                &checkpoint_store,
-                &epoch_store,
-                &cache_traits.backing_package_store,
-            )))
+            Some(Arc::new(
+                RpcIndexStore::new(
+                    &path,
+                    &authority_store,
+                    &checkpoint_store,
+                    &epoch_store,
+                    &cache_traits.backing_package_store,
+                    None,
+                )
+                .await,
+            ))
         };
 
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
@@ -334,6 +351,8 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.authority_store_pruning_config = pruning_config;
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+        let policy_config = config.policy_config.clone();
+        let firewall_config = config.firewall_config.clone();
 
         let state = AuthorityState::new(
             name,
@@ -350,10 +369,11 @@ impl<'a> TestAuthorityBuilder<'a> {
             genesis.objects(),
             &DBCheckpointConfig::default(),
             config.clone(),
-            ArchiveReaderBalancer::default(),
             None,
             chain_identifier,
             pruner_db,
+            policy_config,
+            firewall_config,
         )
         .await;
 
@@ -391,19 +411,20 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis.epoch(),
                     genesis.checkpoint().sequence_number,
                 ),
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &state.epoch_store_for_testing(),
             )
             .await
             .unwrap();
 
+        let batch = state
+            .get_cache_commit()
+            .build_db_batch(epoch_store.epoch(), &[*genesis.transaction().digest()]);
+
         state.get_cache_commit().commit_transaction_outputs(
             epoch_store.epoch(),
+            batch,
             &[*genesis.transaction().digest()],
-            epoch_store
-                .protocol_config()
-                .use_object_per_epoch_marker_table_v2_as_option()
-                .unwrap_or(false),
         );
 
         // We want to insert these objects directly instead of relying on genesis because

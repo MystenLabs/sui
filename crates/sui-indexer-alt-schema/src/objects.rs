@@ -10,7 +10,10 @@ use diesel::{
 use sui_field_count::FieldCount;
 use sui_types::object::{Object, Owner};
 
-use crate::schema::{coin_balance_buckets, kv_objects, obj_info, obj_versions};
+use crate::schema::{
+    coin_balance_buckets, coin_balance_buckets_deletion_reference, kv_objects, obj_info,
+    obj_info_deletion_reference, obj_versions,
+};
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
@@ -21,12 +24,14 @@ pub struct StoredObject {
     pub serialized_object: Option<Vec<u8>>,
 }
 
-#[derive(Insertable, Selectable, Debug, Clone, FieldCount, Queryable)]
+#[derive(
+    Insertable, Selectable, Debug, Clone, PartialEq, Eq, FieldCount, Queryable, QueryableByName,
+)]
 #[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
 pub struct StoredObjVersion {
     pub object_id: Vec<u8>,
     pub object_version: i64,
-    pub object_digest: Vec<u8>,
+    pub object_digest: Option<Vec<u8>>,
     pub cp_sequence_number: i64,
 }
 
@@ -62,6 +67,13 @@ pub struct StoredObjInfo {
     pub instantiation: Option<Vec<u8>>,
 }
 
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
+#[diesel(table_name = obj_info_deletion_reference, primary_key(cp_sequence_number, object_id))]
+pub struct StoredObjInfoDeletionReference {
+    pub object_id: Vec<u8>,
+    pub cp_sequence_number: i64,
+}
+
 #[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
 #[diesel(table_name = coin_balance_buckets, primary_key(object_id, cp_sequence_number))]
 #[diesel(treat_none_as_default_value = false)]
@@ -72,6 +84,13 @@ pub struct StoredCoinBalanceBucket {
     pub owner_id: Option<Vec<u8>>,
     pub coin_type: Option<Vec<u8>>,
     pub coin_balance_bucket: Option<i16>,
+}
+
+#[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
+#[diesel(table_name = coin_balance_buckets_deletion_reference, primary_key(cp_sequence_number, object_id))]
+pub struct StoredCoinBalanceBucketDeletionReference {
+    pub object_id: Vec<u8>,
+    pub cp_sequence_number: i64,
 }
 
 impl StoredObjInfo {
@@ -85,20 +104,16 @@ impl StoredObjInfo {
                 Owner::ObjectOwner(_) => StoredOwnerKind::Object,
                 Owner::Shared { .. } => StoredOwnerKind::Shared,
                 Owner::Immutable => StoredOwnerKind::Immutable,
-                // We do not distinguish between fastpath owned and consensus v2 owned
-                // objects. Also we only support single owner for now.
-                // In the future, if we support more sophisticated authenticator,
-                // this will be changed.
-                Owner::ConsensusV2 { .. } => StoredOwnerKind::Address,
+                // We do not distinguish between fastpath owned and consensus owned
+                // objects.
+                Owner::ConsensusAddressOwner { .. } => StoredOwnerKind::Address,
             }),
 
             owner_id: match object.owner() {
                 Owner::AddressOwner(a) => Some(a.to_vec()),
                 Owner::ObjectOwner(o) => Some(o.to_vec()),
                 Owner::Shared { .. } | Owner::Immutable { .. } => None,
-                Owner::ConsensusV2 { authenticator, .. } => {
-                    Some(authenticator.as_single_owner().to_vec())
-                }
+                Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_vec()),
             },
 
             package: type_.map(|t| t.address().to_vec()),

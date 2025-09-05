@@ -31,7 +31,7 @@ trait TransactionsApi {
         /// The digest of the queried transaction.
         digest: TransactionDigest,
         /// Options controlling the output format.
-        options: SuiTransactionBlockResponseOptions,
+        options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse>;
 }
 
@@ -72,12 +72,14 @@ impl TransactionsApiServer for Transactions {
     async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
-        options: SuiTransactionBlockResponseOptions,
+        options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
         let Self(ctx) = self;
-        Ok(response::transaction(ctx, digest, &options)
-            .await
-            .with_internal_context(|| format!("Failed to get transaction {digest}"))?)
+        Ok(
+            response::transaction(ctx, digest, &options.unwrap_or_default())
+                .await
+                .with_internal_context(|| format!("Failed to get transaction {digest}"))?,
+        )
     }
 }
 
@@ -101,9 +103,42 @@ impl QueryTransactionsApiServer for QueryTransactions {
 
         let options = query.options.unwrap_or_default();
 
-        let tx_futures = digests
-            .iter()
-            .map(|d| response::transaction(ctx, *d, &options));
+        let tx_futures = digests.iter().map(|d| {
+            async {
+                let mut tx = response::transaction(ctx, *d, &options).await;
+
+                let config = &ctx.config().transactions;
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(
+                    config.tx_retry_interval_ms,
+                ));
+
+                let mut retries = 0;
+                for _ in 0..config.tx_retry_count {
+                    // Retry only if the error is an invalid params error, which can only be due to
+                    // the transaction not being found in the kv store or tx balance changes table.
+                    if let Err(RpcError::InvalidParams(
+                        _e @ (Error::BalanceChangesNotFound(_) | Error::NotFound(_)),
+                    )) = tx
+                    {
+                        interval.tick().await;
+                        retries += 1;
+                        tx = response::transaction(ctx, *d, &options).await;
+                        ctx.metrics()
+                            .read_retries
+                            .with_label_values(&["tx_response"])
+                            .inc();
+                    } else {
+                        break;
+                    }
+                }
+
+                ctx.metrics()
+                    .read_retries_per_request
+                    .with_label_values(&["tx_response"])
+                    .observe(retries as f64);
+                tx
+            }
+        });
 
         let data = future::join_all(tx_futures)
             .await

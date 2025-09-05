@@ -16,6 +16,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
 };
 use sui_types::object::Object;
+use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 use tracing::instrument;
 
@@ -325,6 +326,13 @@ impl TransactionKeyValueStore {
         self.inner.get_object(object_id, version).await
     }
 
+    pub async fn multi_get_objects(
+        &self,
+        object_keys: &[ObjectKey],
+    ) -> SuiResult<Vec<Option<Object>>> {
+        self.inner.multi_get_objects(object_keys).await
+    }
+
     pub async fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
@@ -369,6 +377,8 @@ pub trait TransactionKeyValueStoreTrait {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
+
+    async fn multi_get_objects(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>>;
 
     async fn multi_get_transaction_checkpoint(
         &self,
@@ -506,6 +516,23 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         if res.is_none() {
             res = self.fallback.get_object(object_id, version).await?;
         }
+        Ok(res)
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    async fn multi_get_objects(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>> {
+        let mut res = self.primary.multi_get_objects(object_keys).await?;
+
+        let (fallback, indices) = find_fallback(&res, object_keys);
+
+        if fallback.is_empty() {
+            return Ok(res);
+        }
+
+        let secondary_res = self.fallback.multi_get_objects(&fallback).await?;
+
+        merge_res(&mut res, secondary_res, &indices);
+
         Ok(res)
     }
 

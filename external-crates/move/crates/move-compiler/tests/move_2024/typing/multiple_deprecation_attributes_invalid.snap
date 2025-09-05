@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[E10001]: invalid duplicate attribute
   ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:3:7
   │
 2 │     #[deprecated]
@@ -13,7 +13,7 @@ error[E02001]: duplicate declaration, item, or annotation
 3 │     #[deprecated]
   │       ^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
 
-error[E02001]: duplicate declaration, item, or annotation
+error[E10001]: invalid duplicate attribute
   ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:7:7
   │
 6 │     #[deprecated(note = b"note")]
@@ -21,15 +21,15 @@ error[E02001]: duplicate declaration, item, or annotation
 7 │     #[deprecated]
   │       ^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
 
-error[E02001]: duplicate declaration, item, or annotation
+error[E10001]: invalid duplicate attribute
    ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:10:19
    │
 10 │     #[deprecated, deprecated(note = b"note")]
-   │       ----------  ^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
+   │       ----------  ^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
    │       │            
    │       Attribute previously given here
 
-error[E02001]: duplicate declaration, item, or annotation
+error[E10001]: invalid duplicate attribute
    ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:13:19
    │
 13 │     #[deprecated, deprecated]

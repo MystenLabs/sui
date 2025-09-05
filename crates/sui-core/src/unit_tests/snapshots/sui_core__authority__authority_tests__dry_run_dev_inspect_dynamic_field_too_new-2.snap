@@ -1,0 +1,7 @@
+---
+source: crates/sui-core/src/unit_tests/authority_tests.rs
+expression: abort_error.unwrap()
+---
+Module ID: 0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field
+Function: remove_child_object
+Error code: 1

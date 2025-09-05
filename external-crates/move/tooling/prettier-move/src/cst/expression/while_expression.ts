@@ -10,11 +10,11 @@ const { indent, softline, group } = doc.builders;
 export const NODE_TYPE = 'while_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printWhileExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printWhileExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
@@ -34,12 +34,12 @@ export default function (path: AstPath<Node>): treeFn | null {
  * ```
  */
 function printWhileExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	const condition = path.node.nonFormattingChildren[0]!.isList
-		? [indent(softline), path.call(print, 'nonFormattingChildren', 0), softline]
-		: [indent(softline), indent(path.call(print, 'nonFormattingChildren', 0)), softline];
+    const condition = path.node.nonFormattingChildren[0]!.isList
+        ? [indent(softline), path.call(print, 'nonFormattingChildren', 0), softline]
+        : [indent(softline), indent(path.call(print, 'nonFormattingChildren', 0)), softline];
 
-	return [
-		['while (', group(condition), ') '],
-		path.call(print, 'nonFormattingChildren', 1), // body
-	];
+    return [
+        ['while (', group(condition), ') '],
+        path.call(print, 'nonFormattingChildren', 1), // body
+    ];
 }

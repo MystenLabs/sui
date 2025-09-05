@@ -1,0 +1,219 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-14:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch0AfterCp0NoTx": {
+      "totalTransactions": null,
+      "transactions": {
+        "edges": []
+      }
+    }
+  }
+}
+
+task 2, lines 16-18:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 20-22:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 24:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 26-34:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch0AfterCp0WithTx": {
+      "totalTransactions": null,
+      "transactions": {
+        "edges": [
+          {
+            "cursor": "MQ==",
+            "node": {
+              "digest": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 1,
+                  "epoch": {
+                    "epochId": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "Mg==",
+            "node": {
+              "digest": "3g5WNrMkhLMBuUCKvTrXB1VTqFZHSoSo1zdLV1mCnMJB",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 1,
+                  "epoch": {
+                    "epochId": 0
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 6, lines 36-38:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 40-42:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 44:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, lines 46-54:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch0AfterCp1WithTx": {
+      "totalTransactions": null,
+      "transactions": {
+        "edges": [
+          {
+            "cursor": "Mw==",
+            "node": {
+              "digest": "8NYkpueXCxhbSrpGKCr6PQtNWioWEVF5uivF9eRb73DR",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2,
+                  "epoch": {
+                    "epochId": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "NA==",
+            "node": {
+              "digest": "A8WhXmaypUncB3KUCZZ46rXMsaRByqxenw6XF8GtPGWy",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2,
+                  "epoch": {
+                    "epochId": 0
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10, line 56:
+//# advance-epoch
+Epoch advanced: 1
+
+task 11, lines 58-60:
+//# programmable --sender A --inputs 43 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 62-64:
+//# programmable --sender A --inputs 1
+//> SplitCoins(Gas, [Input(0)]);
+//> MergeCoins(Gas, [Result(0)])
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 66:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 14, lines 68-82:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch1AfterCp2": {
+      "totalTransactions": null,
+      "transactions": {
+        "edges": [
+          {
+            "cursor": "Ng==",
+            "node": {
+              "digest": "6XcgDowK3u7P5y71p3BdqEvYwtuQAmBVscR3HA6NzKoe",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 4,
+                  "epoch": {
+                    "epochId": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "Nw==",
+            "node": {
+              "digest": "FSy2aBj2hQjjQtZXVhpxMJzf8KTDnBrmsv4YZi14Qoyb",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 4,
+                  "epoch": {
+                    "epochId": 1
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "epoch1AfterNonExistentCp5": {
+      "totalTransactions": null,
+      "transactions": {
+        "edges": []
+      }
+    }
+  }
+}
+
+task 15, line 84:
+//# create-checkpoint
+Checkpoint created: 5

@@ -8,6 +8,7 @@ use crate::config::Version;
 use crate::server::graphiql_server::start_graphiql_server;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use simulacrum::AdvanceEpochConfig;
 use simulacrum::Simulacrum;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -179,7 +180,7 @@ pub async fn serve_executor(
     info!("Starting executor server on {}", executor_server_url);
 
     let executor_server_handle = tokio::spawn(async move {
-        sui_rpc_api::RpcService::new_without_version(executor)
+        sui_rpc_api::RpcService::new(executor)
             .start_service(executor_server_url)
             .await;
     });
@@ -239,7 +240,10 @@ pub async fn prep_executor_cluster() -> ExecutorCluster {
     sim.create_checkpoint();
     sim.create_checkpoint();
     sim.create_checkpoint();
-    sim.advance_epoch(true);
+    sim.advance_epoch(AdvanceEpochConfig {
+        create_random_state: true,
+        ..Default::default()
+    });
     sim.create_checkpoint();
     sim.advance_clock(
         std::time::SystemTime::now()

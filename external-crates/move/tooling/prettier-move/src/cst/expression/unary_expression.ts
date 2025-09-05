@@ -10,19 +10,19 @@ const {} = doc.builders;
 export const NODE_TYPE = 'unary_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printUnaryExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printUnaryExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `unary_expression` node.
  */
 function printUnaryExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return [
-		path.call(print, 'nonFormattingChildren', 0),
-		path.call(print, 'nonFormattingChildren', 1),
-	];
+    return [
+        path.call(print, 'nonFormattingChildren', 0),
+        path.call(print, 'nonFormattingChildren', 1),
+    ];
 }

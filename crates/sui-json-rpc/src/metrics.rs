@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
-use std::sync::Arc;
-
 use futures::FutureExt;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
+use jsonrpsee::types::{ErrorCode, ErrorObject, Id};
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec,
 };
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::Duration;
 use sui_json_rpc_api::TRANSIENT_ERROR_CODE;
 use sui_json_rpc_api::{CLIENT_SDK_TYPE_HEADER, CLIENT_TARGET_API_VERSION_HEADER};
 use tokio::time::Instant;
@@ -237,6 +238,37 @@ where
             let response = fut.await;
             metrics.on_response(&method_name, started_at, &response);
             response
+        }
+        .boxed()
+    }
+}
+
+#[derive(Clone)]
+pub struct TimeoutLayer<S>(S, Duration);
+
+impl<S> TimeoutLayer<S> {
+    pub fn new(service: S, duration: Duration) -> Self {
+        Self(service, duration)
+    }
+}
+
+impl<'a, S> RpcServiceT<'a> for TimeoutLayer<S>
+where
+    S: RpcServiceT<'a> + Send + Sync,
+    S::Future: 'a,
+{
+    type Future = futures::future::BoxFuture<'a, jsonrpsee::MethodResponse>;
+
+    fn call(&self, req: jsonrpsee::types::Request<'a>) -> Self::Future {
+        let future = tokio::time::timeout(self.1, self.0.call(req));
+        async move {
+            match future.await {
+                Ok(res) => res,
+                Err(_) => jsonrpsee::MethodResponse::error(
+                    Id::Null,
+                    ErrorObject::from(ErrorCode::InternalError),
+                ),
+            }
         }
         .boxed()
     }

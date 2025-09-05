@@ -4,12 +4,10 @@
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
-use once_cell::unsync::OnceCell;
 use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
+use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::error::{SuiError, SuiResult};
@@ -46,11 +44,12 @@ impl InMemoryObjectStore {
     // We will need a trait to unify the these functions. (similarly the one in simulacrum)
     pub(crate) fn read_objects_for_execution(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_key: &TransactionKey,
+        assigned_versions: &AssignedVersions,
         input_object_kinds: &[InputObjectKind],
     ) -> SuiResult<InputObjects> {
-        let shared_version_assignments_cell: OnceCell<Option<HashMap<_, _>>> = OnceCell::new();
+        let shared_version_assignments: HashMap<_, _> =
+            assigned_versions.iter().map(|(k, v)| (*k, *v)).collect();
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
             let obj: Option<Object> = match kind {
@@ -64,27 +63,7 @@ impl InMemoryObjectStore {
                     initial_shared_version,
                     ..
                 } => {
-                    let shared_version_assignments = shared_version_assignments_cell
-                        .get_or_init(|| {
-                            epoch_store
-                                .get_assigned_shared_object_versions(tx_key)
-                                .map(|l| l.into_iter().collect())
-                        })
-                        .as_ref()
-                        .ok_or_else(|| SuiError::GenericAuthorityError {
-                            error: "Shared object versions should have been assigned.".to_string(),
-                        })?;
-                    let initial_shared_version = if epoch_store
-                        .epoch_start_config()
-                        .use_version_assignment_tables_v3()
-                    {
-                        *initial_shared_version
-                    } else {
-                        // (before ConsensusV2 objects, we didn't track initial shared
-                        // version for shared object locks)
-                        SequenceNumber::UNKNOWN
-                    };
-                    let version = shared_version_assignments.get(&(*id, initial_shared_version)).unwrap_or_else(|| {
+                    let version = shared_version_assignments.get(&(*id, *initial_shared_version)).unwrap_or_else(|| {
                         panic!("Shared object version should have been assigned. key: {tx_key:?}, obj id: {id:?}")
                     });
 
@@ -161,8 +140,6 @@ impl ChildObjectResolver for InMemoryObjectStore {
         _receiving_object_id: &ObjectID,
         _receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        _use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         unimplemented!()
     }

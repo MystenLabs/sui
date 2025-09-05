@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::VersionDigest,
+    base_types::{SuiAddress, VersionDigest},
     digests::ObjectDigest,
     object::{Object, Owner},
 };
+use move_core_types::language_storage::TypeTag;
 use serde::{Deserialize, Serialize};
 
 use super::IDOperation;
@@ -54,16 +55,61 @@ impl EffectsObjectChange {
             },
         }
     }
+
+    pub fn new_from_accumulator_write(write: AccumulatorWriteV1) -> Self {
+        Self {
+            input_state: ObjectIn::NotExist,
+            output_state: ObjectOut::AccumulatorWriteV1(write),
+            id_operation: IDOperation::None,
+        }
+    }
 }
 
 /// If an object exists (at root-level) in the store prior to this transaction,
 /// it should be Exist, otherwise it's NonExist, e.g. wrapped objects should be
-/// NonExist.
+/// NotExist.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ObjectIn {
     NotExist,
     /// The old version, digest and owner.
     Exist((VersionDigest, Owner)),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum AccumulatorOperation {
+    /// Merge the value into the accumulator.
+    Merge,
+    /// Split the value from the accumulator.
+    Split,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum AccumulatorValue {
+    Integer(u64),
+    IntegerTuple(u64, u64),
+}
+
+/// Accumulator objects are named by an address (can be an account address or a UID)
+/// and a type tag.
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccumulatorAddress {
+    pub address: SuiAddress,
+    pub ty: TypeTag,
+}
+
+impl AccumulatorAddress {
+    pub fn new(address: SuiAddress, ty: TypeTag) -> Self {
+        Self { address, ty }
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccumulatorWriteV1 {
+    pub address: AccumulatorAddress,
+    /// The operation to be applied to the accumulator.
+    pub operation: AccumulatorOperation,
+    /// The value to be merged into or split from the accumulator.
+    pub value: AccumulatorValue,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -75,4 +121,6 @@ pub enum ObjectOut {
     /// Packages writes need to be tracked separately with version because
     /// we don't use lamport version for package publish and upgrades.
     PackageWrite(VersionDigest),
+    /// This isn't an object write, but a special write to an accumulator.
+    AccumulatorWriteV1(AccumulatorWriteV1),
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod accumulator;
 mod fingerprint;
 pub(crate) mod object_store;
 
@@ -22,6 +23,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::execution::values::{GlobalValue, Value};
+use move_vm_runtime::natives::extensions::NativeExtensionMarker;
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -37,10 +39,13 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    TypeTag, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
-    SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+    SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::error;
+
+pub use accumulator::*;
 
 pub enum ObjectEvent {
     /// Transfer to a new address or object. Or make it shared or immutable.
@@ -55,11 +60,11 @@ type Set<K> = IndexSet<K>;
 pub(crate) struct TestInventories {
     pub(crate) objects: BTreeMap<ObjectID, Value>,
     // address inventories. Most recent objects are at the back of the set
-    pub(crate) address_inventories: BTreeMap<SuiAddress, BTreeMap<TypeTag, Set<ObjectID>>>,
+    pub(crate) address_inventories: BTreeMap<SuiAddress, BTreeMap<MoveObjectType, Set<ObjectID>>>,
     // global inventories.Most recent objects are at the back of the set
-    pub(crate) shared_inventory: BTreeMap<TypeTag, Set<ObjectID>>,
-    pub(crate) immutable_inventory: BTreeMap<TypeTag, Set<ObjectID>>,
-    pub(crate) taken_immutable_values: BTreeMap<TypeTag, BTreeMap<ObjectID, Value>>,
+    pub(crate) shared_inventory: BTreeMap<MoveObjectType, Set<ObjectID>>,
+    pub(crate) immutable_inventory: BTreeMap<MoveObjectType, Set<ObjectID>>,
+    pub(crate) taken_immutable_values: BTreeMap<MoveObjectType, BTreeMap<ObjectID, Value>>,
     // object has been taken from the inventory
     pub(crate) taken: BTreeMap<ObjectID, Owner>,
     // allocated receiving tickets
@@ -74,6 +79,7 @@ pub struct LoadedRuntimeObject {
 pub struct RuntimeResults {
     pub writes: IndexMap<ObjectID, (Owner, MoveObjectType, Value)>,
     pub user_events: Vec<(StructTag, Value)>,
+    pub accumulator_events: Vec<MoveAccumulatorEvent>,
     // Loaded child objects, their loaded version/digest and whether they were modified.
     pub loaded_child_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
     pub created_object_ids: Set<ObjectID>,
@@ -91,6 +97,7 @@ pub(crate) struct ObjectRuntimeState {
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
     transfers: IndexMap<ObjectID, (Owner, MoveObjectType, Value)>,
     events: Vec<(StructTag, Value)>,
+    accumulator_events: Vec<MoveAccumulatorEvent>,
     // total size of events emitted so far
     total_events_size: u64,
     received: IndexMap<ObjectID, DynamicallyLoadedObjectMetadata>,
@@ -109,6 +116,8 @@ pub struct ObjectRuntime<'a> {
     pub(crate) protocol_config: &'a ProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
 }
+
+impl<'a> NativeExtensionMarker<'a> for ObjectRuntime<'a> {}
 
 pub enum TransferResult {
     New,
@@ -173,6 +182,7 @@ impl<'a> ObjectRuntime<'a> {
                 deleted_ids: Set::new(),
                 transfers: IndexMap::new(),
                 events: vec![],
+                accumulator_events: vec![],
                 total_events_size: 0,
                 received: IndexMap::new(),
             },
@@ -237,11 +247,14 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
+    /// In the new PTB adapter, this function is also used for persisting owners at the end
+    /// of the transaction. In which case, we don't check the transfer limits.
     pub fn transfer(
         &mut self,
         owner: Owner,
         ty: MoveObjectType,
         obj: Value,
+        end_of_transaction: bool,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value())?
             .value_as::<AccountAddress>()?
@@ -258,31 +271,50 @@ impl<'a> ObjectRuntime<'a> {
             SUI_RANDOMNESS_STATE_OBJECT_ID,
             SUI_DENY_LIST_OBJECT_ID,
             SUI_BRIDGE_OBJECT_ID,
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
             TransferResult::New
+        } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
+            match (&owner, prev_owner) {
+                // don't use == for dummy values in Shared or ConsensusAddressOwner
+                (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
+                (
+                    Owner::ConsensusAddressOwner {
+                        owner: new_owner, ..
+                    },
+                    Owner::ConsensusAddressOwner {
+                        owner: old_owner, ..
+                    },
+                ) if new_owner == old_owner => TransferResult::SameOwner,
+                (new, old) if new == old => TransferResult::SameOwner,
+                _ => TransferResult::OwnerChanged,
+            }
         } else if is_framework_obj {
             // framework objects are always created when they are transferred, but the id is
             // hard-coded so it is not yet in new_ids
             self.state.new_ids.insert(id);
             TransferResult::New
-        } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
-            match (&owner, prev_owner) {
-                // don't use == for dummy values in Shared owner
-                (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
-                (new, old) if new == old => TransferResult::SameOwner,
-                _ => TransferResult::OwnerChanged,
-            }
         } else {
             TransferResult::OwnerChanged
         };
+        // assert!(end of transaction ==> same owner)
+        if end_of_transaction && !matches!(transfer_result, TransferResult::SameOwner) {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Untransferred object {} had its owner change", id)),
+            );
+        }
 
         // Metered transactions don't have limits for now
 
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             // TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
-            self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
+            // We have higher limits for unmetered transactions and framework obj
+            // We don't check the limit for objects whose owner is persisted at the end of the
+            // transaction
+            self.is_metered && !is_framework_obj && !end_of_transaction,
             self.state.transfers.len(),
             self.protocol_config.max_num_transferred_move_object_ids(),
             self.protocol_config
@@ -310,6 +342,25 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
         std::mem::take(&mut self.state.events)
+    }
+
+    pub fn emit_accumulator_event(
+        &mut self,
+        accumulator_id: ObjectID,
+        action: MoveAccumulatorAction,
+        target_addr: AccountAddress,
+        target_ty: TypeTag,
+        value: MoveAccumulatorValue,
+    ) -> PartialVMResult<()> {
+        let event = MoveAccumulatorEvent {
+            accumulator_id,
+            action,
+            target_addr,
+            target_ty,
+            value,
+        };
+        self.state.accumulator_events.push(event);
+        Ok(())
     }
 
     pub(crate) fn child_object_exists(
@@ -445,6 +496,17 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state)
     }
 
+    pub fn is_deleted(&self, id: &ObjectID) -> bool {
+        self.state.deleted_ids.contains(id)
+    }
+
+    pub fn is_transferred(&self, id: &ObjectID) -> Option<Owner> {
+        self.state
+            .transfers
+            .get(id)
+            .map(|(owner, _, _)| owner.clone())
+    }
+
     pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
         let loaded_child_objects = self.loaded_runtime_objects();
         let child_effects = self.child_object_store.take_effects().map_err(|e| {
@@ -542,6 +604,7 @@ impl ObjectRuntimeState {
             events: user_events,
             total_events_size: _,
             received,
+            accumulator_events,
         } = self;
 
         // Check new owners from transfers, reports an error on cycles.
@@ -591,6 +654,7 @@ impl ObjectRuntimeState {
         Ok(RuntimeResults {
             writes: written_objects,
             user_events,
+            accumulator_events,
             loaded_child_objects,
             created_object_ids: new_ids,
             deleted_object_ids: deleted_ids,
@@ -772,7 +836,7 @@ fn check_circular_ownership(
             Owner::AddressOwner(_)
             | Owner::Shared { .. }
             | Owner::Immutable
-            | Owner::ConsensusV2 { .. } => (),
+            | Owner::ConsensusAddressOwner { .. } => (),
             Owner::ObjectOwner(new_owner) => {
                 let new_owner: ObjectID = new_owner.into();
                 let mut cur = new_owner;

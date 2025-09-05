@@ -89,8 +89,8 @@ async function findMatchingConfig(documentUri) {
 		};
 	}
 
-	const root = workspaceFolder.uri.path;
-	let lookup = documentUri.path;
+	const root = workspaceFolder.uri.fsPath;
+	let lookup = documentUri.fsPath;
 	let search = {};
 
 	// go back in the directory until the root is found; or until we find the

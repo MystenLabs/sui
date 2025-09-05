@@ -19,7 +19,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
-use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::base_types::SequenceNumber;
 use sui_types::committee::EpochId;
@@ -257,14 +256,9 @@ impl AuthorityStorePruner {
             debug!("Pruning effects {:?}", effects_digest);
             effect_digests.push(effects_digest);
 
-            if let Some(event_digest) = effects.events_digest() {
-                if let Some(next_digest) = event_digest.next_lexicographical() {
-                    perpetual_batch.schedule_delete_range(
-                        &perpetual_db.events,
-                        &(*event_digest, 0),
-                        &(next_digest, 0),
-                    )?;
-                }
+            if effects.events_digest().is_some() {
+                perpetual_batch
+                    .delete_batch(&perpetual_db.events_2, [effects.transaction_digest()])?;
             }
         }
         perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
@@ -296,7 +290,7 @@ impl AuthorityStorePruner {
         )?;
 
         if let Some(rpc_index) = rpc_index {
-            rpc_index.prune(&checkpoint_content_to_prune)?;
+            rpc_index.prune(checkpoint_number, &checkpoint_content_to_prune)?;
         }
         perpetual_batch.write()?;
         checkpoints_batch.write()?;
@@ -321,7 +315,9 @@ impl AuthorityStorePruner {
             .get_highest_executed_checkpoint()?
             .map(|c| (*c.sequence_number(), c.epoch))
             .unwrap_or_default();
-        let pruned_checkpoint_number = perpetual_db.get_highest_pruned_checkpoint()?;
+        let pruned_checkpoint_number = perpetual_db
+            .get_highest_pruned_checkpoint()?
+            .unwrap_or_default();
         if config.smooth && config.num_epochs_to_retain > 0 {
             max_eligible_checkpoint_number = Self::smoothed_max_eligible_checkpoint_number(
                 checkpoint_store,
@@ -354,25 +350,22 @@ impl AuthorityStorePruner {
         pruner_db: Option<&Arc<AuthorityPrunerTables>>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        archive_readers: ArchiveReaderBalancer,
         epoch_duration_ms: u64,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("PruneCheckpointsForEligibleEpochs");
-        let pruned_checkpoint_number =
-            checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
-        let (last_executed_checkpoint, epoch_id) = checkpoint_store
+        let pruned_checkpoint_number = checkpoint_store
+            .get_highest_pruned_checkpoint_seq_number()?
+            .unwrap_or(0);
+        let (mut max_eligible_checkpoint, epoch_id) = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| (*c.sequence_number(), c.epoch))
             .unwrap_or_default();
-        let latest_archived_checkpoint = archive_readers
-            .get_archive_watermark()
-            .await?
-            .unwrap_or(u64::MAX);
-        let mut max_eligible_checkpoint = min(latest_archived_checkpoint, last_executed_checkpoint);
         if config.num_epochs_to_retain != u64::MAX {
             max_eligible_checkpoint = min(
                 max_eligible_checkpoint,
-                perpetual_db.get_highest_pruned_checkpoint()?,
+                perpetual_db
+                    .get_highest_pruned_checkpoint()?
+                    .unwrap_or_default(),
             );
         }
         if config.smooth {
@@ -560,14 +553,14 @@ impl AuthorityStorePruner {
         delay_days: usize,
         last_processed: Arc<Mutex<HashMap<String, SystemTime>>>,
     ) -> anyhow::Result<Option<LiveFile>> {
-        let db_path = perpetual_db.objects.rocksdb.path();
+        let db_path = perpetual_db.objects.db.path_for_pruning();
         let mut state = last_processed
             .lock()
             .expect("failed to obtain a lock for last processed SST files");
         let mut sst_file_for_compaction: Option<LiveFile> = None;
         let time_threshold =
             SystemTime::now() - Duration::from_secs(delay_days as u64 * 24 * 60 * 60);
-        for sst_file in perpetual_db.objects.rocksdb.live_files()? {
+        for sst_file in perpetual_db.objects.db.live_files()? {
             let file_path = db_path.join(sst_file.name.clone().trim_matches('/'));
             let last_modified = std::fs::metadata(file_path)?.modified()?;
             if !PERIODIC_PRUNING_TABLES.contains(&sst_file.column_family_name)
@@ -636,6 +629,17 @@ impl AuthorityStorePruner {
         Ok(pruned_checkpoint + delta)
     }
 
+    #[allow(clippy::all)]
+    #[allow(dead_code)]
+    fn th_pruning_config() -> AuthorityStorePruningConfig {
+        let mut config = AuthorityStorePruningConfig::default();
+        config.num_epochs_to_retain = u64::MAX;
+        config.num_epochs_to_retain_for_checkpoints = None;
+        config.num_epochs_to_retain_for_indexes = None;
+        config.periodic_compaction_threshold_days = None;
+        config
+    }
+
     fn setup_pruning(
         config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
@@ -645,13 +649,14 @@ impl AuthorityStorePruner {
         jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        archive_readers: ArchiveReaderBalancer,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
+        #[cfg(tidehunter)]
+        let config = Self::th_pruning_config();
 
         let tick_duration =
             Duration::from_millis(Self::pruning_tick_duration_ms(epoch_duration_ms));
@@ -710,7 +715,7 @@ impl AuthorityStorePruner {
                         }
                     },
                     _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), archive_readers.clone(), epoch_duration_ms).await {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
@@ -735,7 +740,6 @@ impl AuthorityStorePruner {
         is_validator: bool,
         epoch_duration_ms: u64,
         registry: &Registry,
-        archive_readers: ArchiveReaderBalancer,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
@@ -758,7 +762,6 @@ impl AuthorityStorePruner {
                 jsonrpc_index,
                 pruner_db,
                 AuthorityStorePruningMetrics::new(registry),
-                archive_readers,
             ),
         }
     }
@@ -861,7 +864,7 @@ mod tests {
         object::Object,
         storage::ObjectKey,
     };
-    use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions};
+    use typed_store::rocks::{default_db_options, DBMap, MetricConf, ReadWriteOptions};
     use typed_store::Map;
 
     use super::AuthorityStorePruner;
@@ -869,8 +872,11 @@ mod tests {
     fn get_keys_after_pruning(path: &Path) -> anyhow::Result<HashSet<ObjectKey>> {
         let perpetual_db_path = path.join(Path::new("perpetual"));
         let cf_names = AuthorityPerpetualTables::describe_tables();
-        let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
-        let perpetual_db = typed_store::rocks::open_cf(
+        let cfs: Vec<_> = cf_names
+            .keys()
+            .map(|x| (x.as_str(), default_db_options().options))
+            .collect();
+        let perpetual_db = typed_store::rocks::open_cf_opts(
             perpetual_db_path,
             None,
             MetricConf::new("perpetual_pruning"),
@@ -995,24 +1001,24 @@ mod tests {
     // Tests pruning old version of live objects.
     #[tokio::test]
     async fn test_pruning_objects() {
-        let path = tempfile::tempdir().unwrap().into_path();
+        let path = tempfile::tempdir().unwrap().keep();
         let to_keep = run_pruner(&path, 3, 2, 1000).await;
         assert_eq!(
             HashSet::from_iter(to_keep),
             get_keys_after_pruning(&path).unwrap()
         );
-        run_pruner(&tempfile::tempdir().unwrap().into_path(), 3, 2, 1000).await;
+        run_pruner(&tempfile::tempdir().unwrap().keep(), 3, 2, 1000).await;
     }
 
     // Tests pruning deleted objects (object tombstones).
     #[tokio::test]
     async fn test_pruning_tombstones() {
-        let path = tempfile::tempdir().unwrap().into_path();
+        let path = tempfile::tempdir().unwrap().keep();
         let to_keep = run_pruner(&path, 0, 0, 1000).await;
         assert_eq!(to_keep.len(), 0);
         assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
 
-        let path = tempfile::tempdir().unwrap().into_path();
+        let path = tempfile::tempdir().unwrap().keep();
         let to_keep = run_pruner(&path, 3, 0, 1000).await;
         assert_eq!(to_keep.len(), 0);
         assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
@@ -1021,7 +1027,7 @@ mod tests {
     #[cfg(not(target_env = "msvc"))]
     #[tokio::test]
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
-        let primary_path = tempfile::tempdir()?.into_path();
+        let primary_path = tempfile::tempdir()?.keep();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
         let total_unique_object_ids = 10_000;
         let num_versions_per_object = 10;
@@ -1058,8 +1064,7 @@ mod tests {
         let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
         let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
 
-        perpetual_db.objects.rocksdb.flush()?;
-        perpetual_db.objects.compact_range_to_bottom(&start, &end)?;
+        perpetual_db.objects.compact_range(&start, &end)?;
         let before_compaction_size = get_sst_size(&db_path);
 
         let mut effects = TransactionEffects::default();
@@ -1083,8 +1088,7 @@ mod tests {
         .await;
         info!("Total pruned keys = {:?}", total_pruned);
 
-        perpetual_db.objects.rocksdb.flush()?;
-        perpetual_db.objects.compact_range_to_bottom(&start, &end)?;
+        perpetual_db.objects.compact_range(&start, &end)?;
         let after_compaction_size = get_sst_size(&db_path);
 
         info!(

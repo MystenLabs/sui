@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_parsing_old_fun_fail.move:5:5
+  │
+5 │     spec fun with_aborts_if {
+  │     ^^^^
+  │     │
+  │     Unexpected 'spec'
+  │     Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_parsing_old_fun_fail.move:5:29
+  │
+5 │     spec fun with_aborts_if {
+  │                             ^
+  │                             │
+  │                             Unexpected '{'
+  │                             Expected '('
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/old_spec/spec_parsing_old_fun_fail.move:6:7
+  │
+6 │       aborts_if x == 0;
+  │       ^^^^^^^^^ Unbound variable 'aborts_if'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/spec_parsing_old_fun_fail.move:6:17
+  │
+6 │       aborts_if x == 0;
+  │                 ^
+  │                 │
+  │                 Unexpected 'x'
+  │                 Expected ';'

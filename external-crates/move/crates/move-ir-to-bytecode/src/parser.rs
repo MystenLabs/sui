@@ -2,14 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     files::SimpleFiles,
     term::{
-        emit,
+        Config, emit,
         termcolor::{ColorChoice, StandardStream},
-        Config,
     },
 };
 use move_command_line_common::character_sets::is_permitted_chars;

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_macros::nondeterministic;
-use sui_types::base_types::{random_object_ref, ObjectID};
+use sui_types::base_types::{random_object_ref, FullObjectRef, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{AccountKeyPair, AuthorityPublicKeyBytes, Signer};
 use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
@@ -31,11 +31,12 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-use crate::authority::AuthorityState;
-use crate::state_accumulator::StateAccumulator;
+use crate::authority::{AuthorityState, ExecutionEnv};
+use crate::global_state_hasher::GlobalStateHasher;
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
+// TODO(fastpath): switch to use MFP flow.
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
@@ -43,10 +44,10 @@ pub async fn send_and_confirm_transaction(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
-    transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+    transaction.validity_check(&epoch_store.tx_validity_check_context())?;
     let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
-        .handle_transaction(&epoch_store, transaction.clone())
+        .handle_sign_transaction(&epoch_store, transaction.clone())
         .await?;
     let vote = response.status.into_signed_for_testing();
 
@@ -63,14 +64,17 @@ pub async fn send_and_confirm_transaction(
     //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
-    let state_acc = StateAccumulator::new_for_tests(authority.get_accumulator_store().clone());
+    let state_acc =
+        GlobalStateHasher::new_for_tests(authority.get_global_state_hash_store().clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
         .simplified_unwrap_then_delete();
     let mut state =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
-    let (result, _execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
+    let (result, _execution_error_opt) = authority
+        .try_execute_for_test(&certificate, ExecutionEnv::new())
+        .await?;
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
@@ -82,7 +86,9 @@ pub async fn send_and_confirm_transaction(
     assert_eq!(state_after.digest(), state.digest());
 
     if let Some(fullnode) = fullnode {
-        fullnode.try_execute_for_test(&certificate).await?;
+        fullnode
+            .try_execute_for_test(&certificate, ExecutionEnv::new())
+            .await?;
     }
     Ok((certificate.into_inner(), result.into_inner()))
 }
@@ -111,7 +117,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[digest]),
+            .notify_read_executed_effects("", &[digest]),
     )
     .await
     {
@@ -128,7 +134,7 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&digests),
+            .notify_read_executed_effects("", &digests),
     )
     .await
     {
@@ -219,7 +225,7 @@ pub fn make_transfer_object_transaction(
 ) -> Transaction {
     let data = TransactionData::new_transfer(
         recipient,
-        object_ref,
+        FullObjectRef::from_fastpath_ref(object_ref),
         sender,
         gas_object,
         gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
@@ -269,7 +275,7 @@ pub fn make_dummy_tx(
     Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             receiver,
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             sender,
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
@@ -310,6 +316,7 @@ pub fn make_cert_with_large_committee(
         committee,
         &Default::default(),
         Arc::new(VerifiedDigestCache::new_empty()),
+        None,
     )
     .unwrap();
     cert

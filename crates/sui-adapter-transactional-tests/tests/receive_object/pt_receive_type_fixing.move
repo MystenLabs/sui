@@ -63,6 +63,7 @@ module tto::M1 {
 
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: tto::M1::pass_through_a(Input(1));
+// Now treated as Receiving<B> in the new PTB execution
 //> tto::M1::receiver(Input(0), Result(0));
 
 //# programmable --inputs object(2,0) receiving(2,1)

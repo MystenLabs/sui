@@ -1,6 +1,6 @@
 // Tests completions of various code snippets
 {
-  "Completion": {
+  "AutoCompletion": {
     "project": "tests/completion",
     "file_tests": {
       // tests completion of the object snippet

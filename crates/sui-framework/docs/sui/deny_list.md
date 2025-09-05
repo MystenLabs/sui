@@ -52,9 +52,11 @@ list.
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
+<b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 <b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 </code></pre>
 
@@ -278,22 +280,12 @@ Stores the addresses that are denied for a given core type.
 ## Constants
 
 
-<a name="sui_deny_list_COIN_INDEX"></a>
+<a name="sui_deny_list_ENotSystemAddress"></a>
 
-The index into the deny list vector for the <code><a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a></code> type.
-
-
-<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_COIN_INDEX">COIN_INDEX</a>: u64 = 0;
-</code></pre>
+Trying to create a deny list object when not called by the system address.
 
 
-
-<a name="sui_deny_list_EInvalidAddress"></a>
-
-The specified address cannot be added to the deny list.
-
-
-<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_EInvalidAddress">EInvalidAddress</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
 </code></pre>
 
 
@@ -308,12 +300,22 @@ The specified address to be removed is not already in the deny list.
 
 
 
-<a name="sui_deny_list_ENotSystemAddress"></a>
+<a name="sui_deny_list_EInvalidAddress"></a>
 
-Trying to create a deny list object when not called by the system address.
+The specified address cannot be added to the deny list.
 
 
-<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_EInvalidAddress">EInvalidAddress</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_deny_list_COIN_INDEX"></a>
+
+The index into the deny list vector for the <code><a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a></code> type.
+
+
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_COIN_INDEX">COIN_INDEX</a>: u64 = 0;
 </code></pre>
 
 
@@ -626,8 +628,10 @@ meaningless to add them to the deny list.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> bag_entry: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_PerTypeList">PerTypeList</a> = &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.lists[per_type_index];
-    <b>let</b> elements = <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) vector[]
-    <b>else</b> bag_entry.denied_addresses.remove(per_type_key).into_keys();
+    <b>let</b> elements = <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) vector[] <b>else</b> bag_entry
+        .denied_addresses
+        .remove(per_type_key)
+        .into_keys();
     elements.do_ref!(|addr| {
         <b>let</b> addr = *addr;
         <b>let</b> denied_count = &<b>mut</b> bag_entry.denied_count[addr];

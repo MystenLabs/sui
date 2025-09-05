@@ -1,0 +1,25 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 6-37:
+//# publish 
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Enum X cannot have the 'key' ability. Enums cannot have the 'key' ability."), command: Some(0) } }
+
+task 2, line 39:
+//# set-address test object(1,0)
+Error: INVALID TEST. Unknown object, object(1,0)
+
+task 3, line 41:
+//# run test::f::transfer
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+
+task 4, line 43:
+//# run test::f::share
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+
+task 5, line 45:
+//# run test::f::freezer
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }

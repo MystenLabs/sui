@@ -4,11 +4,11 @@
 use crate::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEvents,
-    VerifiedSignedTransactionEffects,
+    SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use crate::object::Object;
-use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction, Transaction};
+use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
+use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
@@ -183,7 +183,7 @@ pub struct SystemStateRequest {
     pub _unused: bool,
 }
 
-/// Response type for version 3 of the handle certifacte validator API.
+/// Response type for version 3 of the handle certificate validator API.
 ///
 /// The corresponding version 3 request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very
@@ -220,41 +220,109 @@ pub struct HandleCertificateRequestV3 {
     pub include_auxiliary_data: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleTransactionRequestV2 {
-    pub transaction: Transaction,
-
-    pub include_events: bool,
-    pub include_input_objects: bool,
-    pub include_output_objects: bool,
-    pub include_auxiliary_data: bool,
+#[derive(Clone, prost::Message)]
+pub struct RawSubmitTxRequest {
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub transactions: Vec<Bytes>,
 }
 
-/// Response type for version 2 of the handle transaction validator API.
-///
-/// The corresponding version 2 request type allows for a client to request events as well as
-/// input/output objects from a transaction's execution. Given Validators operate with very
-/// aggressive object pruning, the return of input/output objects is only done immediately after
-/// the transaction has been executed locally on the validator and will not be returned for
-/// requests to previously executed transactions.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleTransactionResponseV2 {
-    pub effects: TransactionEffects,
-    pub events: Option<TransactionEvents>,
+#[derive(Clone, prost::Message)]
+pub struct RawSubmitTxResponse {
+    // Results for each transaction in the request
+    #[prost(message, repeated, tag = "1")]
+    pub results: Vec<RawSubmitTxResult>,
+}
 
-    /// If requested, will included all initial versions of objects modified in this transaction.
-    /// This includes owned objects included as input into the transaction as well as the assigned
-    /// versions of shared objects.
-    //
-    // TODO: In the future we may want to include shared objects or child objects which were read
-    // but not modified during execution.
-    pub input_objects: Option<Vec<Object>>,
+#[derive(Clone, prost::Message)]
+pub struct RawSubmitTxResult {
+    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2")]
+    pub inner: Option<RawValidatorSubmitStatus>,
+}
 
-    /// If requested, will included all changed objects, including mutated, created and unwrapped
-    /// objects. In other words, all objects that still exist in the object state after this
-    /// transaction.
-    pub output_objects: Option<Vec<Object>>,
-    pub auxiliary_data: Option<Vec<u8>>,
+#[derive(Clone, prost::Oneof)]
+pub enum RawValidatorSubmitStatus {
+    // Serialized Consensus Position.
+    #[prost(bytes = "bytes", tag = "1")]
+    Submitted(Bytes),
+
+    // Transaction has already been executed (finalized).
+    #[prost(message, tag = "2")]
+    Executed(RawExecutedStatus),
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawWaitForEffectsRequest {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub transaction_digest: Bytes,
+
+    /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
+    /// in addition to waiting for finalized effects.
+    /// If not provided, only wait for finalized effects.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub consensus_position: Option<Bytes>,
+
+    /// Whether to include details of the effects,
+    /// including the effects content, events, input objects, and output objects.
+    #[prost(bool, tag = "3")]
+    pub include_details: bool,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawWaitForEffectsResponse {
+    // In order to represent an enum in protobuf, we need to use oneof.
+    // However, oneof also allows the value to be unset, which corresponds to None value.
+    // Hence, we need to use Option type for `inner`.
+    // We expect the value to be set in a valid response.
+    #[prost(oneof = "RawValidatorTransactionStatus", tags = "1, 2, 3")]
+    pub inner: Option<RawValidatorTransactionStatus>,
+}
+
+#[derive(Clone, prost::Oneof)]
+pub enum RawValidatorTransactionStatus {
+    #[prost(message, tag = "1")]
+    Executed(RawExecutedStatus),
+    #[prost(message, tag = "2")]
+    Rejected(RawRejectedStatus),
+    #[prost(message, tag = "3")]
+    Expired(RawExpiredStatus),
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExecutedStatus {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub effects_digest: Bytes,
+    #[prost(message, optional, tag = "2")]
+    pub details: Option<RawExecutedData>,
+    #[prost(bool, tag = "3")]
+    pub fast_path: bool,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExecutedData {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub effects: Bytes,
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub events: Option<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "3")]
+    pub input_objects: Vec<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "4")]
+    pub output_objects: Vec<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawRejectedStatus {
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub error: Option<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExpiredStatus {
+    // Validator's current epoch.
+    #[prost(uint64, tag = "1")]
+    pub epoch: u64,
+    // Validator's current round. 0 if it is not yet checked.
+    #[prost(uint32, optional, tag = "2")]
+    pub round: Option<u32>,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {
@@ -288,4 +356,85 @@ pub struct HandleSoftBundleCertificatesRequestV3 {
     pub include_input_objects: bool,
     pub include_output_objects: bool,
     pub include_auxiliary_data: bool,
+}
+
+/// Raw protobuf request for validator health information (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorHealthRequest {}
+
+/// Raw protobuf response with validator health metrics (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorHealthResponse {
+    /// Number of pending certificates
+    #[prost(uint64, optional, tag = "1")]
+    pub pending_certificates: Option<u64>,
+    /// Number of in-flight consensus messages
+    #[prost(uint64, optional, tag = "2")]
+    pub inflight_consensus_messages: Option<u64>,
+    /// Current consensus round
+    #[prost(uint64, optional, tag = "3")]
+    pub consensus_round: Option<u64>,
+    /// Current checkpoint sequence number
+    #[prost(uint64, optional, tag = "4")]
+    pub checkpoint_sequence: Option<u64>,
+}
+
+/// Request for validator health information (used for latency measurement)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorHealthRequest {}
+
+/// Response with validator health metrics (data collected but not used for scoring yet)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorHealthResponse {
+    /// Number of in-flight execution transactions from execution scheduler
+    pub num_inflight_execution_transactions: u64,
+    /// Number of in-flight consensus transactions
+    pub num_inflight_consensus_transactions: u64,
+    /// Last committed leader round from Mysticeti consensus
+    pub last_committed_leader_round: u32,
+    /// Last locally built checkpoint sequence number
+    pub last_locally_built_checkpoint: u64,
+}
+
+impl TryFrom<ValidatorHealthRequest> for RawValidatorHealthRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(_value: ValidatorHealthRequest) -> Result<Self, Self::Error> {
+        Ok(Self {})
+    }
+}
+
+impl TryFrom<RawValidatorHealthRequest> for ValidatorHealthRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(_value: RawValidatorHealthRequest) -> Result<Self, Self::Error> {
+        // Empty request - ignore reserved field for now
+        Ok(Self {})
+    }
+}
+
+impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: ValidatorHealthResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            pending_certificates: Some(value.num_inflight_execution_transactions),
+            inflight_consensus_messages: Some(value.num_inflight_consensus_transactions),
+            consensus_round: Some(value.last_committed_leader_round as u64),
+            checkpoint_sequence: Some(value.last_locally_built_checkpoint),
+        })
+    }
+}
+
+impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawValidatorHealthResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            num_inflight_consensus_transactions: value.inflight_consensus_messages.unwrap_or(0),
+            num_inflight_execution_transactions: value.pending_certificates.unwrap_or(0),
+            last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
+            last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
+        })
+    }
 }

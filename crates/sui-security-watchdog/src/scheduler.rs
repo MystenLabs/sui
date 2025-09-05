@@ -142,7 +142,10 @@ impl SchedulerService {
                     Self::run_wallet_monitoring_job(&pd, &pd_service_id, &query_runner, &entry)
                         .await
                 {
-                    error!("Failed to run wallet monitoring job with err: {}", err);
+                    error!(
+                        "Failed to run wallet monitoring job: {} with err: {}",
+                        entry.name, err
+                    );
                     metrics
                         .get("wallet_monitoring_error")
                         .await
@@ -162,7 +165,9 @@ impl SchedulerService {
         query_runner: &Arc<dyn QueryRunner>,
         entry: &WalletMonitoringEntry,
     ) -> anyhow::Result<()> {
-        let WalletMonitoringEntry { sql_query, .. } = entry;
+        let WalletMonitoringEntry {
+            sql_query, name, ..
+        } = entry;
         let rows = query_runner.run(sql_query).await?;
         for row in rows {
             let wallet_id = row
@@ -187,6 +192,7 @@ impl SchedulerService {
                 current_balance,
                 lower_bound,
                 service_id,
+                name,
             )
             .await?;
         }
@@ -199,6 +205,7 @@ impl SchedulerService {
         current_balance: i128,
         lower_bound: i128,
         service_id: &str,
+        name: &str,
     ) -> anyhow::Result<()> {
         let service = Service {
             id: service_id.to_string(),
@@ -206,14 +213,18 @@ impl SchedulerService {
         };
         let incident_body = Body {
             details: format!(
-                "Current balance: {} SUI, Lower bound: {} SUI",
+                "Current balance: {}, Lower bound: {}, for job: {}",
                 current_balance / MIST_PER_SUI,
-                lower_bound / MIST_PER_SUI
+                lower_bound / MIST_PER_SUI,
+                name
             ),
             ..Default::default()
         };
         let incident = Incident {
-            title: format!("Wallet: {} is out of compliance", wallet_id),
+            title: format!(
+                "Wallet: {} is out of compliance, for job: {}",
+                wallet_id, name
+            ),
             service,
             incident_key: wallet_id.to_string(),
             body: incident_body,

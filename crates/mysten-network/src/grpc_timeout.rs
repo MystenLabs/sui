@@ -95,7 +95,7 @@ where
             ready!(sleep.poll(cx));
             let response = Status::deadline_exceeded("Timeout expired")
                 .into_http()
-                .map(|_| MaybeEmptyBody::empty());
+                .map(|()| MaybeEmptyBody::empty());
             return Poll::Ready(Ok(response));
         }
 

@@ -8,11 +8,12 @@
 /// particular, fixed state during escrow.
 module escrow::lock;
 
-use sui::{dynamic_object_field as dof, event};
+use sui::dynamic_object_field as dof;
+use sui::event;
 
 /// The `name` of the DOF that holds the Locked object.
 /// Allows better discoverability for the locked object.
-public struct LockedObjectKey has copy, store, drop {}
+public struct LockedObjectKey has copy, drop, store {}
 
 /// A wrapper that protects access to `obj` by requiring access to a `Key`.
 ///

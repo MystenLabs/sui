@@ -10,7 +10,7 @@ use std::{
     io::{Read, Seek, Write},
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
@@ -249,7 +249,7 @@ pub fn update_dependency_graph(
     use toml_edit::value;
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
-    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let mut toml = toml_string.parse::<toml_edit::DocumentMut>()?;
     let move_table = toml
         .entry("move")
         .or_insert(Item::Table(toml_edit::Table::new()))
@@ -297,7 +297,7 @@ pub fn update_compiler_toolchain(
 ) -> Result<()> {
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
-    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let mut toml = toml_string.parse::<toml_edit::DocumentMut>()?;
     let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
     let toolchain_version = toml::Value::try_from(ToolchainVersion {
         compiler_version,
@@ -355,10 +355,10 @@ pub enum ManagedAddressUpdate {
 /// for preparing package publishing and package upgrades. Invariant: callers maintain a valid
 /// hex `id`.
 pub fn set_original_id(file: &mut LockFile, environment: &str, id: &str) -> Result<()> {
-    use toml_edit::{value, Document};
+    use toml_edit::{DocumentMut, value};
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
-    let mut toml = toml_string.parse::<Document>()?;
+    let mut toml = toml_string.parse::<DocumentMut>()?;
     let env_table = toml
         .get_mut(ENV_TABLE_NAME)
         .and_then(|item| item.as_table_mut())
@@ -382,11 +382,11 @@ pub fn update_managed_address(
     environment: &str,
     managed_address_update: ManagedAddressUpdate,
 ) -> Result<()> {
-    use toml_edit::{value, Document, Table};
+    use toml_edit::{DocumentMut, Table, value};
 
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
-    let mut toml = toml_string.parse::<Document>()?;
+    let mut toml = toml_string.parse::<DocumentMut>()?;
 
     let env_table = toml
         .entry(ENV_TABLE_NAME)
@@ -410,10 +410,14 @@ pub fn update_managed_address(
         }
         ManagedAddressUpdate::Upgraded { latest_id, version } => {
             if !env_table.contains_key(CHAIN_ID_KEY) {
-                bail!("Move.lock violation: attempted address update for package upgrade when no {CHAIN_ID_KEY} exists")
+                bail!(
+                    "Move.lock violation: attempted address update for package upgrade when no {CHAIN_ID_KEY} exists"
+                )
             }
             if !env_table.contains_key(ORIGINAL_PUBLISHED_ID_KEY) {
-                bail!("Move.lock violation: attempted address update for package upgrade when no {ORIGINAL_PUBLISHED_ID_KEY} exists")
+                bail!(
+                    "Move.lock violation: attempted address update for package upgrade when no {ORIGINAL_PUBLISHED_ID_KEY} exists"
+                )
             }
             env_table[LATEST_PUBLISHED_ID_KEY] = value(latest_id);
             env_table[PUBLISHED_VERSION_KEY] = value(version.to_string());

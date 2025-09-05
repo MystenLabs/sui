@@ -1,0 +1,318 @@
+// Move bytecode v6
+module 1.uq32_32 {
+
+struct UQ32_32 has copy, drop, store {
+	pos0: u64
+}
+
+public from_quotient(Arg0: u64, Arg1: u64): UQ32_32 {
+L2:	loc0: bool
+L3:	loc1: u64
+L4:	loc2: u64
+L5:	loc3: u128
+L6:	loc4: u128
+L7:	loc5: u128
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: StLoc[4](loc2: u64)
+	2: MoveLoc[1](Arg1: u64)
+	3: StLoc[3](loc1: u64)
+	4: CopyLoc[3](loc1: u64)
+	5: LdU64(0)
+	6: Eq
+	7: BrFalse(10)
+B1:
+	8: LdU64(13906834414861549569)
+	9: Abort
+B2:
+	10: CopyLoc[4](loc2: u64)
+	11: CastU128
+	12: LdConst[10](u8: 64)
+	13: Shl
+	14: StLoc[7](loc5: u128)
+	15: MoveLoc[3](loc1: u64)
+	16: CastU128
+	17: LdConst[10](u8: 64)
+	18: LdConst[11](u8: 32)
+	19: Sub
+	20: Shl
+	21: StLoc[6](loc4: u128)
+	22: MoveLoc[7](loc5: u128)
+	23: MoveLoc[6](loc4: u128)
+	24: Div
+	25: StLoc[5](loc3: u128)
+	26: CopyLoc[5](loc3: u128)
+	27: LdU128(0)
+	28: Eq
+	29: BrFalse(35)
+B3:
+	30: MoveLoc[4](loc2: u64)
+	31: LdU64(0)
+	32: Neq
+	33: StLoc[2](loc0: bool)
+	34: Branch(37)
+B4:
+	35: LdFalse
+	36: StLoc[2](loc0: bool)
+B5:
+	37: MoveLoc[2](loc0: bool)
+	38: BrFalse(41)
+B6:
+	39: LdU64(13906834419156647939)
+	40: Abort
+B7:
+	41: CopyLoc[5](loc3: u128)
+	42: LdU128(18446744073709551615)
+	43: Gt
+	44: BrFalse(47)
+B8:
+	45: LdU64(13906834423451746309)
+	46: Abort
+B9:
+	47: MoveLoc[5](loc3: u128)
+	48: CastU64
+	49: Pack[0](UQ32_32)
+	50: Ret
+}
+
+public from_int(Arg0: u32): UQ32_32 {
+B0:
+	0: MoveLoc[0](Arg0: u32)
+	1: CastU64
+	2: LdConst[11](u8: 32)
+	3: Shl
+	4: Pack[0](UQ32_32)
+	5: Ret
+}
+
+public add(Arg0: UQ32_32, Arg1: UQ32_32): UQ32_32 {
+L2:	loc0: u128
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: CastU128
+	4: ImmBorrowLoc[1](Arg1: UQ32_32)
+	5: ImmBorrowField[0](UQ32_32.pos0: u64)
+	6: ReadRef
+	7: CastU128
+	8: Add
+	9: StLoc[2](loc0: u128)
+	10: CopyLoc[2](loc0: u128)
+	11: LdU128(18446744073709551615)
+	12: Gt
+	13: BrFalse(16)
+B1:
+	14: LdU64(13906834483581419527)
+	15: Abort
+B2:
+	16: MoveLoc[2](loc0: u128)
+	17: CastU64
+	18: Pack[0](UQ32_32)
+	19: Ret
+}
+
+public sub(Arg0: UQ32_32, Arg1: UQ32_32): UQ32_32 {
+L2:	loc0: u64
+L3:	loc1: u64
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: StLoc[2](loc0: u64)
+	4: ImmBorrowLoc[1](Arg1: UQ32_32)
+	5: ImmBorrowField[0](UQ32_32.pos0: u64)
+	6: ReadRef
+	7: StLoc[3](loc1: u64)
+	8: CopyLoc[2](loc0: u64)
+	9: CopyLoc[3](loc1: u64)
+	10: Lt
+	11: BrFalse(14)
+B1:
+	12: LdU64(13906834509351223303)
+	13: Abort
+B2:
+	14: MoveLoc[2](loc0: u64)
+	15: MoveLoc[3](loc1: u64)
+	16: Sub
+	17: Pack[0](UQ32_32)
+	18: Ret
+}
+
+public mul(Arg0: UQ32_32, Arg1: UQ32_32): UQ32_32 {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: MoveLoc[1](Arg1: UQ32_32)
+	4: Call int_mul(u64, UQ32_32): u64
+	5: Pack[0](UQ32_32)
+	6: Ret
+}
+
+public div(Arg0: UQ32_32, Arg1: UQ32_32): UQ32_32 {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: MoveLoc[1](Arg1: UQ32_32)
+	4: Call int_div(u64, UQ32_32): u64
+	5: Pack[0](UQ32_32)
+	6: Ret
+}
+
+public to_int(Arg0: UQ32_32): u32 {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: LdConst[11](u8: 32)
+	4: Shr
+	5: CastU32
+	6: Ret
+}
+
+public int_mul(Arg0: u64, Arg1: UQ32_32): u64 {
+L2:	loc0: u128
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: CastU128
+	2: ImmBorrowLoc[1](Arg1: UQ32_32)
+	3: ImmBorrowField[0](UQ32_32.pos0: u64)
+	4: ReadRef
+	5: CastU128
+	6: Mul
+	7: LdConst[11](u8: 32)
+	8: Shr
+	9: StLoc[2](loc0: u128)
+	10: CopyLoc[2](loc0: u128)
+	11: LdU128(18446744073709551615)
+	12: Gt
+	13: BrFalse(16)
+B1:
+	14: LdU64(13906834633905274887)
+	15: Abort
+B2:
+	16: MoveLoc[2](loc0: u128)
+	17: CastU64
+	18: Ret
+}
+
+public int_div(Arg0: u64, Arg1: UQ32_32): u64 {
+L2:	loc0: u64
+L3:	loc1: u128
+L4:	loc2: u64
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: StLoc[4](loc2: u64)
+	2: ImmBorrowLoc[1](Arg1: UQ32_32)
+	3: ImmBorrowField[0](UQ32_32.pos0: u64)
+	4: ReadRef
+	5: StLoc[2](loc0: u64)
+	6: CopyLoc[2](loc0: u64)
+	7: LdU64(0)
+	8: Eq
+	9: BrFalse(12)
+B1:
+	10: LdU64(13906834689739980809)
+	11: Abort
+B2:
+	12: MoveLoc[4](loc2: u64)
+	13: CastU128
+	14: LdConst[11](u8: 32)
+	15: Shl
+	16: MoveLoc[2](loc0: u64)
+	17: CastU128
+	18: Div
+	19: StLoc[3](loc1: u128)
+	20: CopyLoc[3](loc1: u128)
+	21: LdU128(18446744073709551615)
+	22: Gt
+	23: BrFalse(26)
+B3:
+	24: LdU64(13906834694034817031)
+	25: Abort
+B4:
+	26: MoveLoc[3](loc1: u128)
+	27: CastU64
+	28: Ret
+}
+
+public le(Arg0: UQ32_32, Arg1: UQ32_32): bool {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: ImmBorrowLoc[1](Arg1: UQ32_32)
+	4: ImmBorrowField[0](UQ32_32.pos0: u64)
+	5: ReadRef
+	6: Le
+	7: Ret
+}
+
+public lt(Arg0: UQ32_32, Arg1: UQ32_32): bool {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: ImmBorrowLoc[1](Arg1: UQ32_32)
+	4: ImmBorrowField[0](UQ32_32.pos0: u64)
+	5: ReadRef
+	6: Lt
+	7: Ret
+}
+
+public ge(Arg0: UQ32_32, Arg1: UQ32_32): bool {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: ImmBorrowLoc[1](Arg1: UQ32_32)
+	4: ImmBorrowField[0](UQ32_32.pos0: u64)
+	5: ReadRef
+	6: Ge
+	7: Ret
+}
+
+public gt(Arg0: UQ32_32, Arg1: UQ32_32): bool {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: ImmBorrowLoc[1](Arg1: UQ32_32)
+	4: ImmBorrowField[0](UQ32_32.pos0: u64)
+	5: ReadRef
+	6: Gt
+	7: Ret
+}
+
+public to_raw(Arg0: UQ32_32): u64 {
+B0:
+	0: ImmBorrowLoc[0](Arg0: UQ32_32)
+	1: ImmBorrowField[0](UQ32_32.pos0: u64)
+	2: ReadRef
+	3: Ret
+}
+
+public from_raw(Arg0: u64): UQ32_32 {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: Pack[0](UQ32_32)
+	2: Ret
+}
+
+Constants [
+	0 => vector<u8>: "EDenominator" // interpreted as UTF8 string
+	1 => vector<u8>: "Quotient specified with a zero denominator" // interpreted as UTF8 string
+	2 => vector<u8>: "EQuotientTooSmall" // interpreted as UTF8 string
+	3 => vector<u8>: "Quotient specified is too small, and is outside of the supported range" // interpreted as UTF8 string
+	4 => vector<u8>: "EQuotientTooLarge" // interpreted as UTF8 string
+	5 => vector<u8>: "Quotient specified is too large, and is outside of the supported range" // interpreted as UTF8 string
+	6 => vector<u8>: "EOverflow" // interpreted as UTF8 string
+	7 => vector<u8>: "Overflow from an arithmetic operation" // interpreted as UTF8 string
+	8 => vector<u8>: "EDivisionByZero" // interpreted as UTF8 string
+	9 => vector<u8>: "Division by zero" // interpreted as UTF8 string
+	10 => u8: 64
+	11 => u8: 32
+]
+}

@@ -3,7 +3,7 @@
 
 // tests that shared objects can
 
-//# init --addresses t1=0x0 t2=0x0 --shared-object-deletion false
+//# init --addresses t1=0x0 t2=0x0 --protocol-version 20
 
 //# publish
 

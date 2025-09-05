@@ -111,6 +111,8 @@ pub struct CleverError {
     pub error_info: ErrorConstants,
     /// The line number in the source file where the error occured.
     pub source_line_number: u16,
+    /// The error code of the abort
+    pub error_code: Option<u8>,
 }
 
 /// The `ErrorConstants` enum is used to represent the different kinds of error information that
@@ -309,6 +311,13 @@ macro_rules! as_ref_impl {
 as_ref_impl!(Arc<dyn PackageStore>);
 as_ref_impl!(Box<dyn PackageStore>);
 
+#[async_trait]
+impl<S: PackageStore> PackageStore for Arc<S> {
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        self.as_ref().fetch(id).await
+    }
+}
+
 /// Check $value does not exceed $limit in config, if the limit config exists, returning an error
 /// containing the max value and actual value otherwise.
 macro_rules! check_max_limit {
@@ -480,27 +489,29 @@ impl<S: PackageStore> Resolver<S> {
         let mut tags = vec![None; tx.inputs.len()];
         let mut register_type = |arg: &Argument, tag: &TypeTag| {
             let &Argument::Input(ix) = arg else {
-                return Ok(());
+                return;
             };
 
             if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
-                return Ok(());
+                return;
             }
 
             let Some(type_) = tags.get_mut(ix as usize) else {
-                return Ok(());
+                return;
             };
 
+            // Types are initially `None`, and are set to `Some(Ok(_))` as long as the input can be
+            // mapped to a unique type, and to `Some(Err(()))` if the input is used with
+            // conflicting types at some point.
             match type_ {
-                None => *type_ = Some(tag.clone()),
-                Some(prev) => {
+                None => *type_ = Some(Ok(tag.clone())),
+                Some(Err(())) => {}
+                Some(Ok(prev)) => {
                     if prev != tag {
-                        return Err(Error::InputTypeConflict(ix, prev.clone(), tag.clone()));
+                        *type_ = Some(Err(()));
                     }
                 }
             }
-
-            Ok(())
         };
 
         // (1). Infer type tags for pure inputs from their uses.
@@ -518,15 +529,15 @@ impl<S: PackageStore> Resolver<S> {
 
                     for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
                         let sig = open_sig.instantiate(&call.type_arguments)?;
-                        register_type(arg, &sig.body)?;
+                        register_type(arg, &sig.body);
                     }
                 }
 
-                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address)?,
+                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address),
 
                 Command::SplitCoins(_, amounts) => {
                     for amount in amounts {
-                        register_type(amount, &TypeTag::U64)?;
+                        register_type(amount, &TypeTag::U64);
                     }
                 }
 
@@ -534,7 +545,7 @@ impl<S: PackageStore> Resolver<S> {
                     let tag = as_type_tag(tag)?;
                     if is_primitive_type_tag(&tag) {
                         for elem in elems {
-                            register_type(elem, &tag)?;
+                            register_type(elem, &tag);
                         }
                     }
                 }
@@ -545,7 +556,11 @@ impl<S: PackageStore> Resolver<S> {
 
         // (2). Gather all the unique type tags to convert into layouts. There are relatively few
         // primitive types so this is worth doing to avoid redundant work.
-        let unique_tags: BTreeSet<_> = tags.iter().filter_map(|t| t.clone()).collect();
+        let unique_tags: BTreeSet<_> = tags
+            .iter()
+            .flat_map(|t| t.clone())
+            .flat_map(|t| t.ok())
+            .collect();
 
         // (3). Convert the type tags into layouts.
         let mut layouts = BTreeMap::new();
@@ -557,7 +572,11 @@ impl<S: PackageStore> Resolver<S> {
         // (4) Prepare the result vector.
         Ok(tags
             .iter()
-            .map(|t| t.as_ref().and_then(|t| layouts.get(t).cloned()))
+            .map(|t| -> Option<_> {
+                let t = t.as_ref()?;
+                let t = t.as_ref().ok()?;
+                layouts.get(t).cloned()
+            })
             .collect())
     }
 
@@ -595,57 +614,9 @@ impl<S: PackageStore> Resolver<S> {
         module_id: ModuleId,
         abort_code: u64,
     ) -> Option<CleverError> {
-        let bitset = ErrorBitset::from_u64(abort_code)?;
+        let _bitset = ErrorBitset::from_u64(abort_code)?;
         let package = self.package_store.fetch(*module_id.address()).await.ok()?;
-        let module = package.module(module_id.name().as_str()).ok()?.bytecode();
-        let source_line_number = bitset.line_number()?;
-
-        // We only have a line number in our clever error, so return early.
-        if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
-            return Some(CleverError {
-                module_id,
-                error_info: ErrorConstants::None,
-                source_line_number,
-            });
-        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
-            return None;
-        }
-
-        let error_identifier_constant = module
-            .constant_pool()
-            .get(bitset.identifier_index()? as usize)?;
-        let error_value_constant = module
-            .constant_pool()
-            .get(bitset.constant_index()? as usize)?;
-
-        if !matches!(&error_identifier_constant.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
-        {
-            return None;
-        };
-
-        let error_identifier = bcs::from_bytes::<Vec<u8>>(&error_identifier_constant.data)
-            .ok()
-            .and_then(|x| String::from_utf8(x).ok())?;
-        let bytes = error_value_constant.data.clone();
-
-        let rendered = try_render_constant(error_value_constant);
-
-        let error_info = match rendered {
-            RenderResult::NotRendered => ErrorConstants::Raw {
-                identifier: error_identifier,
-                bytes,
-            },
-            RenderResult::AsString(s) | RenderResult::AsValue(s) => ErrorConstants::Rendered {
-                identifier: error_identifier,
-                constant: s,
-            },
-        };
-
-        Some(CleverError {
-            module_id,
-            error_info,
-            source_line_number,
-        })
+        package.resolve_clever_error(module_id.name().as_str(), abort_code)
     }
 }
 
@@ -794,6 +765,63 @@ impl Package {
             .get(&runtime_id)
             .ok_or_else(|| Error::LinkageNotFound(runtime_id))
             .copied()
+    }
+
+    pub fn resolve_clever_error(&self, module_name: &str, abort_code: u64) -> Option<CleverError> {
+        let bitset = ErrorBitset::from_u64(abort_code)?;
+        let module = self.module(module_name).ok()?.bytecode();
+        let module_id = ModuleId::new(self.runtime_id, Identifier::new(module_name).ok()?);
+        let source_line_number = bitset.line_number()?;
+        let error_code = bitset.error_code();
+
+        // We only have a line number in our clever error, so return early.
+        if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
+            return Some(CleverError {
+                module_id,
+                error_info: ErrorConstants::None,
+                source_line_number,
+                error_code,
+            });
+        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
+            return None;
+        }
+
+        let error_identifier_constant = module
+            .constant_pool()
+            .get(bitset.identifier_index()? as usize)?;
+        let error_value_constant = module
+            .constant_pool()
+            .get(bitset.constant_index()? as usize)?;
+
+        if !matches!(&error_identifier_constant.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
+        {
+            return None;
+        };
+
+        let error_identifier = bcs::from_bytes::<Vec<u8>>(&error_identifier_constant.data)
+            .ok()
+            .and_then(|x| String::from_utf8(x).ok())?;
+        let bytes = error_value_constant.data.clone();
+
+        let rendered = try_render_constant(error_value_constant);
+
+        let error_info = match rendered {
+            RenderResult::NotRendered => ErrorConstants::Raw {
+                identifier: error_identifier,
+                bytes,
+            },
+            RenderResult::AsString(s) | RenderResult::AsValue(s) => ErrorConstants::Rendered {
+                identifier: error_identifier,
+                constant: s,
+            },
+        };
+
+        Some(CleverError {
+            module_id,
+            error_info,
+            source_line_number,
+            error_code,
+        })
     }
 }
 
@@ -2856,6 +2884,7 @@ mod tests {
 
         insta::assert_snapshot!(output);
     }
+
     #[tokio::test]
     async fn test_pure_input_layouts_conflicting() {
         use CallArg as I;
@@ -2895,10 +2924,19 @@ mod tests {
             ],
         };
 
-        insta::assert_snapshot!(
-            resolver.pure_input_layouts(&ptb).await.unwrap_err(),
-            @"Conflicting types for input 3: u64 and u32"
-        );
+        let inputs = resolver.pure_input_layouts(&ptb).await.unwrap();
+
+        // Make the output format a little nicer for the snapshot
+        let mut output = String::new();
+        for input in inputs {
+            if let Some(layout) = input {
+                output += &format!("{layout:#}\n");
+            } else {
+                output += "???\n";
+            }
+        }
+
+        insta::assert_snapshot!(output);
     }
 
     /***** Test Helpers ***************************************************************************/

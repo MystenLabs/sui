@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/parser/duplicate_modes.move:2:16
+  │
+2 │     #[mode(a,b,a)]
+  │            -   ^ Duplicate mode 'a'
+  │            │    
+  │            Previously defined here
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/parser/duplicate_modes.move:5:16
+  │
+5 │     #[mode(a,b,a)]
+  │            -   ^ Duplicate mode 'a'
+  │            │    
+  │            Previously defined here
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/parser/duplicate_modes.move:6:16
+  │
+6 │     #[mode(b,a,b)]
+  │            -   ^ Duplicate mode 'b'
+  │            │    
+  │            Previously defined here

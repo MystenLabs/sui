@@ -1,32 +1,40 @@
-FROM stagex/pallet-rust@sha256:3c0bef86b8b1325f74aea5ecf4ab26bc529f7f61fc440e5b1ab877e338ca0a06 AS pallet-rust
-FROM stagex/core-cross-x86_64-gnu-gcc@sha256:d04f7b231f5137de6ba910702eedb1ef316064e6e5bf8e539f7c615c5be5de93 AS cross-x86_64-gnu-gcc
-FROM stagex/core-cross-x86_64-gnu-rust@sha256:24fb0288c7570c3975ac3f72159cdf5c90cb2d66bb09ccc74d80beb731e7a6fd AS cross-x86_64-gnu-rust
-FROM stagex/user-glibc@sha256:e5bd3fe25abda77183dba03978270b92bdc800e9382870b948c8008ba4b21d4d AS glibc
+ARG PROFILE
+ARG CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
+
+FROM stagex/pallet-rust@sha256:740b9ed5f2a897d45cafdc806976d84231aa50a64998610750b42a48f8daacab AS pallet-rust
+FROM stagex/core-cross-x86_64-gnu-gcc@sha256:88a885049fddb21b48511d36b65d944322f3edfb699e95f1876b6ded8aa91da4 AS cross-x86_64-gnu-gcc
+FROM stagex/core-cross-x86_64-gnu-rust@sha256:12d60727f597a67a5ca8ec95c3ec7a6df13c516df30d1d98b4296308f430b1e1 AS cross-x86_64-gnu-rust
+FROM stagex/core-cross-x86_64-gnu-libunwind@sha256:3a5a3e2049d56830164b2677df8d96a1081209a6ff59ccecd5c743f69ae5008e AS cross-x86_64-gnu-libunwind
+FROM stagex/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS clang
+FROM stagex/core-llvm@sha256:bc1c6d67aa73a96dd92f5def7e2701de78b0639d0c815d69110fbb9b3b3e85fe AS llvm
+FROM stagex/core-lld@sha256:a5cb61edc071d404cd33cb0b5c7113a334cb90ca203cb40fe6cafd3559b6daa5 AS lld
+FROM stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b AS libffi
+FROM stagex/core-make@sha256:a47d8f67f8fd74905f724fdc5f0d18e29df96391751754947bdeaba9bef8f7d8 AS make
 
 FROM pallet-rust AS build
+ARG PROFILE
+ARG CARGO_BUILD_TARGET
 COPY --from=cross-x86_64-gnu-gcc . /
 COPY --from=cross-x86_64-gnu-rust . /
-COPY --from=glibc . /
+COPY --from=cross-x86_64-gnu-libunwind . /
+COPY --from=clang . /
+COPY --from=llvm . /
+COPY --from=lld . /
+COPY --from=libffi . /
+COPY --from=make . /
+
 ENV RUST_BACKTRACE=1
-ENV RUSTFLAGS="${RUSTFLAGS} -C codegen-units=1"
+ENV RUSTFLAGS="-C codegen-units=1"
 ENV RUSTFLAGS="${RUSTFLAGS} -C target-feature=+crt-static"
-ENV RUSTFLAGS="${RUSTFLAGS} -C linker=/usr/bin/x86_64-linux-gnu-gcc"
-WORKDIR sui
+ENV RUSTFLAGS="${RUSTFLAGS} -C linker=/usr/bin/clang"
+ENV RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld -C link-arg=-Wl,--threads=1 -C link-arg=-L/opt/cross/x86_64-linux-gnu/lib"
+ENV RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,-z,nostart-stop-gc"
+
 COPY . .
 RUN cargo fetch
-ARG PROFILE
-RUN --network=none <<-EOF
-	cargo build \
-		--target x86_64-unknown-linux-gnu \
-		--frozen \
-		--profile ${PROFILE} \
-		--bin sui-node
-	mkdir -p /rootfs/opt/sui/bin /rootfs/usr/local/bin
-	cp \
-		target/x86_64-unknown-linux-gnu/release/sui-node \
-		/rootfs/opt/sui/bin/sui-node
-	ln -s /opt/sui/bin/sui-node /rootfs/usr/local/bin/sui-node
-EOF
+RUN --network=none cargo build --frozen --profile $PROFILE --bin sui-node
 
 FROM scratch AS package
-COPY --from=build /rootfs /
+ARG PROFILE
+ARG CARGO_BUILD_TARGET
+COPY --from=build /target/${CARGO_BUILD_TARGET}/${PROFILE}/sui-node /opt/sui/bin/

@@ -1,16 +1,18 @@
 ---
 title: Wrapped Objects
+description: Wrapped objects are object data structures nested inside of another object data structure. Objects can be wrapped directly, through `Option`, or through `vector` fields. 
+keywords: [ wrapped objects, wrapping objects, unwrapping objects, direct wrapping, wrap directly, wrap object directly, wrap object option, option wrap, vector wrap, wrap object vector ]
 ---
 
-In many programming languages, you organize data structures in layers by nesting complex data structures in another data structure. In Move, you can organize data structures by putting a field of `struct` type in another, like the following:
+You can nest structs to organize data structures in Move. This example shows a basic wrapper pattern:
 
 ```move
-struct Foo has key {
+public struct Foo has key {
     id: UID,
     bar: Bar,
 }
 
-struct Bar has store {
+public struct Bar has store {
     value: u64,
 }
 ```
@@ -22,7 +24,7 @@ In the preceding example, `Bar` is a normal struct, but it is not a Sui object s
 The following code turns `Bar` into an object, which you can still wrap in `Foo`:
 
 ```move
-struct Bar has key, store {
+public struct Bar has key, store {
     id: UID,
     value: u64,
 }
@@ -40,14 +42,19 @@ There are a few ways to wrap a Sui object into another Sui object, and their use
 
 ### Direct wrapping
 
-If you put a Sui object type directly as a field in another Sui object type (as in the preceding example), it is called _direct wrapping_. The most important property achieved through direct wrapping is that the wrapped object cannot be unwrapped unless the wrapping object is destroyed. In the preceding example, to make `Bar` a standalone object again, unpack (and hence delete) the `Foo` object. Direct wrapping is the best way to implement object locking, which is to lock an object with constrained access. You can unlock it only through specific contract calls.
+**Direct wrapping** occurs when a Sui object type contains another Sui object type as a direct field. The most important properties achieved through direct wrapping are:
+
+- The wrapped object cannot be extracted without destroying the wrapper
+- Provides strong encapsulation guarantees
+- Ideal for implementing object locking patterns
+- Requires explicit contract calls to modify access
 
 The following example implementation of a trusted swap demonstrates how to use direct wrapping. Assume there is an NFT-style `Object` type that has `scarcity` and `style`. In this example, `scarcity` determines how rare the object is (presumably the more scarce the higher its market value), and `style` determines the object content/type or how it's rendered. If you own some of these objects and want to trade your objects with others, you want to make sure it's a fair trade. You are willing to trade an object only with another one that has identical `scarcity`, but want a different `style` (so that you can collect more styles).
 
 First, define such an object type:
 
 ```move
-struct Object has key, store {
+public struct Object has key, store {
     id: UID,
     scarcity: u8,
     style: u8,
@@ -70,7 +77,7 @@ Another common solution is to send your object to a pool - such as an NFT market
 To swap objects, the same address must own both objects. Anyone who wants to swap their object can send their objects to the third party, such as a site that offers swapping services, and the third party helps perform the swap and send the objects to the appropriate owner. To ensure that you retain custody of your objects (such as coins and NFTs) and not give full custody to the third party, use direct wrapping. To define a wrapper object type:
 
 ```move
-struct SwapRequest has key {
+public struct SwapRequest has key {
     id: UID,
     owner: address,
     object: Object,
@@ -91,7 +98,7 @@ public fun request_swap(
 
     let request = SwapRequest {
         id: object::new(ctx),
-        owner: tx_context::sender(ctx),
+        owner: ctx.sender(),
         object,
         fee: coin::into_balance(fee),
     };
@@ -111,7 +118,7 @@ The function interface for the function that the service operator can call to pe
 public fun execute_swap(s1: SwapRequest, s2: SwapRequest): Balance<SUI>;
 ```
 
-Where `s1` and `s2` are two wrapped objects that were sent from different object owners to the service operator. Both wrapped objects are passed by value because they eventually need to be [unpacked](https://move-book.com/advanced-topics/struct.html#destructing-structures).
+Where `s1` and `s2` are two wrapped objects that were sent from different object owners to the service operator. Both wrapped objects are passed by value because they eventually need to be [unpacked](https://move-book.com/move-basics/struct.html#destructing-structures).
 
 First, unpack the two object to obtain the inner fields:
 
@@ -137,15 +144,14 @@ transfer::transfer(o2, owner1);
 The preceding code sends `o1` to the original owner of `o2`, and sends `o2` to the original owner of `o1`. The service can then delete the wrapping `SwapRequest` objects:
 
 ```move
-object::delete(id1);
-object::delete(id2);
+id1.delete();
+id2.delete();
 ```
 
 Finally, the service merges together the `fee1` and `fee2`, and returns it.  The service provider can then turn it into a coin, or merge it into some larger pool where it collects all fees:
 
 ```move
-balance::join(&mut fee1, fee2);
-fee1
+fee1.join(fee2);
 ```
 
 After this call, the two objects are swapped and the service provider takes the service fee.
@@ -160,10 +166,11 @@ To view a more complex example of how to use direct wrapping, see the [escrow](h
 
 When Sui object type `Bar` is directly wrapped into `Foo`, there is not much flexibility: a `Foo` object must have a `Bar` object in it, and to take out the `Bar` object you must destroy the `Foo` object. However, for more flexibility, the wrapping type might not always have the wrapped object in it, and the wrapped object might be replaced with a different object at some point.
 
+
 To demonstrate this use case, design a simple game character: A warrior with a sword and shield. A warrior might have a sword and shield, or might not have either. The warrior should be able to add a sword and shield, and replace the current ones at any time. To design this, define a `SimpleWarrior` type:
 
 ```move
-struct SimpleWarrior has key {
+public struct SimpleWarrior has key {
     id: UID,
     sword: Option<Sword>,
     shield: Option<Shield>,
@@ -173,12 +180,12 @@ struct SimpleWarrior has key {
 Each `SimpleWarrior` type has an optional `sword` and `shield` wrapped in it, defined as:
 
 ```move
-struct Sword has key, store {
+public struct Sword has key, store {
     id: UID,
     strength: u8,
 }
 
-struct Shield has key, store {
+public struct Shield has key, store {
     id: UID,
     armor: u8,
 }
@@ -193,7 +200,7 @@ public fun create_warrior(ctx: &mut TxContext) {
         sword: option::none(),
         shield: option::none(),
     };
-    transfer::transfer(warrior, tx_context::sender(ctx))
+    transfer::transfer(warrior, ctx.sender())
 }
 ```
 
@@ -201,11 +208,11 @@ You can then define functions to equip new swords or new shields:
 
 ```move
 public fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
-    if (option::is_some(&warrior.sword)) {
-        let old_sword = option::extract(&mut warrior.sword);
-        transfer::transfer(old_sword, tx_context::sender(ctx));
+    if (warrior.sword.is_some()) {
+        let old_sword = warrior.sword.extract();
+        transfer::transfer(old_sword, ctx.sender());
     };
-    option::fill(&mut warrior.sword, sword);
+    warrior.sword.fill(sword);
 }
 ```
 
@@ -220,16 +227,15 @@ To view a more complex example, see [hero](https://github.com/MystenLabs/sui/tre
 ### Wrapping through `vector`
 
 The concept of wrapping objects in a vector field of another Sui object is very similar to wrapping through `Option`: an object can contain 0, 1, or many of the wrapped objects of the same type.
-
 Wrapping through vector resembles:
 
 ```move
-struct Pet has key, store {
+public struct Pet has key, store {
     id: UID,
     cuteness: u64,
 }
 
-struct Farm has key {
+public struct Farm has key {
     id: UID,
     pets: vector<Pet>,
 }

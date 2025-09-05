@@ -1,0 +1,17 @@
+[package]
+name = "sui-indexer-alt-consistent-api"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+tonic.workspace = true
+prost.workspace = true
+prost-types = "0.13.3"
+
+[dev-dependencies]
+protox = "0.7"
+tonic-build = "0.13"
+walkdir.workspace = true

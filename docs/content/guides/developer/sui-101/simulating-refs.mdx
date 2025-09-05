@@ -1,6 +1,7 @@
 ---
 title: Simulating References
 description: Use the borrow module in the Sui framework to include objects by reference in your programmable transaction blocks.
+keywords: [ borrow module, sui framework, objects, immutable reference, mutable reference, Sui API, references, simulate a reference, simulate references ]
 ---
 
 Everything on the Sui blockchain is an object. When you develop Move packages for the Sui network, you're typically manipulating or using on-chain objects in some way through functionality available in the Sui API. For most API functions, you provide an object by reference.
@@ -9,8 +10,8 @@ References are a key construct when programming in Move and on Sui. Most of the 
 
 There are two ways to use an object:
 
-- **by value:** When you use an object by value, you have full control over that object. You can destroy it (if the functionality is available), wrap it (if it has the `store` ability), or transfer it to an address.
-- **by reference:** When you use an object by reference, operations over that object are determined by the logic the module that defines the object provides because you are using a reference to its data rather than having ownership of the object itself. The restrictions of references allow you to develop smart contracts with a high level of security and safety around assets. There are two types of references:
+- **By value:** When you use an object by value, you have full control over that object. You can destroy it (if the functionality is available), wrap it (if it has the `store` ability), or transfer it to an address.
+- **By reference:** When you use an object by reference, operations over that object are determined by the logic the module that defines the object provides because you are using a reference to its data rather than having ownership of the object itself. The restrictions of references allow you to develop smart contracts with a high level of security and safety around assets. There are two types of references:
   - Mutable reference (`&mut`): You can alter the object (according to the API) but you can't destroy or transfer it.
   - Immutable reference (`&`): Further restricts the set of operations and the guarantees/invariants over the referenced object. You have read-only access to the object's data.
 

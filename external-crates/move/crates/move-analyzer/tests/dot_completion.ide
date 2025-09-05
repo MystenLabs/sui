@@ -1,6 +1,6 @@
 // Tests dot completions
 {
-  "Completion": {
+  "AutoCompletion": {
     "project": "tests/completion",
     "file_tests": {
       // tests completion for fields and "regular" functions

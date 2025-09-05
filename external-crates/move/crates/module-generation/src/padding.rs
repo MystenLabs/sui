@@ -5,14 +5,14 @@
 use crate::{options::ModuleGeneratorOptions, utils::random_string};
 use move_binary_format::file_format::{Bytecode, CompiledModule, Signature};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 ///////////////////////////////////////////////////////////////////////////
 // Padding of tables in compiled modules
 ///////////////////////////////////////////////////////////////////////////
 
 pub struct Pad {
-    gen: StdRng,
+    rng: StdRng,
     table_size: usize,
     options: ModuleGeneratorOptions,
 }
@@ -21,7 +21,7 @@ impl Pad {
     pub fn pad(table_size: usize, module: &mut CompiledModule, options: ModuleGeneratorOptions) {
         let seed: [u8; 32] = [1; 32];
         let mut slf = Self {
-            gen: StdRng::from_seed(seed),
+            rng: StdRng::from_seed(seed),
             table_size,
             options,
         };
@@ -40,8 +40,8 @@ impl Pad {
     fn pad_identifier_table(&mut self, module: &mut CompiledModule) {
         module.identifiers = (0..(self.table_size + module.identifiers.len()))
             .map(|_| {
-                let len = self.gen.gen_range(10..self.options.max_string_size);
-                Identifier::new(random_string(&mut self.gen, len)).unwrap()
+                let len = self.rng.gen_range(10..self.options.max_string_size);
+                Identifier::new(random_string(&mut self.rng, len)).unwrap()
             })
             .collect()
     }

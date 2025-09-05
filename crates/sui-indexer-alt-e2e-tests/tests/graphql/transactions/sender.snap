@@ -1,0 +1,50 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 10-12:
+//# programmable --sender B --inputs 43 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 14:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 16-28:
+//# run-graphql
+Response: {
+  "data": {
+    "a": {
+      "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+    },
+    "b": {
+      "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+    },
+    "transactionA": {
+      "sender": {
+        "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+      }
+    },
+    "transactionB": {
+      "sender": {
+        "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+      }
+    }
+  }
+}

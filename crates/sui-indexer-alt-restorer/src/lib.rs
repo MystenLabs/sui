@@ -28,8 +28,8 @@ pub struct Args {
     pub snapshot_bucket: String,
 
     /// Bucket to fetch archive files from.
-    #[clap(long, env = "ARCHIVE_BUCKET", required = true)]
-    pub archive_bucket: String,
+    #[clap(long, env = "ARCHIVE_URL", required = true)]
+    pub archive_url: String,
 
     /// Local directory to temporarily store snapshot files.
     #[clap(long, env = "SNAPSHOT_LOCAL_DIR", required = true)]

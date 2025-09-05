@@ -9,12 +9,14 @@ services:
     container_name: validator1
     hostname: validator1
     environment:
+      - TH_FRAG_SIZE=8388608
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -37,12 +39,14 @@ services:
     container_name: validator2
     hostname: validator2
     environment:
+      - TH_FRAG_SIZE=8388608
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -65,12 +69,14 @@ services:
     container_name: validator3
     hostname: validator3
     environment:
+      - TH_FRAG_SIZE=8388608
       - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -93,12 +99,14 @@ services:
     container_name: validator4
     hostname: validator4
     environment:
+      - TH_FRAG_SIZE=8388608
       - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -121,12 +129,14 @@ services:
     hostname: fullnode1
     container_name: fullnode1
     environment:
+      - TH_FRAG_SIZE=8388608
       - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=${SUI_RUST_LOG:-info}
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
@@ -146,7 +156,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.16
-    image: stress:${SUI_NODE_B_TAG}
+    image: stress:${STRESS_IMAGE_TAG}
     container_name: stress
     environment:
       - RUST_LOG=info
@@ -161,9 +171,11 @@ services:
       - STRESS_SHARED_COUNTER=1
       - STRESS_TRANSFER_OBJECT=1
       - STRESS_DELEGATION=0
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - BATCH_PAYMENT=1
       - BATCH_PAYMENT_SIZE=15
       - STRESS_ADVERSARIAL=0
+      - TRANSACTION_DRIVER=${TRANSACTION_DRIVER:-0}
     volumes:
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
       - ./genesis/static/sui.keystore:/opt/sui/config/sui.keystore:ro

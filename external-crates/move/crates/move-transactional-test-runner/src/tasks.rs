@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)]
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::*;
 use move_command_line_common::files::{MOVE_EXTENSION, MOVE_IR_EXTENSION};
 use move_compiler::shared::NumericalAddress;

@@ -5,7 +5,7 @@ authors = ["Diem Association <opensource@diem.com>"]
 description = "Print a human-readable version of Move bytecode (.mv files)"
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 anyhow.workspace = true

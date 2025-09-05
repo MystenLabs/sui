@@ -2,6 +2,8 @@ Command `new -p package example`:
 External Command `cat package/.gitignore`:
 existing_ignore
 build/*
+.trace
+.coverage*
 External Command `ls -A package`:
 .gitignore
 Move.toml

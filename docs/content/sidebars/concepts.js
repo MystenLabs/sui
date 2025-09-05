@@ -67,6 +67,15 @@ const concepts = [
 							'concepts/sui-move-concepts/packages/automated-address-management',
 						],
 					},
+					{
+						type: 'category',
+						label: 'Dynamic Fields',
+						link: {
+							type: 'doc',
+							id: 'concepts/dynamic-fields',
+						},
+						items: ['concepts/dynamic-fields/tables-bags'],
+					},
 					'concepts/sui-move-concepts/conventions',
 				],
 			},
@@ -83,8 +92,22 @@ const concepts = [
 					'concepts/transactions/gas-smashing',
 				],
 			},
+			'concepts/grpc-overview',
 			'concepts/graphql-rpc',
+			'concepts/archival-store',
+			'concepts/gaming'
 		],
+	},
+	{ 
+		type: 'category',
+		label: 'Custom Indexing Framework',
+		link: {
+			type: 'doc',
+			id: 'concepts/custom-indexing-framework',
+		},
+		items: [
+			'concepts/custom-indexer/pipeline-architecture'
+		]
 	},
 	{
 		type: 'category',
@@ -111,6 +134,18 @@ const concepts = [
 			},
 			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
+			{
+				type: 'category',
+				label: 'Nautilus',
+				link: {
+					type: 'doc',
+					id: 'concepts/cryptography/nautilus',
+				},
+				items: [
+					'concepts/cryptography/nautilus/nautilus-design',
+					'concepts/cryptography/nautilus/using-nautilus',
+				],
+			},
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
@@ -164,4 +199,4 @@ const concepts = [
 	},
 	'concepts/research-papers',
 ];
-module.exports = concepts;
+export default concepts;

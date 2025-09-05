@@ -95,6 +95,7 @@ async fn test_publish_primitive() {
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -200,6 +201,7 @@ async fn test_publish_complex_value() {
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -296,6 +298,7 @@ async fn test_consume_oracle_data() {
 
         let signature = keystore
             .sign_secure(&sender, &data, Intent::sui_transaction())
+            .await
             .unwrap();
 
         let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -395,6 +398,7 @@ async fn test_consume_oracle_data() {
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -435,7 +439,7 @@ async fn init_test_client() -> (SuiClient, Keystore, SuiAddress) {
         .unwrap();
 
     let keystore = Keystore::File(
-        FileBasedKeystore::new(
+        FileBasedKeystore::load_or_create(
             &dirs::home_dir()
                 .unwrap()
                 .join(".sui/sui_config/sui.keystore"),
@@ -483,6 +487,7 @@ async fn publish_package(
     );
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -555,6 +560,7 @@ async fn create_oracle(
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
     let tx = Transaction::from_data(data.clone(), vec![signature]);
     let result = client

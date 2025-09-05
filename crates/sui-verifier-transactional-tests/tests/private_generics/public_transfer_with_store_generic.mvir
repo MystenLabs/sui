@@ -74,3 +74,21 @@ module 0x0.m {
         return move(c);
     }
 }
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.coin;
+    import 0x2.party;
+
+    t(s: coin.Coin<u64>, p: party.Party) {
+        label l0:
+        transfer.public_party_transfer<coin.Coin<u64>>(move(s), move(p));
+        return;
+    }
+    t_gen<T: key + store>(s: T, p: party.Party) {
+        label l0:
+        transfer.public_party_transfer<T>(move(s), move(p));
+        return;
+    }
+}

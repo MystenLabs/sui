@@ -2,18 +2,22 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::{sp, Loc};
+use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 
 use crate::{
-    command_line::compiler::FullyCompiledProgram,
-    diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::DiagnosticReporter,
+    expansion::ast::Address,
     parser::{
         ast::{self as P, DocComment, NamePath, PathEntry},
-        filter::{filter_program, FilterContext},
+        filter::{FilterContext, filter_program},
     },
-    shared::{known_attributes, CompilationEnv},
+    shared::{
+        CompilationEnv,
+        known_attributes::{self, AttributeKind_},
+    },
+    sui_mode::STD_ADDR_VALUE,
 };
 
 use std::sync::Arc;
@@ -52,7 +56,7 @@ impl FilterContext for Context<'_> {
         }
 
         // instrument the test poison
-        if !self.env.flags().is_testing() {
+        if !self.env.test_mode() {
             return Some(module_def);
         }
 
@@ -61,23 +65,17 @@ impl FilterContext for Context<'_> {
         Some(module_def)
     }
 
-    // A module member should be removed if:
-    // * It is annotated as a test function (test_only, test, random_test, abort) and test mode is not set; or
-    // * If it is a library and is annotated as #[test]
+    // Mode filtering happens in the mode filter for `#[mode(test)]`. We further remove any
+    // `#[test]` or `#[rand_test]` that is not in our source definition. This means we will filter
+    // the following definitions:
+    // * Definitions annotated as a test function (test, random_test, abort) and test mode is not set
+    // * Definitions in a library annotated with the same
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-        use known_attributes::TestingAttribute;
-        let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attributes).collect();
-        let is_test_only = flattened_attrs.iter().any(|attr| {
-            matches!(
-                attr.1,
-                TestingAttribute::Test | TestingAttribute::TestOnly | TestingAttribute::RandTest
-            )
-        });
-        is_test_only && !self.env.flags().keep_testing_functions()
-            || (!self.is_source_def
-                && flattened_attrs.iter().any(|attr| {
-                    matches!(attr.1, TestingAttribute::Test | TestingAttribute::RandTest)
-                }))
+        let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attribute_kinds).collect();
+        let has_test_attr = flattened_attrs
+            .iter()
+            .any(|attr| matches!(attr.1, AttributeKind_::Test | AttributeKind_::RandTest));
+        has_test_attr && (!self.is_source_def || !self.env.keep_testing_functions())
     }
 }
 
@@ -94,7 +92,7 @@ pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 // a test plan is created for use by the testing framework.
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: P::Program,
 ) -> P::Program {
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
@@ -107,7 +105,7 @@ pub fn program(
     filter_program(&mut context, prog)
 }
 
-fn has_unit_test_module(prog: &P::Program) -> bool {
+fn stdlib_unit_test_module_in_program(prog: &P::Program) -> bool {
     prog.lib_definitions
         .iter()
         .chain(prog.source_definitions.iter())
@@ -128,16 +126,33 @@ fn has_unit_test_module(prog: &P::Program) -> bool {
         })
 }
 
+fn stdlib_unit_test_module_in_pre_compiled_lib(
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
+) -> bool {
+    pre_compiled_lib.is_some_and(|module_info| {
+        module_info.iter().any(|(sp!(_, mident), _)| {
+            mident.module.0.value == UNIT_TEST_MODULE_NAME
+                && match mident.address {
+                    Address::Numerical {
+                        value: sp!(_, addr),
+                        ..
+                    } => addr == STD_ADDR_VALUE,
+                    Address::NamedUnassigned(_) => false,
+                }
+        })
+    })
+}
+
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
     reporter: &DiagnosticReporter,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &P::Program,
 ) -> bool {
-    let has_unit_test_module = has_unit_test_module(prog)
-        || pre_compiled_lib.is_some_and(|p| has_unit_test_module(&p.parser));
+    let has_unit_test_module = stdlib_unit_test_module_in_program(prog)
+        || stdlib_unit_test_module_in_pre_compiled_lib(pre_compiled_lib);
 
-    if !has_unit_test_module && compilation_env.flags().is_testing() {
+    if !has_unit_test_module && compilation_env.test_mode() {
         if let Some(P::PackageDefinition { def, .. }) = prog
             .source_definitions
             .iter()
@@ -232,23 +247,27 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
     })
 }
 
-fn test_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::TestingAttribute)> {
-    use known_attributes::KnownAttribute;
+fn test_attribute_kinds(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::AttributeKind_)> {
     attrs
         .value
+        .0
         .iter()
-        .filter_map(
-            |attr| match KnownAttribute::resolve(attr.value.attribute_name().value)? {
-                KnownAttribute::Testing(test_attr) => Some((attr.loc, test_attr)),
-                KnownAttribute::Verification(_)
-                | KnownAttribute::Native(_)
-                | KnownAttribute::Diagnostic(_)
-                | KnownAttribute::DefinesPrimitive(_)
-                | KnownAttribute::External(_)
-                | KnownAttribute::Syntax(_)
-                | KnownAttribute::Error(_)
-                | KnownAttribute::Deprecation(_) => None,
-            },
-        )
+        .filter_map(|attr| match attr.value {
+            P::Attribute_::BytecodeInstruction
+            | P::Attribute_::DefinesPrimitive(..)
+            | P::Attribute_::Deprecation { .. }
+            | P::Attribute_::Error { .. }
+            | P::Attribute_::External { .. }
+            | P::Attribute_::Mode { .. }
+            | P::Attribute_::Syntax { .. }
+            | P::Attribute_::Allow { .. }
+            | P::Attribute_::LintAllow { .. } => None,
+            // -- testing attributes
+            P::Attribute_::Test => Some((attr.loc, known_attributes::AttributeKind_::Test)),
+            P::Attribute_::RandomTest => {
+                Some((attr.loc, known_attributes::AttributeKind_::RandTest))
+            }
+            P::Attribute_::ExpectedFailure { .. } => None,
+        })
         .collect()
 }

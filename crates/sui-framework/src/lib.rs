@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::normalized;
 use move_binary_format::{
     binary_config::BinaryConfig, compatibility::Compatibility, CompiledModule,
 };
@@ -248,14 +249,17 @@ pub async fn compare_system_package<S: ObjectStore>(
         .try_as_package_mut()
         .expect("Created as package");
 
-    let cur_normalized = match cur_pkg.normalize(binary_config) {
+    let pool = &mut normalized::RcPool::new();
+    let cur_normalized = match cur_pkg.normalize(pool, binary_config, /* include code */ false) {
         Ok(v) => v,
         Err(e) => {
             error!("Could not normalize existing package: {e:?}");
             return None;
         }
     };
-    let mut new_normalized = new_pkg.normalize(binary_config).ok()?;
+    let mut new_normalized = new_pkg
+        .normalize(pool, binary_config, /* include code */ false)
+        .ok()?;
 
     for (name, cur_module) in cur_normalized {
         let new_module = new_normalized.remove(&name)?;

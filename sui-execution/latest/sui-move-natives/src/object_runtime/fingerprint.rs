@@ -47,8 +47,8 @@ impl ObjectFingerprint {
         preexisting_owner: &ObjectID,
         preexisting_type: &MoveObjectType,
         preexisting_value: &Value,
-    ) -> Self {
-        if !protocol_config.minimize_child_object_mutations() {
+    ) -> PartialVMResult<Self> {
+        Ok(if !protocol_config.minimize_child_object_mutations() {
             Self(None)
         } else {
             Self(Some(ObjectFingerprint_::Preexisting {
@@ -56,7 +56,7 @@ impl ObjectFingerprint {
                 ty: preexisting_type.clone(),
                 value: preexisting_value.copy_value(),
             }))
-        }
+        })
     }
 
     /// Checks if the object has changed since it was read from storage.

@@ -10,12 +10,12 @@ use std::{
 use tempfile::TempDir;
 
 use move_compiler::editions::{Edition, Flavor};
-use move_package::lock_file::schema::{
-    update_managed_address, ManagedAddressUpdate, ManagedPackage, ToolchainVersion,
-};
-use move_package::lock_file::LockFile;
-use move_package::resolution::dependency_graph::DependencyGraph;
 use move_package::BuildConfig;
+use move_package::lock_file::LockFile;
+use move_package::lock_file::schema::{
+    ManagedAddressUpdate, ManagedPackage, ToolchainVersion, update_managed_address,
+};
+use move_package::resolution::dependency_graph::DependencyGraph;
 use move_symbol_pool::Symbol;
 
 #[test]

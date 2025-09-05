@@ -16,7 +16,7 @@ use move_binary_format::file_format::{
 };
 
 use move_binary_format::file_format::TableIndex;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 //---------------------------------------------------------------------------
 // Type Instantiations from Unification with the Abstract Stack

@@ -8,7 +8,7 @@ use crate::{
     expansion::ast::{Attributes, ModuleIdent, ModuleIdent_},
     hlir::ast as H,
     parser::ast::{FunctionName, ModuleName},
-    shared::{unique_map::UniqueMap, Name, NumericalAddress},
+    shared::{Name, NumericalAddress, unique_map::UniqueMap},
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;

@@ -1,0 +1,44 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-37:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6513200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 39:
+//# run test::m::mint --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 41:
+//# run test::m::add --sender A --args object(2,0) 0
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 4, line 43:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 5, line 45:
+//# run test::m::wrap --sender A --args object(2,0)
+created: object(5,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964

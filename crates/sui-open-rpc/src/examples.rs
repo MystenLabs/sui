@@ -43,7 +43,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::balance::Supply;
 use sui_types::base_types::random_object_ref;
 use sui_types::base_types::{
-    MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
+    FullObjectRef, MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
 use sui_types::committee::Committee;
@@ -185,11 +185,11 @@ impl RpcExampleProvider {
             builder
                 .transfer_object(
                     recipient,
-                    (
+                    FullObjectRef::from_fastpath_ref((
                         object_id,
                         SequenceNumber::from_u64(1),
                         ObjectDigest::new(self.rng.gen()),
-                    ),
+                    )),
                 )
                 .unwrap();
             builder.finish()
@@ -675,11 +675,11 @@ impl RpcExampleProvider {
             SequenceNumber::from_u64(2),
             ObjectDigest::new(self.rng.gen()),
         );
-        let object_ref = (
+        let object_ref = FullObjectRef::from_fastpath_ref((
             obj_id,
             SequenceNumber::from_u64(2),
             ObjectDigest::new(self.rng.gen()),
-        );
+        ));
 
         let data = TransactionData::new_transfer(
             recipient,
@@ -701,7 +701,7 @@ impl RpcExampleProvider {
             sender: signer,
             recipient: Owner::AddressOwner(recipient),
             object_type: parse_sui_struct_tag("0x2::example::Object").unwrap(),
-            object_id: object_ref.0,
+            object_id: object_ref.0.id(),
             version: object_ref.1,
             digest: ObjectDigest::new(self.rng.gen()),
         };
@@ -750,7 +750,7 @@ impl RpcExampleProvider {
                         },
                         OwnedObjectRef {
                             owner: Owner::AddressOwner(recipient),
-                            reference: object_ref.into(),
+                            reference: object_ref.as_object_ref().into(),
                         },
                     ],
                     unwrapped: vec![],
@@ -763,6 +763,7 @@ impl RpcExampleProvider {
                     },
                     events_digest: Some(TransactionEventsDigest::new(self.rng.gen())),
                     dependencies: vec![],
+                    abort_error: None,
                 },
             )),
             events: None,
@@ -770,7 +771,11 @@ impl RpcExampleProvider {
             balance_changes: None,
             timestamp_ms: None,
             transaction: Some(SuiTransactionBlock {
-                data: SuiTransactionBlockData::try_from(data1, &&mut NoOpsModuleResolver).unwrap(),
+                data: SuiTransactionBlockData::try_from_with_module_cache(
+                    data1,
+                    &&mut NoOpsModuleResolver,
+                )
+                .unwrap(),
                 tx_signatures: signatures.clone(),
             }),
             raw_transaction,

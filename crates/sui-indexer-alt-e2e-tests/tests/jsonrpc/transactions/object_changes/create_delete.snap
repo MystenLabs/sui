@@ -62,7 +62,9 @@ Response: {
         "version": "2",
         "digest": "8dXr7d9fBENNdxBX1G3jzb6s8V5QKDWewqUiM4hUNPYq"
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }
 
@@ -93,6 +95,8 @@ Response: {
         "objectId": "0xc7162cc23503adb20cb79297ed7ce9079f7430cdd57fe901c3c4d8becc36db8d",
         "version": "3"
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }

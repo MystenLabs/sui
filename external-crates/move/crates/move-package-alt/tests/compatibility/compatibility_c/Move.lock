@@ -1,0 +1,14 @@
+[env]
+
+[env.mainnet]
+chain-id = "foo"
+original-published-id = "0x5"
+latest-published-id = "0x10"
+published-version = "2"
+
+
+[env.testnet]
+chain-id = "bar"
+original-published-id = "0xb"
+latest-published-id = "0xb"
+published-version = "1"

@@ -30,7 +30,7 @@ mod rpc_client;
 #[cfg(test)]
 mod test_utils;
 
-#[derive(clap::Args, Clone, Debug)]
+#[derive(clap::Args, Clone, Debug, Default)]
 #[group(required = true)]
 pub struct ClientArgs {
     /// Remote Store to fetch checkpoints from.
@@ -68,7 +68,7 @@ pub struct IngestionConfig {
     pub retry_interval_ms: u64,
 }
 
-pub(crate) struct IngestionService {
+pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
     ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -86,7 +86,7 @@ impl IngestionConfig {
 impl IngestionService {
     /// TODO: If we want to expose this as part of the framework, so people can run just an
     /// ingestion service, we will need to split `IngestionMetrics` out from `IndexerMetrics`.
-    pub(crate) fn new(
+    pub fn new(
         args: ClientArgs,
         config: IngestionConfig,
         metrics: Arc<IndexerMetrics>,
@@ -134,7 +134,7 @@ impl IngestionService {
     /// run ahead of the watermark by more than the config's buffer_size.
     ///
     /// Returns the channel to receive checkpoints from and the channel to accept watermarks from.
-    pub(crate) fn subscribe(
+    pub fn subscribe(
         &mut self,
     ) -> (
         mpsc::Receiver<Arc<CheckpointData>>,
@@ -159,7 +159,7 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub(crate) async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
+    pub async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
     where
         I: IntoIterator<Item = u64> + Send + Sync + 'static,
         I::IntoIter: Send + Sync + 'static,
@@ -324,28 +324,6 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(1, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
-
-        cancel.cancelled().await;
-        subscriber.await.unwrap();
-        regulator.await.unwrap();
-        broadcaster.await.unwrap();
-    }
-
-    /// If fetching the checkpoint throws an unexpected error, the whole pipeline will be shut
-    /// down.
-    #[tokio::test]
-    async fn shutdown_on_unexpected_error() {
-        telemetry_subscribers::init_for_testing();
-
-        let server = MockServer::start().await;
-        respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
-
-        let cancel = CancellationToken::new();
-        let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
-
-        let (rx, _) = ingestion_service.subscribe();
-        let subscriber = test_subscriber(usize::MAX, rx, cancel.clone()).await;
         let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;

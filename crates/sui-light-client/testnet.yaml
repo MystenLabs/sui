@@ -1,0 +1,12 @@
+full_node_url: "https://fullnode.testnet.sui.io:443"
+# make sure this directory is created and has genesis.blob 
+checkpoint_summary_dir: "testnet_checkpoints_dir"
+genesis_filename: "genesis.blob"
+object_store_url: "https://checkpoints.testnet.sui.io"
+graphql_url: "https://sui-testnet.mystenlabs.com/graphql"
+archive_store_config:
+  object-store: "S3"
+  bucket: "mysten-testnet-archives"
+  no-sign-request: true
+  aws-region: "us-west-2"
+  object-store-connection-limit: 20

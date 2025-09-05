@@ -14,7 +14,8 @@
 /// - the current implementation is not optimized for a large number of records
 /// and the final one will feature better collection type;
 module examples::denylist_rule {
-    use sui::{bag::{Self, Bag}, token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest}};
+    use sui::bag::{Self, Bag};
+    use sui::token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest};
 
     /// Trying to `verify` but the sender or the recipient is on the denylist.
     const EUserBlocked: u64 = 0;
@@ -105,8 +106,10 @@ module examples::denylist_rule {
 #[test_only]
 module examples::denylist_rule_tests {
     use examples::denylist_rule::{Self as denylist, Denylist};
-    use std::{option::{none, some}, string::utf8};
-    use sui::{token, token_test_utils::{Self as test, TEST}};
+    use std::option::{none, some};
+    use std::string::utf8;
+    use sui::token;
+    use sui::token_test_utils::{Self as test, TEST};
 
     #[test]
     // Scenario: add a denylist with addresses, sender is not on the list and
