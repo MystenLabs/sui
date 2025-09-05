@@ -147,7 +147,7 @@ where
         let td_percentage = if !epoch_store.protocol_config().mysticeti_fastpath() {
             0
         } else {
-            choose_transaction_driver_percentage()
+            choose_transaction_driver_percentage(Some(epoch_store.get_chain_identifier()))
         };
 
         let transaction_driver = if td_percentage > 0 {
