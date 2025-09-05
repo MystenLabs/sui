@@ -73,6 +73,7 @@ struct AuthChannel {
     policy: String,
     token_provider: Option<Arc<dyn TokenProvider>>,
     token: Arc<RwLock<Option<Arc<Token>>>>,
+    metrics: Option<Arc<KvMetrics>>,
 }
 
 #[derive(Clone)]
@@ -427,6 +428,7 @@ impl BigTableClient {
             policy: "https://www.googleapis.com/auth/bigtable.data".to_string(),
             token_provider: None,
             token: Arc::new(RwLock::new(None)),
+            metrics: None,
         };
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
@@ -466,17 +468,19 @@ impl BigTableClient {
             token_provider.project_id().await?,
             instance_id
         );
+        let metrics = registry.map(KvMetrics::new);
         let auth_channel = AuthChannel {
             channel: endpoint.connect_lazy(),
             policy: policy.to_string(),
             token_provider: Some(token_provider),
             token: Arc::new(RwLock::new(None)),
+            metrics: metrics.clone(),
         };
         Ok(Self {
             table_prefix,
             client: BigtableInternalClient::new(auth_channel),
             client_name,
-            metrics: registry.map(KvMetrics::new),
+            metrics,
             app_profile_id,
         })
     }
@@ -815,6 +819,7 @@ impl Service<Request<BoxBody>> for AuthChannel {
         let mut inner = std::mem::replace(&mut self.channel, cloned_channel);
         let policy = self.policy.clone();
         let token_provider = self.token_provider.clone();
+        let metrics = self.metrics.clone();
 
         let mut auth_token = None;
         if token_provider.is_some() {
@@ -830,9 +835,14 @@ impl Service<Request<BoxBody>> for AuthChannel {
             if let Some(ref provider) = token_provider {
                 let token = match auth_token {
                     None => {
+                        let start = Instant::now();
                         let new_token = provider.token(&[policy.as_ref()]).await?;
                         let mut guard = cloned_token.write().unwrap();
                         *guard = Some(new_token.clone());
+                        if let Some(ref m) = metrics {
+                            m.kv_auth_success.inc();
+                            m.kv_auth_latency_ms.observe(start.elapsed().as_millis() as f64);
+                        }
                         new_token
                     }
                     Some(token) => token,

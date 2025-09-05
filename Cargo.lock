@@ -15095,6 +15095,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "prometheus",
+ "sui-data-ingestion-core",
  "sui-kvstore",
  "sui-protocol-config",
  "sui-rpc",
@@ -15105,6 +15106,9 @@ dependencies = [
  "tokio",
  "tonic 0.13.1",
  "tonic-reflection",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
 ]
 
 [[package]]

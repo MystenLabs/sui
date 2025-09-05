@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
-    IntCounterVec, Registry,
-};
+use prometheus::{register_histogram_vec_with_registry, register_histogram_with_registry, register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry};
 use std::sync::Arc;
 
 pub(crate) struct KvMetrics {
@@ -21,6 +18,8 @@ pub(crate) struct KvMetrics {
     pub kv_bt_chunk_latency_ms: HistogramVec,
     pub kv_bt_chunk_rows_returned_count: IntCounterVec,
     pub kv_bt_chunk_rows_seen_count: IntCounterVec,
+    pub kv_auth_success: IntCounter,
+    pub kv_auth_latency_ms: Histogram,
 }
 
 impl KvMetrics {
@@ -132,6 +131,17 @@ impl KvMetrics {
                 registry,
             )
             .unwrap(),
+            kv_auth_success: register_int_counter_with_registry!(
+                "kv_auth_success",
+                "kv auth success",
+                registry,
+            )
+                .unwrap(),
+            kv_auth_latency_ms: register_histogram_with_registry!(
+                "kv_auth_latency_ms",
+                "Latency of kv auth successful",
+                registry,
+            ).unwrap(),
         })
     }
 }
