@@ -24,6 +24,17 @@ for cmd in gh git cargo; do
   fi
 done
 
+# Ensure gh is authenticated (in CI this uses GH_TOKEN/GITHUB_TOKEN)
+if ! gh auth status >/dev/null 2>&1; then
+  if [[ -n "${GITHUB_TOKEN:-}" && -z "${GH_TOKEN:-}" ]]; then
+    export GH_TOKEN="$GITHUB_TOKEN"
+  fi
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "Error: gh is not authenticated. Set GH_TOKEN/GITHUB_TOKEN in the environment with pull-requests:write." >&2
+    exit 1
+  fi
+fi
+
 # Make sure GITHUB_ACTOR is set.
 if [[ -z "${GITHUB_ACTOR:-}" ]]; then
   GITHUB_ACTOR="$(whoami 2>/dev/null || echo github-actions[bot])"
