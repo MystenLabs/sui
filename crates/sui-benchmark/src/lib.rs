@@ -283,7 +283,9 @@ impl LocalValidatorAggregatorProxy {
         let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
             tx_driver_percentage
         } else {
-            choose_transaction_driver_percentage()
+            // We don't need to gate transaction driver for benchmark since we
+            // are not running it on mainnet.
+            choose_transaction_driver_percentage(None)
         };
 
         Self::new_impl(
