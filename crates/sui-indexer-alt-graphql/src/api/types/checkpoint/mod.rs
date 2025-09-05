@@ -200,17 +200,21 @@ impl CheckpointContents {
 impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
     /// Returns `None` if the checkpoint is set in the future relative to the current scope's
-    /// checkpoint.
-    ///
-    /// In execution context, always returns `Some` since no checkpoint is considered future.
+    /// checkpoint, or when no checkpoint is set in scope (e.g. execution scope, where
+    /// checkpoint queries return None to prevent temporal inconsistency).
     pub(crate) fn with_sequence_number(scope: Scope, sequence_number: u64) -> Option<Self> {
-        (sequence_number <= scope.checkpoint_viewed_at().unwrap_or(u64::MAX)).then_some(Self {
-            scope,
-            sequence_number,
-        })
+        scope
+            .checkpoint_viewed_at()
+            .is_some_and(|cp| sequence_number <= cp)
+            .then_some(Self {
+                scope,
+                sequence_number,
+            })
     }
 
     /// Paginate through checkpoints with filters applied.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
@@ -221,7 +225,10 @@ impl Checkpoint {
 
         // TODO: (henrychen) Update when we figure out retention for key-value stores.
         let cp_lo = 0;
-        let cp_hi_inclusive = scope.checkpoint_viewed_at().unwrap_or(u64::MAX);
+        let Some(cp_hi_inclusive) = scope.checkpoint_viewed_at() else {
+            // In execution scope, checkpoint pagination returns empty results
+            return Ok(Connection::new(false, false));
+        };
 
         let Some(cp_bounds) = checkpoint_bounds(
             filter.after_checkpoint.map(u64::from),

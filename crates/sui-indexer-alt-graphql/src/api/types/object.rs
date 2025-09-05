@@ -443,7 +443,8 @@ impl Object {
 
     /// Fetch an object by its key. The key can either specify an exact version to fetch, an
     /// upperbound against a "root version", an upperbound against a checkpoint, or none of the
-    /// above.
+    /// above. Returns `None` when no checkpoint is set in scope (e.g. execution scope)
+    /// and no explicit version is provided.
     pub(crate) async fn by_key(
         ctx: &Context<'_>,
         scope: Scope,
@@ -466,8 +467,11 @@ impl Object {
 
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
-            let cp: UInt53 = scope.checkpoint_viewed_at_or_error()?.into();
-            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+            let Some(cp) = scope.checkpoint_viewed_at() else {
+                // Object queries return None in execution scope without explicit version
+                return Ok(None);
+            };
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
         }
     }
 
@@ -699,6 +703,8 @@ impl Object {
     }
 
     /// Paginate through objects in the live object set.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_live(
         ctx: &Context<'_>,
         scope: Scope,
@@ -720,7 +726,12 @@ impl Object {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
 
-            (None, None) => scope.checkpoint_viewed_at_or_error()?,
+            (None, None) => {
+                let Some(cp) = scope.checkpoint_viewed_at() else {
+                    return Ok(Connection::new(false, false));
+                };
+                cp
+            }
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 

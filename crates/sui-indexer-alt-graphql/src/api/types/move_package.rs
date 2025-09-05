@@ -418,7 +418,8 @@ impl MovePackage {
     }
 
     /// Fetch a package by its key. The key can either specify an exact version to fetch, an
-    /// upperbound against a checkpoint, or neither.
+    /// upperbound against a checkpoint, or neither. Returns `None` when no checkpoint is set
+    /// in scope (e.g. execution scope) and no explicit version is provided.
     pub(crate) async fn by_key(
         ctx: &Context<'_>,
         scope: Scope,
@@ -433,8 +434,10 @@ impl MovePackage {
         } else if let Some(cp) = key.at_checkpoint {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
-            let cp: UInt53 = scope.checkpoint_viewed_at_or_error()?.into();
-            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+            let Some(cp) = scope.checkpoint_viewed_at() else {
+                return Ok(None);
+            };
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
         }
     }
 

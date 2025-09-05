@@ -467,6 +467,11 @@ impl EffectsContents {
             return Ok(self.clone());
         }
 
+        // Skip checkpoint bounds check when no checkpoint is set in scope (e.g. execution scope).
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(self.clone());
+        };
+
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
             .load_one_transaction(digest)
@@ -476,11 +481,12 @@ impl EffectsContents {
             return Ok(self.clone());
         };
 
-        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        if let Some(cp_num) = transaction.cp_sequence_number() {
-            if cp_num > self.scope.checkpoint_viewed_at().unwrap_or(u64::MAX) {
-                return Ok(self.clone());
-            }
+        let cp_num = transaction
+            .cp_sequence_number()
+            .context("Fetched transaction should have checkpoint sequence number")?;
+
+        if cp_num > checkpoint_viewed_at {
+            return Ok(self.clone());
         }
 
         Ok(Self {
