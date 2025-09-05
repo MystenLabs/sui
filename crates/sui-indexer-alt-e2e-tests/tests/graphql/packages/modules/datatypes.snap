@@ -1,0 +1,304 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-29:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 31:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 33-61:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "module": {
+        "A": {
+          "name": "A",
+          "abilities": [
+            "COPY",
+            "DROP",
+            "STORE"
+          ],
+          "typeParameters": [],
+          "asMoveStruct": {
+            "name": "A"
+          }
+        },
+        "E": {
+          "name": "E",
+          "abilities": [
+            "STORE"
+          ],
+          "typeParameters": [],
+          "asMoveStruct": null
+        },
+        "S": {
+          "name": "S",
+          "abilities": [
+            "COPY",
+            "DROP"
+          ],
+          "typeParameters": [],
+          "asMoveStruct": {
+            "name": "S"
+          }
+        },
+        "T": {
+          "name": "T",
+          "abilities": [],
+          "typeParameters": [
+            {
+              "constraints": [
+                "DROP"
+              ],
+              "isPhantom": true
+            }
+          ],
+          "asMoveStruct": {
+            "name": "T"
+          }
+        },
+        "V": {
+          "name": "V",
+          "abilities": [],
+          "typeParameters": [
+            {
+              "constraints": [
+                "KEY"
+              ],
+              "isPhantom": false
+            }
+          ],
+          "asMoveStruct": null
+        },
+        "doesntExist": null,
+        "datatypes": {
+          "nodes": [
+            {
+              "name": "A",
+              "abilities": [
+                "COPY",
+                "DROP",
+                "STORE"
+              ],
+              "typeParameters": [],
+              "asMoveStruct": {
+                "name": "A"
+              }
+            },
+            {
+              "name": "E",
+              "abilities": [
+                "STORE"
+              ],
+              "typeParameters": [],
+              "asMoveStruct": null
+            },
+            {
+              "name": "S",
+              "abilities": [
+                "COPY",
+                "DROP"
+              ],
+              "typeParameters": [],
+              "asMoveStruct": {
+                "name": "S"
+              }
+            },
+            {
+              "name": "T",
+              "abilities": [],
+              "typeParameters": [
+                {
+                  "constraints": [
+                    "DROP"
+                  ],
+                  "isPhantom": true
+                }
+              ],
+              "asMoveStruct": {
+                "name": "T"
+              }
+            },
+            {
+              "name": "V",
+              "abilities": [],
+              "typeParameters": [
+                {
+                  "constraints": [
+                    "KEY"
+                  ],
+                  "isPhantom": false
+                }
+              ],
+              "asMoveStruct": null
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 4, lines 63-92:
+//# run-graphql --cursors "A" "V"
+Response: {
+  "data": {
+    "package": {
+      "module": {
+        "all": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            },
+            {
+              "name": "V"
+            }
+          ]
+        },
+        "first": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            }
+          ]
+        },
+        "last": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            },
+            {
+              "name": "V"
+            }
+          ]
+        },
+        "firstBefore": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            }
+          ]
+        },
+        "lastAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            },
+            {
+              "name": "V"
+            }
+          ]
+        },
+        "firstAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            }
+          ]
+        },
+        "lastBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            }
+          ]
+        },
+        "afterBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

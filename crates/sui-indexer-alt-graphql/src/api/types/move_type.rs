@@ -106,7 +106,7 @@ pub(crate) enum Error {
     Resolve(#[from] ResolverError),
 }
 
-/// Represents concrete types (no type parameters, no references).
+/// Represents instances of concrete types (no type parameters, no references).
 #[Object]
 impl MoveType {
     /// Flat representation of the type signature, as a displayable string.

@@ -4,7 +4,9 @@
 use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use anyhow::{self, Context};
-use api::types::{address::IAddressable, move_object::IMoveObject, object::IObject};
+use api::types::{
+    address::IAddressable, move_datatype::IMoveDatatype, move_object::IMoveObject, object::IObject,
+};
 use async_graphql::{
     extensions::ExtensionFactory, http::GraphiQLSource, EmptySubscription, ObjectType, Schema,
     SchemaBuilder, SubscriptionType,
@@ -245,8 +247,9 @@ impl Default for RpcArgs {
 pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
     Schema::build(Query::default(), Mutation, EmptySubscription)
         .register_output_type::<IAddressable>()
-        .register_output_type::<IObject>()
+        .register_output_type::<IMoveDatatype>()
         .register_output_type::<IMoveObject>()
+        .register_output_type::<IObject>()
 }
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
