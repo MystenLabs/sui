@@ -6,8 +6,9 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context as _};
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
-    Context, Object,
+    Context, Enum, Object,
 };
+use move_binary_format::file_format::Visibility;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 use sui_package_resolver::Module as ParsedModule;
@@ -32,6 +33,19 @@ pub(crate) struct MoveModule {
 
     /// The lazily loaded contents of the module, in raw and structured form.
     contents: Arc<OnceCell<Option<ModuleContents>>>,
+}
+
+/// The visibility modifier describes which modules can access this module member.
+///
+/// By default, a module member can be called only within the same module.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum MoveVisibility {
+    /// A public member can be accessed by any module.
+    Public,
+    /// A private member can be accessed in the module it is defined in.
+    Private,
+    /// A friend member can be accessed in the module it is defined in and any other module in its package that is explicitly specified in its friend list.
+    Friend,
 }
 
 pub(crate) struct ModuleContents {
@@ -193,5 +207,18 @@ impl MoveModule {
                 Ok(Some(ModuleContents { native, parsed }))
             })
             .await
+    }
+}
+
+impl From<Visibility> for MoveVisibility {
+    fn from(visibility: Visibility) -> Self {
+        use MoveVisibility as M;
+        use Visibility as V;
+
+        match visibility {
+            V::Private => M::Private,
+            V::Public => M::Public,
+            V::Friend => M::Friend,
+        }
     }
 }
