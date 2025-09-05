@@ -7,16 +7,13 @@ use crate::{
     static_programmable_transactions::env::Env,
 };
 use move_trace_format::format::MoveTraceBuilder;
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::runtime::MoveRuntime;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::TxContext, error::ExecutionError, execution::ResultWithTimings,
     metrics::LimitsMetrics, storage::BackingPackageStore, transaction::ProgrammableTransaction,
 };
-
-// TODO we might replace this with a new one
-pub use crate::data_store::legacy::linkage_view::LinkageView;
 
 pub mod env;
 pub mod execution;
@@ -28,7 +25,7 @@ pub mod typing;
 pub fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    vm: &MoveVM,
+    vm: &MoveRuntime,
     state_view: &mut dyn ExecutionState,
     package_store: &dyn BackingPackageStore,
     tx_context: Rc<RefCell<TxContext>>,

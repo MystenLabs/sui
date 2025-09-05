@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cached_package_store;
-pub mod legacy;
 pub mod linked_data_store;
 
 use move_core_types::identifier::IdentStr;

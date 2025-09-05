@@ -3,7 +3,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::execution::values::{values_impl::Value, MemBox};
+use crate::execution::values::{MemBox, values_impl::Value};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
@@ -189,6 +189,17 @@ impl StackFrame {
         }
         let _ = self.slice[ndx].replace(x);
         Ok(())
+    }
+
+    /// Returns if the location is invalid
+    pub fn is_invalid(&self, ndx: usize) -> PartialVMResult<bool> {
+        self.slice
+            .get(ndx)
+            .map(|value| matches!(&*value.borrow(), &Value::Invalid))
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                    .with_message(format!("Local index out of bounds: {}", ndx))
+            })
     }
 
     /// Gets an index, or returns an error if the index is out of range or the value is unset.

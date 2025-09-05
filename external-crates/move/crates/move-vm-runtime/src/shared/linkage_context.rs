@@ -4,10 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
-use move_core_types::{
-    identifier::IdentStr,
-    language_storage::{ModuleId, TypeTag},
-};
+use move_core_types::language_storage::{ModuleId, TypeTag};
 
 use crate::shared::types::{OriginalId, VersionId};
 
@@ -84,17 +81,6 @@ impl LinkageContext {
                 PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
                     .with_message(format!("Did not find {module_id} in linkage table"))
             })
-    }
-
-    /// Translate the runtime fully-qualified struct name to the on-chain `ModuleId` that originally
-    /// defined that type.
-    /// TODO: FIX THIS WHEN THE TYPE ORIGIN TABLE EXISTS
-    pub fn defining_module(
-        &self,
-        module_id: &ModuleId,
-        _struct: &IdentStr,
-    ) -> PartialVMResult<ModuleId> {
-        self.relocate(module_id)
     }
 
     /// Gives the root package plus transitive dependencies (as published package IDs) of the

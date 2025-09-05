@@ -5,6 +5,7 @@ use crate::static_programmable_transactions::linkage::resolution::{
     ConflictResolution, ResolutionTable,
 };
 use move_core_types::account_address::AccountAddress;
+use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::{collections::BTreeMap, rc::Rc};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 
@@ -79,5 +80,9 @@ impl ResolvedLinkage {
             linkage_resolution: resolution_table.all_versions_resolution_table,
             versions,
         }
+    }
+
+    pub fn linkage_context(&self) -> LinkageContext {
+        LinkageContext::new(self.linkage.iter().map(|(k, v)| (**k, **v)).collect())
     }
 }
