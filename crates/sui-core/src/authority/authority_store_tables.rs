@@ -238,7 +238,7 @@ impl AuthorityPerpetualTables {
                     32 + 8,
                     MUTEXES,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
+                    KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)).with_unloaded_iterator(true),
                 ),
             ),
             (
