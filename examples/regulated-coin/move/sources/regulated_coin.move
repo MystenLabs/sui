@@ -12,7 +12,7 @@ fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
     // Creates a new currency using `create_currency`, but with an extra capability that
     // allows for specific addresses to have their coins frozen. Those addresses cannot interact
     // with the coin as input objects.
-    let (mut builder, treasury_cap) = coin_registry::new_currency_with_otw(
+    let (mut currency, treasury_cap) = coin_registry::new_currency_with_otw(
         otw,
         5, // Decimals
         b"$TABLE".to_string(), // Symbol
@@ -23,9 +23,8 @@ fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
     );
 
     // Mark the currency as regulated, issue a `DenyCapV2`.
-    let deny_cap = builder.make_regulated(true, ctx);
-    let metadata_cap = builder.finalize(ctx);
-
+    let deny_cap = currency.make_regulated(true, ctx);
+    let metadata_cap = currency.finalize(ctx);
     let sender = ctx.sender();
 
     // Transfer the treasury cap, deny cap, and metadata cap to the publisher.

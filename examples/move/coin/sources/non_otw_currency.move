@@ -22,7 +22,7 @@ public struct MyCoin has key { id: UID }
 #[allow(lint(self_transfer))]
 /// Creates a new currency with a non-OTW proof of uniqueness.
 public fun new_currency(registry: &mut CoinRegistry, ctx: &mut TxContext): Coin<MyCoin> {
-    let (mut builder, mut treasury_cap) = coin_registry::new_currency(
+    let (mut currency, mut treasury_cap) = coin_registry::new_currency(
         registry,
         6, // Decimals
         b"MyCoin".to_string(), // Symbol
@@ -33,9 +33,9 @@ public fun new_currency(registry: &mut CoinRegistry, ctx: &mut TxContext): Coin<
     );
 
     let total_supply = treasury_cap.mint(TOTAL_SUPPLY, ctx);
-    builder.make_supply_burn_only(treasury_cap);
+    currency.make_supply_burn_only(treasury_cap);
 
-    let metadata_cap = builder.finalize(ctx);
+    let metadata_cap = currency.finalize(ctx);
     transfer::public_transfer(metadata_cap, ctx.sender());
 
     total_supply
