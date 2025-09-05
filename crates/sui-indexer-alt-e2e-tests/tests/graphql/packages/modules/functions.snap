@@ -6,17 +6,17 @@ processed 4 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-10:
+task 1, lines 6-16:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 3617600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4142000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 12:
+task 2, line 18:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 14-29:
+task 3, lines 20-41:
 //# run-graphql
 Response: {
   "data": {
@@ -24,11 +24,110 @@ Response: {
       "module": {
         "f": {
           "name": "f",
-          "isEntry": false
+          "isEntry": false,
+          "parameters": [],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [],
+          "visibility": "PUBLIC"
         },
         "g": {
           "name": "g",
-          "isEntry": true
+          "isEntry": true,
+          "parameters": [],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [],
+          "visibility": "PRIVATE"
+        },
+        "h": {
+          "name": "h",
+          "isEntry": false,
+          "parameters": [
+            {
+              "repr": "vector<$0>",
+              "signature": {
+                "body": {
+                  "vector": {
+                    "typeParameter": 0
+                  }
+                }
+              }
+            },
+            {
+              "repr": "vector<$1>",
+              "signature": {
+                "body": {
+                  "vector": {
+                    "typeParameter": 1
+                  }
+                }
+              }
+            }
+          ],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [
+            {
+              "constraints": [
+                "DROP",
+                "STORE"
+              ]
+            },
+            {
+              "constraints": [
+                "COPY",
+                "DROP"
+              ]
+            }
+          ],
+          "visibility": "FRIEND"
+        },
+        "i": {
+          "name": "i",
+          "isEntry": false,
+          "parameters": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            },
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [],
+          "visibility": "PUBLIC"
         },
         "x": null
       }
