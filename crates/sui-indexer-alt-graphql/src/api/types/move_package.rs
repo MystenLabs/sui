@@ -167,7 +167,7 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
         self.super_.multi_get_balances(ctx, keys).await
     }
 

@@ -256,12 +256,13 @@ impl Object {
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
     ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
     pub(crate) async fn multi_get_balances(
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
         self.super_.multi_get_balances(ctx, keys).await
     }
 

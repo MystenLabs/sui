@@ -47,18 +47,22 @@ pub(crate) type Cursor = cursor::BcsCursor<(u64, Vec<u8>)>;
 impl Balance {
     /// Fetch the balance for a single coin type owned by the given address, live at the current
     /// checkpoint.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn fetch_one(
         ctx: &Context<'_>,
         scope: &Scope,
         address: SuiAddress,
         coin_type: TypeTag,
-    ) -> Result<Balance, RpcError<Error>> {
+    ) -> Result<Option<Balance>, RpcError<Error>> {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
 
         let consistent_reader: &ConsistentReader = ctx.data()?;
-        let checkpoint = scope.checkpoint_viewed_at();
+        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
 
         let (coin_type, total_balance) = consistent_reader
             .get_balance(
@@ -69,26 +73,28 @@ impl Balance {
             .await
             .map_err(|e| consistent_error(checkpoint, e))?;
 
-        Ok(Balance {
+        Ok(Some(Balance {
             coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
             total_balance: Some(BigInt::from(total_balance)),
-        })
+        }))
     }
 
     /// Fetch balances for multiple coin types owned by the given address, live at the current
-    /// checkpoint.
+    /// checkpoint. Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn fetch_many(
         ctx: &Context<'_>,
         scope: &Scope,
         address: SuiAddress,
         coin_types: Vec<TypeTag>,
-    ) -> Result<Vec<Balance>, RpcError<Error>> {
+    ) -> Result<Option<Vec<Balance>>, RpcError<Error>> {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
 
         let consistent_reader: &ConsistentReader = ctx.data()?;
-        let checkpoint = scope.checkpoint_viewed_at();
+        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
 
         let balances = consistent_reader
             .batch_get_balances(
@@ -102,13 +108,15 @@ impl Balance {
             .await
             .map_err(|e| consistent_error(checkpoint, e))?;
 
-        Ok(balances
-            .into_iter()
-            .map(|(coin_type, total_balance)| Balance {
-                coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
-                total_balance: Some(BigInt::from(total_balance)),
-            })
-            .collect())
+        Ok(Some(
+            balances
+                .into_iter()
+                .map(|(coin_type, total_balance)| Balance {
+                    coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
+                    total_balance: Some(BigInt::from(total_balance)),
+                })
+                .collect(),
+        ))
     }
 
     /// Paginate through balances for coins owned by the given address, live at the current
@@ -134,7 +142,12 @@ impl Balance {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
 
-            (None, None) => scope.checkpoint_viewed_at(),
+            (None, None) => {
+                let Some(cp) = scope.checkpoint_viewed_at() else {
+                    return Ok(Connection::new(false, false));
+                };
+                cp
+            }
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 
