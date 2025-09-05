@@ -96,7 +96,7 @@ impl EventFilter {
                 {}
             WHERE
                 tx_sequence_number >= bounds.tx_lo
-            AND tx_sequence_number < bounds.tx_hi
+                AND tx_sequence_number < bounds.tx_hi
             "#,
             tx_bounds_subquery,
             table
