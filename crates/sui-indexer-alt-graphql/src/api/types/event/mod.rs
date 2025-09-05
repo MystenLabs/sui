@@ -107,14 +107,19 @@ impl Event {
 
 impl Event {
     /// Paginates events based on the provided filters and page parameters.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CEvent>,
         filter: filter::EventFilter,
     ) -> Result<Connection<String, Event>, RpcError> {
-        let mut c = Connection::new(false, false);
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
+        let mut c = Connection::new(false, false);
         let pg_reader: &PgReader = ctx.data()?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
@@ -127,7 +132,7 @@ impl Event {
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             reader_lo,
-            scope.checkpoint_viewed_at(),
+            checkpoint_viewed_at,
         ) else {
             return Ok(Connection::new(false, false));
         };

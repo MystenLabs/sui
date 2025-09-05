@@ -199,16 +199,24 @@ impl CheckpointContents {
 
 impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
+    ///
+    /// If no sequence_number is provided, defaults to the scope's checkpoint.
     /// Returns `None` if the checkpoint is set in the future relative to the current scope's
-    /// checkpoint.
-    pub(crate) fn with_sequence_number(scope: Scope, sequence_number: u64) -> Option<Self> {
-        (sequence_number <= scope.checkpoint_viewed_at()).then_some(Self {
+    /// checkpoint, or when no checkpoint is set in scope (e.g. execution scope, where checkpoint
+    /// queries return None to prevent temporal inconsistency).
+    pub(crate) fn with_sequence_number(scope: Scope, sequence_number: Option<u64>) -> Option<Self> {
+        let scope_checkpoint = scope.checkpoint_viewed_at()?;
+        let sequence_number = sequence_number.unwrap_or(scope_checkpoint);
+
+        (sequence_number <= scope_checkpoint).then_some(Self {
             scope,
             sequence_number,
         })
     }
 
     /// Paginate through checkpoints with filters applied.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
@@ -219,7 +227,10 @@ impl Checkpoint {
 
         // TODO: (henrychen) Update when we figure out retention for key-value stores.
         let cp_lo = 0;
-        let cp_hi_inclusive = scope.checkpoint_viewed_at();
+        let Some(cp_hi_inclusive) = scope.checkpoint_viewed_at() else {
+            // In execution scope, checkpoint pagination returns empty results
+            return Ok(Connection::new(false, false));
+        };
 
         let Some(cp_bounds) = checkpoint_bounds(
             filter.after_checkpoint.map(u64::from),
@@ -245,7 +256,7 @@ impl Checkpoint {
         for (cursor, cp_sequence_number) in results {
             conn.edges.push(Edge::new(
                 cursor.encode_cursor(),
-                Self::with_sequence_number(scope.clone(), cp_sequence_number).unwrap(),
+                Self::with_sequence_number(scope.clone(), Some(cp_sequence_number)).unwrap(),
             ));
         }
 

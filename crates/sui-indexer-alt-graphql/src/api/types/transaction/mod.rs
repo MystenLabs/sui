@@ -189,12 +189,18 @@ impl Transaction {
     }
 
     /// Cursor based pagination through transactions with filters applied.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
+
         let mut conn = Connection::new(false, false);
 
         if page.limit() == 0 {
@@ -212,7 +218,7 @@ impl Transaction {
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             reader_lo,
-            scope.checkpoint_viewed_at(),
+            checkpoint_viewed_at,
         ) else {
             return Ok(Connection::new(false, false));
         };
@@ -298,6 +304,9 @@ impl TransactionContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(self.clone());
+        };
 
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
@@ -312,7 +321,7 @@ impl TransactionContents {
         let cp_num = transaction
             .cp_sequence_number()
             .context("Any transaction fetched from the DB should have a checkpoint set")?;
-        if cp_num > self.scope.checkpoint_viewed_at() {
+        if cp_num > checkpoint_viewed_at {
             return Ok(self.clone());
         }
 

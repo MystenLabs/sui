@@ -18,7 +18,9 @@ use crate::{config::Limits, error::RpcError, task::watermark::Watermarks};
 pub(crate) struct Scope {
     /// The checkpoint we are viewing this data at. Queries for the latest versions of an entity
     /// are relative to this checkpoint.
-    checkpoint_viewed_at: u64,
+    ///
+    /// None indicates execution context where we're viewing fresh transaction effects not yet indexed.
+    checkpoint_viewed_at: Option<u64>,
 
     /// Root parent object version for dynamic fields.
     ///
@@ -49,7 +51,7 @@ impl Scope {
         let limits: &Limits = ctx.data()?;
 
         Ok(Self {
-            checkpoint_viewed_at: watermark.high_watermark().checkpoint(),
+            checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
             root_version: None,
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
@@ -57,14 +59,26 @@ impl Scope {
     }
 
     /// Create a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in
-    /// the future.
+    /// the future, or if the current scope is in execution context (no checkpoint is set).
     pub(crate) fn with_checkpoint_viewed_at(&self, checkpoint_viewed_at: u64) -> Option<Self> {
-        (checkpoint_viewed_at <= self.checkpoint_viewed_at).then(|| Self {
-            checkpoint_viewed_at,
+        let current_cp = self.checkpoint_viewed_at?;
+        (checkpoint_viewed_at <= current_cp).then(|| Self {
+            checkpoint_viewed_at: Some(checkpoint_viewed_at),
             root_version: self.root_version,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
+    }
+
+    /// Create a nested scope for execution context (freshly executed transaction).
+    /// This clears the checkpoint context to indicate fresh execution data.
+    pub(crate) fn with_execution_output(&self) -> Self {
+        Self {
+            checkpoint_viewed_at: None,
+            root_version: self.root_version,
+            package_store: self.package_store.clone(),
+            resolver_limits: self.resolver_limits.clone(),
+        }
     }
 
     /// Create a nested scope with a root version set.
@@ -87,8 +101,12 @@ impl Scope {
         }
     }
 
-    /// Inclusive upper bound on data visible to request
-    pub(crate) fn checkpoint_viewed_at(&self) -> u64 {
+    /// Get the checkpoint being viewed, if any.
+    /// Returns `None` in execution context (freshly executed transaction).
+    ///
+    /// Call sites must explicitly handle the execution context case and decide whether
+    /// their operation makes sense without checkpoint context.
+    pub(crate) fn checkpoint_viewed_at(&self) -> Option<u64> {
         self.checkpoint_viewed_at
     }
 
@@ -97,9 +115,11 @@ impl Scope {
         self.root_version
     }
 
-    /// Exclusive upper bound on data visible to request
-    pub(crate) fn checkpoint_viewed_at_exclusive_bound(&self) -> u64 {
-        self.checkpoint_viewed_at + 1
+    /// Get the exclusive checkpoint bound, if any.
+    ///
+    /// Returns `None` in execution context (freshly executed transaction).
+    pub(crate) fn checkpoint_viewed_at_exclusive_bound(&self) -> Option<u64> {
+        self.checkpoint_viewed_at.map(|cp| cp + 1)
     }
 
     /// A package resolver with access to the packages known at this scope.
