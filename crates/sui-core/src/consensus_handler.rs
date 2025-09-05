@@ -707,6 +707,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         assert!(protocol_config.ignore_execution_time_observations_after_certs_closed());
         assert!(protocol_config.record_time_estimate_processed());
         assert!(protocol_config.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
+        assert!(protocol_config.consensus_checkpoint_signature_key_includes_digest());
 
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
