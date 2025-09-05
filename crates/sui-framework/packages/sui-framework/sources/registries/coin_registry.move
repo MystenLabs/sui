@@ -424,6 +424,8 @@ public fun migrate_legacy_metadata<T>(
     _ctx: &mut TxContext,
 ) {
     assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
+    assert!(is_ascii_printable!(&legacy.get_symbol().to_string()), EInvalidSymbol);
+
     transfer::share_object(Currency<T> {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals: legacy.get_decimals(),
@@ -508,10 +510,18 @@ public fun description<T>(currency: &Currency<T>): String {
 /// Get the icon URL for the coin.
 public fun icon_url<T>(currency: &Currency<T>): String { currency.icon_url }
 
-/// Check if the metadata capability has been claimed for this coin type.
+/// Check if the metadata capability has been claimed for this `Currency` type.
 public fun is_metadata_cap_claimed<T>(currency: &Currency<T>): bool {
     match (currency.metadata_cap_id) {
         MetadataCapState::Claimed(_) | MetadataCapState::Deleted => true,
+        _ => false,
+    }
+}
+
+/// Check if the metadata capability has been deleted for this `Currency` type.
+public fun is_metadata_cap_deleted<T>(currency: &Currency<T>): bool {
+    match (currency.metadata_cap_id) {
+        MetadataCapState::Deleted => true,
         _ => false,
     }
 }
