@@ -1675,6 +1675,42 @@ expire_jwks
 get_active_jwks
 	fun
 	0x2::authenticator_state
+Withdrawal
+	public struct
+	0x2::funds_accumulator
+withdrawal_owner
+	public fun
+	0x2::funds_accumulator
+withdrawal_limit
+	public fun
+	0x2::funds_accumulator
+withdrawal_split
+	public fun
+	0x2::funds_accumulator
+withdrawal_join
+	public fun
+	0x2::funds_accumulator
+redeem
+	public(package) fun
+	0x2::funds_accumulator
+withdraw_from_object
+	public(package) fun
+	0x2::funds_accumulator
+add_impl
+	public(package) fun
+	0x2::funds_accumulator
+withdraw_impl
+	fun
+	0x2::funds_accumulator
+add_to_accumulator_address
+	fun
+	0x2::funds_accumulator
+withdraw_from_accumulator_address
+	fun
+	0x2::funds_accumulator
+create_withdrawal
+	public(package) fun
+	0x2::funds_accumulator
 Supply
 	public struct
 	0x2::balance
@@ -1710,6 +1746,15 @@ withdraw_all
 	0x2::balance
 destroy_zero
 	public fun
+	0x2::balance
+send_funds
+	public(package) fun
+	0x2::balance
+redeem_funds
+	public(package) fun
+	0x2::balance
+withdraw_funds_from_object
+	public(package) fun
 	0x2::balance
 create_staking_rewards
 	fun
