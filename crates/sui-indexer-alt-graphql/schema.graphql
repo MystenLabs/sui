@@ -1553,6 +1553,35 @@ type MoveFunction {
 	visibility: MoveVisibility
 }
 
+type MoveFunctionConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveFunctionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveFunction!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveFunctionEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveFunction!
+}
+
 """
 Declaration of a type parameter on a Move function.
 """
@@ -1589,6 +1618,10 @@ type MoveModule {
 	The function named `name` in this module.
 	"""
 	function(name: String!): MoveFunction
+	"""
+	Paginate through this module's function definitions.
+	"""
+	functions(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
 	"""
 	The module's unqualified name.
 	"""

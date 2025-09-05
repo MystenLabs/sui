@@ -53,7 +53,11 @@ pub(crate) struct ModuleContents {
     pub(crate) parsed: ParsedModule,
 }
 
+/// Cursor for iterating over friend modules. Points to the friend by its index in the friend list.
 type CFriend = JsonCursor<usize>;
+
+/// Cursor for iterating over functioons in a module. Points to the function by its name.
+type CFunction = JsonCursor<String>;
 
 /// Modules are a unit of code organization in Move.
 ///
@@ -168,6 +172,55 @@ impl MoveModule {
         };
 
         Ok(Some(MoveFunction::from_def(self.clone(), name, def)))
+    }
+
+    /// Paginate through this module's function definitions.
+    async fn functions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CFunction>,
+        last: Option<u64>,
+        before: Option<CFunction>,
+    ) -> Result<Option<Connection<String, MoveFunction>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("MoveModule", "functions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let function_range = contents.parsed.functions(
+            page.after().map(|c| c.as_ref()),
+            page.before().map(|c| c.as_ref()),
+        );
+
+        let mut conn = Connection::new(false, false);
+        let functions = if page.is_from_front() {
+            function_range.take(page.limit()).collect()
+        } else {
+            let mut functions: Vec<_> = function_range.rev().take(page.limit()).collect();
+            functions.reverse();
+            functions
+        };
+
+        conn.has_previous_page = functions
+            .first()
+            .is_some_and(|fst| contents.parsed.functions(None, Some(fst)).next().is_some());
+
+        conn.has_next_page = functions
+            .last()
+            .is_some_and(|lst| contents.parsed.functions(Some(lst), None).next().is_some());
+
+        for function in functions {
+            conn.edges.push(Edge::new(
+                JsonCursor::new(function.to_owned()).encode_cursor(),
+                MoveFunction::with_fq_name(self.clone(), function.to_owned()),
+            ));
+        }
+
+        Ok(Some(conn))
     }
 }
 
