@@ -17,12 +17,6 @@ use sui::derived_object;
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
-/// Allows calling `.make_supply_fixed_init` on `CurrencyInitializer`.
-use fun make_supply_fixed_init as CurrencyInitializer.make_supply_fixed;
-
-/// Allows calling `.make_supply_burn_only` on `CurrencyInitializer`.
-use fun make_supply_burn_only_init as CurrencyInitializer.make_supply_burn_only;
-
 #[allow(unused_const)]
 /// Metadata cap already claimed
 #[error(code = 0)]
@@ -272,12 +266,16 @@ public fun make_regulated<T>(
     deny_cap
 }
 
+public use fun make_supply_fixed_init as CurrencyInitializer.make_supply_fixed;
+
 /// Initializer function to make the supply fixed.
 /// Aborts if Supply is `0` to enforce minting during initialization.
 public fun make_supply_fixed_init<T>(init: &mut CurrencyInitializer<T>, cap: TreasuryCap<T>) {
     assert!(cap.total_supply() > 0, EEmptySupply);
     init.currency.make_supply_fixed(cap)
 }
+
+public use fun make_supply_burn_only_init as CurrencyInitializer.make_supply_burn_only;
 
 /// Initializer function to make the supply burn-only.
 /// Aborts if Supply is `0` to enforce minting during initialization.

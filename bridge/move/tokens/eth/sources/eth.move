@@ -13,6 +13,7 @@ module bridged_eth::eth {
 
     const DECIMAL: u8 = 8;
 
+    #[allow(deprecated_usage)]
     fun init(otw: ETH, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(
             otw,
