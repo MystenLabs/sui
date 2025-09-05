@@ -4,10 +4,13 @@
 
 mod builder;
 mod linkage;
+mod package_info;
 mod rename_from;
 mod to_lockfile;
 
+use bimap::BiBTreeMap;
 pub use linkage::LinkageError;
+pub use package_info::PackageInfo;
 pub use rename_from::RenameError;
 use tracing::debug;
 
@@ -15,18 +18,16 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     dependency::PinnedDependencyInfo,
-    errors::{PackageError, PackageResult},
+    errors::PackageResult,
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
-    schema::{Environment, OriginalID, PackageName, PublishAddresses},
+    schema::{Environment, PackageID, PackageName},
 };
 use builder::PackageGraphBuilder;
 
-use derive_where::derive_where;
 use petgraph::{
     algo::toposort,
     graph::{DiGraph, NodeIndex},
-    visit::EdgeRef,
 };
 
 #[derive(Debug, Clone)]
@@ -35,143 +36,19 @@ pub struct PackageGraphEdge {
     dep: PinnedDependencyInfo,
 }
 
+/// The graph of all packages. May include multiple versions of "the same" package. Guaranteed to
+/// be a rooted dag
 #[derive(Debug)]
 pub struct PackageGraph<F: MoveFlavor> {
+    /// The root of the dag
     root_index: NodeIndex,
+
+    /// The mapping between package ids and nodes
+    /// Invariant: the indices in `package_ids` are the same as those in `inner`
+    package_ids: BiBTreeMap<PackageID, NodeIndex>,
+
+    /// The actual nodes and edges of the graph
     inner: DiGraph<Arc<Package<F>>, PackageGraphEdge>,
-}
-
-/// A narrow interface for representing packages outside of `move-package-alt`
-#[derive(Copy)]
-#[derive_where(Clone)]
-pub struct PackageInfo<'a, F: MoveFlavor> {
-    graph: &'a PackageGraph<F>,
-    node: NodeIndex,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum NamedAddress {
-    RootPackage(Option<OriginalID>),
-    Unpublished { dummy_addr: OriginalID },
-    Defined(OriginalID),
-}
-
-impl<F: MoveFlavor> PackageInfo<'_, F> {
-    /// The name that the package has declared for itself
-    pub fn name(&self) -> &PackageName {
-        self.package().name()
-    }
-
-    /// The compiler edition for the package
-    pub fn edition(&self) -> &str {
-        self.package().metadata().edition.as_str()
-    }
-
-    /// The flavor for the package
-    pub fn flavor(&self) -> Option<&str> {
-        // TODO: pull this from manifest
-        Some("sui")
-    }
-
-    /// The path to the package's files on disk
-    pub fn path(&self) -> &PackagePath {
-        self.package().path()
-    }
-
-    /// Returns the published address of this package, if it is published
-    pub fn published(&self) -> Option<&PublishAddresses> {
-        self.package().address()
-    }
-
-    /// Returns true if the node is the root of the package graph
-    pub fn is_root(&self) -> bool {
-        self.package().is_root()
-    }
-
-    /// The addresses for the names that are available to this package. For modern packages, this
-    /// contains only the package and its dependencies, but legacy packages may define additional
-    /// addresses as well
-    pub fn named_addresses(&self) -> PackageResult<BTreeMap<PackageName, NamedAddress>> {
-        if self.package().is_legacy() {
-            return self.legacy_named_addresses();
-        }
-
-        let mut result: BTreeMap<PackageName, NamedAddress> = self
-            .graph
-            .inner
-            .edges(self.node)
-            .map(|edge| (edge.weight().name.clone(), self.node_to_addr(edge.target())))
-            .collect();
-        result.insert(self.package().name().clone(), self.node_to_addr(self.node));
-
-        Ok(result)
-    }
-
-    /// For legacy packages, our named addresses need to include all transitive deps too.
-    /// An example of that is depending on "sui", but also keeping it possible to use "std".
-    fn legacy_named_addresses(&self) -> PackageResult<BTreeMap<PackageName, NamedAddress>> {
-        let mut result: BTreeMap<PackageName, NamedAddress> = BTreeMap::new();
-
-        result.insert(self.package().name().clone(), self.node_to_addr(self.node));
-
-        for edge in self.graph.inner.edges(self.node) {
-            let dep = Self {
-                graph: self.graph,
-                node: edge.target(),
-            };
-
-            let transitive_result = dep.legacy_named_addresses()?;
-
-            for (name, addr) in transitive_result {
-                let existing = result.insert(name.clone(), addr.clone());
-
-                if existing.is_some_and(|existing| existing != addr) {
-                    return Err(PackageError::DuplicateNamedAddress {
-                        address: name,
-                        package: self.package().name().clone(),
-                    });
-                }
-            }
-        }
-
-        if let Some(legacy_data) = &self.package().legacy_data {
-            let addresses = legacy_data.named_addresses.clone();
-
-            for (name, addr) in addresses {
-                let new_addr = NamedAddress::Defined(OriginalID(addr));
-                let existing = result.insert(name.clone(), new_addr.clone());
-
-                if existing.is_some_and(|existing| existing != new_addr) {
-                    return Err(PackageError::DuplicateNamedAddress {
-                        address: name,
-                        package: self.package().name().clone(),
-                    });
-                }
-            }
-        }
-
-        Ok(result)
-    }
-
-    /// Return the NamedAddress for `node`
-    fn node_to_addr(&self, node: NodeIndex) -> NamedAddress {
-        let package = self.graph.inner[node].clone();
-        if package.is_root() {
-            return NamedAddress::RootPackage(package.original_id().cloned());
-        }
-        if let Some(oid) = package.original_id() {
-            NamedAddress::Defined(oid.clone())
-        } else {
-            NamedAddress::Unpublished {
-                dummy_addr: package.dummy_addr.clone(),
-            }
-        }
-    }
-
-    /// The package corresponding to this node
-    fn package(&self) -> &Package<F> {
-        &self.graph.inner[self.node]
-    }
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
@@ -216,16 +93,19 @@ impl<F: MoveFlavor> PackageGraph<F> {
         &self.inner[self.root_index]
     }
 
-    pub fn root_package_info(&self) -> PackageInfo<F> {
-        PackageInfo {
-            graph: self,
-            node: self.root_index,
-        }
+    /// Return all packages in the graph, indexed by their package ID
+    pub(crate) fn all_packages(&self) -> BTreeMap<&PackageID, PackageInfo<F>> {
+        self.package_ids
+            .iter()
+            .map(|(id, node)| (id, self.package_info(*node)))
+            .collect()
     }
 
     /// Return the list of packages that are in the linkage table, as well as
     /// the unpublished ones in the package graph.
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
+    // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
+    // this
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
         let linkage = self.linkage()?;
 
@@ -245,7 +125,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 continue;
             }
 
-            result.push(PackageInfo { graph: self, node });
+            result.push(self.package_info(node));
         }
 
         Ok(result)
@@ -260,97 +140,4 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .map(|x| x.name())
             .collect()
     }
-}
-
-#[cfg(test)]
-mod tests {
-    // TODO: example with a --[local]--> a/b --[local]--> a/c
-    use std::collections::BTreeMap;
-
-    use test_log::test;
-
-    use crate::{
-        flavor::Vanilla,
-        graph::{PackageGraph, PackageInfo},
-        schema::PackageName,
-        test_utils::graph_builder::TestPackageGraph,
-    };
-
-    /// Return the packages in the graph, grouped by their name
-    fn packages_by_name(
-        graph: &PackageGraph<Vanilla>,
-    ) -> BTreeMap<PackageName, PackageInfo<Vanilla>> {
-        graph
-            .packages()
-            .expect("failed to get packages from graph")
-            .into_iter()
-            .map(|node| (node.name().clone(), node))
-            .collect()
-    }
-
-    /// Root package `root` depends on `a` which depends on `b` which depends on `c`, which depends
-    /// on `d`; `a`, `b`,
-    /// `c`, and `d` are all legacy packages.
-    ///
-    /// Named addresses for 'a' should contain `c` and `d`
-    #[test(tokio::test)]
-    async fn modern_legacy_legacy_legacy_legacy() {
-        let scenario = TestPackageGraph::new(["root"])
-            .add_legacy_packages(["a", "b", "c", "d"])
-            .add_deps([("root", "a"), ("a", "b"), ("b", "c"), ("c", "d")])
-            .build();
-
-        let graph = scenario.graph_for("root").await;
-
-        let packages = packages_by_name(&graph);
-
-        assert!(packages["a"].named_addresses().unwrap().contains_key("c"));
-        assert!(packages["a"].named_addresses().unwrap().contains_key("d"));
-        assert!(packages["a"].named_addresses().unwrap().contains_key("b"));
-        assert!(packages["a"].named_addresses().unwrap().contains_key("a"));
-        assert!(
-            !packages["root"]
-                .named_addresses()
-                .unwrap()
-                .contains_key("c")
-        );
-    }
-
-    /// Root package `root` depends on `a` which depends on `b` which depends on `c` which depends
-    /// on `d`; `a` and `c` are legacy packages.
-    ///
-    /// After adding legacy transitive deps, `a` should have direct dependencies on `c` and `d`
-    /// (even though they "pass through" a modern package)
-    #[test(tokio::test)]
-    async fn modern_legacy_modern_legacy() {
-        let scenario = TestPackageGraph::new(["root", "b", "d"])
-            .add_legacy_packages(["legacy_a", "legacy_c"])
-            .add_deps([
-                ("root", "legacy_a"),
-                ("legacy_a", "b"),
-                ("b", "legacy_c"),
-                ("legacy_c", "d"),
-            ])
-            .build();
-
-        let graph = scenario.graph_for("root").await;
-
-        let packages = packages_by_name(&graph);
-
-        assert!(
-            packages["legacy_a"]
-                .named_addresses()
-                .unwrap()
-                .contains_key("legacy_c")
-        );
-        assert!(
-            packages["legacy_a"]
-                .named_addresses()
-                .unwrap()
-                .contains_key("d")
-        );
-        assert!(!packages["b"].named_addresses().unwrap().contains_key("d"));
-    }
-
-    // TODO: tests around name conflicts?
 }
