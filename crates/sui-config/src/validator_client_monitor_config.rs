@@ -106,6 +106,13 @@ pub struct ValidatorClientMonitorConfig {
     #[serde(default = "default_health_check_interval")]
     pub health_check_interval: Duration,
 
+    /// How often to perform latency checks on validators.
+    ///
+    /// Lower values provide faster latency detection but increase network overhead.
+    /// This should be balanced against the `latency_window_size` period.
+    #[serde(default = "default_latency_check_interval")]
+    pub latency_check_interval: Duration,
+
     /// Timeout for health check requests.
     ///
     /// Should be less than `health_check_interval` to avoid overlapping checks.
@@ -190,6 +197,7 @@ impl Default for ValidatorClientMonitorConfig {
         Self {
             health_check_interval: default_health_check_interval(),
             health_check_timeout: default_health_check_timeout(),
+            latency_check_interval: default_latency_check_interval(),
             score_weights: ScoreWeights::default(),
             failure_cooldown: default_failure_cooldown(),
             max_consecutive_failures: default_max_consecutive_failures(),
@@ -214,11 +222,15 @@ impl Default for ScoreWeights {
 // Default value functions
 
 fn default_health_check_interval() -> Duration {
-    Duration::from_secs(4)
+    Duration::from_secs(15)
 }
 
 fn default_health_check_timeout() -> Duration {
     Duration::from_secs(2)
+}
+
+fn default_latency_check_interval() -> Duration {
+    Duration::from_secs(5)
 }
 
 fn default_failure_cooldown() -> Duration {
@@ -230,11 +242,11 @@ fn default_max_consecutive_failures() -> u32 {
 }
 
 fn default_latency_weight() -> f64 {
-    1.0
+    0.8
 }
 
 fn default_reliability_weight() -> f64 {
-    0.0
+    0.2
 }
 
 fn default_submit_latency_weight() -> f64 {
@@ -246,11 +258,11 @@ fn default_effects_latency_weight() -> f64 {
 }
 
 fn default_health_check_latency_weight() -> f64 {
-    0.0
+    0.2
 }
 
 fn default_finalize_latency_weight() -> f64 {
-    1.0
+    0.8
 }
 
 fn default_latency_window_size() -> usize {

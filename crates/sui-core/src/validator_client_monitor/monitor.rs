@@ -16,6 +16,7 @@ use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
 use sui_types::messages_consensus::ConsensusPosition;
+use sui_types::messages_grpc::ValidatorHealthRequest;
 use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorLatencyRequest};
 use tokio::{
     task::JoinSet,
@@ -72,6 +73,11 @@ where
             monitor_clone.run_health_checks().await;
         });
 
+        let monitor_clone = monitor.clone();
+        tokio::spawn(async move {
+            monitor_clone.run_latency_checks().await;
+        });
+
         monitor
     }
 
@@ -98,7 +104,6 @@ where
         loop {
             interval.tick().await;
 
-            /*
             let authority_agg = self.authority_aggregator.load();
 
             let current_validators: Vec<_> = authority_agg.committee.names().cloned().collect();
@@ -158,11 +163,9 @@ where
                 if let Err(e) = result {
                     warn!("Health check task failed: {}", e);
                 }
-            }*/
+            }
 
-            // Run latency checks on all validators
-            self.clone().run_latency_checks().await;
-
+            // Update cached scores after health checks complete - we do not want a super frequent score update to avoid jitters.
             self.update_cached_scores();
         }
     }
@@ -172,35 +175,41 @@ where
     /// Phase 1: Get consensus position from each validator
     /// Phase 2: Use position to measure quorum latency similar to get_certified_finalized_effects
     async fn run_latency_checks(self: Arc<Self>) {
-        let authority_agg = self.authority_aggregator.load();
-        let mut tasks = JoinSet::new();
+        let mut interval = interval(self.config.latency_check_interval);
 
-        for (name, safe_client) in authority_agg.authority_clients.iter() {
-            let name = *name;
-            let display_name = authority_agg.get_display_name(&name);
-            let client = safe_client.clone();
-            let timeout_duration = self.config.health_check_timeout;
-            let monitor = self.clone();
-            let authority_agg_clone = authority_agg.clone();
-            let delay_ms = rand::thread_rng().gen_range(0..timeout_duration.as_millis() as u64);
+        loop {
+            interval.tick().await;
 
-            tasks.spawn(async move {
-                monitor
-                    .measure_validator_latency(
-                        name,
-                        display_name,
-                        client,
-                        authority_agg_clone,
-                        timeout_duration,
-                        delay_ms,
-                    )
-                    .await;
-            });
-        }
+            let authority_agg = self.authority_aggregator.load();
+            let mut tasks = JoinSet::new();
 
-        while let Some(result) = tasks.join_next().await {
-            if let Err(e) = result {
-                warn!("Latency check task failed: {}", e);
+            for (name, safe_client) in authority_agg.authority_clients.iter() {
+                let name = *name;
+                let display_name = authority_agg.get_display_name(&name);
+                let client = safe_client.clone();
+                let timeout_duration = self.config.health_check_timeout;
+                let monitor = self.clone();
+                let authority_agg_clone = authority_agg.clone();
+                let delay_ms = rand::thread_rng().gen_range(0..timeout_duration.as_millis() as u64);
+
+                tasks.spawn(async move {
+                    monitor
+                        .measure_validator_latency(
+                            name,
+                            display_name,
+                            client,
+                            authority_agg_clone,
+                            timeout_duration,
+                            delay_ms,
+                        )
+                        .await;
+                });
+            }
+
+            while let Some(result) = tasks.join_next().await {
+                if let Err(e) = result {
+                    warn!("Latency check task failed: {}", e);
+                }
             }
         }
     }
