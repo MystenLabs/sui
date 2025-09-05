@@ -466,7 +466,7 @@ type CoinDenyListStateCreateTransaction {
 """
 An object representing metadata about a coin type.
 """
-type CoinMetadata implements IAddressable & IObject & IMoveObject {
+type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	The CoinMetadata's ID.
 	"""
@@ -753,7 +753,7 @@ There are two sub-types of dynamic fields:
 - Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
 - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
 """
-type DynamicField implements IAddressable & IObject & IMoveObject {
+type DynamicField implements IAddressable & IMoveObject & IObject {
 	"""
 	The DynamicField's ID.
 	"""
@@ -1341,6 +1341,32 @@ interface IAddressable {
 
 
 """
+Interface implemented by all GraphQL types that represent a Move datatype definition (either a struct or an enum definition).
+
+This interface is used to provide a way to access fields that are shared by both structs and enums, e.g., the module that the datatype belongs to, the name of the datatype, type parameters etc.
+"""
+interface IMoveDatatype {
+	"""
+	Abilities on this datatype definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The module that this datatype is defined in
+	"""
+	module: MoveModule!
+	"""
+	The datatype's unqualified name
+	"""
+	name: String!
+	"""
+	Constraints on the datatype's formal type parameters
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+}
+
+"""
 Interface implemented by types that represent a Move object on-chain (A Move value whose type has `key`).
 """
 interface IMoveObject {
@@ -1518,6 +1544,63 @@ type MoveCallCommand {
 }
 
 """
+Description of a datatype, defined in a Move module.
+"""
+type MoveDatatype implements IMoveDatatype {
+	"""
+	Abilities on this datatype definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	Attempts to convert the `MoveDatatype` as a `MoveStruct`.
+	"""
+	asMoveStruct: MoveStruct
+	"""
+	The module that this datatype is defined in.
+	"""
+	module: MoveModule!
+	"""
+	The datatype's unqualified name.
+	"""
+	name: String!
+	"""
+	Constraints on the datatype's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+}
+
+type MoveDatatypeConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveDatatypeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveDatatype!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveDatatypeEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveDatatype!
+}
+
+"""
 Declaration of a type parameter on a Move struct.
 """
 type MoveDatatypeTypeParameter {
@@ -1632,6 +1715,14 @@ type MoveModule {
 	"""
 	bytes: Base64
 	"""
+	The datatype (struct or enum) named `name` in this module.
+	"""
+	datatype(name: String!): MoveDatatype
+	"""
+	Paginate through this module's datatype definitions.
+	"""
+	datatypes(first: Int, after: String, last: Int, before: String): MoveDatatypeConnection
+	"""
 	Textual representation of the module's bytecode.
 	"""
 	disassembly: String
@@ -1701,7 +1792,7 @@ type MoveModuleEdge {
 """
 A MoveObject is a kind of Object that reprsents data stored on-chain.
 """
-type MoveObject implements IAddressable & IObject & IMoveObject {
+type MoveObject implements IAddressable & IMoveObject & IObject {
 	"""
 	The MoveObject's ID.
 	"""
@@ -1983,7 +2074,7 @@ type MovePackageEdge {
 """
 Description of a struct type, defined in a Move module.
 """
-type MoveStruct {
+type MoveStruct implements IMoveDatatype {
 	"""
 	Abilities on this struct definition.
 	"""
@@ -2040,7 +2131,7 @@ type MoveStructEdge {
 }
 
 """
-Represents concrete types (no type parameters, no references).
+Represents instances of concrete types (no type parameters, no references).
 """
 type MoveType {
 	"""
