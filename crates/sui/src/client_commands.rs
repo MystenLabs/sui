@@ -744,7 +744,7 @@ impl SuiClientCommands {
 
                 let experimental_config = SR2::ReplayConfigExperimental {
                     node,
-                    ..SR2::ReplayConfigExperimental::default()
+                    ..Default::default()
                 };
 
                 let artifact_path =

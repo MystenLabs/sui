@@ -109,8 +109,8 @@ pub struct ReplayConfigExperimental {
     pub store_mode: StoreMode,
 }
 
-impl ReplayConfigExperimental {
-    pub fn default() -> Self {
+impl Default for ReplayConfigExperimental {
+    fn default() -> Self {
         Self {
             node: Node::Mainnet,
             verbose: false,
