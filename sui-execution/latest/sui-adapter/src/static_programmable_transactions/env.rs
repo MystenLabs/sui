@@ -14,7 +14,7 @@ use crate::{
         execution::context::subst_signature,
         linkage::{
             analysis::{LinkageAnalysis, type_linkage},
-            resolved_linkage::RootedLinkage,
+            resolved_linkage::ExecutableLinkage,
         },
         loading::ast::{self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type},
     },
@@ -25,7 +25,6 @@ use move_binary_format::{
     file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
-    account_address::AccountAddress,
     annotated_value,
     language_storage::{ModuleId, StructTag},
     resolver::ModuleResolver,
@@ -97,7 +96,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         }
     }
 
-    pub fn convert_linked_vm_error(&self, e: VMError, linkage: &RootedLinkage) -> ExecutionError {
+    pub fn convert_linked_vm_error(
+        &self,
+        e: VMError,
+        linkage: &ExecutableLinkage,
+    ) -> ExecutionError {
         convert_vm_error(e, self.linkable_store, Some(linkage), self.protocol_config)
     }
 
@@ -109,7 +112,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         idx: usize,
         e: VMError,
-        linkage: &RootedLinkage,
+        linkage: &ExecutableLinkage,
     ) -> ExecutionError {
         use move_core_types::vm_status::StatusCode;
         match e.major_status() {
@@ -162,14 +165,13 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         env.linkable_store,
                     )?;
                     let linkage_context = tag_linkage.linkage_context();
-                    let rooted_linkage = RootedLinkage::new(struct_tag.address, tag_linkage);
-                    let linked_store = LinkedDataStore::new(&rooted_linkage, env.linkable_store);
+                    let linked_store = LinkedDataStore::new(&tag_linkage, env.linkable_store);
                     let vm = env
                         .vm
                         .make_vm(&linked_store, linkage_context)
-                        .map_err(|e| env.convert_linked_vm_error(e, &rooted_linkage))?;
+                        .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?;
                     vm.annotated_type_layout(tag)
-                        .map_err(|e| env.convert_linked_vm_error(e, &rooted_linkage))?
+                        .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?
                 }
             })
         }
@@ -208,14 +210,13 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         env.linkable_store,
                     )?;
                     let linkage_context = tag_linkage.linkage_context();
-                    let rooted_linkage = RootedLinkage::new(struct_tag.address, tag_linkage);
-                    let linked_store = LinkedDataStore::new(&rooted_linkage, env.linkable_store);
+                    let linked_store = LinkedDataStore::new(&tag_linkage, env.linkable_store);
                     let vm = env
                         .vm
                         .make_vm(&linked_store, linkage_context)
-                        .map_err(|e| env.convert_linked_vm_error(e, &rooted_linkage))?;
+                        .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?;
                     vm.runtime_type_layout(tag)
-                        .map_err(|e| env.convert_linked_vm_error(e, &rooted_linkage))?
+                        .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?
                 }
             })
         }
@@ -228,9 +229,9 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         module: String,
         function: String,
         type_arguments: Vec<Type>,
-        linkage: RootedLinkage,
+        linkage: ExecutableLinkage,
     ) -> Result<LoadedFunction, ExecutionError> {
-        let Some(original_id) = linkage.resolved_linkage.resolve_to_original_id(&package) else {
+        let Some(original_id) = linkage.0.resolve_to_original_id(&package) else {
             invariant_violation!(
                 "Package ID {:?} is not found in linkage generated for that package",
                 package
@@ -241,7 +242,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         let storage_id = ModuleId::new(package.into(), module.clone());
         let runtime_id = ModuleId::new(original_id.into(), module);
         let data_store = LinkedDataStore::new(&linkage, self.linkable_store);
-        let linkage_context = linkage.resolved_linkage.linkage_context();
+        let linkage_context = linkage.linkage_context();
         let loaded_type_arguments = type_arguments
             .iter()
             .enumerate()
@@ -393,7 +394,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             env: &Env,
             type_arg_idx: Option<usize>,
             e: VMError,
-            linkage: &RootedLinkage,
+            linkage: &ExecutableLinkage,
         ) -> ExecutionError {
             if let Some(idx) = type_arg_idx {
                 env.convert_type_argument_error(idx, e, linkage)
@@ -413,15 +414,12 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             } else {
                 let tag_linkage = type_linkage(&addresses, self.linkable_store)?;
                 let link_context = tag_linkage.linkage_context();
-                // TODO(vm-rewrite): Remove `RootedLinkage` and just use `ResolvedLinkage`, and that will make
-                // this nicer since we won't need to pass a dummy account address.
-                let linkage = RootedLinkage::new(AccountAddress::ZERO, tag_linkage);
-                let linked_store = LinkedDataStore::new(&linkage, self.linkable_store);
+                let linked_store = LinkedDataStore::new(&tag_linkage, self.linkable_store);
                 Some((
                     self.vm
                         .make_vm(&linked_store, link_context)
-                        .map_err(|e| execution_error(self, type_arg_idx, e, &linkage))?,
-                    linkage,
+                        .map_err(|e| execution_error(self, type_arg_idx, e, &tag_linkage))?,
+                    tag_linkage,
                 ))
             }
         };
@@ -430,7 +428,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             env: &Env,
             type_arg_idx: Option<usize>,
             tag: &TypeTag,
-            vm_opt_linkage: &Option<(MoveVM, RootedLinkage)>,
+            vm_opt_linkage: &Option<(MoveVM, ExecutableLinkage)>,
         ) -> Result<VMR::Type, ExecutionError> {
             Ok(match tag {
                 TypeTag::Bool => VMR::Type::Bool,
@@ -651,7 +649,7 @@ fn to_identifier(name: String) -> Result<Identifier, ExecutionError> {
 fn convert_vm_error(
     error: VMError,
     store: &dyn PackageStore,
-    linkage: Option<&RootedLinkage>,
+    linkage: Option<&ExecutableLinkage>,
     protocol_config: &ProtocolConfig,
 ) -> ExecutionError {
     use crate::error::convert_vm_error_impl;
@@ -664,9 +662,8 @@ fn convert_vm_error(
             );
             linkage
                 .and_then(|linkage| {
-                    LinkedDataStore::new(linkage, store)
-                        .linkage
-                        .resolved_linkage
+                    linkage
+                        .0
                         .linkage
                         .get(&(*id.address()).into())
                         .map(|new_id| ModuleId::new((*new_id).into(), id.name().to_owned()))
