@@ -3960,6 +3960,7 @@ impl ProtocolConfig {
                 }
                 95 => {
                     cfg.type_name_id_base_cost = Some(52);
+                    cfg.feature_flags.authority_capabilities_v2 = true;
                 }
                 // Use this template when making changes:
                 //
