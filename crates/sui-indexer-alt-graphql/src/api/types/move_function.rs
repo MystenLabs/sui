@@ -121,9 +121,9 @@ impl MoveFunction {
 }
 
 impl MoveFunction {
-    /// Construct a function that is represented by its module and name. This does not
-    /// check that the function actually exists, so should not be used to "fetch" a function based on
-    /// user input.
+    /// Construct a function that is represented by its module and name. This does not check that
+    /// the function actually exists, so should not be used to "fetch" a function based on user
+    /// input.
     pub(crate) fn with_fq_name(module: MoveModule, name: String) -> Self {
         Self {
             module,
