@@ -10,7 +10,7 @@ use sui_kvstore::{
     TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI},
@@ -32,9 +32,6 @@ use crate::{
     transactions::TransactionKey,
 };
 
-/// Composite key for efficient object lookup by ID and version
-type ObjectKey = (ObjectID, SequenceNumber);
-
 /// A loader for point lookups in kv stores backed by either Bigtable or Postgres.
 /// Supported lookups:
 /// - Objects by id and version
@@ -55,8 +52,6 @@ pub enum TransactionContents {
         events: Option<Vec<Event>>,
         transaction_data: Box<TransactionData>,
         signatures: Vec<GenericSignature>,
-        input_objects: HashMap<ObjectKey, Object>,
-        output_objects: HashMap<ObjectKey, Object>,
     },
 }
 
@@ -318,36 +313,6 @@ impl TransactionContents {
             Self::Pg(stored) => Some(stored.cp_sequence_number as u64),
             Self::Bigtable(kv) => Some(kv.checkpoint_number),
             Self::ExecutedTransaction { .. } => None, // No checkpoint until indexed
-        }
-    }
-
-    /// Look up an input object by ID and version from just-executed transaction data.
-    /// Returns None for stored transactions (Pg/Bigtable) or if object not found.
-    pub fn executed_input_object(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> Option<&Object> {
-        match self {
-            Self::ExecutedTransaction { input_objects, .. } => {
-                input_objects.get(&(object_id, version))
-            }
-            _ => None, // Only execution context has input objects
-        }
-    }
-
-    /// Look up an output object by ID and version from just-executed transaction data.
-    /// Returns None for stored transactions (Pg/Bigtable) or if object not found.
-    pub fn executed_output_object(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> Option<&Object> {
-        match self {
-            Self::ExecutedTransaction { output_objects, .. } => {
-                output_objects.get(&(object_id, version))
-            }
-            _ => None, // Only execution context has output objects
         }
     }
 }

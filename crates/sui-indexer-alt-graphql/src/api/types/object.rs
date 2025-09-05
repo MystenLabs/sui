@@ -465,7 +465,7 @@ impl Object {
     ) -> Self {
         // Set root_version since we're creating an object at a specific version
         let scope = scope.with_root_version(version.into());
-        let super_ = Address::with_address(scope, address);
+        let super_ = Address::with_address(scope.clone(), address);
 
         Self {
             super_,
@@ -970,10 +970,19 @@ impl Object {
                     return Ok(None);
                 };
 
-                Ok(kv_loader
-                    .load_one_object(self.super_.address.into(), version.into())
-                    .await
-                    .context("Failed to fetch object contents")?)
+                // Check execution context cache first and return if available
+                if let Some(cached_object) = self
+                    .super_
+                    .scope
+                    .execution_output_object(self.super_.address.into(), version)
+                {
+                    Ok(Some(cached_object.clone()))
+                } else {
+                    Ok(kv_loader
+                        .load_one_object(self.super_.address.into(), version.into())
+                        .await
+                        .context("Failed to fetch object contents")?)
+                }
             })
             .await
     }

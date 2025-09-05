@@ -8,15 +8,13 @@ use crate::{api::scalars::sui_address::SuiAddress, scope::Scope};
 
 use super::object::Object;
 
-pub(crate) struct ObjectChange<'a> {
+pub(crate) struct ObjectChange {
     pub(crate) scope: Scope,
     pub(crate) native: NativeObjectChange,
-    pub(crate) input_object: Option<&'a sui_types::object::Object>,
-    pub(crate) output_object: Option<&'a sui_types::object::Object>,
 }
 
 #[Object]
-impl ObjectChange<'_> {
+impl ObjectChange {
     /// The address of the object that has changed.
     async fn address(&self) -> SuiAddress {
         self.native.id.into()
@@ -24,14 +22,6 @@ impl ObjectChange<'_> {
 
     /// The contents of the object immediately before the transaction.
     async fn input_state(&self) -> Option<Object> {
-        // Use execution data if available
-        if let Some(input_obj) = self.input_object {
-            return Some(Object::from_contents(
-                self.scope.clone(),
-                input_obj.clone(),
-            ));
-        }
-
         let NativeObjectChange {
             id,
             input_version: Some(version),
@@ -47,14 +37,6 @@ impl ObjectChange<'_> {
 
     /// The contents of the object immediately after the transaction.
     async fn output_state(&self) -> Option<Object> {
-        // Use execution data if available
-        if let Some(output_obj) = self.output_object {
-            return Some(Object::from_contents(
-                self.scope.clone(),
-                output_obj.clone(),
-            ));
-        }
-
         let NativeObjectChange {
             id,
             output_version: Some(version),

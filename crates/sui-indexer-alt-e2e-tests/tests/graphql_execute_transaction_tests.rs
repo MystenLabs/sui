@@ -39,7 +39,6 @@ struct TransactionEffects {
     events: Option<Events>,
     #[serde(rename = "unchangedConsensusObjects")]
     unchanged_consensus_objects: Option<UnchangedConsensusObjects>,
-    object_changes: Option<ObjectChanges>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,17 +135,6 @@ impl GraphQlTestCluster {
         self.cancel.cancel();
         let _ = self.handle.await;
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ObjectChanges {
-    edges: Vec<ObjectChangeEdge>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ObjectChangeEdge {
-    node: ObjectChangeNode,
 }
 
 #[derive(Debug, Deserialize)]
@@ -571,28 +559,25 @@ async fn test_execute_transaction_object_changes_input_output() {
                         digest
                         status
                         objectChanges {
-                            edges {
-                                node {
-                                    address
-                                    idCreated
-                                    idDeleted
-                                    inputState {
-                                        version
-                                        asMoveObject {
-                                            contents {
-                                                type {
-                                                    repr
-                                                }
+                            nodes {
+                                idCreated
+                                idDeleted
+                                inputState {
+                                    version
+                                    asMoveObject {
+                                        contents {
+                                            type {
+                                                repr
                                             }
                                         }
                                     }
-                                    outputState {
-                                        version
-                                        asMoveObject {
-                                            contents {
-                                                type {
-                                                    repr
-                                                }
+                                }
+                                outputState {
+                                    version
+                                    asMoveObject {
+                                        contents {
+                                            type {
+                                                repr
                                             }
                                         }
                                     }
@@ -623,13 +608,12 @@ async fn test_execute_transaction_object_changes_input_output() {
     // Verify the transaction succeeded
     assert_eq!(effects.status, "SUCCESS");
 
-    let nodes: Vec<ObjectChangeNode> = effects
-        .object_changes
-        .unwrap()
-        .edges
-        .into_iter()
-        .map(|edge| edge.node)
-        .collect();
+    // Use pointer to navigate to object changes and deserialize directly
+    let object_changes_value = result
+        .pointer("/data/executeTransaction/effects/objectChanges/nodes")
+        .unwrap();
+    let nodes: Vec<ObjectChangeNode> =
+        serde_json::from_value(object_changes_value.clone()).unwrap();
 
     // There are 2 objects (gas coin + newly created coin)
     assert_eq!(nodes.len(), 2);

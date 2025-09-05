@@ -308,19 +308,9 @@ impl EffectsContents {
         for edge in cursors.edges {
             let native_change = &object_changes[*edge.cursor];
 
-            // Look up input and output objects from execution data if available
-            let input_object = native_change
-                .input_version
-                .and_then(|version| content.executed_input_object(native_change.id, version));
-            let output_object = native_change
-                .output_version
-                .and_then(|version| content.executed_output_object(native_change.id, version));
-
             let object_change = ObjectChange {
                 scope: self.scope.clone(),
                 native: native_change.clone(),
-                input_object,
-                output_object,
             };
 
             conn.edges
@@ -420,31 +410,21 @@ impl TransactionEffects {
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
     ) -> Self {
-        use std::collections::HashMap;
-        use sui_types::base_types::{ObjectID, SequenceNumber};
-
         let digest = *response.effects.transaction_digest();
 
-        let input_objects: HashMap<(ObjectID, SequenceNumber), sui_types::object::Object> =
+        // Update scope with execution objects cache
+        let scope = scope.with_execution_objects(
             response
                 .input_objects
                 .into_iter()
-                .map(|obj| ((obj.id(), obj.version()), obj))
-                .collect();
-        let output_objects: HashMap<(ObjectID, SequenceNumber), sui_types::object::Object> =
-            response
-                .output_objects
-                .into_iter()
-                .map(|obj| ((obj.id(), obj.version()), obj))
-                .collect();
+                .chain(response.output_objects),
+        );
 
         let contents = NativeTransactionContents::ExecutedTransaction {
             effects: Box::new(response.effects),
             events: response.events.map(|events| events.data),
             transaction_data: Box::new(transaction_data),
             signatures,
-            input_objects,
-            output_objects,
         };
 
         Self {
