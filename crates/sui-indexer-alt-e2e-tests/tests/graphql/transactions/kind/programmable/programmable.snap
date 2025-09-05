@@ -24,7 +24,7 @@ task 3, line 34:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 36-71:
+task 4, lines 36-77:
 //# run-graphql
 Response: {
   "data": {
@@ -59,11 +59,27 @@ Response: {
           "nodes": [
             {
               "__typename": "MoveCallCommand",
-              "functionName": "increment"
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                  },
+                  "name": "simple"
+                },
+                "name": "increment"
+              }
             },
             {
               "__typename": "MoveCallCommand",
-              "functionName": "add"
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                  },
+                  "name": "simple"
+                },
+                "name": "add"
+              }
             },
             {
               "__typename": "TransferObjectsCommand"
@@ -75,7 +91,7 @@ Response: {
   }
 }
 
-task 5, lines 73-108:
+task 5, lines 79-120:
 //# run-graphql
 Response: {
   "data": {
@@ -106,11 +122,27 @@ Response: {
           "nodes": [
             {
               "__typename": "MoveCallCommand",
-              "functionName": "increment"
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                  },
+                  "name": "simple"
+                },
+                "name": "increment"
+              }
             },
             {
               "__typename": "MoveCallCommand",
-              "functionName": "add"
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                  },
+                  "name": "simple"
+                },
+                "name": "add"
+              }
             }
           ]
         }

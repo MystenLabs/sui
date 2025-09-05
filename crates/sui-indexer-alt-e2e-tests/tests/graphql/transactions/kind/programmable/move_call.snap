@@ -27,7 +27,7 @@ task 3, line 46:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 48-69:
+task 4, lines 48-75:
 //# run-graphql
 Response: {
   "data": {
@@ -36,7 +36,15 @@ Response: {
         "commands": {
           "nodes": [
             {
-              "functionName": "create_test_object",
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                  },
+                  "name": "move_call_test"
+                },
+                "name": "create_test_object"
+              },
               "arguments": [
                 {
                   "__typename": "Input",
@@ -45,7 +53,15 @@ Response: {
               ]
             },
             {
-              "functionName": "get_object_value",
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                  },
+                  "name": "move_call_test"
+                },
+                "name": "get_object_value"
+              },
               "arguments": [
                 {
                   "__typename": "TxResult",
@@ -55,7 +71,15 @@ Response: {
               ]
             },
             {
-              "functionName": "check_gas_coin",
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                  },
+                  "name": "move_call_test"
+                },
+                "name": "check_gas_coin"
+              },
               "arguments": [
                 {
                   "__typename": "GasCoin",
@@ -65,7 +89,15 @@ Response: {
             },
             {},
             {
-              "functionName": "transfer_coins",
+              "function": {
+                "module": {
+                  "package": {
+                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                  },
+                  "name": "move_call_test"
+                },
+                "name": "transfer_coins"
+              },
               "arguments": [
                 {
                   "__typename": "TxResult",
