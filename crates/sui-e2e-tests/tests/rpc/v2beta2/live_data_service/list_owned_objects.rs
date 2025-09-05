@@ -31,10 +31,11 @@ async fn test_indexing_with_tto() {
     let address = cluster.get_address_0();
 
     let objects = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(address.to_string()),
-            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
-            ..Default::default()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.read_mask = Some(FieldMask::from_str("object_id,version,digest,object_type"));
+            message
         })
         .await
         .unwrap()
@@ -167,9 +168,10 @@ async fn test_indexing_with_tto() {
     // Parent starts with 1 coin
     assert_eq!(
         client
-            .list_owned_objects(ListOwnedObjectsRequest {
-                owner: Some(parent.0.clone()),
-                ..Default::default()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some(parent.0.clone());
+                message
             })
             .await
             .unwrap()
@@ -181,9 +183,10 @@ async fn test_indexing_with_tto() {
 
     // 0x0 starts with 0 coins
     assert!(client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some("0x0".to_owned()),
-            ..Default::default()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some("0x0".to_owned());
+            message
         })
         .await
         .unwrap()
@@ -238,9 +241,10 @@ async fn test_indexing_with_tto() {
 
     // Parent ends with 0 coins
     assert!(client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(parent.0.clone()),
-            ..Default::default()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(parent.0.clone());
+            message
         })
         .await
         .unwrap()
@@ -251,9 +255,10 @@ async fn test_indexing_with_tto() {
     // 0x0 ends with 1 coin
     assert_eq!(
         client
-            .list_owned_objects(ListOwnedObjectsRequest {
-                owner: Some("0x0".to_owned()),
-                ..Default::default()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some("0x0".to_owned());
+                message
             })
             .await
             .unwrap()
@@ -282,10 +287,11 @@ async fn test_filter_by_type() {
     let address = cluster.get_address_0();
 
     let objects = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(address.to_string()),
-            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
-            ..Default::default()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.read_mask = Some(FieldMask::from_str("object_id,version,digest,object_type"));
+            message
         })
         .await
         .unwrap()
@@ -380,8 +386,10 @@ async fn test_filter_by_type() {
         treasury,
         ..
     } = client
-        .get_coin_info(GetCoinInfoRequest {
-            coin_type: Some(trusted.clone()),
+        .get_coin_info({
+            let mut message = GetCoinInfoRequest::default();
+            message.coin_type = Some(trusted.clone());
+            message
         })
         .await
         .unwrap()
@@ -395,11 +403,12 @@ async fn test_filter_by_type() {
     assert_eq!(treasury.unwrap().total_supply, Some(0));
 
     let objects = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(address.to_string()),
-            object_type: Some(treasury_cap_type.clone()),
-            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
-            ..Default::default()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.object_type = Some(treasury_cap_type.clone());
+            message.read_mask = Some(FieldMask::from_str("object_id,version,digest,object_type"));
+            message
         })
         .await
         .unwrap()
@@ -456,8 +465,10 @@ async fn test_filter_by_type() {
         treasury,
         ..
     } = client
-        .get_coin_info(GetCoinInfoRequest {
-            coin_type: Some(trusted.clone()),
+        .get_coin_info({
+            let mut message = GetCoinInfoRequest::default();
+            message.coin_type = Some(trusted.clone());
+            message
         })
         .await
         .unwrap()
@@ -466,11 +477,12 @@ async fn test_filter_by_type() {
     assert_eq!(treasury.unwrap().total_supply, Some(100_000));
 
     let objects = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(address.to_string()),
-            object_type: Some(trusted_coin.clone()),
-            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
-            ..Default::default()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.object_type = Some(trusted_coin.clone());
+            message.read_mask = Some(FieldMask::from_str("object_id,version,digest,object_type"));
+            message
         })
         .await
         .unwrap()
@@ -483,11 +495,12 @@ async fn test_filter_by_type() {
     // Calling `list_owned_objects` with `0x2::coin::Coin` filter (without a type T) should return
     // all coins
     let objects = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(address.to_string()),
-            object_type: Some("0x2::coin::Coin".to_owned()),
-            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
-            ..Default::default()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.object_type = Some("0x2::coin::Coin".to_owned());
+            message.read_mask = Some(FieldMask::from_str("object_id,version,digest,object_type"));
+            message
         })
         .await
         .unwrap()
@@ -531,12 +544,13 @@ async fn test_reverse_sorted_coins_by_balance() {
     }
 
     let objects = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(address.to_string()),
-            read_mask: Some(FieldMask::from_str(
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.read_mask = Some(FieldMask::from_str(
                 "object_id,version,digest,object_type,balance",
-            )),
-            ..Default::default()
+            ));
+            message
         })
         .await
         .unwrap()

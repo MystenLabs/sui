@@ -6,8 +6,9 @@ use std::{
     path::PathBuf,
 };
 
+use move_core_types::account_address::AccountAddress;
 use move_package_alt::{
-    dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
+    dependency::{self, CombinedDependency, PinnedDependencyInfo},
     errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
     git::GitCache,
@@ -61,12 +62,26 @@ impl SuiFlavor {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BuildParams {
+    flavor: String,
+    edition: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PublishedMetadata {
+    pub toolchain_version: String,
+    pub build_config: BuildParams,
+    pub upgrade_capability: AccountAddress,
+    pub version: u64,
+}
+
 impl MoveFlavor for SuiFlavor {
     fn name() -> String {
         "sui".to_string()
     }
 
-    type PublishedMetadata = (); // TODO
+    type PublishedMetadata = PublishedMetadata;
 
     type AddressInfo = (); // TODO
 

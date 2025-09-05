@@ -53,6 +53,14 @@ pub async fn get_checkpoint(
                 .pop()
                 .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?
         }
+        _ => {
+            let sequence_number = client.get_latest_checkpoint().await?;
+            client
+                .get_checkpoints(&[sequence_number])
+                .await?
+                .pop()
+                .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?
+        }
     };
     let mut message = Checkpoint::default();
     let summary: sui_sdk_types::CheckpointSummary = checkpoint.summary.try_into()?;
@@ -67,7 +75,5 @@ pub async fn get_checkpoint(
         );
     }
     // TODO: handle Checkpoint::TRANSACTIONS_FIELD submask
-    Ok(GetCheckpointResponse {
-        checkpoint: Some(message),
-    })
+    Ok(GetCheckpointResponse::new(message))
 }

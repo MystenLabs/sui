@@ -6,14 +6,13 @@ use crate::{
     compatibility::{
         LegacyBuildInfo, LegacySubstOrRename, LegacySubstitution, LegacyVersion,
         find_module_name_for_package,
-        legacy::{LegacyData, LegacyEnvironment},
     },
     errors::FileHandle,
-    package::{EnvironmentName, layout::SourcePackageLayout, paths::PackagePath},
+    package::{EnvironmentName, paths::PackagePath},
     schema::{
-        DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
+        DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
         ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
-        PublishAddresses, PublishedID,
+        ParsedManifest, PublishAddresses, PublishedID,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -24,10 +23,12 @@ use move_core_types::{
 use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 use toml::Value as TV;
 use tracing::debug;
+
+use super::legacy::{LegacyData, LegacyEnvironment};
 
 const EMPTY_ADDR_STR: &str = "_";
 
@@ -55,13 +56,6 @@ const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 const LEGACY_SYSTEM_DEPS_NAMES: [&str; 5] =
     ["Sui", "MoveStdlib", "Bridge", "DeepBook", "SuiSystem"];
 
-pub struct ParsedLegacyPackage {
-    pub deps: BTreeMap<PackageName, DefaultDependency>,
-    pub metadata: PackageMetadata,
-    pub legacy_data: LegacyData,
-    pub file_handle: FileHandle,
-}
-
 pub struct LegacyPackageMetadata {
     pub legacy_name: String,
     pub edition: String,
@@ -69,49 +63,38 @@ pub struct LegacyPackageMetadata {
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
 }
 
-/// We try to see if a package is `legacy`-like. That means that we can parse it,
-/// and it has `addresses`, `dev-addresses`, or `dev-dependencies` in it.
-///
-/// This is a "best-effort", but should cover 99% of cases.
-pub fn is_legacy_like(path: &PackagePath) -> bool {
-    let Ok(file_contents) = std::fs::read_to_string(path.manifest_path()) else {
-        return false;
+/// If `path` contains a valid legacy manifest, convert it to a modern format and return it. By
+/// "valid legacy manifest", we mean a manifest that parses correctly and contains at least one of
+/// the unsupported sections: `[addresses]`, `[dev-addresses]`, or `[dev-dependencies]`. Although
+/// these fields are not technically required in the old system, we want to process manifests that
+/// don't have them using the modern parser.
+pub fn try_load_legacy(
+    path: &PackagePath,
+    default_env: &Environment,
+) -> Option<(FileHandle, ParsedManifest)> {
+    let Ok(file_handle) = FileHandle::new(path.manifest_path()) else {
+        return None;
     };
 
-    let Ok(parsed) = parse_move_manifest_string(file_contents) else {
-        return false;
+    let Ok(parsed) = parse_move_manifest_string(file_handle.source()) else {
+        return None;
     };
 
-    match parsed {
-        TV::Table(table) => {
-            table.get(ADDRESSES_NAME).is_some()
-                || table.get(DEV_ADDRESSES_NAME).is_some()
-                || table.get(DEV_DEPENDENCY_NAME).is_some()
-        }
-        _ => false,
+    let TV::Table(ref table) = parsed else {
+        return None;
+    };
+
+    let has_legacy_fields = [ADDRESSES_NAME, DEV_ADDRESSES_NAME, DEV_DEPENDENCY_NAME]
+        .into_iter()
+        .any(|key| table.contains_key(key));
+
+    if !has_legacy_fields {
+        return None;
     }
-}
 
-/// Tries to parse a legacy looking manifest.
-/// The parser converts this into a modern one on the fly -- and stores legacy information
-/// in the `LegacyData` struct.
-pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegacyPackage> {
-    let file_contents = std::fs::read_to_string(path.manifest_path()).with_context(|| {
-        format!(
-            "Unable to find package manifest at {:?}",
-            path.manifest_path()
-        )
-    })?;
-
-    let file_handle = FileHandle::new(path.manifest_path())?;
-
-    let parsed_legacy_package = parse_source_manifest(
-        parse_move_manifest_string(file_contents)?,
-        path,
-        file_handle,
-    )?;
-
-    Ok(parsed_legacy_package)
+    parse_source_manifest(parsed, path, default_env)
+        .ok()
+        .map(|parsed| (file_handle, parsed))
 }
 
 fn parse_legacy_lockfile_addresses(
@@ -174,23 +157,15 @@ fn parse_legacy_lockfile_addresses(
     Ok(publish_info)
 }
 
-fn resolve_move_manifest_path(path: &Path) -> PathBuf {
-    if path.is_file() {
-        path.into()
-    } else {
-        path.join(SourcePackageLayout::Manifest.path())
-    }
-}
-
-fn parse_move_manifest_string(manifest_string: String) -> Result<TV> {
-    toml::from_str::<TV>(&manifest_string).context("Unable to parse Move package manifest")
+fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
+    toml::from_str::<TV>(manifest_string).context("Unable to parse Move package manifest")
 }
 
 fn parse_source_manifest(
     tval: TV,
     path: &PackagePath,
-    file_handle: FileHandle,
-) -> Result<ParsedLegacyPackage> {
+    env: &Environment,
+) -> Result<ParsedManifest> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, REQUIRED_FIELDS)
@@ -213,7 +188,7 @@ fn parse_source_manifest(
                 .context("Error parsing '[package]' section of manifest")?
                 .unwrap();
 
-            let build = table
+            let _build = table
                 .remove(BUILD_NAME)
                 .map(parse_build_info)
                 .transpose()
@@ -226,7 +201,7 @@ fn parse_source_manifest(
                 .context("Error parsing '[dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let dev_dependencies = table
+            let _dev_dependencies = table
                 .remove(DEV_DEPENDENCY_NAME)
                 .map(parse_dependencies)
                 .transpose()
@@ -280,25 +255,31 @@ fn parse_source_manifest(
                 None
             };
 
-            Ok(ParsedLegacyPackage {
-                metadata: PackageMetadata {
+            Ok(ParsedManifest {
+                package: PackageMetadata {
                     name: new_name,
                     edition: metadata.edition,
                     system_dependencies,
                     unrecognized_fields: metadata.unrecognized_fields,
                 },
-                deps: dependencies,
-                legacy_data: LegacyData {
-                    incompatible_name: if metadata.legacy_name != modern_name.as_str() {
-                        Some(metadata.legacy_name)
-                    } else {
-                        None
-                    },
-                    addresses: programmatic_addresses,
+
+                dependencies: dependencies
+                    .into_iter()
+                    .map(|(k, v)| (temporary_spanned(k), v))
+                    .collect(),
+
+                environments: BTreeMap::from([(
+                    temporary_spanned(env.name().clone()),
+                    temporary_spanned(env.id().clone()),
+                )]),
+
+                legacy_data: Some(LegacyData {
+                    legacy_name: metadata.legacy_name,
+                    named_addresses: programmatic_addresses,
                     manifest_address_info,
                     legacy_environments: parse_legacy_lockfile_addresses(path).unwrap_or_default(),
-                },
-                file_handle,
+                }),
+                dep_replacements: BTreeMap::new(),
             })
         }
         x => {
@@ -528,7 +509,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
         });
     }
 
-    let subst = table
+    let _subst = table
         .remove("addr_subst")
         .map(parse_substitution)
         .transpose()?;
@@ -582,7 +563,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
         }
 
         (None, None, None, Some(id)) => {
-            let Some(id) = id.as_str() else {
+            let Some(_id) = id.as_str() else {
                 bail!("ID not a string")
             };
 
@@ -668,13 +649,6 @@ fn parse_version(tval: TV) -> Result<LegacyVersion> {
             .parse::<u64>()
             .context("Invalid bugfix version")?,
     ))
-}
-
-fn parse_digest(tval: TV) -> Result<String> {
-    let digest_str = tval
-        .as_str()
-        .ok_or_else(|| format_err!("Invalid package digest"))?;
-    Ok(digest_str.to_string())
 }
 
 fn parse_dep_override(tval: TV) -> Result<bool> {
@@ -799,7 +773,7 @@ fn derive_modern_name(
 
     // If we have multiple, we cannot continue as this is not allowed.
     if zero_addresses.len() > 1 {
-        anyhow!(
+        bail!(
             "Multiple 0x0 addresses found. This is not allowed. Duplicate names found: {:?}",
             zero_addresses
         );

@@ -20,7 +20,10 @@ mod sim_only_tests {
     // and last delete the root object (tests object deletion).
     #[sim_test]
     async fn object_pruning_test() {
-        let test_cluster = TestClusterBuilder::new().build().await;
+        let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(1)
+            .build()
+            .await;
         let fullnode = &test_cluster.fullnode_handle.sui_node;
 
         // Create a root object and a child object. Wrap the child object inside the root object.
@@ -201,11 +204,6 @@ mod sim_only_tests {
             .effects
             .unwrap();
         assert_eq!(effects.wrapped().len(), 1);
-        assert!(test_cluster
-            .get_object_or_tombstone_from_fullnode_store(child_id)
-            .await
-            .2
-            .is_wrapped());
         effects
     }
 

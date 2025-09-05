@@ -106,6 +106,7 @@ fn determine_literal_type(
                     "error determining type of literal",
                 ));
             }
+            _ => return Err(RpcError::new(tonic::Code::Internal, "unknwon command type")),
         }
     }
 

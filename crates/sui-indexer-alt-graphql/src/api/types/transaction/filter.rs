@@ -16,13 +16,13 @@ use crate::intersect;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionFilter {
-    /// Limit to transactions that occured strictly after the given checkpoint.
+    /// Filter to transactions that occurred strictly after the given checkpoint.
     pub after_checkpoint: Option<UInt53>,
 
-    /// Limit to transactions in the given checkpoint.
+    /// Filter to transactions in the given checkpoint.
     pub at_checkpoint: Option<UInt53>,
 
-    /// Limit to transaction that occured strictly before the given checkpoint.
+    /// Filter to transaction that occurred strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 }
 

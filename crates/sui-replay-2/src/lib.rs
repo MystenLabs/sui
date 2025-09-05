@@ -22,6 +22,8 @@ use std::{
 };
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
+// Disambiguate external tracing crate from local `crate::tracing` module using absolute path.
+use ::tracing::{debug, error, info, info_span, warn, Instrument};
 
 pub mod artifacts;
 pub mod build;
@@ -31,6 +33,7 @@ pub mod displays;
 pub mod execution;
 pub mod replay_interface;
 pub mod replay_txn;
+pub mod summary_metrics;
 pub mod tracing;
 
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
@@ -228,7 +231,7 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
         bail!("either --digest or --digests-path must be provided");
     };
 
-    ::tracing::debug!("Binary version: {version}");
+    debug!("Binary version: {version}");
 
     // Build the selected data store and run replay
     match store_mode {
@@ -317,16 +320,20 @@ where
     for tx_digest in digests {
         let tx_dir = output_root_dir.join(tx_digest);
         let artifact_manager = ArtifactManager::new(&tx_dir, overwrite_existing)?;
-        match replay_transaction(&artifact_manager, tx_digest, data_store, trace).await {
+        let span = info_span!("replay", tx_digest = %tx_digest);
+        let result = replay_transaction(&artifact_manager, tx_digest, data_store, trace)
+            .instrument(span)
+            .await;
+        match result {
             Err(e) if terminate_early => {
-                ::tracing::error!("Error while replaying transaction {}: {:?}", tx_digest, e);
+                error!(tx_digest = %tx_digest, error = ?e, "Replay error; terminating early");
                 bail!("Replay terminated due to error: {}", e);
             }
             Err(e) => {
-                ::tracing::error!("Failed to replay transaction {}: {:?}", tx_digest, e);
+                error!(tx_digest = %tx_digest, error = ?e, "Replay failed");
             }
             Ok(_) => {
-                ::tracing::info!("Successfully replayed transaction {}", tx_digest);
+                info!(tx_digest = %tx_digest, "Replay succeeded");
             }
         }
     }
@@ -335,7 +342,7 @@ where
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "\nData store summary:");
         if let Err(e) = data_store.summary(&mut out) {
-            ::tracing::warn!("Failed to write data store summary: {:?}", e);
+            warn!("Failed to write data store summary: {:?}", e);
         }
     }
     Ok(())

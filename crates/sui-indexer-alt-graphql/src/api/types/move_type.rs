@@ -269,9 +269,14 @@ impl MoveType {
         }
     }
 
+    /// Get the native `TypeTag` for this type, if it is valid.
+    pub(crate) fn to_type_tag(&self) -> Option<TypeTag> {
+        self.native.to_type_tag().ok()
+    }
+
     /// Get the annotated type layout for this type, if it is valid.
     pub(crate) async fn layout_impl(&self) -> Result<Option<A::MoveTypeLayout>, RpcError> {
-        let Ok(tag) = self.native.to_type_tag() else {
+        let Some(tag) = self.to_type_tag() else {
             return Ok(None);
         };
 

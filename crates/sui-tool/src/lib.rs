@@ -67,6 +67,7 @@ use sui_types::storage::ReadStore;
 use tracing::info;
 
 pub mod commands;
+#[cfg(not(tidehunter))]
 pub mod db_tool;
 mod formal_snapshot_util;
 

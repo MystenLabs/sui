@@ -75,10 +75,11 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             .insert_new_committee(new_committee.committee());
                         let auth_agg = AuthorityAggregator::new_from_committee(
                             new_committee,
+                            Arc::new(sui_system_state.get_committee_authority_names_to_hostnames()),
+                            sui_system_state.reference_gas_price,
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
                             self.auth_agg_metrics.clone(),
-                            Arc::new(sui_system_state.get_committee_authority_names_to_hostnames()),
                         );
                         driver.update_authority_aggregator(Arc::new(auth_agg));
                     } else {

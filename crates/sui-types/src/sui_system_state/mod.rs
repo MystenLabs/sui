@@ -25,6 +25,7 @@ use std::fmt;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 pub mod epoch_start_sui_system_state;
+pub mod mock;
 pub mod sui_system_state_inner_v1;
 pub mod sui_system_state_inner_v2;
 pub mod sui_system_state_summary;

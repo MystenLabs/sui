@@ -767,6 +767,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
+        let mut num_finalized_user_transactions = vec![0; self.committee.size()];
+        let mut num_rejected_user_transactions = vec![0; self.committee.size()];
         {
             let span = trace_span!("ConsensusHandler::HandleCommit::process_consensus_txns");
             let _guard = span.enter();
@@ -781,18 +783,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         index: tx_index as TransactionIndex,
                     };
                     if parsed.rejected {
-                        // TODO(fastpath): Add metrics for rejected transactions.
                         if parsed.transaction.kind.is_user_transaction() {
                             self.epoch_store
                                 .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                            num_rejected_user_transactions[author] += 1;
                         }
-                        // Skip executing rejected transactions.
-                        // TODO(fastpath): Handle unlocking.
+                        // Skip processing rejected transactions.
                         continue;
                     }
                     if parsed.transaction.kind.is_user_transaction() {
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                        num_finalized_user_transactions[author] += 1;
                     }
                     let kind = classify(&parsed.transaction);
                     self.metrics
@@ -845,6 +847,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .stats
                         .get_num_user_transactions(i.value()) as i64,
                 );
+            self.metrics
+                .consensus_finalized_user_transactions
+                .with_label_values(&[hostname])
+                .set(num_finalized_user_transactions[i.value()] as i64);
+            self.metrics
+                .consensus_rejected_user_transactions
+                .with_label_values(&[hostname])
+                .set(num_rejected_user_transactions[i.value()] as i64);
         }
 
         let mut all_transactions = Vec::new();

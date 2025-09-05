@@ -4,8 +4,6 @@ sidebar_label: GraphQL (Beta)
 description: GraphQL is a public service for the Sui RPC that enables you to efficiently interact with the Sui network.
 beta: devnet, testnet, mainnet
 keywords: [ graphql, sui rpc, rpc service, public rpc service, graphql api, api, graphql migration, graphql quick-start, graphql concepts, interact with sui through rpc, use rpc, graphql rpc ]
-mdx:
-  format: md
 ---
 
 GraphQL for the Sui RPC is a public service that enables interacting with the Sui [network](https://sui.io/networkinfo).
@@ -14,7 +12,7 @@ To get started with GraphQL for the Sui RPC, check out the [Getting Started](/gu
 
 :::info
 
-{@include: ../snippets/data-serving-msg.mdx}
+<ImportContent source="data-serving-msg.mdx" mode="snippet" />
 
 :::
 
@@ -22,7 +20,7 @@ To get started with GraphQL for the Sui RPC, check out the [Getting Started](/gu
 
 :::info
 
-{@include: ../snippets/data-serving-gql-alpha.mdx}
+<ImportContent source="data-serving-gql-alpha.mdx" mode="snippet" />
 
 :::
 
@@ -42,6 +40,6 @@ All GraphQL API elements are accessible via the left sidebar, the following are 
 
 ## Related links
 
-- [GraphQL migration](../guides/developer/advanced/graphql-migration.mdx): Migrating to GraphQL guides you through migrating Sui RPC projects from JSON-RPC to GraphQL.  
-- [GraphQL quick-start](../guides/developer/getting-started/graphql-rpc.mdx): Querying Sui RPC with GraphQL gets you started using GraphQL to query the Sui RPC for on-chain data.
-- [GraphQL concepts](../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.
+<RelatedLink to="/guides/developer/advanced/graphql-migration.mdx" />
+<RelatedLink to="/guides/developer/getting-started/graphql-rpc.mdx" />
+<RelatedLink to="/concepts/graphql-rpc.mdx" />

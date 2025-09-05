@@ -31,7 +31,7 @@ use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPacka
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
     consistent_reader::{ConsistentReader, ConsistentReaderArgs},
-    full_node_client::{FullNodeArgs, FullNodeClient},
+    fullnode_client::{FullnodeArgs, FullnodeClient},
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
@@ -267,7 +267,7 @@ pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
 pub async fn start_rpc(
     database_url: Option<Url>,
     bigtable_instance: Option<String>,
-    full_node_args: FullNodeArgs,
+    fullnode_args: FullnodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
     consistent_reader_args: ConsistentReaderArgs,
@@ -283,7 +283,13 @@ pub async fn start_rpc(
     let metrics = rpc.metrics();
 
     // Create gRPC full node client wrapper
-    let grpc_client = FullNodeClient::new(full_node_args, cancel.child_token()).await?;
+    let fullnode_client = FullnodeClient::new(
+        Some("graphql_fullnode"),
+        fullnode_args,
+        registry,
+        cancel.child_token(),
+    )
+    .await?;
 
     let pg_reader = PgReader::new(
         Some("graphql_db"),
@@ -369,7 +375,7 @@ pub async fn start_rpc(
         .data(pg_loader)
         .data(kv_loader)
         .data(package_store)
-        .data(grpc_client);
+        .data(fullnode_client);
 
     let h_rpc = rpc.run().await?;
     let h_system_package_task = system_package_task.run();

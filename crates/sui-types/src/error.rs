@@ -262,19 +262,20 @@ pub enum UserInputError {
 
     // Soft Bundle related errors
     #[error(
-        "Number of transactions exceeds the maximum allowed ({:?}) in a Soft Bundle",
+        "Number of transactions ({}) exceeds the maximum allowed ({}) in a batch",
+        size,
         limit
     )]
-    TooManyTransactionsInSoftBundle { limit: u64 },
+    TooManyTransactionsInBatch { size: usize, limit: u64 },
     #[error(
-        "Total transactions size ({:?})bytes exceeds the maximum allowed ({:?})bytes in a Soft Bundle",
+        "Total transactions size ({}) bytes exceeds the maximum allowed ({}) bytes in a Soft Bundle",
         size, limit
     )]
-    SoftBundleTooLarge { size: u64, limit: u64 },
+    TotalTransactionSizeTooLargeInBatch { size: usize, limit: u64 },
     #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
     NoSharedObjectError { digest: TransactionDigest },
     #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
-    AlreadyExecutedError { digest: TransactionDigest },
+    AlreadyExecutedInSoftBundleError { digest: TransactionDigest },
     #[error("At least one certificate in Soft Bundle has already been processed")]
     CertificateAlreadyProcessed,
     #[error(

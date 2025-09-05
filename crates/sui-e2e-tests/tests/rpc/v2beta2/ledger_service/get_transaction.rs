@@ -30,10 +30,7 @@ async fn get_transaction() {
         timestamp,
         ..
     } = client
-        .get_transaction(GetTransactionRequest {
-            digest: Some(transaction_digest.to_string()),
-            read_mask: None,
-        })
+        .get_transaction(GetTransactionRequest::new(&transaction_digest))
         .await
         .unwrap()
         .into_inner()
@@ -62,18 +59,19 @@ async fn get_transaction() {
         timestamp,
         ..
     } = client
-        .get_transaction(GetTransactionRequest {
-            digest: Some(transaction_digest.to_string()),
-            read_mask: Some(FieldMask::from_paths([
-                "digest",
-                "transaction",
-                "signatures",
-                "effects",
-                "events",
-                "checkpoint",
-                "timestamp",
-            ])),
-        })
+        .get_transaction(
+            GetTransactionRequest::new(&transaction_digest).with_read_mask(FieldMask::from_paths(
+                [
+                    "digest",
+                    "transaction",
+                    "signatures",
+                    "effects",
+                    "events",
+                    "checkpoint",
+                    "timestamp",
+                ],
+            )),
+        )
         .await
         .unwrap()
         .into_inner()

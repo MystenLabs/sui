@@ -2,13 +2,11 @@
 title: Client App with Sui TypeScript SDK
 description: Build a client-side application using the Sui TypeScript SDK.
 keywords: [ typescript, typescript SDK, build app, create app, client app, client-side, client-side application, build client app, build client, dApp kit, dApp-kit ]
-mdx:
-  format: md
 ---
 
 This exercise diverges from the example built in the previous topics in this section. Rather than adding a frontend to the running example, the instruction walks you through setting up dApp Kit in a React App, allowing you to connect to wallets, and query data from Sui RPC nodes to display in your app. You can use it to create your own frontend for the example used previously, but if you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
 
-{@include: ../../../snippets/info-pnpm-required.mdx}
+<ImportContent source="info-pnpm-required.mdx" mode="snippet" />
 
 ```sh
 $ pnpm create @mysten/dapp --template react-client-dapp
@@ -220,6 +218,6 @@ You now have a dApp connected to wallets and can query data from RPC nodes.
 
 The next step from here is to start interacting with Move modules, constructing transaction blocks, and making Move calls. This exercise continues in the Counter end-to-end example.
 
-- [End-to-End Example](../app-examples/e2e-counter.mdx): Continue this exercise by creating an app.
-- [Sui 101](../sui-101.mdx): Learn the basics of the Sui network and how to interact with on-chain objects using Move.
-- [Sui Move CLI](/references/cli/move.mdx): The `move` commands in the Sui CLI provide console or terminal interaction with the Move VM.
+<RelatedLink to="/guides/developer/app-examples/e2e-counter.mdx" />
+<RelatedLink to="/guides/developer/sui-101.mdx" />
+<RelatedLink to="/references/cli/move.mdx" />

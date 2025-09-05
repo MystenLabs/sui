@@ -38,6 +38,7 @@ clock.yaml
 coin.yaml
 config.yaml
 deny_list.yaml
+derived_object.yaml
 display.yaml
 dynamic_field.yaml
 dynamic_object_field.yaml

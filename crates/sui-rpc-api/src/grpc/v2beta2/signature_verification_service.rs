@@ -9,6 +9,7 @@ use tap::Pipe;
 
 use crate::ErrorReason;
 use crate::Result;
+use crate::RpcError;
 use crate::RpcService;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2beta2::signature_verification_service_server::SignatureVerificationService;
@@ -96,6 +97,12 @@ fn verify_signature(
                 sui_sdk_types::SimpleSignature::Secp256r1 { public_key, .. } => {
                     [Some(public_key.derive_address()), None]
                 }
+                _ => {
+                    return Err(RpcError::new(
+                        tonic::Code::Internal,
+                        "unknown signature scheme",
+                    ))
+                }
             },
             sui_sdk_types::UserSignature::Multisig(multisig) => {
                 [Some(multisig.committee().derive_address()), None]
@@ -110,6 +117,12 @@ fn verify_signature(
             sui_sdk_types::UserSignature::Passkey(p) => {
                 [Some(p.public_key().derive_address()), None]
             }
+            _ => {
+                return Err(RpcError::new(
+                    tonic::Code::Internal,
+                    "unknown signature scheme",
+                ))
+            }
         };
 
         let first_derived_address = derived_addresses[0].unwrap();
@@ -120,13 +133,13 @@ fn verify_signature(
             .flatten()
             .any(|derived_address| derived_address == address)
         {
-            return Ok(VerifySignatureResponse {
-                is_valid: Some(false),
-                reason: Some(format!(
-                    "provided address `{}` does not match derived address `{}`",
-                    address, first_derived_address
-                )),
-            });
+            let mut message = VerifySignatureResponse::default();
+            message.is_valid = Some(false);
+            message.reason = Some(format!(
+                "provided address `{}` does not match derived address `{}`",
+                address, first_derived_address
+            ));
+            return Ok(message);
         }
     }
 
@@ -171,15 +184,14 @@ fn verify_signature(
     let mut verifier = sui_crypto::UserSignatureVerifier::new();
     verifier.with_zklogin_verifier(zklogin_verifier);
 
+    let mut message = VerifySignatureResponse::default();
     match verifier.verify(&signing_digest, &signature) {
-        Ok(()) => VerifySignatureResponse {
-            is_valid: Some(true),
-            reason: None,
-        },
-        Err(error) => VerifySignatureResponse {
-            is_valid: Some(false),
-            reason: Some(error.to_string()),
-        },
+        Ok(()) => message.is_valid = Some(true),
+        Err(error) => {
+            message.is_valid = Some(false);
+            message.reason = Some(error.to_string());
+        }
     }
-    .pipe(Ok)
+
+    Ok(message)
 }
