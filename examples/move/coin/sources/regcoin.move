@@ -11,7 +11,7 @@ use sui::deny_list::DenyList;
 public struct REGCOIN has drop {}
 
 fun init(witness: REGCOIN, ctx: &mut TxContext) {
-    let (mut builder, treasury_cap) = coin_registry::new_currency(
+    let (mut builder, treasury_cap) = coin_registry::new_currency_with_otw(
         witness,
         6, // Decimals
         b"REGCOIN".to_string(), // Symbol

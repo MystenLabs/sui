@@ -22,7 +22,7 @@ public struct FIXED_SUPPLY has drop {}
 // - `TreasuryCap` is locked up in the `Currency`
 // - Total supply is sent to the publisher along with `MetadataCap`
 fun init(witness: FIXED_SUPPLY, ctx: &mut TxContext) {
-    let (mut builder, mut treasury_cap) = coin_registry::new_currency(
+    let (mut builder, mut treasury_cap) = coin_registry::new_currency_with_otw(
         witness,
         6, // Decimals
         b"FIXED_SUPPLY".to_string(), // Symbol
@@ -36,7 +36,7 @@ fun init(witness: FIXED_SUPPLY, ctx: &mut TxContext) {
     let total_supply = treasury_cap.mint(TOTAL_SUPPLY, ctx);
 
     // Make the supply fixed by giving up TreasuryCap.
-    builder.inner_mut().make_supply_fixed(treasury_cap);
+    builder.make_supply_fixed(treasury_cap);
 
     // Finalize the building process and claim the metadata cap.
     let metadata_cap = builder.finalize(ctx);

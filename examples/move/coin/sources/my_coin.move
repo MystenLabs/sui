@@ -14,7 +14,7 @@ public struct MY_COIN has drop {}
 // to the publisher, who then controls minting and burning. `MetadataCap` is also
 // sent to the Publisher.
 fun init(witness: MY_COIN, ctx: &mut TxContext) {
-    let (builder, treasury_cap) = coin_registry::new_currency(
+    let (builder, treasury_cap) = coin_registry::new_currency_with_otw(
         witness,
         6, // Decimals
         b"MY_COIN".to_string(), // Symbol

@@ -257,7 +257,7 @@ public fun make_regulated<T>(
     deny_cap
 }
 
-use fun make_supply_fixed_init as CurrencyInitializer.make_supply_fixed;
+public use fun make_supply_fixed_init as CurrencyInitializer.make_supply_fixed;
 
 /// Initializer function to make the supply fixed.
 /// Aborts if Supply is `0` to enforce minting during initialization.
@@ -266,7 +266,7 @@ public fun make_supply_fixed_init<T>(init: &mut CurrencyInitializer<T>, cap: Tre
     init.currency.make_supply_fixed(cap)
 }
 
-use fun make_supply_deflationary_init as CurrencyInitializer.make_supply_deflationary;
+public use fun make_supply_deflationary_init as CurrencyInitializer.make_supply_deflationary;
 
 /// Initializer function to make the supply deflationary.
 /// Aborts if Supply is `0` to enforce minting during initialization.
@@ -465,6 +465,7 @@ public fun migrate_regulated_state_by_metadata<T>(
     currency.regulated =
         RegulatedState::Regulated {
             cap: metadata.deny_cap_id(),
+            allow_global_pause: false,
             variant: REGULATED_COIN_VARIANT,
         };
 }
@@ -474,6 +475,7 @@ public fun migrate_regulated_state_by_cap<T>(currency: &mut Currency<T>, cap: &D
     currency.regulated =
         RegulatedState::Regulated {
             cap: object::id(cap),
+            allow_global_pause: false,
             variant: REGULATED_COIN_VARIANT,
         };
 }
