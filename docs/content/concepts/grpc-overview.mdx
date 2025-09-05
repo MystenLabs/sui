@@ -33,6 +33,7 @@ Protocol buffers define the gRPC interface. You can find the relevant **beta** `
 | `SubscriptionService` | `sui/rpc/v2beta2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
 | `MovePackageService` | `sui/rpc/v2beta2/move_package_service.proto` | Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
 | `SignatureVerificationService` | `sui/rpc/v2beta2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](./cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
+| `NameService` | `sui/rpc/v2beta2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
 
 Use these definitions to generate client libraries in various programming languages.
 
@@ -160,6 +161,7 @@ grpc.reflection.v1.ServerReflection
 sui.rpc.v2beta2.LedgerService
 sui.rpc.v2beta2.LiveDataService
 sui.rpc.v2beta2.MovePackageService
+sui.rpc.v2beta2.NameService
 sui.rpc.v2beta2.SignatureVerificationService
 sui.rpc.v2beta2.SubscriptionService
 sui.rpc.v2beta2.TransactionExecutionService
@@ -260,6 +262,12 @@ which should return something like:
 ```
 
 ### Sample clients in different programming languages
+
+:::info
+
+For Rust, consider using the [Sui-Rust-Sdk](https://github.com/MystenLabs/sui-rust-sdk).
+
+:::
 
 <Tabs groupId="language">
 
