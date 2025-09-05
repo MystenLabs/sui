@@ -97,10 +97,10 @@ public(package) fun send_funds<T>(balance: Balance<T>, recipient: address) {
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 
-public(package) fun withdraw_funds<T>(
+public(package) fun redeem_funds<T>(
     withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
 ): Balance<T> {
-    withdrawal.settle()
+    withdrawal.redeem()
 }
 
 public(package) fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Balance<T> {
@@ -171,16 +171,12 @@ public fun create_supply_for_testing<T>(): Supply<T> {
 
 #[allow(unused_function)]
 fun send_to_account<T>(balance: Balance<T>, recipient: address) {
-    let Balance { value } = balance;
-    let accumulator = sui::accumulator::accumulator_address<Balance<T>>(recipient);
-    sui::accumulator::emit_deposit_event<Balance<T>>(accumulator, recipient, value);
+    balance.send_funds(recipient)
 }
 
 #[allow(unused_function)]
 fun withdraw_from_account<T>(amount: u64, ctx: &TxContext): Balance<T> {
     let owner = ctx.sender();
-    let accumulator = sui::accumulator::accumulator_address<Balance<T>>(owner);
-    let credit = Balance { value: amount };
-    sui::accumulator::emit_withdraw_event<Balance<T>>(accumulator, owner, amount);
-    credit
+    let withdrawal = sui::funds_accumulator::create_withdrawal<Balance<T>>(owner, amount as u256);
+    withdrawal.redeem()
 }

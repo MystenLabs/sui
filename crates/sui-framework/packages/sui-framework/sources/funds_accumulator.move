@@ -47,7 +47,7 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 // TODO When this becomes `public` we need
 // - custom verifier rules for `T`
 // - private generic rules for `T`
-public(package) fun settle</* internal */ T: store>(withdrawal: Withdrawal<T>): T {
+public(package) fun redeem</* internal */ T: store>(withdrawal: Withdrawal<T>): T {
     let Withdrawal { owner, limit: value } = withdrawal;
     withdraw_impl(owner, value)
 }
@@ -87,3 +87,8 @@ native fun withdraw_from_accumulator_address<T: store>(
     owner: address,
     value: u256,
 ): T;
+
+// TODO remove once Withdrawal is supported in PTBs
+public(package) fun create_withdrawal<T: store>(owner: address, limit: u256): Withdrawal<T> {
+    Withdrawal { owner, limit }
+}
