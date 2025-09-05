@@ -41,6 +41,9 @@ title: Module `sui::funds_accumulator`
 
 ## Struct `Withdrawal`
 
+Allows for withdrawing funds from a given address. The <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a></code> can be created in PTBs for
+the transaction sender, or dynamically from an object via <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_object">withdraw_from_object</a></code>.
+The redemption of the funds must be initiated from the module that defines <code>T</code>.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;<b>phantom</b> T: store&gt; <b>has</b> drop
