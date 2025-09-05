@@ -18,13 +18,8 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
     debug!("Parsed config: {:#?}", config);
 
-    let output_root = handle_replay_config(
-        &config.replay_stable,
-        Some(&config.replay_experimental),
-        &config.replay_experimental.node,
-        VERSION,
-    )
-    .await?;
+    let output_root =
+        handle_replay_config(&config.replay_stable, &config.replay_experimental, VERSION).await?;
 
     if let Some(digest) = &config.replay_stable.digest {
         print_effects_or_fork(

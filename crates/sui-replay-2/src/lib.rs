@@ -12,7 +12,7 @@ use crate::{
     replay_txn::replay_transaction,
 };
 use anyhow::{anyhow, bail};
-use clap::{Parser, ValueEnum};
+use clap::{ArgAction, Parser, ValueEnum};
 use similar::{ChangeTag, TextDiff};
 use std::{
     io::Write,
@@ -80,7 +80,7 @@ pub struct ReplayConfigStable {
     pub output_dir: Option<PathBuf>,
 
     /// Show transaction effects.
-    #[arg(long, short = 'e', default_value = "false")]
+    #[arg(long, short = 'e',action = ArgAction::Set, default_value = "true")]
     pub show_effects: bool,
 
     /// Whether existing artifacts that were generated from a previous replay of the transaction
@@ -107,6 +107,16 @@ pub struct ReplayConfigExperimental {
     /// - inmem-fs-gql: InMemory -> FileSystem -> GraphQL (default)
     #[arg(long = "store-mode", value_enum, default_value_t = StoreMode::GqlOnly)]
     pub store_mode: StoreMode,
+}
+
+impl ReplayConfigExperimental {
+    pub fn default() -> Self {
+        Self {
+            node: Node::Mainnet,
+            verbose: false,
+            store_mode: StoreMode::GqlOnly,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -177,8 +187,7 @@ impl FromStr for Node {
 
 pub async fn handle_replay_config(
     stable_config: &ReplayConfigStable,
-    experimental_config: Option<&ReplayConfigExperimental>,
-    node: &Node,
+    experimental_config: &ReplayConfigExperimental,
     version: &str,
 ) -> anyhow::Result<PathBuf> {
     let ReplayConfigStable {
@@ -191,11 +200,11 @@ pub async fn handle_replay_config(
         overwrite: overwrite_existing,
     } = stable_config;
 
-    let (verbose, store_mode) = if let Some(experimental_config) = experimental_config {
-        (experimental_config.verbose, experimental_config.store_mode)
-    } else {
-        (false, StoreMode::GqlOnly)
-    };
+    let ReplayConfigExperimental {
+        node,
+        verbose,
+        store_mode,
+    } = experimental_config;
 
     let output_root_dir = if let Some(dir) = output_dir {
         dir.to_path_buf()
@@ -251,7 +260,7 @@ pub async fn handle_replay_config(
                 &digests,
                 *overwrite_existing,
                 *trace,
-                verbose,
+                *verbose,
                 terminate_early,
             )
             .await?;
@@ -268,7 +277,7 @@ pub async fn handle_replay_config(
                 &digests,
                 *overwrite_existing,
                 *trace,
-                verbose,
+                *verbose,
                 terminate_early,
             )
             .await?;
@@ -282,7 +291,7 @@ pub async fn handle_replay_config(
                 &digests,
                 *overwrite_existing,
                 *trace,
-                verbose,
+                *verbose,
                 terminate_early,
             )
             .await?;
@@ -301,7 +310,7 @@ pub async fn handle_replay_config(
                 &digests,
                 *overwrite_existing,
                 *trace,
-                verbose,
+                *verbose,
                 terminate_early,
             )
             .await?;

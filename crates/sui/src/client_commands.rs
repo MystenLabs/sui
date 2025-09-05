@@ -742,8 +742,14 @@ impl SuiClientCommands {
             } => {
                 let node = get_replay_node(context).await?;
 
+                let experimental_config = SR2::ReplayConfigExperimental {
+                    node,
+                    ..SR2::ReplayConfigExperimental::default()
+                };
+
                 let artifact_path =
-                    SR2::handle_replay_config(&replay_config, None, &node, USER_AGENT).await?;
+                    SR2::handle_replay_config(&replay_config, &experimental_config, USER_AGENT)
+                        .await?;
 
                 if let Some(digest) = &replay_config.digest {
                     // show effects and gas
