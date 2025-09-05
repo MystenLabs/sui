@@ -9,11 +9,12 @@ use crate::{
         interpreter::{self, locals::BaseHeap},
     },
     jit::execution::ast::{Function, Type, TypeSubst},
-    natives::extensions::NativeContextExtensions,
+    natives::extensions::NativeExtensions,
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
         serialization::{SerializedReturnValues, *},
+        types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
 };
@@ -54,7 +55,7 @@ pub struct MoveVM<'extensions> {
     /// The linkage context used to create this VM instance
     pub(crate) link_context: LinkageContext,
     /// Native context extensions for the interpreter
-    pub(crate) native_extensions: NativeContextExtensions<'extensions>,
+    pub(crate) native_extensions: NativeExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
     /// Move VM Base Heap, which holds base arguments, including reference return values, etc.
@@ -394,7 +395,7 @@ impl<'extensions> MoveVM<'extensions> {
         let return_values = interpreter::run(
             &mut self.virtual_tables,
             self.vm_config.clone(),
-            &mut self.native_extensions,
+            &mut self.native_extensions.0.write(),
             tracer,
             gas_meter,
             func,
@@ -428,11 +429,7 @@ impl<'extensions> MoveVM<'extensions> {
     // Into Methods
     // -------------------------------------------
 
-    pub fn into_extensions(self) -> NativeContextExtensions<'extensions> {
-        self.native_extensions
-    }
-
-    pub fn extensions(&self) -> &NativeContextExtensions<'extensions> {
+    pub fn extensions(&self) -> &NativeExtensions<'extensions> {
         &self.native_extensions
     }
 }

@@ -10,7 +10,7 @@ use anyhow::{Result, bail};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
     dev_utils::{gas_schedule::CostTable, storage::StoredPackage},
-    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
+    natives::{extensions::NativeExtensions, functions::NativeFunctions},
     runtime::MoveRuntime,
     shared::{linkage_context::LinkageContext, types::VersionId},
 };
@@ -97,7 +97,7 @@ pub fn publish(
         package_original_id,
         ser_pkg.clone(),
         &mut gas_status,
-        NativeContextExtensions::default(),
+        NativeExtensions::default(),
     )?;
     // TODO: Fix this?
     // if verbose {
