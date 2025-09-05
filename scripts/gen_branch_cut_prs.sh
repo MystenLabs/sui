@@ -68,13 +68,28 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
   git commit -m "$BODY"
   git push -u origin "$BRANCH"
 
-  PR_URL=$(gh pr create \
+  # Create PR with proper error handling
+  echo "Creating pull request..."
+  if PR_OUTPUT=$(gh pr create \
     --base main \
     --head "$BRANCH" \
     --title "$BODY" \
     --reviewer "MystenLabs/mysten-pe" \
-    --body "$BODY" \
-    2>&1 | grep -Eo 'https://github.com/[^ ]+')
+    --body "$BODY" 2>&1); then
+    
+    # Extract PR URL from output
+    if PR_URL=$(echo "$PR_OUTPUT" | grep -Eo 'https://github.com/[^ ]+'); then
+      echo "Successfully created PR: $PR_URL"
+    else
+      echo "Warning: PR created but could not extract URL from output:"
+      echo "$PR_OUTPUT"
+      PR_URL="(URL extraction failed)"
+    fi
+  else
+    echo "Error: Failed to create pull request:" >&2
+    echo "$PR_OUTPUT" >&2
+    exit 1
+  fi
 
   # Setting the PR to auto merge
   gh pr merge --auto --squash --delete-branch "$BRANCH"
@@ -107,13 +122,28 @@ elif [[ "$PR_TYPE" == *version-bump* ]]; then
   git commit -m "$BODY"
   git push -u origin "$BRANCH"
 
-  PR_URL=$(gh pr create \
+  # Create PR with proper error handling
+  echo "Creating pull request..."
+  if PR_OUTPUT=$(gh pr create \
     --base main \
     --head "$BRANCH" \
     --title "$BODY" \
     --reviewer "MystenLabs/mysten-pe" \
-    --body "$BODY" \
-    2>&1 | grep -Eo 'https://github.com/[^ ]+')
+    --body "$BODY" 2>&1); then
+    
+    # Extract PR URL from output
+    if PR_URL=$(echo "$PR_OUTPUT" | grep -Eo 'https://github.com/[^ ]+'); then
+      echo "Successfully created PR: $PR_URL"
+    else
+      echo "Warning: PR created but could not extract URL from output:"
+      echo "$PR_OUTPUT"
+      PR_URL="(URL extraction failed)"
+    fi
+  else
+    echo "Error: Failed to create pull request:" >&2
+    echo "$PR_OUTPUT" >&2
+    exit 1
+  fi
 
   echo "Pull request for Sui v${NEW_SUI_VERSION} Version Bump created: $PR_URL"
 else
