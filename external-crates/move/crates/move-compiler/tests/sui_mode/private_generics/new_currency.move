@@ -9,12 +9,20 @@ module a::m {
     id: UID,
   }
 
+  struct InternalGeneric<phantom T> has key {
+    id: UID,
+  }
+
   public fun t1<T: key>() {
     coin_registry::new_currency<External>();
   }
 
   public fun t2<T: key>() {
     coin_registry::new_currency<Internal>();
+  }
+
+  public fun t3() {
+    coin_registry::new_currency<InternalGeneric<External>>();
   }
 }
 

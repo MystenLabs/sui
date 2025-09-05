@@ -2479,6 +2479,9 @@ new_deny_cap_v2
 new_treasury_cap
 	public(package) fun
 	0x2::coin
+allow_global_pause
+	public(package) fun
+	0x2::coin
 supply
 	public fun
 	0x2::coin
@@ -2527,7 +2530,7 @@ MetadataCap
 Currency
 	public struct
 	0x2::coin_registry
-CurrencyBuilder
+CurrencyInitializer
 	public struct
 	0x2::coin_registry
 SupplyState
@@ -2539,10 +2542,10 @@ RegulatedState
 MetadataCapState
 	public enum
 	0x2::coin_registry
-new_currency_with_otw
+new_currency
 	public fun
 	0x2::coin_registry
-new_currency
+new_currency_with_otw
 	public fun
 	0x2::coin_registry
 claim_metadata_cap
@@ -2551,10 +2554,16 @@ claim_metadata_cap
 make_regulated
 	public fun
 	0x2::coin_registry
+make_supply_fixed_init
+	public fun
+	0x2::coin_registry
+make_supply_burn_only_init
+	public fun
+	0x2::coin_registry
 make_supply_fixed
 	public fun
 	0x2::coin_registry
-make_supply_deflationary
+make_supply_burn_only
 	public fun
 	0x2::coin_registry
 finalize
@@ -2566,10 +2575,10 @@ finalize_registration
 delete_metadata_cap
 	public fun
 	0x2::coin_registry
-inner_mut
+burn
 	public fun
 	0x2::coin_registry
-burn
+burn_balance
 	public fun
 	0x2::coin_registry
 set_name
@@ -2620,6 +2629,9 @@ icon_url
 is_metadata_cap_claimed
 	public fun
 	0x2::coin_registry
+is_metadata_cap_deleted
+	public fun
+	0x2::coin_registry
 metadata_cap_id
 	public fun
 	0x2::coin_registry
@@ -2632,7 +2644,7 @@ deny_cap_id
 is_supply_fixed
 	public fun
 	0x2::coin_registry
-is_supply_deflationary
+is_supply_burn_only
 	public fun
 	0x2::coin_registry
 is_regulated
@@ -2642,9 +2654,6 @@ total_supply
 	public fun
 	0x2::coin_registry
 exists
-	public fun
-	0x2::coin_registry
-inner
 	public fun
 	0x2::coin_registry
 coin_registry_id
