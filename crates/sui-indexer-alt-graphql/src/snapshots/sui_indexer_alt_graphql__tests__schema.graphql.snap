@@ -1537,6 +1537,34 @@ type MoveFunction {
 	The function's unqualified name.
 	"""
 	name: String!
+	"""
+	The function's parameter types. These types can reference type parameters introduced by this function (see `typeParameters`).
+	"""
+	parameters: [OpenMoveType!]
+	"""
+	The function's return types. There can be multiple because functions in Move can return multiple values. These types can reference type parameters introduced by this function (see `typeParameters`).
+	"""
+	return: [OpenMoveType!]
+	"""
+	Constraints on the function's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in parameter and return types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveFunctionTypeParameter!]
+	"""
+	The function's visibility: `public`, `public(friend)`, or `private`.
+	"""
+	visibility: MoveVisibility
+}
+
+"""
+Declaration of a type parameter on a Move function.
+"""
+type MoveFunctionTypeParameter {
+	"""
+	Ability constraints on this type parameter.
+	"""
+	constraints: [MoveAbility!]!
 }
 
 """
@@ -1985,6 +2013,26 @@ type MoveValue {
 }
 
 """
+The visibility modifier describes which modules can access this module member.
+
+By default, a module member can be called only within the same module.
+"""
+enum MoveVisibility {
+	"""
+	A public member can be accessed by any module.
+	"""
+	PUBLIC
+	"""
+	A private member can be accessed in the module it is defined in.
+	"""
+	PRIVATE
+	"""
+	A friend member can be accessed in the module it is defined in and any other module in its package that is explicitly specified in its friend list.
+	"""
+	FRIEND
+}
+
+"""
 A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
 """
 type MutateConsensusStreamEnded {
@@ -2256,6 +2304,46 @@ type ObjectOwner {
 	"""
 	address: Address
 }
+
+"""
+Represents types that could contain references or free type parameters.  Such types can appear
+as function parameters, in fields of structs, or as actual type parameter.
+"""
+type OpenMoveType {
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
+	repr: String!
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: OpenMoveTypeSignature!
+}
+
+"""
+The shape of an abstract Move Type (a type that can contain free type parameters, and can optionally be taken by reference), corresponding to the following recursive type:
+
+type OpenMoveTypeSignature = {
+  ref: ("&" | "&mut")?,
+  body: OpenMoveTypeSignatureBody,
+}
+
+type OpenMoveTypeSignatureBody =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: OpenMoveTypeSignatureBody }
+  | {
+      datatype {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [OpenMoveTypeSignatureBody]
+      }
+    }
+  | { typeParameter: number }
+"""
+scalar OpenMoveTypeSignature
 
 """
 Placeholder for unimplemented command types
