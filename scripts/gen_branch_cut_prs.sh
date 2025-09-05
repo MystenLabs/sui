@@ -8,7 +8,6 @@
 # 2. Generate a version bump PR
 
 set -euo pipefail
-set -x
 
 # check required params
 if [[ $# -ne 1 ]]; then
