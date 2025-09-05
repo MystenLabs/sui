@@ -365,36 +365,11 @@ I don't care if I ever come back.
 
 ## Mermaid graphs
 
-Mermaid graphs are text-based [Mermaid.js](https://mermaid.js.org) diagrams. Mermaid has native support in Docusaurus.
-
-Any graph you want to include should use Mermaid. Flowchart and sequence diagram types are particularly useful. The Docusaurus implementation determines support for newer graph types, which might not render correctly. 
-
-By using Mermaid, anyone can update or augment visual assets without relying on separate imaging software or source files.
+Mermaid graphs are text-based [Mermaid.js](https://mermaid.js.org) diagrams. Mermaid has native support in Docusaurus. The Docusaurus implementation determines support for newer graph types, which might not render correctly. 
 
 ### How to use
 
 To create a mermaid graph, place the code inside tick fencing with `mermaid` defined as the language. You do not need to import anything into your document. 
-
-The following code:
-
-    ```mermaid
-    flowchart LR
-        CC(CLI Client) --> ClientService
-        RC(Rest Client) --> ClientService
-        RPCC(RPC Client) --> ClientService
-        ClientService --> AuthorityAggregator
-        AuthorityAggregator --> AC1[AuthorityClient] & AC2[AuthorityClient]
-        subgraph Authority1
-        AS[AuthorityState]
-        end
-        subgraph Authority2
-        AS2[AuthorityState]
-        end
-        AC1 <==>|Network TCP| Authority1
-        AC2 <==>|Network TCP| Authority2
-    ```
-
-creates the following diagram:
 
 ```mermaid
 flowchart LR
