@@ -15,7 +15,7 @@ use crate::{
             self,
             values::{Local, Locals, Value},
         },
-        linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
+        linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         typing::ast::{self as T, Type},
     },
 };
@@ -510,7 +510,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         storage_id: ModuleId,
         function_def_idx: FunctionDefinitionIndex,
         instr_length: u16,
-        linkage: &RootedLinkage,
+        linkage: &ExecutableLinkage,
     ) -> Result<(), ExecutionError> {
         let events = object_runtime_mut!(self)?.take_user_events();
         let num_events = self.user_events.len() + events.len();
@@ -694,7 +694,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         function_name: &IdentStr,
         ty_args: &[Type],
         args: Vec<CtxValue>,
-        linkage: &RootedLinkage,
+        linkage: &ExecutableLinkage,
         tracer: Option<&mut MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
         let ty_args = ty_args
@@ -703,7 +703,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map(|(idx, ty)| self.env.load_vm_type_argument_from_adapter_type(idx, ty))
             .collect::<Result<Vec<_>, _>>()?;
         let data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
-        let link_context = linkage.resolved_linkage.linkage_context();
+        let link_context = linkage.linkage_context();
         let vm = self
             .env
             .vm
@@ -728,7 +728,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         _function_name: &IdentStr,
         _ty_args: &[VMType],
         _args: Vec<CtxValue>,
-        _linkage: &RootedLinkage,
+        _linkage: &ExecutableLinkage,
         _tracer: Option<&mut MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
         // let gas_status = self.gas_charger.move_gas_status_mut();
@@ -798,7 +798,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         package_id: ObjectID,
         pkg: &MovePackage,
         modules: &[CompiledModule],
-        linkage: &RootedLinkage,
+        linkage: &ExecutableLinkage,
     ) -> Result<MoveVM<'env>, ExecutionError> {
         let serialized_pkg = pkg.into_serialized_move_package();
         let data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
@@ -836,7 +836,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         vm: MoveVM<'env>,
         package_id: ObjectID,
         modules: &[CompiledModule],
-        linkage: &RootedLinkage,
+        linkage: &ExecutableLinkage,
         mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         for module in modules {
@@ -919,7 +919,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         // remove it.
         // The call to `pop_last_package` later is fine because we cannot re-enter and
         // the last package we pushed is the one we are verifying and running the init from
-        let linkage = RootedLinkage::new_for_publication(package_id, runtime_id, linkage);
+        let linkage = ResolvedLinkage::update_for_publication(package_id, runtime_id, linkage);
 
         self.env
             .linkable_store
@@ -967,7 +967,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             dependencies.iter().map(|p| p.move_package()),
         )?;
 
-        let linkage = RootedLinkage::new_for_publication(storage_id, runtime_id, linkage);
+        let linkage = ResolvedLinkage::update_for_publication(storage_id, runtime_id, linkage);
         self.publish_and_verify_modules(runtime_id, &package, &modules, &linkage)?;
 
         check_compatibility(

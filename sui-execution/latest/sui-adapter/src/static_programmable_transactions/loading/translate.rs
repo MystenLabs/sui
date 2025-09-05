@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::{
-    env::Env, linkage::resolved_linkage::RootedLinkage, loading::ast as L,
+    env::Env, linkage::resolved_linkage::ExecutableLinkage, loading::ast as L,
 };
 use move_core_types::language_storage::StructTag;
 use sui_types::{
@@ -101,7 +101,7 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
                 type_arguments: ptype_arguments,
                 arguments,
             } = *pmc;
-            let linkage = RootedLinkage::new(*package, resolved_linkage);
+            let linkage = ExecutableLinkage::new(resolved_linkage);
             let type_arguments = ptype_arguments
                 .into_iter()
                 .enumerate()

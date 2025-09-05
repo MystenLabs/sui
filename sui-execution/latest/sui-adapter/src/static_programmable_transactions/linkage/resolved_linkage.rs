@@ -4,45 +4,20 @@
 use crate::static_programmable_transactions::linkage::resolution::{
     ConflictResolution, ResolutionTable,
 };
-use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::{collections::BTreeMap, rc::Rc};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 
 #[derive(Clone, Debug)]
-pub struct RootedLinkage {
-    pub link_context: AccountAddress,
-    pub resolved_linkage: Rc<ResolvedLinkage>,
-}
+pub struct ExecutableLinkage(pub Rc<ResolvedLinkage>);
 
-impl RootedLinkage {
-    pub fn new(link_context: AccountAddress, resolved_linkage: ResolvedLinkage) -> RootedLinkage {
-        Self {
-            link_context,
-            resolved_linkage: Rc::new(resolved_linkage),
-        }
+impl ExecutableLinkage {
+    pub fn new(resolved_linkage: ResolvedLinkage) -> Self {
+        Self(Rc::new(resolved_linkage))
     }
 
-    /// We need to late-bind the "self" resolution since for publication and upgrade we don't know
-    /// this a priori when loading the PTB.
-    pub fn new_for_publication(
-        link_context: ObjectID,
-        original_package_id: ObjectID,
-        mut resolved_linkage: ResolvedLinkage,
-    ) -> RootedLinkage {
-        // original package ID maps to the link context (new package ID) in this context
-        resolved_linkage
-            .linkage
-            .insert(original_package_id, link_context);
-        // Add resolution from the new package ID to the original package ID.
-        resolved_linkage
-            .linkage_resolution
-            .insert(link_context, original_package_id);
-        let resolved_linkage = Rc::new(resolved_linkage);
-        Self {
-            link_context: *link_context,
-            resolved_linkage,
-        }
+    pub fn linkage_context(&self) -> LinkageContext {
+        LinkageContext::new(self.0.linkage.iter().map(|(k, v)| (**k, **v)).collect())
     }
 }
 
@@ -82,7 +57,21 @@ impl ResolvedLinkage {
         }
     }
 
-    pub fn linkage_context(&self) -> LinkageContext {
-        LinkageContext::new(self.linkage.iter().map(|(k, v)| (**k, **v)).collect())
+    /// We need to late-bind the "self" resolution since for publication and upgrade we don't know
+    /// this a priori when loading the PTB.
+    pub fn update_for_publication(
+        package_version_id: ObjectID,
+        original_package_id: ObjectID,
+        mut resolved_linkage: ResolvedLinkage,
+    ) -> ExecutableLinkage {
+        // original package ID maps to the link context (new package ID) in this context
+        resolved_linkage
+            .linkage
+            .insert(original_package_id, package_version_id);
+        // Add resolution from the new package ID to the original package ID.
+        resolved_linkage
+            .linkage_resolution
+            .insert(package_version_id, original_package_id);
+        ExecutableLinkage::new(resolved_linkage)
     }
 }
