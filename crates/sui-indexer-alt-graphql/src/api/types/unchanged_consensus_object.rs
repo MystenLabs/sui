@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Enum, Object, SimpleObject, Union};
+use anyhow::Context as _;
+use async_graphql::{dataloader::DataLoader, Context, Enum, Object, SimpleObject, Union};
+use std::sync::Arc;
+use sui_indexer_alt_reader::{epochs::EpochStartKey, pg_reader::PgReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,
@@ -80,15 +83,24 @@ pub(crate) struct ConsensusObjectCancelled {
 pub(crate) struct PerEpochConfig {
     scope: Scope,
     object_id: ObjectID,
-    /// The checkpoint when the transaction was executed (not the current view checkpoint)
-    execution_checkpoint: u64,
+    /// The epoch when the transaction was executed
+    epoch: u64,
 }
 
 #[Object]
 impl PerEpochConfig {
-    /// The per-epoch configuration object as of the checkpoint when the transaction was executed.
+    /// The per-epoch configuration object as of when the transaction was executed.
     async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError<object::Error>> {
-        let cp: UInt53 = self.execution_checkpoint.into();
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let Some(epoch_start) = pg_loader
+            .load_one(EpochStartKey(self.epoch))
+            .await
+            .context("Failed to fetch epoch start information")?
+        else {
+            return Ok(None);
+        };
+
+        let cp: UInt53 = (epoch_start.cp_lo as u64).into();
         Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
     }
 }
@@ -110,7 +122,7 @@ impl UnchangedConsensusObject {
     pub(crate) fn from_native(
         scope: Scope,
         native: (ObjectID, NativeUnchangedConsensusKind),
-        execution_checkpoint: u64,
+        epoch: u64,
     ) -> Self {
         let (object_id, kind) = native;
 
@@ -154,7 +166,7 @@ impl UnchangedConsensusObject {
             NativeUnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig(PerEpochConfig {
                 scope,
                 object_id,
-                execution_checkpoint,
+                epoch,
             }),
         }
     }

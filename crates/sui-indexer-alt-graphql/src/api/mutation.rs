@@ -4,16 +4,17 @@
 use anyhow::anyhow;
 use async_graphql::{Context, Object, Result};
 use fastcrypto::error::FastCryptoError;
-use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 
+use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
 use crate::{
-    api::types::execution_result::ExecutionResult,
+    api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},
     error::{bad_user_input, RpcError},
+    scope::Scope,
 };
 
 /// Error type for user input validation in executeTransaction
@@ -68,14 +69,23 @@ impl Mutation {
 
         // Execute transaction - capture gRPC errors for ExecutionResult.errors
         match fullnode_client
-            .execute_transaction(tx_data, parsed_signatures)
+            .execute_transaction(tx_data.clone(), parsed_signatures.clone())
             .await
         {
-            // TODO: Implement effects for ExecutionResult
-            Ok(_response) => Ok(ExecutionResult {
-                effects: None,
-                errors: None,
-            }),
+            Ok(response) => {
+                let scope = Scope::new(ctx)?;
+                let effects = TransactionEffects::from_execution_response(
+                    scope,
+                    response,
+                    tx_data,
+                    parsed_signatures,
+                );
+
+                Ok(ExecutionResult {
+                    effects: Some(effects),
+                    errors: None,
+                })
+            }
             Err(GrpcExecutionError(status)) => Ok(ExecutionResult {
                 effects: None,
                 errors: Some(vec![status.to_string()]),
