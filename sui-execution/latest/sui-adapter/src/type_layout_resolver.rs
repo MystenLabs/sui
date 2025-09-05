@@ -1,43 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-<<<<<<< HEAD
-use crate::execution_value::SuiResolver;
-use crate::linkage_resolution::UnifiedLinkage;
-use crate::programmable_transactions::context::vm_for_struct_tags;
-use crate::programmable_transactions::datastore::SuiDataStore;
-||||||| 0f914b9774
-use crate::programmable_transactions::context::load_type_from_struct;
-use crate::programmable_transactions::linkage_view::LinkageView;
-use move_core_types::account_address::AccountAddress;
-=======
 use crate::data_store::cached_package_store::CachedPackageStore;
-use crate::data_store::legacy::linkage_view::LinkageView;
-use crate::programmable_transactions::context::load_type_from_struct;
->>>>>>> origin/main
+use crate::data_store::linked_data_store::LinkedDataStore;
+use crate::static_programmable_transactions::linkage::analysis::type_linkage;
+use crate::static_programmable_transactions::linkage::resolved_linkage::RootedLinkage;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
-<<<<<<< HEAD
 use move_vm_runtime::runtime::MoveRuntime;
-||||||| 0f914b9774
-use move_core_types::resolver::ResourceResolver;
-use move_vm_runtime::move_vm::MoveVM;
-=======
-use move_vm_runtime::move_vm::MoveVM;
->>>>>>> origin/main
+use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiResult;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::storage::{BackingPackageStore, PackageObject};
-use sui_types::TypeTag;
 use sui_types::{error::SuiError, layout_resolver::LayoutResolver};
 
 /// Retrieve a `MoveStructLayout` from a `Type`.
 pub struct TypeLayoutResolver<'state, 'vm> {
     vm: &'vm MoveRuntime,
-    resolver: NullSuiResolver<'state>,
-    // Doesn't matter what we have here as long as it implements the `LinkageResolver` trait.
-    linkage_resolver: UnifiedLinkage,
+    resolver: CachedPackageStore<'state>,
 }
 
 /// Implements SuiResolver traits by providing null implementations for module and resource
@@ -46,26 +27,8 @@ struct NullSuiResolver<'state>(Box<dyn TypeLayoutStore + 'state>);
 
 impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
     pub fn new(vm: &'vm MoveRuntime, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
-        let resolver = 
-        Box::new(CachedPackageStore::new(Box::new(
-                    NullSuiResolver(state_view),
-        )));
-        // Since we do not include system packages by default, we can set this to false as no
-        // loading will be done when creating the linkage resolver.
-        let always_include_system_packages = false;
-        let Some(linkage_resolver) = UnifiedLinkage::new(
-            always_include_system_packages,
-            vm.vm_config().binary_config.clone(),
-            &resolver,
-        )
-        .ok() else {
-            unreachable!()
-        };
-        Self {
-            vm,
-            resolver,
-            linkage_resolver,
-        }
+        let resolver = CachedPackageStore::new(Box::new(NullSuiResolver(state_view)));
+        Self { vm, resolver }
     }
 }
 
@@ -74,13 +37,17 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         &mut self,
         struct_tag: &StructTag,
     ) -> Result<A::MoveDatatypeLayout, SuiError> {
-        let data_store = SuiDataStore::new(self.resolver.0.as_backing_package_store(), &[]);
-        let Ok(vm) = vm_for_struct_tags(
-            &mut self.linkage_resolver,
-            self.vm,
-            [struct_tag],
-            &data_store,
-        ) else {
+        let root_address = struct_tag.address.into();
+        let ids = struct_tag
+            .all_addresses()
+            .into_iter()
+            .map(|a| a.into())
+            .collect::<Vec<_>>();
+        let tag_linkage = type_linkage(&ids, &self.resolver)?;
+        let link_context = tag_linkage.linkage_context();
+        let rooted_linkage = RootedLinkage::new(root_address, tag_linkage);
+        let data_store = LinkedDataStore::new(&rooted_linkage, &self.resolver);
+        let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
             return Err(SuiError::FailObjectLayout {
                 st: format!("{}", struct_tag),
             });

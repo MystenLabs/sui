@@ -32,7 +32,7 @@ mod checked {
     use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
-    use crate::static_programmable_transactions;
+    use crate::static_programmable_transactions as SPT;
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
@@ -289,7 +289,7 @@ mod checked {
             0,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
-        static_programmable_transactions::execution::execute::<execution_mode::Genesis>(
+        SPT::execute::<execution_mode::Genesis>(
             protocol_config,
             metrics,
             move_vm,
@@ -686,21 +686,19 @@ mod checked {
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
             }
-            TransactionKind::ProgrammableTransaction(pt) => {
-                static_programmable_transactions::execution::execute::<Mode>(
-                    protocol_config,
-                    metrics,
-                    move_vm,
-                    temporary_store,
-                    store.as_backing_package_store(),
-                    tx_ctx,
-                    gas_charger,
-                    pt,
-                    trace_builder_opt,
-                )
-            }
+            TransactionKind::ProgrammableTransaction(pt) => SPT::execute::<Mode>(
+                protocol_config,
+                metrics,
+                move_vm,
+                temporary_store,
+                store.as_backing_package_store(),
+                tx_ctx,
+                gas_charger,
+                pt,
+                trace_builder_opt,
+            ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
-                static_programmable_transactions::execution::execute::<execution_mode::System>(
+                SPT::execute::<execution_mode::System>(
                     protocol_config,
                     metrics,
                     move_vm,
@@ -976,7 +974,7 @@ mod checked {
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
         let advance_epoch_pt = construct_advance_epoch_pt(builder, &params)?;
-        let result = static_programmable_transactions::execution::execute::<execution_mode::System>(
+        let result = SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics.clone(),
             move_vm,
@@ -1007,7 +1005,7 @@ mod checked {
             } else {
                 let advance_epoch_safe_mode_pt =
                     construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
-                static_programmable_transactions::execution::execute::<execution_mode::System>(
+                SPT::execute::<execution_mode::System>(
                     protocol_config,
                     metrics.clone(),
                     move_vm,
@@ -1085,7 +1083,7 @@ mod checked {
                     b.finish()
                 };
 
-                static_programmable_transactions::execution::execute::<execution_mode::System>(
+                SPT::execute::<execution_mode::System>(
                     protocol_config,
                     metrics.clone(),
                     move_vm,
@@ -1158,7 +1156,7 @@ mod checked {
             );
             builder.finish()
         };
-        static_programmable_transactions::execution::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics,
             move_vm,
@@ -1305,7 +1303,7 @@ mod checked {
             );
             builder.finish()
         };
-        static_programmable_transactions::execution::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics,
             move_vm,
@@ -1377,7 +1375,7 @@ mod checked {
             );
             builder.finish()
         };
-        static_programmable_transactions::execution::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics,
             move_vm,
