@@ -23,6 +23,22 @@ pub(crate) enum ModuleFilter {
 #[error("Invalid filter format, expected: package[::module]")]
 pub(crate) struct ModuleFilterError;
 
+impl ModuleFilter {
+    pub(crate) fn package(&self) -> Option<SuiAddress> {
+        match self {
+            ModuleFilter::Package(p) => Some(*p),
+            ModuleFilter::Module(p, _) => Some(*p),
+        }
+    }
+
+    pub(crate) fn module(&self) -> Option<String> {
+        match self {
+            ModuleFilter::Package(_) => None,
+            ModuleFilter::Module(_, m) => Some(m.clone()),
+        }
+    }
+}
+
 impl_string_input!(ModuleFilter);
 
 impl FromStr for ModuleFilter {

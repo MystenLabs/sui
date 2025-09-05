@@ -8,7 +8,7 @@ use async_graphql::InputObject;
 
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
-use sui_types::event::Event as NativeEvent;
+use sui_types::{event::Event as NativeEvent, TypeTag};
 
 use crate::{
     api::scalars::{
@@ -33,7 +33,7 @@ pub(crate) struct EventFilter {
     pub before_checkpoint: Option<UInt53>,
 
     /// Filter on events by transaction digest.
-    pub digest: Option<Digest>,
+    pub transaction_digest: Option<Digest>,
 
     /// Filter on events by transaction sender address.
     pub sender: Option<SuiAddress>,
@@ -59,182 +59,124 @@ pub(crate) struct EventFilter {
 }
 
 impl EventFilter {
+    pub(crate) fn package(&self) -> Option<SuiAddress> {
+        self.module
+            .as_ref()
+            .and_then(|m| m.package())
+            .or_else(|| self.type_.as_ref().and_then(|t| t.package()))
+    }
+
+    pub(crate) fn module(&self) -> Option<String> {
+        self.module
+            .as_ref()
+            .and_then(|m| m.module())
+            .or_else(|| self.type_.as_ref().and_then(|t| t.module()))
+    }
+
+    pub(crate) fn type_name(&self) -> Option<String> {
+        self.type_.as_ref().and_then(|t| t.type_name())
+    }
+    pub(crate) fn type_params(&self) -> Option<Vec<TypeTag>> {
+        self.type_.as_ref().and_then(|t| t.type_params())
+    }
+
     /// Builds a SQL query to select and filter events based on sender, module, and type filters.
     /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
     pub(crate) fn query(&self, tx_bounds_subquery: Query<'static>) -> Result<Query, RpcError> {
-        let sender_filter = if let Some(sender) = self.sender {
-            query!("AND sender = {Bytea}", sender.into_vec())
-        } else {
-            query!("")
-        };
-
-        let query = match (self.sender, &self.module, &self.type_) {
-            (_, None, None) => {
-                // No type or module filter - just use tx_bounds and sender if provided.
-                query!(
-                    r#"
-                    WITH bounds AS ({})
-                    SELECT tx_sequence_number FROM ev_struct_inst, bounds
-                    WHERE tx_sequence_number >= bounds.tx_lo 
-                    AND tx_sequence_number < bounds.tx_hi
-                    {}
-                    "#,
-                    tx_bounds_subquery,
-                    sender_filter
-                )
-            }
-            (_, None, Some(event_type)) => match event_type {
-                TypeFilter::Package(package) => {
-                    query!(
-                        r#"
-                            WITH bounds AS ({})
-                            SELECT tx_sequence_number FROM ev_struct_inst, bounds
-                            WHERE package = {Bytea} 
-                            AND tx_sequence_number >= bounds.tx_lo 
-                            AND tx_sequence_number < bounds.tx_hi
-                            {}
-                            "#,
-                        tx_bounds_subquery,
-                        package.into_vec(),
-                        sender_filter
-                    )
-                }
-                TypeFilter::Module(package, module) => {
-                    query!(
-                        r#"
-                            WITH bounds AS ({})
-                            SELECT tx_sequence_number FROM ev_struct_inst, bounds
-                            WHERE package = {Bytea} AND module = {Text} 
-                            AND tx_sequence_number >= bounds.tx_lo 
-                            AND tx_sequence_number < bounds.tx_hi
-                            {}
-                            "#,
-                        tx_bounds_subquery,
-                        package.into_vec(),
-                        module,
-                        sender_filter
-                    )
-                }
-                TypeFilter::Type(tag) => {
-                    let package = tag.address.to_vec();
-                    let module = tag.module.to_string();
-                    let name = tag.name.as_str().to_owned();
-                    let type_params_bytes = bcs::to_bytes(&tag.type_params)
-                        .context("Failed to serialize type parameters")?;
-
-                    query!(
-                        r#"
-                            WITH bounds AS ({})
-                            SELECT tx_sequence_number FROM ev_struct_inst, bounds
-                            WHERE 
-                            package = {Bytea} AND module = {Text} AND name = {Text} {}
-                            AND tx_sequence_number >= bounds.tx_lo 
-                            AND tx_sequence_number < bounds.tx_hi
-                            {}
-                            "#,
-                        tx_bounds_subquery,
-                        package,
-                        module,
-                        name,
-                        if tag.type_params.is_empty() {
-                            query!("")
-                        } else {
-                            query!("AND instantiation = {Bytea}", type_params_bytes)
-                        },
-                        sender_filter
-                    )
-                }
-            },
-            (_, Some(module), None) => match module {
-                ModuleFilter::Package(package) => {
-                    query!(
-                        r#"
-                            WITH bounds AS ({})
-                            SELECT tx_sequence_number FROM ev_emit_mod, bounds
-                            WHERE package = {Bytea} 
-                            AND tx_sequence_number >= bounds.tx_lo 
-                            AND tx_sequence_number < bounds.tx_hi
-                            {}
-                            "#,
-                        tx_bounds_subquery,
-                        package.into_vec(),
-                        sender_filter
-                    )
-                }
-                ModuleFilter::Module(package, module) => {
-                    query!(
-                        r#"
-                            WITH bounds AS ({})
-                            SELECT tx_sequence_number FROM ev_emit_mod, bounds
-                            WHERE package = {Bytea} AND module = {Text} 
-                            AND tx_sequence_number >= bounds.tx_lo 
-                            AND tx_sequence_number < bounds.tx_hi
-                            {}
-                            "#,
-                        tx_bounds_subquery,
-                        package.into_vec(),
-                        module,
-                        sender_filter
-                    )
-                }
-            },
-            (_, Some(_), Some(_)) => {
+        let table = match (&self.module, &self.type_) {
+            (Some(_), Some(_)) => {
                 return Err(feature_unavailable(
                     "Filtering by both emitting module and event type is not supported",
                 ))
             }
+            (Some(_), None) => query!("ev_emit_mod"),
+            (None, _) => query!("ev_struct_inst"),
         };
+
+        let mut query = query!(
+            r#"
+            WITH bounds AS ({})
+            SELECT
+                tx_sequence_number
+            FROM
+                bounds,
+                {}
+            WHERE
+                tx_sequence_number >= bounds.tx_lo
+            AND tx_sequence_number < bounds.tx_hi
+            "#,
+            tx_bounds_subquery,
+            table
+        );
+
+        if let Some(sender) = self.sender {
+            query += query!(" AND sender = {Bytea}", sender.into_vec());
+        }
+
+        if let Some(package) = self.package() {
+            query += query!(" AND package = {Bytea}", package.into_vec());
+        }
+
+        if let Some(module) = self.module() {
+            query += query!(" AND module = {Text}", module);
+        }
+
+        if let Some(type_name) = self.type_name() {
+            query += query!(" AND name = {Text}", type_name);
+        }
+
+        if let Some(type_params) = self.type_params() {
+            if !type_params.is_empty() {
+                query += query!(
+                    " AND instantiation = {Bytea}",
+                    bcs::to_bytes(&type_params).context("Failed to serialize type parameters")?
+                );
+            }
+        }
+
+        if let Some(digest) = self.transaction_digest {
+            query += query!(" AND tx_sequence_number = (SELECT tx_sequence_number FROM tx_digests WHERE tx_digest = {Bytea})", digest.into_inner());
+        }
 
         Ok(query)
     }
 
     // Check if the Event matches sender, module, or type filters in EventFilter if they are provided.
     pub(crate) fn matches(&self, event: &NativeEvent) -> bool {
-        // Helper function for optional sender filtering when module or type filter is provided.
-        let sender_is_none_or_matches = |sender: &Option<SuiAddress>| {
-            sender
-                .as_ref()
-                .is_none_or(|s| s == &SuiAddress::from(event.sender))
-        };
-
-        match (self.sender, &self.module, &self.type_) {
-            (Some(sender), None, None) => sender == SuiAddress::from(event.sender),
-            (sender, Some(module), None) => {
-                sender_is_none_or_matches(&sender)
-                    && match module {
-                        ModuleFilter::Package(package) => {
-                            SuiAddress::from(event.package_id) == *package
-                        }
-                        ModuleFilter::Module(package, module_name) => {
-                            SuiAddress::from(event.package_id) == *package
-                                && event.transaction_module.as_str() == module_name
-                        }
-                    }
-            }
-            (sender, None, Some(event_type)) => {
-                sender_is_none_or_matches(&sender)
-                    && match event_type {
-                        TypeFilter::Package(package) => {
-                            SuiAddress::from(event.type_.address) == *package
-                        }
-                        TypeFilter::Module(package, module_name) => {
-                            SuiAddress::from(event.type_.address) == *package
-                                && event.type_.module.as_str() == module_name
-                        }
-                        TypeFilter::Type(tag) => {
-                            if tag.type_params.is_empty() {
-                                tag.address == event.type_.address
-                                    && tag.module == event.type_.module
-                                    && tag.name == event.type_.name
-                            } else {
-                                tag == &event.type_
-                            }
-                        }
-                    }
-            }
-            (_, Some(_), Some(_)) => false,
-            (None, None, None) => true,
+        if self
+            .sender
+            .is_some_and(|s| s != SuiAddress::from(event.sender))
+        {
+            return false;
         }
+
+        if self
+            .package()
+            .is_some_and(|p| p != SuiAddress::from(event.package_id))
+        {
+            return false;
+        }
+
+        if self
+            .module()
+            .is_some_and(|m| m != event.transaction_module.to_string())
+        {
+            return false;
+        }
+        if let Some(type_name) = self.type_name() {
+            if type_name != event.type_.name.to_string() {
+                return false;
+            }
+        }
+
+        if self
+            .type_params()
+            .is_some_and(|p| !p.is_empty() && p != event.type_.type_params.to_vec())
+        {
+            return false;
+        }
+
+        true
     }
 }
 

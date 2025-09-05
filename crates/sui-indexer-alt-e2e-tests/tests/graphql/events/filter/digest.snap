@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 14 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -54,7 +54,7 @@ task 9, line 56:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 10, lines 58-87:
+task 10, lines 58-92:
 //# run-graphql
 Response: {
   "data": {
@@ -106,7 +106,7 @@ Response: {
         }
       ]
     },
-    "eventByDigest": {
+    "eventByDigest3": {
       "nodes": [
         {
           "sequenceNumber": 0,
@@ -121,7 +121,7 @@ Response: {
         }
       ]
     },
-    "eventsByDigest": {
+    "eventsByDigest5": {
       "nodes": [
         {
           "sequenceNumber": 0,
@@ -146,6 +146,79 @@ Response: {
           }
         }
       ]
+    },
+    "eventsByDigest5AtCheckpoint6OutsideOfRange": {
+      "nodes": []
+    }
+  }
+}
+
+task 11, lines 94-115:
+//# run-graphql --cursors {"t":3,"e":0}
+Response: {
+  "data": {
+    "eventByDigestAfterT3E0HasPreviousPage": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true,
+        "startCursor": "eyJ0IjozLCJlIjoxfQ==",
+        "endCursor": "eyJ0IjozLCJlIjoxfQ=="
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 1,
+          "transaction": {
+            "digest": "CXQdZ7GUgvTcocrrwQAvuakgYg29e9xmU9BnaxSpCt6o",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 117-136:
+//# run-graphql --cursors {"t":3,"e":1}
+Response: {
+  "data": {
+    "eventByDigestBeforeT3E1HasNextPage": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transaction": {
+            "digest": "CXQdZ7GUgvTcocrrwQAvuakgYg29e9xmU9BnaxSpCt6o",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 139-160:
+//# run-graphql --cursors {"t":10,"e":0}
+Response: {
+  "data": {
+    "eventByDigestCursorsOutsideRangeIsEmpty": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "startCursor": null,
+        "endCursor": null
+      },
+      "nodes": []
     }
   }
 }

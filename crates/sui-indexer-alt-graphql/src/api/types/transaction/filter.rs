@@ -5,11 +5,10 @@ use async_graphql::{CustomValidator, InputObject, InputValueError};
 
 use std::ops::RangeInclusive;
 use sui_pg_db::query::Query;
-
 use sui_sql_macro::query;
 
 use crate::{
-    api::scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
+    api::scalars::{sui_address::SuiAddress, uint53::UInt53},
     intersect,
 };
 
@@ -128,15 +127,5 @@ pub(crate) fn tx_bounds_query(
         cursor_lo as i64,
         global_tx_hi as i64,
         cursor_hi as i64,
-    )
-}
-
-/// The tx_sequence_number of the transaction with the given digest.
-/// Returned as tx_sequence_number (tx_lo) and tx_sequence_number + 1 (tx_hi) to make it easier to use in queries.
-pub(crate) fn tx_bounds_by_digest_query(digest: Digest) -> Query<'static> {
-    query!(
-        r#"
-        SELECT tx_sequence_number as tx_lo, tx_sequence_number + 1 as tx_hi FROM tx_digests WHERE tx_digest = {Bytea}"#,
-        digest.into_inner()
     )
 }

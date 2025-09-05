@@ -27,14 +27,9 @@ use crate::{
 };
 
 use super::{
-    address::Address,
-    checkpoint::filter::checkpoint_bounds,
-    move_module::MoveModule,
-    move_package::MovePackage,
-    move_type::MoveType,
-    move_value::MoveValue,
-    transaction::filter::{tx_bounds_by_digest_query, tx_bounds_query},
-    transaction::Transaction,
+    address::Address, checkpoint::filter::checkpoint_bounds, move_module::MoveModule,
+    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::filter::tx_bounds_query, transaction::Transaction,
 };
 
 pub(crate) mod filter;
@@ -150,19 +145,18 @@ impl Event {
             return Ok(Connection::new(false, false));
         };
 
+        let cursor_tx_bounds = page.after().map_or(0, |c| c.tx_sequence_number)
+            ..page
+                .before()
+                .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1));
         // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
         // Digest to tx_sequence_number is 1:1. If we have a digest filter, query tx_digests for the corresponding tx_sequence_number.
-        let tx_bounds_query = if let Some(digest) = filter.digest {
-            tx_bounds_by_digest_query(digest)
-        } else {
-            tx_bounds_query(
-                &cp_bounds,
-                global_tx_hi,
-                page.after().map_or(0, |c| c.tx_sequence_number),
-                page.before()
-                    .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1)),
-            )
-        };
+        let tx_bounds_query = tx_bounds_query(
+            &cp_bounds,
+            global_tx_hi,
+            cursor_tx_bounds.start,
+            cursor_tx_bounds.end,
+        );
 
         let query_from_filters = filter.query(tx_bounds_query)?;
 
