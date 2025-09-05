@@ -21,7 +21,11 @@ use crate::{
     pagination::{Page, PaginationConfig},
 };
 
-use super::{move_datatype::MoveStruct, move_function::MoveFunction, move_package::MovePackage};
+use super::{
+    move_datatype::{MoveDatatype, MoveStruct},
+    move_function::MoveFunction,
+    move_package::MovePackage,
+};
 
 #[derive(Clone)]
 pub(crate) struct MoveModule {
@@ -52,6 +56,9 @@ pub(crate) struct ModuleContents {
     native: Vec<u8>,
     pub(crate) parsed: ParsedModule,
 }
+
+/// Cursor for iterating over datatypes in a module. Points to the datatype by its name.
+type CDatatype = JsonCursor<String>;
 
 /// Cursor for iterating over friend modules. Points to the friend by its index in the friend list.
 type CFriend = JsonCursor<usize>;
@@ -84,6 +91,76 @@ impl MoveModule {
         };
 
         Ok(Some(Base64::from(contents.native.clone())))
+    }
+
+    /// The datatype (struct or enum) named `name` in this module.
+    async fn datatype(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<MoveDatatype>, RpcError> {
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let Some(def) = contents
+            .parsed
+            .data_def(&name)
+            .context("Failed to get datatype definition")?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(MoveDatatype::from_def(self.clone(), name, def)))
+    }
+
+    /// Paginate through this module's datatype definitions.
+    async fn datatypes(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CDatatype>,
+        last: Option<u64>,
+        before: Option<CDatatype>,
+    ) -> Result<Option<Connection<String, MoveDatatype>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("MoveModule", "datatypes");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let datatype_range = contents.parsed.datatypes(
+            page.after().map(|c| c.as_ref()),
+            page.before().map(|c| c.as_ref()),
+        );
+
+        let mut conn = Connection::new(false, false);
+        let datatypes = if page.is_from_front() {
+            datatype_range.take(page.limit()).collect()
+        } else {
+            let mut datatypes: Vec<_> = datatype_range.rev().take(page.limit()).collect();
+            datatypes.reverse();
+            datatypes
+        };
+
+        conn.has_previous_page = datatypes
+            .first()
+            .is_some_and(|fst| contents.parsed.datatypes(None, Some(fst)).next().is_some());
+
+        conn.has_next_page = datatypes
+            .last()
+            .is_some_and(|lst| contents.parsed.datatypes(Some(lst), None).next().is_some());
+
+        for datatype_name in datatypes {
+            conn.edges.push(Edge::new(
+                JsonCursor::new(datatype_name.to_owned()).encode_cursor(),
+                MoveDatatype::with_fq_name(self.clone(), datatype_name.to_owned()),
+            ));
+        }
+
+        Ok(Some(conn))
     }
 
     /// Textual representation of the module's bytecode.

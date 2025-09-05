@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::{Context, Interface, Object, SimpleObject};
 use sui_package_resolver::{DataDef, MoveData, OpenSignatureBody};
 use tokio::sync::OnceCell;
 
@@ -16,15 +16,53 @@ use super::{
     open_move_type::OpenMoveType,
 };
 
-pub(crate) struct MoveStruct {
-    /// The module that this struct is defined in.
+/// Interface implemented by all GraphQL types that represent a Move datatype definition (either a struct or an enum definition).
+///
+/// This interface is used to provide a way to access fields that are shared by both structs and enums, e.g., the module that the datatype belongs to, the name of the datatype, type parameters etc.
+#[allow(clippy::duplicated_attributes)]
+#[derive(Interface)]
+#[graphql(
+    name = "IMoveDatatype",
+    field(
+        name = "module",
+        ty = "Result<&MoveModule, RpcError>",
+        desc = "The module that this datatype is defined in",
+    ),
+    field(
+        name = "name",
+        ty = "Result<&str, RpcError>",
+        desc = "The datatype's unqualified name",
+    ),
+    field(
+        name = "abilities",
+        ty = "Result<Option<Vec<MoveAbility>>, RpcError>",
+        desc = "Abilities on this datatype definition.",
+    ),
+    field(
+        name = "type_parameters",
+        ty = "Result<Option<Vec<MoveDatatypeTypeParameter>>, RpcError>",
+        desc = "Constraints on the datatype's formal type parameters\n\nMove bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.",
+    )
+)]
+pub(crate) enum IMoveDatatype {
+    MoveDatatype(MoveDatatype),
+    MoveStruct(MoveStruct),
+}
+
+#[derive(Clone)]
+pub(crate) struct MoveDatatype {
+    /// The module that this datatype is defined in.
     module: MoveModule,
 
-    /// The struct's unqualified name.
+    /// The datatype's unqualified name.
     name: String,
 
-    /// The lazily loaded definition of the struct.
+    /// The lazily loaded definition of the datatype.
     contents: Arc<OnceCell<Option<DataDef>>>,
+}
+
+pub(crate) struct MoveStruct {
+    super_: MoveDatatype,
 }
 
 /// Declaration of a type parameter on a Move struct.
@@ -44,20 +82,20 @@ struct MoveField<'f> {
     type_: &'f OpenSignatureBody,
 }
 
-/// Description of a struct type, defined in a Move module.
+/// Description of a datatype, defined in a Move module.
 #[Object]
-impl MoveStruct {
-    /// The module that this struct is defined in.
-    async fn module(&self) -> &MoveModule {
-        &self.module
+impl MoveDatatype {
+    /// The module that this datatype is defined in.
+    async fn module(&self, _ctx: &Context<'_>) -> Result<&MoveModule, RpcError> {
+        Ok(&self.module)
     }
 
-    /// The struct's unqualified name.
-    async fn name(&self) -> &str {
-        &self.name
+    /// The datatype's unqualified name.
+    async fn name(&self, _ctx: &Context<'_>) -> Result<&str, RpcError> {
+        Ok(&self.name)
     }
 
-    /// Abilities on this struct definition.
+    /// Abilities on this datatype definition.
     async fn abilities(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveAbility>>, RpcError> {
         let Some(def) = self.contents(ctx).await? else {
             return Ok(None);
@@ -66,11 +104,63 @@ impl MoveStruct {
         Ok(Some(abilities(def.abilities)))
     }
 
+    /// Attempts to convert the `MoveDatatype` as a `MoveStruct`.
+    async fn as_move_struct(&self, ctx: &Context<'_>) -> Result<Option<MoveStruct>, RpcError> {
+        let Some(def) = self.contents(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(matches!(def.data, MoveData::Struct(_)).then(|| MoveStruct {
+            super_: self.clone(),
+        }))
+    }
+
+    /// Constraints on the datatype's formal type parameters.
+    ///
+    /// Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+    async fn type_parameters(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Vec<MoveDatatypeTypeParameter>>, RpcError> {
+        let Some(def) = self.contents(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            def.type_params
+                .iter()
+                .map(|param| MoveDatatypeTypeParameter {
+                    constraints: abilities(param.constraints),
+                    is_phantom: param.is_phantom,
+                })
+                .collect(),
+        ))
+    }
+}
+
+/// Description of a struct type, defined in a Move module.
+#[Object]
+impl MoveStruct {
+    /// The module that this struct is defined in.
+    async fn module(&self, ctx: &Context<'_>) -> Result<&MoveModule, RpcError> {
+        self.super_.module(ctx).await
+    }
+
+    /// The struct's unqualified name.
+    async fn name(&self, ctx: &Context<'_>) -> Result<&str, RpcError> {
+        self.super_.name(ctx).await
+    }
+
+    /// Abilities on this struct definition.
+    async fn abilities(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveAbility>>, RpcError> {
+        self.super_.abilities(ctx).await
+    }
+
     /// The names and types of the struct's fields.
     ///
     /// Field types reference type parameters by their index in the defining struct's `typeParameters` list.
     async fn fields(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveField<'_>>>, RpcError> {
-        let Some(def) = self.contents(ctx).await? else {
+        let Some(def) = self.super_.contents(ctx).await? else {
             return Ok(None);
         };
 
@@ -96,19 +186,7 @@ impl MoveStruct {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Vec<MoveDatatypeTypeParameter>>, RpcError> {
-        let Some(def) = self.contents(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            def.type_params
-                .iter()
-                .map(|param| MoveDatatypeTypeParameter {
-                    constraints: abilities(param.constraints),
-                    is_phantom: param.is_phantom,
-                })
-                .collect(),
-        ))
+        self.super_.type_parameters(ctx).await
     }
 }
 
@@ -127,10 +205,10 @@ impl MoveField<'_> {
     }
 }
 
-impl MoveStruct {
-    /// Construct a struct that is represented by its module and name. This does not check that the
-    /// datatype exists and is a struct, so should not be used to "fetch" a struct based on user
-    /// input.
+impl MoveDatatype {
+    /// Construct a datatype that is represented by its fully-qualified name (package, module and
+    /// name). This does not check that the datatype exists , so should not be used to "fetch" a
+    /// datatype based on user input.
     pub(crate) fn with_fq_name(module: MoveModule, name: String) -> Self {
         Self {
             module,
@@ -139,8 +217,7 @@ impl MoveStruct {
         }
     }
 
-    /// Construct a struct with a pre-loaded struct definition. This does not check that the
-    /// datatype definition is for a struct, so it is the caller's responsibility to check that.
+    /// Construct a datatype with a pre-loaded definition.
     pub(crate) fn from_def(module: MoveModule, name: String, def: DataDef) -> Self {
         Self {
             module,
@@ -158,9 +235,23 @@ impl MoveStruct {
 
                 Ok(module
                     .parsed
-                    .struct_def(&self.name)
-                    .context("Failed to deserialize struct definition")?)
+                    .data_def(&self.name)
+                    .context("Failed to deserialize datatype definition")?)
             })
             .await
+    }
+}
+
+impl MoveStruct {
+    pub(crate) fn with_fq_name(module: MoveModule, name: String) -> Self {
+        Self {
+            super_: MoveDatatype::with_fq_name(module, name),
+        }
+    }
+
+    pub(crate) fn from_def(module: MoveModule, name: String, def: DataDef) -> Self {
+        Self {
+            super_: MoveDatatype::from_def(module, name, def),
+        }
     }
 }
