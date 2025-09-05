@@ -2,19 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use std::ops::{Range, RangeInclusive};
-use sui_pg_db::query::Query;
-
 use async_graphql::{Context, InputObject};
 use diesel::prelude::QueryableByName;
 use diesel::sql_types::BigInt;
+use std::ops::{Range, RangeInclusive};
 use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
-use crate::api::scalars::digest::Digest;
-use crate::api::scalars::uint53::UInt53;
-use crate::error::RpcError;
-use crate::intersect;
+use crate::{api::scalars::uint53::UInt53, error::RpcError, intersect};
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionFilter {
@@ -68,6 +64,8 @@ impl TransactionFilter {
 /// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
 /// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
 /// `hi_inclusive`).
+///
+/// TODO: (henry) deprecate this in favor of tx_bounds_query
 pub(crate) async fn tx_bounds(
     ctx: &Context<'_>,
     cp_bounds: &RangeInclusive<u64>,
@@ -184,15 +182,5 @@ pub(crate) fn tx_bounds_query(
         cursor_lo as i64,
         global_tx_hi as i64,
         cursor_hi as i64,
-    )
-}
-
-/// The tx_sequence_number of the transaction with the given digest.
-/// Returned as tx_sequence_number (tx_lo) and tx_sequence_number + 1 (tx_hi) to make it easier to use in queries.
-pub(crate) fn tx_bounds_by_digest_query(digest: Digest) -> Query<'static> {
-    query!(
-        r#"
-        SELECT tx_sequence_number as tx_lo, tx_sequence_number + 1 as tx_hi FROM tx_digests WHERE tx_digest = {Bytea}"#,
-        digest.into_inner()
     )
 }
