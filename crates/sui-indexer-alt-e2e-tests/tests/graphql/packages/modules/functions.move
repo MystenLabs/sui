@@ -39,3 +39,32 @@ fragment F on MoveFunction {
   typeParameters { constraints }
   visibility
 }
+
+//# run-graphql --cursors "f" "i"
+{
+  package(address: "@{P}") {
+    module(name: "M") {
+      all: functions(first: 4) { ...F }
+      first: functions(first: 2) { ...F }
+      last: functions(last: 2) { ...F }
+
+      firstBefore: functions(first: 2, before: "@{cursor_1}") { ...F }
+      lastAfter: functions(last: 2, after: "@{cursor_0}") { ...F }
+
+      firstAfter: functions(first: 2, after: "@{cursor_0}") { ...F }
+      lastBefore: functions(last: 2, before: "@{cursor_1}") { ...F }
+
+      afterBefore: functions(after: "@{cursor_0}", before: "@{cursor_1}") { ...F }
+    }
+  }
+}
+
+fragment F on MoveFunctionConnection {
+  pageInfo {
+    hasPreviousPage
+    hasNextPage
+  }
+  nodes {
+    name
+  }
+}
