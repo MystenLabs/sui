@@ -56,7 +56,6 @@ pub struct TransactionDriver<A: Clone> {
     submitter: TransactionSubmitter,
     certifier: EffectsCertifier,
     client_monitor_owned_object_txes: Arc<ValidatorClientMonitor<A>>,
-    client_monitor_shared_object_txes: Arc<ValidatorClientMonitor<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -82,12 +81,13 @@ where
             shared_swap.clone(),
             TxType::SingleWriter,
         );
+        /*
         let client_monitor_shared_object_txes = ValidatorClientMonitor::new(
             monitor_config.clone(),
             client_metrics.clone(),
             shared_swap.clone(),
             TxType::SharedObject,
-        );
+        );*/
 
         let driver = Arc::new(Self {
             authority_aggregator: shared_swap,
@@ -96,7 +96,6 @@ where
             submitter: TransactionSubmitter::new(metrics.clone()),
             certifier: EffectsCertifier::new(metrics),
             client_monitor_owned_object_txes,
-            client_monitor_shared_object_txes,
         });
 
         driver.enable_reconfig(reconfig_observer);
@@ -211,12 +210,14 @@ where
         let start_time = Instant::now();
         let auth_agg = self.authority_aggregator.load();
 
+        /*
         let client_monitor = if tx_type == TxType::SingleWriter {
             &self.client_monitor_owned_object_txes
         } else {
             &self.client_monitor_shared_object_txes
         };
-
+        */
+        let client_monitor = &self.client_monitor_owned_object_txes;
         let (name, submit_txn_resp) = self
             .submitter
             .submit_transaction(&auth_agg, client_monitor, tx_digest, raw_request, options)

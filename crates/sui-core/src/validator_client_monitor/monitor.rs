@@ -10,7 +10,7 @@ use crate::validator_client_monitor::{
 use arc_swap::ArcSwap;
 use mysten_metrics::TxType;
 use parking_lot::RwLock;
-use rand::seq::SliceRandom;
+use rand::{seq::SliceRandom, Rng};
 use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
@@ -182,6 +182,7 @@ where
             let timeout_duration = self.config.health_check_timeout;
             let monitor = self.clone();
             let authority_agg_clone = authority_agg.clone();
+            let delay_ms = rand::thread_rng().gen_range(0..1_000);
 
             tasks.spawn(async move {
                 monitor
@@ -191,6 +192,7 @@ where
                         client,
                         authority_agg_clone,
                         timeout_duration,
+                        delay_ms,
                     )
                     .await;
             });
@@ -211,7 +213,11 @@ where
         client: Arc<crate::safe_client::SafeClient<A>>,
         authority_agg: Arc<crate::authority_aggregator::AuthorityAggregator<A>>,
         timeout_duration: std::time::Duration,
+        delay_ms: u64,
     ) {
+        // Add some random delay to the task to avoid all tasks running at the same time
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+
         // Get consensus position from this validator
         // Start measuring latency from here and broadcast to all validators
         let start_time = Instant::now();
