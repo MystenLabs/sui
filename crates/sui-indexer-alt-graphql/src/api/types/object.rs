@@ -467,11 +467,10 @@ impl Object {
                 .ok_or_else(|| bad_user_input(Error::Future(cp.into())))?;
 
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
-        } else {
-            let Some(cp) = scope.checkpoint_viewed_at() else {
-                return Ok(None);
-            };
+        } else if let Some(cp) = scope.checkpoint_viewed_at() {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
+        } else {
+            Ok(None)
         }
     }
 

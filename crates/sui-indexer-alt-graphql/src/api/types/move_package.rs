@@ -433,11 +433,10 @@ impl MovePackage {
             Ok(Self::at_version(ctx, scope, key.address, v).await?)
         } else if let Some(cp) = key.at_checkpoint {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
-        } else {
-            let Some(cp) = scope.checkpoint_viewed_at() else {
-                return Ok(None);
-            };
+        } else if let Some(cp) = scope.checkpoint_viewed_at() {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
+        } else {
+            Ok(None)
         }
     }
 
@@ -521,10 +520,10 @@ impl MovePackage {
         scope: Scope,
         stored: StoredPackage,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(None);
-        };
-        if stored.cp_sequence_number as u64 > checkpoint_viewed_at {
+        if scope
+            .checkpoint_viewed_at()
+            .is_none_or(|cp| stored.cp_sequence_number as u64 > cp)
+        {
             return Ok(None);
         }
 

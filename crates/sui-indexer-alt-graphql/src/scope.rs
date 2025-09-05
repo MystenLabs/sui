@@ -70,19 +70,15 @@ impl Scope {
         })
     }
 
-    /// Create a new scope for execution context (freshly executed transaction).
-    pub(crate) fn with_execution_output<E: std::error::Error>(
-        ctx: &Context<'_>,
-    ) -> Result<Self, RpcError<E>> {
-        let package_store: &Arc<PackageCache> = ctx.data()?;
-        let limits: &Limits = ctx.data()?;
-
-        Ok(Self {
+    /// Create a nested scope for execution context (freshly executed transaction).
+    /// This clears the checkpoint context to indicate fresh execution data.
+    pub(crate) fn with_execution_output(&self) -> Self {
+        Self {
             checkpoint_viewed_at: None,
-            root_version: None,
-            package_store: package_store.clone(),
-            resolver_limits: limits.package_resolver(),
-        })
+            root_version: self.root_version,
+            package_store: self.package_store.clone(),
+            resolver_limits: self.resolver_limits.clone(),
+        }
     }
 
     /// Create a nested scope with a root version set.

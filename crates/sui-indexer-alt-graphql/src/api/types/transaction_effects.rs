@@ -102,7 +102,9 @@ impl EffectsContents {
             return None;
         };
 
-        Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
+        content
+            .cp_sequence_number()
+            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)))
     }
 
     /// Whether the transaction executed successfully or not.

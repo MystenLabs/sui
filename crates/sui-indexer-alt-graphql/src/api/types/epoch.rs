@@ -157,21 +157,21 @@ impl Epoch {
         let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
             return Ok(None);
         };
+        let Some(checkpoint_viewed_at_exclusive_bound) =
+            self.scope.checkpoint_viewed_at_exclusive_bound()
+        else {
+            return Ok(None);
+        };
 
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Epoch", "transactions");
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
-        let cp_hi = match end.as_ref() {
-            Some(end) => end.cp_hi as u64,
-            None => {
-                let Some(bound) = self.scope.checkpoint_viewed_at_exclusive_bound() else {
-                    return Ok(None);
-                };
-                bound
-            }
-        };
+        let cp_hi = end.as_ref().map_or_else(
+            || checkpoint_viewed_at_exclusive_bound,
+            |end| end.cp_hi as u64,
+        );
 
         let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
             after_checkpoint: cp_lo_exclusive.map(UInt53::from),
