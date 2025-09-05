@@ -34,23 +34,9 @@ module P::O {
   cp1: checkpoint(sequenceNumber: 1) {
     query {
       package(address: "@{P}") {
-        m: module(name: "M") {
-          name
-          fileFormatVersion
-          bytes
-        }
-
-        n: module(name: "N") {
-          name
-          fileFormatVersion
-          bytes
-        }
-
-        o: module(name: "O") {
-          name
-          fileFormatVersion
-          bytes
-        }
+        m: module(name: "M") { ...M }
+        n: module(name: "N") { ...M }
+        o: module(name: "O") { ...M }
       }
     }
   }
@@ -58,24 +44,17 @@ module P::O {
   cp2: checkpoint(sequenceNumber: 2) {
     query {
       package(address: "@{P}") {
-        m: module(name: "M") {
-          name
-          fileFormatVersion
-          bytes
-        }
-
-        n: module(name: "N") {
-          name
-          fileFormatVersion
-          bytes
-        }
-
-        o: module(name: "O") {
-          name
-          fileFormatVersion
-          bytes
-        }
+        m: module(name: "M") { ...M }
+        n: module(name: "N") { ...M }
+        o: module(name: "O") { ...M }
       }
     }
   }
+}
+
+fragment M on MoveModule {
+  name
+  fileFormatVersion
+  bytes
+  disassembly
 }
