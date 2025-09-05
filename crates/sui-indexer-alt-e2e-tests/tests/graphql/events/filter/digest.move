@@ -62,17 +62,17 @@ module P1::M1 {
       ...E
     }
   }
-  eventByDigest3: events(first: 50, filter: {digest: "@{digest_3}"}) {
+  eventByDigest3: events(first: 50, filter: {transactionDigest: "@{digest_3}"}) {
     nodes {
       ...E
     }
   }
-  eventsByDigest5: events(first: 50, filter: {digest: "@{digest_5}"}) {
+  eventsByDigest5: events(first: 50, filter: {transactionDigest: "@{digest_5}"}) {
     nodes {
       ...E
     }
   }
-  eventsByDigest5AtCheckpoint6OutsideOfRange: events(first: 50, filter: {digest: "@{digest_5}", atCheckpoint: 6}) {
+  eventsByDigest5AtCheckpoint6OutsideOfRange: events(first: 50, filter: {transactionDigest: "@{digest_5}", atCheckpoint: 6}) {
     nodes {
       ...E
     }
@@ -93,7 +93,7 @@ fragment E on Event {
 
 //# run-graphql --cursors {"t":3,"e":0}
 {
-  eventByDigestAfterT3E0HasPreviousPage: events(first: 50, after: "@{cursor_0}", filter: {digest: "@{digest_5}"}) {
+  eventByDigestAfterT3E0HasPreviousPage: events(first: 50, after: "@{cursor_0}", filter: {transactionDigest: "@{digest_5}"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -116,7 +116,7 @@ fragment E on Event {
 
 //# run-graphql --cursors {"t":3,"e":1}
 {
-  eventByDigestBeforeT3E1HasNextPage: events(first: 50, before: "@{cursor_0}", filter: {digest: "@{digest_5}"}) {
+  eventByDigestBeforeT3E1HasNextPage: events(first: 50, before: "@{cursor_0}", filter: {transactionDigest: "@{digest_5}"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -138,7 +138,7 @@ fragment E on Event {
 
 //# run-graphql --cursors {"t":10,"e":0}
 {
-  eventByDigestCursorsOutsideRangeIsEmpty: events(last: 50, before: "@{cursor_0}", filter: {digest: "@{digest_5}"}) {
+  eventByDigestCursorsOutsideRangeIsEmpty: events(last: 50, before: "@{cursor_0}", filter: {transactionDigest: "@{digest_5}"}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
