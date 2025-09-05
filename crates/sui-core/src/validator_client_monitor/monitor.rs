@@ -182,7 +182,7 @@ where
             let timeout_duration = self.config.health_check_timeout;
             let monitor = self.clone();
             let authority_agg_clone = authority_agg.clone();
-            let delay_ms = rand::thread_rng().gen_range(0..1_000);
+            let delay_ms = rand::thread_rng().gen_range(0..timeout_duration.as_millis() as u64);
 
             tasks.spawn(async move {
                 monitor

@@ -214,7 +214,7 @@ impl Default for ScoreWeights {
 // Default value functions
 
 fn default_health_check_interval() -> Duration {
-    Duration::from_secs(3)
+    Duration::from_secs(4)
 }
 
 fn default_health_check_timeout() -> Duration {
@@ -254,5 +254,5 @@ fn default_finalize_latency_weight() -> f64 {
 }
 
 fn default_latency_window_size() -> usize {
-    80
+    100
 }
