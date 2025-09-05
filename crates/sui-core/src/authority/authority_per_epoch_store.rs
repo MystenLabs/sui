@@ -50,7 +50,9 @@ use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::{
+    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+};
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -542,7 +544,11 @@ pub struct AuthorityEpochTables {
     active_jwks: DBMap<(u64, (JwkId, JWK)), ()>,
 
     /// Transactions that are being deferred until some future time
+    /// TODO(consensus-handler-rewrite): remove this table once we no longer need to support the old consensus handler
     deferred_transactions: DBMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>,
+
+    /// Transactions that are being deferred until some future time
+    deferred_transactions_v2: DBMap<DeferralKey, Vec<TrustedExecutableTransaction>>,
 
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
@@ -946,6 +952,16 @@ impl AuthorityEpochTables {
         Ok(self
             .deferred_transactions
             .safe_iter()
+            .collect::<Result<_, _>>()?)
+    }
+
+    fn get_all_deferred_transactions_v2(
+        &self,
+    ) -> SuiResult<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>> {
+        Ok(self
+            .deferred_transactions_v2
+            .safe_iter()
+            .map(|item| item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect())))
             .collect::<Result<_, _>>()?)
     }
 }
@@ -2802,6 +2818,7 @@ impl AuthorityPerEpochStore {
         jwk: &JWK,
     ) {
         info!(
+            ?round,
             "received jwk vote from {:?} for jwk ({:?}, {:?})",
             authority.concise(),
             id,
@@ -2844,6 +2861,7 @@ impl AuthorityPerEpochStore {
     }
 
     pub(crate) fn get_new_jwks(&self, round: u64) -> SuiResult<Vec<ActiveJwk>> {
+        info!("Getting new jwks for round {:?}", round);
         self.consensus_quarantine.read().get_new_jwks(self, round)
     }
 
@@ -3266,6 +3284,7 @@ impl AuthorityPerEpochStore {
                     None
                 }
                 DkgStatus::Successful => {
+                    // TODO(commit-handler-rewrite): do not reserve randomness if !should_accept_tx()
                     // Generate randomness for this commit if DKG is successful and we are still
                     // accepting certs.
                     if self

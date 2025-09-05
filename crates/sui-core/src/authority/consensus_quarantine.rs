@@ -68,8 +68,8 @@ pub(crate) struct ConsensusCommitOutput {
     // TODO: If we delay committing consensus output until after all deferrals have been loaded,
     // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
-    // TODO: remove the original once we no longer need to support the old consensus handler
-    deferred_txns_v2: BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>,
+    // TODO(commit-handler-rewrite): remove the original once we no longer need to support the old consensus handler
+    deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>,
     // deferred txns that have been loaded and can be removed
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
@@ -205,7 +205,7 @@ impl ConsensusCommitOutput {
         key: DeferralKey,
         transactions: Vec<VerifiedExecutableTransaction>,
     ) {
-        self.deferred_txns_v2.insert(key, transactions);
+        self.deferred_txns_v2.push((key, transactions));
     }
 
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
@@ -301,8 +301,28 @@ impl ConsensusCommitOutput {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
         }
 
-        batch.delete_batch(&tables.deferred_transactions, self.deleted_deferred_txns)?;
+        // TODO(consensus-handler-rewrite): delete the old structures once commit handler rewrite is complete
+        batch.delete_batch(&tables.deferred_transactions, &self.deleted_deferred_txns)?;
+        batch.delete_batch(
+            &tables.deferred_transactions_v2,
+            &self.deleted_deferred_txns,
+        )?;
+
         batch.insert_batch(&tables.deferred_transactions, self.deferred_txns)?;
+        batch.insert_batch(
+            &tables.deferred_transactions_v2,
+            self.deferred_txns_v2.into_iter().map(|(key, txs)| {
+                (
+                    key,
+                    txs.into_iter()
+                        .map(|tx| {
+                            let tx: TrustedExecutableTransaction = tx.serializable();
+                            tx
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            }),
+        )?;
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
@@ -382,8 +402,12 @@ impl ConsensusCommitOutput {
 pub(crate) struct ConsensusOutputCache {
     // deferred transactions is only used by consensus handler so there should never be lock contention
     // - hence no need for a DashMap.
+    // TODO(consensus-handler-rewrite): remove this once we no longer need to support the old consensus handler
     pub(crate) deferred_transactions:
         Mutex<BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>>,
+
+    pub(crate) deferred_transactions_v2:
+        Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>>,
 
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
     // The critical sections are small in both cases so a DashMap is probably not helpful.
@@ -403,6 +427,10 @@ impl ConsensusOutputCache {
             .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
 
+        let deferred_transactions_v2 = tables
+            .get_all_deferred_transactions_v2()
+            .expect("load deferred transactions cannot fail");
+
         assert!(
             epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch(),
             "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
@@ -412,6 +440,7 @@ impl ConsensusOutputCache {
 
         Self {
             deferred_transactions: Mutex::new(deferred_transactions),
+            deferred_transactions_v2: Mutex::new(deferred_transactions_v2),
             user_signatures_for_checkpoints: Default::default(),
             executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
             executed_in_epoch_cache: MokaCache::builder(8)
