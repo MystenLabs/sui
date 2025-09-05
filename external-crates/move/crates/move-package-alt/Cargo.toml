@@ -10,6 +10,7 @@ default-run = "move-package-alt"
 [dependencies]
 anyhow.workspace = true
 append-only-vec.workspace = true
+bimap.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
 derive-where.workspace = true

@@ -158,18 +158,6 @@ impl PinnedDependencyInfo {
         matches!(self.0.dep_info, Pinned::Root)
     }
 
-    /// Return a duplicate of `self` with a new `rename-from` field
-    pub fn with_rename_from(mut self, name: PackageName) -> Self {
-        self.0.rename_from = Some(name);
-        self
-    }
-
-    /// Set the `override = true` field on this dependency
-    pub fn with_override(mut self, is_override: bool) -> Self {
-        self.0.is_override = is_override;
-        self
-    }
-
     /// Return the absolute path to the directory that this package would be fetched into, without
     /// actually fetching it
     pub fn unfetched_path(&self) -> PathBuf {

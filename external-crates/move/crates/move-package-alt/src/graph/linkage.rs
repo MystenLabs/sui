@@ -132,7 +132,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         // Convert NodeIndex to PackageInfo
         Ok(root_linkage
             .into_iter()
-            .map(|(oid, node)| (oid, PackageInfo { graph: self, node }))
+            .map(|(oid, node)| (oid, self.package_info(node)))
             .collect())
     }
 

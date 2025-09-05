@@ -7,7 +7,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
-    schema::Environment,
+    schema::{Environment, PackageID, PackageName},
 };
 
 use std::{
@@ -16,6 +16,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use bimap::BiBTreeMap;
 use petgraph::graph::{DiGraph, NodeIndex};
 use tokio::sync::OnceCell;
 
@@ -73,13 +74,13 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             return Ok(None);
         };
 
-        let mut inner = DiGraph::new();
-        let mut package_nodes = BTreeMap::new();
-        let mut root_index = None;
-
         let Some(pins) = lockfile.pins_for_env(env.name()) else {
             return Ok(None);
         };
+
+        let mut inner = DiGraph::new();
+        let mut package_ids: BiBTreeMap<PackageID, NodeIndex> = BiBTreeMap::new();
+        let mut root_index = None;
 
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
@@ -90,8 +91,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                 return Ok(None);
             }
             let index = inner.add_node(package.clone());
-            package_nodes.insert(pkg_id.clone(), index);
-            if package.is_root() {
+            package_ids.insert(pkg_id.clone(), index);
+            if dep.is_root() {
                 let old_root = root_index.replace(index);
                 if old_root.is_some() {
                     return Err(PackageError::Generic(format!(
@@ -108,38 +109,39 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // Second pass: add edges based on dependencies
         for (source_id, source_pin) in pins.iter() {
-            let source_index = package_nodes.get(source_id).unwrap();
+            let source_index = package_ids.get_by_left(source_id).unwrap();
+            let source_package = inner[*source_index].clone();
 
-            for (name, target_id) in source_pin.deps.iter() {
-                let target_index = package_nodes
-                    .get(target_id)
+            for (dep_name, dep) in source_package.direct_deps() {
+                let target_id = source_pin
+                    .deps
+                    .get(dep_name)
+                    .ok_or(PackageError::Generic(format!(
+                        "Invalid lockfile: package <TODO> has a dependency named <TODO> in its manifest, but that dependency is not pinned in the lockfile"
+                    )))?;
+
+                let target_index = package_ids
+                    .get_by_left(target_id)
                     .ok_or(PackageError::Generic(format!(
                         "Invalid lockfile: package depends on a package with undefined ID `{target_id}`"
                     )))?;
-
-                let target = &inner[*target_index];
-
-                // we assume that the override and rename-from checks have already been performed,
-                // so we go ahead an update the override and rename-from fields to values that we
-                // know will pass the rename-from checks
-                let dep = target
-                    .dep_for_self()
-                    .clone()
-                    .with_rename_from(target.name().clone())
-                    .with_override(true);
 
                 inner.add_edge(
                     *source_index,
                     *target_index,
                     PackageGraphEdge {
-                        name: name.clone(),
-                        dep,
+                        name: dep_name.clone(),
+                        dep: dep.clone(),
                     },
                 );
             }
         }
 
-        Ok(Some(PackageGraph { inner, root_index }))
+        Ok(Some(PackageGraph {
+            inner,
+            root_index,
+            package_ids,
+        }))
     }
 
     /// Construct a new package graph for `env` by recursively fetching and reading manifest files
@@ -158,11 +160,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
 
-        let root_idx = self
+        let root_index = self
             .add_transitive_manifest_deps(root, env, graph.clone(), visited)
             .await?;
 
-        let graph: DiGraph<Arc<Package<F>>, PackageGraphEdge> =
+        let inner: DiGraph<Arc<Package<F>>, PackageGraphEdge> =
             graph.lock().expect("unpoisoned").map(
                 |_, node| {
                     node.clone()
@@ -171,10 +173,44 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                 |_, e| e.clone(),
             );
 
+        let package_ids = Self::create_ids(&inner);
         Ok(PackageGraph {
-            inner: graph,
-            root_index: root_idx,
+            inner,
+            package_ids,
+            root_index,
         })
+    }
+
+    /// Assign unique identifiers to each node. In the case that there is no overlap, the
+    /// identifier should be the same as the package's name.
+    fn create_ids(
+        graph: &DiGraph<Arc<Package<F>>, PackageGraphEdge>,
+    ) -> BiBTreeMap<PackageID, NodeIndex> {
+        let mut name_to_suffix: BTreeMap<PackageName, u8> = BTreeMap::new();
+        let mut node_to_id: BiBTreeMap<PackageID, NodeIndex> = BiBTreeMap::new();
+
+        // TODO: maybe we need to be more deterministic about disambiguation? In particular, the ID
+        // we generate depends on the iteration order, which may be nondeterministic. If we're
+        // exposing this in any way (e.g. using the IDs to index ephemeral addresses) then a switch
+        // could lead to confusion.
+        //
+        // Of course repinning will change these names too, so something more stable might be to
+        // use the inclusion paths as indices (but this may still depend on order?)
+
+        // build index to id map
+        for node in graph.node_indices() {
+            let pkg_node = graph.node_weight(node).expect("node exists");
+            let suffix = name_to_suffix.entry(pkg_node.name().clone()).or_default();
+            let id = if *suffix == 0 {
+                pkg_node.name().to_string()
+            } else {
+                format!("{}_{suffix}", pkg_node.name())
+            };
+            node_to_id.insert(id, node);
+            *suffix += 1;
+        }
+
+        node_to_id
     }
 
     /// Adds nodes and edges for the graph rooted at `package` to `graph` and returns the node ID for
