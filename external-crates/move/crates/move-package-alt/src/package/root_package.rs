@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use std::{collections::BTreeMap, fmt, path::Path};
 
 use tracing::debug;
@@ -9,7 +10,10 @@ use tracing::debug;
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
-use crate::schema::{Environment, OriginalID, PackageName, ParsedPubs, Publication, RenderToml};
+use crate::schema::{
+    Environment, OriginalID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile, Publication,
+    RenderToml,
+};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
@@ -17,6 +21,19 @@ use crate::{
     package::EnvironmentName,
     schema::ParsedLockfile,
 };
+
+#[derive(Debug)]
+enum AddressSource<F: MoveFlavor> {
+    /// Addresses are stored in the `Published.toml` file and retrieved from dependencies' files
+    Published(ParsedPublishedFile<F>),
+
+    /// Addresses are retrieved from and stored to the ephemeral publication file located at `file`
+    /// and with contents `pubs`
+    Ephemeral {
+        file: PathBuf,
+        pubs: ParsedEphemeralPubs<F>,
+    },
+}
 
 /// A package that is defined as the root of a Move project.
 ///
@@ -38,7 +55,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     lockfile: ParsedLockfile,
 
     /// The stored publications for the root package
-    pubs: ParsedPubs<F>,
+    pubs: AddressSource<F>,
 
     /// The list of published ids for every dependency in the root package
     deps_published_ids: Vec<OriginalID>,
@@ -62,7 +79,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(environments)
     }
 
-    /// Load the root package from `env` using the "normal" path - we first try to load from the
+    /// Load the root package for `env` using the "normal" path - we first try to load from the
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
@@ -75,6 +92,67 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         root_pkg.update_lockfile_digests();
 
         Ok(root_pkg)
+    }
+
+    /// Load the root package from `root` in environment `build_env`, but replace all the addresses
+    /// with the addresses in `pubfile`. Saving publication data will also save to the output to
+    /// `pubfile` rather than `Published.toml`
+    ///
+    /// If `pubfile` does not exist, one is created with the provided `chain_id` and `build_env`;
+    /// If the file does exist but these fields differ, then an error is returned.
+    pub async fn load_ephemeral(
+        _root: impl AsRef<Path>,
+        build_env: Option<EnvironmentName>,
+        chain_id: EnvironmentID,
+        pubfile: impl AsRef<Path>,
+    ) -> PackageResult<Self> {
+        let _addresses = Self::load_ephemeral_pubfile(build_env, chain_id, pubfile);
+        todo!()
+    }
+
+    /// Load ephemeral publications from `pubfile`, checking that they have the correct `chain-id`
+    /// and `build-env`. If the file does not exist, a new file is created and returned
+    async fn load_ephemeral_pubfile(
+        build_env: Option<EnvironmentName>,
+        chain_id: EnvironmentID,
+        pubfile: impl AsRef<Path>,
+    ) -> PackageResult<AddressSource<F>> {
+        if let Ok(file) = FileHandle::new(&pubfile) {
+            let parsed: ParsedEphemeralPubs<F> = toml_edit::de::from_str(file.source())?;
+            if build_env.is_some() && build_env.as_ref() != Some(&parsed.build_env) {
+                return Err(PackageError::EphemeralEnvMismatch {
+                    file,
+                    file_build_env: parsed.build_env,
+                    passed_build_env: build_env.unwrap(),
+                });
+            }
+            if chain_id != parsed.chain_id {
+                return Err(PackageError::EphemeralChainMismatch {
+                    file,
+                    file_chain_id: parsed.chain_id,
+                    passed_chain_id: chain_id,
+                });
+            }
+
+            Ok(AddressSource::Ephemeral {
+                file: pubfile.as_ref().to_path_buf(),
+                pubs: parsed,
+            })
+        } else {
+            let file = pubfile.as_ref().to_path_buf();
+            let Some(build_env) = build_env else {
+                return Err(PackageError::EphemeralNoBuildEnv { file });
+            };
+
+            let pubs = ParsedEphemeralPubs {
+                build_env,
+                chain_id,
+                published: BTreeMap::new(),
+            };
+            std::fs::write(&file, pubs.render_as_toml())?;
+
+            return Ok(AddressSource::Ephemeral { file, pubs });
+        }
     }
 
     /// Loads the root package from path and builds a dependency graph from the manifests.
@@ -141,7 +219,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             graph,
             lockfile,
             deps_published_ids,
-            pubs,
+            pubs: AddressSource::Published(pubs),
         })
     }
 
@@ -186,14 +264,24 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(())
     }
 
-    /// Update the `Move.published` file for the root package in its loaded environment to
-    /// `publish_data`
+    /// Record metadata for a publication for the root package in either its `Published.toml` or
+    /// its ephemeral pubfile (depending on how it was loaded)
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
-        self.pubs
-            .published
-            .insert(self.environment.name().clone(), publish_data);
+        let package_id = self.name().to_string();
 
-        std::fs::write(&self.package_path, self.pubs.render_as_toml())?;
+        match &mut self.pubs {
+            AddressSource::Published(pubfile) => {
+                pubfile
+                    .published
+                    .insert(self.environment.name().clone(), publish_data);
+                std::fs::write(&self.package_path, pubfile.render_as_toml())?;
+            }
+            AddressSource::Ephemeral { file, pubs } => {
+                pubs.published.insert(package_id, publish_data.into());
+                std::fs::write(&file, pubs.render_as_toml())?;
+            }
+        }
+
         Ok(())
     }
 
@@ -211,11 +299,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// Read the pubfile from the root directory, returning an empty structure if none exists
-    fn load_pubfile(path: &PackagePath) -> PackageResult<ParsedPubs<F>> {
+    fn load_pubfile(path: &PackagePath) -> PackageResult<ParsedPublishedFile<F>> {
         let path = path.publications_path();
 
         if !path.exists() {
-            return Ok(ParsedPubs::default());
+            return Ok(ParsedPublishedFile::default());
         }
 
         let file = FileHandle::new(path)?;
@@ -234,21 +322,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     pub fn lockfile(&self) -> &ParsedLockfile {
         &self.lockfile
-    }
-
-    /// Return the publication information for this environment.
-    pub fn publication(&self, env: EnvironmentName) -> PackageResult<Publication<F>> {
-        self.pubs
-            .published
-            .get(&env)
-            .ok_or_else(|| {
-                PackageError::Generic(format!(
-                    "Could not find publication info for {} environment in package {}",
-                    env,
-                    self.name()
-                ))
-            })
-            .cloned()
     }
 
     // *** PATHS RELATED FUNCTIONS ***
@@ -272,7 +345,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-    use std::{fs, path::PathBuf};
+    use std::{fs, io::Write, path::PathBuf};
     use test_log::test;
 
     use super::*;
@@ -281,7 +354,7 @@ mod tests {
             Vanilla,
             vanilla::{DEFAULT_ENV_NAME, default_environment},
         },
-        schema::LockfileDependencyInfo,
+        schema::{LockfileDependencyInfo, PublishedID},
         test_utils::{
             self, basic_manifest_with_env,
             git::{self},
@@ -541,5 +614,116 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
             LockfileDependencyInfo::Git(p) => assert_eq!(p.rev.to_string(), commits[0]),
             x => panic!("Expected a git dependency, but got {:?}", x),
         }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Ephemeral loading and storing ///////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Loading an ephemeral root package from a file containing all the dependencies succeeds and
+    /// produces the correct addresses for the deps
+    #[test(tokio::test)]
+    async fn ephemeral_only_deps() {
+        let scenario = TestPackageGraph::new(["a", "b"])
+            .add_published("c", OriginalID::from(1), PublishedID::from(1))
+            .add_deps([("a", "b"), ("b", "c")])
+            .build();
+
+        let mut ephemeral = tempfile::NamedTempFile::new().unwrap();
+        write!(
+            ephemeral,
+            r###"
+            chain-id = "localnet"
+            build-env = {DEFAULT_ENV_NAME}
+
+            # note: root package (published.a) is not present
+
+            [published.b]
+            original-id = "bbb1"
+            published-at = "bbb2"
+
+            [published.c]
+            original-id = "ccc1"
+            published-at = "ccc2"
+            "###,
+        )
+        .unwrap();
+
+        let _root = RootPackage::<Vanilla>::load_ephemeral(
+            scenario.path_for("a"),
+            None,
+            "localnet".into(),
+            ephemeral.path(),
+        )
+        .await
+        .unwrap();
+
+        todo!()
+    }
+
+    /// Loading an ephemeral root package from a file containing the root succeeds, and the root's
+    /// address is reported as the root package
+    #[test(tokio::test)]
+    async fn ephemeral_root_and_deps() {
+        todo!()
+    }
+
+    /// Loading an ephemeral root package from a non-existing file succeeds if the root package has
+    /// no dependencies
+    #[test(tokio::test)]
+    async fn ephemeral_empty() {
+        todo!()
+    }
+
+    /// Loading an ephemeral root package from a file missing some dependencies fails
+    #[test(tokio::test)]
+    async fn ephemeral_missing() {
+        todo!()
+    }
+
+    /// Loading an ephemeral root package and then publishing correctly updates the ephemeral file
+    /// (and does not update the normal pubfile)
+    #[test(tokio::test)]
+    async fn ephemeral_publish() {
+        todo!()
+    }
+
+    /// Loading a package with an ephemeral file and a legacy dependency with a `published-at`
+    /// address succeeds even if the dependency is not listed in the ephemeral file
+    #[test(tokio::test)]
+    async fn ephemeral_legacy_published_at() {
+        todo!()
+    }
+
+    /// Loading a package with an legacy dependency with a `published-at` using an ephemeral file takes
+    /// the address from the ephemeral file
+    #[test(tokio::test)]
+    async fn ephemeral_overridden_published_at() {
+        todo!()
+    }
+
+    /// Loading a package from an address-managed legacy dependency using an ephemeral file fails
+    /// if the ephemeral file doesn't have the address
+    #[test(tokio::test)]
+    async fn ephemeral_address_managed_legacy_missing() {
+        todo!()
+    }
+
+    /// Loading an ephemeral package with a mismatched `chain-id` fails
+    #[test(tokio::test)]
+    async fn ephemeral_chain_mismatch() {
+        todo!()
+    }
+
+    /// Loading an ephemeral package with a mismatched `build-env` fails
+    #[test(tokio::test)]
+    async fn ephemeral_build_env_mismatch() {
+        todo!()
+    }
+
+    /// Loading an ephemeral package with no `build-env` (either passed or in the file) fails
+    #[test(tokio::test)]
+    async fn ephemeral_no_build_env() {
+        todo!()
     }
 }

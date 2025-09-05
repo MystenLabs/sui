@@ -13,7 +13,7 @@ use crate::compatibility::legacy::LegacyData;
 use crate::compatibility::legacy_parser::try_load_legacy;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
-use crate::schema::{ParsedManifest, ParsedPubs, ReplacementDependency};
+use crate::schema::{ParsedManifest, ParsedPublishedFile, ReplacementDependency};
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
@@ -249,7 +249,7 @@ impl<F: MoveFlavor> Package<F> {
         };
 
         debug!("parsing\n---\n{}\n---", file.source());
-        let parsed = toml_edit::de::from_str::<ParsedPubs<F>>(file.source())?;
+        let parsed = toml_edit::de::from_str::<ParsedPublishedFile<F>>(file.source())?;
 
         let Some(publish) = parsed.published.get(env) else {
             debug!("no entry for {env:?} in {pubfile:?}");

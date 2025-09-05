@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::flavor::MoveFlavor;
 
 use super::{
-    EnvironmentID, EnvironmentName, PackageName, PublishAddresses, RenderToml,
+    EnvironmentID, EnvironmentName, PublishAddresses, RenderToml,
     toml_format::{expand_toml, flatten_toml},
 };
 
@@ -15,7 +15,7 @@ use super::{
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(bound = "")]
 #[derive_where(Default)]
-pub struct ParsedPubs<F: MoveFlavor> {
+pub struct ParsedPublishedFile<F: MoveFlavor> {
     #[serde(default)]
     pub published: BTreeMap<EnvironmentName, Publication<F>>,
 }
@@ -37,7 +37,7 @@ pub struct Publication<F: MoveFlavor> {
     pub metadata: F::PublishedMetadata,
 }
 
-impl<F: MoveFlavor> RenderToml for ParsedPubs<F> {
+impl<F: MoveFlavor> RenderToml for ParsedPublishedFile<F> {
     /// Pretty-print `self` as TOML
     fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
@@ -68,7 +68,7 @@ mod tests {
 
     use crate::{flavor::Vanilla, schema::RenderToml};
 
-    use super::ParsedPubs;
+    use super::ParsedPublishedFile;
 
     /// Parsing and rendering a pubfile produces the original input
     #[test]
@@ -93,7 +93,7 @@ mod tests {
             "###
         );
 
-        let parsed: ParsedPubs<Vanilla> = toml_edit::de::from_str(original).unwrap();
+        let parsed: ParsedPublishedFile<Vanilla> = toml_edit::de::from_str(original).unwrap();
         let rendered = parsed.render_as_toml();
         assert_eq!(rendered, original);
     }
