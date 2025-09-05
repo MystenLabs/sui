@@ -1,0 +1,65 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-21:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5745600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 23:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 25-37:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "modules": {
+        "nodes": [
+          {
+            "name": "M",
+            "friends": {
+              "nodes": [
+                {
+                  "name": "N"
+                },
+                {
+                  "name": "O"
+                }
+              ]
+            }
+          },
+          {
+            "name": "N",
+            "friends": {
+              "nodes": [
+                {
+                  "name": "P"
+                }
+              ]
+            }
+          },
+          {
+            "name": "O",
+            "friends": {
+              "nodes": []
+            }
+          },
+          {
+            "name": "P",
+            "friends": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}
