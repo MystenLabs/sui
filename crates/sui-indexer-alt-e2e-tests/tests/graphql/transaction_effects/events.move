@@ -68,6 +68,10 @@ module test::events_test {
         transaction {
           digest
         }
+        transactionModule {
+          package { address }
+          name
+        }
       }
     }
   }
@@ -94,6 +98,10 @@ module test::events_test {
         }
         transaction {
           digest
+        }
+        transactionModule {
+          package { address }
+          name
         }
       }
     }
@@ -122,6 +130,10 @@ module test::events_test {
         transaction {
           digest
         }
+        transactionModule {
+          package { address }
+          name
+        }
       }
     }
   }
@@ -149,6 +161,10 @@ module test::events_test {
         transaction {
           digest
         }
+        transactionModule {
+          package { address }
+          name
+        }
       }
     }
   }
@@ -175,6 +191,10 @@ module test::events_test {
         }
         transaction {
           digest
+        }
+        transactionModule {
+          package { address }
+          name
         }
       }
     }

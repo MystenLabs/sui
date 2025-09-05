@@ -46,7 +46,7 @@ pub(crate) struct MoveObject {
     name = "IMoveObject",
     field(
         name = "contents",
-        ty = "Result<Option<MoveValue>, RpcError<object::Error>>",
+        ty = "Result<Option<MoveValue>, RpcError>",
         desc = "The structured representation of the object's contents."
     ),
     field(
@@ -103,12 +103,12 @@ impl MoveObject {
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<UInt53, RpcError> {
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
         self.super_.version(ctx).await
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
         self.super_.digest(ctx).await
     }
 
@@ -116,7 +116,7 @@ impl MoveObject {
     pub(crate) async fn as_coin_metadata(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<CoinMetadata>, RpcError<object::Error>> {
+    ) -> Result<Option<CoinMetadata>, RpcError> {
         CoinMetadata::from_move_object(self, ctx).await
     }
 
@@ -124,7 +124,7 @@ impl MoveObject {
     pub(crate) async fn as_dynamic_field(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+    ) -> Result<Option<DynamicField>, RpcError> {
         DynamicField::from_move_object(self, ctx).await
     }
 
@@ -152,10 +152,7 @@ impl MoveObject {
     }
 
     /// The structured representation of the object's contents.
-    pub(crate) async fn contents(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<MoveValue>, RpcError<object::Error>> {
+    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
         let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -172,7 +169,7 @@ impl MoveObject {
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError<object::Error>> {
+    ) -> Result<Option<String>, RpcError> {
         self.super_.default_suins_name(ctx).await
     }
 
@@ -181,7 +178,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+    ) -> Result<Option<DynamicField>, RpcError> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -224,7 +221,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<object::Error>> {
+    ) -> Result<Option<DynamicField>, RpcError> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -243,7 +240,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -275,7 +272,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<object::Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -293,7 +290,7 @@ impl MoveObject {
     pub(crate) async fn move_object_bcs(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+    ) -> Result<Option<Base64>, RpcError> {
         let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -318,10 +315,7 @@ impl MoveObject {
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    pub(crate) async fn object_bcs(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<object::Error>> {
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
         self.super_.object_bcs(ctx).await
     }
 
@@ -334,7 +328,7 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
@@ -349,7 +343,7 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
@@ -371,10 +365,7 @@ impl MoveObject {
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Owner>, RpcError<object::Error>> {
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
         self.super_.owner(ctx).await
     }
 
@@ -382,7 +373,7 @@ impl MoveObject {
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError<object::Error>> {
+    ) -> Result<Option<Transaction>, RpcError> {
         self.super_.previous_transaction(ctx).await
     }
 
@@ -390,7 +381,7 @@ impl MoveObject {
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError<object::Error>> {
+    ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
     }
 }
@@ -410,7 +401,7 @@ impl MoveObject {
     pub(crate) async fn from_object(
         object: &Object,
         ctx: &Context<'_>,
-    ) -> Result<Option<Self>, RpcError<object::Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -429,7 +420,7 @@ impl MoveObject {
     pub(crate) async fn native(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<NativeMoveObject>, RpcError<object::Error>> {
+    ) -> Result<&Option<NativeMoveObject>, RpcError> {
         self.native
             .get_or_try_init(async || {
                 let Some(contents) = self.super_.contents(ctx).await?.as_ref() else {
