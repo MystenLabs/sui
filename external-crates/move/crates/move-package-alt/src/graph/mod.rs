@@ -8,8 +8,8 @@ mod package_info;
 mod rename_from;
 mod to_lockfile;
 
-use bimap::BiBTreeMap;
 pub use linkage::LinkageError;
+pub use package_info::NamedAddress;
 pub use package_info::PackageInfo;
 pub use rename_from::RenameError;
 use tracing::debug;
@@ -23,6 +23,7 @@ use crate::{
     package::{Package, paths::PackagePath},
     schema::{Environment, PackageID, PackageName},
 };
+use bimap::BiBTreeMap;
 use builder::PackageGraphBuilder;
 
 use petgraph::{
