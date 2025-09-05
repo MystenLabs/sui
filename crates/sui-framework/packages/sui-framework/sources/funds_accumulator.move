@@ -17,6 +17,9 @@ public use fun withdrawal_owner as Withdrawal.owner;
 #[allow(unused_const)]
 const EOverflow: u64 = 0;
 
+/// Allows for withdrawing funds from a given address. The `Withdrawal` can be created in PTBs for
+/// the transaction sender, or dynamically from an object via `withdraw_from_object`.
+/// The redemption of the funds must be initiated from the module that defines `T`.
 public struct Withdrawal<phantom T: store> has drop {
     /// The owner of the funds, either an object or a transaction sender
     owner: address,
