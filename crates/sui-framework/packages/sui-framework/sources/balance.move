@@ -6,9 +6,10 @@
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance;
 
+use sui::funds_accumulator::Withdrawal;
+
 /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
 public use fun sui::coin::from_balance as Balance.into_coin;
-
 /// For when trying to destroy a non-zero balance.
 const ENonZero: u64 = 0;
 /// For when an overflow is happening on Supply operations.
@@ -93,17 +94,24 @@ public fun destroy_zero<T>(balance: Balance<T>) {
     let Balance { value: _ } = balance;
 }
 
+/// Send a `Balance` to an address's funds accumulator.
 public(package) fun send_funds<T>(balance: Balance<T>, recipient: address) {
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 
+/// Redeem a `Withdrawal<Balance<T>>` to get the underlying `Balance<T>` from an address's funds
+/// accumulator.
 public(package) fun redeem_funds<T>(
     withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
 ): Balance<T> {
     withdrawal.redeem()
 }
 
-public(package) fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Balance<T> {
+/// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.
+public(package) fun withdraw_funds_from_object<T>(
+    obj: &mut UID,
+    value: u64,
+): Withdrawal<Balance<T>> {
     sui::funds_accumulator::withdraw_from_object(obj, value as u256)
 }
 

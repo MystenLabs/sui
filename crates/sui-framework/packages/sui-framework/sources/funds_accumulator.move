@@ -18,9 +18,10 @@ public use fun withdrawal_owner as Withdrawal.owner;
 const EOverflow: u64 = 0;
 
 public struct Withdrawal<phantom T: store> has drop {
-    // Owner? Controller? Account?
+    /// The owner of the funds, either an object or a transaction sender
     owner: address,
-    // at signing we check this isn't too big for `T`
+    /// At signing we check the limit <= balance when taking this as a call arg.
+    /// If this was generated from an object, we cannot check this until redemption.
     limit: u256,
 }
 
@@ -52,12 +53,16 @@ public(package) fun redeem</* internal */ T: store>(withdrawal: Withdrawal<T>): 
     withdraw_impl(owner, value)
 }
 
+// Allows for creating a withdrawal from an object
+// (note no internal check needed since this will be gated at redemption)
+// Does not abort even if the value is greater than the amount in the object, unless we keep track
+// at each withdraw from object, we need to check it again at redeem so this seems fine?
 // TODO When this becomes `public` we need
 // - custom verifier rules for `T`
-// - private generic rules for `T`
 #[allow(unused_mut_parameter)]
-public(package) fun withdraw_from_object</* internal */ T: store>(obj: &mut UID, value: u256): T {
-    withdraw_impl(obj.to_address(), value)
+public(package) fun withdraw_from_object<T: store>(obj: &mut UID, limit: u256): Withdrawal<T> {
+    let owner = obj.to_address();
+    Withdrawal { owner, limit }
 }
 
 // TODO when funds become public, we likely need to wrap T
