@@ -5,6 +5,7 @@ pub(crate) mod address;
 pub(crate) mod balance;
 pub(crate) mod balance_change;
 pub(crate) mod checkpoint;
+pub(crate) mod coin_metadata;
 pub(crate) mod display;
 pub(crate) mod dynamic_field;
 pub(crate) mod epoch;
