@@ -38,23 +38,16 @@ pub(crate) struct EventFilter {
     /// Filter on events by transaction sender address.
     pub sender: Option<SuiAddress>,
 
-    /// Events emitted by a particular module. An event is emitted by a
-    /// particular module if some function in the module is called by a
-    /// PTB and emits an event.
+    /// Events emitted by a particular module. An event is emitted by a particular module if some function in the module is called by a PTB and emits an event.
     ///
-    /// Modules can be filtered by their package, or package::module.
-    /// We currently do not support filtering by emitting module and event type
-    /// at the same time so if both are provided in one filter, the query will error.
+    /// Modules can be filtered by their package, or package::module. We currently do not support filtering by emitting module and event type at the same time so if both are provided in one filter, the query will error.
     pub module: Option<ModuleFilter>,
 
     /// This field is used to specify the type of event emitted.
     ///
-    /// Events can be filtered by their type's package, package::module,
-    /// or their fully qualified type name.
+    /// Events can be filtered by their type's package, package::module, or their fully qualified type name.
     ///
-    /// Generic types can be queried by either the generic type name, e.g.
-    /// `0x2::coin::Coin`, or by the full type name, such as
-    /// `0x2::coin::Coin<0x2::sui::SUI>`.
+    /// Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
     pub type_: Option<TypeFilter>,
 }
 
