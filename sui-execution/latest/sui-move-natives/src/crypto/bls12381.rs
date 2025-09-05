@@ -16,7 +16,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 
 const BLS12381_BLOCK_SIZE: usize = 64;
 
@@ -47,9 +47,7 @@ pub fn bls12381_min_sig_verify(
     debug_assert!(args.len() == 3);
 
     // Load the cost parameters from the protocol config
-    let bls12381_bls12381_min_sig_verify_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let bls12381_bls12381_min_sig_verify_cost_params = get_extension!(context, NativesCostTable)?
         .bls12381_bls12381_min_sig_verify_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -127,9 +125,7 @@ pub fn bls12381_min_pk_verify(
     debug_assert!(args.len() == 3);
 
     // Load the cost parameters from the protocol config
-    let bls12381_bls12381_min_pk_verify_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let bls12381_bls12381_min_pk_verify_cost_params = get_extension!(context, NativesCostTable)?
         .bls12381_bls12381_min_pk_verify_cost_params
         .clone();
 

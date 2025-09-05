@@ -13,7 +13,7 @@ use move_vm_types::{
 use std::collections::{BTreeMap, VecDeque};
 use sui_types::nitro_attestation::{parse_nitro_attestation, verify_nitro_attestation};
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{get_extension, object_runtime::ObjectRuntime, NativesCostTable};
 use move_vm_runtime::native_charge_gas_early_exit;
 
 pub const NOT_SUPPORTED_ERROR: u64 = 0;
@@ -45,17 +45,13 @@ macro_rules! native_charge_gas_early_exit_option {
 }
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_nitro_attestation())
 }
 
 fn is_upgraded(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_nitro_attestation_upgraded_parsing())
 }
@@ -77,9 +73,7 @@ pub fn load_nitro_attestation_internal(
     let attestation_ref = pop_arg!(args, VectorRef);
     let attestation_bytes = attestation_ref.as_bytes_ref();
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .nitro_attestation_cost_params
         .clone();
 
