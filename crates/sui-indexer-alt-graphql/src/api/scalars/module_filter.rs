@@ -46,13 +46,13 @@ impl FromStr for ModuleFilter {
 
     fn from_str(s: &str) -> Result<Self, ModuleFilterError> {
         if let Ok(module) = parse_sui_module_id(s) {
-            // Then try as a module ID
+            // Try as a module ID
             Ok(ModuleFilter::Module(
                 SuiAddress::from(*module.address()),
                 module.name().to_string(),
             ))
         } else if let Ok(package) = parse_sui_address(s) {
-            // Finally try as just a package address
+            // Then try as just a package address
             Ok(ModuleFilter::Package(package.into()))
         } else {
             Err(ModuleFilterError)
