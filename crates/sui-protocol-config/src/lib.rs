@@ -792,6 +792,10 @@ struct FeatureFlags {
     // If true, use MFP txns in load initial object debts.
     #[serde(skip_serializing_if = "is_false")]
     use_mfp_txns_in_load_initial_object_debts: bool,
+
+    // If true, cancel randomness-using txns when DKG has failed *before* doing other congestion checks.
+    #[serde(skip_serializing_if = "is_false")]
+    cancel_for_failed_dkg_early: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2203,6 +2207,10 @@ impl ProtocolConfig {
 
     pub fn use_mfp_txns_in_load_initial_object_debts(&self) -> bool {
         self.feature_flags.use_mfp_txns_in_load_initial_object_debts
+    }
+
+    pub fn cancel_for_failed_dkg_early(&self) -> bool {
+        self.feature_flags.cancel_for_failed_dkg_early
     }
 }
 
@@ -3987,6 +3995,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.correct_gas_payment_limit_check = true;
                     cfg.feature_flags.authority_capabilities_v2 = true;
                     cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
+                    cfg.feature_flags.cancel_for_failed_dkg_early = true;
                 }
                 // Use this template when making changes:
                 //
