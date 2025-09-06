@@ -110,15 +110,26 @@ impl PackageContext<'_> {
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
-    ) -> Option<VMPointer<Function>> {
+    ) -> PartialVMResult<VMPointer<Function>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
         if vtable_entry.package_key != self.original_id {
-            return None;
+            return Err(
+                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(format!(
+                    "Cannot resolve call in a different package with PackageKey {:?}",
+                    vtable_entry.package_key
+                )),
+            );
         }
-        // TODO(vm-rewrite): Have this return an error if the function was not found.
-        self.vtable_funs
-            .get(&vtable_entry.inner_pkg_key)
-            .map(|f| f.ptr_clone())
+
+        match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
+            Some(v) => Ok(v.ptr_clone()),
+            None => Err(
+                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(format!(
+                    "Cannot resolve call with PackageKey {:?}",
+                    vtable_entry.package_key
+                )),
+            ),
+        }
     }
 
     fn arena_vec<T>(
@@ -1305,8 +1316,8 @@ fn call(
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
     Ok(
         match context.try_resolve_direct_function_call(&vtable_key) {
-            Some(func) => CallType::Direct(func),
-            None => CallType::Virtual(vtable_key),
+            Ok(func) => CallType::Direct(func),
+            Err(_) => CallType::Virtual(vtable_key),
         },
     )
 }
