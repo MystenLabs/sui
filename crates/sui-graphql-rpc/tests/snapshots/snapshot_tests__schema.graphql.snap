@@ -463,6 +463,11 @@ type Checkpoint {
 	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
 	"""
 	bcs: Base64
+	"""
+	A commitment by the committee on the artifacts of the checkpoint.
+	e.g., object checkpoint states
+	"""
+	artifactsDigest: String
 }
 
 type CheckpointConnection {
