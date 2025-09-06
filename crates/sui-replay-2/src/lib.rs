@@ -3,7 +3,6 @@
 
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    build::BuildCmdConfig,
     data_stores::{
         data_store::DataStore, file_system_store::FileSystemStore, in_memory_store::InMemoryStore,
         read_through_store::ReadThroughStore,
@@ -13,7 +12,7 @@ use crate::{
     replay_txn::replay_transaction,
 };
 use anyhow::{anyhow, bail};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, Parser, ValueEnum};
 use similar::{ChangeTag, TextDiff};
 use std::{
     io::Write,
@@ -26,7 +25,6 @@ use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain}
 use ::tracing::{debug, error, info, info_span, warn, Instrument};
 
 pub mod artifacts;
-pub mod build;
 #[path = "data-stores/mod.rs"]
 pub mod data_stores;
 pub mod displays;
@@ -54,52 +52,56 @@ const TESTNET_GQL_URL: &str = "https://public-rpc.sui-testnet.mystenlabs.com/gra
     rename_all = "kebab-case"
 )]
 pub struct Config {
-    #[command(subcommand)]
-    pub command: Option<Commands>,
-
     #[command(flatten)]
-    pub replay: ReplayConfig,
-}
-
-#[derive(Subcommand, Clone, Debug)]
-pub enum Commands {
-    /// Build and prepare replay data
-    #[clap(alias = "b")]
-    Build(BuildCmdConfig),
+    pub replay_stable: ReplayConfigStable,
+    #[command(flatten)]
+    pub replay_experimental: ReplayConfigExperimental,
 }
 
 /// Arguments for replay
 #[derive(Parser, Clone, Debug)]
-pub struct ReplayConfig {
+pub struct ReplayConfigStable {
     /// Transaction digest to replay.
     #[arg(long, short)]
     pub digest: Option<String>,
+
     /// File containing a list of digests, one per line.
     #[arg(long)]
     pub digests_path: Option<PathBuf>,
-    /// RPC of the fullnode used to replay the transaction.
-    #[arg(long, short, default_value = "mainnet")]
-    pub node: Node,
+
+    /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
+    #[arg(long, default_value = "false")]
+    pub terminate_early: bool,
+
     /// Whether to trace the transaction execution. Generated traces will be saved in the output
     /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
     #[arg(long = "trace", default_value = "false")]
     pub trace: bool,
+
     /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
     #[arg(long, short)]
     pub output_dir: Option<PathBuf>,
-    /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
-    #[arg(long, default_value = "false")]
-    pub terminate_early: bool,
+
     /// Show transaction effects.
-    #[arg(long, short, default_value = "false")]
+    #[arg(long, short = 'e',action = ArgAction::Set, default_value = "true")]
     pub show_effects: bool,
+
     /// Whether existing artifacts that were generated from a previous replay of the transaction
     /// should be overwritten or an error raised if they already exist.
     #[arg(long, default_value = "false")]
-    pub overwrite_existing: bool,
+    pub overwrite: bool,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct ReplayConfigExperimental {
+    /// RPC of the fullnode used to replay the transaction.
+    #[arg(long, short, default_value = "mainnet")]
+    pub node: Node,
+
     /// Print a summary of data store usage after the replay completes.
     #[arg(long, short = 'v', default_value = "false")]
     pub verbose: bool,
+
     /// Select which data store mode to use.
     /// Options:
     /// - gql-only: remote GraphQL only
@@ -108,6 +110,16 @@ pub struct ReplayConfig {
     /// - inmem-fs-gql: InMemory -> FileSystem -> GraphQL (default)
     #[arg(long = "store-mode", value_enum, default_value_t = StoreMode::GqlOnly)]
     pub store_mode: StoreMode,
+}
+
+impl Default for ReplayConfigExperimental {
+    fn default() -> Self {
+        Self {
+            node: Node::Mainnet,
+            verbose: false,
+            store_mode: StoreMode::GqlOnly,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -176,19 +188,26 @@ impl FromStr for Node {
     }
 }
 
-pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyhow::Result<PathBuf> {
-    let ReplayConfig {
-        node,
+pub async fn handle_replay_config(
+    stable_config: &ReplayConfigStable,
+    experimental_config: &ReplayConfigExperimental,
+    version: &str,
+) -> anyhow::Result<PathBuf> {
+    let ReplayConfigStable {
         digest,
         digests_path,
-        trace,
         mut terminate_early,
+        trace,
         output_dir,
-        show_effects: _,
-        overwrite_existing,
+        show_effects: _, // used in the caller
+        overwrite: overwrite_existing,
+    } = stable_config;
+
+    let ReplayConfigExperimental {
+        node,
         verbose,
         store_mode,
-    } = config;
+    } = experimental_config;
 
     let output_root_dir = if let Some(dir) = output_dir {
         dir.to_path_buf()

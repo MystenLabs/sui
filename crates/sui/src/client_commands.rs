@@ -643,9 +643,8 @@ pub enum SuiClientCommands {
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
     #[clap(name = "replay-transaction")]
     ReplayTransaction {
-        /// The digest of the transaction to replay
-        #[arg(long, short)]
-        tx_digest: String,
+        #[command(flatten)]
+        replay_config: SR2::ReplayConfigStable,
 
         /// Log extra gas-related information
         #[arg(long)]
@@ -654,46 +653,6 @@ pub enum SuiClientCommands {
         /// Log information about each programmable transaction command
         #[arg(long)]
         ptb_info: bool,
-
-        /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
-        #[arg(long)]
-        output_dir: Option<PathBuf>,
-
-        /// Whether to trace the transaction execution. Generated traces will be saved in the output
-        /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
-        #[arg(long = "trace", default_value = "false")]
-        trace: bool,
-
-        /// Whether existing artifacts that were generated from a previous replay of the transaction
-        /// should be overwritten or an error raised if they already exist.
-        #[arg(long, default_value = "false")]
-        overwrite_existing: bool,
-    },
-
-    /// Replay transactions listed in a file.
-    #[clap(name = "replay-batch")]
-    ReplayBatch {
-        /// The path to the file of transaction digests to replay, with one digest per line
-        #[arg(long, short)]
-        path: PathBuf,
-
-        /// If an error is encountered during a transaction, this specifies whether to terminate or continue
-        #[arg(long, short)]
-        terminate_early: bool,
-
-        /// Whether to trace the transaction execution. Generated traces will be saved in the output
-        /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
-        #[arg(long = "trace", default_value = "false")]
-        trace: bool,
-
-        /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
-        #[arg(long, short)]
-        output_dir: Option<PathBuf>,
-
-        /// Whether existing artifacts that were generated from a previous replay of the transaction
-        /// should be overwritten or an error raised if they already exist.
-        #[arg(long, default_value = "false")]
-        overwrite_existing: bool,
     },
 }
 
@@ -777,68 +736,30 @@ impl SuiClientCommands {
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = match self {
             SuiClientCommands::ReplayTransaction {
-                tx_digest,
+                replay_config,
                 gas_info: _,
                 ptb_info: _,
-                output_dir,
-                trace,
-                overwrite_existing,
             } => {
                 let node = get_replay_node(context).await?;
-                let cmd2 = SR2::ReplayConfig {
-                    digest: Some(tx_digest.clone()),
-                    digests_path: None,
+
+                let experimental_config = SR2::ReplayConfigExperimental {
                     node,
-                    trace,
-                    terminate_early: false,
-                    output_dir,
-                    show_effects: false,
-                    overwrite_existing,
-                    verbose: false,
-                    store_mode: SR2::StoreMode::GqlOnly,
+                    ..Default::default()
                 };
 
-                let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
+                let artifact_path =
+                    SR2::handle_replay_config(&replay_config, &experimental_config, USER_AGENT)
+                        .await?;
 
-                // show effects and gas
-                SR2::print_effects_or_fork(
-                    &tx_digest,
-                    &artifact_path,
-                    true,
-                    &mut std::io::stdout(),
-                )?;
-
-                // this will be displayed via trace info, so no output is needed here
-                SuiClientCommandResult::NoOutput
-            }
-            SuiClientCommands::ReplayBatch {
-                path,
-                terminate_early,
-                trace,
-                output_dir,
-                overwrite_existing,
-            } => {
-                let node = get_replay_node(context).await?;
-                let cmd2 = SR2::ReplayConfig {
-                    digest: None,
-                    digests_path: Some(path),
-                    node,
-                    trace,
-                    terminate_early,
-                    output_dir,
-                    show_effects: false,
-                    overwrite_existing,
-                    verbose: false,
-                    store_mode: SR2::StoreMode::GqlOnly,
-                };
-
-                let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
-
-                println!(
-                    "Replayed transactions from {}. Artifacts stored under {}",
-                    cmd2.digests_path.as_ref().unwrap().display(),
-                    artifact_path.display()
-                );
+                if let Some(digest) = &replay_config.digest {
+                    // show effects and gas
+                    SR2::print_effects_or_fork(
+                        digest,
+                        &artifact_path,
+                        replay_config.show_effects,
+                        &mut std::io::stdout(),
+                    )?;
+                }
 
                 // this will be displayed via trace info, so no output is needed here
                 SuiClientCommandResult::NoOutput

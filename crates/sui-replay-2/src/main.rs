@@ -3,9 +3,7 @@
 
 use clap::*;
 use core::panic;
-use sui_replay_2::{
-    build::handle_build_command, handle_replay_config, print_effects_or_fork, Commands, Config,
-};
+use sui_replay_2::{handle_replay_config, print_effects_or_fork, Config};
 use tracing::debug;
 
 // Define the `GIT_REVISION` and `VERSION` consts
@@ -20,23 +18,16 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
     debug!("Parsed config: {:#?}", config);
 
-    match config.command {
-        Some(Commands::Build(build_config)) => {
-            handle_build_command(build_config)?;
-        }
-        None => {
-            let output_root = handle_replay_config(&config.replay, VERSION).await?;
+    let output_root =
+        handle_replay_config(&config.replay_stable, &config.replay_experimental, VERSION).await?;
 
-            // Default to replay behavior when no subcommand is specified
-            if let Some(digest) = &config.replay.digest {
-                print_effects_or_fork(
-                    digest,
-                    &output_root,
-                    config.replay.show_effects,
-                    &mut std::io::stdout(),
-                )?;
-            }
-        }
+    if let Some(digest) = &config.replay_stable.digest {
+        print_effects_or_fork(
+            digest,
+            &output_root,
+            config.replay_stable.show_effects,
+            &mut std::io::stdout(),
+        )?;
     }
     Ok(())
 }

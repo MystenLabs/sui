@@ -1,4 +1,4 @@
-test -t 1 --trace-execution
+test -t 1 --trace
 > diff -qr traces saved_traces
 
 coverage lcov
