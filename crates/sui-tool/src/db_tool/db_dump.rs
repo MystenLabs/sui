@@ -188,13 +188,17 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> anyhow::Result<(usize, usi
 }
 
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
     AuthorityStorePruner::compact(&perpetual)?;
     Ok(())
 }
 
 pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &db_path.join("store"),
+        None,
+        None,
+    ));
     let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let highest_pruned_checkpoint = checkpoint_store
@@ -227,7 +231,11 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
 }
 
 pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &db_path.join("store"),
+        None,
+        None,
+    ));
     let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
@@ -307,7 +315,7 @@ mod test {
 
         // Open the DB for writing
         let _: AuthorityEpochTables = AuthorityEpochTables::open(0, &primary_path, None);
-        let _: AuthorityPerpetualTables = AuthorityPerpetualTables::open(&primary_path, None);
+        let _: AuthorityPerpetualTables = AuthorityPerpetualTables::open(&primary_path, None, None);
 
         // Get all the tables for AuthorityEpochTables
         let tables = {

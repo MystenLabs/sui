@@ -135,6 +135,7 @@ impl StateSnapshotUploader {
                 let db = Arc::new(AuthorityPerpetualTables::open(
                     &path_to_filesystem(self.db_checkpoint_path.clone(), &db_path.child("store"))?,
                     None,
+                    None,
                 ));
                 let commitments = self
                     .checkpoint_store
