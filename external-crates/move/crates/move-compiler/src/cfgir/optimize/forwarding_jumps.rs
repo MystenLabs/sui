@@ -82,7 +82,7 @@ fn find_forwarding_jump_destinations(blocks: &BasicBlocks) -> LabelMap {
 
     for start in forwarding_jumps.keys() {
         if final_jumps.contains_key(start) {
-            break;
+            continue;
         };
         let mut target = *start;
         let mut seen = BTreeSet::new();
