@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["instantiation","module","name","package","sender","star","tx_sequence_number"]};

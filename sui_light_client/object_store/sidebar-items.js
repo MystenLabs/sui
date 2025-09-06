@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["download_checkpoint_summary"],"struct":["SuiObjectStore"],"trait":["ObjectStoreExt"]};

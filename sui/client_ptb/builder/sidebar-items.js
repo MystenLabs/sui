@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["into_struct_tag","into_type_tag","is_mvr_name","resolve_package","to_ordinal_contraction"],"struct":["PTBBuilder"]};
