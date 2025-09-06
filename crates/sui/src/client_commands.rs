@@ -883,17 +883,6 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await.ok();
-                let protocol_version = read_api.get_protocol_config(None).await?.protocol_version;
-                let protocol_config = ProtocolConfig::get_for_version(
-                    protocol_version,
-                    match chain_id
-                        .as_ref()
-                        .and_then(ChainIdentifier::from_chain_short_id)
-                    {
-                        Some(chain_id) => chain_id.chain(),
-                        None => Chain::Unknown,
-                    },
-                );
 
                 check_protocol_version_and_warn(read_api).await?;
                 let package_path =
@@ -929,7 +918,7 @@ impl SuiClientCommands {
                 .await;
 
                 // Restore original ID, then check result.
-                if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                if let (Some(chain_id), Some(previous_id)) = (chain_id.clone(), previous_id) {
                     let _ = sui_package_management::set_package_id(
                         &package_path,
                         build_config.install_dir.clone(),
@@ -949,6 +938,28 @@ impl SuiClientCommands {
                 let dep_ids = compiled_package.get_published_dependencies_ids();
 
                 if verify_compatibility {
+                    let protocol_version =
+                        read_api.get_protocol_config(None).await?.protocol_version;
+
+                    ensure!(
+                        ProtocolVersion::MAX >= protocol_version,
+                        "On-chain protocol version ({}) is ahead of the latest \
+                        known version ({}) in the CLI. Please update the CLI to the latest version \
+                        if you want to use --verify-compatibility flag",
+                        protocol_version.as_u64(),
+                        ProtocolVersion::MAX.as_u64()
+                    );
+
+                    let protocol_config = ProtocolConfig::get_for_version(
+                        protocol_version,
+                        match chain_id
+                            .as_ref()
+                            .and_then(ChainIdentifier::from_chain_short_id)
+                        {
+                            Some(chain_id) => chain_id.chain(),
+                            None => Chain::Unknown,
+                        },
+                    );
                     check_compatibility(
                         read_api,
                         package_id,
