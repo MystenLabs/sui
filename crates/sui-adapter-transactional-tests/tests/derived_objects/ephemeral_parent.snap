@@ -1,0 +1,127 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-42:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8010400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 44:
+//# run a::m::ephemeral_parent_persistent_derived --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4734800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 46:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: a::m::Derived {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 48:
+//# view-object 2,1
+Owner: Object ID: ( _ )
+Version: 2
+Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_object::ClaimedStatus> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    name: sui::derived_object::Claimed {
+        pos0: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: sui::derived_object::ClaimedStatus::Reserved{},
+}
+
+task 5, line 50:
+//# run a::m::ephemeral_parent_ephemeral_derived --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3480800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 52:
+//# view-object 5,0
+Owner: Object ID: ( _ )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_object::ClaimedStatus> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    name: sui::derived_object::Claimed {
+        pos0: sui::object::ID {
+            bytes: _,
+        },
+    },
+    value: sui::derived_object::ClaimedStatus::Reserved{},
+}
+
+task 7, line 54:
+//# run a::m::ephemeral_parent_ephemeral_intermediate_derived --sender A
+created: object(7,0), object(7,1), object(7,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7227600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 56:
+//# view-object 7,0
+Owner: Account Address ( A )
+Version: 4
+Contents: a::m::Derived {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}
+
+task 9, line 58:
+//# view-object 7,1
+Owner: Object ID: ( _ )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_object::ClaimedStatus> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,1),
+        },
+    },
+    name: sui::derived_object::Claimed {
+        pos0: sui::object::ID {
+            bytes: _,
+        },
+    },
+    value: sui::derived_object::ClaimedStatus::Reserved{},
+}
+
+task 10, line 60:
+//# view-object 7,2
+Owner: Object ID: ( _ )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_object::ClaimedStatus> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,2),
+        },
+    },
+    name: sui::derived_object::Claimed {
+        pos0: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+    value: sui::derived_object::ClaimedStatus::Reserved{},
+}
