@@ -254,6 +254,14 @@ impl Object {
         self.super_.balances(ctx, first, after, last, before).await
     }
 
+    /// The domain explicitly configured as the default SuiNS name for this address.
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<String>, RpcError<Error>> {
+        self.super_.default_suins_name(ctx).await
+    }
+
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
     ///
     /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
