@@ -977,6 +977,13 @@ fn exp(context: &mut Context, e: &T::Exp) {
             {
                 check_event_emit(context, e.exp.loc, mcall)
             }
+
+            if module.value.is(&SUI_ADDR_VALUE, COIN_REGISTRY_MODULE_NAME)
+                && name.value() == DYNAMIC_COIN_CREATION_FUNCTION_NAME
+            {
+                check_dynamic_coin_creation(context, e.exp.loc, mcall)
+            }
+
             let is_transfer_module = module.value.is(&SUI_ADDR_VALUE, TRANSFER_MODULE_NAME);
             if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
                 check_private_transfer(context, e.exp.loc, mcall)
@@ -1036,6 +1043,37 @@ fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
         );
         context.add_diag(diag!(
             EVENT_EMIT_CALL_DIAG,
+            (loc, msg),
+            (first_ty.loc, ty_msg)
+        ));
+    }
+}
+
+fn check_dynamic_coin_creation(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
+    let current_module = context.current_module();
+    let ModuleCall {
+        module,
+        name,
+        type_arguments,
+        ..
+    } = mcall;
+    let Some(first_ty) = type_arguments.first() else {
+        // invalid arity
+        debug_assert!(false, "ICE arity should have been expanded for errors");
+        return;
+    };
+    let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m == current_module);
+    if !is_defined_in_current_module {
+        let msg = format!(
+            "Invalid coin creation. The function '{}::{}' must be called with a type defined in the current module",
+            module, name
+        );
+        let ty_msg = format!(
+            "The type {} is not declared in the current module",
+            error_format(first_ty, &Subst::empty()),
+        );
+        context.add_diag(diag!(
+            DYNAMIC_COIN_CREATION_CALL_DIAG,
             (loc, msg),
             (first_ty.loc, ty_msg)
         ));

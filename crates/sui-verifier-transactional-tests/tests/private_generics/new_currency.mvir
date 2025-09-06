@@ -1,0 +1,97 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tests that coin_registry::new_currency can only be called by internal types.
+
+//# publish
+module 0x0.t {
+    import 0x1.string;
+    import 0x1.vector;
+    import 0x2.coin;
+    import 0x2.coin_registry;
+    import 0x2.tx_context;
+
+    // This should fail - trying to call new_currency with external type
+    test(registry: &mut coin_registry.CoinRegistry, ctx: &mut tx_context.TxContext) {
+        let builder: coin_registry.CurrencyInitializer<coin.Coin<u64>>;
+        let treasury: coin.TreasuryCap<coin.Coin<u64>>;
+        
+        label l0:
+        // This should fail with SuiMoveVerificationError because coin.Coin<u64> is external
+        builder, treasury = coin_registry.new_currency<coin.Coin<u64>>(
+            copy(registry),
+            9u8,
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            copy(ctx)
+        );
+        abort 0;
+    }
+}
+
+//# publish
+module 0x0.t {
+    import 0x1.string;
+    import 0x1.vector;
+    import 0x2.object;
+    import 0x2.coin;
+    import 0x2.coin_registry;
+    import 0x2.tx_context;
+
+    // Uses `LP` with an external generic parameter, to prove that we can do that.
+    struct LP<phantom A> has key {
+        id: object.UID
+    }
+
+    test(registry: &mut coin_registry.CoinRegistry, ctx: &mut tx_context.TxContext) {
+        let builder: coin_registry.CurrencyInitializer<Self.LP<string.String>>;
+        let treasury: coin.TreasuryCap<Self.LP<string.String>>;
+        
+        label l0:
+        // This should succeed as LP is internal
+        builder, treasury = coin_registry.new_currency<Self.LP<string.String>>(
+            copy(registry),
+            9u8,
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            copy(ctx)
+        );
+        abort 0;
+    }
+}
+
+//# publish
+module 0x0.t {
+    import 0x1.string;
+    import 0x1.vector;
+    import 0x2.object;
+    import 0x2.coin;
+    import 0x2.coin_registry;
+    import 0x2.tx_context;
+
+    struct Foo has key {
+        id: object.UID
+    }
+
+    test(registry: &mut coin_registry.CoinRegistry, ctx: &mut tx_context.TxContext) {
+        let builder: coin_registry.CurrencyInitializer<Self.Foo>;
+        let treasury: coin.TreasuryCap<Self.Foo>;
+        
+        label l0:
+        // This should succeed as Foo is internal
+        builder, treasury = coin_registry.new_currency<Self.Foo>(
+            copy(registry),
+            9u8,
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            string.utf8(vector.empty<u8>()),
+            copy(ctx)
+        );
+        abort 0;
+    }
+}

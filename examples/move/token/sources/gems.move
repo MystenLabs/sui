@@ -63,6 +63,7 @@ module examples::gem {
     /// The OTW to create the in-game currency.
     public struct GEM has drop {}
 
+    #[allow(deprecated_usage)]
     // In the module initializer we create the in-game currency and define the
     // rules for different types of actions.
     fun init(otw: GEM, ctx: &mut TxContext) {

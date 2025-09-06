@@ -9,6 +9,7 @@ module test::coin {
 
     public struct COIN has drop {}
 
+    #[allow(deprecated_usage)]
     fun init(otw: COIN, ctx: &mut TxContext) {
         let (mut treasury_cap, metadata) = coin::create_currency(
             otw,

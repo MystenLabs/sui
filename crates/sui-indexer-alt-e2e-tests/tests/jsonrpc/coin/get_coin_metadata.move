@@ -10,6 +10,7 @@ module Test::fake {
 
     public struct FAKE has drop {}
 
+    #[allow(deprecated_usage)]
     fun init(witness: FAKE, ctx: &mut TxContext){
         let (treasury_cap, metadata) = coin::create_currency(
             witness,
@@ -37,6 +38,7 @@ module Test::real {
         coin_metadata: coin::CoinMetadata<REAL>,
     }
 
+    #[allow(deprecated_usage)]
     fun init(witness: REAL, ctx: &mut TxContext){
         let (treasury_cap, metadata) = coin::create_currency(
             witness,

@@ -10,6 +10,7 @@ use sui::coin::{Self, TreasuryCap};
 // Make sure that the name of the type matches the module's name.
 public struct MY_COIN has drop {}
 
+#[allow(deprecated_usage)]
 // Module initializer is called once on module publish. A treasury
 // cap is sent to the publisher, who then controls minting and burning.
 fun init(witness: MY_COIN, ctx: &mut TxContext) {
