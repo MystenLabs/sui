@@ -306,9 +306,11 @@ impl EffectsContents {
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
+            let native_change = &object_changes[*edge.cursor];
+
             let object_change = ObjectChange {
                 scope: self.scope.clone(),
-                native: object_changes[*edge.cursor].clone(),
+                native: native_change.clone(),
             };
 
             conn.edges.push(Edge::new(edge.cursor, object_change))
@@ -408,6 +410,18 @@ impl TransactionEffects {
         signatures: Vec<GenericSignature>,
     ) -> Self {
         let digest = *response.effects.transaction_digest();
+
+        // Update scope with execution objects cache
+        let mut scope = scope;
+
+        // Add input and output objects to cache
+        for obj in response.input_objects {
+            scope.insert_execution_object(obj.id(), obj.version(), obj);
+        }
+        for obj in response.output_objects {
+            scope.insert_execution_object(obj.id(), obj.version(), obj);
+        }
+
         let contents = NativeTransactionContents::ExecutedTransaction {
             effects: Box::new(response.effects),
             events: response.events.map(|events| events.data),

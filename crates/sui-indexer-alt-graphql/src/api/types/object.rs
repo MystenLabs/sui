@@ -432,7 +432,7 @@ impl Object {
     ) -> Self {
         // Set root_version since we're creating an object at a specific version
         let scope = scope.with_root_version(version.into());
-        let super_ = Address::with_address(scope, address);
+        let super_ = Address::with_address(scope.clone(), address);
 
         Self {
             super_,
@@ -860,7 +860,17 @@ impl Object {
     ) -> Result<&Option<NativeObject>, RpcError<Error>> {
         self.contents
             .get_or_try_init(async || {
-                contents(ctx, self.super_.address.into(), self.version.into()).await
+                // Check execution context cache first and return if available
+                if let Some(cached_object) = self
+                    .super_
+                    .scope
+                    .get_execution_object(self.super_.address.into(), self.version)
+                {
+                    Ok(Some(cached_object.clone()))
+                } else {
+                    // Fall back to database lookup if not in execution cache
+                    contents(ctx, self.super_.address.into(), self.version.into()).await
+                }
             })
             .await
     }
