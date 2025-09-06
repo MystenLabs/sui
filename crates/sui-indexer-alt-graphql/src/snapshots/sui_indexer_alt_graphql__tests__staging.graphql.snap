@@ -1556,7 +1556,11 @@ type MoveDatatype implements IMoveDatatype {
 	"""
 	abilities: [MoveAbility!]
 	"""
-	Attempts to convert the `MoveDatatype` as a `MoveStruct`.
+	Attempts to convert the `MoveDatatype` to a `MoveEnum`.
+	"""
+	asMoveEnum: MoveEnum
+	"""
+	Attempts to convert the `MoveDatatype` to a `MoveStruct`.
 	"""
 	asMoveStruct: MoveStruct
 	"""
@@ -1618,6 +1622,78 @@ type MoveDatatypeTypeParameter {
 	Phantom type parameters are not referenced in the struct's fields.
 	"""
 	isPhantom: Boolean!
+}
+
+"""
+Description of an enum type, defined in a Move module.
+"""
+type MoveEnum implements IMoveDatatype {
+	"""
+	Abilities on this enum definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The module that this enum is defined in.
+	"""
+	module: MoveModule!
+	"""
+	The enum's unqualified name.
+	"""
+	name: String!
+	"""
+	Constraints on the enum's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+	"""
+	The names and fields of the enum's variants
+	
+	Field types reference type parameters by their index in the defining enum's `typeParameters` list.
+	"""
+	variants: [MoveEnumVariant!]
+}
+
+type MoveEnumConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveEnumEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveEnum!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveEnumEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveEnum!
+}
+
+type MoveEnumVariant {
+	"""
+	The names and types of the variant's fields.
+	
+	Field types reference type parameters by their index in the defining struct's `typeParameters` list.
+	"""
+	fields: [MoveField!]
+	"""
+	The variant's name.
+	"""
+	name: String
 }
 
 type MoveField {
@@ -1730,6 +1806,14 @@ type MoveModule {
 	Textual representation of the module's bytecode.
 	"""
 	disassembly: String
+	"""
+	The enum named `name` in this module.
+	"""
+	enum(name: String!): MoveEnum
+	"""
+	Paginate through this module's enum definitions.
+	"""
+	enums(first: Int, after: String, last: Int, before: String): MoveEnumConnection
 	"""
 	Bytecode format version.
 	"""

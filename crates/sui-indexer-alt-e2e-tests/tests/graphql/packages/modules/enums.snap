@@ -1,0 +1,529 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-32:
+//# run-graphql
+Response: {
+  "data": {
+    "package": null
+  }
+}
+
+task 2, lines 34-40:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5487200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 42-59:
+//# upgrade --package P0 --upgrade-capability 2,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6878000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, line 61:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 63-94:
+//# run-graphql
+Response: {
+  "data": {
+    "packageVersions": {
+      "nodes": [
+        {
+          "version": 1,
+          "module": {
+            "enums": {
+              "nodes": [
+                {
+                  "name": "Status",
+                  "abilities": [
+                    "COPY",
+                    "DROP"
+                  ],
+                  "typeParameters": [],
+                  "variants": [
+                    {
+                      "name": "Active",
+                      "fields": []
+                    },
+                    {
+                      "name": "Inactive",
+                      "fields": [
+                        {
+                          "name": "reason",
+                          "type": {
+                            "repr": "vector<u8>",
+                            "signature": {
+                              "body": {
+                                "vector": "u8"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "version": 2,
+          "module": {
+            "enums": {
+              "nodes": [
+                {
+                  "name": "Complex",
+                  "abilities": [
+                    "STORE"
+                  ],
+                  "typeParameters": [
+                    {
+                      "constraints": [
+                        "STORE"
+                      ],
+                      "isPhantom": false
+                    }
+                  ],
+                  "variants": [
+                    {
+                      "name": "Empty",
+                      "fields": []
+                    },
+                    {
+                      "name": "Single",
+                      "fields": [
+                        {
+                          "name": "pos0",
+                          "type": {
+                            "repr": "$0",
+                            "signature": {
+                              "body": {
+                                "typeParameter": 0
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Pair",
+                      "fields": [
+                        {
+                          "name": "first",
+                          "type": {
+                            "repr": "$0",
+                            "signature": {
+                              "body": {
+                                "typeParameter": 0
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "second",
+                          "type": {
+                            "repr": "$0",
+                            "signature": {
+                              "body": {
+                                "typeParameter": 0
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "Result",
+                  "abilities": [
+                    "DROP"
+                  ],
+                  "typeParameters": [
+                    {
+                      "constraints": [
+                        "DROP"
+                      ],
+                      "isPhantom": false
+                    },
+                    {
+                      "constraints": [
+                        "DROP"
+                      ],
+                      "isPhantom": false
+                    }
+                  ],
+                  "variants": [
+                    {
+                      "name": "Ok",
+                      "fields": [
+                        {
+                          "name": "pos0",
+                          "type": {
+                            "repr": "$0",
+                            "signature": {
+                              "body": {
+                                "typeParameter": 0
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Err",
+                      "fields": [
+                        {
+                          "name": "pos0",
+                          "type": {
+                            "repr": "$1",
+                            "signature": {
+                              "body": {
+                                "typeParameter": 1
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "Status",
+                  "abilities": [
+                    "COPY",
+                    "DROP"
+                  ],
+                  "typeParameters": [],
+                  "variants": [
+                    {
+                      "name": "Active",
+                      "fields": []
+                    },
+                    {
+                      "name": "Inactive",
+                      "fields": [
+                        {
+                          "name": "reason",
+                          "type": {
+                            "repr": "vector<u8>",
+                            "signature": {
+                              "body": {
+                                "vector": "u8"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6, lines 96-123:
+//# run-graphql --cursors "Complex" "Status"
+Response: {
+  "data": {
+    "package": {
+      "module": {
+        "all": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "Complex"
+            },
+            {
+              "name": "Result"
+            },
+            {
+              "name": "Status"
+            }
+          ]
+        },
+        "first": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "Complex"
+            },
+            {
+              "name": "Result"
+            }
+          ]
+        },
+        "last": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "Result"
+            },
+            {
+              "name": "Status"
+            }
+          ]
+        },
+        "firstBefore": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "Complex"
+            }
+          ]
+        },
+        "lastAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "Status"
+            }
+          ]
+        },
+        "firstAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "Result"
+            }
+          ]
+        },
+        "lastBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "Result"
+            }
+          ]
+        },
+        "afterBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "Result"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 125-168:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "module": {
+        "status": {
+          "name": "Status",
+          "module": {
+            "name": "M"
+          },
+          "abilities": [
+            "COPY",
+            "DROP"
+          ],
+          "typeParameters": [],
+          "variants": [
+            {
+              "name": "Active",
+              "fields": []
+            },
+            {
+              "name": "Inactive",
+              "fields": [
+                {
+                  "name": "reason",
+                  "type": {
+                    "repr": "vector<u8>",
+                    "signature": {
+                      "body": {
+                        "vector": "u8"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "result": {
+          "name": "Result",
+          "module": {
+            "name": "M"
+          },
+          "abilities": [
+            "DROP"
+          ],
+          "typeParameters": [
+            {
+              "constraints": [
+                "DROP"
+              ],
+              "isPhantom": false
+            },
+            {
+              "constraints": [
+                "DROP"
+              ],
+              "isPhantom": false
+            }
+          ],
+          "variants": [
+            {
+              "name": "Ok",
+              "fields": [
+                {
+                  "name": "pos0",
+                  "type": {
+                    "repr": "$0",
+                    "signature": {
+                      "body": {
+                        "typeParameter": 0
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Err",
+              "fields": [
+                {
+                  "name": "pos0",
+                  "type": {
+                    "repr": "$1",
+                    "signature": {
+                      "body": {
+                        "typeParameter": 1
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "complex": {
+          "name": "Complex",
+          "module": {
+            "name": "M"
+          },
+          "abilities": [
+            "STORE"
+          ],
+          "typeParameters": [
+            {
+              "constraints": [
+                "STORE"
+              ],
+              "isPhantom": false
+            }
+          ],
+          "variants": [
+            {
+              "name": "Empty",
+              "fields": []
+            },
+            {
+              "name": "Single",
+              "fields": [
+                {
+                  "name": "pos0",
+                  "type": {
+                    "repr": "$0",
+                    "signature": {
+                      "body": {
+                        "typeParameter": 0
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Pair",
+              "fields": [
+                {
+                  "name": "first",
+                  "type": {
+                    "repr": "$0",
+                    "signature": {
+                      "body": {
+                        "typeParameter": 0
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "second",
+                  "type": {
+                    "repr": "$0",
+                    "signature": {
+                      "body": {
+                        "typeParameter": 0
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "statusDatatype": {
+          "name": "Status",
+          "asMoveEnum": {
+            "name": "Status"
+          },
+          "asMoveStruct": null
+        },
+        "resultDatatype": {
+          "name": "Result",
+          "asMoveEnum": {
+            "name": "Result"
+          },
+          "asMoveStruct": null
+        }
+      }
+    }
+  }
+}
