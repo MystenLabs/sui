@@ -36,6 +36,7 @@ arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
 better_any = "0.1.1"
+bimap = "0.6.2"
 bitvec = "0.19.4"
 byteorder = "1.4.3"
 bytes = "1.0.1"

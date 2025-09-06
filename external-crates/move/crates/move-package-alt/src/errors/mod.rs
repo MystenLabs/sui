@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::term;
 use codespan_reporting::term::Config;
@@ -23,6 +25,8 @@ use crate::dependency::ResolverError;
 use crate::git::GitError;
 use crate::graph::LinkageError;
 use crate::graph::RenameError;
+use crate::package::EnvironmentID;
+use crate::package::EnvironmentName;
 use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
 use crate::schema::PackageName;
@@ -76,6 +80,30 @@ pub enum PackageError {
         address: Identifier,
         package: PackageName,
     },
+
+    #[error(
+        "Ephemeral publication file `{file}` has `build-env = \"{file_build_env}\"`; it cannot be used to publish with `--build-env {passed_build_env}`"
+    )]
+    EphemeralEnvMismatch {
+        file: FileHandle,
+        file_build_env: EnvironmentName,
+        passed_build_env: EnvironmentName,
+    },
+
+    #[error(
+        "Ephemeral publication file `{file}` has `chain-id = \"{file_chain_id}\"`; it cannot be
+        used to publish to chain with id `{passed_chain_id}`"
+    )]
+    EphemeralChainMismatch {
+        file: FileHandle,
+        file_chain_id: EnvironmentID,
+        passed_chain_id: EnvironmentID,
+    },
+
+    #[error(
+        "Ephemeral publication file `{file}` does not have a `build-env` so you must pass `--build-env <env>`"
+    )]
+    EphemeralNoBuildEnv { file: PathBuf },
 }
 
 impl PackageError {

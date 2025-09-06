@@ -198,7 +198,7 @@ pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
 
     let mut package_paths: Vec<PackagePaths> = vec![];
 
-    for (counter, pkg) in packages.into_iter().enumerate() {
+    for pkg in packages.into_iter() {
         let name: Symbol = pkg.name().as_str().into();
 
         if !pkg.is_root() {
@@ -216,11 +216,7 @@ pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
         };
 
         // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
-        let safe_name = if pkg.is_root() {
-            Symbol::from(format!("{}_root", name))
-        } else {
-            Symbol::from(format!("{}_{}", name, counter))
-        };
+        let safe_name = Symbol::from(pkg.id().clone());
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
         debug!("Named address map {:#?}", addresses);
