@@ -4537,6 +4537,7 @@ impl AuthorityPerEpochStore {
 
         let fail_dkg_early = self.protocol_config().cancel_for_failed_dkg_early();
 
+        // TODO(commit-handler-rewrite): cancel randomness-using txns if DKG failed
         if fail_dkg_early
             && dkg_failed
             && self.randomness_state_enabled()
