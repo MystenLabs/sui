@@ -859,9 +859,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         // DONE(commit-handler-rewrite): load and activate previous round's jwks
-        let authenticator_state_update_transaction = should_accept_tx
-            .then(|| self.create_authenticator_state_update(last_committed_round, &commit_info))
-            .flatten();
+        let authenticator_state_update_transaction =
+            self.create_authenticator_state_update(last_committed_round, &commit_info);
 
         let (schedulables, randomness_schedulables, assigned_versions) = self.process_transactions(
             &mut state,
@@ -1842,12 +1841,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         (timestamp, leader_author, commit_sub_dag_index)
     }
 
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(round = consensus_commit.leader_round()))]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
-        let use_old_commit_handler =
-            once_cell::sync::Lazy::new(|| std::env::var("USE_OLD_COMMIT_HANDLER").is_ok());
+        let use_new_commit_handler = {
+            let name = self.epoch_store.name;
+            let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
+            authority_index < 2
+        };
 
-        if !*use_old_commit_handler {
+        if use_new_commit_handler {
             self.handle_consensus_commit_v2(consensus_commit).await;
             return;
         }
