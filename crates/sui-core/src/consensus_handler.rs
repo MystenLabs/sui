@@ -1507,7 +1507,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 )
                 .expect("db error"),
             self.epoch_store.protocol_config(),
-            true,
+            for_randomness,
         )
     }
 
