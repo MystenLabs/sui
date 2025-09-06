@@ -429,7 +429,7 @@ impl SuiNode {
                                     info!("Submitting JWK to consensus: {:?}", id);
 
                                     let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
-                                    consensus_adapter.submit(txn, None, &epoch_store, None)
+                                    consensus_adapter.submit(txn, None, &epoch_store, None, None)
                                         .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
                                         .ok();
                                 }
@@ -1810,9 +1810,13 @@ impl SuiNode {
                     ))
                 };
                 info!(?transaction, "submitting capabilities to consensus");
-                components
-                    .consensus_adapter
-                    .submit(transaction, None, &cur_epoch_store, None)?;
+                components.consensus_adapter.submit(
+                    transaction,
+                    None,
+                    &cur_epoch_store,
+                    None,
+                    None,
+                )?;
             }
 
             let stop_condition = checkpoint_executor.run_epoch(run_with_range).await;

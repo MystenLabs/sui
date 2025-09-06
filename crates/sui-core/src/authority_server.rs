@@ -559,8 +559,15 @@ impl ValidatorService {
             consensus_adapter,
             metrics,
             traffic_controller: _,
-            client_id_source: _,
+            client_id_source,
         } = self.clone();
+
+        let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
+            self.get_client_ip_addr(&request, client_id_source)
+        } else {
+            self.get_client_ip_addr(&request, &ClientIdSource::SocketAddr)
+        };
+
         let epoch_store = state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return Err(SuiError::UnsupportedFeatureError {
@@ -813,11 +820,16 @@ impl ValidatorService {
             self.handle_submit_to_consensus_for_position(
                 NonEmpty::from_vec(consensus_transactions).unwrap(),
                 &epoch_store,
+                submitter_client_addr,
             )
             .await?
         } else {
             let futures = consensus_transactions.into_iter().map(|t| {
-                self.handle_submit_to_consensus_for_position(NonEmpty::new(t), &epoch_store)
+                self.handle_submit_to_consensus_for_position(
+                    NonEmpty::new(t),
+                    &epoch_store,
+                    submitter_client_addr,
+                )
             });
             future::try_join_all(futures)
                 .await?
@@ -1016,6 +1028,7 @@ impl ValidatorService {
         &self,
         consensus_transactions: NonEmpty<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> Result<Vec<ConsensusPosition>, tonic::Status> {
         let consensus_transactions: Vec<_> = consensus_transactions.into();
         let (tx_consensus_positions, rx_consensus_positions) = oneshot::channel();
@@ -1038,6 +1051,7 @@ impl ValidatorService {
                 Some(&reconfiguration_lock),
                 epoch_store,
                 Some(tx_consensus_positions),
+                submitter_client_addr,
             )?;
         }
 
@@ -1079,6 +1093,7 @@ impl ValidatorService {
                     Some(&reconfiguration_lock),
                     epoch_store,
                     None,
+                    None, // not tracking submitter client addr for quorum driver path
                 )?;
                 // Do not wait for the result, because the transaction might have already executed.
                 // Instead, check or wait for the existence of certificate effects below.
