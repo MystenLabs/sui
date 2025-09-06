@@ -2392,8 +2392,18 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
+
+        let gas_len = self.gas().len();
+        let max_gas_objects = config.max_gas_payment_objects() as usize;
+
+        let within_limit = if config.correct_gas_payment_limit_check() {
+            gas_len <= max_gas_objects
+        } else {
+            gas_len < max_gas_objects
+        };
+
         fp_ensure!(
-            self.gas().len() < config.max_gas_payment_objects() as usize,
+            within_limit,
             UserInputError::SizeLimitExceeded {
                 limit: "maximum number of gas payment objects".to_string(),
                 value: config.max_gas_payment_objects().to_string()
