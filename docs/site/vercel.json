@@ -127,6 +127,7 @@
       { "source": "/guides/operator/node-tools", "destination": "/guides/operator/validator/node-tools"},
       { "source": "/guides/operator/validator-config", "destination": "/guides/operator/validator/validator-config"},
       { "source": "/guides/operator/validator-tasks", "destination": "/guides/operator/validator/validator-tasks"},
-      { "source": "/standards/deepbookv2/:path*", "destination": "/standards/deepbook"}
+      { "source": "/standards/deepbookv2/:path*", "destination": "/standards/deepbook"},
+      { "source": "/guides/developer/advanced/graphql-migration", "destination": "/guides/developer/getting-started/graphql-rpc", "permanent": true }
     ]
   }
