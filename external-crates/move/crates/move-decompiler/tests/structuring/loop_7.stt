@@ -1,0 +1,14 @@
+// if 0 { loop { 1 } } else { 2 } ; 3
+
+// But this is what we get:
+//        0
+//      /   \
+//   ->1     2
+//  |__|\   /
+//        3
+
+cond,0,1,2
+cond,1,1,3
+code,2,3
+code,3
+

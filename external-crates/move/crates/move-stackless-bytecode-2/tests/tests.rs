@@ -53,8 +53,17 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
                     input_path: file_path,
                     contents: stackless_bytecode,
                     name: name,
-                    suffix: ".opt.sbir",
+                    suffix: "opt.sbir",
                 };
+                // if let Some(decompiled) = decompile(module) {
+                //     let decompiled = format!("{}", decompiled);
+                //     insta_assert! {
+                //         input_path: file_path,
+                //         contents: decompiled,
+                //         name: name,
+                //         suffix: "decomp",
+                //     };
+                // }
             }
         }
     }
@@ -71,7 +80,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
                     input_path: file_path,
                     contents: stackless_bytecode,
                     name: name,
-                    suffix: ".no_opt.sbir",
+                    suffix: "no_opt.sbir",
                 };
             }
         }

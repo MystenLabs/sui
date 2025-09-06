@@ -1,0 +1,44 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module loop_mod {
+    public fun do_0 () {
+        return 
+    }
+
+    public fun do_1 () {
+        return 
+    }
+
+    public fun do_2 () {
+        return 
+    }
+
+    public fun do_3 () {
+        return 
+    }
+
+    public fun do_4 () {
+        return 
+    }
+
+    public fun loop_0 () {
+        while(        *l0) {
+            do_0(l0)
+            continue;
+        }
+        do_1(l0)
+        return 
+    }
+
+    public fun loop_1 () {
+        do_0(l0)
+        while(        *l0) {
+            do_1(l0)
+            continue;
+        }
+        do_2(l0)
+        return 
+    }
+
+}

@@ -1,0 +1,50 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+  Module: bin_ops
+    Function: add (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = Move(lcl_1)
+        reg_2 = Add(reg_0, reg_1)
+        Return(reg_2)
+
+
+    Function: div (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = Move(lcl_1)
+        reg_2 = Divide(reg_0, reg_1)
+        Return(reg_2)
+
+
+    Function: greater_than (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = Move(lcl_1)
+        reg_2 = GreaterThan(reg_0, reg_1)
+        Return(reg_2)
+
+
+    Function: less_than (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = Move(lcl_1)
+        reg_2 = LessThan(reg_0, reg_1)
+        Return(reg_2)
+
+
+    Function: mul (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = Move(lcl_1)
+        reg_2 = Multiply(reg_0, reg_1)
+        Return(reg_2)
+
+
+    Function: sub (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = Move(lcl_1)
+        reg_2 = Subtract(reg_0, reg_1)
+        Return(reg_2)

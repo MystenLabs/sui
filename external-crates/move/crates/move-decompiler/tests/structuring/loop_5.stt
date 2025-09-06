@@ -1,0 +1,12 @@
+// degenerate loop
+
+//    0
+//    |
+//  ->1
+// |_/ \
+//      2
+
+code,0,1
+cond,1,1,2
+code,2
+

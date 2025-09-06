@@ -1,0 +1,4 @@
+infinite_loop
+loop_cases
+loop_mod
+while_cases
