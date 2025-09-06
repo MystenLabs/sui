@@ -34,11 +34,17 @@ module P::M {
 {
   package(address: "@{P}") {
     module(name: "M") {
-      A: datatype(name: "A") { ...D }
-      E: datatype(name: "E") { ...D }
-      S: datatype(name: "S") { ...D }
-      T: datatype(name: "T") { ...D }
-      V: datatype(name: "V") { ...D }
+      a: datatype(name: "A") { ...D }
+      e: datatype(name: "E") { ...D }
+      s: datatype(name: "S") { ...D }
+      t: datatype(name: "T") { ...D }
+      v: datatype(name: "V") { ...D }
+
+      aStruct: struct(name: "A") { name }
+      aEnum: enum(name: "A") { name }
+
+      eStruct: struct(name: "E") { name }
+      eEnum: enum(name: "E") { name }
 
       doesntExist: datatype(name: "DoesntExist") { ...D }
 
@@ -57,6 +63,7 @@ fragment D on MoveDatatype {
     isPhantom
   }
 
+  asMoveEnum { name }
   asMoveStruct { name }
 }
 
