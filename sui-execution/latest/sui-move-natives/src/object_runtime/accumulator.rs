@@ -22,6 +22,8 @@ impl MoveAccumulatorAction {
 #[derive(Debug)]
 pub enum MoveAccumulatorValue {
     U64(u64),
+    // commit the nth event emitted by the transaction to an event stream
+    EventRef(u64),
 }
 
 #[derive(Debug)]
