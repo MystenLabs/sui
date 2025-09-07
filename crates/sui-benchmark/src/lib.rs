@@ -364,6 +364,7 @@ impl LocalValidatorAggregatorProxy {
                     transaction: tx.clone(),
                 },
                 SubmitTransactionOptions::default(),
+                Some(Duration::from_secs(60)),
             )
             .await?;
         Ok(ExecutionEffects::FinalizedTransactionEffects(

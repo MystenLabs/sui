@@ -579,7 +579,7 @@ where
         );
 
         let td_response = td
-            .drive_transaction_with_timeout(
+            .drive_transaction(
                 SubmitTxRequest {
                     transaction: request.transaction.clone(),
                 },

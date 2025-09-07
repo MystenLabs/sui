@@ -94,18 +94,8 @@ where
         driver
     }
 
-    #[instrument(level = "error", skip_all, err(level = "info"), fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn drive_transaction(
-        &self,
-        request: SubmitTxRequest,
-        options: SubmitTransactionOptions,
-    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        self.drive_transaction_with_timeout(request, options, None)
-            .await
-    }
-
     #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn drive_transaction_with_timeout(
+    pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
@@ -183,6 +173,7 @@ where
                                 .transaction_retries
                                 .with_label_values(&["failure"])
                                 .observe(attempts as f64);
+                            tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
                             return Err(e);
                         }
                         tracing::info!(
@@ -206,11 +197,17 @@ where
                     .await
                     .unwrap_or_else(|_| {
                         // Timeout occurred, return with latest retriable error if available
-                        Err(TransactionDriverError::TimeoutWithLastRetriableError {
+                        let e = TransactionDriverError::TimeoutWithLastRetriableError {
                             last_error: latest_retriable_error.map(Box::new),
                             attempts,
                             timeout: duration,
-                        })
+                        };
+                        tracing::info!(
+                            "Transaction timed out after {} attempts. Last error: {}",
+                            attempts,
+                            e
+                        );
+                        Err(e)
                     })
             }
             None => retry_loop.await,
