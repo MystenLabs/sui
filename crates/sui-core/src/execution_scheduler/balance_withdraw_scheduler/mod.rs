@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use sui_types::{base_types::ObjectID, digests::TransactionDigest};
 
 mod balance_read;
+mod eager_scheduler;
 mod naive_scheduler;
 pub(crate) mod scheduler;
 #[cfg(test)]
@@ -41,9 +42,6 @@ pub(crate) struct ScheduleResult {
 /// and committed to the writeback cache.
 pub struct BalanceSettlement {
     /// The balance changes for each account object ID.
-    /// This is currently unused because the naive scheduler
-    /// always load the latest balance during scheduling.
-    #[allow(unused)]
     pub balance_changes: BTreeMap<ObjectID, i128>,
 }
 
