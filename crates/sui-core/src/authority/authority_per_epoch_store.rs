@@ -2244,14 +2244,6 @@ impl AuthorityPerEpochStore {
         .assigned_versions)
     }
 
-    pub(crate) fn load_deferred_transactions_for_randomness(
-        &self,
-        output: &mut ConsensusCommitOutput,
-    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
-        let (min, max) = DeferralKey::full_range_for_randomness();
-        self.load_deferred_transactions(output, min, max)
-    }
-
     fn load_and_process_deferred_transactions_for_randomness(
         &self,
         output: &mut ConsensusCommitOutput,
@@ -2278,6 +2270,14 @@ impl AuthorityPerEpochStore {
         sequenced_randomness_transactions
             .extend(deferred_randomness_txs.into_iter().flat_map(|(_, txs)| txs));
         Ok(())
+    }
+
+    pub(crate) fn load_deferred_transactions_for_randomness(
+        &self,
+        output: &mut ConsensusCommitOutput,
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
+        let (min, max) = DeferralKey::full_range_for_randomness();
+        self.load_deferred_transactions(output, min, max)
     }
 
     pub(crate) fn load_deferred_transactions_for_up_to_consensus_round(
@@ -2325,6 +2325,68 @@ impl AuthorityPerEpochStore {
             for deferred_txn_batch in &txns {
                 for txn in &deferred_txn_batch.1 {
                     assert!(seen.insert(txn.0.key()));
+                }
+            }
+        }
+
+        output.delete_loaded_deferred_transactions(&keys);
+
+        Ok(txns)
+    }
+
+    pub(crate) fn load_deferred_transactions_for_randomness_v2(
+        &self,
+        output: &mut ConsensusCommitOutput,
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+        let (min, max) = DeferralKey::full_range_for_randomness();
+        self.load_deferred_transactions_v2(output, min, max)
+    }
+
+    pub(crate) fn load_deferred_transactions_for_up_to_consensus_round_v2(
+        &self,
+        output: &mut ConsensusCommitOutput,
+        consensus_round: u64,
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+        let (min, max) = DeferralKey::range_for_up_to_consensus_round(consensus_round);
+        self.load_deferred_transactions_v2(output, min, max)
+    }
+
+    // factoring of the above
+    fn load_deferred_transactions_v2(
+        &self,
+        output: &mut ConsensusCommitOutput,
+        min: DeferralKey,
+        max: DeferralKey,
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+        debug!("Query epoch store to load deferred txn {:?} {:?}", min, max);
+
+        let (keys, txns) = {
+            let mut keys = Vec::new();
+            let mut txns = Vec::new();
+
+            let deferred_transactions = self.consensus_output_cache.deferred_transactions_v2.lock();
+
+            for (key, transactions) in deferred_transactions.range(min..max) {
+                debug!(
+                    "Loaded {:?} deferred txn with deferral key {:?}",
+                    transactions.len(),
+                    key
+                );
+                keys.push(*key);
+                txns.push((*key, transactions.clone()));
+            }
+
+            (keys, txns)
+        };
+
+        // verify that there are no duplicates - should be impossible due to
+        // is_consensus_message_processed
+        #[cfg(debug_assertions)]
+        {
+            let mut seen = HashSet::new();
+            for deferred_txn_batch in &txns {
+                for txn in &deferred_txn_batch.1 {
+                    assert!(seen.insert(txn.digest()));
                 }
             }
         }

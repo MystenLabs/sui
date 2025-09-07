@@ -17,7 +17,7 @@ use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, debug_fatal, fatal, random_util::randomize_cache_capacity_in_tests,
+    assert_reachable, debug_fatal, random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
     monitored_future,
@@ -1410,73 +1410,45 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         Vec<VerifiedExecutableTransaction>,
         HashMap<TransactionDigest, DeferralKey>,
     ) {
-        let epoch = self.epoch_store.epoch();
-        // TODO: we should just store VerifiedExecutableTransaction in the deferred table
-        let to_verified_executable_transaction =
-            |tx: VerifiedSequencedConsensusTransaction| -> VerifiedExecutableTransaction {
-                match tx.0.transaction {
-                    SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                        kind: ConsensusTransactionKind::CertifiedTransaction(cert),
-                        ..
-                    }) => {
-                        // Safe because the cert would have been checked when it arrived originally.
-                        let cert = VerifiedCertificate::new_unchecked(*cert);
-                        VerifiedExecutableTransaction::new_from_certificate(cert)
-                    }
-                    SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                        kind: ConsensusTransactionKind::UserTransaction(tx),
-                        ..
-                    }) => {
-                        // Safe because transactions are certified by consensus.
-                        let tx = VerifiedTransaction::new_unchecked(*tx);
-                        // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
-                        VerifiedExecutableTransaction::new_from_consensus(
-                            tx,
-                            epoch,
-                        )
-                    }
-                    _ => fatal!("deferred transaction was not a user certificate or mfp transaction: {tx:?}"),
-                }
-            };
-
         let mut previously_deferred_tx_digests = HashMap::new();
 
         // DONE(commit-handler-rewrite): Load transactions deferred from previous commits, compute the digest set of all such transactions.
         let deferred_txs: Vec<_> = self
             .epoch_store
-            .load_deferred_transactions_for_up_to_consensus_round(
+            .load_deferred_transactions_for_up_to_consensus_round_v2(
                 &mut state.output,
                 commit_info.round,
             )
             .expect("db error")
             .into_iter()
-            .flat_map(|(key, txns)| {
-                txns.into_iter()
-                    .map(move |tx| (key, to_verified_executable_transaction(tx)))
-            })
+            .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
             .map(|(key, tx)| {
                 previously_deferred_tx_digests.insert(*tx.digest(), key);
                 tx
             })
             .collect();
+        trace!(
+            "loading deferred transactions: {:?}",
+            deferred_txs.iter().map(|tx| tx.digest())
+        );
 
         // DONE(commit-handler-rewrite): load all deferred randomness-using txns
         let deferred_randomness_txs = if state.dkg_failed || state.randomness_round.is_some() {
             let txns: Vec<_> = self
                 .epoch_store
-                .load_deferred_transactions_for_randomness(&mut state.output)
+                .load_deferred_transactions_for_randomness_v2(&mut state.output)
                 .expect("db error")
                 .into_iter()
-                .flat_map(|(key, txns)| {
-                    txns.into_iter()
-                        .map(move |tx| (key, to_verified_executable_transaction(tx)))
-                })
+                .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
                 .map(|(key, tx)| {
                     previously_deferred_tx_digests.insert(*tx.digest(), key);
                     tx
                 })
                 .collect();
-            trace!("loading deferred randomness transactions: {:?}", txns);
+            trace!(
+                "loading deferred randomness transactions: {:?}",
+                txns.iter().map(|tx| tx.digest())
+            );
             txns
         } else {
             vec![]
