@@ -787,6 +787,10 @@ struct FeatureFlags {
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
+
+    // If true, use MFP txns in load initial object debts.
+    #[serde(skip_serializing_if = "is_false")]
+    use_mfp_txns_in_load_initial_object_debts: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2194,6 +2198,10 @@ impl ProtocolConfig {
     pub fn consensus_checkpoint_signature_key_includes_digest(&self) -> bool {
         self.feature_flags
             .consensus_checkpoint_signature_key_includes_digest
+    }
+
+    pub fn use_mfp_txns_in_load_initial_object_debts(&self) -> bool {
+        self.feature_flags.use_mfp_txns_in_load_initial_object_debts
     }
 }
 
@@ -3977,6 +3985,7 @@ impl ProtocolConfig {
                 96 => {
                     cfg.feature_flags.correct_gas_payment_limit_check = true;
                     cfg.feature_flags.authority_capabilities_v2 = true;
+                    cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
                 }
                 // Use this template when making changes:
                 //
