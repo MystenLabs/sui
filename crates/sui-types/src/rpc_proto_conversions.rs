@@ -234,7 +234,7 @@ impl From<crate::messages_checkpoint::CheckpointCommitment> for CheckpointCommit
             }
             crate::messages_checkpoint::CheckpointCommitment::CheckpointArtifactsDigest(digest) => {
                 message.digest = Some(digest.to_string());
-                CheckpointCommitmentKind::CheckpointArtifactsDigest
+                CheckpointCommitmentKind::CheckpointArtifacts
             }
         };
 
