@@ -193,7 +193,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .published
             .insert(self.environment.name().clone(), publish_data);
 
-        std::fs::write(&self.package_path, self.pubs.render_as_toml())?;
+        std::fs::write(
+            &self.package_path.publications_path(),
+            self.pubs.render_as_toml(),
+        )?;
         Ok(())
     }
 

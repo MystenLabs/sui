@@ -71,6 +71,10 @@ impl Manifest {
         Ok(result)
     }
 
+    pub fn package_name(&self) -> String {
+        self.inner.package.name.get_ref().to_string()
+    }
+
     pub fn dep_replacements(
         &self,
     ) -> &BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>> {
