@@ -19,6 +19,7 @@ use std::{
 use bimap::BiBTreeMap;
 use petgraph::graph::{DiGraph, NodeIndex};
 use tokio::sync::OnceCell;
+use tracing::debug;
 
 use super::{PackageGraph, PackageGraphEdge};
 
@@ -107,6 +108,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             "Invalid lockfile: there is no root node".into(),
         ))?;
 
+        debug!("loaded packages from lockfile: {package_ids:?}");
+
         // Second pass: add edges based on dependencies
         for (source_id, source_pin) in pins.iter() {
             let source_index = package_ids.get_by_left(source_id).unwrap();
@@ -117,7 +120,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                     .deps
                     .get(dep_name)
                     .ok_or(PackageError::Generic(format!(
-                        "Invalid lockfile: package <TODO> has a dependency named <TODO> in its manifest, but that dependency is not pinned in the lockfile"
+                        "Invalid lockfile: package `{source_id}` has a dependency named `{dep_name}` in its manifest, but that dependency is not pinned in the lockfile",
                     )))?;
 
                 let target_index = package_ids
