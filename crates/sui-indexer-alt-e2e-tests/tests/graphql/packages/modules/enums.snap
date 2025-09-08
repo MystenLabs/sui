@@ -61,7 +61,6 @@ Response: {
                           "type": {
                             "repr": "vector<u8>",
                             "signature": {
-                              "ref": null,
                               "body": {
                                 "vector": "u8"
                               }
@@ -107,7 +106,6 @@ Response: {
                           "type": {
                             "repr": "$0",
                             "signature": {
-                              "ref": null,
                               "body": {
                                 "typeParameter": 0
                               }
@@ -124,7 +122,6 @@ Response: {
                           "type": {
                             "repr": "$0",
                             "signature": {
-                              "ref": null,
                               "body": {
                                 "typeParameter": 0
                               }
@@ -136,7 +133,6 @@ Response: {
                           "type": {
                             "repr": "$0",
                             "signature": {
-                              "ref": null,
                               "body": {
                                 "typeParameter": 0
                               }
@@ -175,7 +171,6 @@ Response: {
                           "type": {
                             "repr": "$0",
                             "signature": {
-                              "ref": null,
                               "body": {
                                 "typeParameter": 0
                               }
@@ -192,7 +187,6 @@ Response: {
                           "type": {
                             "repr": "$1",
                             "signature": {
-                              "ref": null,
                               "body": {
                                 "typeParameter": 1
                               }
@@ -223,7 +217,6 @@ Response: {
                           "type": {
                             "repr": "vector<u8>",
                             "signature": {
-                              "ref": null,
                               "body": {
                                 "vector": "u8"
                               }
@@ -383,7 +376,6 @@ Response: {
                   "type": {
                     "repr": "vector<u8>",
                     "signature": {
-                      "ref": null,
                       "body": {
                         "vector": "u8"
                       }
@@ -425,7 +417,6 @@ Response: {
                   "type": {
                     "repr": "$0",
                     "signature": {
-                      "ref": null,
                       "body": {
                         "typeParameter": 0
                       }
@@ -442,7 +433,6 @@ Response: {
                   "type": {
                     "repr": "$1",
                     "signature": {
-                      "ref": null,
                       "body": {
                         "typeParameter": 1
                       }
@@ -482,7 +472,6 @@ Response: {
                   "type": {
                     "repr": "$0",
                     "signature": {
-                      "ref": null,
                       "body": {
                         "typeParameter": 0
                       }
@@ -499,7 +488,6 @@ Response: {
                   "type": {
                     "repr": "$0",
                     "signature": {
-                      "ref": null,
                       "body": {
                         "typeParameter": 0
                       }
@@ -511,7 +499,6 @@ Response: {
                   "type": {
                     "repr": "$0",
                     "signature": {
-                      "ref": null,
                       "body": {
                         "typeParameter": 0
                       }
