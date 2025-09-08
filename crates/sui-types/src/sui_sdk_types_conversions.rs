@@ -1447,6 +1447,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
                 Self::AccumulatorRootCreate
             }
+            crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
+                Self::CoinRegistryCreate
+            }
         }
     }
 }

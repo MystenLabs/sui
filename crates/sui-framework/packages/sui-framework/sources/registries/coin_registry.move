@@ -593,12 +593,11 @@ public fun coin_registry_id(): ID {
 /// Create and share the singleton Registry -- this function is
 /// called exactly once, during the upgrade epoch.
 /// Only the system address (0x0) can create the registry.
-fun create(ctx: &mut TxContext) {
+fun create(ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
     transfer::share_object(CoinRegistry {
-        // TODO: id: object::sui_coin_registry_object_id(),
-        id: object::new(ctx),
+        id: object::sui_coin_registry_object_id(),
     });
 }
 

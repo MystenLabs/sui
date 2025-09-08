@@ -414,6 +414,7 @@ pub enum EndOfEpochTransactionKind {
     BridgeCommitteeInit(SequenceNumber),
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
     AccumulatorRootCreate,
+    CoinRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -459,6 +460,10 @@ impl EndOfEpochTransactionKind {
 
     pub fn new_accumulator_root_create() -> Self {
         Self::AccumulatorRootCreate
+    }
+
+    pub fn new_coin_registry_create() -> Self {
+        Self::CoinRegistryCreate
     }
 
     pub fn new_deny_list_state_create() -> Self {
@@ -519,6 +524,7 @@ impl EndOfEpochTransactionKind {
                 }]
             }
             Self::AccumulatorRootCreate => vec![],
+            Self::CoinRegistryCreate => vec![],
         }
     }
 
@@ -554,6 +560,7 @@ impl EndOfEpochTransactionKind {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
+            Self::CoinRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -614,6 +621,13 @@ impl EndOfEpochTransactionKind {
                 if !config.enable_accumulators() {
                     return Err(UserInputError::Unsupported(
                         "accumulators not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::CoinRegistryCreate => {
+                if !config.enable_coin_registry() {
+                    return Err(UserInputError::Unsupported(
+                        "coin registry not enabled".to_string(),
                     ));
                 }
             }
