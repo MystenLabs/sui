@@ -8220,6 +8220,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "append-only-vec",
+ "bimap",
  "clap",
  "codespan-reporting",
  "derive-where",
