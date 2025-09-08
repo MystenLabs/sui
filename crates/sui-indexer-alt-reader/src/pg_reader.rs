@@ -79,6 +79,11 @@ impl PgReader {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 
+    /// Check if this reader has a database available.
+    pub fn has_database(&self) -> bool {
+        self.db.is_some()
+    }
+
     /// Acquire a connection to the database. This can potentially fail if the service is cancelled
     /// while the connection is being acquired.
     pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {

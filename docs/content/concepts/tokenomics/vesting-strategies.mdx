@@ -2,8 +2,6 @@
 title: Token Vesting Strategies
 description: If you plan to launch a token on Sui, then you might consider implementing a vesting strategy to strengthen the long-term outlook of your token.
 keywords: [ vesting strategies, token vesting strategies, designing a token launch, designing token vesting, how to design token vesting, vesting options, token vest strategies, how to vest tokens, how to design token vest ]
-mdx:
-  format: md
 ---
 
 If you plan to launch a token on Sui, then you might consider implementing a vesting strategy to strengthen the long-term outlook of your token. A vesting strategy typically releases your tokens to team members, investors, or other early stakeholders over time, rather than releasing them all at once.
@@ -42,7 +40,7 @@ Considering the example scenario, you would call `new_wallet` ten times so that 
 
 </summary>
 
-{@inject: ../../../../examples/vesting/sources/cliff.move}
+<ImportContent source="examples/vesting/sources/cliff.move" mode="code" />
 
 </details>
 
@@ -78,7 +76,7 @@ The following smart contract creates a hybrid vesting model. Like the cliff vest
 
 </summary>
 
-{@inject: ../../../../examples/vesting/sources/hybrid.move}
+<ImportContent source="examples/vesting/sources/hybrid.move" mode="code" />
 
 </details>
 
@@ -106,7 +104,7 @@ For the example scenario, you could pass the start timestamp for the frontload a
 
 </summary>
 
-{@inject: ../../../../examples/vesting/sources/backloaded.move}
+<ImportContent source="examples/vesting/sources/backloaded.move" mode="code" />
 
 </details>
 
@@ -140,7 +138,7 @@ The milestone update authority can call `update_milestone_percentage` to update 
 
 </summary>
 
-{@inject: ../../../../examples/vesting/sources/milestone.move}
+<ImportContent source="examples/vesting/sources/milestone.move" mode="code" />
 
 </details>
 
@@ -166,7 +164,7 @@ For the example scenario, you create the wallet (call `new_wallet`) with 1,000 t
 
 </summary>
 
-{@inject: ../../../../examples/vesting/sources/linear.move}
+<ImportContent source="examples/vesting/sources/linear.move" mode="code" />
 
 </details>
 
@@ -196,6 +194,6 @@ The following test leverages the [linear vesting](#linear-vesting) smart contrac
 
 </summary>
 
-{@inject: ../../../../examples/vesting/tests/immediate_tests.move}
+<ImportContent source="examples/vesting/tests/immediate_tests.move" mode="code" />
 
 </details>

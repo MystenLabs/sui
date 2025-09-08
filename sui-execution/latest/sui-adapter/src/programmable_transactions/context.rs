@@ -918,6 +918,8 @@ mod checked {
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
+                settlement_input_sui,
+                settlement_output_sui,
             } = object_runtime.finish()?;
             assert_invariant!(
                 remaining_events.is_empty(),
@@ -1027,6 +1029,8 @@ mod checked {
                 deleted_object_ids,
                 user_events,
                 accumulator_events,
+                settlement_input_sui,
+                settlement_output_sui,
             )
         }
 
@@ -1414,6 +1418,8 @@ mod checked {
         deleted_object_ids: IndexSet<ObjectID>,
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
         accumulator_events: Vec<MoveAccumulatorEvent>,
+        settlement_input_sui: u64,
+        settlement_output_sui: u64,
     ) -> Result<ExecutionResults, ExecutionError> {
         // Before finishing, ensure that any shared object taken by value by the transaction is either:
         // 1. Mutated (and still has a shared ownership); or
@@ -1556,6 +1562,8 @@ mod checked {
             deleted_object_ids: deleted_object_ids.into_iter().collect(),
             user_events,
             accumulator_events,
+            settlement_input_sui,
+            settlement_output_sui,
         }))
     }
 

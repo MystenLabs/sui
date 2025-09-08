@@ -25,28 +25,28 @@ async fn execute_transaction(
 ) -> ExecutedTransaction {
     let mut client = TransactionExecutionServiceClient::new(&mut *channel);
 
-    let ExecuteTransactionResponse {
-        finality: _,
-        transaction,
-    } = client
-        .execute_transaction(ExecuteTransactionRequest {
-            transaction: Some(Transaction {
-                bcs: Some(Bcs::serialize(signed_transaction.transaction_data()).unwrap()),
-                ..Default::default()
-            }),
-            signatures: signed_transaction
-                .tx_signatures()
-                .iter()
-                .map(|s| UserSignature {
-                    bcs: Some(Bcs {
-                        name: None,
-                        value: Some(s.as_ref().to_owned().into()),
-                    }),
-                    ..Default::default()
-                })
-                .collect(),
-            read_mask: Some(FieldMask::from_paths(["finality", "transaction"])),
-        })
+    let mut transaction = Transaction::default();
+    transaction.bcs = Some(Bcs::serialize(signed_transaction.transaction_data()).unwrap());
+    let ExecuteTransactionResponse { transaction, .. } = client
+        .execute_transaction(
+            ExecuteTransactionRequest::new(transaction)
+                .with_signatures(
+                    signed_transaction
+                        .tx_signatures()
+                        .iter()
+                        .map(|s| {
+                            let mut message = UserSignature::default();
+                            message.bcs = Some({
+                                let mut message = Bcs::default();
+                                message.value = Some(s.as_ref().to_owned().into());
+                                message
+                            });
+                            message
+                        })
+                        .collect(),
+                )
+                .with_read_mask(FieldMask::from_paths(["finality", "transaction"])),
+        )
         .await
         .unwrap()
         .into_inner();
@@ -87,9 +87,10 @@ async fn wait_for_transaction(
             interval.tick().await;
 
             if let Ok(poll_response) = client
-                .get_transaction(GetTransactionRequest {
-                    digest: Some(digest.to_owned()),
-                    read_mask: None,
+                .get_transaction({
+                    let mut request = GetTransactionRequest::default();
+                    request.digest = Some(digest.to_owned());
+                    request
                 })
                 .await
             {

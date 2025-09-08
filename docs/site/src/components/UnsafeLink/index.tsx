@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from "react";
-import Link from "@docusaurus/Link";
 
 type Props = {
   href: string;
@@ -34,8 +33,8 @@ export default function UnsafeLink({ href, children, className }: Props) {
   }
 
   return (
-    <Link to={href} className={className}>
+    <a href={href} target="_self" className={className}>
       {children}
-    </Link>
+    </a>
   );
 }

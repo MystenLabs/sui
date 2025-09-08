@@ -2200,7 +2200,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
         assert_matches!(
             response.unwrap_err(),
             SuiError::UserInputError {
-                error: UserInputError::TooManyTransactionsInSoftBundle { .. },
+                error: UserInputError::TooManyTransactionsInBatch { .. },
             }
         );
     }
@@ -2481,7 +2481,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
         assert_matches!(
             response.unwrap_err(),
             SuiError::UserInputError {
-                error: UserInputError::SoftBundleTooLarge {
+                error: UserInputError::TotalTransactionSizeTooLargeInBatch {
                     size: 25116,
                     limit: 5000
                 },

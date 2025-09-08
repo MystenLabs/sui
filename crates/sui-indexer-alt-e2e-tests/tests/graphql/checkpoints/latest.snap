@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 6 tasks
+processed 7 tasks
 
 init:
 A: object(0,0)
@@ -35,6 +35,16 @@ task 4, line 18:
 Checkpoint created: 2
 
 task 5, lines 20-23:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 2
+    }
+  }
+}
+
+task 6, lines 25-29:
 //# run-graphql
 Response: {
   "data": {

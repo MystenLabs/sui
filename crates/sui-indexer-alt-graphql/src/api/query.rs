@@ -17,13 +17,17 @@ use super::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         epoch::Epoch,
+        event::{filter::EventFilter, CEvent, Event},
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
         object::{self, Object, ObjectKey, VersionFilter},
         object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
-        transaction::{filter::TransactionFilter, CTransaction, Transaction},
+        transaction::{
+            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+            CTransaction, Transaction,
+        },
         transaction_effects::TransactionEffects,
     },
 };
@@ -38,8 +42,25 @@ pub struct Query {
 #[Object]
 impl Query {
     /// Look-up an account by its SuiAddress.
-    async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Address, RpcError> {
-        let scope = self.scope(ctx)?;
+    ///
+    /// If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+    ///
+    /// - The root object of the object it is wrapped in, if it is wrapped.
+    /// - The root object of its owner, if it is owned by another object.
+    /// - The object itself, if it is not object-owned or wrapped.
+    ///
+    /// Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+    async fn address(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        root_version: Option<UInt53>,
+    ) -> Result<Address, RpcError> {
+        let mut scope = self.scope(ctx)?;
+        if let Some(version) = root_version {
+            scope = scope.with_root_version(version.into());
+        }
+
         Ok(Address::with_address(scope, address.into()))
     }
 
@@ -58,11 +79,10 @@ impl Query {
         sequence_number: Option<UInt53>,
     ) -> Result<Option<Checkpoint>, RpcError> {
         let scope = self.scope(ctx)?;
-        let sequence_number = sequence_number
-            .map(|s| s.into())
-            .unwrap_or(scope.checkpoint_viewed_at());
-
-        Ok(Checkpoint::with_sequence_number(scope, sequence_number))
+        Ok(Checkpoint::with_sequence_number(
+            scope,
+            sequence_number.map(|s| s.into()),
+        ))
     }
 
     /// Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
@@ -97,6 +117,24 @@ impl Query {
         Epoch::fetch(ctx, scope, epoch_id).await
     }
 
+    /// Paginate events that are emitted in the network, optionally filtered by event filters.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CEvent>,
+        last: Option<u64>,
+        before: Option<CEvent>,
+        filter: Option<EventFilter>,
+    ) -> Result<Connection<String, Event>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "events");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
+    }
+
     /// Fetch checkpoints by their sequence numbers.
     ///
     /// Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
@@ -108,7 +146,7 @@ impl Query {
         let scope = self.scope(ctx)?;
         Ok(keys
             .into_iter()
-            .map(|k| Checkpoint::with_sequence_number(scope.clone(), k.into()))
+            .map(|k| Checkpoint::with_sequence_number(scope.clone(), Some(k.into())))
             .collect())
     }
 
@@ -213,11 +251,13 @@ impl Query {
     ///
     /// If `version` is specified, the object will be fetched at that exact version.
     ///
-    /// If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+    /// If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. Nested dynamic field accesses will also be subject to this bound. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
     ///
     /// - The root object of the object it is wrapped in, if it is wrapped.
     /// - The root object of its owner, if it is owned by another object.
     /// - The object itself, if it is not object-owned or wrapped.
+    ///
+    /// Specifying a `version` or a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
     ///
     /// If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
     ///
@@ -430,7 +470,7 @@ impl Query {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;

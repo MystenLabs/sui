@@ -15,11 +15,10 @@ async fn test_get_function_validator_cap() {
         .await
         .unwrap();
 
-    let request = GetFunctionRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: Some("validator_cap".to_string()),
-        name: Some("new_unverified_validator_operation_cap_and_transfer".to_string()),
-    };
+    let mut request = GetFunctionRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("validator_cap".to_string());
+    request.name = Some("new_unverified_validator_operation_cap_and_transfer".to_string());
 
     let response = service.get_function(request).await.unwrap();
     let function = response.into_inner().function.unwrap();
@@ -34,11 +33,10 @@ async fn test_get_function_not_found() {
         .await
         .unwrap();
 
-    let request = GetFunctionRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: Some("validator_cap".to_string()),
-        name: Some("non_existent_function".to_string()),
-    };
+    let mut request = GetFunctionRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("validator_cap".to_string());
+    request.name = Some("non_existent_function".to_string());
 
     let error = service.get_function(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::Internal);
@@ -52,11 +50,10 @@ async fn test_get_function_invalid_hex() {
         .await
         .unwrap();
 
-    let request = GetFunctionRequest {
-        package_id: Some("0xGGGG".to_string()),
-        module_name: Some("module".to_string()),
-        name: Some("function".to_string()),
-    };
+    let mut request = GetFunctionRequest::default();
+    request.package_id = Some("0xGGGG".to_string());
+    request.module_name = Some("module".to_string());
+    request.name = Some("function".to_string());
 
     let error = service.get_function(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -70,11 +67,10 @@ async fn test_get_function_missing_package_id() {
         .await
         .unwrap();
 
-    let request = GetFunctionRequest {
-        package_id: None,
-        module_name: Some("module".to_string()),
-        name: Some("function".to_string()),
-    };
+    let mut request = GetFunctionRequest::default();
+    request.package_id = None;
+    request.module_name = Some("module".to_string());
+    request.name = Some("function".to_string());
 
     let error = service.get_function(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -88,11 +84,10 @@ async fn test_get_function_missing_module_name() {
         .await
         .unwrap();
 
-    let request = GetFunctionRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: None,
-        name: Some("function".to_string()),
-    };
+    let mut request = GetFunctionRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = None;
+    request.name = Some("function".to_string());
 
     let error = service.get_function(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -106,11 +101,10 @@ async fn test_get_function_missing_name() {
         .await
         .unwrap();
 
-    let request = GetFunctionRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: Some("validator_cap".to_string()),
-        name: None,
-    };
+    let mut request = GetFunctionRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("validator_cap".to_string());
+    request.name = None;
 
     let error = service.get_function(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);

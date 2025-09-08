@@ -24,8 +24,9 @@ async fn get_service_info() {
         lowest_available_checkpoint,
         lowest_available_checkpoint_objects,
         server,
+        ..
     } = grpc_client
-        .get_service_info(GetServiceInfoRequest {})
+        .get_service_info(GetServiceInfoRequest::default())
         .await
         .unwrap()
         .into_inner();

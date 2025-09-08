@@ -1,8 +1,6 @@
 ---
 title: Packages
 description: A Move package on Sui includes one or more modules that define that package's interaction with on-chain objects. Upgrading packages lets you improve code or add features without breaking packages that depend on them.
-mdx:
-  format: md
 ---
 
 A Move package on Sui includes one or more modules that define the package's interaction with on-chain objects. You develop the logic for those modules in Move, compile them into an object, and publish that package object to a Sui network. On-chain, anyone can view a package’s contents and see how its logic manipulates objects using a Sui Explorer.
@@ -25,7 +23,7 @@ The [Sui Client CLI](/references/cli/client.mdx) provides an approachable way to
 
 This workflow is convenient when you’re starting development or iterating quickly. However, protecting package upgrades with a single private key poses security risks:
 
-{@include: ../../snippets/upgrade-single-key-risk.mdx}
+<ImportContent source="upgrade-single-key-risk.mdx" mode="snippet" />
 
 ### Making packages immutable
 

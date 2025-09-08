@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub use crate::bootstrap::BootstrapGenesis;
 use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
@@ -43,11 +44,7 @@ pub async fn setup_indexer(
     indexer_args: IndexerArgs,
     client_args: ClientArgs,
     indexer_config: IndexerConfig,
-    // If true, the indexer will bootstrap from genesis.
-    // Otherwise it will skip the pipelines that rely on genesis data.
-    // TODO: There is probably a better way to handle this.
-    // For instance, we could also pass in dummy genesis data in the benchmark mode.
-    with_genesis: bool,
+    bootstrap_genesis: Option<BootstrapGenesis>,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<Indexer<Db>> {
@@ -56,8 +53,7 @@ pub async fn setup_indexer(
         committer,
         pruner,
         pipeline,
-        extra: _,
-    } = indexer_config.finish()?;
+    } = indexer_config;
 
     let PipelineLayer {
         sum_displays,
@@ -81,8 +77,7 @@ pub async fn setup_indexer(
         tx_calls,
         tx_digests,
         tx_kinds,
-        extra: _,
-    } = pipeline.finish()?;
+    } = pipeline;
 
     let ingestion = ingestion.finish(IngestionConfig::default())?;
     let committer = committer.finish(CommitterConfig::default())?;
@@ -162,13 +157,11 @@ pub async fn setup_indexer(
         };
     }
 
-    if with_genesis {
-        let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
+    let genesis = bootstrap(&indexer, retry_interval, cancel.clone(), bootstrap_genesis).await?;
 
-        // Pipelines that rely on genesis information
-        add_concurrent!(KvFeatureFlags(genesis.clone()), kv_feature_flags);
-        add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
-    }
+    // Pipelines that rely on genesis information
+    add_concurrent!(KvFeatureFlags(genesis.clone()), kv_feature_flags);
+    add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);

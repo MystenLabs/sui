@@ -129,7 +129,7 @@ impl<const T: bool> From<crate::crypto::AuthorityQuorumSignInfo<T>>
         Self {
             epoch,
             signature: Bls12381Signature::from_bytes(signature.as_ref()).unwrap(),
-            bitmap: signers_map,
+            bitmap: Bitmap::from_iter(signers_map),
         }
     }
 }
@@ -148,7 +148,7 @@ impl<const T: bool> From<ValidatorAggregatedSignature>
             epoch,
             signature: crate::crypto::AggregateAuthoritySignature::from_bytes(signature.as_bytes())
                 .unwrap(),
-            signers_map: bitmap,
+            signers_map: roaring::RoaringBitmap::from_iter(bitmap.iter()),
         }
     }
 }
@@ -189,6 +189,7 @@ impl From<Owner> for crate::object::Owner {
                 start_version: start_version.into(),
                 owner: owner.into(),
             },
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -356,8 +357,8 @@ pub fn struct_tag_sdk_to_core(
     } = value;
 
     let address = move_core_types::account_address::AccountAddress::new(address.into_inner());
-    let module = move_core_types::identifier::Identifier::new(module.into_inner())?;
-    let name = move_core_types::identifier::Identifier::new(name.into_inner())?;
+    let module = move_core_types::identifier::Identifier::new(module.as_str())?;
+    let name = move_core_types::identifier::Identifier::new(name.as_str())?;
     let type_params = type_params
         .into_iter()
         .map(type_tag_sdk_to_core)
@@ -438,8 +439,8 @@ impl From<StructTag> for crate::type_input::StructInput {
             address: move_core_types::account_address::AccountAddress::new(
                 value.address.into_inner(),
             ),
-            module: value.module.into_inner().into(),
-            name: value.name.into_inner().into(),
+            module: value.module.as_str().into(),
+            name: value.name.as_str().into(),
             type_params: value.type_params.into_iter().map(Into::into).collect(),
         }
     }
@@ -550,6 +551,7 @@ impl From<UnchangedConsensusKind> for crate::effects::UnchangedConsensusKind {
             UnchangedConsensusKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
             UnchangedConsensusKind::PerEpochConfigWithSequenceNumber { .. } => todo!(),
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -637,6 +639,7 @@ impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
         match value {
             TransactionExpiration::None => Self::None,
             TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -657,6 +660,7 @@ impl From<TypeArgumentError> for crate::execution_status::TypeArgumentError {
         match value {
             TypeArgumentError::TypeNotFound => Self::TypeNotFound,
             TypeArgumentError::ConstraintNotSatisfied => Self::ConstraintNotSatisfied,
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -721,6 +725,7 @@ impl From<PackageUpgradeError> for crate::execution_status::PackageUpgradeError 
                 package_id: package_id.into(),
                 ticket_id: ticket_id.into(),
             },
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -783,6 +788,7 @@ impl From<CommandArgumentError> for crate::execution_status::CommandArgumentErro
                 Self::SharedObjectOperationNotAllowed
             }
             CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -963,6 +969,7 @@ impl From<ExecutionError> for crate::execution_status::ExecutionFailureStatus {
                 max_scaled_size,
             },
             ExecutionError::InvalidLinkage => Self::InvalidLinkage,
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -986,14 +993,11 @@ impl From<MoveLocation> for crate::execution_status::MoveLocation {
         Self {
             module: move_core_types::language_storage::ModuleId::new(
                 move_core_types::account_address::AccountAddress::new(value.package.into_inner()),
-                move_core_types::identifier::Identifier::new(value.module.into_inner()).unwrap(),
+                move_core_types::identifier::Identifier::new(value.module.as_str()).unwrap(),
             ),
             function: value.function,
             instruction: value.instruction,
-            function_name: value
-                .function_name
-                .map(Identifier::into_inner)
-                .map(Into::into),
+            function_name: value.function_name.map(|ident| ident.as_str().into()),
         }
     }
 }
@@ -1181,6 +1185,7 @@ impl From<Input> for crate::transaction::CallArg {
                     digest.into(),
                 )))
             }
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -1305,8 +1310,8 @@ impl From<MoveCall> for crate::transaction::ProgrammableMoveCall {
     fn from(value: MoveCall) -> Self {
         Self {
             package: value.package.into(),
-            module: value.module.into_inner().into(),
-            function: value.function.into_inner().into(),
+            module: value.module.as_str().into(),
+            function: value.function.as_str().into(),
             type_arguments: value.type_arguments.into_iter().map(Into::into).collect(),
             arguments: value.arguments.into_iter().map(Into::into).collect(),
         }
@@ -1352,6 +1357,7 @@ impl From<Command> for crate::transaction::Command {
                 package.into(),
                 ticket.into(),
             ),
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }

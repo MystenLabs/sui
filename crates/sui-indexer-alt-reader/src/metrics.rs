@@ -32,6 +32,14 @@ pub(crate) struct ConsistentReaderMetrics {
     pub requests_failed: IntCounterVec,
 }
 
+#[derive(Clone)]
+pub(crate) struct FullnodeClientMetrics {
+    pub latency: HistogramVec,
+    pub requests_received: IntCounterVec,
+    pub requests_succeeded: IntCounterVec,
+    pub requests_failed: IntCounterVec,
+}
+
 impl DbReaderMetrics {
     pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("db");
@@ -104,6 +112,48 @@ impl ConsistentReaderMetrics {
             requests_failed: register_int_counter_vec_with_registry!(
                 name("requests_failed"),
                 "Number of consistent store requests that completed with an error",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
+impl FullnodeClientMetrics {
+    pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("fullnode_client");
+        let name = |n| format!("{prefix}_{n}");
+
+        Arc::new(Self {
+            latency: register_histogram_vec_with_registry!(
+                name("latency"),
+                "Time taken for full node gRPC operations",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            requests_received: register_int_counter_vec_with_registry!(
+                name("requests_received"),
+                "Number of full node requests received",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_succeeded: register_int_counter_vec_with_registry!(
+                name("requests_succeeded"),
+                "Number of successful full node requests",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_failed: register_int_counter_vec_with_registry!(
+                name("requests_failed"),
+                "Number of failed full node requests",
                 &["method"],
                 registry,
             )

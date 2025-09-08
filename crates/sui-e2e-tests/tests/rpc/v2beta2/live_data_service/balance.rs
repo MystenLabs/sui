@@ -259,9 +259,11 @@ async fn test_custom_coin_balance() {
     // Test that address_3 returns 0 balance for the TRUSTED coin (not error since coin exists)
     let address_2 = test_cluster.get_address_2();
     let balance_response = grpc_client
-        .get_balance(GetBalanceRequest {
-            owner: Some(address_2.to_string()),
-            coin_type: Some(coin_type.to_string()),
+        .get_balance({
+            let mut message = GetBalanceRequest::default();
+            message.owner = Some(address_2.to_string());
+            message.coin_type = Some(coin_type.to_string());
+            message
         })
         .await
         .unwrap()
@@ -399,9 +401,11 @@ async fn test_fresh_address_with_no_coins() {
 
     // Get balance for SUI
     let response = grpc_client
-        .get_balance(GetBalanceRequest {
-            owner: Some(fresh_address.to_string()),
-            coin_type: Some(SUI_COIN_TYPE.to_string()),
+        .get_balance({
+            let mut message = GetBalanceRequest::default();
+            message.owner = Some(fresh_address.to_string());
+            message.coin_type = Some(SUI_COIN_TYPE.to_string());
+            message
         })
         .await
         .unwrap()
@@ -412,10 +416,10 @@ async fn test_fresh_address_with_no_coins() {
 
     // List all balances for fresh address
     let list_response = grpc_client
-        .list_balances(ListBalancesRequest {
-            owner: Some(fresh_address.to_string()),
-            page_size: None,
-            page_token: None,
+        .list_balances({
+            let mut message = ListBalancesRequest::default();
+            message.owner = Some(fresh_address.to_string());
+            message
         })
         .await
         .unwrap()
@@ -432,10 +436,8 @@ async fn test_invalid_requests() {
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Test with missing owner
-    let request = GetBalanceRequest {
-        owner: None,
-        coin_type: Some(SUI_COIN_TYPE.to_string()),
-    };
+    let mut request = GetBalanceRequest::default();
+    request.coin_type = Some(SUI_COIN_TYPE.to_string());
     let result = grpc_client.get_balance(request).await;
     assert!(result.is_err(), "Expected error for missing owner");
     let error = result.unwrap_err();
@@ -449,9 +451,10 @@ async fn test_invalid_requests() {
     // Test with missing coin type - should error
     let address = test_cluster.get_address_0();
     let result = grpc_client
-        .get_balance(GetBalanceRequest {
-            owner: Some(address.to_string()),
-            coin_type: None,
+        .get_balance({
+            let mut message = GetBalanceRequest::default();
+            message.owner = Some(address.to_string());
+            message
         })
         .await;
     assert!(result.is_err(), "Expected error for missing coin_type");
@@ -465,9 +468,11 @@ async fn test_invalid_requests() {
 
     // Test with invalid address format
     let result = grpc_client
-        .get_balance(GetBalanceRequest {
-            owner: Some("not_a_hex_address".to_string()),
-            coin_type: Some(SUI_COIN_TYPE.to_string()),
+        .get_balance({
+            let mut message = GetBalanceRequest::default();
+            message.owner = Some("not_a_hex_address".to_string());
+            message.coin_type = Some(SUI_COIN_TYPE.to_string());
+            message
         })
         .await;
     assert!(result.is_err(), "Expected error for invalid address format");
@@ -481,9 +486,11 @@ async fn test_invalid_requests() {
 
     // Test with invalid coin type format
     let result = grpc_client
-        .get_balance(GetBalanceRequest {
-            owner: Some(address.to_string()),
-            coin_type: Some("invalid::coin::type::format".to_string()),
+        .get_balance({
+            let mut message = GetBalanceRequest::default();
+            message.owner = Some(address.to_string());
+            message.coin_type = Some("invalid::coin::type::format".to_string());
+            message
         })
         .await;
     assert!(result.is_err(), "Expected error for invalid coin type");
@@ -499,9 +506,11 @@ async fn test_invalid_requests() {
     let fake_coin_type =
         "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef::fakecoin::FAKECOIN";
     let result = grpc_client
-        .get_balance(GetBalanceRequest {
-            owner: Some(address.to_string()),
-            coin_type: Some(fake_coin_type.to_string()),
+        .get_balance({
+            let mut message = GetBalanceRequest::default();
+            message.owner = Some(address.to_string());
+            message.coin_type = Some(fake_coin_type.to_string());
+            message
         })
         .await;
     assert!(result.is_err(), "Expected error for non-existent coin type");
@@ -515,11 +524,7 @@ async fn test_invalid_requests() {
 
     // Test ListBalancesRequest with missing owner
     let result = grpc_client
-        .list_balances(ListBalancesRequest {
-            owner: None,
-            page_size: None,
-            page_token: None,
-        })
+        .list_balances(ListBalancesRequest::default())
         .await;
     assert!(
         result.is_err(),
@@ -535,10 +540,11 @@ async fn test_invalid_requests() {
 
     // Test corrupted page token
     let result = grpc_client
-        .list_balances(ListBalancesRequest {
-            owner: Some(address.to_string()),
-            page_size: None,
-            page_token: Some(vec![0xFF, 0xDE, 0xAD, 0xBE, 0xEF].into()),
+        .list_balances({
+            let mut message = ListBalancesRequest::default();
+            message.owner = Some(address.to_string());
+            message.page_token = Some(vec![0xFF, 0xDE, 0xAD, 0xBE, 0xEF].into());
+            message
         })
         .await;
     assert!(result.is_err(), "Expected error for corrupted page token");
@@ -668,9 +674,11 @@ async fn verify_balances(
     // Verify each balance using get_balance
     for (coin_type, expected_balance) in expected_balances {
         let balance = grpc_client
-            .get_balance(GetBalanceRequest {
-                owner: Some(address.to_string()),
-                coin_type: Some(coin_type.to_string()),
+            .get_balance({
+                let mut message = GetBalanceRequest::default();
+                message.owner = Some(address.to_string());
+                message.coin_type = Some(coin_type.to_string());
+                message
             })
             .await
             .unwrap()
@@ -689,10 +697,10 @@ async fn verify_balances(
 
     // Also verify using list_balances
     let list_response = grpc_client
-        .list_balances(ListBalancesRequest {
-            owner: Some(address.to_string()),
-            page_size: None,
-            page_token: None,
+        .list_balances({
+            let mut message = ListBalancesRequest::default();
+            message.owner = Some(address.to_string());
+            message
         })
         .await
         .unwrap()

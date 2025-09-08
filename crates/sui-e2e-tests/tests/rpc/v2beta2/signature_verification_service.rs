@@ -59,13 +59,15 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     let signature = Bcs::from(generic_sig.as_ref().to_owned());
 
     let response = client
-        .verify_signature(VerifySignatureRequest {
-            message: Some(message.clone()),
-            signature: Some(UserSignature {
-                bcs: Some(signature.clone()),
-                ..Default::default()
-            }),
-            ..Default::default()
+        .verify_signature({
+            let mut request = VerifySignatureRequest::default();
+            request.message = Some(message.clone());
+            request.signature = Some({
+                let mut message = UserSignature::default();
+                message.bcs = Some(signature.clone());
+                message
+            });
+            request
         })
         .await
         .unwrap()
@@ -75,14 +77,16 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
 
     // address checks pass
     let response = client
-        .verify_signature(VerifySignatureRequest {
-            message: Some(message.clone()),
-            signature: Some(UserSignature {
-                bcs: Some(signature.clone()),
-                ..Default::default()
-            }),
-            address: Some(zklogin_addr.to_string()),
-            ..Default::default()
+        .verify_signature({
+            let mut request = VerifySignatureRequest::default();
+            request.message = Some(message.clone());
+            request.signature = Some({
+                let mut message = UserSignature::default();
+                message.bcs = Some(signature.clone());
+                message
+            });
+            request.address = Some(zklogin_addr.to_string());
+            request
         })
         .await
         .unwrap()
@@ -93,14 +97,16 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     // address checks fail
     let wrong_address = SuiAddress::random_for_testing_only();
     let response = client
-        .verify_signature(VerifySignatureRequest {
-            message: Some(message.clone()),
-            signature: Some(UserSignature {
-                bcs: Some(signature.clone()),
-                ..Default::default()
-            }),
-            address: Some(wrong_address.to_string()),
-            ..Default::default()
+        .verify_signature({
+            let mut request = VerifySignatureRequest::default();
+            request.message = Some(message.clone());
+            request.signature = Some({
+                let mut message = UserSignature::default();
+                message.bcs = Some(signature.clone());
+                message
+            });
+            request.address = Some(wrong_address.to_string());
+            request
         })
         .await
         .unwrap()
@@ -116,13 +122,15 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
 
     // Use the same signature but a different message so force verification failure
     let response = client
-        .verify_signature(VerifySignatureRequest {
-            message: Some(Bcs::from(bcs::to_bytes("some personal message").unwrap())),
-            signature: Some(UserSignature {
-                bcs: Some(signature),
-                ..Default::default()
-            }),
-            ..Default::default()
+        .verify_signature({
+            let mut message = VerifySignatureRequest::default();
+            message.message = Some(Bcs::from(bcs::to_bytes("some personal message").unwrap()));
+            message.signature = Some({
+                let mut message = UserSignature::default();
+                message.bcs = Some(signature);
+                message
+            });
+            message
         })
         .await
         .unwrap()

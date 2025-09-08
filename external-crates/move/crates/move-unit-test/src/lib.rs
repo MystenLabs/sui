@@ -32,7 +32,7 @@ const DEFAULT_RAND_ITERS: u64 = 10;
 
 const RAND_NUM_ITERS_FLAG: &str = "rand-num-iters";
 const SEED_FLAG: &str = "seed";
-const TRACE_FLAG: &str = "trace-execution";
+const TRACE_FLAG: &str = "trace";
 
 #[derive(Debug, Parser, Clone)]
 #[clap(author, version, about)]
@@ -124,7 +124,7 @@ pub struct UnitTestingConfig {
 
     // Enable tracing for tests
     #[clap(long = TRACE_FLAG)]
-    pub trace_execution: bool,
+    pub trace: bool,
 }
 
 fn format_module_id(
@@ -156,7 +156,7 @@ impl UnitTestingConfig {
             rand_num_iters: Some(DEFAULT_RAND_ITERS),
             seed: None,
             deterministic_generation: false,
-            trace_execution: false,
+            trace: false,
         }
     }
 
@@ -268,7 +268,7 @@ impl UnitTestingConfig {
         }
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
-        let trace_location = if self.trace_execution {
+        let trace_location = if self.trace {
             Some("traces".to_string())
         } else {
             None

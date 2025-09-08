@@ -2,17 +2,10 @@ The `Processor` is the concurrent processing engine, handling multiple tasks run
 
 The component handles this task by spawning `FANOUT` worker tasks (default: 10) for parallel processing. The `FANOUT` is the key configuration as it controls parallel processing capacity.
 
-import CodeFromFile from '@site/src/components/CodeFromFile';
-
-<CodeFromFile
-  filePath="crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=FANOUT"
-/>
+<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/processor.rs" mode="code" variable="FANOUT" />
 
 Each worker calls your `Handler::process()` method independently. 
 
-<CodeFromFile
-  filePath="crates/sui-indexer-alt-framework/src/pipeline/processor.rs#variable=values"
-/>
-
+<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/processor.rs" mode="code" variable="values" />
 
 Each of these workers can process different checkpoints simultaneously and in any order. The workers send their processed data to the `Collector` with checkpoint metadata.

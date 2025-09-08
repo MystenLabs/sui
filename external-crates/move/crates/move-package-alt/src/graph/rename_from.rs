@@ -60,7 +60,7 @@ impl RenameError {
         let target_name = target.name();
 
         // in example: expected_target_name is "b_name"
-        let expected_target_name = dep.rename_from().as_ref().unwrap_or(dep_name);
+        let _expected_target_name = dep.rename_from().as_ref().unwrap_or(dep_name);
 
         // in example: dep_location is `local = "b_path"`
         let dep_location = "<TODO>";

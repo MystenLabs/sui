@@ -32,11 +32,13 @@ impl SubmitTxRequest {
                     error: e.to_string(),
                 })?
                 .into()],
+            ..Default::default()
         })
     }
 }
 
-pub enum SubmitTxResponse {
+#[derive(Clone)]
+pub enum SubmitTxResult {
     Submitted {
         consensus_position: ConsensusPosition,
     },
@@ -48,9 +50,12 @@ pub enum SubmitTxResponse {
         // Whether the transaction was executed using fast path.
         fast_path: bool,
     },
+    Rejected {
+        error: SuiError,
+    },
 }
 
-impl fmt::Debug for SubmitTxResponse {
+impl fmt::Debug for SubmitTxResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Submitted { consensus_position } => f
@@ -66,8 +71,74 @@ impl fmt::Debug for SubmitTxResponse {
                 .field("effects_digest", &format_args!("{}", effects_digest))
                 .field("fast_path", fast_path)
                 .finish(),
+            Self::Rejected { error } => f.debug_struct("Rejected").field("error", &error).finish(),
         }
     }
+}
+
+impl TryFrom<SubmitTxResult> for RawSubmitTxResult {
+    type Error = SuiError;
+
+    fn try_from(value: SubmitTxResult) -> Result<Self, Self::Error> {
+        let inner = match value {
+            SubmitTxResult::Submitted { consensus_position } => {
+                let consensus_position = consensus_position.into_raw()?;
+                RawValidatorSubmitStatus::Submitted(consensus_position)
+            }
+            SubmitTxResult::Executed {
+                effects_digest,
+                details,
+                fast_path,
+            } => {
+                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
+                RawValidatorSubmitStatus::Executed(raw_executed)
+            }
+            SubmitTxResult::Rejected { error } => {
+                RawValidatorSubmitStatus::Rejected(try_from_response_rejected(Some(error))?)
+            }
+        };
+        Ok(RawSubmitTxResult { inner: Some(inner) })
+    }
+}
+
+impl TryFrom<RawSubmitTxResult> for SubmitTxResult {
+    type Error = SuiError;
+
+    fn try_from(value: RawSubmitTxResult) -> Result<Self, Self::Error> {
+        match value.inner {
+            Some(RawValidatorSubmitStatus::Submitted(consensus_position)) => {
+                Ok(SubmitTxResult::Submitted {
+                    consensus_position: consensus_position.as_ref().try_into()?,
+                })
+            }
+            Some(RawValidatorSubmitStatus::Executed(executed)) => {
+                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
+                Ok(SubmitTxResult::Executed {
+                    effects_digest,
+                    details,
+                    fast_path,
+                })
+            }
+            Some(RawValidatorSubmitStatus::Rejected(error)) => {
+                let error = try_from_raw_rejected_status(error)?.unwrap_or(
+                    SuiError::GrpcMessageDeserializeError {
+                        type_info: "RawSubmitTxResult.inner.Error".to_string(),
+                        error: "RawSubmitTxResult.inner.Error is None".to_string(),
+                    },
+                );
+                Ok(SubmitTxResult::Rejected { error })
+            }
+            None => Err(SuiError::GrpcMessageDeserializeError {
+                type_info: "RawSubmitTxResult.inner".to_string(),
+                error: "RawSubmitTxResult.inner is None".to_string(),
+            }),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmitTxResponse {
+    pub results: Vec<SubmitTxResult>,
 }
 
 impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
@@ -82,48 +153,13 @@ impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
             });
         }
 
-        let result = value.results.into_iter().next().unwrap();
-        match result.inner {
-            Some(RawValidatorSubmitStatus::Submitted(consensus_position)) => Ok(Self::Submitted {
-                consensus_position: consensus_position.as_ref().try_into()?,
-            }),
-            Some(RawValidatorSubmitStatus::Executed(executed)) => {
-                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
-                Ok(Self::Executed {
-                    effects_digest,
-                    details,
-                    fast_path,
-                })
-            }
-            None => Err(SuiError::GrpcMessageDeserializeError {
-                type_info: "RawSubmitTxResult.inner".to_string(),
-                error: "RawSubmitTxResult.inner is None".to_string(),
-            }),
-        }
-    }
-}
+        let results = value
+            .results
+            .into_iter()
+            .map(|result| result.try_into())
+            .collect::<Result<Vec<SubmitTxResult>, SuiError>>()?;
 
-impl TryFrom<SubmitTxResponse> for RawSubmitTxResponse {
-    type Error = SuiError;
-
-    fn try_from(value: SubmitTxResponse) -> Result<Self, Self::Error> {
-        let inner = match value {
-            SubmitTxResponse::Submitted { consensus_position } => {
-                let consensus_position = consensus_position.into_raw()?;
-                RawValidatorSubmitStatus::Submitted(consensus_position)
-            }
-            SubmitTxResponse::Executed {
-                effects_digest,
-                details,
-                fast_path,
-            } => {
-                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
-                RawValidatorSubmitStatus::Executed(raw_executed)
-            }
-        };
-        Ok(RawSubmitTxResponse {
-            results: vec![RawSubmitTxResult { inner: Some(inner) }],
-        })
+        Ok(Self { results })
     }
 }
 

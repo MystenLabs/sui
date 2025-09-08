@@ -43,10 +43,9 @@ impl SubscriptionService for SubscriptionServiceHandle {
                     &read_mask
                 );
 
-                let response = SubscribeCheckpointsResponse {
-                    cursor: Some(cursor),
-                    checkpoint: Some(checkpoint),
-                };
+                let mut response = SubscribeCheckpointsResponse::default();
+                response.cursor = Some(cursor);
+                response.checkpoint = Some(checkpoint);
 
                 yield Ok(response);
             }

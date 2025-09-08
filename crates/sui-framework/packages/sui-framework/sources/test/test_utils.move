@@ -4,10 +4,12 @@
 #[test_only]
 module sui::test_utils;
 
+#[deprecated(note = b"Use `std::unit_test::assert_eq!` for better error messages")]
 public fun assert_eq<T: drop>(t1: T, t2: T) {
     assert_ref_eq(&t1, &t2)
 }
 
+#[deprecated(note = b"Use `std::unit_test::assert_ref_eq!` for better error messages")]
 public fun assert_ref_eq<T>(t1: &T, t2: &T) {
     let res = t1 == t2;
     if (!res) {

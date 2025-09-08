@@ -103,25 +103,25 @@ fn lookup_name(service: &RpcService, request: LookupNameRequest) -> Result<Looku
     };
 
     if is_valid {
-        Ok(LookupNameResponse {
-            record: Some(sui_rpc::proto::sui::rpc::v2beta2::NameRecord {
-                id: Some(record_id.to_canonical_string(true)),
-                name: Some(domain.to_string()),
-                registration_nft_id: Some(name_record.nft_id.bytes.to_canonical_string(true)),
-                expiration_timestamp: Some(timestamp_ms_to_proto(
-                    name_record.expiration_timestamp_ms,
-                )),
-                target_address: name_record
-                    .target_address
-                    .map(|address| address.to_string()),
-                data: name_record
-                    .data
-                    .contents
-                    .into_iter()
-                    .map(|entry| (entry.key, entry.value))
-                    .collect(),
-            }),
-        })
+        let mut record = sui_rpc::proto::sui::rpc::v2beta2::NameRecord::default();
+        record.id = Some(record_id.to_canonical_string(true));
+        record.name = Some(domain.to_string());
+        record.registration_nft_id = Some(name_record.nft_id.bytes.to_canonical_string(true));
+        record.expiration_timestamp =
+            Some(timestamp_ms_to_proto(name_record.expiration_timestamp_ms));
+        record.target_address = name_record
+            .target_address
+            .map(|address| address.to_string());
+        record.data = name_record
+            .data
+            .contents
+            .into_iter()
+            .map(|entry| (entry.key, entry.value))
+            .collect();
+
+        let mut response = LookupNameResponse::default();
+        response.record = Some(record);
+        Ok(response)
     } else {
         Err(RpcError::new(
             tonic::Code::ResourceExhausted,
@@ -169,12 +169,7 @@ fn reverse_lookup_name(
 
     let domain_name = domain.to_string();
 
-    let maybe_record = lookup_name(
-        service,
-        LookupNameRequest {
-            name: Some(domain_name.clone()),
-        },
-    )?;
+    let maybe_record = lookup_name(service, LookupNameRequest::new(&domain_name))?;
 
     // If looking up the domain returns an empty result, we return an empty result.
     let Some(record) = maybe_record.record else {
@@ -185,7 +180,5 @@ fn reverse_lookup_name(
         return Err(RpcError::not_found());
     }
 
-    Ok(ReverseLookupNameResponse {
-        record: Some(record),
-    })
+    Ok(ReverseLookupNameResponse::new(record))
 }

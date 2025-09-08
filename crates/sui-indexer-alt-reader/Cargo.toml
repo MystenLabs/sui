@@ -17,6 +17,7 @@ bcs.workspace = true
 clap.workspace = true
 diesel.workspace = true
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+futures.workspace = true
 prometheus.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

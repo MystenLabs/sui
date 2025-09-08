@@ -80,7 +80,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
 
     /// Returns the published address of this package, if it is published
     pub fn published(&self) -> Option<&PublishAddresses> {
-        self.package().publication()
+        self.package().address()
     }
 
     /// Returns true if the node is the root of the package graph
@@ -115,7 +115,6 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
         result.insert(self.package().name().clone(), self.node_to_addr(self.node));
 
         for edge in self.graph.inner.edges(self.node) {
-            let name = edge.weight().name.clone();
             let dep = Self {
                 graph: self.graph,
                 node: edge.target(),
@@ -136,7 +135,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
         }
 
         if let Some(legacy_data) = &self.package().legacy_data {
-            let addresses = legacy_data.addresses.clone();
+            let addresses = legacy_data.named_addresses.clone();
 
             for (name, addr) in addresses {
                 let new_addr = NamedAddress::Defined(OriginalID(addr));
@@ -158,10 +157,10 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     fn node_to_addr(&self, node: NodeIndex) -> NamedAddress {
         let package = self.graph.inner[node].clone();
         if package.is_root() {
-            return NamedAddress::RootPackage(package.original_id());
+            return NamedAddress::RootPackage(package.original_id().cloned());
         }
         if let Some(oid) = package.original_id() {
-            NamedAddress::Defined(oid)
+            NamedAddress::Defined(oid.clone())
         } else {
             NamedAddress::Unpublished {
                 dummy_addr: package.dummy_addr.clone(),
@@ -228,7 +227,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// the unpublished ones in the package graph.
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
-        let mut linkage = self.linkage()?;
+        let linkage = self.linkage()?;
 
         // Populate ALL the linkage elements
         let mut result: Vec<PackageInfo<F>> = linkage.values().cloned().collect();
@@ -241,7 +240,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
             if package
                 .original_id()
-                .is_some_and(|oid| linkage.contains_key(&oid))
+                .is_some_and(|oid| linkage.contains_key(oid))
             {
                 continue;
             }
@@ -301,7 +300,7 @@ mod tests {
             .add_deps([("root", "a"), ("a", "b"), ("b", "c"), ("c", "d")])
             .build();
 
-        let mut graph = scenario.graph_for("root").await;
+        let graph = scenario.graph_for("root").await;
 
         let packages = packages_by_name(&graph);
 
@@ -334,7 +333,7 @@ mod tests {
             ])
             .build();
 
-        let mut graph = scenario.graph_for("root").await;
+        let graph = scenario.graph_for("root").await;
 
         let packages = packages_by_name(&graph);
 
