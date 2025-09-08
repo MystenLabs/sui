@@ -200,9 +200,9 @@ impl MoveModule {
         let functions = if page.is_from_front() {
             function_range.take(page.limit()).collect()
         } else {
-            let mut fs: Vec<_> = function_range.rev().take(page.limit()).collect();
-            fs.reverse();
-            fs
+            let mut functions: Vec<_> = function_range.rev().take(page.limit()).collect();
+            functions.reverse();
+            functions
         };
 
         conn.has_previous_page = functions
