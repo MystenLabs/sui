@@ -13,7 +13,7 @@ pub(crate) struct OpenMoveType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct OpenMoveTypeSignature {
-    #[serde(rename = "ref")]
+    #[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
     ref_: Option<OpenMoveTypeReference>,
     body: OpenMoveTypeSignatureBody,
 }
