@@ -335,21 +335,27 @@ fn cache_and_evict_packages() {
     assert!(result.is_ok());
 
     assert!(adapter.runtime().cache().package_cache().read().len() == 3);
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package1_address)
-        .is_some());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package2_address)
-        .is_some());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package3_address)
-        .is_some());
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .is_some()
+    );
 
     assert!(
         adapter.runtime().cache().remove_package(&package2_address),
@@ -362,41 +368,53 @@ fn cache_and_evict_packages() {
         "Package 2 double-evicted"
     );
     assert!(adapter.runtime().cache().package_cache().read().len() == 2);
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package1_address)
-        .is_some());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package2_address)
-        .is_none());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package3_address)
-        .is_some());
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .is_none()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .is_some()
+    );
 
     // This should re-load package 2, but not packages 1 or 3.
     let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result.is_ok());
     assert!(adapter.runtime().cache().package_cache().read().len() == 3);
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package1_address)
-        .is_some());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package2_address)
-        .is_some());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package3_address)
-        .is_some());
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .is_some()
+    );
 
     // Re-evict 2.
     assert!(
@@ -404,21 +422,27 @@ fn cache_and_evict_packages() {
         "Package 2 not found"
     );
     assert!(adapter.runtime().cache().package_cache().read().len() == 2);
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package1_address)
-        .is_some());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package2_address)
-        .is_none());
-    assert!(adapter
-        .runtime()
-        .cache()
-        .cached_package_at(package3_address)
-        .is_some());
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package1_address)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package2_address)
+            .is_none()
+    );
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(package3_address)
+            .is_some()
+    );
 }
 
 #[test]

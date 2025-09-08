@@ -577,7 +577,7 @@ impl VMTracer<'_> {
         let Some(ref_type) = reftype else {
             return None;
         };
-        let (trace_index, trace_value) = self.emit_data_load(value.into(), ref_type);
+        let (trace_index, trace_value) = self.emit_data_load(value, ref_type);
 
         self.loaded_data
             .insert(trace_index, GlobalValue::Value(trace_value));
@@ -722,9 +722,7 @@ impl VMTracer<'_> {
                             .insert(id, GlobalValue::Value(trace_value.clone()));
                         Some(trace_value)
                     }
-                    None => Some(TraceValue::RuntimeValue {
-                        value: move_value.into(),
-                    }),
+                    None => Some(TraceValue::RuntimeValue { value: move_value }),
                 }
             })
             .collect::<Option<_>>()?;

@@ -296,7 +296,7 @@ impl SharedTestingConfig {
         TestRunInfo,
     ) {
         // A nicety since Rust doesn't have `try { .. }` yet
-        fn do_call<'extensions>(
+        fn do_call(
             test_config: &SharedTestingConfig,
             gas_meter: &mut impl GasMeter,
             tracer: Option<&mut MoveTraceBuilder>,

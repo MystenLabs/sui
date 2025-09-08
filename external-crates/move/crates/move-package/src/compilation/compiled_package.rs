@@ -378,7 +378,7 @@ impl OnDiskCompiledPackage {
         let d = Disassembler::from_unit(&unit.unit);
         let (disassembled_string, mut bytecode_map) = d.disassemble_with_source_map()?;
         let disassembly_file_path = disassembly_dir
-                .join(&file_path)
+            .join(&file_path)
             .with_extension(MOVE_BYTECODE_EXTENSION);
         self.save_under(
             disassembly_file_path.clone(),

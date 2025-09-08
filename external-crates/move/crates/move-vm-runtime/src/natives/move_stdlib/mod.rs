@@ -12,7 +12,7 @@ pub mod type_name;
 pub mod unit_test;
 pub mod vector;
 
-use crate::natives::functions::{make_table_from_iter, NativeFunctionTable, NativeFunctions};
+use crate::natives::functions::{NativeFunctionTable, NativeFunctions, make_table_from_iter};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 

@@ -6,9 +6,9 @@ use crate::dev_utils::{
     vm_test_adapter::VMTestAdapter,
 };
 use move_binary_format::file_format::{
-    empty_module, Bytecode::*, CodeUnit, Constant, ConstantPoolIndex, FunctionDefinition,
-    FunctionHandle, FunctionHandleIndex, IdentifierIndex, Signature, SignatureIndex,
-    SignatureToken::*, Visibility,
+    Bytecode::*, CodeUnit, Constant, ConstantPoolIndex, FunctionDefinition, FunctionHandle,
+    FunctionHandleIndex, IdentifierIndex, Signature, SignatureIndex, SignatureToken::*, Visibility,
+    empty_module,
 };
 use move_core_types::vm_status::StatusCode;
 

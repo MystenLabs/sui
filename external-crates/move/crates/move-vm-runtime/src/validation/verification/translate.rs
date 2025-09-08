@@ -7,9 +7,9 @@ use crate::{
 };
 
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMResult, VMResult},
-    file_format::{StructFieldInformation, TableIndex},
     CompiledModule, IndexKind,
+    errors::{Location, PartialVMResult, VMResult, verification_error},
+    file_format::{StructFieldInformation, TableIndex},
 };
 use move_bytecode_verifier::script_signature;
 use move_core_types::vm_status::StatusCode;
