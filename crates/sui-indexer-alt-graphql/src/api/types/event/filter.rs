@@ -32,9 +32,6 @@ pub(crate) struct EventFilter {
     /// Limit to event that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
-    /// Filter on events by transaction digest.
-    pub transaction_digest: Option<Digest>,
-
     /// Filter on events by transaction sender address.
     pub sender: Option<SuiAddress>,
 
@@ -125,10 +122,6 @@ impl EventFilter {
                     bcs::to_bytes(&type_params).context("Failed to serialize type parameters")?
                 );
             }
-        }
-
-        if let Some(digest) = self.transaction_digest {
-            query += query!(" AND tx_sequence_number = (SELECT tx_sequence_number FROM tx_digests WHERE tx_digest = {Bytea})", digest.into_inner());
         }
 
         Ok(query)
