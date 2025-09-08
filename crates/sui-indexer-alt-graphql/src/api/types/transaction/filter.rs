@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{CustomValidator, InputObject, InputValueError};
-
 use std::ops::RangeInclusive;
+
+use async_graphql::{CustomValidator, Enum, InputObject, InputValueError};
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
@@ -23,6 +23,9 @@ pub(crate) struct TransactionFilter {
     /// Filter to transaction that occurred strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
+    /// An input filter selecting for either system or programmable transactions.
+    pub kind: Option<TransactionKindInput>,
+
     /// Limit to transactions that interacted with the given address.
     /// The address could be a sender, sponsor, or recipient of the transaction.
     pub affected_address: Option<SuiAddress>,
@@ -31,14 +34,24 @@ pub(crate) struct TransactionFilter {
     pub sent_address: Option<SuiAddress>,
 }
 
+/// An input filter selecting for either system or programmable transactions.
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum TransactionKindInput {
+    /// A system transaction can be one of several types of transactions.
+    /// See [unions/transaction-block-kind] for more details.
+    SystemTx = 0,
+    /// A user submitted transaction block.
+    ProgrammableTx = 1,
+}
+
 pub(crate) struct TransactionFilterValidator;
 
 impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
-        let filters = filter.affected_address.is_some() as u8;
+        let filters = filter.kind.is_some() as u8 + filter.affected_address.is_some() as u8;
         if filters > 1 {
             return Err(InputValueError::custom(
-                "Only one of affectedAddress can be specified",
+                "Only one of [kind, affectedAddress] can be specified",
             ));
         }
 
@@ -62,6 +75,7 @@ impl TransactionFilter {
             after_checkpoint: intersect!(after_checkpoint, intersect::by_max)?,
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
+            kind: intersect!(kind, intersect::by_eq)?,
             affected_address: intersect!(affected_address, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
         })
@@ -90,31 +104,31 @@ pub(crate) fn tx_bounds_query(
         r#"
         WITH
         tx_lo AS (
-            SELECT 
+            SELECT
                 tx_lo
-            FROM 
-                cp_sequence_numbers 
-            WHERE 
+            FROM
+                cp_sequence_numbers
+            WHERE
                 cp_sequence_number = {BigInt}
             LIMIT 1
         ),
 
-        -- tx_hi is the tx_lo of the checkpoint directly after the cp_bounds.end() 
+        -- tx_hi is the tx_lo of the checkpoint directly after the cp_bounds.end()
         tx_hi AS (
             SELECT
                 tx_lo AS tx_hi
-            FROM 
-                cp_sequence_numbers 
-            WHERE 
-                cp_sequence_number = {BigInt} + 1 
+            FROM
+                cp_sequence_numbers
+            WHERE
+                cp_sequence_number = {BigInt} + 1
             LIMIT 1
         )
 
         SELECT
             (
-            SELECT 
+            SELECT
             -- tx_hi is the greatest of the after cursor, cp_bounds.start()
-            GREATEST(tx_lo, {BigInt}) 
+            GREATEST(tx_lo, {BigInt})
             FROM tx_lo
             ) AS tx_lo,
             -- tx_hi is the least of the before cursor and cp_bounds.end()
