@@ -28,6 +28,9 @@ pub(crate) struct TransactionFilter {
     /// Limit to transactions that interacted with the given address.
     /// The address could be a sender, sponsor, or recipient of the transaction.
     pub affected_address: Option<SuiAddress>,
+
+    /// Limit to transactions that were sent by the given address.
+    pub sent_address: Option<SuiAddress>,
 }
 
 pub(crate) struct TransactionFilterValidator;
@@ -70,6 +73,7 @@ impl TransactionFilter {
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
             affected_address: intersect!(affected_address, intersect::by_eq)?,
+            sent_address: intersect!(sent_address, intersect::by_eq)?,
         })
     }
 }
