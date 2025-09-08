@@ -10,7 +10,7 @@ use super::compute_digest;
 use super::manifest::Manifest;
 use super::paths::PackagePath;
 use crate::compatibility::legacy::LegacyData;
-use crate::compatibility::legacy_parser::try_load_legacy;
+use crate::compatibility::legacy_parser::try_load_legacy_manifest;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
 use crate::schema::{ParsedManifest, ParsedPubs, ReplacementDependency};
@@ -99,7 +99,7 @@ impl<F: MoveFlavor> Package<F> {
         debug!("loading package {:?}", dep_for_self);
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let (file_handle, manifest) = if let Some(result) = try_load_legacy(&path, env) {
+        let (file_handle, manifest) = if let Some(result) = try_load_legacy_manifest(&path, env) {
             result
         } else {
             let m = Manifest::read_from_file(path.manifest_path())?;
@@ -123,6 +123,7 @@ impl<F: MoveFlavor> Package<F> {
         // TODO: try to gather dependencies from the modern lockfile
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
         //     (adding system deps)
+
         let deps = Self::deps_from_manifest(&dep_for_self, &file_handle, &manifest, env).await?;
 
         // compute the digest (TODO: this should only compute over the environment specific data)
@@ -199,10 +200,6 @@ impl<F: MoveFlavor> Package<F> {
         let Some(ref legacy) = self.legacy_data else {
             return None;
         };
-
-        if let Some(lockfile_entry) = legacy.legacy_environments.get(self.environment_name()) {
-            return Some(&lockfile_entry.addresses);
-        }
 
         if let Some(manifest_addr) = &legacy.manifest_address_info {
             return Some(manifest_addr);
