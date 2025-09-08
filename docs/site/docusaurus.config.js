@@ -167,13 +167,6 @@ const config = {
             extendDefaults: true,
           },
           beforeDefaultRemarkPlugins: [
-            [
-              require("./src/js/remark-includes.cjs"),
-              {
-                // Match docs.path ("../content") so path math & excludes are correct
-                docsDir: path.resolve(__dirname, "../content"),
-              },
-            ],
           ],
           remarkPlugins: [
             math,
