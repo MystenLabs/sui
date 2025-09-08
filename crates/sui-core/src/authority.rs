@@ -5336,7 +5336,7 @@ impl AuthorityState {
         }
 
         let tx = EndOfEpochTransactionKind::new_coin_registry_create();
-        info!("Creating CoinRegistry Create tx");
+        info!("Creating CoinRegistryCreate tx");
         Some(tx)
     }
 
@@ -5570,7 +5570,7 @@ impl AuthorityState {
         if let Some(tx) = self.create_accumulator_root_tx(epoch_store) {
             txns.push(tx);
         }
-        
+
         if let Some(tx) = self.create_coin_registry_tx(epoch_store) {
             txns.push(tx);
         }
