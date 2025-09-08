@@ -1011,6 +1011,25 @@ You can create flowcharts and similar images directly in Markdown [using Mermaid
 
 ---
 
+## Index pages 
+
+Section index pages must link to subcategory index pages when one exists. This is to ensure users can easily navigate deeper into subsections without relying solely on the sidebar and creates a consistent navigation structure. 
+
+For example, if the docs folder looks like this:
+
+```
+/docs/
+  guides/
+    index.mdx
+    setup/
+      index.mdx
+      install.mdx
+```
+
+Then `/docs/guides/index.mdx` must include a link to `/docs/guides/setup/index.mdx` rather than a link to `/docs/guides/setup/install.mdx`.
+
+---
+
 ## Accessibility {#accessibility}
 
 Reference works for making content accessible:
