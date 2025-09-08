@@ -2155,6 +2155,8 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 Kind::ExecutionTimeObservations(observations.into())
             }
             K::AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
+            K::RegistryRootCreate => Kind::RegistryRootCreate(()),
+            // TODO(manos): uncomment when introducing coin registry
             // K::CoinRegistryCreate => Kind::CoinRegistryCreate(()),
         };
 

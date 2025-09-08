@@ -47,6 +47,9 @@ pub(crate) enum EndOfEpochTransactionKind {
     BridgeCommitteeInit(BridgeCommitteeInitTransaction),
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
     AccumulatorRootCreate(AccumulatorRootCreateTransaction),
+    RegistryRootCreate(RegistryRootCreateTransaction),
+    // TODO(manos): uncomment when introducing coin registry
+    // CoinRegistryCreate(CoinRegistryCreateTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -112,6 +115,21 @@ pub(crate) struct AccumulatorRootCreateTransaction {
     #[graphql(name = "_")]
     dummy: Option<bool>,
 }
+
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct RegistryRootCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+// TODO(manos): uncomment when introducing coin registry
+// #[derive(SimpleObject, Clone, PartialEq, Eq)]
+// pub(crate) struct CoinRegistryCreateTransaction {
+//     /// A workaround to define an empty variant of a GraphQL union.
+//     #[graphql(name = "_")]
+//     dummy: Option<bool>,
+// }
 
 pub(crate) type CTxn = JsonCursor<ConsistentIndexCursor>;
 pub(crate) type CPackage = JsonCursor<ConsistentIndexCursor>;
@@ -325,6 +343,12 @@ impl EndOfEpochTransactionKind {
             N::AccumulatorRootCreate => {
                 K::AccumulatorRootCreate(AccumulatorRootCreateTransaction { dummy: None })
             }
+            N::RegistryRootCreate => {
+                K::RegistryRootCreate(RegistryRootCreateTransaction { dummy: None })
+            } // TODO(manos): uncomment when introducing coin registry
+              // N::CoinRegistryCreate => {
+              //     K::CoinRegistryCreate(CoinRegistryCreateTransaction { dummy: None })
+              // }
         }
     }
 }

@@ -1447,6 +1447,12 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
                 Self::AccumulatorRootCreate
             }
+            crate::transaction::EndOfEpochTransactionKind::RegistryRootCreate => {
+                Self::RegistryRootCreate
+            } // TODO(manos): uncomment when introducing coin registry
+              // crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
+              //     Self::CoinRegistryCreate
+              // }
         }
     }
 }

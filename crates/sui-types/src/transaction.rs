@@ -414,6 +414,9 @@ pub enum EndOfEpochTransactionKind {
     BridgeCommitteeInit(SequenceNumber),
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
     AccumulatorRootCreate,
+    RegistryRootCreate,
+    // TODO(manos): uncomment when introducing coin registry
+    // CoinRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -460,6 +463,15 @@ impl EndOfEpochTransactionKind {
     pub fn new_accumulator_root_create() -> Self {
         Self::AccumulatorRootCreate
     }
+
+    pub fn new_registry_root_create() -> Self {
+        Self::RegistryRootCreate
+    }
+
+    // TODO(manos): uncomment when introducing coin registry
+    // pub fn new_coin_registry_create() -> Self {
+    //     Self::CoinRegistryCreate
+    // }
 
     pub fn new_deny_list_state_create() -> Self {
         Self::DenyListStateCreate
@@ -519,6 +531,9 @@ impl EndOfEpochTransactionKind {
                 }]
             }
             Self::AccumulatorRootCreate => vec![],
+            Self::RegistryRootCreate => vec![],
+            // TODO(manos): uncomment when introducing coin registry
+            // Self::CoinRegistryCreate => vec![],
         }
     }
 
@@ -554,6 +569,9 @@ impl EndOfEpochTransactionKind {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
+            Self::RegistryRootCreate => Either::Right(iter::empty()),
+            // TODO(manos): uncomment when introducing coin registry
+            // Self::CoinRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -617,6 +635,20 @@ impl EndOfEpochTransactionKind {
                     ));
                 }
             }
+            Self::RegistryRootCreate => {
+                if !config.enable_registry_root() {
+                    return Err(UserInputError::Unsupported(
+                        "root registry not enabled".to_string(),
+                    ));
+                }
+            } // TODO(manos): uncomment when introducing coin registry
+              // Self::CoinRegistryCreate => {
+              //     if !config.enable_coin_registry() {
+              //         return Err(UserInputError::Unsupported(
+              //             "coin registry not enabled".to_string(),
+              //         ));
+              //     }
+              // }
         }
         Ok(())
     }

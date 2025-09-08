@@ -81,6 +81,7 @@ pub mod proto_value;
 pub mod ptb_trace;
 pub mod quorum_driver_types;
 pub mod randomness_state;
+pub mod registry_root;
 pub mod rpc_proto_conversions;
 pub mod signature;
 pub mod signature_verification;
@@ -137,6 +138,7 @@ built_in_ids! {
     SUI_BRIDGE_ADDRESS / SUI_BRIDGE_OBJECT_ID = 0x9;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
+    SUI_REGISTRY_ROOT_ADDRESS / SUI_REGISTRY_ROOT_OBJECT_ID = 0xba5e;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

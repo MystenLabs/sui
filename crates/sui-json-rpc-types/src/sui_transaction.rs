@@ -599,6 +599,12 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::AccumulatorRootCreate => {
                                 SuiEndOfEpochTransactionKind::AccumulatorRootCreate
                             }
+                            EndOfEpochTransactionKind::RegistryRootCreate => {
+                                SuiEndOfEpochTransactionKind::RegistryRootCreate
+                            } // TODO(manos): uncomment when introducing coin registry
+                              // EndOfEpochTransactionKind::CoinRegistryCreate => {
+                              //     SuiEndOfEpochTransactionKind::CoinRegistryCreate
+                              // }
                         })
                         .collect(),
                 })
@@ -1683,6 +1689,9 @@ pub enum SuiEndOfEpochTransactionKind {
     BridgeCommitteeUpdate(SequenceNumber),
     StoreExecutionTimeObservations,
     AccumulatorRootCreate,
+    RegistryRootCreate,
+    // TODO(manos): uncomment when introducing coin registry
+    // CoinRegistryCreate,
 }
 
 #[serde_as]

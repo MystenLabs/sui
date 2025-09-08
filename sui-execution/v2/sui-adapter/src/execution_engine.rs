@@ -664,6 +664,12 @@ mod checked {
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v2");
                         }
+                        EndOfEpochTransactionKind::RegistryRootCreate => {
+                            panic!("EndOfEpochTransactionKind::RegistryRootCreate should not exist in v2");
+                        } // TODO(manos): uncomment when introducing coin registry
+                          // EndOfEpochTransactionKind::CoinRegistryCreate => {
+                          //     panic!("CoinRegistryCreate::CoinRegistryCreate should not exist in v2");
+                          // }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

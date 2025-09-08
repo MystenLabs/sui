@@ -781,6 +781,15 @@ struct FeatureFlags {
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
+
+    // Check if `registry root` is enabled`
+    #[serde(skip_serializing_if = "is_false")]
+    enable_registry_root: bool,
+
+    // TODO(manos): uncomment when introducing coin registry
+    // // Enable coin registry protocol
+    // #[serde(skip_serializing_if = "is_false")]
+    // enable_coin_registry: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1883,6 +1892,15 @@ impl ProtocolConfig {
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
     }
+
+    pub fn enable_registry_root(&self) -> bool {
+        self.feature_flags.enable_registry_root
+    }
+
+    // TODO(manos): uncomment when introducing coin registry
+    // pub fn enable_coin_registry(&self) -> bool {
+    //     self.feature_flags.enable_coin_registry
+    // }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
         self.feature_flags.enable_coin_deny_list_v2
@@ -3963,6 +3981,9 @@ impl ProtocolConfig {
 
                     // Reudce the frequency of checkpoint splitting under high TPS.
                     cfg.max_transactions_per_checkpoint = Some(20_000);
+
+                    // Enable the creation of root registry
+                    cfg.feature_flags.enable_registry_root = true;
                 }
                 // Use this template when making changes:
                 //

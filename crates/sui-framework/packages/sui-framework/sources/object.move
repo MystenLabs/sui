@@ -46,6 +46,9 @@ const SUI_ACCUMULATOR_ROOT_OBJECT_ID: address = @0xacc;
 /// The hardcoded ID for the Bridge Object.
 const SUI_BRIDGE_ID: address = @0x9;
 
+/// The hardcoded ID for the `RegistryRoot` Object.
+const SUI_REGISTRY_ROOT_OBJECT_ID: address = @0xba5e;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -147,6 +150,14 @@ public(package) fun sui_accumulator_root_object_id(): UID {
 
 public(package) fun sui_accumulator_root_address(): address {
     SUI_ACCUMULATOR_ROOT_OBJECT_ID
+}
+
+/// Create the `UID` for the singleton `RegistryRoot` object.
+/// This should only be called once from `registry`.
+public(package) fun sui_registry_root_object_id(): UID {
+    UID {
+        id: ID { bytes: SUI_REGISTRY_ROOT_OBJECT_ID },
+    }
 }
 
 #[allow(unused_function)]

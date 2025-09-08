@@ -774,6 +774,14 @@ mod checked {
                             assert!(protocol_config.enable_accumulators());
                             builder = setup_accumulator_root_create(builder);
                         }
+                        EndOfEpochTransactionKind::RegistryRootCreate => {
+                            assert!(protocol_config.enable_registry_root());
+                            builder = setup_registry_root_create(builder);
+                        } // TODO(manos): uncomment when introducing coin registry
+                          // EndOfEpochTransactionKind::CoinRegistryCreate => {
+                          //     assert!(protocol_config.enable_coin_registry());
+                          //     builder = setup_coin_registry_create(builder);
+                          // }
                     }
                 }
                 unreachable!(
@@ -1440,4 +1448,35 @@ mod checked {
             .expect("Unable to generate accumulator_root_create transaction!");
         builder
     }
+
+    fn setup_registry_root_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("registry").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate registry_root_create transaction!");
+        builder
+    }
+
+    // TODO(manos): uncomment when introducing coin registry
+    // fn setup_coin_registry_create(
+    //     mut builder: ProgrammableTransactionBuilder,
+    // ) -> ProgrammableTransactionBuilder {
+    //     builder
+    //         .move_call(
+    //             SUI_FRAMEWORK_ADDRESS.into(),
+    //             ident_str!("coin_registry").to_owned(),
+    //             ident_str!("create").to_owned(),
+    //             vec![],
+    //             vec![],
+    //         )
+    //         .expect("Unable to generate registry_root_create transaction!");
+    //     builder
+    // }
 }
