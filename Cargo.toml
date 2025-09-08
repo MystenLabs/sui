@@ -183,7 +183,6 @@ members = [
   "crates/sui-single-node-benchmark",
   "crates/sui-snapshot",
   "crates/sui-source-validation",
-  "crates/sui-source-validation-service",
   "crates/sui-sql-macro",
   "crates/sui-storage",
   "crates/sui-surfer",
@@ -756,7 +755,6 @@ sui-sdk = { path = "crates/sui-sdk" }
 sui-simulator = { path = "crates/sui-simulator" }
 sui-snapshot = { path = "crates/sui-snapshot" }
 sui-source-validation = { path = "crates/sui-source-validation" }
-sui-source-validation-service = { path = "crates/sui-source-validation-service" }
 sui-sql-macro = { path = "crates/sui-sql-macro" }
 sui-storage = { path = "crates/sui-storage" }
 sui-surfer = { path = "crates/sui-surfer" }
