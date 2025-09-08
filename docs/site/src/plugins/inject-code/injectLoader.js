@@ -5,7 +5,7 @@
 //
 // This file is deprecated.
 //
-// See src/js/remark-includes
+// See src/components/ImportContent
 //
 // **********************************
 
