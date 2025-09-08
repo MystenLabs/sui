@@ -35,8 +35,8 @@ pub mod summary_metrics;
 pub mod tracing;
 
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
-const MAINNET_GQL_URL: &str = "https://public-rpc.sui-mainnet.mystenlabs.com/graphql";
-const TESTNET_GQL_URL: &str = "https://public-rpc.sui-testnet.mystenlabs.com/graphql";
+const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
+const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
 
 // Arguments to the replay tool.
 // It allows to replay a single transaction by digest or
