@@ -425,6 +425,9 @@ fn test_storage_returns_bogus_error_when_loading_module() {
         let linkage: LinkageContext = adapter.get_linkage_context(TEST_ADDR).unwrap();
         let runtime = adapter.runtime();
         let sess = runtime.make_vm::<BogusStorage>(storage, linkage);
-        assert_eq!(sess.unwrap_err().status_type(), StatusType::InvariantViolation);
+        assert_eq!(
+            sess.unwrap_err().status_type(),
+            StatusType::InvariantViolation
+        );
     }
 }
