@@ -8,7 +8,7 @@ use crate::{
         effects_certifier::EffectsCertifier,
         error::TransactionDriverError,
         message_types::{
-            ExecutedData, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
+            ExecutedData, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
         },
         metrics::TransactionDriverMetrics,
         SubmitTransactionOptions,
@@ -288,7 +288,7 @@ async fn test_successful_certified_effects() {
         .unwrap();
 
     // Get certified effects for tx when consensus positions is returned.
-    let submit_tx_resp = SubmitTxResponse::Submitted { consensus_position };
+    let submit_tx_result = SubmitTxResult::Submitted { consensus_position };
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
@@ -296,7 +296,7 @@ async fn test_successful_certified_effects() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            submit_tx_resp,
+            submit_tx_result,
             &options,
         )
         .await;
@@ -323,7 +323,7 @@ async fn test_successful_certified_effects() {
         client.set_ack_response(tx_digest, executed_response_ack.clone());
     }
 
-    let submit_tx_resp = SubmitTxResponse::Executed {
+    let submit_tx_result = SubmitTxResult::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
         fast_path: false,
@@ -335,7 +335,7 @@ async fn test_successful_certified_effects() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            submit_tx_resp,
+            submit_tx_result,
             &options,
         )
         .await;
@@ -398,7 +398,7 @@ async fn test_transaction_rejected_non_retriable() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -406,6 +406,7 @@ async fn test_transaction_rejected_non_retriable() {
     assert!(result.is_err());
     match result.unwrap_err() {
         TransactionDriverError::InvalidTransaction {
+            local_error: _,
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -463,7 +464,7 @@ async fn test_transaction_rejected_retriable() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -534,7 +535,7 @@ async fn test_transaction_rejected_with_conflicts() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -542,6 +543,7 @@ async fn test_transaction_rejected_with_conflicts() {
     assert!(result.is_err());
     match result.unwrap_err() {
         TransactionDriverError::InvalidTransaction {
+            local_error: _,
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -595,7 +597,7 @@ async fn test_transaction_expired() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -678,7 +680,7 @@ async fn test_mixed_rejected_and_expired() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -686,6 +688,7 @@ async fn test_mixed_rejected_and_expired() {
     assert!(result.is_err());
     match result.unwrap_err() {
         TransactionDriverError::InvalidTransaction {
+            local_error: _,
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -719,7 +722,7 @@ async fn test_mixed_rejected_and_expired() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -810,7 +813,7 @@ async fn test_mixed_rejected_reasons() {
                 &tx_digest,
                 TxType::SingleWriter,
                 *name,
-                SubmitTxResponse::Submitted { consensus_position },
+                SubmitTxResult::Submitted { consensus_position },
                 &options,
             )
             .await;
@@ -818,6 +821,7 @@ async fn test_mixed_rejected_reasons() {
         assert!(result.is_err());
         match result.unwrap_err() {
             TransactionDriverError::InvalidTransaction {
+                local_error: _,
                 submission_non_retriable_errors,
                 submission_retriable_errors: _,
             } => {
@@ -860,7 +864,7 @@ async fn test_mixed_rejected_reasons() {
                 &tx_digest,
                 TxType::SingleWriter,
                 *name,
-                SubmitTxResponse::Submitted { consensus_position },
+                SubmitTxResult::Submitted { consensus_position },
                 &options,
             )
             .await;
@@ -868,6 +872,7 @@ async fn test_mixed_rejected_reasons() {
         assert!(result.is_err());
         match result.unwrap_err() {
             TransactionDriverError::InvalidTransaction {
+                local_error: _,
                 submission_non_retriable_errors,
                 submission_retriable_errors: _,
             } => {
@@ -908,7 +913,7 @@ async fn test_mixed_rejected_reasons() {
                 &tx_digest,
                 TxType::SingleWriter,
                 *name,
-                SubmitTxResponse::Submitted { consensus_position },
+                SubmitTxResult::Submitted { consensus_position },
                 &options,
             )
             .await;
@@ -959,7 +964,7 @@ async fn test_mixed_rejected_reasons() {
                 &tx_digest,
                 TxType::SingleWriter,
                 *name,
-                SubmitTxResponse::Submitted { consensus_position },
+                SubmitTxResult::Submitted { consensus_position },
                 &options,
             )
             .await;
@@ -1006,7 +1011,7 @@ async fn test_mixed_rejected_reasons() {
                 &tx_digest,
                 TxType::SingleWriter,
                 *name,
-                SubmitTxResponse::Submitted { consensus_position },
+                SubmitTxResult::Submitted { consensus_position },
                 &options,
             )
             .await;
@@ -1091,7 +1096,7 @@ async fn test_forked_execution() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -1181,7 +1186,7 @@ async fn test_aborted_with_multiple_effects() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -1276,7 +1281,7 @@ async fn test_full_effects_retry_loop() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -1363,7 +1368,7 @@ async fn test_full_effects_digest_mismatch() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -1438,7 +1443,7 @@ async fn test_request_retrier_exhaustion() {
             &tx_digest,
             TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;

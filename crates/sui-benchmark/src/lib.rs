@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use anyhow::bail;
 use async_trait::async_trait;
-use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use rand::Rng;
@@ -61,7 +60,6 @@ use crate::drivers::bench_driver::ClientType;
 pub mod bank;
 pub mod benchmark_setup;
 pub mod drivers;
-pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
 pub mod in_memory_wallet;
 pub mod options;
@@ -274,7 +272,7 @@ impl LocalValidatorAggregatorProxy {
     pub async fn from_genesis(
         genesis: &Genesis,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: Option<&str>,
+        reconfig_fullnode_rpc_url: &str,
         transaction_driver_percentage: Option<u8>,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
@@ -285,7 +283,9 @@ impl LocalValidatorAggregatorProxy {
         let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
             tx_driver_percentage
         } else {
-            choose_transaction_driver_percentage()
+            // We don't need to gate transaction driver for benchmark since we
+            // are not running it on mainnet.
+            choose_transaction_driver_percentage(None)
         };
 
         Self::new_impl(
@@ -302,7 +302,7 @@ impl LocalValidatorAggregatorProxy {
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: Option<&str>,
+        reconfig_fullnode_rpc_url: &str,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
         td_percentage: u8,
@@ -312,7 +312,7 @@ impl LocalValidatorAggregatorProxy {
         let (aggregator, reconfig_observer): (
             Arc<_>,
             Arc<dyn ReconfigObserver<NetworkAuthorityClient> + Sync + Send>,
-        ) = if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
+        ) = {
             info!(
                 "Using FullNodeReconfigObserver: {:?}",
                 reconfig_fullnode_rpc_url
@@ -328,16 +328,8 @@ impl LocalValidatorAggregatorProxy {
                 .await,
             );
             (Arc::new(aggregator), reconfig_observer)
-        } else {
-            info!("Using EmbeddedReconfigObserver");
-            let reconfig_observer = Arc::new(EmbeddedReconfigObserver::new());
-            // Get the latest committee from config observer
-            let aggregator = reconfig_observer
-                .get_committee(Arc::new(aggregator))
-                .await
-                .expect("Failed to get latest committee");
-            (aggregator, reconfig_observer)
         };
+
         let qd_handler_builder =
             QuorumDriverHandlerBuilder::new(aggregator.clone(), quorum_driver_metrics.clone())
                 .with_reconfig_observer(reconfig_observer.clone());
@@ -537,6 +529,12 @@ pub struct FullNodeProxy {
 
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
+        let http_url = if http_url.starts_with("http://") || http_url.starts_with("https://") {
+            http_url.to_string()
+        } else {
+            format!("http://{http_url}")
+        };
+
         // Each request times out after 60s (default value)
         let sui_client = SuiClientBuilder::default()
             .max_concurrent_requests(500_000)
@@ -641,7 +639,6 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
-        // TODO(fastpath): Add support for TransactionDriver
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 10 {

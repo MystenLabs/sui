@@ -2,8 +2,6 @@
 title: Sui Tokenomics
 description: Sui's tokenomics is designed to support the long-term financial needs of Web3. It uses the native SUI coin as the currency of the network and to pay for the network's gas fees. 
 keywords: [ sui, SUI, sui coin, SUI token, sui tokenomics, sui economy, sui gas fees, sui coin purpose, sui coin uses, SUI token uses, SUI token purpose, unlocking schedules, sui unlock schedul, sui validator rewards, validator rewards, validator and staking pools, sui staking pools, sui staking ] 
-mdx:
-  format: md
 pagination_prev: null
 ---
 
@@ -120,7 +118,7 @@ Exchange rate at E+1 = ( 1 + ( third-party staker rewards at E / third-party sta
 
 The distinction between third-party owned vs validator-owned rewards and stake is relevant in that validators earn commissions on the staking pool's tokens but third-party stakers do not. This accounting enables Sui to keep track of the rewards accrued by both validators and third-party token holders using a single global exchange rate table.
 
-{@include: ../snippets/staking-pool-reqs.mdx}
+<ImportContent source="staking-pool-reqs.mdx" mode="snippet" />
 
 #### Understanding the voting power formula
 
@@ -151,5 +149,5 @@ As the total network stake changes, the minimum required amount will adjust auto
 
 ## Related links
 
-- [The Sui Smart Contracts Platform: Economics and Incentives](https://docs.sui.io/paper/tokenomics.pdf): Whitepaper that details Sui tokenomics.
-- [Gas fees](https://docs.sui.io/concepts/tokenomics/gas-in-sui): Gas fees are charged on all network operations and used to reward participants of the proof-of-stake mechanism and prevent spam and denial-of-service attacks.
+<RelatedLink href="https://docs.sui.io/paper/tokenomics.pdf" label="The Sui Smart Contracts Platform: Economics and Incentives" desc="Whitepaper that details Sui tokenomics." />
+<RelatedLink to="/concepts/tokenomics/gas-in-sui" />

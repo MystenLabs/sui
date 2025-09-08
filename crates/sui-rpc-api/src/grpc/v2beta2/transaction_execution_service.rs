@@ -136,9 +136,9 @@ pub async fn execute_transaction(
                 Finality::QuorumExecuted(())
             }
         };
-        sui_rpc::proto::sui::rpc::v2beta2::TransactionFinality {
-            finality: Some(finality),
-        }
+        let mut message = sui_rpc::proto::sui::rpc::v2beta2::TransactionFinality::default();
+        message.finality = Some(finality);
+        message
     };
 
     let executed_transaction = if let Some(mask) =
@@ -226,55 +226,52 @@ pub async fn execute_transaction(
                 effects
             });
 
-        Some(ExecutedTransaction {
-            digest: mask
-                .contains(ExecutedTransaction::DIGEST_FIELD.name)
-                .then(|| transaction.digest().to_string()),
-            transaction: mask
-                .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
-                .map(|mask| Transaction::merge_from(transaction, &mask)),
-            signatures: mask
-                .subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
-                .map(|mask| {
-                    signatures
-                        .into_iter()
-                        .map(|s| UserSignature::merge_from(s, &mask))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            effects,
-            events,
-            checkpoint: None,
-            timestamp: None,
-            balance_changes,
-            input_objects: mask
-                .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD.name)
-                .map(|mask| {
-                    input_objects
-                        .into_iter()
-                        .map(|o| Object::merge_from(o, &mask))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            output_objects: mask
-                .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD.name)
-                .map(|mask| {
-                    output_objects
-                        .into_iter()
-                        .map(|o| Object::merge_from(o, &mask))
-                        .collect()
-                })
-                .unwrap_or_default(),
-        })
+        let mut message = ExecutedTransaction::default();
+        message.digest = mask
+            .contains(ExecutedTransaction::DIGEST_FIELD.name)
+            .then(|| transaction.digest().to_string());
+        message.transaction = mask
+            .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
+            .map(|mask| Transaction::merge_from(transaction, &mask));
+        message.signatures = mask
+            .subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
+            .map(|mask| {
+                signatures
+                    .into_iter()
+                    .map(|s| UserSignature::merge_from(s, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+        message.effects = effects;
+        message.events = events;
+        message.balance_changes = balance_changes;
+        message.input_objects = mask
+            .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD.name)
+            .map(|mask| {
+                input_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+        message.output_objects = mask
+            .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD.name)
+            .map(|mask| {
+                output_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Some(message)
     } else {
         None
     };
 
-    ExecuteTransactionResponse {
-        finality: read_mask
-            .contains(ExecuteTransactionResponse::FINALITY_FIELD.name)
-            .then_some(finality),
-        transaction: executed_transaction,
-    }
-    .pipe(Ok)
+    let mut message = ExecuteTransactionResponse::default();
+    message.finality = read_mask
+        .contains(ExecuteTransactionResponse::FINALITY_FIELD.name)
+        .then_some(finality);
+    message.transaction = executed_transaction;
+    Ok(message)
 }

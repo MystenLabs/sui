@@ -33,6 +33,8 @@
 //! [TestPackageGraph::add_package] and [TestPackageGraph::add_dep]. These take closures that
 //! customize the generated packages and deps respectively. See [tests::complex] for a complete example.
 
+#![allow(unused)]
+
 use std::{
     collections::BTreeMap,
     convert::identity,
@@ -40,7 +42,7 @@ use std::{
 };
 
 use heck::CamelCase;
-use indoc::formatdoc;
+use indoc::{formatdoc, indoc};
 use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
@@ -126,7 +128,7 @@ impl TestPackageGraph {
     /// Add a dependency to the graph from `a` to `b` for each pair `("a", "b")` in `edges`. The
     /// dependencies will be local dependencies in the `[dependencies]` sections.
     pub fn add_deps(
-        mut self,
+        self,
         edges: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
     ) -> Self {
         edges.into_iter().fold(self, |graph, (source, target)| {
@@ -161,7 +163,7 @@ impl TestPackageGraph {
     /// builder.add_package("a", |a| a.publish(original, published_at))
     /// ```
     pub fn add_published(
-        mut self,
+        self,
         node: impl AsRef<str>,
         original_id: OriginalID,
         published_at: PublishedID,
@@ -198,14 +200,14 @@ impl TestPackageGraph {
             let dir = PathBuf::from(package_id.as_str());
 
             let manifest = &self.format_manifest(*node);
-            let lockfile = &self.format_lockfile(*node);
+            let pubfile = &self.format_pubfile(*node);
 
             debug!("Generated test manifest for {package_id}:\n\n{manifest}");
-            debug!("Generated test lockfile for {package_id}:\n\n{lockfile}");
+            debug!("Generated test pubfile for {package_id}:\n\n{pubfile}");
 
             project = project
                 .file(dir.join("Move.toml"), manifest)
-                .file(dir.join("Move.lock"), lockfile);
+                .file(dir.join("Move.published"), pubfile);
         }
 
         Scenario {
@@ -307,37 +309,31 @@ impl TestPackageGraph {
     }
 
     /// Return the contents of a `Move.lock` file for the package represented by
-    /// `node`. The lock file will not contain a `pinned` section, only the `published` section
-    ///
-    /// For publications with no published-at and original-id fields, we generate them sequentially
-    /// starting from 1000 (and set them to the same value)
-    fn format_lockfile(&self, node: NodeIndex) -> String {
+    /// `node`.
+    fn format_pubfile(&self, node: NodeIndex) -> String {
         let mut move_lock = String::new();
 
         for (env, publication) in self.inner[node].pubs.iter() {
             let PubSpec {
-                chain_id,
                 addresses:
                     PublishAddresses {
                         original_id,
                         published_at,
                     },
+                ..
             } = publication;
 
             move_lock.push_str(&formatdoc!(
                 r#"
                     [published.{env}]
+                    chain-id = "{DEFAULT_ENV_ID}"
                     published-at = "{published_at}"
                     original-id = "{original_id}"
-                    chain-id = "{DEFAULT_ENV_ID}"
-                    toolchain-version = "test-0.0.0"
-                    build-config = {{}}
 
                     "#,
             ));
         }
 
-        debug!("{move_lock}");
         move_lock
     }
 
@@ -550,9 +546,9 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("a/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("a/Move.published"), @"");
 
-        assert_snapshot!(graph.read_file("b/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("b/Move.published"), @"");
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -619,13 +615,11 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("c/Move.lock"), @r###"
+        assert_snapshot!(graph.read_file("c/Move.published"), @r###"
         [published._test_env]
+        chain-id = "_test_env_id"
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
         original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
-        chain-id = "_test_env_id"
-        toolchain-version = "test-0.0.0"
-        build-config = {}
         "###);
     }
 

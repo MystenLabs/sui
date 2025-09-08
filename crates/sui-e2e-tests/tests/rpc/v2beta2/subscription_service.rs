@@ -20,9 +20,8 @@ async fn subscribe_checkpoint() {
         .await
         .unwrap();
 
-    let request = SubscribeCheckpointsRequest {
-        read_mask: Some(FieldMask::from_str("sequence_number")),
-    };
+    let mut request = SubscribeCheckpointsRequest::default();
+    request.read_mask = Some(FieldMask::from_str("sequence_number"));
 
     let mut stream = client
         .subscribe_checkpoints(request)

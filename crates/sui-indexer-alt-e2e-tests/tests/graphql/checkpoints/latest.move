@@ -21,3 +21,9 @@
 {
   checkpoint { sequenceNumber }
 }
+
+//# run-graphql
+{
+  # Test that explicit null defaults to latest checkpoint
+  checkpoint(sequenceNumber: null) { sequenceNumber }
+}

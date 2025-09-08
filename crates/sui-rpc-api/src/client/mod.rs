@@ -100,12 +100,11 @@ impl Client {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
     ) -> Result<CertifiedCheckpointSummary> {
-        let request = proto::GetCheckpointRequest {
-            checkpoint_id: sequence_number.map(|sequence_number| {
-                proto::get_checkpoint_request::CheckpointId::SequenceNumber(sequence_number)
-            }),
-            read_mask: FieldMask::from_paths(["summary.bcs", "signature"]).pipe(Some),
-        };
+        let mut request = proto::GetCheckpointRequest::default()
+            .with_read_mask(FieldMask::from_paths(["summary.bcs", "signature"]));
+        request.checkpoint_id = sequence_number.map(|sequence_number| {
+            proto::get_checkpoint_request::CheckpointId::SequenceNumber(sequence_number)
+        });
 
         let (metadata, checkpoint, _extentions) = self
             .raw_client()
@@ -124,11 +123,8 @@ impl Client {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointData> {
-        let request = proto::GetCheckpointRequest {
-            checkpoint_id: Some(proto::get_checkpoint_request::CheckpointId::SequenceNumber(
-                sequence_number,
-            )),
-            read_mask: FieldMask::from_paths([
+        let request = proto::GetCheckpointRequest::by_sequence_number(sequence_number)
+            .with_read_mask(FieldMask::from_paths([
                 "summary.bcs",
                 "signature",
                 "contents.bcs",
@@ -137,9 +133,7 @@ impl Client {
                 "transactions.events.bcs",
                 "transactions.input_objects.bcs",
                 "transactions.output_objects.bcs",
-            ])
-            .pipe(Some),
-        };
+            ]));
 
         let (metadata, response, _extentions) = self
             .raw_client()
@@ -173,11 +167,9 @@ impl Client {
         object_id: ObjectID,
         version: Option<u64>,
     ) -> Result<Object> {
-        let request = proto::GetObjectRequest {
-            object_id: Some(sui_sdk_types::Address::from(object_id).to_string()),
-            version,
-            read_mask: FieldMask::from_paths(["bcs"]).pipe(Some),
-        };
+        let mut request = proto::GetObjectRequest::new(&object_id.into())
+            .with_read_mask(FieldMask::from_paths(["bcs"]));
+        request.version = version;
 
         let (metadata, object, _extentions) =
             self.raw_client().get_object(request).await?.into_parts();
@@ -196,29 +188,28 @@ impl Client {
             .inner()
             .tx_signatures
             .iter()
-            .map(|signature| proto::UserSignature {
-                bcs: Some(signature.as_ref().to_vec().into()),
-                ..Default::default()
+            .map(|signature| {
+                let mut message = proto::UserSignature::default();
+                message.bcs = Some(signature.as_ref().to_vec().into());
+                message
             })
             .collect();
 
-        let request = proto::ExecuteTransactionRequest {
-            transaction: Some(proto::Transaction {
-                bcs: Some(
-                    proto::Bcs::serialize(&transaction.inner().intent_message.value)
-                        .map_err(|e| Status::from_error(e.into()))?,
-                ),
-                ..Default::default()
-            }),
-            signatures,
-            read_mask: FieldMask::from_paths([
-                "finality",
-                "transaction.effects.bcs",
-                "transaction.events.bcs",
-                "transaction.balance_changes",
-            ])
-            .pipe(Some),
-        };
+        let request = proto::ExecuteTransactionRequest::new({
+            let mut tx = proto::Transaction::default();
+            tx.bcs = Some(
+                proto::Bcs::serialize(&transaction.inner().intent_message.value)
+                    .map_err(|e| Status::from_error(e.into()))?,
+            );
+            tx
+        })
+        .with_signatures(signatures)
+        .with_read_mask(FieldMask::from_paths([
+            "finality",
+            "transaction.effects.bcs",
+            "transaction.events.bcs",
+            "transaction.balance_changes",
+        ]));
 
         let (metadata, response, _extentions) = self
             .execution_client()

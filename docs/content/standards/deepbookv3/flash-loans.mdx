@@ -2,8 +2,6 @@
 title: Flash Loans
 description: Use DeepBookV3 to perform flash loans, uncollaterized loans that are borrowed and repaid within the same programmable transaction block.
 keywords: [ uncollateralized, flash loans, loans, uncollateralized loans, programmable transaction blocks, ptbs, borrow flash loan base, borrow flash loan quote, retrieve flash loan base, retrieve flash loan quote ]
-mdx:
-  format: md
 ---
 
 Flash loans by definition are uncollateralized loans that are borrowed and repaid within the same programmable transaction block. Users can borrow flash loans in the base or quote asset from any DeepBookV3 pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned.
@@ -18,27 +16,27 @@ Following are the endpoints that the `Pool` exposes for flash loans.
 
 Borrow base assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
 
-{@inject: ../deepbook-ref/pool.move#fun=borrow_flashloan_base noComments}
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="borrow_flashloan_base" noComments />
 
 ### Borrow flash loan quote
 
 Borrow quote assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
 
-{@inject: ../deepbook-ref/pool.move#fun=borrow_flashloan_quote noComments}
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="borrow_flashloan_quote" noComments />
 
 ### Retrieve flash loan base
 
 Return the flash loaned base assets to the `Pool`. `FlashLoan` object is unwrapped only if the assets are returned, otherwise the transaction fails.
 
-{@inject: ../deepbook-ref/pool.move#fun=return_flashloan_base noComments}
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="return_flashloan_base" noComments />
 
 ### Retrieve flash loan quote
 
 Return the flash loaned quote assets to the `Pool`. `FlashLoan` object is unwrapped only if the assets are returned,
 otherwise the transaction fails.
 
-{@inject: ../deepbook-ref/pool.move#fun=return_flashloan_quote noComments}
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="return_flashloan_quote" noComments />
 
 ## Related links
 
-- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.
+<RelatedLink href="https://github.com/MystenLabs/deepbookv3" label="DeepBookV3 repository" desc="The DeepBookV3 repository on GitHub." />

@@ -1,20 +1,23 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use serde::{Deserialize, Deserializer, de};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
+
+use crate::compatibility::legacy::LegacyData;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
+    toml_format::RenderToml,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
 /// names in the `[environments]` table of the manifest
 pub type EnvironmentID = String;
 
-// Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
-// writing these files should use [toml_edit] to set / preserve the formatting, since these are
-// user-editable files
-#[derive(Debug, Deserialize, Clone)]
+// Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
+// tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
+// implement [Serialize] and provide [render_as_toml], primarily for generating tests
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
@@ -29,10 +32,15 @@ pub struct ParsedManifest {
     #[serde(default)]
     pub dep_replacements:
         BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>>,
+
+    /// Additional information that we may need when we handle legacy packages. This data is only
+    /// populated by the legacy parser
+    #[serde(skip)]
+    pub legacy_data: Option<LegacyData>,
 }
 
 /// The `[package]` section of a manifest
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
@@ -46,7 +54,7 @@ pub struct PackageMetadata {
 }
 
 /// An entry in the `[dependencies]` section of a manifest
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct DefaultDependency {
     #[serde(flatten)]
@@ -60,7 +68,7 @@ pub struct DefaultDependency {
 }
 
 /// An entry in the `[dep-replacements]` section of a manifest
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
 pub struct ReplacementDependency {
@@ -79,7 +87,7 @@ pub struct ReplacementDependency {
 ///
 /// There are additional general fields in the manifest format (like `override` or `rename-from`);
 /// these are in the [ManifestDependency] or [ManifestDependencyReplacement] types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ManifestDependencyInfo {
     Git(ManifestGitDependency),
     External(ExternalDependency),
@@ -89,7 +97,7 @@ pub enum ManifestDependencyInfo {
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
 /// dependencies are resolved by external resolvers.
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
@@ -100,7 +108,7 @@ pub struct ExternalDependency {
 }
 
 /// A `{git = "..."}` dependency in a manifest
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ManifestGitDependency {
     /// The repository containing the dependency
     #[serde(rename = "git")]
@@ -116,9 +124,15 @@ pub struct ManifestGitDependency {
 }
 
 /// Convenience type for serializing/deserializing external deps
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
+}
+
+impl RenderToml for ParsedManifest {
+    fn render_as_toml(&self) -> String {
+        todo!()
+    }
 }
 
 impl<'de> Deserialize<'de> for ManifestDependencyInfo {
@@ -172,11 +186,17 @@ impl TryFrom<RField> for ExternalDependency {
     }
 }
 
+impl From<ExternalDependency> for RField {
+    fn from(value: ExternalDependency) -> Self {
+        Self {
+            r: BTreeMap::from([(value.resolver, value.data)]),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-
-    use crate::schema::{LocalDepInfo, OnChainDepInfo};
 
     use super::{
         DefaultDependency, ExternalDependency, ManifestDependencyInfo, ManifestGitDependency,
@@ -188,7 +208,7 @@ mod tests {
         fn get_dep(&self, name: impl AsRef<str>) -> &DefaultDependency {
             self.dependencies
                 .iter()
-                .find(|(dep_name, dep)| dep_name.as_ref().as_str() == name.as_ref())
+                .find(|(dep_name, _)| dep_name.as_ref().as_str() == name.as_ref())
                 .unwrap()
                 .1
         }
@@ -203,7 +223,7 @@ mod tests {
                 .get(env.as_ref())
                 .expect("environment exists")
                 .iter()
-                .find(|(dep_name, dep)| dep_name.as_ref().as_str() == name.as_ref())
+                .find(|(dep_name, _)| dep_name.as_ref().as_str() == name.as_ref())
                 .unwrap()
                 .1
                 .as_ref()
@@ -219,25 +239,11 @@ mod tests {
             ext
         }
 
-        fn as_local(&self) -> &LocalDepInfo {
-            let Self::Local(loc) = self else {
-                panic!("expected local dependency")
-            };
-            loc
-        }
-
         fn as_git(&self) -> &ManifestGitDependency {
             let Self::Git(git) = self else {
                 panic!("expected git dependency")
             };
             git
-        }
-
-        fn as_onchain(&self) -> &OnChainDepInfo {
-            let Self::OnChain(onchain) = self else {
-                panic!("expected onchain dependency")
-            };
-            onchain
         }
     }
 
@@ -253,7 +259,7 @@ mod tests {
     /// Parsing a basic file using a number of features succeeds
     #[test]
     fn basic() {
-        let manifest: ParsedManifest = toml_edit::de::from_str(
+        let _: ParsedManifest = toml_edit::de::from_str(
             r#"
             [package]
             name = "example"

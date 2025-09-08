@@ -29,8 +29,10 @@ use sui_types::{
 use crate::{
     api::scalars::{
         base64::Base64,
+        big_int::BigInt,
         cursor::{BcsCursor, JsonCursor},
         sui_address::SuiAddress,
+        type_filter::TypeInput,
         uint53::UInt53,
     },
     error::{bad_user_input, RpcError},
@@ -39,11 +41,12 @@ use crate::{
 };
 
 use super::{
-    address::AddressableImpl,
+    balance::{self, Balance},
     linkage::Linkage,
     move_object::MoveObject,
-    object::{self, CLive, CVersion, Object, ObjectImpl, VersionFilter},
+    object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
+    owner::Owner,
     transaction::Transaction,
     type_origin::TypeOrigin,
 };
@@ -93,6 +96,9 @@ pub(crate) struct PackageCursor {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
+    #[error("Checkpoint {0} in the future")]
+    Future(u64),
+
     #[error(
         "At most one of a version, or a checkpoint bound can be specified when fetching a package"
     )]
@@ -110,8 +116,59 @@ pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
 #[Object]
 impl MovePackage {
     /// The MovePackage's ID.
-    pub(crate) async fn address(&self) -> SuiAddress {
-        AddressableImpl::from(&self.super_.super_).address()
+    pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
+        self.super_.address(ctx).await
+    }
+
+    /// The version of this package that this content comes from.
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<UInt53, RpcError> {
+        self.super_.version(ctx).await
+    }
+
+    /// 32-byte hash that identifies the package's contents, encoded in Base58.
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.digest(ctx).await
+    }
+
+    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    ///
+    /// If the address does not own any coins of that type, a balance of zero is returned.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
+        self.super_.balance(ctx, coin_type).await
+    }
+
+    /// Total balance across coins owned by this address, grouped by coin type.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+        self.super_.balances(ctx, first, after, last, before).await
+    }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
+        Ok(Some(bytes.into()))
+    }
+
+    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    ///
+    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    pub(crate) async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
+        self.super_.multi_get_balances(ctx, keys).await
     }
 
     /// Objects owned by this package, optionally filtered by type.
@@ -124,26 +181,9 @@ impl MovePackage {
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
-        AddressableImpl::from(&self.super_.super_)
+        self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
-    }
-
-    /// The version of this package that this content comes from.
-    pub(crate) async fn version(&self) -> UInt53 {
-        ObjectImpl::from(&self.super_).version()
-    }
-
-    /// 32-byte hash that identifies the package's contents, encoded in Base58.
-    pub(crate) async fn digest(&self) -> String {
-        ObjectImpl::from(&self.super_).digest()
-    }
-
-    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
-    /// name, followed by module bytes), in alphabetic order by module name.
-    async fn module_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bytes = bcs::to_bytes(self.native.serialized_module_map())?;
-        Ok(Some(bytes.into()))
     }
 
     /// Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
@@ -156,7 +196,7 @@ impl MovePackage {
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Result<Option<Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_at(ctx, version, root_version, checkpoint)
             .await
     }
@@ -166,7 +206,7 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_).object_bcs(ctx).await
+        self.super_.object_bcs(ctx).await
     }
 
     /// Paginate all versions of this package treated as an object, after this one.
@@ -179,7 +219,7 @@ impl MovePackage {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
     }
@@ -194,9 +234,17 @@ impl MovePackage {
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
     ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
+        self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
+    }
+
+    /// The object's owner kind.
+    pub(crate) async fn owner(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Owner>, RpcError<object::Error>> {
+        self.super_.owner(ctx).await
     }
 
     /// Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
@@ -297,9 +345,7 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Transaction>, RpcError<object::Error>> {
-        ObjectImpl::from(&self.super_)
-            .previous_transaction(ctx)
-            .await
+        self.super_.previous_transaction(ctx).await
     }
 
     /// The transitive dependencies of this package.
@@ -315,6 +361,14 @@ impl MovePackage {
             .collect();
 
         Some(linkage)
+    }
+
+    /// The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+    pub(crate) async fn storage_rebate(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<BigInt>, RpcError<object::Error>> {
+        self.super_.storage_rebate(ctx).await
     }
 
     /// A table identifying which versions of a package introduced each of its types.
@@ -335,7 +389,8 @@ impl MovePackage {
     /// is not a package. This is more efficient when you already have the native object.
     pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
         let package = native.data.try_as_package()?.clone();
-        let super_ = Object::from_contents(scope, Arc::new(native));
+        let scope = scope.with_root_version(package.version().value());
+        let super_ = Object::from_contents(scope, native);
         Some(Self {
             super_,
             native: package,
@@ -348,7 +403,7 @@ impl MovePackage {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let Some(super_contents) = object.contents(ctx).await? else {
+        let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
 
@@ -363,7 +418,8 @@ impl MovePackage {
     }
 
     /// Fetch a package by its key. The key can either specify an exact version to fetch, an
-    /// upperbound against a checkpoint, or neither.
+    /// upperbound against a checkpoint, or neither. Returns `None` when no checkpoint is set
+    /// in scope (e.g. execution scope) and no explicit version is provided.
     pub(crate) async fn by_key(
         ctx: &Context<'_>,
         scope: Scope,
@@ -377,9 +433,10 @@ impl MovePackage {
             Ok(Self::at_version(ctx, scope, key.address, v).await?)
         } else if let Some(cp) = key.at_checkpoint {
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+        } else if let Some(cp) = scope.checkpoint_viewed_at() {
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
         } else {
-            let cp: UInt53 = scope.checkpoint_viewed_at().into();
-            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+            Ok(None)
         }
     }
 
@@ -412,6 +469,7 @@ impl MovePackage {
             return Ok(None);
         };
 
+        let scope = scope.with_root_version(stored_package.package_version as u64);
         Self::from_stored(scope, stored_package)
     }
 
@@ -423,6 +481,10 @@ impl MovePackage {
         address: SuiAddress,
         at_checkpoint: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
+        let scope = scope
+            .with_checkpoint_viewed_at(at_checkpoint.into())
+            .ok_or_else(|| bad_user_input(Error::Future(at_checkpoint.into())))?;
+
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(stored_original) = pg_loader
@@ -452,11 +514,16 @@ impl MovePackage {
 
     /// Construct a GraphQL representation of a `MovePackage` from its representation in the
     /// database.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) fn from_stored(
         scope: Scope,
         stored: StoredPackage,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+        if scope
+            .checkpoint_viewed_at()
+            .is_none_or(|cp| stored.cp_sequence_number as u64 > cp)
+        {
             return Ok(None);
         }
 
@@ -467,7 +534,7 @@ impl MovePackage {
             return Ok(None);
         };
 
-        let super_ = Object::from_contents(scope, Arc::new(native));
+        let super_ = Object::from_contents(scope, native);
         Ok(Some(Self {
             super_,
             native: package,
@@ -476,6 +543,8 @@ impl MovePackage {
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
     /// any package on-chain that has that original ID.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_by_version(
         ctx: &Context<'_>,
         scope: Scope,
@@ -484,6 +553,10 @@ impl MovePackage {
         filter: VersionFilter,
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
+
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
         let mut conn = Connection::new(false, false);
 
@@ -502,12 +575,12 @@ impl MovePackage {
 
         // The original ID record exists but points to a package that is not visible at the
         // checkpoint being viewed.
-        if original_id.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+        if original_id.cp_sequence_number as u64 > checkpoint_viewed_at {
             return Ok(conn);
         }
 
         let mut query = p::kv_packages
-            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(p::cp_sequence_number.le(checkpoint_viewed_at as i64))
             .filter(p::original_id.eq(original_id.original_id))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
@@ -559,7 +632,8 @@ impl MovePackage {
         conn.has_next_page = next;
 
         for (cursor, stored) in results {
-            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
+            let scope = scope.with_root_version(stored.package_version as u64);
+            if let Some(object) = Self::from_stored(scope, stored)? {
                 conn.edges.push(Edge::new(cursor.encode_cursor(), object));
             }
         }
@@ -568,6 +642,8 @@ impl MovePackage {
     }
 
     /// Paginate through all packages published in a range of checkpoints.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate_by_checkpoint(
         ctx: &Context<'_>,
         scope: Scope,
@@ -576,12 +652,16 @@ impl MovePackage {
     ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
+
         let mut conn = Connection::new(false, false);
 
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
-            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(p::cp_sequence_number.le(checkpoint_viewed_at as i64))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
 

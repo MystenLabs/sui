@@ -146,14 +146,14 @@ async fn get_service_info(
     let Some(checkpoint) = client.get_latest_checkpoint_summary().await? else {
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
-    Ok(GetServiceInfoResponse {
-        chain_id: Some(Digest::new(chain_id.as_bytes().to_owned()).to_string()),
-        chain: Some(chain_id.chain().as_str().into()),
-        epoch: Some(checkpoint.epoch),
-        checkpoint_height: Some(checkpoint.sequence_number),
-        timestamp: Some(timestamp_ms_to_proto(checkpoint.timestamp_ms)),
-        lowest_available_checkpoint: Some(0),
-        lowest_available_checkpoint_objects: Some(0),
-        server: server_version.as_ref().map(ToString::to_string),
-    })
+    let mut message = GetServiceInfoResponse::default();
+    message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
+    message.chain = Some(chain_id.chain().as_str().into());
+    message.epoch = Some(checkpoint.epoch);
+    message.checkpoint_height = Some(checkpoint.sequence_number);
+    message.timestamp = Some(timestamp_ms_to_proto(checkpoint.timestamp_ms));
+    message.lowest_available_checkpoint = Some(0);
+    message.lowest_available_checkpoint_objects = Some(0);
+    message.server = server_version.as_ref().map(ToString::to_string);
+    Ok(message)
 }

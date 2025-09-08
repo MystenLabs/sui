@@ -18,11 +18,10 @@ echo 'Setup Complete'
 /usr/local/bin/stress \
     --staggered-start-max-multiplier "${STRESS_STAGGERED_START_MAX_MULTIPLIER:-0}" \
     --fullnode-rpc-addresses "${FULLNODE_RPC_ADDRESS}" \
-    --use-fullnode-for-reconfig "${USE_FULLNODE_FOR_RECONFIG}" \
+    --use-fullnode-for-execution true \
     --num-client-threads 24 \
     --num-server-threads 1 \
     --num-transfer-accounts 2 \
-    --local false \
     --primary-gas-owner-id "${PRIMARY_GAS_OWNER}" \
     --genesis-blob-path ${GENESIS_BLOB_PATH} \
     --keystore-path ${KEYSTORE_PATH} \

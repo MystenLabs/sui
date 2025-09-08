@@ -3,11 +3,9 @@ title: Trustless Swap
 description: An app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 effort: large
 keywords: [ trustless, swap, atomic swaps, shared objects, composability, example app, example dApp, example swap, swap example, how to swap tokens  ]
-mdx:
-  format: md
 ---
 
-{@include: ../../../snippets/app-examples-swap-source.mdx}
+<ImportContent source="app-examples-swap-source.mdx" mode="snippet" />
 
 This guide demonstrates how to make an app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 
@@ -37,7 +35,7 @@ Before getting started, make sure you have:
 - [Acquired Devnet or Testnet](../getting-started/get-coins.mdx) tokens for development purposes.
   :::tip
       
-  {@include: ../../../snippets/faucet-online.mdx}
+  <ImportContent source="faucet-online.mdx" mode="snippet" />
 
   :::
 - Read the basics of [object ownership](../sui-101/object-ownership.mdx).
@@ -69,7 +67,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 :::
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/Move.toml}
+<ImportContent source="examples/trading/contracts/escrow/Move.toml" mode="code"  />
 
 ### `Locked` and `Key`
 
@@ -89,7 +87,7 @@ Click the titles at the top of codeblocks to open the relevant source file in Gi
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code"  />
 
 </details>
 
@@ -103,7 +101,7 @@ This is done by requiring that an object that is available for trading is **lock
 
 To tamper with the object would require unlocking it, which consumes the key. Consequently, there would no longer be a key to finish the trade.
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#struct=Locked,Key noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" struct="Locked,Key" noComments />
 
 - The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a dynamic object field, so that it is still readable at its own ID off-chain.
 - The corresponding `Key` type only stores its own `id`.
@@ -118,7 +116,7 @@ The lock and key are made single-use by the signatures of the `lock` and `unlock
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="lock" noComments />
 
 </details>
 
@@ -133,9 +131,9 @@ The `unlock` function accepts the `Locked<T>` and `Key` by value (which consumes
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#variable=ELockKeyMismatch noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" variable="ELockKeyMismatch" noComments />
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=unlock noTitle noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="unlock" noTitle noComments />
 
 </details>
 
@@ -158,7 +156,7 @@ Move's type system guarantees that a given `Key` cannot be re-used (because `unl
 
 The test starts with a helper function for creating an object, it doesn't matter what kind of object it is, as long as it has the `store` ability. The test uses `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=test_coin noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="test_coin" noComments />
 
 - All test-related functions and imports are annotated with `#[test_only]` to make sure they don't show up in the published package. This can also be done by separating tests into their own module – e.g. `lock_tests.move` – and marking that module as `#[test_only]`.
 - The `test_scenario` module is used to provide access to a `&mut TxContext` in the test (necessary for creating new objects). Tests that don't need to simulate multiple transactions but still need access to a `TxContext` can use `sui::tx_context::dummy` to create a test context instead.
@@ -166,13 +164,13 @@ The test starts with a helper function for creating an object, it doesn't matter
 The first test works by creating an object to test, locking it and unlocking it – this should finish executing without aborting.
 The last two lines exist to keep the Move compiler happy by cleaning up the test coin and test scenario objects, because values in Move are not implicitly cleaned up unless they have the `drop` ability.
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=test_lock_unlock noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="test_lock_unlock" noComments />
 
 The other test is testing a failure scenario – that an abort happens. It creates two locked objects (this time the values are just `u64`s), and use the key from one to try and unlock the other, which should fail (specified using the `expected_failure` attribute).
 
 Unlike the previous test, the same clean up is not needed, because the code is expected to terminate. Instead, add another abort after the code that you expect to abort (making sure to use a different code for this second abort).
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/lock.move#fun=test_lock_key_mismatch noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="test_lock_key_mismatch" noComments />
 
 :::tip Additional resources
 
@@ -216,7 +214,7 @@ Create a new file in your `escrow` folder titled `shared.move`. The code in this
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" noComments />
 
 </details>
 
@@ -228,7 +226,7 @@ Trading proceeds in three steps:
 
 You can start by implementing steps two and three, by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it's an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#struct=Escrow noComments singleSpace}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" struct="Escrow" noComments singleSpace />
 
 You also need to create a function for creating the `Escrow` object. The object is shared because it needs to be accessed by the address that created it (in case the object needs to be returned) and by the intended recipient (to complete the swap).
 
@@ -240,7 +238,7 @@ You also need to create a function for creating the `Escrow` object. The object 
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#noemit noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" tag="noemit"  noComments />
 
 </details>
 
@@ -257,7 +255,7 @@ If the second party stops responding, the first party can unlock their object. Y
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=return_to_sender noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" fun="return_to_sender" noComments />
 
 </details>
 
@@ -276,9 +274,9 @@ Finally, you need to add a function to allow the first party to complete the tra
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#variable=EMismatchedSenderRecipient,EMismatchedExchangeObject singleSpace noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" variable="EMismatchedSenderRecipient,EMismatchedExchangeObject" singleSpace noComments />
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=swap noComments noTitle}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" fun="swap" noComments noTitle />
 
 </details>
 
@@ -300,29 +298,29 @@ The guide focuses on the test for a successful swap, but you can find a link to 
 
 As with the lock test, start by creating a function to mint a test coin. You also create some constants to represent our transaction senders, `ALICE`, `BOB`, and `DIANE`.
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=test_coin noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" fun="test_coin" noComments />
 
 The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address you pass to `begin`, because you pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#test}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" tag="test"  />
 
 The first transaction is from `BOB` who creates a coin and locks it. You must remember the ID of the coin and the ID of the key, which you will need later, and then you transfer the locked object and the key itself to `BOB`, because this is what would happen in a real transaction: When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
 
 Write these transactions inside the `test_successful_swap` function, between the call to `begin` and `end`.
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#variable=i2 noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" variable="i2" noComments />
 
 Next, `ALICE` comes along and sets up the `Escrow`, which locks their coin. They register their interest for `BOB'`s coin by referencing `BOB`'s key's ID (`ik2`):
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#variable=i1 noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" variable="i1" noComments />
 
 Finally, `BOB` completes the trade by calling `swap`. The `take_shared` function is used to simulate accepting a shared input. It uses type inference to know that the object must be an `Escrow`, and finds the last object of this type that was shared (by `ALICE` in the previous transaction). Similarly, use `take_from_sender` to simulate accepting owned inputs (in this case, `BOB`'s lock and key). The coin returned by `swap` is transferred back to `BOB`, as if it was called as part of a PTB, followed by a transfer command.
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#bob noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" tag="bob"  noComments />
 
 The rest of the test is designed to check that `ALICE` has `BOB`'s coin and vice versa. It starts by calling `next_tx` to make sure the effects of the previous transaction have been committed, before running the necessary checks.
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#finish noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" tag="finish"  noComments />
 
 :::tip Additional resources
 
@@ -338,7 +336,7 @@ The `escrow` Move package is now functional: You could publish it on chain and p
 
 Querying `Escrow` objects by their sender or recipient requires custom indexing, and to make it easy for the indexer to spot relevant transactions, add the following **events** to `escrow.move`:
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#struct=EscrowCreated,EscrowSwapped,EscrowCancelled noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" struct="EscrowCreated,EscrowSwapped,EscrowCancelled" noComments />
 
 Functions responsible for various aspects of the escrow's lifecycle emit these events. The custom indexer can then subscribe to transactions that emit these events and process only those, rather than the entire chain state:
 
@@ -350,9 +348,9 @@ Functions responsible for various aspects of the escrow's lifecycle emit these e
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#use=sui::event}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" dep="sui::event"  />
 
-{@inject:  ../../../../../examples/trading/contracts/escrow/sources/shared.move#fun=create,swap,return_to_sender noTitle noComments}
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" fun="create,swap,return_to_sender" noTitle noComments />
 
 </details>
 
@@ -407,13 +405,13 @@ The indexer is backed by a Prisma DB with the following schema:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/api/prisma/schema.prisma}
+<ImportContent source="examples/trading/api/prisma/schema.prisma" mode="code"  />
 
 </details>
 
 The core of the indexer is an event loop, initialized in a function called `setupListeners`.
 
-{@inject:  ../../../../../examples/trading/api/indexer.ts}
+<ImportContent source="examples/trading/api/indexer.ts" mode="code"  />
 
 The indexer queries events related to the `escrow` module, using a `queryEvent` filter, and keeps track of a cursor representing the latest event it has processed so it can resume indexing from the right place even if it is restarted. The filter is looking for any events whose type is from the `escrow` module of the Move package (see the `event-indexer.ts` code that follows).
 
@@ -427,7 +425,7 @@ The core event job works by polling: It queries RPC for events following its lat
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/api/indexer/event-indexer.ts}
+<ImportContent source="examples/trading/api/indexer/event-indexer.ts" mode="code"  />
 
 </details>
 
@@ -441,7 +439,7 @@ The callback is responsible for reading the event and updating the database acco
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/api/indexer/escrow-handler.ts}
+<ImportContent source="examples/trading/api/indexer/escrow-handler.ts" mode="code"  />
 
 </details>
 
@@ -469,11 +467,11 @@ You want your API to accept the query string in the URL as the parameters for da
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#enum=WhereParamTypes}
+<ImportContent source="examples/trading/api/utils/api-queries.ts" mode="code" enumeration="WhereParamTypes"  />
 
-{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#type=WhereParam noTitle}
+<ImportContent source="examples/trading/api/utils/api-queries.ts" mode="code" type="WhereParam"  noTitle />
 
-{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#variable=parseWhereStatement noTitle}
+<ImportContent source="examples/trading/api/utils/api-queries.ts" mode="code" variable="parseWhereStatement" noTitle />
 
 </details>
 
@@ -492,9 +490,9 @@ In this example, the `id` field of the model in the database as the cursor that 
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#type=ApiPagination}
+<ImportContent source="examples/trading/api/utils/api-queries.ts" mode="code" type="ApiPagination"  />
 
-{@inject:  ../../../../../examples/trading/api/utils/api-queries.ts#variable=parsePaginationForQuery noTitle}
+<ImportContent source="examples/trading/api/utils/api-queries.ts" mode="code" variable="parsePaginationForQuery" noTitle />
 
 </details>
 
@@ -515,7 +513,7 @@ You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, an
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/api/server.ts}
+<ImportContent source="examples/trading/api/server.ts" mode="code"  />
 
 </details>
 
@@ -537,7 +535,7 @@ Deployment instructions
 
 </summary>
 
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
 Next, configure the Sui CLI to use `testnet` as the active environment. 
 
@@ -620,7 +618,7 @@ In this final part of the app example, you build a frontend (UI) that allows end
 
 ### Prerequisites
 
-{@include: ../../../snippets/app-examples-swap-source.mdx}
+<ImportContent source="app-examples-swap-source.mdx" mode="snippet" />
 
 Before getting started, make sure you have:
 
@@ -683,7 +681,7 @@ Replace the content of `tsconfig.json` with the following:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/tsconfig.json}
+<ImportContent source="examples/trading/frontend/tsconfig.json" mode="code"  />
 
 </details>
 
@@ -697,7 +695,7 @@ Replace the content of `vite.config.ts` with the following:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/vite.config.ts}
+<ImportContent source="examples/trading/frontend/vite.config.ts" mode="code"  />
 
 </details>
 
@@ -738,7 +736,7 @@ Replace the content of `tailwind.config.js` with the following:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/tailwind.config.js}
+<ImportContent source="examples/trading/frontend/tailwind.config.js" mode="code"  />
 
 </details>
 
@@ -750,7 +748,7 @@ Add the `src/styles/` directory and add `base.css`:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/styles/base.css}
+<ImportContent source="examples/trading/frontend/src/styles/base.css" mode="code"  />
 
 </details>
 
@@ -766,7 +764,7 @@ Then, create a `src/constants.ts` file and fill it with the following:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/constants.ts}
+<ImportContent source="examples/trading/frontend/src/constants.ts" mode="code"  />
 
 </details>
 
@@ -786,7 +784,7 @@ Create a `src/utils/` directory and add the following file:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/utils/helpers.ts}
+<ImportContent source="examples/trading/frontend/src/utils/helpers.ts" mode="code"  />
 
 </details>
 
@@ -800,7 +798,7 @@ Create a `src/components/` directory and add the following components:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/ExplorerLink.tsx}
+<ImportContent source="examples/trading/frontend/src/components/ExplorerLink.tsx" mode="code"  />
 
 </details>
 
@@ -812,7 +810,7 @@ Create a `src/components/` directory and add the following components:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/InfiniteScrollArea.tsx}
+<ImportContent source="examples/trading/frontend/src/components/InfiniteScrollArea.tsx" mode="code"  />
 
 </details>
 
@@ -824,7 +822,7 @@ Create a `src/components/` directory and add the following components:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/Loading.tsx}
+<ImportContent source="examples/trading/frontend/src/components/Loading.tsx" mode="code"  />
 
 </details>
 
@@ -836,7 +834,7 @@ Create a `src/components/` directory and add the following components:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/SuiObjectDisplay.tsx}
+<ImportContent source="examples/trading/frontend/src/components/SuiObjectDisplay.tsx" mode="code"  />
 
 </details>
 
@@ -891,7 +889,7 @@ Then, create a `src/routes/` directory and add `index.tsx`. This file contains t
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/routes/index.tsx}
+<ImportContent source="examples/trading/frontend/src/routes/index.tsx" mode="code"  />
 
 </details>
 
@@ -905,7 +903,7 @@ Add the following respective files to the `src/routes/` directory:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/routes/root.tsx}
+<ImportContent source="examples/trading/frontend/src/routes/root.tsx" mode="code"  />
 
 </details>
 
@@ -957,7 +955,7 @@ Update `src/main.tsx` by replacing the `App` component with the `RouterProvider`
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/main.tsx}
+<ImportContent source="examples/trading/frontend/src/main.tsx" mode="code"  />
 
 </details>
 
@@ -1068,7 +1066,7 @@ All the type definitions are in `src/types/types.ts`. Create this file and add t
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/types/types.ts}
+<ImportContent source="examples/trading/frontend/src/types/types.ts" mode="code"  />
 
 </details>
 
@@ -1220,7 +1218,7 @@ Create `src/hooks/useTransactionExecution.ts`:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/hooks/useTransactionExecution.ts}
+<ImportContent source="examples/trading/frontend/src/hooks/useTransactionExecution.ts" mode="code"  />
 
 </details>
 
@@ -1246,7 +1244,7 @@ Create `src/mutations/demo.ts`:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/mutations/demo.ts}
+<ImportContent source="examples/trading/frontend/src/mutations/demo.ts" mode="code"  />
 
 </details>
 
@@ -1268,7 +1266,7 @@ Now the logic to create a dummy bear object exists. You just need to attach it i
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/Header.tsx}
+<ImportContent source="examples/trading/frontend/src/components/Header.tsx" mode="code"  />
 
 </details>
 
@@ -1342,7 +1340,7 @@ Update `src/components/locked/LockOwnedObjects.tsx` to include the `useLockObjec
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
+<ImportContent source="examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx" mode="code"  />
 
 </details>
 
@@ -1370,7 +1368,7 @@ Let's take a look at the **My Locked Objects** tab by examining `src/components/
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/locked/OwnedLockedList.tsx}
+<ImportContent source="examples/trading/frontend/src/components/locked/OwnedLockedList.tsx" mode="code"  />
 
 </details>
 
@@ -1388,7 +1386,7 @@ The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is m
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/locked/LockedObject.tsx}
+<ImportContent source="examples/trading/frontend/src/components/locked/LockedObject.tsx" mode="code"  />
 
 </details>
 
@@ -1489,7 +1487,7 @@ Update `src/routes/LockedDashboard.tsx` to include the `OwnedLockedList` compone
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/routes/LockedDashboard.tsx}
+<ImportContent source="examples/trading/frontend/src/routes/LockedDashboard.tsx" mode="code"  />
 
 </details>
 
@@ -1517,7 +1515,7 @@ Unlocking owned objects is another crucial and complex on-chain action in this a
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/mutations/locked.ts}
+<ImportContent source="examples/trading/frontend/src/mutations/locked.ts" mode="code"  />
 
 </details>
 
@@ -1725,7 +1723,7 @@ Add `src/components/locked/ApiLockedList.tsx`:
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
+<ImportContent source="examples/trading/frontend/src/components/locked/ApiLockedList.tsx" mode="code"  />
 
 </details>
 
@@ -1741,7 +1739,7 @@ Add `src/hooks/useGetLockedObject.ts`
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/hooks/useGetLockedObject.ts}
+<ImportContent source="examples/trading/frontend/src/hooks/useGetLockedObject.ts" mode="code"  />
 
 </details>
 
@@ -1821,7 +1819,7 @@ Update `src/components/locked/partials/Locked.tsx` to include the `useCreateEscr
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/locked/partials/Locked.tsx}
+<ImportContent source="examples/trading/frontend/src/components/locked/partials/Locked.tsx" mode="code"  />
 
 </details>
 
@@ -1833,7 +1831,7 @@ Add `src/components/escrows/CreateEscrow.tsx`
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
+<ImportContent source="examples/trading/frontend/src/components/escrows/CreateEscrow.tsx" mode="code"  />
 
 </details>
 
@@ -2111,7 +2109,7 @@ Add `src/components/escrows/EscrowList.tsx`
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/escrows/EscrowList.tsx}
+<ImportContent source="examples/trading/frontend/src/components/escrows/EscrowList.tsx" mode="code"  />
 
 </details>
 
@@ -2376,7 +2374,7 @@ Update `src/components/escrows/Escrow.tsx` to include the `useAcceptEscrowMutati
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/components/escrows/Escrow.tsx}
+<ImportContent source="examples/trading/frontend/src/components/escrows/Escrow.tsx" mode="code"  />
 
 </details>
 
@@ -2388,7 +2386,7 @@ Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component
 
 </summary>
 
-{@inject:  ../../../../../examples/trading/frontend/src/routes/EscrowDashboard.tsx}
+<ImportContent source="examples/trading/frontend/src/routes/EscrowDashboard.tsx" mode="code"  />
 
 </details>
 

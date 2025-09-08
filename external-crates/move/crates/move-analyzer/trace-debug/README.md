@@ -34,15 +34,15 @@ If you plan to use the Trace Debugging Extension by itself, you need to generate
 
 Once the `sui` binary is installed, you generate traces for all test files in a given package, as well as disassembled bytecode for all the modules (to support disassembly view) by running the following command in the package's root directory:
 ```shell
-sui move test --trace-execution
+sui move test --trace
 ```
 
 You can limit trace generation to the tests whose name contains a filter string by passing this string as an additional argument to the trace generation command:
 ```shell
-sui move test FILTER_STRING --trace-execution
+sui move test FILTER_STRING --trace
 ```
 
-While this extension is geared towards being used with Sui, you can also use it to trace-debug programs written in other Move flavors. In particular, you can use it with "vanilla" Move flavor available via Move CLI (instead of Sui CLI). You need to build Move CLI with the `--features tracing` flag and, simlarly to how you generate traces with Sui CLI, execute    `move test --trace-execution` in the root directory of the package you want to trace-debug.
+While this extension is geared towards being used with Sui, you can also use it to trace-debug programs written in other Move flavors. In particular, you can use it with "vanilla" Move flavor available via Move CLI (instead of Sui CLI). You need to build Move CLI with the `--features tracing` flag and, simlarly to how you generate traces with Sui CLI, execute    `move test --trace` in the root directory of the package you want to trace-debug.
 
 ## Trace-debugging a test
 

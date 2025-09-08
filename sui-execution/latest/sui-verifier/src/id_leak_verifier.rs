@@ -66,6 +66,11 @@ const OBJECT_NEW_UID_FROM_HASH: FunctionIdent = (
     OBJECT_MODULE_NAME,
     ident_str!("new_uid_from_hash"),
 );
+const OBJECT_NEW_DERIVED: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    ident_str!("derived_object"),
+    ident_str!("claim"),
+);
 const TS_NEW_OBJECT: FunctionIdent = (
     &SUI_FRAMEWORK_ADDRESS,
     ident_str!(TEST_SCENARIO_MODULE_NAME),
@@ -104,7 +109,12 @@ const SUI_ACCUMULATOR_CREATE: FunctionIdent = (
     ACCUMULATOR_MODULE_NAME,
     ident_str!("create"),
 );
-const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
+const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[
+    OBJECT_NEW,
+    OBJECT_NEW_UID_FROM_HASH,
+    OBJECT_NEW_DERIVED,
+    TS_NEW_OBJECT,
+];
 const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_SYSTEM_CREATE,
     SUI_CLOCK_CREATE,
@@ -359,9 +369,14 @@ fn pack(
         let msg = format!(
             "Invalid object creation in {cur_package}::{cur_module}::{cur_function}. \
                 Object created without a newly created UID. \
-                The UID must come directly from sui::{}::{}. \
-                Or for tests, it can come from sui::{}::{}",
-            OBJECT_NEW.1, OBJECT_NEW.2, TS_NEW_OBJECT.1, TS_NEW_OBJECT.2,
+                The UID must come directly from `sui::{}::{}`, or `sui::{}::{}`. \
+                For tests, it can also come from `sui::{}::{}`",
+            OBJECT_NEW.1,
+            OBJECT_NEW.2,
+            OBJECT_NEW_DERIVED.1,
+            OBJECT_NEW_DERIVED.2,
+            TS_NEW_OBJECT.1,
+            TS_NEW_OBJECT.2
         );
 
         return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)

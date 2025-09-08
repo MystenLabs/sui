@@ -129,7 +129,7 @@ fun coin_tests_mint() {
 #[test]
 fun deny_list_v1() {
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -179,7 +179,7 @@ fun deny_list_v1() {
 #[test]
 fun deny_list_v1_double_add() {
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -214,7 +214,7 @@ fun deny_list_v1_double_add() {
 fun deny_list_v2() {
     use sui::coin::{deny_list_v2_add as add, deny_list_v2_remove as remove};
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -291,7 +291,7 @@ fun deny_list_v2_global_pause() {
         deny_list_v2_disable_global_pause as disable_global_pause,
     };
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -363,7 +363,7 @@ fun deny_list_v2_global_pause() {
 fun deny_list_v2_double_add() {
     use sui::coin::{deny_list_v2_add as add, deny_list_v2_remove as remove};
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -399,7 +399,7 @@ fun deny_list_v2_double_add() {
 #[test, expected_failure(abort_code = sui::coin::EGlobalPauseNotAllowed)]
 fun deny_list_v2_global_pause_not_allowed_enable() {
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -421,7 +421,7 @@ fun deny_list_v2_global_pause_not_allowed_enable() {
 #[test, expected_failure(abort_code = sui::coin::EGlobalPauseNotAllowed)]
 fun deny_list_v2_global_pause_not_allowed_disable() {
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -443,7 +443,7 @@ fun deny_list_v2_global_pause_not_allowed_disable() {
 #[test]
 fun migrate_regulated_currency_to_v2() {
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -507,7 +507,7 @@ fun migrate_regulated_currency_to_v2() {
 #[test, expected_failure(abort_code = sui::coin::EGlobalPauseNotAllowed)]
 fun migrate_regulated_currency_to_v2_disallow_global_pause() {
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};
@@ -558,7 +558,7 @@ fun migrate_regulated_currency_to_v2_disallow_global_pause() {
 fun deny_list_v2_add_remove() {
     use sui::coin::{deny_list_v2_add as add, deny_list_v2_remove as remove};
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(TEST_ADDR);
 
     let witness = COIN_TESTS {};

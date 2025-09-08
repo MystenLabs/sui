@@ -2,8 +2,6 @@
 title: Getting Started
 description: Get started with Sui, the first internet-scale programmable blockchain platform.
 keywords: [ install sui, sui data, move, move ides, get started, how to get started, connect to a network, get SUI, sui tokens ]
-mdx:
-  format: md
 pagination_prev: null
 ---
 
@@ -14,7 +12,7 @@ Before you can get started developing on Sui, you need to understand the code re
 
 ## Install Sui 
 
-{@include: ../../snippets/quick-install.mdx}
+<ImportContent source="quick-install.mdx" mode="snippet" />
 
 You can also install Sui from binaries or from source, as detailed in the Install Sui page.
 
@@ -30,7 +28,9 @@ After you have Sui installed on your system, you can begin to connect with a net
 - [Get SUI Coins](./getting-started/get-coins.mdx)
 
 :::tip
-{@include: ../../snippets/faucet-online.mdx}
+
+<ImportContent source="faucet-online.mdx" mode="snippet" />
+
 :::
 
 
@@ -61,7 +61,7 @@ Some plugins might not yet provide highlighting support for [Move 2024](./advanc
 
 After installing Sui and setting up your development environment, use the information in the following sections to continue your development journey.
 
-- [App Examples](./app-examples.mdx): A mix of end-to-end examples that you can draw inspiration from in your own projects.
-- [Sui 101](./sui-101.mdx): Topics that you should know when just starting out to develop on Sui.
-- [Advanced Topics](./advanced.mdx): Topics that you might not find beneficial until you start solving more complex problems.
-- [Cryptography](./cryptography.mdx): Leverage cryptography functions to provide security for your smart contract actions. 
+<RelatedLink to="/guides/developer/app-examples.mdx" />
+<RelatedLink to="/guides/developer/sui-101.mdx" />
+<RelatedLink to="/guides/developer/advanced.mdx" />
+<RelatedLink to="/guides/developer/cryptography.mdx" />

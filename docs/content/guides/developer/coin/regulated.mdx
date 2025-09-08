@@ -2,8 +2,6 @@
 title: Regulated Coin and Deny List
 description: You can create regulated coins on Sui, such as stablecoins. These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list.
 keywords: [ regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, SUI token standards ]
-mdx:
-  format: md
 ---
 
 You can create regulated coins on Sui, such as [stablecoins](../stablecoins.mdx). These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list. 
@@ -73,7 +71,7 @@ The example uses a single file to create the smart contract for the project (`re
 
 </summary>
 
-{@inject: ../../../../../examples/regulated-coin/move/sources/regulated_coin.move}
+<ImportContent source="examples/regulated-coin/move/sources/regulated_coin.move" mode="code" />
 
 </details>
 
@@ -87,13 +85,13 @@ The TypeScript and Rust clients handle the call to the `coin` package's `mint` f
 
 <TabItem label="TypeScript" value="typescript">
 
-{@inject: ../../../../../examples/regulated-coin/ts-client/src/main.ts#mint}
+<ImportContent source="examples/regulated-coin/ts-client/src/main.ts" mode="code" tag="mint" />
 
 </TabItem>
 
 <TabItem label="Rust" value="rust">
 
-{@inject: ../../../../../examples/regulated-coin/rust-client/src/tx_run/coin.rs#mint}
+<ImportContent source="examples/regulated-coin/rust-client/src/tx_run/coin.rs" mode="code" tag="mint" />
 
 </TabItem>
 
@@ -109,7 +107,7 @@ For all `Coin` functions available, see the Sui framework [`coin` module documen
 
 </summary>
 
-{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint" />
 
 </details>
 <details>
@@ -120,7 +118,7 @@ For all `Coin` functions available, see the Sui framework [`coin` module documen
 
 </summary>
 
-{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_balance}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint_balance" />
 
 </details>
 
@@ -132,7 +130,7 @@ For all `Coin` functions available, see the Sui framework [`coin` module documen
 
 </summary>
 
-{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=mint_and_transfer}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint_and_transfer" />
 
 </details>
 
@@ -144,7 +142,7 @@ For all `Coin` functions available, see the Sui framework [`coin` module documen
 
 </summary>
 
-{@inject: ../../../../../crates/sui-framework/packages/sui-framework/sources/coin.move#fun=burn}
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="burn" />
 
 </details>
 
@@ -160,13 +158,13 @@ To use these functions, you pass the address you want to either add or remove. T
 
 <TabItem label="TypeScript" value="typescript">
 
-{@inject: ../../../../../examples/regulated-coin/ts-client/src/main.ts#deny}
+<ImportContent source="examples/regulated-coin/ts-client/src/main.ts" mode="code" tag="deny" />
 
 </TabItem>
 
 <TabItem label="Rust" value="rust">
 
-{@inject: ../../../../../examples/regulated-coin/rust-client/src/tx_run/deny.rs#deny}
+<ImportContent source="examples/regulated-coin/rust-client/src/tx_run/deny.rs" mode="code" tag="deny" />
 
 </TabItem>
 
@@ -174,7 +172,7 @@ To use these functions, you pass the address you want to either add or remove. T
 
 ## Related links
 
-- [Closed Loop Token standard](../../../standards/closed-loop-token.mdx): Details for the standard used to create tokens on Sui.
-- [Source code](https://github.com/MystenLabs/sui/tree/main/examples/regulated-coin): The source code in GitHub for this example.
-- [In-Game Tokens](./in-game-token.mdx): Example of how to create tokens for use as in-game currency.
-- [Loyalty Tokens](./loyalty.mdx): Example of how to create tokens that reward brand or service loyalty on the Sui network.
+<RelatedLink to="/standards/closed-loop-token.mdx" />
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/regulated-coin" label="Source code" desc="The source code in GitHub for this example." />
+<RelatedLink to="/guides/developer/coin/in-game-token.mdx" />
+<RelatedLink to="/guides/developer/coin/loyalty.mdx" />
