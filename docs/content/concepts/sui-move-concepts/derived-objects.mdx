@@ -1,0 +1,176 @@
+---
+title: Derived Objects
+description: Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, creating a per-parent namespace.
+keywords: [ Derived objects, registry, ]
+---
+
+Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, creating a per-parent namespace. This gives you the benefits of a registry (unique slots per key) without storing child objects inside the parent.
+
+Classic registries (dynamic fields) require a parent registry object that owns children. Because mutation of a child typically requires a mutable borrow through the parent, unrelated writes get funneled through the parent. This can create a contention/consensus hotspot if the parent is shared.
+
+Derived objects keep the namespace (parent+key) but the derived object is a top-level object (not stored in the parent). It can be owned (fast path), shared, or immutable. You avoid sequencing unrelated mutations through the parent, and still guarantee uniqueness per (parent, key).
+
+**On-chain benefits**
+
+-	Less contention and better parallelism: No parent bottleneck for unrelated keys.
+-	Cheaper when owned: You can make each derived object owned, avoiding shared-object consensus for most operations.
+-	Deterministic uniqueness: One object per (parent, key) without extra bookkeeping.
+-	Top-level ergonomics: Clean capability patterns, Object Display, and simpler permissioning.
+
+**Off-chain benefits**
+
+-	Fewer hops: Clients can compute or look up the derived ID directly instead of going through the parent.
+-	Better discoverability/indexing: Explorers/SDKs can infer or cache by (parent, key); fewer sequential queries.
+-	Lean SDK calls: Compute ID and fetch object, instead of mutably touching a parent.
+
+
+## Derived objects and dynamic fields matrix
+
+The following matrix highlights some of the differences between using dynamic fields versus derived objects. Considering the tradeoffs helps you select the optimum approach for your project.
+
+| Aspect | Derived objects | Dynamic fields |
+| --- | --- | --- |
+| Address predictability | ✅ Yes | ✅ Yes |
+| Parent required? | Only to create | ✅ Yes |
+| Ownership type | Any. Can be wrapped or shared, owned, party, or frozen. | Cannot be independently owned. Owner is always the parent. |
+| Supports receiving objects? | ✅ Yes | ❌ No |
+| Object parallelism | ✅ Yes | Limited. All writes sequenced through parent. |
+| Cost overhead | Double the cost of dynamic fields. Requires UID and dynamic field (to prevent duplicate claims) creation. Receive a rebate upon UID deletion, but no rebate on the dynamic field. | Cheaper and offers full storage rebates on deletion. |
+| Loading type | Static. Direct access after creation. | Dynamic. Transactions happen through the parent. |
+| Supports deletion? | ✅ Yes | ✅ Yes |
+| Supports reclaiming? | ❌ No | ✅ Yes |
+
+## Examples
+
+The following code examples explore the differences between a dynamic field table registry, a registry that uses a pointer, and the derived object approach.
+
+### Classic registry
+
+Perhaps the biggest advantage for classic registries are the straightforward queries. This increased discoverability comes at the cost of parallelization, however, as all operations must go through the parent object.
+
+```move
+const EVaultAlreadyExists: u64 = 0;
+
+public struct VaultRegistry has key {
+  id: UID,
+  vaults: Table<address, Vault>,
+}
+
+public struct Vault has key, store {
+  id: UID,
+}
+
+// Creating a vault goes through the registry and is stored there.
+public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
+  assert!(!registry.vaults.contains(ctx.sender()), EVaultAlreadyExists);
+
+  let vault = Vault {
+    id: object::new(ctx),
+  };
+
+  registry.vaults.add(ctx.sender(), vault);
+}
+
+// Access vault through parent
+public fun receive_from_vault<T key + store>(
+  registry: &mut VaultRegistry,
+  receiving: Receiving<T>,
+  ctx: &mut TxContext,
+): T {
+  let vault = registry.vaults.borrow_mut(ctx.sender());
+
+  let obj = transfer::public_receive(&mut vault.id, receiving);
+
+  obj
+}
+```
+
+### Registry with pointer
+
+If parallelization is an important aspect for your project needs, you could create a registry that uses a pointer. This approach provides good parallelization, but makes discoverability more difficult. To find a vault, you first have to find its pointer.
+
+```move
+const EVaultAlreadyExists: u64 = 0;
+
+public struct VaultRegistry has key {
+  id: UID,
+  vaults: Table<address, Vault>,
+}
+
+public struct Vault has key, store {
+  id: UID,
+}
+
+// Creating a vault goes through the registry but only a pointer to the vault is stored there.
+public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
+  assert!(!registry.vaults.contains(ctx.sender()), EVaultAlreadyExists);
+
+  let vault = Vault {
+    id: object::new(ctx),
+  };
+
+  registry.vaults.add(ctx.sender(), vault.id.to_inner());
+
+  transfer::transfer(vault, ctx.sender());
+}
+
+// Access vault without relying on parent
+public fun receive_from_vault<T key + store>(
+  vault: &mut Vault,
+  receiving: Receiving<T>,
+  ctx: &mut TxContext,
+): T {
+
+  let obj = transfer::public_receive(&mut vault.id, receiving);
+
+  obj
+}
+```
+
+### Derived objects
+
+Using derived objects doesn't require a tradeoff between discoverability and parallelization.  
+
+```move
+const EVaultAlreadyExists: u64 = 0;
+
+public struct VaultRegistry has key {
+  id: UID,
+  vaults: Table<address, Vault>,
+}
+
+public struct Vault has key, store {
+  id: UID,
+}
+
+// Creating a unique soulbound vault from address.
+public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
+  assert!(!derived_objects::exists(&registry.id, ctx.sender()), EVaultAlreadyExists);
+
+  let vault = Vault {
+    id: derived_object::claim(&mut registry.id, ctx.sender()),
+  };
+
+  transfer::transfer(vault, ctx.sender());
+}
+
+// Access vault without relying on parent
+public fun receive_from_vault<T key + store>(
+  vault: &mut Vault,
+  receiving: Receiving<T>,
+): T {
+
+  let obj = transfer::public_receive(&mut vault.id, receiving);
+
+  obj
+}
+
+```
+
+
+
+## Related links
+
+<RelatedLink to="/concepts/dynamic-fields" />
+<RelatedLink to="/concepts/object-ownership" />
+<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/derived_object.move" label="`derived_object` module" desc="The code that defines derived objects on Sui." />
