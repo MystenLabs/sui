@@ -285,6 +285,9 @@ pub enum UserInputError {
 
     #[error("Invalid withdraw reservation: {error}")]
     InvalidWithdrawReservation { error: String },
+
+    #[error("Invalid ping request request: {error}")]
+    InvalidPingRequest { error: String },
 }
 
 #[derive(
