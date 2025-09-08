@@ -236,7 +236,7 @@ impl MoveDatatype {
                 Ok(module
                     .parsed
                     .data_def(&self.name)
-                    .context("Failed to deserialize struct definition")?)
+                    .context("Failed to deserialize datatype definition")?)
             })
             .await
     }

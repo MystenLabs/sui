@@ -106,7 +106,7 @@ impl MoveModule {
         let Some(def) = contents
             .parsed
             .data_def(&name)
-            .context("Failed to get struct definition")?
+            .context("Failed to get datatype definition")?
         else {
             return Ok(None);
         };
