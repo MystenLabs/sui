@@ -86,7 +86,11 @@ fn pipeline(retention_key: RetentionKey) -> Result<String, RpcError<Error>> {
     match (
         retention_key.type_.as_str(),
         retention_key.field.as_str(),
-        retention_key.filter.as_ref().map(|f| f.as_str()),
+        retention_key
+            .filter
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_str()),
     ) {
         ("Query", "transactions", None) => Ok("tx_digests".to_string()),
         ("Query", "transactions", Some("affectedAddresses")) => {
