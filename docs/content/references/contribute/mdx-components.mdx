@@ -165,7 +165,7 @@ Snippets help reduce maintenance and avoid forcing readers off-page for importan
 
 For guides and tutorials that have prerequisite requirements, the prerequisite tab format should be used.
 
-If a guide or tutorial uses the following prerequisites, a reusable snippet can be used:
+If a guide or tutorial uses the following prerequisites: 
 
 ```
 - [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
@@ -175,13 +175,13 @@ If a guide or tutorial uses the following prerequisites, a reusable snippet can 
 - [x] Obtain test tokens. 
 ```
 
-The reusable snippet should be used with:
+Then a reusable snippet can be used:
 
 ```jsx
 <ImportContent source="prerequisites.mdx" mode="snippet" />
 ```
 
-For guides and tutorials that have their own unique prerequisites, the following `Tabs` component with the `className="tabsHeadingCentered--small"` class should be used:
+For guides and tutorials that have their own unique prerequisites, the following `Tabs` component with the `className="tabsHeadingCentered--small"` styling should be used:
 
 ```
 <Tabs className="tabsHeadingCentered--small">
