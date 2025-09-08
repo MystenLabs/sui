@@ -65,7 +65,6 @@ impl<A: Clone> RequestRetrier<A> {
             .reached_validity_threshold()
         {
             Err(TransactionDriverError::InvalidTransaction {
-                local_error: None,
                 submission_non_retriable_errors: aggregate_request_errors(
                     self.non_retriable_errors_aggregator.status_by_authority(),
                 ),
@@ -107,7 +106,6 @@ impl<A: Clone> RequestRetrier<A> {
                 .reached_validity_threshold()
             {
                 return Err(TransactionDriverError::InvalidTransaction {
-                    local_error: None,
                     submission_non_retriable_errors: aggregate_request_errors(
                         self.non_retriable_errors_aggregator.status_by_authority(),
                     ),
