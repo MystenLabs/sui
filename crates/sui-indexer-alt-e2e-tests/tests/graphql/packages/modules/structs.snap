@@ -30,7 +30,6 @@ Response: {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
                 "signature": {
-                  "ref": null,
                   "body": {
                     "datatype": {
                       "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
@@ -47,7 +46,6 @@ Response: {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>",
                 "signature": {
-                  "ref": null,
                   "body": {
                     "datatype": {
                       "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
@@ -79,7 +77,6 @@ Response: {
               "type": {
                 "repr": "address",
                 "signature": {
-                  "ref": null,
                   "body": "address"
                 }
               }
@@ -89,7 +86,6 @@ Response: {
               "type": {
                 "repr": "vector<u8>",
                 "signature": {
-                  "ref": null,
                   "body": {
                     "vector": "u8"
                   }
@@ -101,7 +97,6 @@ Response: {
               "type": {
                 "repr": "u64",
                 "signature": {
-                  "ref": null,
                   "body": "u64"
                 }
               }
@@ -111,7 +106,6 @@ Response: {
               "type": {
                 "repr": "u64",
                 "signature": {
-                  "ref": null,
                   "body": "u64"
                 }
               }
@@ -121,7 +115,6 @@ Response: {
               "type": {
                 "repr": "u64",
                 "signature": {
-                  "ref": null,
                   "body": "u64"
                 }
               }
@@ -173,7 +166,6 @@ Response: {
                       "type": {
                         "repr": "u64",
                         "signature": {
-                          "ref": null,
                           "body": "u64"
                         }
                       }
@@ -202,7 +194,6 @@ Response: {
                       "type": {
                         "repr": "u64",
                         "signature": {
-                          "ref": null,
                           "body": "u64"
                         }
                       }
@@ -226,7 +217,6 @@ Response: {
                       "type": {
                         "repr": "u64",
                         "signature": {
-                          "ref": null,
                           "body": "u64"
                         }
                       }
@@ -236,7 +226,6 @@ Response: {
                       "type": {
                         "repr": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6::M::S",
                         "signature": {
-                          "ref": null,
                           "body": {
                             "datatype": {
                               "package": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6",
@@ -253,7 +242,6 @@ Response: {
                       "type": {
                         "repr": "$0",
                         "signature": {
-                          "ref": null,
                           "body": {
                             "typeParameter": 0
                           }
@@ -272,7 +260,6 @@ Response: {
                       "type": {
                         "repr": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6::M::T<0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6::M::S>",
                         "signature": {
-                          "ref": null,
                           "body": {
                             "datatype": {
                               "package": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6",
