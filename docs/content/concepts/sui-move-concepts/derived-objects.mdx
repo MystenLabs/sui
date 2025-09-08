@@ -4,25 +4,23 @@ description: Derived objects enable you to deterministically compute object IDs 
 keywords: [ Derived objects, registry, ]
 ---
 
-Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, creating a per-parent namespace. This gives you the benefits of a registry (unique slots per key) without storing child objects inside the parent.
+Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, creating a per-parent namespace. This gives you the benefits of a registry (unique slots per key) without storing child objects inside the parent. After creation, you no longer need the parent to interact with derived objects and can use them as inputs to your programmable transaction blocks (PTBs).
 
 Classic registries (dynamic fields) require a parent registry object that owns children. Because mutation of a child typically requires a mutable borrow through the parent, unrelated writes get funneled through the parent. This can create a contention/consensus hotspot if the parent is shared.
 
-Derived objects keep the namespace (parent+key) but the derived object is a top-level object (not stored in the parent). It can be owned (fast path), shared, or immutable. You avoid sequencing unrelated mutations through the parent (for all operations besides creation), while maintaining the guaranteed uniqueness per (parent, key).
+Derived objects keep the parent-key namespace but the derived object is either a wrapped or top-level object (not stored in the parent). It can be owned (fast path), shared, or immutable. You avoid sequencing unrelated mutations through the parent (for all operations besides creation), while maintaining the guaranteed uniqueness per parent-key relationship.
 
 **On-chain benefits**
 
 -	Less contention and better parallelism: No parent bottleneck for unrelated keys.
--	Cheaper when owned: You can make each derived object owned, avoiding shared-object consensus for most operations.
 -	Deterministic uniqueness: One object per (parent, key) without manual bookkeeping.
 -	Top-level object ergonomics: Clean capability patterns, Object Display, and simpler permissioning.
 
 **Off-chain benefits**
 
 -	Fewer hops: Clients can compute or look up the derived ID directly instead of going through the parent.
--	Better discoverability/indexing: Explorers/SDKs can infer or cache by (parent, key); fewer sequential queries.
--	Lean SDK calls: Compute ID and fetch object, instead of mutably touching a parent.
-
+-	Better discoverability/indexing: Explorers/SDKs can infer or cache the parent-key namespace with fewer sequential queries.
+-	Lean SDK calls: Less querying needed, minimizing the SDK codebase and requiring less network traffic.
 
 ## Derived objects and dynamic fields matrix
 
@@ -35,7 +33,6 @@ The following matrix highlights some of the differences between using dynamic fi
 | Ownership type | Any. Can be wrapped or shared, owned, party, or frozen. | Cannot be independently owned. Owner is always the parent. |
 | Supports receiving objects? | ✅ Yes | ❌ No |
 | Object parallelism | ✅ Yes | Limited. All writes sequenced through parent. |
-| Cost overhead | Double the cost of dynamic fields. Requires UID and dynamic field (to prevent duplicate claims) creation. Receive a rebate upon UID deletion, but no rebate on the dynamic field. | Cheaper and offers full storage rebates on deletion. |
 | Loading type | Static. Direct access after creation. | Dynamic. They are loaded through the parent. |
 | Supports deletion? | ✅ Yes | ✅ Yes |
 | Supports reclaiming? | ❌ Currently no | ✅ Yes |
@@ -166,8 +163,6 @@ public fun receive_from_vault<T key + store>(
 }
 
 ```
-
-
 
 ## Related links
 
