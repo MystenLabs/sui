@@ -10,7 +10,7 @@ use sui_types::{
     error::SuiError,
     messages_consensus::ConsensusPosition,
     messages_grpc::{
-        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectedStatus,
+        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawPingType, RawRejectedStatus,
         RawSubmitTxRequest, RawSubmitTxResponse, RawSubmitTxResult, RawValidatorSubmitStatus,
         RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
     },
@@ -186,6 +186,17 @@ pub(crate) struct WaitForEffectsRequest {
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,
+    /// If this is a ping request, then this is the type of ping.
+    pub ping: Option<PingType>,
+}
+
+#[derive(PartialEq)]
+pub(crate) enum PingType {
+    // Testing the time that it takes for the block of the ping transaction to appear as certified via the FastPath.
+    FastPath,
+    // Testing the time that it takes for the block of the ping transaction to appear as certified via the Consensus.
+    // This is useful when want to test the end to end latency from when a block is proposed up to when it comes out of consensus as certified.
+    Consensus,
 }
 
 #[derive(Clone)]
@@ -239,6 +250,15 @@ impl fmt::Debug for WaitForEffectsResponse {
     }
 }
 
+impl From<RawPingType> for PingType {
+    fn from(value: RawPingType) -> Self {
+        match value {
+            RawPingType::FastPath(_) => PingType::FastPath,
+            RawPingType::Consensus(_) => PingType::Consensus,
+        }
+    }
+}
+
 impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
     type Error = SuiError;
 
@@ -257,6 +277,7 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
             consensus_position,
             transaction_digest,
             include_details: value.include_details,
+            ping: value.ping.map(|ping| ping.into()),
         })
     }
 }
@@ -376,6 +397,15 @@ fn try_from_response_rejected(error: Option<SuiError>) -> Result<RawRejectedStat
     Ok(RawRejectedStatus { error })
 }
 
+impl From<PingType> for RawPingType {
+    fn from(value: PingType) -> Self {
+        match value {
+            PingType::FastPath => RawPingType::FastPath(true),
+            PingType::Consensus => RawPingType::Consensus(true),
+        }
+    }
+}
+
 impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
     type Error = SuiError;
 
@@ -394,6 +424,7 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
             consensus_position,
             transaction_digest,
             include_details: value.include_details,
+            ping: value.ping.map(|ping| ping.into()),
         })
     }
 }
