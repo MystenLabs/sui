@@ -368,6 +368,7 @@ impl CheckpointSummary {
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
         randomness_rounds: Vec<RandomnessRound>,
+        checkpoint_artifact_digests: Vec<CheckpointArtifactsDigest>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
 
@@ -382,6 +383,8 @@ impl CheckpointSummary {
             _ => unimplemented!("unrecognized version_specific_data version for CheckpointSummary"),
         };
 
+        let checkpoint_commitments = checkpoint_artifact_digests.into_iter().map(|d| CheckpointCommitment::CheckpointArtifactsDigest(d)).collect();
+
         Self {
             epoch,
             sequence_number,
@@ -392,7 +395,7 @@ impl CheckpointSummary {
             end_of_epoch_data,
             timestamp_ms,
             version_specific_data,
-            checkpoint_commitments: Default::default(),
+            checkpoint_commitments,
         }
     }
 
@@ -966,6 +969,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -1001,6 +1005,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
+            Vec::new(),
             Vec::new(),
         );
 
@@ -1043,6 +1048,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -1082,6 +1088,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
+            Vec::new(),
             Vec::new(),
         )
     }
