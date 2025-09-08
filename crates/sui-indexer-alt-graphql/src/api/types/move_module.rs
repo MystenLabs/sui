@@ -229,9 +229,9 @@ impl MoveModule {
         let enums = if page.is_from_front() {
             enum_range.take(page.limit()).collect()
         } else {
-            let mut es: Vec<_> = enum_range.rev().take(page.limit()).collect();
-            es.reverse();
-            es
+            let mut enums: Vec<_> = enum_range.rev().take(page.limit()).collect();
+            enums.reverse();
+            enums
         };
 
         conn.has_previous_page = enums
