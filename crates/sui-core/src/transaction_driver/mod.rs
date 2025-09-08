@@ -25,11 +25,8 @@ use effects_certifier::*;
 use mysten_metrics::{monitored_future, TxType};
 use parking_lot::Mutex;
 use sui_types::{
-    committee::EpochId,
-    digests::TransactionDigest,
-    error::{SuiError, UserInputError},
-    messages_grpc::RawSubmitTxRequest,
-    transaction::TransactionDataAPI as _,
+    committee::EpochId, digests::TransactionDigest, error::UserInputError,
+    messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
 };
 use tokio::{task::JoinSet, time::sleep};
 use tracing::instrument;
@@ -39,7 +36,6 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
-    transaction_driver::error::AggregatedRequestErrors,
     validator_client_monitor::{ValidatorClientMetrics, ValidatorClientMonitor},
 };
 use sui_config::NodeConfig;
@@ -94,18 +90,8 @@ where
         driver
     }
 
-    #[instrument(level = "error", skip_all, err(level = "info"), fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn drive_transaction(
-        &self,
-        request: SubmitTxRequest,
-        options: SubmitTransactionOptions,
-    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        self.drive_transaction_with_timeout(request, options, None)
-            .await
-    }
-
     #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn drive_transaction_with_timeout(
+    pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
@@ -122,18 +108,12 @@ where
         let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
         let amplification_factor = gas_price / reference_gas_price.max(1);
         if amplification_factor == 0 {
-            return Err(TransactionDriverError::InvalidTransaction {
-                local_error: Some(
-                    SuiError::UserInputError {
-                        error: UserInputError::GasPriceUnderRGP {
-                            gas_price,
-                            reference_gas_price,
-                        },
-                    }
-                    .to_string(),
-                ),
-                submission_non_retriable_errors: AggregatedRequestErrors::default(),
-                submission_retriable_errors: AggregatedRequestErrors::default(),
+            return Err(TransactionDriverError::ValidationFailed {
+                error: UserInputError::GasPriceUnderRGP {
+                    gas_price,
+                    reference_gas_price,
+                }
+                .to_string(),
             });
         }
 
@@ -183,6 +163,7 @@ where
                                 .transaction_retries
                                 .with_label_values(&["failure"])
                                 .observe(attempts as f64);
+                            tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
                             return Err(e);
                         }
                         tracing::info!(
@@ -206,11 +187,17 @@ where
                     .await
                     .unwrap_or_else(|_| {
                         // Timeout occurred, return with latest retriable error if available
-                        Err(TransactionDriverError::TimeoutWithLastRetriableError {
+                        let e = TransactionDriverError::TimeoutWithLastRetriableError {
                             last_error: latest_retriable_error.map(Box::new),
                             attempts,
                             timeout: duration,
-                        })
+                        };
+                        tracing::info!(
+                            "Transaction timed out after {} attempts. Last error: {}",
+                            attempts,
+                            e
+                        );
+                        Err(e)
                     })
             }
             None => retry_loop.await,
