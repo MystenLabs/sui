@@ -5,12 +5,6 @@ description: This example demonstrates how to create three variations of a tic-t
 keywords: [ multisig public key, multisig example, game example, game app, owned objects, shared objects, dynamic object fields, multisig accounts ]
 ---
 
-:::info
-
-You can view the [complete source code for this app example](https://github.com/MystenLabs/sui/tree/main/examples/tic-tac-toe) in the Sui repository.
-
-:::
-
 This guide covers three different implementations of the game tic-tac-toe on Sui. The first example utilizes a centralized admin that owns the board object and marks it on the users’ behalf. The second example utilizes a shared object that both users can mutate. And the third example utilizes a [multisig](https://docs.sui.io/guides/developer/cryptography/multisig), where instead of sharing the game board, it's in a 1-of-2 multisig of both users’ accounts.
 
 The guide is divided into three parts that each cover a different implementation of the tic-tac-toe game board:
@@ -19,6 +13,14 @@ The guide is divided into three parts that each cover a different implementation
 1. [Shared game board](#shared.move): A shared object that allows players to directly update the game board.
 1. [Multisig operated game board](#multisig): A multisig account that acts as the game admin, allowing either player to update the game board directly.
 
+<ImportContent source="prerequisites.mdx" mode="snippet" />
+
+:::info
+
+You can view the [complete source code for this app example](https://github.com/MystenLabs/sui/tree/main/examples/tic-tac-toe) in the Sui repository.
+
+:::
+
 ## What the guide teaches
 
 - **Owned objects:** The guide teaches you how to use [owned objects](../../../concepts/object-ownership/address-owned.mdx), in this case to act as the game board in the centralized and multisig version of tic-tac-toe. Owned objects are objects that are owned by a single account and can only be modified by that account. In this case, the game board is owned by a game admin, who is responsible for updating the board with each player's move.
@@ -26,12 +28,6 @@ The guide is divided into three parts that each cover a different implementation
 - **Multisig accounts:** The guide teaches you how to use [multisig accounts](https://sdk.mystenlabs.com/typescript/cryptography/multisig) to share ownership of the game board between two players. Multisig accounts are accounts that require a certain threshold of signatures to authorize a transaction. In this case, the game board is owned by a 1-of-2 multisig account.
 - **Dynamic object fields:** The guide teaches you how to use dynamic object fields, in this case to transfer the actions of the players to the game board, which will be retrieved by the game admin. See [The Move Book](https://move-book.com/programmability/dynamic-object-fields.html) to learn more about dynamic object fields.
 
-## What you need
-
-Before getting started, make sure you have:
-
-- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
-- Read the basics of [object ownership](../sui-101/object-ownership.mdx).
 
 ## Directory structure
 

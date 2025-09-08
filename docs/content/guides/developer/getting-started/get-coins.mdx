@@ -6,9 +6,39 @@ keywords: [ sui faucet, faucet, token faucet, sui devnet, sui testnet, devnet, t
 
 Sui faucet is a helpful tool where Sui developers can get free test SUI tokens to deploy and interact with their programs on Sui's Devnet and Testnet networks. There is no faucet for Sui Mainnet.
 
-## Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-To request tokens from the faucet, you must own a wallet address that can receive the SUI tokens. See the [Get Sui Address](./get-address.mdx) topic if you don't already have an address or need to create a new one.
+- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
+
+- [x] Set up your Sui account and CLI environment. 
+
+<details className="nudge-details">
+
+<summary>
+
+Create Sui account and setup CLI environment
+
+</summary>
+
+```sh
+$ sui client
+```
+
+If this is the first time running the `sui client` CLI tool, it asks you to provide a Sui full node server URL and a meaningful environment alias. It also generates an address with a random key pair in `sui.keystore` and a config `client.yaml`.
+
+By default, the `client.yaml` and `sui.keystore` files are located in `~/.sui/sui_config`. For more information, refer to the [Sui client CLI tutorial](/references/cli/client.mdx).
+
+If this is not your first time running `sui client`, then you already have a `client.yaml` file in your local environment. If you'd like to create a new address for this tutorial, use the command:
+
+```sh 
+$ sui client new-address ed25519
+```
+
+</details>
+
+</TabItem>
+</Tabs>
 
 ## Request test tokens through the online faucet {#online-faucet}
 

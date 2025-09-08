@@ -12,6 +12,8 @@ The guide is split into two parts:
 1. [Smart Contracts](#smart-contracts): The Move code that sets up the `Counter` structure and logic.
 1. [Frontend](#frontend): A UI that enables users to create, increment, and reset `Counter` objects.
 
+<ImportContent source="prerequisites.mdx" mode="snippet" />
+
 :::tip Additional resources
 
 [Example source code](https://github.com/MystenLabs/sui/blob/60bb8bdc274b9e5706fd916cd84c13f81e832529/sdk/create-dapp/templates/react-e2e-counter)
@@ -22,12 +24,6 @@ The guide is split into two parts:
 
 - **Shared objects:** The guide teaches you how to use [shared objects](../../../concepts/object-ownership/shared.mdx), in this case to create globally accessible `Counter` objects.
 - **Programmable transaction blocks (PTBs):** You learn how to use PTBs to interact with your Move module from your frontend.
-
-## What you need
-
-Before getting started, make sure you have:
-
-- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
 
 ## Directory structure
 
@@ -52,7 +48,7 @@ To begin, create a new folder on your system titled `react-e2e-counter` to hold 
 
 In this part of the guide, you write the Move contracts that create, increment, and reset counters.
 
-### Move.toml
+### `Move.toml`
 
 To begin writing your smart contracts, create a file inside `react-e2e-counter/move/counter` named `Move.toml` and copy the following code into it. This is the package manifest file. If you want to learn more about the structure of the file, see [Package Manifest](https://move-book.com/concepts/manifest.html) in The Move Book.
 
@@ -213,18 +209,23 @@ $ yarn create @mysten/dapp --template react-e2e-counter
 
 :::
 
-### Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-Before getting started, make sure you have:
+- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
 
 - [Deployed the complete `counter` Move module](#smart-contracts) and understand its design.
+
 - Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) to use as the package manager.
+
+</TabItem>
+</Tabs>
 
 :::tip Additional resources
 
-- Tooling: [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
-- Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
+- [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
+- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
 
 :::
 
