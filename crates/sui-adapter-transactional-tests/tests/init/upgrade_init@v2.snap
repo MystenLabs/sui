@@ -25,7 +25,7 @@ Error: task 3, lines 31-31
 
 task 4, lines 33-52:
 //# upgrade --package v1 --upgrade-capability 1,1 --sender A
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 5, line 54:
 //# view-object 4,0

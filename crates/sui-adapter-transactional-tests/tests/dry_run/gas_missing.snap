@@ -55,7 +55,7 @@ task 6, lines 72-75:
 //# programmable --sender A --inputs 100 --dry-run --gas-payment 4,0
 //> 0: test::m::large_storage_func(Input(0));
 // Give A enough gas to send transaction after rebates, it should still fail
-Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 2, needed_gas_amount: 5000000000 }
+Error: Error checking transaction input objects: Balance of gas object 2 is lower than the needed amount: 5000000000
 
 task 7, lines 76-80:
 //# programmable --sender B --inputs 2499999999 @A
@@ -70,14 +70,14 @@ task 8, lines 81-84:
 //# programmable --sender A --inputs 100 --dry-run --gas-payment 7,0 --gas-payment 7,1
 //> 0: test::m::large_storage_func(Input(0));
 // Destroying an object before the transaction ends does not allow the transaction to succeed
-Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 4999999998, needed_gas_amount: 5000000000 }
+Error: Error checking transaction input objects: Balance of gas object 4999999998 is lower than the needed amount: 5000000000
 
 task 9, lines 85-89:
 //# programmable --sender A --inputs object(2,0) 100 --dry-run --gas-payment 7,0 --gas-payment 7,1
 //> 0: test::m::destroy_object(Input(0));
 //> 1: test::m::large_storage_func(Input(1));
 // Include 3,0 in the gas payment, it should succeed
-Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 4999999998, needed_gas_amount: 5000000000 }
+Error: Error checking transaction input objects: Balance of gas object 4999999998 is lower than the needed amount: 5000000000
 
 task 10, lines 90-93:
 //# programmable --sender A --inputs 100 --dry-run --gas-payment 7,0 --gas-payment 7,1 --gas-payment 4,0
@@ -91,7 +91,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 
 task 11, lines 94-96:
 //# programmable --sender A --inputs object(7,0) --dry-run --gas-payment 4,0
 // Return a small amount of coin to A
-Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 2, needed_gas_amount: 5000000000 }
+Error: Error checking transaction input objects: Balance of gas object 2 is lower than the needed amount: 5000000000
 
 task 12, lines 97-101:
 //# programmable --sender B --inputs 2 @A
@@ -115,14 +115,14 @@ task 14, lines 107-110:
 //# programmable --sender A --inputs 100 --dry-run --gas-payment 13,0 --gas-payment 13,1
 //> 0: test::m::large_compute_func(Input(0));
 // Destroying an object before the transaction ends does not allow the transaction to succeed
-Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 4999999998, needed_gas_amount: 5000000000 }
+Error: Error checking transaction input objects: Balance of gas object 4999999998 is lower than the needed amount: 5000000000
 
 task 15, lines 111-115:
 //# programmable --sender A --inputs object(2,0) 100 --dry-run --gas-payment 13,0 --gas-payment 13,1
 //> 0: test::m::destroy_object(Input(0));
 //> 1: test::m::large_compute_func(Input(1));
 // Include 3,0 in the gas payment, it should succeed
-Error: Error checking transaction input objects: GasBalanceTooLow { gas_balance: 4999999998, needed_gas_amount: 5000000000 }
+Error: Error checking transaction input objects: Balance of gas object 4999999998 is lower than the needed amount: 5000000000
 
 task 16, lines 116-117:
 //# programmable --sender A --inputs 100 --dry-run --gas-payment 13,0 --gas-payment 13,1 --gas-payment 12,0

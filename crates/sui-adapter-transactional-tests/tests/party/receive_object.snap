@@ -126,8 +126,8 @@ Contents: ex::m::PubB {
 
 task 13, line 79:
 //# run ex::m::receiver --args object(2,0) receiving(2,5)
-Error: Error checking transaction input objects: NotSharedObjectError
+Error: Error checking transaction input objects: Object used as shared is not shared
 
 task 14, line 81:
 //# run ex::m::receiver --args object(2,1) receiving(2,4)
-Error: Error checking transaction input objects: NotSharedObjectError
+Error: Error checking transaction input objects: Object used as shared is not shared

@@ -67,7 +67,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
 
 task 6, line 20:
 //# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(1,0) 0 @C --sender A
-Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(1,0) is owned by account address @B, but given owner/signer address is @A" }
+Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(1,0) is owned by account address @B, but given owner/signer address is @A
 
 task 7, line 22:
 //# view-object 1,0

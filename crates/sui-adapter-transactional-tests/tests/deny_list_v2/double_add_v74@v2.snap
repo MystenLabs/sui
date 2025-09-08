@@ -40,11 +40,11 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 task 6, lines 59-61:
 //# transfer-object 2,0 --sender B --recipient A
-Error: Error checking transaction input objects: AddressDeniedForCoin { address: @B, coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
 
 task 7, lines 62-64:
 //# run sui::pay::split_and_transfer --args object(2,0) 1 @A --type-args test::regulated_coin::REGULATED_COIN --sender B
-Error: Error checking transaction input objects: AddressDeniedForCoin { address: @B, coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
 
 task 8, lines 65-67:
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A

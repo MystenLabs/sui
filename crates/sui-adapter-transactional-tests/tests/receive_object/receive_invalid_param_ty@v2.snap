@@ -66,7 +66,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 10, line 59:
 //# run tto::M1::receiver6 --args object(2,1)
-Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(2,1) is owned by account address object(2,0), but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e" }
+Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(2,1) is owned by account address object(2,0), but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e
 
 task 11, line 61:
 //# run tto::M1::receiver6 --args object(2,0)
