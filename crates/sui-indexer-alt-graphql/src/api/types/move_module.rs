@@ -140,9 +140,9 @@ impl MoveModule {
         let datatypes = if page.is_from_front() {
             datatype_range.take(page.limit()).collect()
         } else {
-            let mut ss: Vec<_> = datatype_range.rev().take(page.limit()).collect();
-            ss.reverse();
-            ss
+            let mut datatypes: Vec<_> = datatype_range.rev().take(page.limit()).collect();
+            datatypes.reverse();
+            datatypes
         };
 
         conn.has_previous_page = datatypes
