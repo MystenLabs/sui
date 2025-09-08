@@ -273,9 +273,9 @@ impl MoveModule {
         let structs = if page.is_from_front() {
             struct_range.take(page.limit()).collect()
         } else {
-            let mut ss: Vec<_> = struct_range.rev().take(page.limit()).collect();
-            ss.reverse();
-            ss
+            let mut structs: Vec<_> = struct_range.rev().take(page.limit()).collect();
+            structs.reverse();
+            structs
         };
 
         conn.has_previous_page = structs
