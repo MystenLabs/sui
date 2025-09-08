@@ -89,7 +89,7 @@ pub enum UserInputError {
     #[error("Wrong number of parameters for the transaction")]
     ObjectInputArityViolation,
     #[error(
-        "Could not find the referenced object {:?} at version {:?}",
+        "Could not find the referenced object {} at version {:?}",
         object_id,
         version
     )]
@@ -105,25 +105,23 @@ pub enum UserInputError {
         provided_obj_ref: ObjectRef,
         current_version: SequenceNumber,
     },
-    #[error("Package verification failed: {err:?}")]
+    #[error("Package verification failed: {err}")]
     PackageVerificationTimeout { err: String },
-    #[error("Dependent package not found on-chain: {package_id:?}")]
+    #[error("Dependent package not found on-chain: {package_id}")]
     DependentPackageNotFound { package_id: ObjectID },
     #[error("Mutable parameter provided, immutable parameter expected")]
     ImmutableParameterExpectedError { object_id: ObjectID },
     #[error("Size limit exceeded: {limit} is {value}")]
     SizeLimitExceeded { limit: String, value: String },
     #[error(
-        "Object {child_id:?} is owned by object {parent_id:?}. \
+        "Object {child_id} is owned by object {parent_id}. \
         Objects owned by other objects cannot be used as input arguments"
     )]
     InvalidChildObjectArgument {
         child_id: ObjectID,
         parent_id: ObjectID,
     },
-    #[error(
-        "Invalid Object digest for object {object_id:?}. Expected digest : {expected_digest:?}"
-    )]
+    #[error("Invalid Object digest for object {object_id}. Expected digest : {expected_digest}")]
     InvalidObjectDigest {
         object_id: ObjectID,
         expected_digest: ObjectDigest,
@@ -147,14 +145,12 @@ pub enum UserInputError {
     MissingGasPayment,
     #[error("Gas object is not an owned object with owner: {:?}", owner)]
     GasObjectNotOwnedObject { owner: Owner },
-    #[error("Gas budget: {:?} is higher than max: {:?}", gas_budget, max_budget)]
+    #[error("Gas budget: {gas_budget} is higher than max: {max_budget}")]
     GasBudgetTooHigh { gas_budget: u64, max_budget: u64 },
-    #[error("Gas budget: {:?} is lower than min: {:?}", gas_budget, min_budget)]
+    #[error("Gas budget: {gas_budget} is lower than min: {min_budget}")]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than the needed amount: {:?}",
-        gas_balance,
-        needed_gas_amount
+        "Balance of gas object {gas_balance} is lower than the needed amount: {needed_gas_amount}"
     )]
     GasBalanceTooLow {
         gas_balance: u128,
@@ -162,31 +158,27 @@ pub enum UserInputError {
     },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
-    #[error(
-        "Gas price {:?} under reference gas price (RGP) {:?}",
-        gas_price,
-        reference_gas_price
-    )]
+    #[error("Gas price {gas_price} under reference gas price (RGP) {reference_gas_price}")]
     GasPriceUnderRGP {
         gas_price: u64,
         reference_gas_price: u64,
     },
-    #[error("Gas price cannot exceed {:?} mist", max_gas_price)]
+    #[error("Gas price cannot exceed {max_gas_price} mist")]
     GasPriceTooHigh { max_gas_price: u64 },
     #[error("Object {object_id} is not a gas object")]
     InvalidGasObject { object_id: ObjectID },
     #[error("Gas object does not have enough balance to cover minimal gas spend")]
     InsufficientBalanceToCoverMinimalGas,
 
-    #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
+    #[error("Could not find the referenced object {object_id} as the asked version {asked_version:?} is higher than the latest {latest_version:?}")]
     ObjectSequenceNumberTooHigh {
         object_id: ObjectID,
         asked_version: SequenceNumber,
         latest_version: SequenceNumber,
     },
-    #[error("Object deleted at reference {:?}", object_ref)]
+    #[error("Object deleted at reference ({}, {:?}, {})", object_ref.0, object_ref.1, object_ref.2)]
     ObjectDeleted { object_ref: ObjectRef },
-    #[error("Invalid Batch Transaction: {}", error)]
+    #[error("Invalid Batch Transaction: {error}")]
     InvalidBatchTransaction { error: String },
     #[error("This Move function is currently disabled and not available for call")]
     BlockedMoveFunction,
@@ -208,7 +200,7 @@ pub enum UserInputError {
     )]
     EmptyCommandInput,
 
-    #[error("Transaction is denied: {}", error)]
+    #[error("Transaction is denied: {error}")]
     TransactionDenied { error: String },
 
     #[error("Feature is not supported: {0}")]
@@ -236,7 +228,7 @@ pub enum UserInputError {
     TransactionCursorNotFound(u64),
 
     #[error(
-        "Object {:?} is a system object and cannot be accessed by user transactions",
+        "Object {} is a system object and cannot be accessed by user transactions",
         object_id
     )]
     InaccessibleSystemObject { object_id: ObjectID },
@@ -251,7 +243,7 @@ pub enum UserInputError {
     #[error("Immutable parameter provided, mutable parameter expected")]
     MutableParameterExpected { object_id: ObjectID },
 
-    #[error("Address {address:?} is denied for coin {coin_type}")]
+    #[error("Address {address} is denied for coin {coin_type}")]
     AddressDeniedForCoin {
         address: SuiAddress,
         coin_type: String,
@@ -261,28 +253,20 @@ pub enum UserInputError {
     PostRandomCommandRestrictions,
 
     // Soft Bundle related errors
-    #[error(
-        "Number of transactions ({}) exceeds the maximum allowed ({}) in a batch",
-        size,
-        limit
-    )]
+    #[error("Number of transactions ({size}) exceeds the maximum allowed ({limit}) in a batch")]
     TooManyTransactionsInBatch { size: usize, limit: u64 },
     #[error(
-        "Total transactions size ({}) bytes exceeds the maximum allowed ({}) bytes in a Soft Bundle",
-        size, limit
+        "Total transactions size ({size}) bytes exceeds the maximum allowed ({limit}) bytes in a Soft Bundle",
     )]
     TotalTransactionSizeTooLargeInBatch { size: usize, limit: u64 },
-    #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
+    #[error("Transaction {digest} in Soft Bundle contains no shared objects")]
     NoSharedObjectError { digest: TransactionDigest },
-    #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
+    #[error("Transaction {digest} in Soft Bundle has already been executed")]
     AlreadyExecutedInSoftBundleError { digest: TransactionDigest },
     #[error("At least one certificate in Soft Bundle has already been processed")]
     CertificateAlreadyProcessed,
     #[error(
-        "Gas price for transaction {:?} in Soft Bundle mismatch: want {:?}, have {:?}",
-        digest,
-        expected,
-        actual
+        "Gas price for transaction {digest} in Soft Bundle mismatch: want {expected}, have {actual}",
     )]
     GasPriceMismatchError {
         digest: TransactionDigest,
@@ -318,15 +302,12 @@ pub enum UserInputError {
 )]
 #[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
 pub enum SuiObjectResponseError {
-    #[error("Object {:?} does not exist", object_id)]
+    #[error("Object {object_id} does not exist")]
     NotExists { object_id: ObjectID },
-    #[error("Cannot find dynamic field for parent object {:?}", parent_object_id)]
+    #[error("Cannot find dynamic field for parent object {parent_object_id}")]
     DynamicFieldNotFound { parent_object_id: ObjectID },
     #[error(
-        "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
-        object_id,
-        version,
-        digest
+        "Object has been deleted object_id: {object_id} at version: {version:?} in digest {digest}"
     )]
     Deleted {
         object_id: ObjectID,
@@ -337,7 +318,7 @@ pub enum SuiObjectResponseError {
     },
     #[error("Unknown Error")]
     Unknown,
-    #[error("Display Error: {:?}", error)]
+    #[error("Display Error: {error}")]
     DisplayError { error: String },
     // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
 }
@@ -347,10 +328,10 @@ pub enum SuiObjectResponseError {
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
 )]
 pub enum SuiError {
-    #[error("Error checking transaction input objects: {:?}", error)]
+    #[error("Error checking transaction input objects: {error}")]
     UserInputError { error: UserInputError },
 
-    #[error("Error checking transaction object: {:?}", error)]
+    #[error("Error checking transaction object: {error}")]
     SuiObjectResponseError { error: SuiObjectResponseError },
 
     #[error("Expecting a single owner, shared ownership found")]
@@ -459,9 +440,9 @@ pub enum SuiError {
     UnexpectedMessage(String),
 
     // Move module publishing related errors
-    #[error("Failed to verify the Move module, reason: {error:?}.")]
+    #[error("Failed to verify the Move module, reason: {error}.")]
     ModuleVerificationFailure { error: String },
-    #[error("Failed to deserialize the Move module, reason: {error:?}.")]
+    #[error("Failed to deserialize the Move module, reason: {error}.")]
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error}")]
     ModulePublishFailure { error: String },
@@ -469,11 +450,11 @@ pub enum SuiError {
     ModuleBuildFailure { error: String },
 
     // Move call related errors
-    #[error("Function resolution failure: {error:?}.")]
+    #[error("Function resolution failure: {error}.")]
     FunctionNotFound { error: String },
-    #[error("Module not found in package: {module_name:?}.")]
+    #[error("Module not found in package: {module_name}.")]
     ModuleNotFound { module_name: String },
-    #[error("Type error while binding function arguments: {error:?}.")]
+    #[error("Type error while binding function arguments: {error}.")]
     TypeError { error: String },
     #[error("Circular object ownership detected")]
     CircularObjectOwnership,
@@ -549,55 +530,40 @@ pub enum SuiError {
     #[error("DEPRECATED")]
     DEPRECATED_StorageCorruptedFieldError,
 
-    #[error("Authority Error: {error:?}")]
+    #[error("Authority Error: {error}")]
     GenericAuthorityError { error: String },
 
-    #[error("Generic Bridge Error: {error:?}")]
+    #[error("Generic Bridge Error: {error}")]
     GenericBridgeError { error: String },
 
-    #[error("Failed to dispatch subscription: {error:?}")]
+    #[error("Failed to dispatch subscription: {error}")]
     FailedToDispatchSubscription { error: String },
 
-    #[error("Failed to serialize Owner: {error:?}")]
+    #[error("Failed to serialize Owner: {error}")]
     OwnerFailedToSerialize { error: String },
 
-    #[error("Failed to deserialize fields into JSON: {error:?}")]
+    #[error("Failed to deserialize fields into JSON: {error}")]
     ExtraFieldFailedToDeserialize { error: String },
 
-    #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
+    #[error("Failed to execute transaction locally by Orchestrator: {error}")]
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
-    #[error("Failure serializing transaction in the requested format: {:?}", error)]
+    #[error("Failure serializing transaction in the requested format: {error}")]
     TransactionSerializationError { error: String },
-    #[error(
-        "Failure deserializing transaction from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure deserializing transaction from the provided format: {error}")]
     TransactionDeserializationError { error: String },
-    #[error(
-        "Failure serializing transaction effects from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure serializing transaction effects from the provided format: {error}")]
     TransactionEffectsSerializationError { error: String },
-    #[error(
-        "Failure deserializing transaction effects from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure deserializing transaction effects from the provided format: {error}")]
     TransactionEffectsDeserializationError { error: String },
-    #[error(
-        "Failure serializing transaction events from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure serializing transaction events from the provided format: {error}")]
     TransactionEventsSerializationError { error: String },
-    #[error(
-        "Failure deserializing transaction events from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure deserializing transaction events from the provided format: {error}")]
     TransactionEventsDeserializationError { error: String },
-    #[error("Failure serializing object in the requested format: {:?}", error)]
+    #[error("Failure serializing object in the requested format: {error}")]
     ObjectSerializationError { error: String },
-    #[error("Failure deserializing object in the requested format: {:?}", error)]
+    #[error("Failure deserializing object in the requested format: {error}")]
     ObjectDeserializationError { error: String },
     #[error("Event store component is not active on this node")]
     NoEventStore,
@@ -608,7 +574,7 @@ pub enum SuiError {
         errors: Vec<(AuthorityName, SuiError)>,
         action: String,
     },
-    #[error("Invalid transaction range query to the fullnode: {:?}", error)]
+    #[error("Invalid transaction range query to the fullnode: {error}")]
     FullNodeInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
@@ -636,7 +602,7 @@ pub enum SuiError {
     ValidatorHaltedAtEpochEnd,
     #[error("Operations for epoch {0} have ended")]
     EpochEnded(EpochId),
-    #[error("Error when advancing epoch: {:?}", error)]
+    #[error("Error when advancing epoch: {error}")]
     AdvanceEpochError { error: String },
 
     #[error("Transaction Expired")]
@@ -650,10 +616,10 @@ pub enum SuiError {
     #[error("Method not allowed")]
     InvalidRpcMethodError,
 
-    #[error("Use of disabled feature: {:?}", error)]
+    #[error("Use of disabled feature: {error}")]
     UnsupportedFeatureError { error: String },
 
-    #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
+    #[error("Unable to communicate with the Quorum Driver channel: {error}")]
     QuorumDriverCommunicationError { error: String },
 
     #[error("Operation timed out")]
@@ -710,14 +676,14 @@ pub enum SuiError {
     #[error("Nitro attestation verify failed: {0}")]
     NitroAttestationFailedToVerify(String),
 
-    #[error("Failed to serialize {type_info:?}, error: {error:?}")]
+    #[error("Failed to serialize {type_info}, error: {error}")]
     GrpcMessageSerializeError { type_info: String, error: String },
 
-    #[error("Failed to deserialize {type_info:?}, error: {error:?}")]
+    #[error("Failed to deserialize {type_info}, error: {error}")]
     GrpcMessageDeserializeError { type_info: String, error: String },
 
     #[error(
-        "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round:?}, requested round: {round:?}"
+        "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round}, requested round: {round}"
     )]
     ValidatorConsensusLagging {
         round: u32,

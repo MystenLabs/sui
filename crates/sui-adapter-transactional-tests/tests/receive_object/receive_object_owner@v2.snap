@@ -64,8 +64,8 @@ Contents: tto::M1::A {
 
 task 6, lines 39-41:
 //# run tto::M1::receive --args object(2,2) receiving(2,1) --sender A
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(2,1), parent_id: object(2,0) }
+Error: Error checking transaction input objects: Object object(2,1) is owned by object object(2,0). Objects owned by other objects cannot be used as input arguments
 
 task 7, line 42:
 //# run tto::M1::receive --args object(2,2) receiving(2,0) --sender A
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(2,0), parent_id: object(2,2) }
+Error: Error checking transaction input objects: Object object(2,0) is owned by object object(2,2). Objects owned by other objects cannot be used as input arguments

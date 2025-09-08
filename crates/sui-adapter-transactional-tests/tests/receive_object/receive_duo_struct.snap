@@ -63,7 +63,7 @@ task 7, lines 59-63:
 //> 0: tto::M1::make_duo(Input(1), Input(2));
 //> 1: tto::M1::receive_duo(Input(0), Result(0));
 // receive the objects and return them. Then Transfer them with TransferObjects
-Error: Error checking transaction input objects: DuplicateObjectRefInput
+Error: Error checking transaction input objects: The transaction inputs contain duplicated ObjectRef's
 
 task 8, lines 64-67:
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) @tto
