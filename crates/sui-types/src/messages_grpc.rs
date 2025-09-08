@@ -231,6 +231,12 @@ pub struct RawSubmitTxRequest {
     /// out of order in blocks (batch).
     #[prost(bool, tag = "2")]
     pub soft_bundle: bool,
+
+    /// If true, then a request to help perform latency measurement. In this case
+    /// the system will simulate a (ping) transaction submission to consensus and return the consensus position.
+    /// In this case no transactions should be provided as part of the request.
+    #[prost(bool, tag = "3")]
+    pub ping: bool,
 }
 
 #[derive(Clone, prost::Message)]
@@ -261,8 +267,17 @@ pub enum RawValidatorSubmitStatus {
     Rejected(RawRejectedStatus),
 }
 
+#[derive(Clone, prost::Oneof)]
+pub enum RawPingType {
+    #[prost(bool, tag = "5")]
+    FastPath(bool),
+    #[prost(bool, tag = "6")]
+    Consensus(bool),
+}
+
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsRequest {
+    /// The transaction's digest. If it's a ping request, then this will practically be ignored.
     #[prost(bytes = "bytes", tag = "1")]
     pub transaction_digest: Bytes,
 
@@ -276,6 +291,10 @@ pub struct RawWaitForEffectsRequest {
     /// including the effects content, events, input objects, and output objects.
     #[prost(bool, tag = "3")]
     pub include_details: bool,
+
+    /// if this is a ping request, then this is the type of ping.
+    #[prost(oneof = "RawPingType", tags = "5, 6")]
+    pub ping: Option<RawPingType>,
 }
 
 #[derive(Clone, prost::Message)]
