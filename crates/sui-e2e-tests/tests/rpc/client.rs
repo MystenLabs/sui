@@ -108,18 +108,5 @@ async fn get_checkpoint_artifacts() {
         assert!(expected_digest.is_ok());
 
         assert_eq!(artifacts_digest.unwrap(), &expected_digest.unwrap());
-
-        // Write the checkpoint to disk as a one-time hack
-        // Use checkpoint 5 which should have more object modifications
-        // if i == 5 {
-        //     use std::fs;
-        //     let checkpoint_bytes = bcs::to_bytes(&checkpoint).unwrap();
-        //     let output_path = "/tmp/new_cp_with_artifacts.chk";
-        //     fs::write(output_path, &checkpoint_bytes).unwrap();
-        //     println!("Written checkpoint {} with artifacts to {}", i, output_path);
-
-        //     // Debug: print info about this checkpoint
-        //     println!("Written checkpoint {} to disk", i);
-        // }
     }
 }
