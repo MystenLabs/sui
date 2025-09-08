@@ -40,6 +40,8 @@ module P::M {
       T: datatype(name: "T") { ...D }
       V: datatype(name: "V") { ...D }
 
+      doesntExist: datatype(name: "DoesntExist") { ...D }
+
       datatypes {
         nodes { ...D }
       }
@@ -56,4 +58,35 @@ fragment D on MoveDatatype {
   }
 
   asMoveStruct { name }
+}
+
+//# run-graphql --cursors "A" "V"
+{
+  package(address: "@{P}") {
+    module(name: "M") {
+      all: datatypes(first: 10) { ...D }
+
+      first: datatypes(first: 3) { ...D }
+      last: datatypes(last: 3) { ...D }
+
+      firstBefore: datatypes(first: 3, before: "@{cursor_1}") { ...D }
+      lastAfter: datatypes(last: 3, after: "@{cursor_0}") { ...D }
+
+      firstAfter: datatypes(first: 3, after: "@{cursor_0}") { ...D }
+      lastBefore: datatypes(last: 3, before: "@{cursor_1}") { ...D }
+
+      afterBefore: datatypes(after: "@{cursor_0}", before: "@{cursor_1}") { ...D }
+    }
+  }
+}
+
+
+fragment D on MoveDatatypeConnection {
+  pageInfo {
+    hasPreviousPage
+    hasNextPage
+  }
+  nodes {
+    name
+  }
 }

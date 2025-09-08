@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 4 tasks
+processed 5 tasks
 
 init:
 A: object(0,0)
@@ -16,7 +16,7 @@ task 2, line 31:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 33-59:
+task 3, lines 33-61:
 //# run-graphql
 Response: {
   "data": {
@@ -81,6 +81,7 @@ Response: {
           ],
           "asMoveStruct": null
         },
+        "doesntExist": null,
         "datatypes": {
           "nodes": [
             {
@@ -141,6 +142,159 @@ Response: {
                 }
               ],
               "asMoveStruct": null
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 4, lines 63-92:
+//# run-graphql --cursors "A" "V"
+Response: {
+  "data": {
+    "package": {
+      "module": {
+        "all": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            },
+            {
+              "name": "V"
+            }
+          ]
+        },
+        "first": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            }
+          ]
+        },
+        "last": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            },
+            {
+              "name": "V"
+            }
+          ]
+        },
+        "firstBefore": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            }
+          ]
+        },
+        "lastAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            },
+            {
+              "name": "V"
+            }
+          ]
+        },
+        "firstAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            }
+          ]
+        },
+        "lastBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
+            }
+          ]
+        },
+        "afterBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "E"
+            },
+            {
+              "name": "S"
+            },
+            {
+              "name": "T"
             }
           ]
         }
