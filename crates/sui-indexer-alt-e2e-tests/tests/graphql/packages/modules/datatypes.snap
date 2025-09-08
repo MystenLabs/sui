@@ -16,13 +16,13 @@ task 2, line 31:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 33-61:
+task 3, lines 33-68:
 //# run-graphql
 Response: {
   "data": {
     "package": {
       "module": {
-        "A": {
+        "a": {
           "name": "A",
           "abilities": [
             "COPY",
@@ -30,30 +30,35 @@ Response: {
             "STORE"
           ],
           "typeParameters": [],
+          "asMoveEnum": null,
           "asMoveStruct": {
             "name": "A"
           }
         },
-        "E": {
+        "e": {
           "name": "E",
           "abilities": [
             "STORE"
           ],
           "typeParameters": [],
+          "asMoveEnum": {
+            "name": "E"
+          },
           "asMoveStruct": null
         },
-        "S": {
+        "s": {
           "name": "S",
           "abilities": [
             "COPY",
             "DROP"
           ],
           "typeParameters": [],
+          "asMoveEnum": null,
           "asMoveStruct": {
             "name": "S"
           }
         },
-        "T": {
+        "t": {
           "name": "T",
           "abilities": [],
           "typeParameters": [
@@ -64,11 +69,12 @@ Response: {
               "isPhantom": true
             }
           ],
+          "asMoveEnum": null,
           "asMoveStruct": {
             "name": "T"
           }
         },
-        "V": {
+        "v": {
           "name": "V",
           "abilities": [],
           "typeParameters": [
@@ -79,7 +85,18 @@ Response: {
               "isPhantom": false
             }
           ],
+          "asMoveEnum": {
+            "name": "V"
+          },
           "asMoveStruct": null
+        },
+        "aStruct": {
+          "name": "A"
+        },
+        "aEnum": null,
+        "eStruct": null,
+        "eEnum": {
+          "name": "E"
         },
         "doesntExist": null,
         "datatypes": {
@@ -92,6 +109,7 @@ Response: {
                 "STORE"
               ],
               "typeParameters": [],
+              "asMoveEnum": null,
               "asMoveStruct": {
                 "name": "A"
               }
@@ -102,6 +120,9 @@ Response: {
                 "STORE"
               ],
               "typeParameters": [],
+              "asMoveEnum": {
+                "name": "E"
+              },
               "asMoveStruct": null
             },
             {
@@ -111,6 +132,7 @@ Response: {
                 "DROP"
               ],
               "typeParameters": [],
+              "asMoveEnum": null,
               "asMoveStruct": {
                 "name": "S"
               }
@@ -126,6 +148,7 @@ Response: {
                   "isPhantom": true
                 }
               ],
+              "asMoveEnum": null,
               "asMoveStruct": {
                 "name": "T"
               }
@@ -141,6 +164,9 @@ Response: {
                   "isPhantom": false
                 }
               ],
+              "asMoveEnum": {
+                "name": "V"
+              },
               "asMoveStruct": null
             }
           ]
@@ -150,7 +176,7 @@ Response: {
   }
 }
 
-task 4, lines 63-92:
+task 4, lines 70-99:
 //# run-graphql --cursors "A" "V"
 Response: {
   "data": {
