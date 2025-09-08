@@ -748,10 +748,8 @@ impl<S: Hash + Eq> Module<S> {
     }
 
     #[cfg(test)]
-    pub(crate) fn update_table_signatures(&mut self, signatures: Vec<Signature<S>>) {
-        let old_signatures = std::mem::take(&mut self.tables.signatures);
-        let signatures = [old_signatures, signatures].concat();
-        let _ = std::mem::replace(&mut self.tables.signatures, signatures);
+    pub(crate) fn extend_table_signatures(&mut self, signatures: Vec<Signature<S>>) {
+        self.tables.signatures.extend(signatures);
     }
 }
 

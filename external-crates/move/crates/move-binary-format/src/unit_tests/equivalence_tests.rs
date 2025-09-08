@@ -17,14 +17,14 @@ fn test_module_tables_ignored_in_equivalence() {
         vec![Bytecode::LdU8(0), Bytecode::Ret],
     );
 
-    // Clone module and alter `tables` to ensure these changes are not observable.
+    // Make an identical module and alter `tables` to ensure these changes are not observable.
     let mut modified_module = mk_module_plus_code(
         &mut pool,
         Visibility::Public as u8,
         vec![Bytecode::LdU8(0), Bytecode::Ret],
     );
     let new_signatures = vec![Rc::new(vec![Rc::new(Type::U128)])];
-    modified_module.update_table_signatures(new_signatures);
+    modified_module.extend_table_signatures(new_signatures);
 
     assert!(
         base_module.equivalent(&modified_module),
