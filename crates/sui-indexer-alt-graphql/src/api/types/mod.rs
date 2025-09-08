@@ -33,6 +33,7 @@ pub(crate) mod owner;
 pub(crate) mod protocol_configs;
 pub(crate) mod safe_mode;
 pub(crate) mod service_config;
+pub(crate) mod simulation_result;
 mod stake_subsidy;
 pub(crate) mod storage_fund;
 pub(crate) mod system_parameters;
