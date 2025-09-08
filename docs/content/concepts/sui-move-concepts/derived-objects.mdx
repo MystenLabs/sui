@@ -8,14 +8,14 @@ Derived objects enable you to deterministically compute object IDs from a parent
 
 Classic registries (dynamic fields) require a parent registry object that owns children. Because mutation of a child typically requires a mutable borrow through the parent, unrelated writes get funneled through the parent. This can create a contention/consensus hotspot if the parent is shared.
 
-Derived objects keep the namespace (parent+key) but the derived object is a top-level object (not stored in the parent). It can be owned (fast path), shared, or immutable. You avoid sequencing unrelated mutations through the parent, and still guarantee uniqueness per (parent, key).
+Derived objects keep the namespace (parent+key) but the derived object is a top-level object (not stored in the parent). It can be owned (fast path), shared, or immutable. You avoid sequencing unrelated mutations through the parent (for all operations besides creation), while maintaining the guaranteed uniqueness per (parent, key).
 
 **On-chain benefits**
 
 -	Less contention and better parallelism: No parent bottleneck for unrelated keys.
 -	Cheaper when owned: You can make each derived object owned, avoiding shared-object consensus for most operations.
--	Deterministic uniqueness: One object per (parent, key) without extra bookkeeping.
--	Top-level ergonomics: Clean capability patterns, Object Display, and simpler permissioning.
+-	Deterministic uniqueness: One object per (parent, key) without manual bookkeeping.
+-	Top-level object ergonomics: Clean capability patterns, Object Display, and simpler permissioning.
 
 **Off-chain benefits**
 
@@ -36,9 +36,9 @@ The following matrix highlights some of the differences between using dynamic fi
 | Supports receiving objects? | ✅ Yes | ❌ No |
 | Object parallelism | ✅ Yes | Limited. All writes sequenced through parent. |
 | Cost overhead | Double the cost of dynamic fields. Requires UID and dynamic field (to prevent duplicate claims) creation. Receive a rebate upon UID deletion, but no rebate on the dynamic field. | Cheaper and offers full storage rebates on deletion. |
-| Loading type | Static. Direct access after creation. | Dynamic. Transactions happen through the parent. |
+| Loading type | Static. Direct access after creation. | Dynamic. They are loaded through the parent. |
 | Supports deletion? | ✅ Yes | ✅ Yes |
-| Supports reclaiming? | ❌ No | ✅ Yes |
+| Supports reclaiming? | ❌ Currently no | ✅ Yes |
 
 ## Examples
 
@@ -87,7 +87,7 @@ public fun receive_from_vault<T key + store>(
 
 ### Registry with pointer
 
-If parallelization is an important aspect for your project needs, you could create a registry that uses a pointer. This approach provides good parallelization, but makes discoverability more difficult. To find a vault, you first have to find its pointer.
+If parallelization is an important aspect for your project needs, you could create a registry that uses a pointer. This approach provides good parallelization, but makes discoverability a 2-sequential-network-hop operation. To find a vault, you first have to find its pointer.
 
 ```move
 const EVaultAlreadyExists: u64 = 0;
