@@ -2842,6 +2842,11 @@ type TransactionEffects {
 
 input TransactionFilter {
 	"""
+	Limit to transactions that interacted with the given address.
+	The address could be a sender, sponsor, or recipient of the transaction.
+	"""
+	affectedAddress: SuiAddress
+	"""
 	Filter to transactions that occurred strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53

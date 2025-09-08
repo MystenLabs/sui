@@ -6,7 +6,10 @@ use super::{
     move_package::{self, CSysPackage, MovePackage},
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+        CTransaction, Transaction,
+    },
 };
 use crate::api::types::safe_mode::{from_system_state, SafeMode};
 use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
@@ -152,7 +155,7 @@ impl Epoch {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
             return Ok(None);

@@ -24,7 +24,10 @@ use super::{
         object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
-        transaction::{filter::TransactionFilter, CTransaction, Transaction},
+        transaction::{
+            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+            CTransaction, Transaction,
+        },
         transaction_effects::TransactionEffects,
     },
 };
@@ -467,7 +470,7 @@ impl Query {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
