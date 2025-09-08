@@ -16185,44 +16185,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-source-validation-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.8.3",
- "bin-version",
- "clap",
- "expect-test",
- "fs_extra",
- "hyper 1.5.2",
- "jsonrpsee",
- "move-compiler",
- "move-core-types",
- "move-package",
- "move-symbol-pool",
- "mysten-metrics",
- "prometheus",
- "reqwest 0.12.9",
- "serde",
- "sui",
- "sui-json-rpc-types",
- "sui-move",
- "sui-move-build",
- "sui-package-management",
- "sui-sdk",
- "sui-source-validation",
- "telemetry-subscribers",
- "tempfile",
- "test-cluster",
- "tokio",
- "toml 0.7.4",
- "tower 0.5.2",
- "tower-http",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "sui-sql-macro"
 version = "1.57.0"
 dependencies = [
