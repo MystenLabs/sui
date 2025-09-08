@@ -16,7 +16,7 @@ use crate::supported_protocol_versions::{
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
-use consensus_types::block::{BlockRef, TransactionIndex};
+use consensus_types::block::{BlockRef, TransactionIndex, PING_TRANSACTION_INDEX};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
@@ -60,6 +60,16 @@ impl ConsensusPosition {
                 error: e.to_string(),
             })
             .map(Bytes::from)
+    }
+
+    // We reserve the max index for the "ping" transaction. This transaction is not included in the block, but we are
+    // simulating by assuming its position in the block as the max index.
+    pub fn ping(epoch: EpochId, block: BlockRef) -> Self {
+        Self {
+            epoch,
+            block,
+            index: PING_TRANSACTION_INDEX,
+        }
     }
 }
 
