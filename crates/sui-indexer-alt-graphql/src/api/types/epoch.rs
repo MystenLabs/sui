@@ -454,13 +454,12 @@ impl Epoch {
         let commitments: Vec<CheckpointCommitment> = bcs::from_bytes(&end.epoch_commitments)
             .context("Failed to deserialize epoch commitments")?;
 
-        let digest = commitments.into_iter().next().map(
-            |CheckpointCommitment::ECMHLiveObjectSetDigest(digest)| {
-                Base58::encode(digest.digest.into_inner())
-            },
-        );
-
-        Ok(digest)
+        for commitment in commitments {
+            if let CheckpointCommitment::ECMHLiveObjectSetDigest(digest) = commitment {
+                return Ok(Some(Base58::encode(digest.digest.into_inner())));
+            }
+        }
+        Ok(None)
     }
 }
 
