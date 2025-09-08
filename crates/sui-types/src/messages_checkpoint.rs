@@ -383,7 +383,10 @@ impl CheckpointSummary {
             _ => unimplemented!("unrecognized version_specific_data version for CheckpointSummary"),
         };
 
-        let checkpoint_commitments = checkpoint_artifact_digests.into_iter().map(|d| CheckpointCommitment::CheckpointArtifactsDigest(d)).collect();
+        let checkpoint_commitments = checkpoint_artifact_digests
+            .into_iter()
+            .map(CheckpointCommitment::CheckpointArtifactsDigest)
+            .collect();
 
         Self {
             epoch,
