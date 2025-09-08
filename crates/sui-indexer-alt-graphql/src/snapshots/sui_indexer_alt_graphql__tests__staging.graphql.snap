@@ -354,6 +354,11 @@ Checkpoints contain finalized transactions and are used for node synchronization
 """
 type Checkpoint {
 	"""
+	A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
+	e.g., object checkpoint states
+	"""
+	artifactsDigest: String
+	"""
 	The Base64 serialized BCS bytes of this checkpoint's contents.
 	"""
 	contentBcs: Base64
