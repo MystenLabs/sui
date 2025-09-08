@@ -281,22 +281,37 @@ pub struct RawExecutedData {
 
 #[derive(Clone, Debug)]
 pub struct SubmitTxRequest {
-    pub transaction: Transaction,
+    pub transaction: Option<Transaction>,
+    pub ping: Option<PingType>,
 }
 
 impl SubmitTxRequest {
     pub fn new_transaction(transaction: Transaction) -> Self {
-        Self { transaction }
+        Self {
+            transaction: Some(transaction),
+            ping: None,
+        }
+    }
+
+    pub fn new_ping(ping: PingType) -> Self {
+        Self {
+            transaction: None,
+            ping: Some(ping),
+        }
     }
 }
 
 impl SubmitTxRequest {
     pub fn into_raw(&self) -> Result<RawSubmitTxRequest, SuiError> {
-        let transactions = vec![bcs::to_bytes(&self.transaction)
-            .map_err(|e| SuiError::TransactionSerializationError {
-                error: e.to_string(),
-            })?
-            .into()];
+        let transactions = if let Some(transaction) = &self.transaction {
+            vec![bcs::to_bytes(&transaction)
+                .map_err(|e| SuiError::TransactionSerializationError {
+                    error: e.to_string(),
+                })?
+                .into()]
+        } else {
+            vec![]
+        };
         Ok(RawSubmitTxRequest {
             transactions,
             ..Default::default()
