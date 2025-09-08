@@ -372,6 +372,7 @@ new_name!(FunctionName);
 
 pub const NATIVE_MODIFIER: &str = "native";
 pub const ENTRY_MODIFIER: &str = "entry";
+pub const EXTEND_MODIFIER: &str = "extend";
 pub const MACRO_MODIFIER: &str = "macro";
 
 #[derive(PartialEq, Clone, Debug)]

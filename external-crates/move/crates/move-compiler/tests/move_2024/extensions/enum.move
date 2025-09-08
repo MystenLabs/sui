@@ -6,7 +6,7 @@ module a::m {
 }
 
 #[test_only]
-extend a::m {
+extend module a::m {
     fun g(e: &E): &u64 {
         match (e) {
             E::A(x) => x,

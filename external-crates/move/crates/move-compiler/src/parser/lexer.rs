@@ -13,7 +13,7 @@ use move_ir_types::location::Loc;
 use std::{collections::BTreeSet, fmt};
 
 // This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
-pub const TOK_COUNT: usize = 78;
+pub const TOK_COUNT: usize = 77;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
@@ -94,7 +94,6 @@ pub enum Tok {
     BlockLabel,
     MinusGreater,
     For,
-    Extend,
 }
 
 impl fmt::Display for Tok {
@@ -178,7 +177,6 @@ impl fmt::Display for Tok {
             BlockLabel => "'<Identifier>",
             MinusGreater => "->",
             For => "for",
-            Extend => "extend",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -971,7 +969,6 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
         "type" if edition.supports(FeatureGate::Move2024Keywords) => Tok::Type,
         "match" if edition.supports(FeatureGate::Move2024Keywords) => Tok::Match,
         "for" if edition.supports(FeatureGate::Move2024Keywords) => Tok::For,
-        "extend" if edition.supports(FeatureGate::ModuleExtension) => Tok::Extend,
         // Other toekns
         _ => Tok::Identifier,
     }

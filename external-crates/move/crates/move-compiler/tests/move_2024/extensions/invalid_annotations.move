@@ -4,6 +4,6 @@ module a::m {
 
 #[mode(test)]
 #[allow(unreachable_code)]
-extend a::m {
+extend module a::m {
     public fun g(): u64 { 1 }
 }

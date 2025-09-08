@@ -3,12 +3,12 @@ module a::m{
 }
 
 #[test_only]
-extend a::m {
+extend module a::m {
     public fun g(): u64 { 1 }
 }
 
 #[test_only]
-extend a::m {
+extend module a::m {
     public fun g(): u64 { 1 }
 }
 

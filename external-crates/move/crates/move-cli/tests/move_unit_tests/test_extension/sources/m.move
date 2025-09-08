@@ -9,7 +9,7 @@ module testing::m {
 }
 
 #[test_only]
-extend testing::m {
+extend module testing::m {
     // can only be destructured in the same module
     fun destroy_s(s: S) {
         let S { x: _x } = s;

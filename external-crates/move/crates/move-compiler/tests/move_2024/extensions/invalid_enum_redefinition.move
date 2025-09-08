@@ -3,6 +3,6 @@ module a::m {
 }
 
 #[test_only]
-extend a::m {
+extend module a::m {
     public enum E { B() }
 }

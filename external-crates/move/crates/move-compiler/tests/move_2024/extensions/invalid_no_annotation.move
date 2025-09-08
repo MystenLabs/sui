@@ -2,7 +2,7 @@ module a::m {
     fun f(): u64 { 42 }
 }
 
-extend a::m {
+extend module a::m {
     fun g(): u64 { 24 }
 
     fun test() {

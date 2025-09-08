@@ -5,7 +5,7 @@ module a::m {
 }
 
 #[test_only]
-extend a::m {
+extend module a::m {
     use fun get_x as S.to_x;
 
     #[test]

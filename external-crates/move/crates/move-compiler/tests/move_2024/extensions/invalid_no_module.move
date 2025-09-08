@@ -3,6 +3,6 @@ module a::m {
 }
 
 #[test_only]
-extend a::n {
+extend module a::n {
     fun g(): u64 { 24 }
 }

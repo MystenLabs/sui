@@ -3,11 +3,11 @@ module a::m {
 }
 
 #[mode(test)]
-extend a::m {
+extend module a::m {
     public fun g(): u64 { 0 }
 }
 
 #[mode(spec)]
-extend a::m {
+extend module a::m {
     public fun g(): u64 { 0 }
 }

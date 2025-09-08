@@ -5,7 +5,7 @@ module a::m {
 }
 
 #[test_only]
-extend a::m {
+extend module a::m {
     fun g(s: &S): &u64 { s.get_x() }
 
     #[test]

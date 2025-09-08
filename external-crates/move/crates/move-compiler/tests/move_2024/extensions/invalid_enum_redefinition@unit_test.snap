@@ -2,11 +2,11 @@
 source: crates/move-compiler/tests/move_check_testsuite.rs
 info:
   flavor: core
-  edition: development
+  edition: 2024.alpha
   lint: false
 ---
 error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/development/extensions/invalid_enum_redefinition.move:7:17
+  ┌─ tests/move_2024/extensions/invalid_enum_redefinition.move:7:17
   │
 2 │     public enum E { A() }
   │                 - Alias previously defined here
