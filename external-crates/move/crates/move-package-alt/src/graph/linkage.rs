@@ -722,4 +722,22 @@ mod tests {
         assert_snapshot!(scenario.graph_for("root").await.linkage().unwrap_err().to_string(), @"");
         assert_snapshot!(scenario.graph_for("a").await.linkage().unwrap_err().to_string(), @"");
     }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    ///     a --> b --> c1 --> d1
+    ///     a -->|override| c2
+    ///     a -.-> d1
+    /// ```
+    ///
+    /// In this example, `a` overrides `b`'s `c1` dependency to `c2` which doesn't include a
+    /// dependency on `d` at all. In a legacy package, can `a` refer to `d` at all? If so, which
+    /// version of `d` should it use?
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    #[ignore] // TODO: what should happen here?
+    async fn test_dropped_dep() {
+        todo!()
+    }
 }
