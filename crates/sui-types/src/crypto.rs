@@ -652,7 +652,7 @@ where
     if bytes.len() != priv_length + pub_key_length {
         return Err(SuiError::KeyConversionError(format!(
             "Invalid input byte length, expected {}: {}",
-            priv_length,
+            priv_length + pub_key_length,
             bytes.len()
         )));
     }
