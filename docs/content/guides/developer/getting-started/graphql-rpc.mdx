@@ -16,18 +16,22 @@ The quickest way to access the GraphQL service for Sui RPC is through the online
 
 The online IDE is available for Mainnet and Testnet. You can try the various queries on this page directly in the IDE.
 
-- Mainnet: https://graphql.mainnet.sui.io/graphql
-- Testnet: https://graphql.testnet.sui.io/graphql
-
 :::info
 
-- Any existing addresses and object IDs in these examples refer to `mainnet` data only.
-- Both Mainnet and Testnet services are rate-limited to keep network throughput optimized.
+Both Mainnet and Testnet services are rate-limited to keep network throughput optimized.
 
 :::
 
-For more details about some concepts used in the examples below, please see the [GraphQL concepts](../../../concepts/graphql-rpc.mdx) page, and consult the [reference](../../../references/sui-graphql.mdx) for full documentation on the supported schema.
+- Mainnet: https://graphql.mainnet.sui.io/graphql
+- Testnet: https://graphql.testnet.sui.io/graphql
 
+:::caution
+
+Switch any apps that still use the GraphQL Alpha endpoints (`https://sui-mainnet.mystenlabs.com/graphql` and `https://sui-testnet.mystenlabs.com/graphql`) as soon as possible. Migrate your apps to the GraphQL Beta endpoints to avoid disruption of service.
+
+:::
+
+For more details about some concepts used in the following examples, see the [GraphQL concepts](../../../concepts/graphql-rpc.mdx) page. Consult the [GraphQL reference](../../../references/sui-graphql.mdx) for full documentation on the supported schema.
 
 ## Discovering the schema
 
