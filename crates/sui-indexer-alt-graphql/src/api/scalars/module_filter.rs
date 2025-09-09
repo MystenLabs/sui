@@ -31,10 +31,10 @@ impl ModuleFilter {
         }
     }
 
-    pub(crate) fn module(&self) -> Option<String> {
+    pub(crate) fn module(&self) -> Option<&str> {
         match self {
             ModuleFilter::Package(_) => None,
-            ModuleFilter::Module(_, m) => Some(m.clone()),
+            ModuleFilter::Module(_, m) => Some(m.as_str()),
         }
     }
 }

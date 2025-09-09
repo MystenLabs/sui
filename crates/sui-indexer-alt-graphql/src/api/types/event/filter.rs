@@ -87,7 +87,7 @@ impl EventFilter {
                 query += query!(" AND package = {Bytea}", package.into_vec());
             }
             if let Some(module) = module.module() {
-                query += query!(" AND module = {Text}", module);
+                query += query!(" AND module = {Text}", module.to_string());
             }
         }
 
@@ -97,11 +97,11 @@ impl EventFilter {
             }
 
             if let Some(module) = type_.module() {
-                query += query!(" AND module = {Text}", module);
+                query += query!(" AND module = {Text}", module.to_string());
             }
 
             if let Some(type_name) = type_.type_name() {
-                query += query!(" AND name = {Text}", type_name);
+                query += query!(" AND name = {Text}", type_name.to_string());
             }
             if let Some(type_params) = type_.type_params() {
                 if !type_params.is_empty() {
@@ -133,7 +133,7 @@ impl EventFilter {
                 }
             }
             if let Some(module) = module.module() {
-                if module != event.transaction_module.to_string() {
+                if module != event.transaction_module.as_str() {
                     return false;
                 }
             }
@@ -146,18 +146,18 @@ impl EventFilter {
                 }
             }
             if let Some(module) = type_.module() {
-                if module != event.type_.module.to_string() {
+                if module != event.type_.module.as_str() {
                     return false;
                 }
             }
             if let Some(type_name) = type_.type_name() {
-                if type_name != event.type_.name.to_string() {
+                if type_name != event.type_.name.as_str() {
                     return false;
                 }
             }
             if type_
                 .type_params()
-                .is_some_and(|p| !p.is_empty() && p != event.type_.type_params.to_vec())
+                .is_some_and(|p| p != event.type_.type_params.as_slice())
             {
                 return false;
             }

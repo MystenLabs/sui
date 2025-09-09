@@ -49,27 +49,27 @@ impl TypeFilter {
     }
 
     /// Returns the module name if this filter contains one
-    pub(crate) fn module(&self) -> Option<String> {
+    pub(crate) fn module(&self) -> Option<&str> {
         match self {
             TypeFilter::Package(_) => None,
-            TypeFilter::Module(_, module) => Some(module.to_owned()),
-            TypeFilter::Type(tag) => Some(tag.module.as_str().to_owned()),
+            TypeFilter::Module(_, module) => Some(module.as_str()),
+            TypeFilter::Type(tag) => Some(tag.module.as_str()),
         }
     }
 
     /// Returns the type name if this filter contains one
-    pub(crate) fn type_name(&self) -> Option<String> {
+    pub(crate) fn type_name(&self) -> Option<&str> {
         match self {
             TypeFilter::Package(_) | TypeFilter::Module(_, _) => None,
-            TypeFilter::Type(tag) => Some(tag.name.as_str().to_owned()),
+            TypeFilter::Type(tag) => Some(tag.name.as_str()),
         }
     }
 
-    /// Returns the StructTag if this filter contains one
-    pub(crate) fn type_params(&self) -> Option<Vec<TypeTag>> {
+    /// Returns the type's type parameters if this filter has any
+    pub(crate) fn type_params(&self) -> Option<&[TypeTag]> {
         match self {
-            TypeFilter::Package(_) | TypeFilter::Module(_, _) => None,
-            TypeFilter::Type(tag) => Some(tag.type_params.to_owned()),
+            TypeFilter::Type(tag) if !tag.type_params.is_empty() => Some(&tag.type_params),
+            TypeFilter::Package(_) | TypeFilter::Module(_, _) | TypeFilter::Type(_) => None,
         }
     }
 
