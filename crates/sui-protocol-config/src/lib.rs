@@ -259,6 +259,8 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 // Version 93: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
 // Version 94: Decrease stored observations limit by 10% to stay within system object size limit.
 //             Enable party transfer on mainnet.
+// Version 95: Change type name id base cost to 52, increase max transactions per checkpoint to 20000.
+// Version 96: Enable authority capabilities v2.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3974,6 +3976,7 @@ impl ProtocolConfig {
                 }
                 96 => {
                     cfg.feature_flags.correct_gas_payment_limit_check = true;
+                    cfg.feature_flags.authority_capabilities_v2 = true;
                 }
                 // Use this template when making changes:
                 //

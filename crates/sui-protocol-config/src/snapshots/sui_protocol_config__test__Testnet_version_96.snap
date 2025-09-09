@@ -75,6 +75,7 @@ feature_flags:
   soft_bundle: true
   enable_coin_deny_list_v2: true
   passkey_auth: true
+  authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
