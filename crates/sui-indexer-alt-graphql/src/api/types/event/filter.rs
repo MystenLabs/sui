@@ -8,12 +8,12 @@ use async_graphql::InputObject;
 
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
-use sui_types::{event::Event as NativeEvent, TypeTag};
+use sui_types::event::Event as NativeEvent;
 
 use crate::{
     api::scalars::{
-        digest::Digest, module_filter::ModuleFilter, sui_address::SuiAddress,
-        type_filter::TypeFilter, uint53::UInt53,
+        module_filter::ModuleFilter, sui_address::SuiAddress, type_filter::TypeFilter,
+        uint53::UInt53,
     },
     error::{feature_unavailable, RpcError},
     pagination::Page,
@@ -49,27 +49,6 @@ pub(crate) struct EventFilter {
 }
 
 impl EventFilter {
-    pub(crate) fn package(&self) -> Option<SuiAddress> {
-        self.module
-            .as_ref()
-            .and_then(|m| m.package())
-            .or_else(|| self.type_.as_ref().and_then(|t| t.package()))
-    }
-
-    pub(crate) fn module(&self) -> Option<String> {
-        self.module
-            .as_ref()
-            .and_then(|m| m.module())
-            .or_else(|| self.type_.as_ref().and_then(|t| t.module()))
-    }
-
-    pub(crate) fn type_name(&self) -> Option<String> {
-        self.type_.as_ref().and_then(|t| t.type_name())
-    }
-    pub(crate) fn type_params(&self) -> Option<Vec<TypeTag>> {
-        self.type_.as_ref().and_then(|t| t.type_params())
-    }
-
     /// Builds a SQL query to select and filter events based on sender, module, and type filters.
     /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
     pub(crate) fn query<'q>(&self, tx_bounds_subquery: Query<'q>) -> Result<Query<'q>, RpcError> {
@@ -103,24 +82,35 @@ impl EventFilter {
             query += query!(" AND sender = {Bytea}", sender.into_vec());
         }
 
-        if let Some(package) = self.package() {
-            query += query!(" AND package = {Bytea}", package.into_vec());
+        if let Some(module) = &self.module {
+            if let Some(package) = module.package() {
+                query += query!(" AND package = {Bytea}", package.into_vec());
+            }
+            if let Some(module) = module.module() {
+                query += query!(" AND module = {Text}", module);
+            }
         }
 
-        if let Some(module) = self.module() {
-            query += query!(" AND module = {Text}", module);
-        }
+        if let Some(type_) = &self.type_ {
+            if let Some(package) = type_.package() {
+                query += query!(" AND package = {Bytea}", package.into_vec());
+            }
 
-        if let Some(type_name) = self.type_name() {
-            query += query!(" AND name = {Text}", type_name);
-        }
+            if let Some(module) = type_.module() {
+                query += query!(" AND module = {Text}", module);
+            }
 
-        if let Some(type_params) = self.type_params() {
-            if !type_params.is_empty() {
-                query += query!(
-                    " AND instantiation = {Bytea}",
-                    bcs::to_bytes(&type_params).context("Failed to serialize type parameters")?
-                );
+            if let Some(type_name) = type_.type_name() {
+                query += query!(" AND name = {Text}", type_name);
+            }
+            if let Some(type_params) = type_.type_params() {
+                if !type_params.is_empty() {
+                    query += query!(
+                        " AND instantiation = {Bytea}",
+                        bcs::to_bytes(&type_params)
+                            .context("Failed to serialize type parameters")?
+                    );
+                }
             }
         }
 
@@ -136,30 +126,41 @@ impl EventFilter {
             return false;
         }
 
-        if self
-            .package()
-            .is_some_and(|p| p != SuiAddress::from(event.package_id))
-        {
-            return false;
-        }
-
-        if self
-            .module()
-            .is_some_and(|m| m != event.transaction_module.to_string())
-        {
-            return false;
-        }
-        if let Some(type_name) = self.type_name() {
-            if type_name != event.type_.name.to_string() {
-                return false;
+        if let Some(module) = &self.module {
+            if let Some(package) = module.package() {
+                if package != SuiAddress::from(event.package_id) {
+                    return false;
+                }
+            }
+            if let Some(module) = module.module() {
+                if module != event.transaction_module.to_string() {
+                    return false;
+                }
             }
         }
 
-        if self
-            .type_params()
-            .is_some_and(|p| !p.is_empty() && p != event.type_.type_params.to_vec())
-        {
-            return false;
+        if let Some(type_) = &self.type_ {
+            if let Some(package) = type_.package() {
+                if package != SuiAddress::from(event.type_.address) {
+                    return false;
+                }
+            }
+            if let Some(module) = type_.module() {
+                if module != event.type_.module.to_string() {
+                    return false;
+                }
+            }
+            if let Some(type_name) = type_.type_name() {
+                if type_name != event.type_.name.to_string() {
+                    return false;
+                }
+            }
+            if type_
+                .type_params()
+                .is_some_and(|p| !p.is_empty() && p != event.type_.type_params.to_vec())
+            {
+                return false;
+            }
         }
 
         true

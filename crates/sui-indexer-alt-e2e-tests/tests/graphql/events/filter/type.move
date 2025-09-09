@@ -38,6 +38,8 @@ module P2::M2 {
     use sui::event;
     use P1::M1::{T3};
 
+    public struct T4 has copy, drop {}
+
     public struct EventC<T> has copy, drop {
         value: T
     }
@@ -46,6 +48,11 @@ module P2::M2 {
         // Use a public constructor function from P1::M1
         let t3_instance = P1::M1::new_T3();
         event::emit(EventC<T3> { value: t3_instance })
+    }
+
+    public fun emit_T4() {
+        // Use a public constructor function from P1::M1
+        event::emit(EventC<T4> { value: T4 {} })
     }
 }
 
@@ -60,6 +67,8 @@ module P2::M2 {
 //# run P1::M1::emit_both --sender B
 
 //# run P2::M2::emit_T3 --sender B
+
+//# run P2::M2::emit_T4 --sender B
 
 //# create-checkpoint
 
@@ -85,8 +94,8 @@ module P2::M2 {
       ...E
     }
   }
-  # This should only match events whose TYPE is from P1, not events emitted by P1 modules
-  eventsOfTypeP1EmittedByP2: events(first: 50, filter: {type: "@{P1}"}) {
+  # This should only match EventC whose type is defined in P1
+  eventsOfTypeP1EmittedByP2: events(first: 50, filter: {type: "@{P2}::M2::EventC<@{P1}::M1::T3>"}) {
     nodes {
       ...E
     }
