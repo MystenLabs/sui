@@ -222,6 +222,8 @@ members = [
   "sui-execution/v2/sui-adapter",
   "sui-execution/v2/sui-move-natives",
   "sui-execution/v2/sui-verifier",
+  "examples/rust/basic-sui-indexer",
+  "examples/rust/clickhouse-sui-indexer",
 ]
 
 [workspace.package]
