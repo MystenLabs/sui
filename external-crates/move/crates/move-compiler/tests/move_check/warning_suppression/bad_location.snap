@@ -5,13 +5,13 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02015]: invalid attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_check/warning_suppression/bad_location.move:4:7
   │
 4 │     #[allow(unused)]
-  │       ^^^^^
+  │       ^^^^^^^^^^^^^
   │       │
-  │       Known attribute 'allow' is not expected with a use
+  │       Attribute 'allow' is not expected with a use
   │       Expected to be used with one of the following: module, constant, struct, enum, function
 
 warning[W09001]: unused alias
@@ -22,11 +22,11 @@ warning[W09001]: unused alias
   │
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02015]: invalid attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_check/warning_suppression/bad_location.move:7:7
   │
 7 │     #[allow(all)]
-  │       ^^^^^
+  │       ^^^^^^^^^^
   │       │
-  │       Known attribute 'allow' is not expected with a friend
+  │       Attribute 'allow' is not expected with a friend
   │       Expected to be used with one of the following: module, constant, struct, enum, function

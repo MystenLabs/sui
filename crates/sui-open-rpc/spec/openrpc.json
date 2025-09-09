@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.45.0"
+    "version": "1.56.0"
   },
   "methods": [
     {
@@ -1294,30 +1294,43 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "78",
+              "maxSupportedProtocolVersion": "95",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
+                "additional_consensus_digest_indirect_state": false,
+                "additional_multisig_checks": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
+                "allow_private_accumulator_entrypoints": false,
                 "allow_receiving_object_id": false,
+                "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
+                "better_adapter_type_resolution_errors": false,
                 "bridge": false,
+                "check_for_init_during_upgrade": false,
                 "commit_root_state_digest": false,
+                "consensus_batched_block_sync": false,
+                "consensus_checkpoint_signature_key_includes_digest": false,
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_linearize_subdag_v2": false,
+                "consensus_median_based_commit_timestamp": false,
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
                 "consensus_round_prober_probe_accepted_rounds": false,
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "debug_fatal_on_move_invariant_violation": false,
+                "dependency_linkage_error": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "disallow_new_modules_in_deps_only_packages": false,
+                "disallow_self_identifier": false,
+                "enable_accumulators": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
                 "enable_effects_v2": false,
@@ -1325,15 +1338,21 @@
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_nitro_attestation": false,
+                "enable_nitro_attestation_upgraded_parsing": false,
+                "enable_party_transfer": false,
                 "enable_poseidon": false,
+                "enable_ptb_execution_v2": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
+                "enforce_checkpoint_timestamp_monotonicity": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
+                "ignore_execution_time_observations_after_certs_closed": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
+                "max_ptb_value_size_v2": false,
                 "minimize_child_object_mutations": false,
                 "missing_type_is_compatibility_error": true,
                 "move_native_context": false,
@@ -1345,9 +1364,11 @@
                 "narwhal_versioned_metadata": false,
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
+                "normalize_ptb_arguments": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,
+                "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "random_beacon": false,
                 "receive_objects": false,
@@ -1355,10 +1376,12 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
+                "resolve_type_input_ids_to_defining_id": false,
                 "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
@@ -1367,6 +1390,7 @@
                 "soft_bundle": false,
                 "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
+                "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
                 "validate_identifier_inputs": false,
@@ -1751,6 +1775,7 @@
                 "max_gas_price": {
                   "u64": "100000"
                 },
+                "max_gas_price_rgp_factor_for_aborted_transactions": null,
                 "max_generic_instantiation_length": {
                   "u64": "32"
                 },
@@ -1805,6 +1830,7 @@
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
+                "max_ptb_value_size": null,
                 "max_publish_or_upgrade_per_ptb": null,
                 "max_pure_argument_size": {
                   "u32": "16384"
@@ -1939,6 +1965,7 @@
                 "transfer_freeze_object_cost_base": {
                   "u64": "52"
                 },
+                "transfer_party_transfer_internal_cost_base": null,
                 "transfer_receive_object_cost_base": null,
                 "transfer_share_object_cost_base": {
                   "u64": "52"
@@ -1956,10 +1983,12 @@
                 "tx_context_gas_price_cost_base": null,
                 "tx_context_ids_created_cost_base": null,
                 "tx_context_replace_cost_base": null,
+                "tx_context_rgp_cost_base": null,
                 "tx_context_sender_cost_base": null,
                 "tx_context_sponsor_cost_base": null,
                 "type_name_get_base_cost": null,
                 "type_name_get_per_byte_cost": null,
+                "type_name_id_base_cost": null,
                 "types_is_one_time_witness_cost_base": {
                   "u64": "52"
                 },
@@ -5339,23 +5368,6 @@
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
       },
-      "Authenticator": {
-        "oneOf": [
-          {
-            "description": "The contained SuiAddress exclusively has all permissions: read, write, delete, transfer",
-            "type": "object",
-            "required": [
-              "SingleOwner"
-            ],
-            "properties": {
-              "SingleOwner": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "AuthorityPublicKeyBytes": {
         "description": "Defines the compressed version of the public key that we pass around in Sui",
         "allOf": [
@@ -6100,6 +6112,16 @@
             "items": {
               "$ref": "#/components/schemas/ObjectChange"
             }
+          },
+          "suggestedGasPrice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -7851,26 +7873,21 @@
             ]
           },
           {
-            "description": "Object is sequenced via consensus. Ownership is managed by the configured authenticator.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
+            "description": "Object is exclusively owned by a single address and sequenced via consensus.",
             "type": "object",
             "required": [
-              "ConsensusV2"
+              "ConsensusAddressOwner"
             ],
             "properties": {
-              "ConsensusV2": {
+              "ConsensusAddressOwner": {
                 "type": "object",
                 "required": [
-                  "authenticator",
+                  "owner",
                   "start_version"
                 ],
                 "properties": {
-                  "authenticator": {
-                    "description": "The authentication mode of the object",
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/Authenticator"
-                      }
-                    ]
+                  "owner": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   },
                   "start_version": {
                     "description": "The version at which the object most recently became a consensus object. This serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",
@@ -8740,6 +8757,32 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "reservation",
+              "type",
+              "typeParam",
+              "withdrawFrom"
+            ],
+            "properties": {
+              "reservation": {
+                "$ref": "#/components/schemas/SuiReservation"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "balanceWithdraw"
+                ]
+              },
+              "typeParam": {
+                "$ref": "#/components/schemas/SuiWithdrawTypeParam"
+              },
+              "withdrawFrom": {
+                "$ref": "#/components/schemas/SuiWithdrawFrom"
+              }
+            }
           }
         ]
       },
@@ -8825,7 +8868,8 @@
               "AuthenticatorStateCreate",
               "RandomnessStateCreate",
               "CoinDenyListStateCreate",
-              "StoreExecutionTimeObservations"
+              "StoreExecutionTimeObservations",
+              "AccumulatorRootCreate"
             ]
           },
           {
@@ -8992,6 +9036,39 @@
           }
         }
       },
+      "SuiMoveAbort": {
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "function": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "module_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SuiMoveModuleId": {
         "type": "object",
         "required": [
@@ -9022,6 +9099,16 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          },
+          "variantDeclarationOrder": {
+            "default": null,
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
             }
           },
           "variants": {
@@ -9519,6 +9606,28 @@
             }
           }
         }
+      },
+      "SuiReservation": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "entireBalance"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "maxAmountU64"
+            ],
+            "properties": {
+              "maxAmountU64": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "SuiSystemStateSummary": {
         "description": "This is the JSON-RPC type for the SUI system state object. It flattens all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
@@ -10323,6 +10432,28 @@
           }
         }
       },
+      "SuiWithdrawFrom": {
+        "type": "string",
+        "enum": [
+          "sender"
+        ]
+      },
+      "SuiWithdrawTypeParam": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "balance"
+            ],
+            "properties": {
+              "balance": {
+                "$ref": "#/components/schemas/TypeTag"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "Supply": {
         "type": "object",
         "required": [
@@ -10428,6 +10559,17 @@
               "transactionDigest"
             ],
             "properties": {
+              "abortError": {
+                "description": "The abort error populated if the transaction failed with an abort code.",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SuiMoveAbort"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "created": {
                 "description": "ObjectRef and owner of new objects created.",
                 "type": "array",
@@ -10884,6 +11026,37 @@
                     "type": "null"
                   }
                 ]
+              }
+            }
+          },
+          {
+            "description": "A series of commands where the results of one command can be used in future commands",
+            "type": "object",
+            "required": [
+              "inputs",
+              "kind",
+              "transactions"
+            ],
+            "properties": {
+              "inputs": {
+                "description": "Input objects or primitive values",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiCallArg"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ProgrammableSystemTransaction"
+                ]
+              },
+              "transactions": {
+                "description": "The transactions to be executed sequentially. A failure in any transaction will result in the failure of the entire programmable transaction block.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiTransaction"
+                }
               }
             }
           }

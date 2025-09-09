@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    debug_display, diag,
+    PreCompiledProgramInfo, debug_display, diag,
     diagnostics::{
-        self,
+        self, Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{self, *},
         warning_filters::WarningFilters,
-        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::{
@@ -19,10 +18,11 @@ use crate::{
     naming::{
         ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
         fake_natives,
+        resolvable_module::ResolvableModule,
         syntax_methods::resolve_syntax_attributes,
     },
     parser::ast::{
-        self as P, ConstantName, DatatypeName, Field, FunctionName, VariantName, MACRO_MODIFIER,
+        self as P, ConstantName, DatatypeName, Field, FunctionName, MACRO_MODIFIER, VariantName,
     },
     shared::{
         ide::{EllipsisMatchEntries, IDEAnnotation, IDEInfo},
@@ -30,13 +30,12 @@ use crate::{
         unique_map::UniqueMap,
         *,
     },
-    FullyCompiledProgram,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map},
     sync::Arc,
 };
 
@@ -405,11 +404,12 @@ impl std::fmt::Display for ResolvedModuleMember {
 
 pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>;
 
-pub fn build_member_map(
+/// Generic function to build resolved members from a module-like structure
+fn resolved_members(
     env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-    prog: &E::Program,
-) -> ModuleMembers {
+    mident: ModuleIdent,
+    module: &dyn ResolvableModule,
+) -> BTreeMap<Symbol, ResolvedModuleMember> {
     // NB: This checks if the element is present, and doesn't replace it if so. This is congruent
     // with how top-level definitions are handled for alias resolution, where a new definition will
     // not overwrite the previous one.
@@ -425,97 +425,115 @@ pub fn build_member_map(
     }
 
     use ResolvedModuleMember as M;
-    let all_modules = prog
-        .modules
-        .key_cloned_iter()
-        .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
-            pre_compiled
-                .expansion
-                .modules
-                .key_cloned_iter()
-                .filter(|(mident, _m)| !prog.modules.contains_key(mident))
-        }));
-    let mut all_members = BTreeMap::new();
-    for (mident, mdef) in all_modules {
-        let mut members = BTreeMap::new();
-        for (name, sdef) in mdef.structs.key_cloned_iter() {
-            let tyarg_arity = sdef.type_parameters.len();
-            let field_info = match &sdef.fields {
-                E::StructFields::Positional(fields) => FieldInfo::Positional(fields.len()),
-                E::StructFields::Named(f) => {
-                    FieldInfo::Named(f.key_cloned_iter().map(|(k, _)| k).collect())
-                }
-                E::StructFields::Native(_) => FieldInfo::Empty,
-            };
-            let struct_def = ResolvedStruct {
+    let mut resolved_members = BTreeMap::new();
+
+    // Handle structs
+    for (name, tyarg_arity, field_info, decl_loc) in module.structs() {
+        let resolved_struct = ResolvedStruct {
+            mident,
+            name,
+            decl_loc,
+            tyarg_arity,
+            field_info,
+        };
+        add_or_error!(
+            resolved_members,
+            name,
+            M::Datatype(ResolvedDatatype::Struct(Box::new(resolved_struct)))
+        );
+    }
+
+    // Handle enums
+    for (enum_name, tyarg_arity, decl_loc, variants_vec) in module.enums() {
+        let mut variants = UniqueMap::new();
+        for (vname, field_info, variant_loc) in variants_vec {
+            let resolved_variant = ResolvedVariant {
                 mident,
-                name,
-                decl_loc: name.loc(),
+                enum_name,
                 tyarg_arity,
+                name: vname,
+                decl_loc: variant_loc,
                 field_info,
             };
-            assert!(members
-                .insert(
-                    name.value(),
-                    M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))
-                )
-                .is_none())
+            let _ = variants.add(vname, resolved_variant);
         }
-        for (enum_name, edef) in mdef.enums.key_cloned_iter() {
-            let tyarg_arity = edef.type_parameters.len();
-            let variants = edef.variants.clone().map(|name, v| {
-                let field_info = match &v.fields {
-                    E::VariantFields::Named(fields) => {
-                        FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
-                    }
-                    E::VariantFields::Positional(tys) => FieldInfo::Positional(tys.len()),
-                    E::VariantFields::Empty => FieldInfo::Empty,
-                };
-                ResolvedVariant {
-                    mident,
-                    enum_name,
-                    tyarg_arity,
-                    name,
-                    decl_loc: v.loc,
-                    field_info,
-                }
-            });
-            let decl_loc = edef.loc;
-            let enum_def = ResolvedEnum {
-                mident,
-                name: enum_name,
-                decl_loc,
-                tyarg_arity,
-                variants,
-            };
-            add_or_error!(
-                members,
-                enum_name,
-                M::Datatype(ResolvedDatatype::Enum(Box::new(enum_def)))
-            );
-        }
-        // Functions and constants are shadowed by datatypes that share their names.
-        for (name, fun) in mdef.functions.key_cloned_iter() {
-            let tyarg_arity = fun.signature.type_parameters.len();
-            let arity = fun.signature.parameters.len();
-            let fun_def = ResolvedModuleFunction {
-                mident,
-                name,
-                tyarg_arity,
-                arity,
-            };
-            add_or_error!(members, name, M::Function(Box::new(fun_def)));
-        }
-        for (name, _) in mdef.constants.key_cloned_iter() {
-            let const_def = ResolvedConstant {
-                mident,
-                name,
-                decl_loc: name.loc(),
-            };
-            add_or_error!(members, name, M::Constant(Box::new(const_def)));
-        }
-        assert!(all_members.insert(mident, members).is_none());
+        let resolved_enum = ResolvedEnum {
+            mident,
+            name: enum_name,
+            decl_loc,
+            tyarg_arity,
+            variants,
+        };
+
+        add_or_error!(
+            resolved_members,
+            enum_name,
+            M::Datatype(ResolvedDatatype::Enum(Box::new(resolved_enum)))
+        );
     }
+
+    // Handle functions
+    for (name, tyarg_arity, arity) in module.functions() {
+        let fun_def = ResolvedModuleFunction {
+            mident,
+            name,
+            tyarg_arity,
+            arity,
+        };
+        add_or_error!(resolved_members, name, M::Function(Box::new(fun_def)));
+    }
+
+    // Handle constants
+    for (name, decl_loc) in module.constants() {
+        let const_def = ResolvedConstant {
+            mident,
+            name,
+            decl_loc,
+        };
+        add_or_error!(resolved_members, name, M::Constant(Box::new(const_def)));
+    }
+
+    resolved_members
+}
+
+pub fn build_member_map(
+    env: &CompilationEnv,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
+    prog: &E::Program,
+) -> ModuleMembers {
+    // Create chained iterator of (ModuleIdent, &dyn ResolvableModule)
+    let prog_modules = prog
+        .modules
+        .key_cloned_iter()
+        .map(|(mident, mdef)| (mident, mdef as &dyn ResolvableModule));
+
+    let precompiled_modules = pre_compiled_lib.as_ref().into_iter().flat_map(|lib| {
+        lib.iter().filter_map(|(mident, minfo)| {
+            if !prog.modules.contains_key(mident) {
+                Some((*mident, &minfo.info as &dyn ResolvableModule))
+            } else {
+                None
+            }
+        })
+    });
+
+    let all_modules = prog_modules.chain(precompiled_modules);
+
+    let mut all_members = BTreeMap::new();
+    for (mident, module) in all_modules {
+        let members = resolved_members(env, mident, module);
+        // Apply error checking for duplicate names (functions and constants are shadowed by datatypes)
+        let mut checked_members = BTreeMap::new();
+        for (name, member) in members {
+            if let btree_map::Entry::Vacant(e) = checked_members.entry(name) {
+                e.insert(member);
+            } else {
+                assert!(env.has_errors());
+            }
+        }
+        assert!(all_members.insert(mident, checked_members).is_none());
+    }
+
     all_members
 }
 
@@ -570,7 +588,7 @@ macro_rules! resolve_from_module_access {
 impl OuterContext {
     fn new(
         compilation_env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
         prog: &E::Program,
     ) -> Self {
         use ResolvedType as RT;
@@ -790,8 +808,8 @@ impl<'outer, 'env> Context<'outer, 'env> {
     }
 
     fn resolve_call_subject(&mut self, sp!(mloc, ma_): E::ModuleAccess) -> ResolvedCallSubject {
-        use ErrorKind as EK;
         use E::ModuleAccess_ as EA;
+        use ErrorKind as EK;
         use N::BuiltinFunction_ as B;
         match ma_ {
             EA::ModuleAccess(m, n) => {
@@ -1658,7 +1676,7 @@ fn arity_string(arity: usize) -> &'static str {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: E::Program,
 ) -> N::Program {
     let outer_context = OuterContext::new(compilation_env, pre_compiled_lib.clone(), &prog);
@@ -1696,6 +1714,7 @@ fn module(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         use_funs: euse_funs,
@@ -1767,6 +1786,7 @@ fn module(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         use_funs,
@@ -1794,7 +1814,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
         .flat_map(|e| explicit_use_fun(context, e))
         .collect();
     for (tn, method, nuf) in resolved_vec {
-        let methods = resolved.entry(tn.clone()).or_default();
+        let methods = resolved.entry(tn).or_default();
         let nuf_loc = nuf.loc;
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
@@ -1899,7 +1919,7 @@ fn explicit_use_fun(
         loc,
         attributes,
         is_public,
-        tname: tn.clone(),
+        tname: tn,
         target_function,
         kind: N::UseFunKind::Explicit,
         used: is_public.is_some(), // suppress unused warning for public use funs
@@ -2421,9 +2441,9 @@ fn types(context: &mut Context, case: TypeAnnotation, tys: Vec<E::Type>) -> Vec<
 }
 
 fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -> N::Type {
-    use ResolvedType as RT;
     use E::Type_ as ET;
-    use N::{TypeName_ as NN, Type_ as NT};
+    use N::{Type_ as NT, TypeName_ as NN};
+    use ResolvedType as RT;
     let ty_ = match ety_ {
         ET::Unit => NT::Unit,
         ET::Multiple(tys) => NT::multiple_(
@@ -2459,9 +2479,9 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                     };
                     if let Some((case_str, help_str)) = case_str_opt {
                         let msg = format!(
-                                  "Invalid usage of a placeholder for type inference '_'. \
+                            "Invalid usage of a placeholder for type inference '_'. \
                           {case_str} require fully specified types. Replace '_' with a specific type{help_str}"
-                              );
+                        );
                         let mut diag = diag!(NameResolution::InvalidTypeAnnotation, (loc, msg));
                         if let TypeAnnotation::FunctionSignature = case {
                             diag.add_note("Only 'macro' functions can use '_' in their signatures");
@@ -2766,6 +2786,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                     return_label,
                     use_fun_color: 0, // used in macro expansion
                     body,
+                    extra_annotations: vec![], // used in macro expansion
                 }),
             }
         }
@@ -3718,8 +3739,8 @@ fn lvalue(
     case: LValueCase,
     sp!(loc, l_): E::LValue,
 ) -> Option<N::LValue> {
-    use LValueCase as C;
     use E::LValue_ as EL;
+    use LValueCase as C;
     use N::LValue_ as NL;
     let nl_ = match l_ {
         EL::Var(mut_, sp!(_, E::ModuleAccess_::Name(n)), None) => {
@@ -4325,6 +4346,7 @@ fn remove_unused_bindings_exp(
             return_type: _,
             use_fun_color: _,
             body,
+            extra_annotations: _,
         }) => {
             for (lvs, _) in parameters {
                 remove_unused_bindings_lvalues(context, used, lvs)

@@ -3,11 +3,11 @@
 
 #![no_main]
 use move_binary_format::file_format::{
-    empty_module, AbilitySet, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex,
-    FieldDefinition, FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
-    ModuleHandleIndex, Signature, SignatureIndex,
-    SignatureToken::{Address, Bool, U128, U64},
-    StructDefinition, StructFieldInformation, TypeSignature, Visibility,
+    AbilitySet, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex, FieldDefinition,
+    FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex,
+    Signature, SignatureIndex,
+    SignatureToken::{Address, Bool, U64, U128},
+    StructDefinition, StructFieldInformation, TypeSignature, Visibility, empty_module,
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::str::FromStr;

@@ -30,31 +30,40 @@ error[E04007]: incompatible types
    │                -------- Given: 'vector<u8>'
 
 error[E04017]: too many arguments
-  ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
-  │
-3 │         $f(0);
-  │         ^^^^^
-  │         │ │
-  │         │ Found 1 argument(s) here
-  │         Invalid lambda call of '$f'. The call expected 0 argument(s) but got 1
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
+   │
+ 3 │         $f(0);
+   │         ^^^^^
+   │         │ │
+   │         │ Found 1 argument(s) here
+   │         Invalid lambda call of '$f'. The call expected 0 argument(s) but got 1
+   ·
+10 │             || vector[], // invalid
+   │             ----------- Expected 0 argument(s)
 
 error[E04016]: too few arguments
-  ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
-  │
-3 │         $f(0);
-  │         ^^^^^
-  │         │ │
-  │         │ Found 1 argument(s) here
-  │         Invalid lambda call of '$f'. The call expected 2 argument(s) but got 1
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
+   │
+ 3 │         $f(0);
+   │         ^^^^^
+   │         │ │
+   │         │ Found 1 argument(s) here
+   │         Invalid lambda call of '$f'. The call expected 2 argument(s) but got 1
+   ·
+15 │             |_, _| vector[], // invalid
+   │             --------------- Expected 2 argument(s)
 
 error[E04016]: too few arguments
-  ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:4:9
-  │
-4 │         $g(0, 1);
-  │         ^^^^^^^^
-  │         │ │
-  │         │ Found 2 argument(s) here
-  │         Invalid lambda call of '$g'. The call expected 3 argument(s) but got 2
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:4:9
+   │
+ 4 │         $g(0, 1);
+   │         ^^^^^^^^
+   │         │ │
+   │         │ Found 2 argument(s) here
+   │         Invalid lambda call of '$g'. The call expected 3 argument(s) but got 2
+   ·
+26 │             |a, b, _| vector[(a as u8), (b as u8)], // invalid
+   │             -------------------------------------- Expected 3 argument(s)
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:9:9

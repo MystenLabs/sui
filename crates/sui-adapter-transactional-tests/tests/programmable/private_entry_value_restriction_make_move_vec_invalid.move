@@ -31,4 +31,4 @@ module test::m1 {
 //# programmable --sender A --inputs 0 0 0
 //> 0: test::m1::dirty_u64(Input(1));
 //> 1: MakeMoveVec<u64>([Input(0), Input(1), Input(2)]);
-//> test::m1::priv(Result(1))
+//> test::m1::priv2(Result(1))

@@ -16,7 +16,7 @@ use crate::{
         tracing::{trace, tracer::VMTracer},
         values::{
             IntegerValue, Reference, Struct, StructRef, VMValueCast, Value, Variant, VariantRef,
-            Vector, VectorRef,
+            Vector, VectorRef, VectorSpecialization,
         },
     },
     jit::execution::ast::{Bytecode, CallType, Function, Type},
@@ -33,9 +33,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::{VMConfig, VMRuntimeLimitsConfig};
-use move_vm_profiler::{
-    profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
-};
 use smallvec::SmallVec;
 
 use std::{collections::VecDeque, sync::Arc};
@@ -142,7 +139,6 @@ fn step(
         ))
     });
 
-    profile_open_instr!(gas_meter, format!("{:?}", instruction));
     trace(run_context.tracer, |tracer| {
         tracer.start_instruction(
             run_context.vtables,
@@ -157,7 +153,6 @@ fn step(
     match instruction {
         Bytecode::Ret => {
             let charge_result = gas_meter.charge_simple_instr(SimpleInstruction::Ret);
-            profile_close_instr!(gas_meter, format!("{:?}", instruction));
             trace(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
@@ -175,10 +170,6 @@ fn step(
                 .charge_drop_frame(non_ref_vals.into_iter())
                 .map_err(|e| state.set_location(e))?;
 
-            profile_close_frame!(
-                gas_meter,
-                state.call_stack.current_frame.function().pretty_string()
-            );
             trace(run_context.tracer, |tracer| {
                 tracer.exit_frame(
                     run_context.vtables,
@@ -199,7 +190,6 @@ fn step(
             }
         }
         Bytecode::CallGeneric(fun_inst_ptr) => {
-            profile_close_instr!(gas_meter, format!("{:?}", instruction));
             trace(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
@@ -220,7 +210,6 @@ fn step(
             Ok(StepStatus::Running)
         }
         Bytecode::VirtualCall(vtable_key) => {
-            profile_close_instr!(gas_meter, format!("{:?}", instruction));
             trace(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
@@ -237,7 +226,6 @@ fn step(
             Ok(StepStatus::Running)
         }
         Bytecode::DirectCall(function) => {
-            profile_close_instr!(gas_meter, format!("{:?}", instruction));
             trace(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
@@ -704,7 +692,8 @@ fn op_step_impl(
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_vec_pack(make_ty!(&ty), state.last_n_operands(*num as usize)?)?;
             let elements = state.pop_n_operands(*num as u16)?;
-            let value = Vector::pack(&ty, elements)?;
+            let specialization: VectorSpecialization = (&ty).try_into()?;
+            let value = Vector::pack(specialization, elements)?;
             state.push_operand(value)?;
         }
         Bytecode::VecLen(ty_ptr) => {
@@ -826,7 +815,6 @@ fn op_step_impl(
             }
         }
     }
-    profile_close_instr!(gas_meter, format!("{:?}", instruction));
     if !control_flow_instruction(instruction) {
         state.call_stack.current_frame.pc += 1;
     }
@@ -860,7 +848,6 @@ fn call_function(
             &ty_args,
         )
     });
-    profile_open_frame!(gas_meter, function.name().to_string());
 
     // Charge gas
     let module_id = function.module_id();
@@ -910,7 +897,6 @@ fn call_function(
 
         native_result?;
         state.call_stack.current_frame.pc += 1; // advance past the Call instruction in the caller
-        profile_close_frame!(gas_meter, function.name().to_string());
     } else {
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
@@ -1176,7 +1162,7 @@ fn check_depth_of_type_impl(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Type parameter should be fully resolved".to_string()),
-            )
+            );
         }
     };
 

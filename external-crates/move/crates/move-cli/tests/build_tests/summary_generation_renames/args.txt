@@ -1,0 +1,6 @@
+summary
+> ls -1 package_summaries/
+> cat package_summaries/A/A.json
+> cat package_summaries/CA/A.json
+> cat package_summaries/DA/A.json
+> cat package_summaries/address_mapping.json

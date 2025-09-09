@@ -91,19 +91,11 @@ impl Config {
         ServerBuilder::from_config(self, metrics_provider)
     }
 
-    pub async fn connect(
-        &self,
-        addr: &Multiaddr,
-        tls_config: Option<ClientConfig>,
-    ) -> Result<Channel> {
+    pub async fn connect(&self, addr: &Multiaddr, tls_config: ClientConfig) -> Result<Channel> {
         connect_with_config(addr, tls_config, self).await
     }
 
-    pub fn connect_lazy(
-        &self,
-        addr: &Multiaddr,
-        tls_config: Option<ClientConfig>,
-    ) -> Result<Channel> {
+    pub fn connect_lazy(&self, addr: &Multiaddr, tls_config: ClientConfig) -> Result<Channel> {
         connect_lazy_with_config(addr, tls_config, self)
     }
 

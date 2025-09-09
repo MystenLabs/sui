@@ -2,13 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use criterion::{measurement::Measurement, Criterion};
+use criterion::{Criterion, measurement::Measurement};
 use move_binary_format::CompiledModule;
-use move_compiler::{editions::Edition, shared::PackagePaths, Compiler, FullyCompiledProgram};
+use move_compiler::{
+    Compiler, command_line::compiler::PreCompiledProgramInfo, editions::Edition,
+    shared::PackagePaths,
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{ModuleId, CORE_CODE_ADDRESS},
+    language_storage::{CORE_CODE_ADDRESS, ModuleId},
 };
 
 use move_vm_runtime::{
@@ -24,14 +27,16 @@ use std::{path::PathBuf, sync::Arc};
 
 const BENCH_FUNCTION_PREFIX: &str = "bench_";
 
-static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: move_stdlib::move_stdlib_files(),
-            named_address_map: move_stdlib::move_stdlib_named_addresses(),
+            paths: move_stdlib::source_files(),
+            named_address_map: move_stdlib::named_addresses(),
         }],
         None,
+        None,
+        false,
         move_compiler::Flags::empty(),
         None,
     )
@@ -65,16 +70,12 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
         edition: Edition::E2024_BETA,
         ..Default::default()
     };
-    let (_files, compiled_units) = Compiler::from_files(
-        None,
-        src_files,
-        vec![],
-        move_stdlib::move_stdlib_named_addresses(),
-    )
-    .set_pre_compiled_lib(Arc::new(PRECOMPILED_MOVE_STDLIB.clone()))
-    .set_default_config(pkg_config)
-    .build_and_report()
-    .expect("Error compiling...");
+    let (_files, compiled_units) =
+        Compiler::from_files(None, src_files, vec![], move_stdlib::named_addresses())
+            .set_pre_compiled_program_opt(Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
+            .set_default_config(pkg_config)
+            .build_and_report()
+            .expect("Error compiling...");
     compiled_units
         .into_iter()
         .map(|annot_unit| annot_unit.named_module.module)

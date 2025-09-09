@@ -8,7 +8,7 @@ use move_vm_runtime::{
         values::{self, Value, VectorRef},
         Type,
     },
-    natives::{extensions::NativeContextMut, functions::NativeResult},
+    natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -49,14 +49,14 @@ pub fn prepare_verifying_key_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_prepare_verifying_key_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.groth16_prepare_verifying_key_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
         )
     };
     let bytes = pop_arg!(args, VectorRef);
-    let verifying_key = &*bytes.as_bytes_ref();
+    let verifying_key = bytes.as_bytes_ref();
 
     let curve = pop_arg!(args, u8);
 
@@ -81,9 +81,9 @@ pub fn prepare_verifying_key_internal(
 
     let result;
     if curve == BLS12381 {
-        result = fastcrypto_zkp::bls12381::api::prepare_pvk_bytes(verifying_key);
+        result = fastcrypto_zkp::bls12381::api::prepare_pvk_bytes(&verifying_key);
     } else if curve == BN254 {
-        result = fastcrypto_zkp::bn254::api::prepare_pvk_bytes(verifying_key);
+        result = fastcrypto_zkp::bn254::api::prepare_pvk_bytes(&verifying_key);
     } else {
         return Ok(NativeResult::err(cost, INVALID_CURVE));
     }
@@ -137,7 +137,7 @@ pub fn verify_groth16_proof_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_verify_groth16_proof_internal_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table
                 .groth16_verify_groth16_proof_internal_cost_params
@@ -146,22 +146,22 @@ pub fn verify_groth16_proof_internal(
         )
     };
     let bytes5 = pop_arg!(args, VectorRef);
-    let proof_points = &*bytes5.as_bytes_ref();
+    let proof_points = bytes5.as_bytes_ref();
 
     let bytes4 = pop_arg!(args, VectorRef);
-    let public_proof_inputs = &*bytes4.as_bytes_ref();
+    let public_proof_inputs = bytes4.as_bytes_ref();
 
     let bytes3 = pop_arg!(args, VectorRef);
-    let delta_g2_neg_pc = &*bytes3.as_bytes_ref();
+    let delta_g2_neg_pc = bytes3.as_bytes_ref();
 
     let bytes2 = pop_arg!(args, VectorRef);
-    let gamma_g2_neg_pc = &*bytes2.as_bytes_ref();
+    let gamma_g2_neg_pc = bytes2.as_bytes_ref();
 
     let byte1 = pop_arg!(args, VectorRef);
-    let alpha_g1_beta_g2 = &*byte1.as_bytes_ref();
+    let alpha_g1_beta_g2 = byte1.as_bytes_ref();
 
     let bytes = pop_arg!(args, VectorRef);
-    let vk_gamma_abc_g1 = &*bytes.as_bytes_ref();
+    let vk_gamma_abc_g1 = bytes.as_bytes_ref();
 
     let curve = pop_arg!(args, u8);
 
@@ -189,8 +189,7 @@ pub fn verify_groth16_proof_internal(
             context.charge_gas(crypto_invalid_arguments_cost);
             let cost = if context
                 .extensions()
-                .get::<NativeContextMut<ObjectRuntime>>()
-                .borrow()
+                .get::<ObjectRuntime>()?
                 .protocol_config
                 .native_charging_v2()
             {
@@ -222,24 +221,24 @@ pub fn verify_groth16_proof_internal(
             return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
         }
         result = fastcrypto_zkp::bls12381::api::verify_groth16_in_bytes(
-            vk_gamma_abc_g1,
-            alpha_g1_beta_g2,
-            gamma_g2_neg_pc,
-            delta_g2_neg_pc,
-            public_proof_inputs,
-            proof_points,
+            &vk_gamma_abc_g1,
+            &alpha_g1_beta_g2,
+            &gamma_g2_neg_pc,
+            &delta_g2_neg_pc,
+            &public_proof_inputs,
+            &proof_points,
         );
     } else if curve == BN254 {
         if public_proof_inputs.len() > fastcrypto_zkp::bn254::api::SCALAR_SIZE * MAX_PUBLIC_INPUTS {
             return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
         }
         result = fastcrypto_zkp::bn254::api::verify_groth16_in_bytes(
-            vk_gamma_abc_g1,
-            alpha_g1_beta_g2,
-            gamma_g2_neg_pc,
-            delta_g2_neg_pc,
-            public_proof_inputs,
-            proof_points,
+            &vk_gamma_abc_g1,
+            &alpha_g1_beta_g2,
+            &gamma_g2_neg_pc,
+            &delta_g2_neg_pc,
+            &public_proof_inputs,
+            &proof_points,
         );
     } else {
         return Ok(NativeResult::err(cost, INVALID_CURVE));

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::collections::btree_map::{self, BTreeMap};
 
 /// A storage operation.

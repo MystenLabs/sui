@@ -5,7 +5,7 @@
 use crate::{
     deserializer::load_signature_token_test_entry,
     file_format::{DatatypeHandleIndex, SignatureToken},
-    file_format_common::{BinaryData, SerializedType, SIGNATURE_TOKEN_DEPTH_MAX},
+    file_format_common::{BinaryData, SIGNATURE_TOKEN_DEPTH_MAX, SerializedType},
     serializer::{serialize_signature_token, serialize_signature_token_unchecked},
 };
 use std::io::Cursor;

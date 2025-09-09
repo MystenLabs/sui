@@ -20,6 +20,11 @@ module a::m {
     public fun r(p: &mut UID, s: Receiving<other::S>): other::S {
         transfer::public_receive(p, s)
     }
+
+    public fun m(s: other::S, p: sui::party::Party) {
+        transfer::public_party_transfer(s, p)
+    }
+
 }
 
 module a::other {
@@ -47,6 +52,14 @@ module sui::transfer {
         abort 0
     }
 
+    public fun party_transfer<T: key>(_: T, _: sui::party::Party) {
+        abort 0
+    }
+
+    public fun public_party_transfer<T: key + store>(_: T, _: sui::party::Party) {
+        abort 0
+    }
+
     public fun freeze_object<T: key>(_: T) {
         abort 0
     }
@@ -70,4 +83,8 @@ module sui::transfer {
     public fun public_receive<T: key + store>(_: &mut UID, _: Receiving<T>): T {
         abort 0
     }
+}
+
+module sui::party {
+    struct Party has copy, drop {}
 }

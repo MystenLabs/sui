@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(hidden_glob_reexports)]
 use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_binary_format::{
     errors::{Location, VMError},
     file_format::{AbilitySet, CompiledModule, SignatureToken},
@@ -11,7 +11,7 @@ use move_binary_format::{
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{
     language_storage::TypeTag,
-    transaction_argument::TransactionArgument,
+    runtime_value::MoveValue,
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_runtime::dev_utils::gas_schedule::Gas;
@@ -38,10 +38,7 @@ pub fn get_gas_status(cost_table: &CostTable, gas_budget: Option<u64>) -> Result
     Ok(gas_status)
 }
 
-pub(crate) fn explain_type_error(
-    script_params: &[SignatureToken],
-    txn_args: &[TransactionArgument],
-) {
+pub(crate) fn explain_type_error(script_params: &[SignatureToken], txn_args: &[MoveValue]) {
     // TODO: printing type(s) of missing arguments could be useful
     if script_params.len() != txn_args.len() {
         println!(
@@ -65,7 +62,7 @@ pub(crate) fn explain_execution_error(
     script_type_parameters: &[AbilitySet],
     script_parameters: &[SignatureToken],
     vm_type_args: &[TypeTag],
-    txn_args: &[TransactionArgument],
+    txn_args: &[MoveValue],
 ) -> Result<()> {
     use StatusCode::*;
     match (error.location(), error.major_status(), error.sub_status()) {

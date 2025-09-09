@@ -15,33 +15,32 @@ Tests projects are established as following
     - linkage table should be empty
 - A_v2 is a package upgrade of A (now at version 2).
     - linkage table should be empty
-- B_depends_on_A is a normal package that depends on A, and source code references A.
+- B_A is a normal package that depends on A, and source code references A.
     - linkage table should contain package A's ID
-- B_depends_on_A_but_no_code_references_A is a package that depends on A, but source code does not reference any code from A.
+- B_A1 is a package that depends on A, but source code does not reference any code from A.
      - linkage table should be empty
-- C_depends_on_B is a normal package that depends on B, and source code references B.
+- C_B_A is a normal package that depends on B_A, and source code references B.
      - linkage table should contain package B's ID and package A's ID
-- C_depends_on_B_but_no_code_references_B is a package that depends on B, but source code does not reference any code from B.
+- C_B is a package that depends on B, but source code does not reference any code from B.
      - linkage table should be empty
-- D_depends_on_A_v1 is a normal package that depends on A v1, and source code references A.
+- D_A_v1 is a normal package that depends on A v1, and source code references A.
      - linkage table should contain package A's ID (and the related upgrade info)
-- D_depends_on_A_v1_but_no_code_references_A is a package that depends on A v1, but source code does not reference any code from A.
+- D_A is a package that depends on A v1, but source code does not reference any code from A.
      - linkage table should be empty
-- E_depends_on_A_v1_and_on_B_depends_on_A_and_code_references_A/
+- E is a package that depends on A_v1 and on B_A
      - linkage table should contain package A's ID (and the related upgrade info) and package B's ID
-- E_depends_on_A_v1_and_on_B_depends_on_A_but_no_code_references_to_A_or_B/
+- E_A_v1
     - linkage table should be empty
-- F_depends_on_A_as_bytecode_dep/
+- F is a package that depends on A which is set to be a bytecode dep
     - linkage table should be empty
-- G_unpublished just a normal package that is not published
-- H_depends_on_G_unpublished
+- G just a normal package that is not published
+- H is just a package that depends on G
     - linkage table should be empty
-- I_depends_on_D_depends_on_A_v1_but_no_code_references_A_and_on_A_v2
+- I depends_on_D A but_no code references A, and depends on A_v2
     - linkage table should be empty
 - K is a normal package
 - K_v2 is a package upgrade of K
-- L_depends_on_K a package that has a code dependency on K
+- L is a package that has a code dependency on K
     - linkage table should contain package K's ID
-- M_depends_on_L_and_K_v2_no_code_references_K_v2 has a code dependency on L_depends_on K package, and a dependency on K_v2 but no code
-references K_v2
+- M has a code dependency on L_depends_on K package, and a dependency on K_v2 but no code references K_v2
     - linkage table should contain package K's ID and L's ID

@@ -16,6 +16,8 @@ pub struct AppMetrics {
     pub request_size_bytes: HistogramVec,
     pub timeouts_total: IntCounterVec,
     pub error_counts: IntCounterVec,
+    pub request_body_read_failures: IntCounterVec,
+    pub upstream_request_failures: IntCounterVec,
 }
 
 impl AppMetrics {
@@ -73,6 +75,20 @@ impl AppMetrics {
             error_counts: register_int_counter_vec_with_registry!(
                 "edge_proxy_error_counts",
                 "Total number of errors encountered by the edge proxy",
+                &["peer_type", "error_type"],
+                registry
+            )
+            .unwrap(),
+            request_body_read_failures: register_int_counter_vec_with_registry!(
+                "edge_proxy_request_body_read_failures",
+                "Total number of request body read failures",
+                &[],
+                registry
+            )
+            .unwrap(),
+            upstream_request_failures: register_int_counter_vec_with_registry!(
+                "edge_proxy_upstream_request_failures",
+                "Total number of upstream request failures",
                 &["peer_type", "error_type"],
                 registry
             )

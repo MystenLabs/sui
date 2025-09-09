@@ -4,6 +4,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while1, take_while_m_n},
@@ -14,11 +15,7 @@ use nom::{
     IResult,
 };
 
-use crate::{
-    block::{BlockRef, Round, Slot},
-    context::Context,
-    test_dag_builder::DagBuilder,
-};
+use crate::{block::Slot, context::Context, test_dag_builder::DagBuilder};
 
 /// DagParser
 ///

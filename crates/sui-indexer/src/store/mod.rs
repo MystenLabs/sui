@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use backon::{ExponentialBuilder, Retryable};
 use diesel_async::{scoped_futures::ScopedBoxFuture, AsyncPgConnection};
 pub(crate) use indexer_store::*;
 pub use pg_indexer_store::PgIndexerStore;
@@ -27,30 +28,23 @@ where
     Q: Clone,
     T: 'a,
 {
-    let backoff = backoff::ExponentialBackoff {
-        max_elapsed_time: Some(timeout),
-        ..Default::default()
-    };
-    backoff::future::retry(backoff, || async {
-        let mut connection = pool.get().await.map_err(|e| backoff::Error::Transient {
-            err: IndexerError::PostgresWriteError(e.to_string()),
-            retry_after: None,
-        })?;
+    let transaction_fn = || async {
+        let mut connection = pool.get().await?;
 
         connection
             .build_transaction()
             .read_write()
             .run(query.clone())
             .await
-            .map_err(|e| {
-                tracing::error!("Error with persisting data into DB: {:?}, retrying...", e);
-                backoff::Error::Transient {
-                    err: IndexerError::PostgresWriteError(e.to_string()),
-                    retry_after: None,
-                }
-            })
-    })
-    .await
+    };
+
+    transaction_fn
+        .retry(ExponentialBuilder::default().with_max_delay(timeout))
+        .when(|e: &IndexerError| {
+            tracing::error!("Error with persisting data into DB: {:?}, retrying...", e);
+            true
+        })
+        .await
 }
 
 pub async fn read_with_retry<'a, Q, T>(
@@ -66,28 +60,21 @@ where
     Q: Clone,
     T: 'a,
 {
-    let backoff = backoff::ExponentialBackoff {
-        max_elapsed_time: Some(timeout),
-        ..Default::default()
-    };
-    backoff::future::retry(backoff, || async {
-        let mut connection = pool.get().await.map_err(|e| backoff::Error::Transient {
-            err: IndexerError::PostgresWriteError(e.to_string()),
-            retry_after: None,
-        })?;
+    let read_fn = || async {
+        let mut connection = pool.get().await?;
 
         connection
             .build_transaction()
             .read_only()
             .run(query.clone())
             .await
-            .map_err(|e| {
-                tracing::error!("Error with reading data from DB: {:?}, retrying...", e);
-                backoff::Error::Transient {
-                    err: IndexerError::PostgresWriteError(e.to_string()),
-                    retry_after: None,
-                }
-            })
-    })
-    .await
+    };
+
+    read_fn
+        .retry(ExponentialBuilder::default().with_max_delay(timeout))
+        .when(|e: &IndexerError| {
+            tracing::error!("Error with reading data from DB: {:?}, retrying...", e);
+            true
+        })
+        .await
 }

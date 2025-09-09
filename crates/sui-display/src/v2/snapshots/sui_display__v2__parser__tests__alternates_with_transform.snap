@@ -1,0 +1,8 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{foo | bar | baz :base64}\"#)"
+---
+{ foo
+| bar
+| baz
+: base64}

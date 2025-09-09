@@ -8,19 +8,16 @@ use crate::{
     identifier::{IdentStr, Identifier},
     parsing::types::{ParsedModuleId, ParsedStructType, ParsedType},
 };
+use indexmap::IndexSet;
 use move_proc_macros::test_variant_order;
 use once_cell::sync::Lazy;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
     fmt::{Display, Formatter},
     str::FromStr,
 };
-
-pub const CODE_TAG: u8 = 0;
-pub const RESOURCE_TAG: u8 = 1;
 
 /// Hex address: 0x1
 pub const CORE_CODE_ADDRESS: AccountAddress = AccountAddress::ONE;
@@ -134,13 +131,13 @@ impl TypeTag {
     }
 
     /// Return all of the addresses used inside of the type.
-    pub fn all_addresses(&self) -> BTreeSet<AccountAddress> {
-        let mut account_addresses = BTreeSet::new();
+    pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
+        let mut account_addresses = IndexSet::new();
         self.find_addresses_internal(&mut account_addresses);
         account_addresses
     }
 
-    pub(crate) fn find_addresses_internal(&self, account_addresses: &mut BTreeSet<AccountAddress>) {
+    pub(crate) fn find_addresses_internal(&self, account_addresses: &mut IndexSet<AccountAddress>) {
         match self {
             TypeTag::Bool
             | TypeTag::U8
@@ -178,12 +175,6 @@ pub struct StructTag {
 }
 
 impl StructTag {
-    pub fn access_vector(&self) -> Vec<u8> {
-        let mut key = vec![RESOURCE_TAG];
-        key.append(&mut bcs::to_bytes(self).unwrap());
-        key
-    }
-
     /// Returns true if this is a `StructTag` for an `std::ascii::String` struct defined in the
     /// standard library at address `move_std_addr`.
     pub fn is_ascii_string(&self, move_std_addr: &AccountAddress) -> bool {
@@ -273,19 +264,20 @@ impl StructTag {
                 })
     }
 
-    pub fn all_addresses(&self) -> BTreeSet<AccountAddress> {
-        let mut account_addresses = BTreeSet::new();
+    pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
+        let mut account_addresses = IndexSet::new();
         self.all_addresses_internal(&mut account_addresses);
         account_addresses
     }
 
-    pub fn all_addresses_internal(&self, addrs: &mut BTreeSet<AccountAddress>) {
+    pub fn all_addresses_internal(&self, addrs: &mut IndexSet<AccountAddress>) {
         let StructTag {
             address,
             module: _,
             name: _,
             type_params,
         } = self;
+        // Traverse in a pre-order manner. So the address is added first, then the type parameters.
         addrs.insert(*address);
         for tag in type_params {
             tag.find_addresses_internal(addrs);
@@ -334,12 +326,6 @@ impl ModuleId {
 
     pub fn address(&self) -> &AccountAddress {
         &self.address
-    }
-
-    pub fn access_vector(&self) -> Vec<u8> {
-        let mut key = vec![CODE_TAG];
-        key.append(&mut bcs::to_bytes(self).unwrap());
-        key
     }
 
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {

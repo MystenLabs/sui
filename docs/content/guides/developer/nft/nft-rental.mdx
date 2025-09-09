@@ -2,6 +2,8 @@
 title: NFT Rental Example
 description: An example using the Kiosk Apps standard that provides the ability for users to rent NFTs according to the rules of a provided policy instead of outright owning them. This approach closely aligns with the ERC-4907 renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
 keywords: [ERC-721, NFT]
+mdx:
+  format: md
 ---
 
 NFT renting is a mechanism that allows individuals without ownership or possession of a specific NFT to temporarily utilize or experience it. The implementation of this process leverages the [Kiosk Apps standard](../../../standards/kiosk-apps.mdx) to establish an infrastructure for rental transactions. This approach closely aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
@@ -67,7 +69,7 @@ This implementation is charging a rental fee based on days. You can re-purpose a
 
 The NFT Rental example uses a single module, `nft_rental.move`. You can find the source for this file hosted in the [sui repository](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental/sources/nft_rental.move) in the `examples` directory. The source code includes extensive comments to help you follow the example's logic and structure. 
 
-### nft_rental
+### `nft_rental`
 
 The `nft_rental` module provides an API that facilitates lending or borrowing through the following operations:
 
@@ -79,7 +81,7 @@ The `nft_rental` module provides an API that facilitates lending or borrowing th
 
 ### Structs
 
-The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct has only the `drop` ability and acts as the extension key for the kiosk `Rentables` extension.
+The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct has only the `drop` ability and acts as the extension key for the Kiosk `Rentables` extension.
 
 ```move
 public struct Rentables has drop {}
@@ -124,7 +126,7 @@ public struct Rentable<T: key + store> has store {
   /// Initially undefined, is updated once someone rents it.
   start_date: Option<u64>,
   price_per_day: u64,
-  /// The kiosk id that the object was taken from.
+  /// The kiosk ID that the object was taken from.
   kiosk_id: ID,
 }
 ```

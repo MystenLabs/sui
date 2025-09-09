@@ -1,0 +1,73 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-12:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-16:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::pub();
+//> sui::transfer::public_transfer<test::m1::Pub>(Result(0), Input(0));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 18:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m1::Pub {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, lines 20-22:
+//# programmable
+//> 0: test::m1::pub();
+//> sui::transfer::public_share_object<test::m1::Pub>(Result(0));
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 24:
+//# view-object 4,0
+Owner: Shared( 3 )
+Version: 3
+Contents: test::m1::Pub {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+}
+
+task 6, lines 26-28:
+//# programmable
+//> 0: test::m1::pub();
+//> sui::transfer::public_freeze_object<test::m1::Pub>(Result(0));
+created: object(6,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 30:
+//# view-object 6,0
+Owner: Immutable
+Version: 4
+Contents: test::m1::Pub {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+}

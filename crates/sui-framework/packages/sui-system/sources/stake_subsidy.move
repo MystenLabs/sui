@@ -3,36 +3,30 @@
 
 module sui_system::stake_subsidy;
 
+use sui::bag::{Self, Bag};
 use sui::balance::Balance;
 use sui::sui::SUI;
-use sui::bag::Bag;
-use sui::bag;
+
+const ESubsidyDecreaseRateTooLarge: u64 = 0;
+
+const BASIS_POINT_DENOMINATOR: u128 = 100_00;
 
 public struct StakeSubsidy has store {
     /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
     balance: Balance<SUI>,
-
     /// Count of the number of times stake subsidies have been distributed.
     distribution_counter: u64,
-
     /// The amount of stake subsidy to be drawn down per distribution.
     /// This amount decays and decreases over time.
     current_distribution_amount: u64,
-
     /// Number of distributions to occur before the distribution amount decays.
     stake_subsidy_period_length: u64,
-
     /// The rate at which the distribution amount decays at the end of each
     /// period. Expressed in basis points.
     stake_subsidy_decrease_rate: u16,
-
     /// Any extra fields that's not defined statically.
     extra_fields: Bag,
 }
-
-const BASIS_POINT_DENOMINATOR: u128 = 10000;
-
-const ESubsidyDecreaseRateTooLarge: u64 = 0;
 
 public(package) fun create(
     balance: Balance<SUI>,
@@ -70,9 +64,12 @@ public(package) fun advance_epoch(self: &mut StakeSubsidy): Balance<SUI> {
 
     // Decrease the subsidy amount only when the current period ends.
     if (self.distribution_counter % self.stake_subsidy_period_length == 0) {
-        let decrease_amount = self.current_distribution_amount as u128
+        let decrease_amount =
+            self.current_distribution_amount as u128
             * (self.stake_subsidy_decrease_rate as u128) / BASIS_POINT_DENOMINATOR;
-        self.current_distribution_amount = self.current_distribution_amount - (decrease_amount as u64)
+
+        self.current_distribution_amount =
+            self.current_distribution_amount - (decrease_amount as u64)
     };
 
     stake_subsidy

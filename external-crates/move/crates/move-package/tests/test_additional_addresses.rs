@@ -4,12 +4,12 @@
 
 use move_core_types::account_address::AccountAddress;
 use move_package::{
+    BuildConfig,
     resolution::{dependency_graph as DG, resolution_graph as RG},
     source_package::{
         layout::SourcePackageLayout,
         parsed_manifest::{self as PM, Dependencies},
     },
-    BuildConfig,
 };
 use std::{collections::BTreeMap, path::PathBuf};
 use tempfile::tempdir;
@@ -32,6 +32,7 @@ fn test_additional_addresses() {
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
         /* implicit_deps */ Dependencies::default(),
+        /* force_lock_file */ false,
     );
     let (dg, _) = dep_graph_builder
         .get_graph(
@@ -48,33 +49,37 @@ fn test_additional_addresses() {
         ..
     } = dep_graph_builder;
 
-    assert!(RG::ResolvedGraph::resolve(
-        dg.clone(),
-        BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            additional_named_addresses: BTreeMap::from([(
-                "A".to_string(),
-                AccountAddress::from_hex_literal("0x1").unwrap()
-            )]),
-            ..Default::default()
-        },
-        &mut dependency_cache,
-        None,
-        &mut progress_output,
-    )
-    .is_ok());
+    assert!(
+        RG::ResolvedGraph::resolve(
+            dg.clone(),
+            BuildConfig {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                additional_named_addresses: BTreeMap::from([(
+                    "A".to_string(),
+                    AccountAddress::from_hex_literal("0x1").unwrap()
+                )]),
+                ..Default::default()
+            },
+            &mut dependency_cache,
+            None,
+            &mut progress_output,
+        )
+        .is_ok()
+    );
 
-    assert!(RG::ResolvedGraph::resolve(
-        dg,
-        BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            ..Default::default()
-        },
-        &mut dependency_cache,
-        None,
-        &mut progress_output,
-    )
-    .is_err());
+    assert!(
+        RG::ResolvedGraph::resolve(
+            dg,
+            BuildConfig {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                ..Default::default()
+            },
+            &mut dependency_cache,
+            None,
+            &mut progress_output,
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -91,6 +96,7 @@ fn test_additional_addresses_already_assigned_same_value() {
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
         /* implicit_deps */ Dependencies::default(),
+        /* force_lock_file */ false,
     );
     let (dg, _) = dep_graph_builder
         .get_graph(
@@ -107,21 +113,23 @@ fn test_additional_addresses_already_assigned_same_value() {
         ..
     } = dep_graph_builder;
 
-    assert!(RG::ResolvedGraph::resolve(
-        dg,
-        BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            additional_named_addresses: BTreeMap::from([(
-                "A".to_string(),
-                AccountAddress::from_hex_literal("0x0").unwrap()
-            )]),
-            ..Default::default()
-        },
-        &mut dependency_cache,
-        None,
-        &mut progress_output,
-    )
-    .is_ok());
+    assert!(
+        RG::ResolvedGraph::resolve(
+            dg,
+            BuildConfig {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                additional_named_addresses: BTreeMap::from([(
+                    "A".to_string(),
+                    AccountAddress::from_hex_literal("0x0").unwrap()
+                )]),
+                ..Default::default()
+            },
+            &mut dependency_cache,
+            None,
+            &mut progress_output,
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -138,6 +146,7 @@ fn test_additional_addresses_already_assigned_different_value() {
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
         /* implicit_deps */ Dependencies::default(),
+        /* force_lock_file */ false,
     );
     let (dg, _) = dep_graph_builder
         .get_graph(
@@ -154,19 +163,21 @@ fn test_additional_addresses_already_assigned_different_value() {
         ..
     } = dep_graph_builder;
 
-    assert!(RG::ResolvedGraph::resolve(
-        dg,
-        BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            additional_named_addresses: BTreeMap::from([(
-                "A".to_string(),
-                AccountAddress::from_hex_literal("0x1").unwrap()
-            )]),
-            ..Default::default()
-        },
-        &mut dependency_cache,
-        None,
-        &mut progress_output,
-    )
-    .is_err());
+    assert!(
+        RG::ResolvedGraph::resolve(
+            dg,
+            BuildConfig {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                additional_named_addresses: BTreeMap::from([(
+                    "A".to_string(),
+                    AccountAddress::from_hex_literal("0x1").unwrap()
+                )]),
+                ..Default::default()
+            },
+            &mut dependency_cache,
+            None,
+            &mut progress_output,
+        )
+        .is_err()
+    );
 }

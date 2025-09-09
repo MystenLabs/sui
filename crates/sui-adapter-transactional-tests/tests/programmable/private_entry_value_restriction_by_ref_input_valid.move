@@ -35,9 +35,8 @@ module test::m1 {
 //> test::m1::priv(Input(0));
 //> test::m1::priv(Input(0));
 
-//# programmable --sender A --inputs @A  --gas-budget 10000000000
-//> 0: test::m1::v();
-//> 1: SplitCoins(Gas, [Result(0)]);
+//# programmable --sender A --inputs @A 0  --gas-budget 10000000000
+//> 0: SplitCoins(Gas, [Input(1)]);
 //> test::m1::coin(Gas);
-//> test::m1::coin(Result(1));
-//> TransferObjects([Result(1)], Input(0))
+//> test::m1::coin(Result(0));
+//> TransferObjects([Result(0)], Input(0))

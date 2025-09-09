@@ -26,20 +26,20 @@ title: Module `sui::ecvrf`
 
 
 
-<a name="sui_ecvrf_EInvalidProofEncoding"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/ecvrf.md#sui_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a>: u64 = 3;
-</code></pre>
-
-
-
 <a name="sui_ecvrf_EInvalidPublicKeyEncoding"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui/ecvrf.md#sui_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_ecvrf_EInvalidProofEncoding"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/ecvrf.md#sui_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a>: u64 = 3;
 </code></pre>
 
 

@@ -6,8 +6,8 @@ use crate::{
     cache::{
         arena::{Arena, ArenaBox, ArenaVec},
         identifier_interner::{
-            self, intern_ident_str, intern_identifier, intern_identifier_with_msg,
-            resolve_interned, IdentifierKey,
+            self, IdentifierKey, intern_ident_str, intern_identifier, intern_identifier_with_msg,
+            resolve_interned,
         },
     },
     dbg_println,
@@ -232,10 +232,12 @@ pub fn package(
         )?;
 
         let key = identifier_interner::intern_ident_str(loaded_module.id.name()).unwrap();
-        assert!(package_context
-            .loaded_modules
-            .insert(key, loaded_module)
-            .is_none());
+        assert!(
+            package_context
+                .loaded_modules
+                .insert(key, loaded_module)
+                .is_none()
+        );
     }
 
     let PackageContext {

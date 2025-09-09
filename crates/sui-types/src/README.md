@@ -1,11 +1,14 @@
 # sui-types README
 
-Note: this README file currently covers cryptography-related structs and methods.
+Supplementary technical documentation for some key types is available alongside source files, in Markdown files with the same name in the same directory.
+
+
+## Cryptography-related structs and methods
 
 Currently, three files are equipped with signature and hashing functionality (`crypto.rs`, `signature_seed` and
 `messages.rs`). See [Sui Signatures](https://github.com/MystenLabs/sui/blob/main/docs/content/concepts/cryptography/transaction-auth/signatures.mdx) for supported signature schemes and its requirments for user and authority signatures. See [fastcrypto](https://github.com/MystenLabs/fastcrypto) for concrete implementation of various cryptography libraries.
 
-## Quick links
+### Quick links
 
 - [crypto.rs](crypto.rs), the main library for cryptography (sign/verify/hash) structs and functions.
 - [signature_seed.rs](signature_seed.rs), deterministic signer using a seed, domain and some key identifier. Potential
@@ -14,7 +17,7 @@ Currently, three files are equipped with signature and hashing functionality (`c
 - [messages.rs](messages.rs), functionality for adding/verifying signatures to transactions (for both account holders
   and validators).
 
-## Tests
+### Tests
 
 Unit tests exist under the `unit_tests` folder, in particular
 

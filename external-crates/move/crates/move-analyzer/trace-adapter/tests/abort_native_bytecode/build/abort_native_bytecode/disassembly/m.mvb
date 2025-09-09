@@ -1,0 +1,28 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+foo(v#0#0: vector<u64>): u64 {
+B0:
+	0: ImmBorrowLoc[0](v#0#0: vector<u64>)
+	1: LdU64(0)
+	2: VecImmBorrow(1)
+	3: ReadRef
+	4: Ret
+}
+
+test() {
+B0:
+	0: VecPack(1, 0)
+	1: Call foo(vector<u64>): u64
+	2: Pop
+	3: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

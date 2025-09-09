@@ -1,0 +1,73 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 7-9:
+//# programmable --sender A --inputs 100 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-13:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 14-16:
+//# advance-epoch
+Epoch advanced: 1
+
+task 4, lines 17-19:
+//# programmable --sender A --inputs 200 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 21-23:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 6, lines 24-26:
+//# advance-epoch
+Epoch advanced: 2
+
+task 7, lines 27-29:
+//# programmable --sender A --inputs 300 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 31:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 9, lines 33-52:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch0Transaction": {
+      "epoch": {
+        "epochId": 0
+      }
+    },
+    "epoch1Transaction": {
+      "epoch": {
+        "epochId": 1
+      }
+    },
+    "epoch2Transaction": {
+      "epoch": {
+        "epochId": 2
+      }
+    }
+  }
+}

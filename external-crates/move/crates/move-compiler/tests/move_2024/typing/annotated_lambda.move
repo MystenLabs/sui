@@ -4,7 +4,7 @@ module a::m {
     }
 
     fun t() {
-        // cannot annotate a lambda this way
-        call!((|| 1 : || -> u64))
+        // this sort of annotation is now supported
+        call!((|| 1 : || -> u64));
     }
 }

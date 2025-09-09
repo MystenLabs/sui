@@ -62,7 +62,9 @@ Response: {
         "previousVersion": "1",
         "digest": "BRwz4gsomJX3ka2jqYBp7Ud2XSmL4We8weumCPsMSYSm"
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }
 
@@ -108,6 +110,8 @@ Response: {
           "N"
         ]
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }

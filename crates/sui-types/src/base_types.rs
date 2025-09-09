@@ -2,6 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulator_root::extract_balance_type_from_field;
+use crate::accumulator_root::is_balance_accumulator_field;
+use crate::balance::Balance;
 use crate::coin::Coin;
 use crate::coin::CoinMetadata;
 use crate::coin::TreasuryCap;
@@ -14,6 +17,7 @@ use crate::crypto::{
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
 use crate::dynamic_field::DynamicFieldType;
+use crate::dynamic_field::{DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME};
 use crate::effects::TransactionEffects;
 use crate::effects::TransactionEffectsAPI;
 use crate::epoch_data::EpochData;
@@ -31,11 +35,14 @@ use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
+use crate::sui_serde::to_custom_deser_error;
+use crate::sui_serde::to_sui_struct_tag_string;
 use crate::sui_serde::Readable;
-use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
+use crate::MoveTypeTagTrait;
+use crate::MoveTypeTagTraitGeneric;
 use crate::MOVE_STDLIB_ADDRESS;
 use crate::SUI_CLOCK_OBJECT_ID;
 use crate::SUI_FRAMEWORK_ADDRESS;
@@ -60,9 +67,12 @@ use rand::Rng;
 use schemars::JsonSchema;
 use serde::ser::Error;
 use serde::ser::SerializeSeq;
+use serde::Deserializer;
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use serde_with::DeserializeAs;
+use serde_with::SerializeAs;
 use shared_crypto::intent::HashingIntentScope;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
@@ -73,6 +83,10 @@ use sui_protocol_config::ProtocolConfig;
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/accumulator_types_tests.rs"]
+mod accumulator_types_tests;
 
 #[derive(
     Eq,
@@ -182,9 +196,32 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     )
 }
 
-pub type FullObjectRef = (FullObjectID, SequenceNumber, ObjectDigest);
+#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct FullObjectRef(pub FullObjectID, pub SequenceNumber, pub ObjectDigest);
 
-/// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
+impl FullObjectRef {
+    pub fn from_fastpath_ref(object_ref: ObjectRef) -> Self {
+        Self(
+            FullObjectID::Fastpath(object_ref.0),
+            object_ref.1,
+            object_ref.2,
+        )
+    }
+
+    pub fn from_object_ref_and_owner(object_ref: ObjectRef, owner: &Owner) -> Self {
+        let full_id = if let Some(start_version) = owner.start_version() {
+            FullObjectID::Consensus((object_ref.0, start_version))
+        } else {
+            FullObjectID::Fastpath(object_ref.0)
+        };
+        Self(full_id, object_ref.1, object_ref.2)
+    }
+
+    pub fn as_object_ref(&self) -> ObjectRef {
+        (self.0.id(), self.1, self.2)
+    }
+}
+/// Represents an distinct stream of object versions for a consensus object,
 /// based on the object ID and start version.
 pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 
@@ -207,6 +244,13 @@ pub enum MoveObjectType_ {
     StakedSui,
     /// A non-SUI coin type (i.e., `0x2::coin::Coin<T> where T != 0x2::sui::SUI`)
     Coin(TypeTag),
+    /// A SUI balance accumulator field
+    /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<0x2::sui::SUI>>, 0x2::accumulator::U128>`)
+    SuiBalanceAccumulatorField,
+    /// A non-SUI balance accumulator field
+    /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<T>>, 0x2::accumulator::U128>`
+    /// where T != 0x2::sui::SUI)
+    BalanceAccumulatorField(TypeTag),
     // NOTE: if adding a new type here, and there are existing on-chain objects of that
     // type with Other(_), that is ok, but you must hand-roll PartialEq/Eq/Ord/maybe Hash
     // to make sure the new type and Other(_) are interpreted consistently.
@@ -215,6 +259,10 @@ pub enum MoveObjectType_ {
 impl MoveObjectType {
     pub fn gas_coin() -> Self {
         Self(MoveObjectType_::GasCoin)
+    }
+
+    pub fn is_efficient_representation(&self) -> bool {
+        !matches!(self.0, MoveObjectType_::Other(_))
     }
 
     pub fn coin(coin_type: TypeTag) -> Self {
@@ -233,6 +281,8 @@ impl MoveObjectType {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => SUI_FRAMEWORK_ADDRESS,
             MoveObjectType_::StakedSui => SUI_SYSTEM_ADDRESS,
+            MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => SUI_FRAMEWORK_ADDRESS,
             MoveObjectType_::Other(s) => s.address,
         }
     }
@@ -241,6 +291,8 @@ impl MoveObjectType {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => COIN_MODULE_NAME,
             MoveObjectType_::StakedSui => STAKING_POOL_MODULE_NAME,
+            MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => DYNAMIC_FIELD_MODULE_NAME,
             MoveObjectType_::Other(s) => &s.module,
         }
     }
@@ -249,6 +301,8 @@ impl MoveObjectType {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => COIN_STRUCT_NAME,
             MoveObjectType_::StakedSui => STAKED_SUI_STRUCT_NAME,
+            MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => DYNAMIC_FIELD_FIELD_STRUCT_NAME,
             MoveObjectType_::Other(s) => &s.name,
         }
     }
@@ -258,6 +312,12 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin => vec![GAS::type_tag()],
             MoveObjectType_::StakedSui => vec![],
             MoveObjectType_::Coin(inner) => vec![inner.clone()],
+            MoveObjectType_::SuiBalanceAccumulatorField => {
+                Self::balance_accumulator_field_type_params(GAS::type_tag())
+            }
+            MoveObjectType_::BalanceAccumulatorField(inner) => {
+                Self::balance_accumulator_field_type_params(inner.clone())
+            }
             MoveObjectType_::Other(s) => s.type_params.clone(),
         }
     }
@@ -267,6 +327,12 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin => vec![GAS::type_tag()],
             MoveObjectType_::StakedSui => vec![],
             MoveObjectType_::Coin(inner) => vec![inner],
+            MoveObjectType_::SuiBalanceAccumulatorField => {
+                Self::balance_accumulator_field_type_params(GAS::type_tag())
+            }
+            MoveObjectType_::BalanceAccumulatorField(inner) => {
+                Self::balance_accumulator_field_type_params(inner)
+            }
             MoveObjectType_::Other(s) => s.type_params,
         }
     }
@@ -276,8 +342,30 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin => Some(GAS::type_tag()),
             MoveObjectType_::Coin(inner) => Some(inner.clone()),
             MoveObjectType_::StakedSui => None,
+            MoveObjectType_::SuiBalanceAccumulatorField => None,
+            MoveObjectType_::BalanceAccumulatorField(_) => None,
             MoveObjectType_::Other(_) => None,
         }
+    }
+
+    pub fn balance_accumulator_field_type_maybe(&self) -> Option<TypeTag> {
+        match &self.0 {
+            MoveObjectType_::SuiBalanceAccumulatorField => Some(GAS::type_tag()),
+            MoveObjectType_::BalanceAccumulatorField(inner) => Some(inner.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_balance_accumulator_field(&self) -> bool {
+        matches!(
+            self.0,
+            MoveObjectType_::SuiBalanceAccumulatorField
+                | MoveObjectType_::BalanceAccumulatorField(_)
+        )
+    }
+
+    pub fn is_sui_balance_accumulator_field(&self) -> bool {
+        matches!(self.0, MoveObjectType_::SuiBalanceAccumulatorField)
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -290,6 +378,10 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin => 1,
             MoveObjectType_::StakedSui => 1,
             MoveObjectType_::Coin(inner) => bcs::serialized_size(inner).unwrap() + 1,
+            MoveObjectType_::SuiBalanceAccumulatorField => 1,
+            MoveObjectType_::BalanceAccumulatorField(inner) => {
+                bcs::serialized_size(inner).unwrap() + 1
+            }
             MoveObjectType_::Other(s) => bcs::serialized_size(s).unwrap() + 1,
         }
     }
@@ -298,7 +390,10 @@ impl MoveObjectType {
     pub fn is_coin(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => true,
-            MoveObjectType_::StakedSui | MoveObjectType_::Other(_) => false,
+            MoveObjectType_::StakedSui
+            | MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::Other(_) => false,
         }
     }
 
@@ -306,9 +401,11 @@ impl MoveObjectType {
     pub fn is_gas_coin(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin => true,
-            MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) | MoveObjectType_::Other(_) => {
-                false
-            }
+            MoveObjectType_::StakedSui
+            | MoveObjectType_::Coin(_)
+            | MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::Other(_) => false,
         }
     }
 
@@ -317,33 +414,42 @@ impl MoveObjectType {
         match &self.0 {
             MoveObjectType_::GasCoin => GAS::is_gas_type(t),
             MoveObjectType_::Coin(c) => t == c,
-            MoveObjectType_::StakedSui | MoveObjectType_::Other(_) => false,
+            MoveObjectType_::StakedSui
+            | MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::Other(_) => false,
         }
     }
 
     pub fn is_staked_sui(&self) -> bool {
         match &self.0 {
             MoveObjectType_::StakedSui => true,
-            MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) | MoveObjectType_::Other(_) => {
-                false
-            }
+            MoveObjectType_::GasCoin
+            | MoveObjectType_::Coin(_)
+            | MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::Other(_) => false,
         }
     }
 
     pub fn is_coin_metadata(&self) -> bool {
         match &self.0 {
-            MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
-                false
-            }
+            MoveObjectType_::GasCoin
+            | MoveObjectType_::StakedSui
+            | MoveObjectType_::Coin(_)
+            | MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => false,
             MoveObjectType_::Other(s) => CoinMetadata::is_coin_metadata(s),
         }
     }
 
     pub fn is_treasury_cap(&self) -> bool {
         match &self.0 {
-            MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
-                false
-            }
+            MoveObjectType_::GasCoin
+            | MoveObjectType_::StakedSui
+            | MoveObjectType_::Coin(_)
+            | MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => false,
             MoveObjectType_::Other(s) => TreasuryCap::is_treasury_type(s),
         }
     }
@@ -377,6 +483,10 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
                 false
             }
+            MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => {
+                true // These are dynamic fields
+            }
             MoveObjectType_::Other(s) => DynamicFieldInfo::is_dynamic_field(s),
         }
     }
@@ -385,8 +495,14 @@ impl MoveObjectType {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
                 Err(SuiError::ObjectDeserializationError {
-                    error: "Error extracting dynamic object name from Coin object".to_string(),
+                    error: "Error extracting dynamic object name from specialized object type"
+                        .to_string(),
                 })
+            }
+            MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => {
+                let struct_tag: StructTag = self.clone().into();
+                DynamicFieldInfo::try_extract_field_name(&struct_tag, type_)
             }
             MoveObjectType_::Other(s) => DynamicFieldInfo::try_extract_field_name(s, type_),
         }
@@ -396,8 +512,14 @@ impl MoveObjectType {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
                 Err(SuiError::ObjectDeserializationError {
-                    error: "Error extracting dynamic object value from Coin object".to_string(),
+                    error: "Error extracting dynamic object value from specialized object type"
+                        .to_string(),
                 })
+            }
+            MoveObjectType_::SuiBalanceAccumulatorField
+            | MoveObjectType_::BalanceAccumulatorField(_) => {
+                let struct_tag: StructTag = self.clone().into();
+                DynamicFieldInfo::try_extract_field_value(&struct_tag)
             }
             MoveObjectType_::Other(s) => DynamicFieldInfo::try_extract_field_value(s),
         }
@@ -409,6 +531,18 @@ impl MoveObjectType {
             MoveObjectType_::StakedSui => StakedSui::is_staked_sui(s),
             MoveObjectType_::Coin(inner) => {
                 Coin::is_coin(s) && s.type_params.len() == 1 && inner == &s.type_params[0]
+            }
+            MoveObjectType_::SuiBalanceAccumulatorField => {
+                is_balance_accumulator_field(s)
+                    && extract_balance_type_from_field(s)
+                        .map(|t| GAS::is_gas_type(&t))
+                        .unwrap_or(false)
+            }
+            MoveObjectType_::BalanceAccumulatorField(inner) => {
+                is_balance_accumulator_field(s)
+                    && extract_balance_type_from_field(s)
+                        .map(|t| &t == inner)
+                        .unwrap_or(false)
             }
             MoveObjectType_::Other(o) => s == o,
         }
@@ -426,6 +560,25 @@ impl MoveObjectType {
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
         StructTag::from(self.clone()).to_canonical_string(with_prefix)
     }
+
+    /// Helper function to construct type parameters for balance accumulator fields
+    /// Field<Key<Balance<T>>, U128> has two type params
+    fn balance_accumulator_field_type_params(inner_type: TypeTag) -> Vec<TypeTag> {
+        use crate::accumulator_root::{AccumulatorKey, U128};
+        let balance_type = Balance::type_tag(inner_type);
+        let key_type = AccumulatorKey::get_type_tag(&[balance_type]);
+        let u128_type = U128::get_type_tag();
+        vec![key_type, u128_type]
+    }
+
+    /// Map from T to Field<AccumulatorKey<Balance<T>>, U128>
+    fn balance_accumulator_field_struct_tag(inner_type: TypeTag) -> StructTag {
+        use crate::accumulator_root::{AccumulatorKey, U128};
+        let balance_type = Balance::type_tag(inner_type);
+        let key_type = AccumulatorKey::get_type_tag(&[balance_type]);
+        let u128_type = U128::get_type_tag();
+        DynamicFieldInfo::dynamic_field_type(key_type, u128_type)
+    }
 }
 
 impl From<StructTag> for MoveObjectType {
@@ -437,6 +590,16 @@ impl From<StructTag> for MoveObjectType {
             MoveObjectType_::Coin(s.type_params.pop().unwrap())
         } else if StakedSui::is_staked_sui(&s) {
             MoveObjectType_::StakedSui
+        } else if is_balance_accumulator_field(&s) {
+            if let Some(balance_type) = extract_balance_type_from_field(&s) {
+                if GAS::is_gas_type(&balance_type) {
+                    MoveObjectType_::SuiBalanceAccumulatorField
+                } else {
+                    MoveObjectType_::BalanceAccumulatorField(balance_type)
+                }
+            } else {
+                MoveObjectType_::Other(s)
+            }
         } else {
             MoveObjectType_::Other(s)
         })
@@ -449,6 +612,12 @@ impl From<MoveObjectType> for StructTag {
             MoveObjectType_::GasCoin => GasCoin::type_(),
             MoveObjectType_::StakedSui => StakedSui::type_(),
             MoveObjectType_::Coin(inner) => Coin::type_(inner),
+            MoveObjectType_::SuiBalanceAccumulatorField => {
+                MoveObjectType::balance_accumulator_field_struct_tag(GAS::type_tag())
+            }
+            MoveObjectType_::BalanceAccumulatorField(inner) => {
+                MoveObjectType::balance_accumulator_field_struct_tag(inner)
+            }
             MoveObjectType_::Other(s) => s,
         }
     }
@@ -938,6 +1107,11 @@ pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
+pub const RESOLVED_TX_CONTEXT: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &SUI_FRAMEWORK_ADDRESS,
+    TX_CONTEXT_MODULE_NAME,
+    TX_CONTEXT_STRUCT_NAME,
+);
 
 pub fn move_ascii_str_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {
@@ -1018,6 +1192,8 @@ pub struct TxContext {
     epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
+    // Reference gas price
+    rgp: u64,
     // gas price passed to transaction as input
     gas_price: u64,
     // gas budget passed to transaction as input
@@ -1029,7 +1205,7 @@ pub struct TxContext {
     is_native: bool,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TxContextKind {
     // No TxContext
     None,
@@ -1044,6 +1220,7 @@ impl TxContext {
         sender: &SuiAddress,
         digest: &TransactionDigest,
         epoch_data: &EpochData,
+        rgp: u64,
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<SuiAddress>,
@@ -1054,6 +1231,7 @@ impl TxContext {
             digest,
             &epoch_data.epoch_id(),
             epoch_data.epoch_start_timestamp(),
+            rgp,
             gas_price,
             gas_budget,
             sponsor,
@@ -1066,6 +1244,7 @@ impl TxContext {
         digest: &TransactionDigest,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        rgp: u64,
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<SuiAddress>,
@@ -1077,6 +1256,7 @@ impl TxContext {
             epoch: *epoch_id,
             epoch_timestamp_ms,
             ids_created: 0,
+            rgp,
             gas_price,
             gas_budget,
             sponsor: sponsor.map(|s| s.into()),
@@ -1097,15 +1277,19 @@ impl TxContext {
             return TxContextKind::None;
         };
 
-        let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
-        let is_tx_context_type = module_name == TX_CONTEXT_MODULE_NAME
-            && module_addr == &SUI_FRAMEWORK_ADDRESS
-            && struct_name == TX_CONTEXT_STRUCT_NAME;
-
-        if is_tx_context_type {
+        if resolve_struct(view, *idx) == RESOLVED_TX_CONTEXT {
             kind
         } else {
             TxContextKind::None
+        }
+    }
+
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: TX_CONTEXT_MODULE_NAME.to_owned(),
+            name: TX_CONTEXT_STRUCT_NAME.to_owned(),
+            type_params: vec![],
         }
     }
 
@@ -1128,6 +1312,10 @@ impl TxContext {
 
     pub fn sponsor(&self) -> Option<SuiAddress> {
         self.sponsor.map(SuiAddress::from)
+    }
+
+    pub fn rgp(&self) -> u64 {
+        self.rgp
     }
 
     pub fn gas_price(&self) -> u64 {
@@ -1158,6 +1346,7 @@ impl TxContext {
                 epoch: 0,
                 epoch_timestamp_ms: 0,
                 ids_created: 0,
+                rgp: 0,
                 gas_price: 0,
                 gas_budget: 0,
                 sponsor: None,
@@ -1204,6 +1393,7 @@ impl TxContext {
         epoch: u64,
         epoch_timestamp_ms: u64,
         ids_created: u64,
+        rgp: u64,
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<AccountAddress>,
@@ -1213,6 +1403,7 @@ impl TxContext {
         self.epoch = epoch;
         self.epoch_timestamp_ms = epoch_timestamp_ms;
         self.ids_created = ids_created;
+        self.rgp = rgp;
         self.gas_price = gas_price;
         self.gas_budget = gas_budget;
         self.sponsor = sponsor;
@@ -1557,6 +1748,33 @@ impl From<ObjectID> for AccountAddress {
 impl From<SuiAddress> for AccountAddress {
     fn from(address: SuiAddress) -> Self {
         Self::new(address.0)
+    }
+}
+
+/// Hex serde for AccountAddress
+struct HexAccountAddress;
+
+impl SerializeAs<AccountAddress> for HexAccountAddress {
+    fn serialize_as<S>(value: &AccountAddress, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Hex::serialize_as(value, serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, AccountAddress> for HexAccountAddress {
+    fn deserialize_as<D>(deserializer: D) -> Result<AccountAddress, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s.starts_with("0x") {
+            AccountAddress::from_hex_literal(&s)
+        } else {
+            AccountAddress::from_hex(&s)
+        }
+        .map_err(to_custom_deser_error::<'de, D, _>)
     }
 }
 

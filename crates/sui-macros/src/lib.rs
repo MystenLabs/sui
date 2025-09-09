@@ -316,6 +316,13 @@ macro_rules! replay_log {
     };
 }
 
+pub static ANTITHESIS_ASSERTIONS_ENABLED: once_cell::sync::Lazy<bool> =
+    once_cell::sync::Lazy::new(|| {
+        std::env::var("ANTITHESIS_ASSERTIONS_ENABLED")
+            .map(|s| s == "1")
+            .unwrap_or(false)
+    });
+
 // These tests need to be run in release mode, since debug mode does overflow checks by default!
 #[cfg(test)]
 mod test {

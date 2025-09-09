@@ -13,10 +13,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
+pub const SUI_MODULE_NAME: &IdentStr = ident_str!("sui");
 pub const BALANCE_MODULE_NAME: &IdentStr = ident_str!("balance");
 pub const BALANCE_STRUCT_NAME: &IdentStr = ident_str!("Balance");
 pub const BALANCE_CREATE_REWARDS_FUNCTION_NAME: &IdentStr = ident_str!("create_staking_rewards");
 pub const BALANCE_DESTROY_REBATES_FUNCTION_NAME: &IdentStr = ident_str!("destroy_storage_rebates");
+pub const SEND_TO_ACCOUNT_FUNCTION_NAME: &IdentStr = ident_str!("send_to_account");
+pub const WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME: &IdentStr = ident_str!("withdraw_from_account");
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -45,10 +48,22 @@ impl Balance {
         }
     }
 
+    pub fn type_tag(type_param: TypeTag) -> TypeTag {
+        TypeTag::Struct(Box::new(Self::type_(type_param)))
+    }
+
     pub fn is_balance(s: &StructTag) -> bool {
         s.address == SUI_FRAMEWORK_ADDRESS
             && s.module.as_ident_str() == BALANCE_MODULE_NAME
             && s.name.as_ident_str() == BALANCE_STRUCT_NAME
+    }
+
+    pub fn is_balance_type(type_param: &TypeTag) -> bool {
+        if let TypeTag::Struct(struct_tag) = type_param {
+            Self::is_balance(struct_tag)
+        } else {
+            false
+        }
     }
 
     pub fn withdraw(&mut self, amount: u64) -> Result<(), ExecutionError> {

@@ -138,7 +138,7 @@ Create a new <code><a href="../sui/borrow.md#sui_borrow_Referent">Referent</a></
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow_new">new</a>&lt;T: key + store&gt;(value: T, ctx: &<b>mut</b> TxContext): <a href="../sui/borrow.md#sui_borrow_Referent">Referent</a>&lt;T&gt; {
     <a href="../sui/borrow.md#sui_borrow_Referent">Referent</a> {
-        id: <a href="../sui/tx_context.md#sui_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx),
+        id: ctx.fresh_object_address(),
         value: option::some(value),
     }
 }
@@ -152,7 +152,7 @@ Create a new <code><a href="../sui/borrow.md#sui_borrow_Referent">Referent</a></
 
 ## Function `borrow`
 
-Borrow the <code>T</code> from the <code><a href="../sui/borrow.md#sui_borrow_Referent">Referent</a></code> receiving the <code>T</code> and a <code><a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a></code>
+Borrow the <code>T</code> from the <code><a href="../sui/borrow.md#sui_borrow_Referent">Referent</a></code>, receiving the <code>T</code> and a <code><a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a></code>
 hot potato.
 
 

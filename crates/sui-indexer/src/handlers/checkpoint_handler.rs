@@ -51,7 +51,6 @@ pub async fn new_handlers(
     cancel: CancellationToken,
     start_checkpoint_opt: Option<CheckpointSequenceNumber>,
     end_checkpoint_opt: Option<CheckpointSequenceNumber>,
-    mvr_mode: bool,
 ) -> Result<(CheckpointHandler, u64), IndexerError> {
     let start_checkpoint = match start_checkpoint_opt {
         Some(start_checkpoint) => start_checkpoint,
@@ -84,7 +83,6 @@ pub async fn new_handlers(
         cancel.clone(),
         start_checkpoint,
         end_checkpoint_opt,
-        mvr_mode
     ));
     Ok((
         CheckpointHandler::new(state, metrics, indexed_checkpoint_sender),

@@ -3,13 +3,13 @@
 
 use crate::{
     cfgir::{
+        CFGContext, MemberName,
         absint::JoinResult,
         cfg::ImmForwardCFG,
         visitor::{
-            cfg_satisfies, LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
-            SimpleExecutionContext,
+            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
+            SimpleExecutionContext, cfg_satisfies,
         },
-        CFGContext, MemberName,
     },
     diag,
     diagnostics::{Diagnostic, Diagnostics},
@@ -17,14 +17,15 @@ use crate::{
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::{Ability_, TargetKind},
-    shared::{program_info::TypingProgramInfo, Identifier},
+    shared::{Identifier, program_info::TypingProgramInfo},
     sui_mode::{
-        AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME, BRIDGE_ADDR_VALUE,
-        BRIDGE_CREATE, BRIDGE_MODULE_NAME, CLOCK_MODULE_NAME, DENY_LIST_CREATE,
-        DENY_LIST_MODULE_NAME, ID_LEAK_DIAG, OBJECT_MODULE_NAME, OBJECT_NEW,
-        OBJECT_NEW_UID_FROM_HASH, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE, SUI_ADDR_NAME,
-        SUI_ADDR_VALUE, SUI_CLOCK_CREATE, SUI_SYSTEM_ADDR_VALUE, SUI_SYSTEM_CREATE,
-        SUI_SYSTEM_MODULE_NAME, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT, UID_TYPE_NAME,
+        ACCUMULATOR_CREATE, ACCUMULATOR_MODULE_NAME, AUTHENTICATOR_STATE_CREATE,
+        AUTHENTICATOR_STATE_MODULE_NAME, BRIDGE_ADDR_VALUE, BRIDGE_CREATE, BRIDGE_MODULE_NAME,
+        CLOCK_MODULE_NAME, DENY_LIST_CREATE, DENY_LIST_MODULE_NAME, ID_LEAK_DIAG,
+        OBJECT_MODULE_NAME, OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, RANDOMNESS_MODULE_NAME,
+        RANDOMNESS_STATE_CREATE, SUI_ADDR_NAME, SUI_ADDR_VALUE, SUI_CLOCK_CREATE,
+        SUI_SYSTEM_ADDR_VALUE, SUI_SYSTEM_CREATE, SUI_SYSTEM_MODULE_NAME,
+        TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT, UID_TYPE_NAME,
     },
 };
 use move_core_types::account_address::AccountAddress;
@@ -56,6 +57,7 @@ pub const FUNCTIONS_TO_SKIP: &[(AccountAddress, Symbol, Symbol)] = &[
     ),
     (SUI_ADDR_VALUE, DENY_LIST_MODULE_NAME, DENY_LIST_CREATE),
     (BRIDGE_ADDR_VALUE, BRIDGE_MODULE_NAME, BRIDGE_CREATE),
+    (SUI_ADDR_VALUE, ACCUMULATOR_MODULE_NAME, ACCUMULATOR_CREATE),
 ];
 
 //**************************************************************************************************

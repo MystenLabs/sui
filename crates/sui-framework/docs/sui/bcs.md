@@ -117,12 +117,12 @@ enables use of <code>vector::pop_back</code>.
 ## Constants
 
 
-<a name="sui_bcs_ELenOutOfRange"></a>
+<a name="sui_bcs_EOutOfRange"></a>
 
-For when ULEB byte is out of range (or not found).
+For when bytes length is less than required for deserialization.
 
 
-<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
 </code></pre>
 
 
@@ -137,12 +137,12 @@ For when the boolean value different than <code>0</code> or <code>1</code>.
 
 
 
-<a name="sui_bcs_EOutOfRange"></a>
+<a name="sui_bcs_ELenOutOfRange"></a>
 
-For when bytes length is less than required for deserialization.
+For when ULEB byte is out of range (or not found).
 
 
-<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
 </code></pre>
 
 
@@ -246,12 +246,7 @@ Read address from the bcs-serialized bytes.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_address">peel_address</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>): <b>address</b> {
     <b>assert</b>!(<a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.length() &gt;= <a href="../sui/address.md#sui_address_length">address::length</a>(), <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>);
-    <b>let</b> (<b>mut</b> addr_bytes, <b>mut</b> i) = (vector[], 0);
-    <b>while</b> (i &lt; <a href="../sui/address.md#sui_address_length">address::length</a>()) {
-        addr_bytes.push_back(<a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.pop_back());
-        i = i + 1;
-    };
-    <a href="../sui/address.md#sui_address_from_bytes">address::from_bytes</a>(addr_bytes)
+    <a href="../sui/address.md#sui_address_from_bytes">address::from_bytes</a>(vector::tabulate!(<a href="../sui/address.md#sui_address_length">address::length</a>(), |_| <a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.pop_back()))
 }
 </code></pre>
 
@@ -529,14 +524,7 @@ functionality of peeling each value.
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec">peel_vec</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T): vector&lt;$T&gt; {
     <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
-    <b>let</b> len = <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec_length">peel_vec_length</a>();
-    <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> <b>mut</b> res = vector[];
-    <b>while</b> (i &lt; len) {
-        res.push_back($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>));
-        i = i + 1;
-    };
-    res
+    vector::tabulate!(<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec_length">peel_vec_length</a>(), |_| $peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>))
 }
 </code></pre>
 
@@ -828,8 +816,7 @@ functionality of peeling the inner value.
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option">peel_option</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T): Option&lt;$T&gt; {
     <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
-    <b>if</b> (<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_bool">peel_bool</a>()) option::some($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>))
-    <b>else</b> option::none()
+    <b>if</b> (<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_bool">peel_bool</a>()) option::some($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>)) <b>else</b> option::none()
 }
 </code></pre>
 

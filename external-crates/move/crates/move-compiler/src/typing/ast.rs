@@ -4,8 +4,8 @@
 
 use crate::{
     diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersTable},
         DiagnosticReporter,
+        warning_filters::{WarningFilters, WarningFiltersTable},
     },
     expansion::ast::{
         Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
@@ -16,10 +16,12 @@ use crate::{
         Type, Type_, UseFuns, Var,
     },
     parser::ast::{
-        BinOp, ConstantName, DatatypeName, DocComment, Field, FunctionName, TargetKind, UnaryOp,
-        VariantName, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        BinOp, ConstantName, DatatypeName, DocComment, ENTRY_MODIFIER, Field, FunctionName,
+        MACRO_MODIFIER, NATIVE_MODIFIER, TargetKind, UnaryOp, VariantName,
     },
-    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
+    shared::{
+        Name, NamedAddressMap, ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap,
+    },
 };
 use move_core_types::parsing::address::NumericalAddress;
 use move_ir_types::location::*;
@@ -54,6 +56,8 @@ pub struct ModuleDefinition {
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
+    /// The named address map used by this module during `expansion`.
+    pub named_address_map: Arc<NamedAddressMap>,
     pub attributes: Attributes,
     pub target_kind: TargetKind,
     /// `dependency_order` is the topological order/rank in the dependency graph.
@@ -243,6 +247,7 @@ pub enum UnannotatedExp_ {
     ErrorConstant {
         line_number_loc: Loc,
         error_constant: Option<ConstantName>,
+        error_code: Option<u8>,
     },
     UnresolvedError,
 }
@@ -459,6 +464,7 @@ impl AstDebug for ModuleDefinition {
             loc: _,
             warning_filter,
             package_name,
+            named_address_map: _,
             attributes,
             target_kind,
             dependency_order,
@@ -873,11 +879,16 @@ impl AstDebug for UnannotatedExp_ {
             E::ErrorConstant {
                 line_number_loc: _,
                 error_constant,
+                error_code,
             } => {
-                w.write("ErrorConstant");
-                if let Some(c) = error_constant {
-                    w.write(format!("({})", c))
+                w.write("ErrorConstant(");
+                if let Some(c) = error_code {
+                    w.write(format!("code={},", c))
                 }
+                if let Some(c) = error_constant {
+                    w.write(format!("{}", c))
+                }
+                w.write("(");
             }
         }
     }

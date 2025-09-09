@@ -24,11 +24,11 @@ public struct Config<phantom WriteCap> has key {
     id: UID,
 }
 
-public struct Setting<Value: copy + drop + store> has store, drop {
+public struct Setting<Value: copy + drop + store> has drop, store {
     data: Option<SettingData<Value>>,
 }
 
-public struct SettingData<Value: copy + drop + store> has store, drop {
+public struct SettingData<Value: copy + drop + store> has drop, store {
     newer_value_epoch: u64,
     newer_value: Option<Value>,
     older_value_opt: Option<Value>,
@@ -77,22 +77,23 @@ public(package) fun add_for_next_epoch<
             newer_value,
             older_value_opt,
         } = sobj.data.extract();
-        let (older_value_opt, removed_value) =
-            if (epoch > newer_value_epoch) {
-                // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
-                (move newer_value, move older_value_opt)
-            } else {
-                // the current epoch cannot be less than the `newer_value_epoch`
-                assert!(epoch == newer_value_epoch);
-                // if the `newer_value` is for the current epoch, then the option must be `none`
-                assert!(newer_value.is_none(), EAlreadySetForEpoch);
-                (move older_value_opt, option::none())
-            };
-        sobj.data.fill(SettingData {
-            newer_value_epoch: epoch,
-            newer_value: option::some(value),
-            older_value_opt,
-        });
+        let (older_value_opt, removed_value) = if (epoch > newer_value_epoch) {
+            // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
+            (move newer_value, move older_value_opt)
+        } else {
+            // the current epoch cannot be less than the `newer_value_epoch`
+            assert!(epoch == newer_value_epoch);
+            // if the `newer_value` is for the current epoch, then the option must be `none`
+            assert!(newer_value.is_none(), EAlreadySetForEpoch);
+            (move older_value_opt, option::none())
+        };
+        sobj
+            .data
+            .fill(SettingData {
+                newer_value_epoch: epoch,
+                newer_value: option::some(value),
+                older_value_opt,
+            });
         removed_value
     }
 }
@@ -116,21 +117,22 @@ public(package) fun remove_for_next_epoch<
         newer_value,
         older_value_opt,
     } = sobj.data.extract();
-    let (older_value_opt, removed_value) =
-        if (epoch > newer_value_epoch) {
-            // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
-            (move newer_value, option::none())
-        } else {
-            // the current epoch cannot be less than the `newer_value_epoch`
-            assert!(epoch == newer_value_epoch);
-            (move older_value_opt, move newer_value)
-        };
+    let (older_value_opt, removed_value) = if (epoch > newer_value_epoch) {
+        // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
+        (move newer_value, option::none())
+    } else {
+        // the current epoch cannot be less than the `newer_value_epoch`
+        assert!(epoch == newer_value_epoch);
+        (move older_value_opt, move newer_value)
+    };
     let older_value_opt_is_none = older_value_opt.is_none();
-    sobj.data.fill(SettingData {
-        newer_value_epoch: epoch,
-        newer_value: option::none(),
-        older_value_opt,
-    });
+    sobj
+        .data
+        .fill(SettingData {
+            newer_value_epoch: epoch,
+            newer_value: option::none(),
+            older_value_opt,
+        });
     if (older_value_opt_is_none) {
         field::remove<_, Setting<Value>>(&mut config.id, name);
     };
@@ -199,11 +201,7 @@ public(package) fun read_setting_for_next_epoch<
     data.newer_value
 }
 
-public(package) macro fun entry<
-    $WriteCap,
-    $Name: copy + drop + store,
-    $Value: copy + drop + store,
->(
+public(package) macro fun entry<$WriteCap, $Name: copy + drop + store, $Value: copy + drop + store>(
     $config: &mut Config<$WriteCap>,
     $cap: &mut $WriteCap,
     $name: $Name,
@@ -237,13 +235,12 @@ public(package) macro fun update<
     let cap = $cap;
     let name = $name;
     let ctx = $ctx;
-    let old_value_opt =
-        if (!config.exists_with_type_for_next_epoch<_, _, $Value>(name, ctx)) {
-            let initial = $initial_for_next_epoch(config, cap, ctx);
-            config.add_for_next_epoch(cap, name, initial, ctx)
-        } else {
-            option::none()
-        };
+    let old_value_opt = if (!config.exists_with_type_for_next_epoch<_, _, $Value>(name, ctx)) {
+        let initial = $initial_for_next_epoch(config, cap, ctx);
+        config.add_for_next_epoch(cap, name, initial, ctx)
+    } else {
+        option::none()
+    };
     $update_for_next_epoch(old_value_opt, config.borrow_for_next_epoch_mut(cap, name, ctx));
 }
 
@@ -275,7 +272,7 @@ native fun read_setting_impl<
     name: address,
     current_epoch: u64,
 ): Option<Value>;
-    /*
+/*
 // but the code is essentially
     if (!field::exists_with_type<Name, Value>(&config.id, setting)) return option::none()
     let sobj: &Setting<Value> = field::borrow(&config.id, setting);

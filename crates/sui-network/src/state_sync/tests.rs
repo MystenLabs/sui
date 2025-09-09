@@ -10,15 +10,14 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use anyhow::anyhow;
-use prometheus::Registry;
+use std::io::Write;
 use std::num::NonZeroUsize;
 use std::{collections::HashMap, time::Duration};
-use sui_archival::reader::ArchiveReaderBalancer;
-use sui_archival::writer::ArchiveWriter;
 use sui_config::node::ArchiveReaderConfig;
-use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
-use sui_storage::{FileCompression, StorageFormat};
+use sui_config::object_storage_config::ObjectStoreConfig;
+use sui_storage::blob::{Blob, BlobEncoding};
 use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     messages_checkpoint::CheckpointDigest,
     storage::{ReadStore, SharedInMemoryStore, WriteStore},
@@ -269,72 +268,35 @@ async fn isolated_sync_job() {
 async fn test_state_sync_using_archive() -> anyhow::Result<()> {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     // build mock data
-    let (ordered_checkpoints, _, sequence_number_to_digest, checkpoints) =
+    let (ordered_checkpoints, ordered_contents, sequence_number_to_digest, checkpoints) =
         committee.make_empty_checkpoints(100, None);
-    // Initialize archive store with all checkpoints
-    let temp_dir = tempdir()?.into_path();
-    let local_path = temp_dir.join("local_dir");
-    let remote_path = temp_dir.join("remote_dir");
-    let local_store_config = ObjectStoreConfig {
-        object_store: Some(ObjectStoreType::File),
-        directory: Some(local_path.clone()),
-        ..Default::default()
-    };
-    let remote_store_config = ObjectStoreConfig {
-        object_store: Some(ObjectStoreType::File),
-        directory: Some(remote_path.clone()),
-        ..Default::default()
-    };
-    let archive_writer = ArchiveWriter::new(
-        local_store_config.clone(),
-        remote_store_config.clone(),
-        FileCompression::Zstd,
-        StorageFormat::Blob,
-        Duration::from_secs(10),
-        20,
-        &Registry::default(),
-    )
-    .await?;
-    let test_store = SharedInMemoryStore::default();
-    test_store.inner_mut().insert_genesis_state(
-        ordered_checkpoints.first().cloned().unwrap(),
-        empty_contents(),
-        committee.committee().to_owned(),
-    );
-    // We ensure that only a part of the data exists in the archive store (and no new checkpoints after
-    // sequence number >= 50 are written to the archive store). This is to test the fact that a node
-    // can download latest checkpoints from a peer and back fill missing older data from archive
-    for checkpoint in &ordered_checkpoints[0..50] {
-        test_store.inner_mut().insert_checkpoint(checkpoint);
-    }
-    let kill = archive_writer.start(test_store).await?;
-    let archive_reader_config = ArchiveReaderConfig {
-        remote_store_config,
-        download_concurrency: NonZeroUsize::new(1).unwrap(),
-        use_for_pruning_watermark: false,
-    };
+    let temp_dir = tempdir()?.keep();
     // We will delete all checkpoints older than this checkpoint on Node 2
     let oldest_checkpoint_to_keep: u64 = 10;
-    let archive_readers =
-        ArchiveReaderBalancer::new(vec![archive_reader_config], &Registry::default())?;
-    let archive_reader = archive_readers.pick_one_random(0..u64::MAX).await.unwrap();
-    loop {
-        archive_reader.sync_manifest_once().await?;
-        if let Ok(latest_available_checkpoint_in_archive) =
-            archive_reader.latest_available_checkpoint().await
-        {
-            // We only need enough checkpoints to be in archive store for this test
-            if latest_available_checkpoint_in_archive >= oldest_checkpoint_to_keep {
-                break;
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Populate the local directory with checkpoint files
+    // It will be used as a checkpoint bucket
+    for (idx, summary) in ordered_checkpoints.iter().enumerate() {
+        let chk = CheckpointData {
+            checkpoint_summary: summary.clone().into(),
+            checkpoint_contents: ordered_contents[idx].clone().into_checkpoint_contents(),
+            transactions: vec![],
+        };
+        let file_path = temp_dir.join(format!("{}.chk", summary.sequence_number));
+        let mut file = std::fs::File::create(file_path)?;
+        file.write_all(&Blob::encode(&chk, BlobEncoding::Bcs)?.to_bytes())?;
     }
+    let archive_reader_config = ArchiveReaderConfig {
+        remote_store_config: ObjectStoreConfig::default(),
+        download_concurrency: NonZeroUsize::new(1).unwrap(),
+        ingestion_url: Some(format!("file://{}", temp_dir.display())),
+        remote_store_options: vec![],
+    };
     // Build and connect two nodes where Node 1 will be given access to an archive store
     // Node 2 will prune older checkpoints, so Node 1 is forced to backfill from the archive
     let (builder, server) = Builder::new()
         .store(SharedInMemoryStore::default())
-        .archive_readers(archive_readers)
+        .archive_config(Some(archive_reader_config))
         .build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone());
@@ -442,7 +404,6 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    kill.send(())?;
     Ok(())
 }
 
@@ -719,9 +680,12 @@ async fn sync_with_checkpoints_watermark() {
             assert_eq!(subscriber_1.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
             store_1
-                .get_full_checkpoint_contents(&content_digest)
+                .get_full_checkpoint_contents(None, &content_digest)
                 .unwrap();
-            assert_eq!(store_2.get_full_checkpoint_contents(&content_digest), None);
+            assert_eq!(
+                store_2.get_full_checkpoint_contents(None, &content_digest),
+                None
+            );
         }
     })
     .await
@@ -772,7 +736,7 @@ async fn sync_with_checkpoints_watermark() {
     );
     tokio::spawn(event_loop_3.start());
 
-    // Peer 3 is able to sync checkpoint 1 with teh help from Peer 2
+    // Peer 3 is able to sync checkpoint 1 with the help from Peer 2
     timeout(Duration::from_secs(1), async {
         assert_eq!(
             subscriber_3.recv().await.unwrap().data(),
@@ -780,7 +744,7 @@ async fn sync_with_checkpoints_watermark() {
         );
         let content_digest = contents[1].clone().into_checkpoint_contents_digest();
         store_3
-            .get_full_checkpoint_contents(&content_digest)
+            .get_full_checkpoint_contents(None, &content_digest)
             .unwrap();
     })
     .await
@@ -816,8 +780,12 @@ async fn sync_with_checkpoints_watermark() {
             assert_eq!(subscriber_2.recv().await.unwrap().data(), checkpoint.data());
             assert_eq!(subscriber_3.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
-            store_2.get_full_checkpoint_contents(&content_digest);
-            store_3.get_full_checkpoint_contents(&content_digest);
+            store_2
+                .get_full_checkpoint_contents(None, &content_digest)
+                .unwrap();
+            store_3
+                .get_full_checkpoint_contents(None, &content_digest)
+                .unwrap();
         }
     })
     .await
@@ -892,7 +860,7 @@ async fn sync_with_checkpoints_watermark() {
             assert_eq!(subscriber_4.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
             store_4
-                .get_full_checkpoint_contents(&content_digest)
+                .get_full_checkpoint_contents(None, &content_digest)
                 .unwrap();
         }
     })

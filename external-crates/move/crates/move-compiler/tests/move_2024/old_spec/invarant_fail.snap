@@ -1,0 +1,37 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/old_spec/invarant_fail.move:3:24
+  │
+3 │ fun contains_invariant(x: u64, n: u64) {
+  │                        ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/old_spec/invarant_fail.move:3:32
+  │
+3 │ fun contains_invariant(x: u64, n: u64) {
+  │                                ^ Unused parameter 'n'. Consider removing or prefixing with an underscore: '_n'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/old_spec/invarant_fail.move:4:4
+  │
+4 │    invariant x > 0;
+  │    ^^^^^^^^^ Unbound variable 'invariant'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/old_spec/invarant_fail.move:4:14
+  │
+4 │    invariant x > 0;
+  │              ^
+  │              │
+  │              Unexpected 'x'
+  │              Expected ';'

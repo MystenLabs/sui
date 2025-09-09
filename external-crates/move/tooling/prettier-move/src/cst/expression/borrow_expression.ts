@@ -10,19 +10,19 @@ const {} = doc.builders;
 export const NODE_TYPE = 'borrow_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printBorrowExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printBorrowExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `borrow_expression` node.
  */
 function printBorrowExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return [
-		path.call(print, 'nonFormattingChildren', 0), // borrow type
-		path.call(print, 'nonFormattingChildren', 1), // expression
-	];
+    return [
+        path.call(print, 'nonFormattingChildren', 0), // borrow type
+        path.call(print, 'nonFormattingChildren', 1), // expression
+    ];
 }

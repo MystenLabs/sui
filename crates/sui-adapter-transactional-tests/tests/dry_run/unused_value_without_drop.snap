@@ -1,0 +1,20 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 809
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-15:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4727200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-18:
+//# programmable --sender A --dry-run
+//> 0: test::m::return_object();
+Error: Transaction Effects Status: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }
+Execution Error: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }

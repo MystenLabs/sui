@@ -1,0 +1,78 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-18:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4605600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-22:
+//# programmable --inputs 0u8
+//> test::m::take_b(Input(0), Input(1))
+// input out of bounds
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(0) } }
+
+task 3, lines 23-26:
+//# programmable --inputs 0u8
+//> test::m::take_b(Input(0), Input(100))
+// result out of bounds at len
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 100
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 100 } }, source: None, command: Some(0) } }
+
+task 4, lines 27-31:
+//# programmable
+//> test::m::a();
+//> test::m::take_b(Result(0), Result(1))
+// result out of bounds
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(1) } }
+
+task 5, lines 32-36:
+//# programmable
+//> test::m::a();
+//> test::m::take_b(Result(0), Result(5123))
+// nested results out of bounds at len
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 5123
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 5123 } }, source: None, command: Some(1) } }
+
+task 6, lines 37-42:
+//# programmable
+//> test::m::a();
+//> test::m::a2();
+//> test::m::take_b(Result(0), NestedResult(2, 0))
+// nested results out of bounds
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 2 } }, source: None, command: Some(2) } }
+
+task 7, lines 43-48:
+//# programmable
+//> test::m::a();
+//> test::m::a2();
+//> test::m::take_b(Result(0), NestedResult(115, 0))
+// nested secondary out of bounds barely
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 115
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 115 } }, source: None, command: Some(2) } }
+
+task 8, lines 49-54:
+//# programmable
+//> test::m::a();
+//> test::m::a2();
+//> test::m::take_b(Result(0), NestedResult(1, 2))
+// nested secondary out of bounds
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds secondary access to result vector 1 at secondary index 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: SecondaryIndexOutOfBounds { result_idx: 1, secondary_idx: 2 } }, source: None, command: Some(2) } }
+
+task 9, lines 55-58:
+//# programmable
+//> test::m::a();
+//> test::m::a2();
+//> test::m::take_b(Result(0), NestedResult(1, 2104))
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds secondary access to result vector 1 at secondary index 2104
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: SecondaryIndexOutOfBounds { result_idx: 1, secondary_idx: 2104 } }, source: None, command: Some(2) } }

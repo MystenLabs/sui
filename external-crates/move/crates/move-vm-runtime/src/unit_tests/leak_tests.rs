@@ -12,8 +12,8 @@ use crate::{
     },
 };
 use move_binary_format::file_format::{
-    empty_module, Bytecode::*, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
-    IdentifierIndex, Signature, SignatureIndex, SignatureToken::*, Visibility,
+    Bytecode::*, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
+    IdentifierIndex, Signature, SignatureIndex, SignatureToken::*, Visibility, empty_module,
 };
 
 // #[test]

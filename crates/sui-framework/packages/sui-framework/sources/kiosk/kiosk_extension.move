@@ -93,7 +93,7 @@ public struct Extension has store {
 /// The `ExtensionKey` is a typed dynamic field key used to store the
 /// extension configuration and data. `Ext` is a phantom type that is used
 /// to identify the extension witness.
-public struct ExtensionKey<phantom Ext> has store, copy, drop {}
+public struct ExtensionKey<phantom Ext> has copy, drop, store {}
 
 // === Management ===
 

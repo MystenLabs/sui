@@ -1,0 +1,135 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-9:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "networkTotalTransactions": 1
+    }
+  }
+}
+
+task 2, lines 11-13:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 16:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 18-21:
+//# run-graphql
+Response: {
+  "data": {
+    "c1": {
+      "networkTotalTransactions": 2
+    }
+  }
+}
+
+task 5, line 23:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 25-28:
+//# run-graphql
+Response: {
+  "data": {
+    "c2": {
+      "networkTotalTransactions": 2
+    }
+  }
+}
+
+task 7, lines 30-32:
+//# programmable --sender A --inputs 44 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 34-36:
+//# programmable --sender B --inputs 43 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(8,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 9, line 38:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 40-43:
+//# run-graphql
+Response: {
+  "data": {
+    "c3": {
+      "networkTotalTransactions": 4
+    }
+  }
+}
+
+task 11, lines 45-48:
+//# run-graphql
+Response: {
+  "data": {
+    "c4": null
+  }
+}
+
+task 12, lines 50-58:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 0,
+        "networkTotalTransactions": 1
+      },
+      {
+        "sequenceNumber": 1,
+        "networkTotalTransactions": 2
+      },
+      {
+        "sequenceNumber": 2,
+        "networkTotalTransactions": 2
+      },
+      {
+        "sequenceNumber": 3,
+        "networkTotalTransactions": 4
+      }
+    ]
+  }
+}
+
+task 13, lines 61-67:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 2,
+        "networkTotalTransactions": 2
+      },
+      null,
+      {
+        "sequenceNumber": 0,
+        "networkTotalTransactions": 1
+      },
+      null
+    ]
+  }
+}

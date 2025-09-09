@@ -14,12 +14,12 @@
 //! rules for entrypoints
 
 use move_binary_format::{
+    IndexKind,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
     },
     file_format_common::{VERSION_1, VERSION_5},
-    IndexKind,
 };
 use move_core_types::{identifier::IdentStr, vm_status::StatusCode};
 

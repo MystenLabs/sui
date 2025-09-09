@@ -12,8 +12,8 @@ use crate::{
 use std::collections::BTreeMap;
 
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMError, VMResult},
     IndexKind,
+    errors::{Location, PartialVMError, VMResult, verification_error},
 };
 use move_core_types::{resolver::SerializedPackage, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;

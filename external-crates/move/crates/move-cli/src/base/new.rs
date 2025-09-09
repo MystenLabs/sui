@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{self, ensure, Context};
+use anyhow::{self, Context, ensure};
 use clap::*;
 use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
@@ -55,7 +55,7 @@ impl New {
 
     /// add `build/*` to `{path}/.gitignore` if it doesn't already have it
     fn write_gitignore(&self, path: &Path) -> anyhow::Result<()> {
-        let gitignore_entry = "build/*";
+        let gitignore_entry = "build/*\n.trace\n.coverage*";
 
         let mut file = std::fs::OpenOptions::new()
             .create(true)

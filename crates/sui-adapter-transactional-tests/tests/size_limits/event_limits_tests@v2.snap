@@ -1,0 +1,54 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+task 1, lines 8-55:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7311200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 56-58:
+//# run Test::M1::emit_n_small_events --args 1 --gas-budget 100000000000000 --summarize
+events: 1
+mutated: 1
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 59-61:
+//# run Test::M1::emit_n_small_events --args 1024 --gas-budget 100000000000000 --summarize
+events: 50
+mutated: 1
+gas summary: computation_cost: 53000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 62-64:
+//# run Test::M1::emit_n_small_events --args 1025 --gas-budget 100000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 1024 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+
+task 5, lines 65-67:
+//# run Test::M1::emit_n_small_events --args 2093 --gas-budget 100000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(0), message: Some("Emitting more than 1024 events is not allowed"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+
+task 6, lines 68-70:
+//# run Test::M1::emit_event_with_size --args 200000 --gas-budget 100000000000000 --summarize
+events: 1
+mutated: 1
+gas summary: computation_cost: 1394000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 71-73:
+//# run Test::M1::emit_event_with_size --args 256000 --gas-budget 100000000000000 --summarize
+events: 1
+mutated: 1
+gas summary: computation_cost: 1815000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 74-76:
+//# run Test::M1::emit_event_with_size --args 256001 --gas-budget 100000000000000 --summarize
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(1), message: Some("Emitting event of size 256001 bytes. Limit is 256000 bytes."), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+
+task 9, line 77:
+//# run Test::M1::emit_event_with_size --args 259000 --gas-budget 100000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("event") }, function: 0, instruction: 0, function_name: Some("emit") }))), source: Some(VMError { major_status: MEMORY_LIMIT_EXCEEDED, sub_status: Some(1), message: Some("Emitting event of size 259000 bytes. Limit is 256000 bytes."), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }

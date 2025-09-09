@@ -1,0 +1,62 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-102:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 13482400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 104:
+//# run a::m::t0 --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 106:
+//# run a::m::t1 --sender A --args object(2,0)
+created: object(3,0), object(3,1), object(3,2), object(3,3), object(3,4), object(3,5)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 13421600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+
+task 4, line 108:
+//# run a::m::t2 --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+
+task 5, line 110:
+//# run a::m::t3 --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+
+task 6, line 112:
+//# run a::m::t4 --sender A --args object(2,0)
+mutated: object(0,0), object(2,0), object(3,0), object(3,1), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 6156000,  storage_rebate: 6094440, non_refundable_storage_fee: 61560
+
+task 7, line 114:
+//# run a::m::t5 --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+
+task 8, line 116:
+//# run a::m::t6 --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(3,2), object(3,4), object(3,5)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 9608148, non_refundable_storage_fee: 97052
+
+task 9, line 118:
+//# run a::m::t7 --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+
+task 10, line 120:
+//# run a::m::t8 --sender A --args object(2,0)
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2189484, non_refundable_storage_fee: 22116

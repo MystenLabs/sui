@@ -28,6 +28,7 @@ tracing.workspace = true
 prometheus.workspace = true
 object_store.workspace = true
 indicatif.workspace = true
+consensus-core.workspace = true
 
 anemo-cli.workspace = true
 anemo.workspace = true
@@ -38,6 +39,7 @@ fastcrypto.workspace = true
 
 sui-config.workspace = true
 sui-core.workspace = true
+sui-data-ingestion-core.workspace = true
 sui-network.workspace = true
 sui-snapshot.workspace = true
 sui-protocol-config.workspace = true
@@ -45,7 +47,6 @@ sui-replay.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-sui-archival.workspace = true
 sui-package-dump.workspace = true
 sui-tls.workspace = true
 bin-version.workspace = true

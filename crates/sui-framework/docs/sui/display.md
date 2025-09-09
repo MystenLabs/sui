@@ -44,6 +44,7 @@ More entry functions might be added in the future depending on the use cases.
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
@@ -258,12 +259,8 @@ Create a new Display<T> object with a set of fields.
 ): <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt; {
     <b>let</b> len = <a href="../sui/display.md#sui_display_fields">fields</a>.length();
     <b>assert</b>!(len == values.length(), <a href="../sui/display.md#sui_display_EVecLengthMismatch">EVecLengthMismatch</a>);
-    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> <a href="../sui/display.md#sui_display">display</a> = <a href="../sui/display.md#sui_display_new">new</a>&lt;T&gt;(pub, ctx);
-    <b>while</b> (i &lt; len) {
-        <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_add_internal">add_internal</a>(<a href="../sui/display.md#sui_display_fields">fields</a>[i], values[i]);
-        i = i + 1;
-    };
+    <a href="../sui/display.md#sui_display_fields">fields</a>.zip_do!(values, |field, value| <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_add_internal">add_internal</a>(field, value));
     <a href="../sui/display.md#sui_display">display</a>
 }
 </code></pre>
@@ -375,11 +372,7 @@ Sets multiple <code><a href="../sui/display.md#sui_display_fields">fields</a></c
 ) {
     <b>let</b> len = <a href="../sui/display.md#sui_display_fields">fields</a>.length();
     <b>assert</b>!(len == values.length(), <a href="../sui/display.md#sui_display_EVecLengthMismatch">EVecLengthMismatch</a>);
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; len) {
-        self.<a href="../sui/display.md#sui_display_add_internal">add_internal</a>(<a href="../sui/display.md#sui_display_fields">fields</a>[i], values[i]);
-        i = i + 1;
-    };
+    <a href="../sui/display.md#sui_display_fields">fields</a>.zip_do!(values, |field, value| self.<a href="../sui/display.md#sui_display_add_internal">add_internal</a>(field, value));
 }
 </code></pre>
 

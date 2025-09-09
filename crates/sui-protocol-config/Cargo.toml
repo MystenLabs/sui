@@ -15,10 +15,11 @@ tracing.workspace = true
 serde_with.workspace = true
 sui-protocol-config-macros.workspace = true
 schemars.workspace = true
-insta.workspace = true
 clap.workspace = true
 move-vm-config.workspace = true
 serde-env.workspace = true
+fastcrypto = { workspace = true }
+move-core-types.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

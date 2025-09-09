@@ -48,19 +48,29 @@ Response: {
   "result": {
     "data": [
       {
-        "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD"
+        "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD",
+        "timestampMs": "0",
+        "checkpoint": "0"
       },
       {
-        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa"
+        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa",
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
-        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37"
+        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37",
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
-        "digest": "21AuR8T8joUdTFAM8rBUqMiqQG57CEvW9PBTWoUxZCEW"
+        "digest": "21AuR8T8joUdTFAM8rBUqMiqQG57CEvW9PBTWoUxZCEW",
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
-        "digest": "FNmBXaFzxKExTXCparbWdGXfFrj6cchG9Rx1uEeGw4vP"
+        "digest": "FNmBXaFzxKExTXCparbWdGXfFrj6cchG9Rx1uEeGw4vP",
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "NA==",
@@ -76,13 +86,19 @@ Response: {
   "result": {
     "data": [
       {
-        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa"
+        "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa",
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
-        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37"
+        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37",
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
-        "digest": "FNmBXaFzxKExTXCparbWdGXfFrj6cchG9Rx1uEeGw4vP"
+        "digest": "FNmBXaFzxKExTXCparbWdGXfFrj6cchG9Rx1uEeGw4vP",
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "NA==",
@@ -98,10 +114,14 @@ Response: {
   "result": {
     "data": [
       {
-        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37"
+        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37",
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
-        "digest": "21AuR8T8joUdTFAM8rBUqMiqQG57CEvW9PBTWoUxZCEW"
+        "digest": "21AuR8T8joUdTFAM8rBUqMiqQG57CEvW9PBTWoUxZCEW",
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "Mw==",
@@ -117,7 +137,9 @@ Response: {
   "result": {
     "data": [
       {
-        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37"
+        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37",
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "Mg==",
@@ -133,7 +155,9 @@ Response: {
   "result": {
     "data": [
       {
-        "digest": "21AuR8T8joUdTFAM8rBUqMiqQG57CEvW9PBTWoUxZCEW"
+        "digest": "21AuR8T8joUdTFAM8rBUqMiqQG57CEvW9PBTWoUxZCEW",
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "Mw==",
@@ -149,7 +173,9 @@ Response: {
   "result": {
     "data": [
       {
-        "digest": "FNmBXaFzxKExTXCparbWdGXfFrj6cchG9Rx1uEeGw4vP"
+        "digest": "FNmBXaFzxKExTXCparbWdGXfFrj6cchG9Rx1uEeGw4vP",
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "NA==",
@@ -165,7 +191,9 @@ Response: {
   "result": {
     "data": [
       {
-        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37"
+        "digest": "Cs81ueNvP7Y63qibhhJXvEKhqXqVXsWRRuZKvxDJgd37",
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "Mg==",

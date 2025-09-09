@@ -15,20 +15,19 @@ use crate::{
         VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex, Visibility,
     },
     file_format_common::{
-        VARIANT_COUNT_MAX, VARIANT_HANDLE_INDEX_MAX, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX,
+        VARIANT_HANDLE_INDEX_MAX, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX, VARIANT_TAG_MAX_VALUE,
     },
     internals::ModuleIndex,
     proptest_types::{
-        prop_index_avoid,
+        TableSize, prop_index_avoid,
         signature::{AbilitySetGen, SignatureGen, SignatureTokenGen},
-        TableSize,
     },
 };
 use move_core_types::u256::U256;
 use proptest::{
-    collection::{vec, SizeRange},
+    collection::{SizeRange, vec},
     prelude::*,
-    sample::{select, Index as PropIndex},
+    sample::{Index as PropIndex, select},
 };
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
@@ -957,7 +956,7 @@ impl BytecodeGen {
             }
             BytecodeGen::PackVariant(idx, tag) => {
                 let enum_defs_len = state.enum_defs.len();
-                if tag as u64 >= VARIANT_COUNT_MAX || enum_defs_len == 0 {
+                if tag as u64 > VARIANT_TAG_MAX_VALUE || enum_defs_len == 0 {
                     return None;
                 }
                 let ed_idx = idx.index(enum_defs_len);
@@ -987,7 +986,7 @@ impl BytecodeGen {
             }
             BytecodeGen::UnpackVariant(idx, tag) => {
                 let enum_defs_len = state.enum_defs.len();
-                if tag as u64 >= VARIANT_COUNT_MAX || enum_defs_len == 0 {
+                if tag as u64 > VARIANT_TAG_MAX_VALUE || enum_defs_len == 0 {
                     return None;
                 }
                 let ed_idx = idx.index(enum_defs_len);
@@ -1018,7 +1017,7 @@ impl BytecodeGen {
             }
             BytecodeGen::UnpackVariantImmRef(idx, tag) => {
                 let enum_defs_len = state.enum_defs.len();
-                if tag as u64 >= VARIANT_COUNT_MAX || enum_defs_len == 0 {
+                if tag as u64 > VARIANT_TAG_MAX_VALUE || enum_defs_len == 0 {
                     return None;
                 }
                 let ed_idx = idx.index(enum_defs_len);
@@ -1049,7 +1048,7 @@ impl BytecodeGen {
             }
             BytecodeGen::UnpackVariantMutRef(idx, tag) => {
                 let enum_defs_len = state.enum_defs.len();
-                if tag as u64 >= VARIANT_COUNT_MAX || enum_defs_len == 0 {
+                if tag as u64 > VARIANT_TAG_MAX_VALUE || enum_defs_len == 0 {
                     return None;
                 }
                 let ed_idx = idx.index(enum_defs_len);

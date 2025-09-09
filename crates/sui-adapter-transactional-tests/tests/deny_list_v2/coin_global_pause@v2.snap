@@ -1,0 +1,127 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 10-72:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 21964000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 73-75:
+//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 3, lines 76-78:
+//# run test::regulated_coin::partial_wrap --args object(1,1) --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4119200,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 4, lines 79-81:
+//# run test::regulated_coin::partial_wrap --args object(1,1) --sender A
+created: object(4,0)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4119200,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 5, lines 82-84:
+//# run sui::coin::deny_list_v2_enable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 54, 101, 99, 53, 53, 52, 55, 102, 50, 98, 99, 101, 48, 55, 97, 49, 48, 97, 102, 50, 57, 49, 57, 101, 97, 48, 101, 97, 57, 54, 97, 97, 102, 97, 56, 57, 54, 57, 56, 55, 56, 55, 50, 49, 50, 56, 55, 101, 98, 102, 54, 54, 102, 52, 48, 51, 100, 50, 100, 54, 99, 53, 57, 50, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 254, 127, 25, 0, 75, 139, 142, 51, 141, 181, 23, 12, 237, 165, 178, 199, 150, 191, 43, 48, 121, 145, 70, 28, 15, 98, 69, 101, 83, 67, 172, 114] }
+created: object(5,0), object(5,1), object(5,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 11985200,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
+
+task 6, lines 85-87:
+//# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) true --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 88-90:
+//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Error checking transaction input objects: CoinTypeGlobalPause { coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+
+task 8, lines 91-93:
+//# transfer-object 2,0 --sender B --recipient A
+Error: Error checking transaction input objects: CoinTypeGlobalPause { coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+
+task 9, lines 94-97:
+//# run sui::pay::split_and_transfer --args object(2,0) 1 @A --type-args test::regulated_coin::REGULATED_COIN --sender B
+Error: Error checking transaction input objects: CoinTypeGlobalPause { coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+
+task 10, line 98:
+//# run test::regulated_coin::unwrap --args object(3,0) --sender A
+mutated: object(0,0)
+unwrapped: object(10,0)
+deleted: object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
+
+task 11, lines 100-103:
+//# advance-epoch
+Epoch advanced: 1
+
+task 12, lines 104-106:
+//# run test::regulated_coin::unwrap --args object(4,0) --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 13, lines 107-109:
+//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Error checking transaction input objects: CoinTypeGlobalPause { coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
+
+task 14, lines 110-112:
+//# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) true --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15, lines 113-115:
+//# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(5,1)
+gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
+
+task 16, lines 116-118:
+//# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) false --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17, lines 119-121:
+//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 18, lines 122-125:
+//# run test::regulated_coin::full_wrap --args object(1,1) --sender A
+created: object(18,0)
+mutated: object(0,0)
+wrapped: object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2644800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 19, line 126:
+//# run test::regulated_coin::unwrap --args object(18,0) --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 20, lines 128-130:
+//# advance-epoch
+Epoch advanced: 2
+
+task 21, line 131:
+//# run test::regulated_coin::unwrap --args object(18,0) --sender A
+mutated: object(0,0)
+unwrapped: object(1,1)
+deleted: object(18,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2618352, non_refundable_storage_fee: 26448

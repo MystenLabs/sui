@@ -1,0 +1,277 @@
+// Move bytecode v6
+module 1.string {
+use 0000000000000000000000000000000000000000000000000000000000000001::ascii;
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+struct String has copy, drop, store {
+	bytes: vector<u8>
+}
+
+public utf8(Arg0: vector<u8>): String {
+B0:
+	0: ImmBorrowLoc[0](Arg0: vector<u8>)
+	1: Call internal_check_utf8(&vector<u8>): bool
+	2: BrFalse(4)
+B1:
+	3: Branch(6)
+B2:
+	4: LdConst[0](u64: 1)
+	5: Abort
+B3:
+	6: MoveLoc[0](Arg0: vector<u8>)
+	7: Pack[0](String)
+	8: Ret
+}
+
+public from_ascii(Arg0: String): String {
+B0:
+	0: MoveLoc[0](Arg0: String)
+	1: Call ascii::into_bytes(String): vector<u8>
+	2: Pack[0](String)
+	3: Ret
+}
+
+public to_ascii(Arg0: String): String {
+B0:
+	0: MoveLoc[0](Arg0: String)
+	1: Unpack[0](String)
+	2: Call ascii::string(vector<u8>): String
+	3: Ret
+}
+
+public try_utf8(Arg0: vector<u8>): Option<String> {
+L1:	loc0: Option<String>
+B0:
+	0: ImmBorrowLoc[0](Arg0: vector<u8>)
+	1: Call internal_check_utf8(&vector<u8>): bool
+	2: BrFalse(8)
+B1:
+	3: MoveLoc[0](Arg0: vector<u8>)
+	4: Pack[0](String)
+	5: Call option::some<String>(String): Option<String>
+	6: StLoc[1](loc0: Option<String>)
+	7: Branch(10)
+B2:
+	8: Call option::none<String>(): Option<String>
+	9: StLoc[1](loc0: Option<String>)
+B3:
+	10: MoveLoc[1](loc0: Option<String>)
+	11: Ret
+}
+
+public as_bytes(Arg0: &String): &vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: Ret
+}
+
+public into_bytes(Arg0: String): vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: String)
+	1: Unpack[0](String)
+	2: Ret
+}
+
+public is_empty(Arg0: &String): bool {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: Call vector::is_empty<u8>(&vector<u8>): bool
+	3: Ret
+}
+
+public length(Arg0: &String): u64 {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: VecLen(19)
+	3: Ret
+}
+
+public append(Arg0: &mut String, Arg1: String) {
+B0:
+	0: MoveLoc[0](Arg0: &mut String)
+	1: MutBorrowField[0](String.bytes: vector<u8>)
+	2: ImmBorrowLoc[1](Arg1: String)
+	3: ImmBorrowField[0](String.bytes: vector<u8>)
+	4: ReadRef
+	5: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+	6: Ret
+}
+
+public append_utf8(Arg0: &mut String, Arg1: vector<u8>) {
+B0:
+	0: MoveLoc[0](Arg0: &mut String)
+	1: MoveLoc[1](Arg1: vector<u8>)
+	2: Call utf8(vector<u8>): String
+	3: Call append(&mut String, String)
+	4: Ret
+}
+
+public insert(Arg0: &mut String, Arg1: u64, Arg2: String) {
+L3:	loc0: bool
+L4:	loc1: &vector<u8>
+L5:	loc2: String
+L6:	loc3: String
+L7:	loc4: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: StLoc[4](loc1: &vector<u8>)
+	3: CopyLoc[1](Arg1: u64)
+	4: CopyLoc[4](loc1: &vector<u8>)
+	5: VecLen(19)
+	6: Le
+	7: BrFalse(13)
+B1:
+	8: MoveLoc[4](loc1: &vector<u8>)
+	9: CopyLoc[1](Arg1: u64)
+	10: Call internal_is_char_boundary(&vector<u8>, u64): bool
+	11: StLoc[3](loc0: bool)
+	12: Branch(17)
+B2:
+	13: MoveLoc[4](loc1: &vector<u8>)
+	14: Pop
+	15: LdFalse
+	16: StLoc[3](loc0: bool)
+B3:
+	17: MoveLoc[3](loc0: bool)
+	18: BrFalse(20)
+B4:
+	19: Branch(24)
+B5:
+	20: MoveLoc[0](Arg0: &mut String)
+	21: Pop
+	22: LdConst[1](u64: 2)
+	23: Abort
+B6:
+	24: CopyLoc[0](Arg0: &mut String)
+	25: FreezeRef
+	26: Call length(&String): u64
+	27: StLoc[7](loc4: u64)
+	28: CopyLoc[0](Arg0: &mut String)
+	29: FreezeRef
+	30: LdU64(0)
+	31: CopyLoc[1](Arg1: u64)
+	32: Call substring(&String, u64, u64): String
+	33: StLoc[6](loc3: String)
+	34: CopyLoc[0](Arg0: &mut String)
+	35: FreezeRef
+	36: MoveLoc[1](Arg1: u64)
+	37: MoveLoc[7](loc4: u64)
+	38: Call substring(&String, u64, u64): String
+	39: StLoc[5](loc2: String)
+	40: MutBorrowLoc[6](loc3: String)
+	41: MoveLoc[2](Arg2: String)
+	42: Call append(&mut String, String)
+	43: MutBorrowLoc[6](loc3: String)
+	44: MoveLoc[5](loc2: String)
+	45: Call append(&mut String, String)
+	46: MoveLoc[6](loc3: String)
+	47: MoveLoc[0](Arg0: &mut String)
+	48: WriteRef
+	49: Ret
+}
+
+public substring(Arg0: &String, Arg1: u64, Arg2: u64): String {
+L3:	loc0: bool
+L4:	loc1: &vector<u8>
+L5:	loc2: u64
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: StLoc[4](loc1: &vector<u8>)
+	3: CopyLoc[4](loc1: &vector<u8>)
+	4: VecLen(19)
+	5: StLoc[5](loc2: u64)
+	6: CopyLoc[2](Arg2: u64)
+	7: MoveLoc[5](loc2: u64)
+	8: Le
+	9: BrFalse(29)
+B1:
+	10: CopyLoc[1](Arg1: u64)
+	11: CopyLoc[2](Arg2: u64)
+	12: Le
+	13: BrFalse(26)
+B2:
+	14: CopyLoc[4](loc1: &vector<u8>)
+	15: CopyLoc[1](Arg1: u64)
+	16: Call internal_is_char_boundary(&vector<u8>, u64): bool
+	17: BrFalse(23)
+B3:
+	18: CopyLoc[4](loc1: &vector<u8>)
+	19: CopyLoc[2](Arg2: u64)
+	20: Call internal_is_char_boundary(&vector<u8>, u64): bool
+	21: StLoc[3](loc0: bool)
+	22: Branch(31)
+B4:
+	23: LdFalse
+	24: StLoc[3](loc0: bool)
+	25: Branch(31)
+B5:
+	26: LdFalse
+	27: StLoc[3](loc0: bool)
+	28: Branch(31)
+B6:
+	29: LdFalse
+	30: StLoc[3](loc0: bool)
+B7:
+	31: MoveLoc[3](loc0: bool)
+	32: BrFalse(34)
+B8:
+	33: Branch(38)
+B9:
+	34: MoveLoc[4](loc1: &vector<u8>)
+	35: Pop
+	36: LdConst[1](u64: 2)
+	37: Abort
+B10:
+	38: MoveLoc[4](loc1: &vector<u8>)
+	39: MoveLoc[1](Arg1: u64)
+	40: MoveLoc[2](Arg2: u64)
+	41: Call internal_sub_string(&vector<u8>, u64, u64): vector<u8>
+	42: Pack[0](String)
+	43: Ret
+}
+
+public index_of(Arg0: &String, Arg1: &String): u64 {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: ImmBorrowField[0](String.bytes: vector<u8>)
+	2: MoveLoc[1](Arg1: &String)
+	3: ImmBorrowField[0](String.bytes: vector<u8>)
+	4: Call internal_index_of(&vector<u8>, &vector<u8>): u64
+	5: Ret
+}
+
+native internal_check_utf8(Arg0: &vector<u8>): bool;
+
+native internal_is_char_boundary(Arg0: &vector<u8>, Arg1: u64): bool;
+
+native internal_sub_string(Arg0: &vector<u8>, Arg1: u64, Arg2: u64): vector<u8>;
+
+native internal_index_of(Arg0: &vector<u8>, Arg1: &vector<u8>): u64;
+
+public bytes(Arg0: &String): &vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: Call as_bytes(&String): &vector<u8>
+	2: Ret
+}
+
+public sub_string(Arg0: &String, Arg1: u64, Arg2: u64): String {
+B0:
+	0: MoveLoc[0](Arg0: &String)
+	1: MoveLoc[1](Arg1: u64)
+	2: MoveLoc[2](Arg2: u64)
+	3: Call substring(&String, u64, u64): String
+	4: Ret
+}
+
+Constants [
+	0 => u64: 1
+	1 => u64: 2
+]
+}

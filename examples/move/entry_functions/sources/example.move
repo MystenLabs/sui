@@ -21,7 +21,7 @@ entry fun share(bar: u64, ctx: &mut TxContext) {
 /// transaction block (like `foo`, below) must be inputs to the
 /// transaction block, and not results of previous transactions.
 entry fun update(foo: &mut Foo, ctx: &TxContext) {
-    foo.bar = tx_context::epoch(ctx);
+    foo.bar = ctx.epoch();
 }
 
 /// Entry functions can return types that have `drop`.

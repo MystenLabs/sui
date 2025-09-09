@@ -8,12 +8,13 @@ use std::{
 };
 
 use consensus_config::{AuthorityIndex, Stake};
+use consensus_types::block::Round;
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 
 use crate::{
     commit::CommitRange, context::Context, dag_state::DagState, leader_scoring::ReputationScores,
-    CommitIndex, Round,
+    CommitIndex,
 };
 
 /// The `LeaderSchedule` is responsible for producing the leader schedule across
@@ -433,10 +434,11 @@ impl Debug for LeaderSwapTable {
 
 #[cfg(test)]
 mod tests {
+    use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs};
 
     use super::*;
     use crate::{
-        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         commit::{CommitDigest, CommitInfo, CommitRef, CommittedSubDag, TrustedCommit},
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,
@@ -673,10 +675,8 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             vec![],
-            vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
-            vec![],
         )];
         dag_state.write().add_scoring_subdags(unscored_subdags);
 
@@ -755,7 +755,6 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
-        let rejected_transactions = vec![vec![]; blocks.len()];
 
         let last_commit = TrustedCommit::new_for_test(
             commit_index,
@@ -771,10 +770,8 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
-            rejected_transactions,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
-            vec![],
         )];
 
         let mut dag_state_write = dag_state.write();

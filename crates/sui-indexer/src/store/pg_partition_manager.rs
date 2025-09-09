@@ -164,16 +164,14 @@ impl PgPartitionManager {
             transaction_with_retry(&self.pool, Duration::from_secs(10), |conn| {
                 async {
                     diesel_async::RunQueryDsl::execute(
-                        diesel::sql_query("CALL advance_partition($1, $2, $3, $4, $5)")
+                        diesel::sql_query("CALL robust_advance_partition($1, $2, $3, $4)")
                             .bind::<diesel::sql_types::Text, _>(table.clone())
                             .bind::<diesel::sql_types::BigInt, _>(data.last_epoch as i64)
                             .bind::<diesel::sql_types::BigInt, _>(data.next_epoch as i64)
-                            .bind::<diesel::sql_types::BigInt, _>(partition_range.0 as i64)
                             .bind::<diesel::sql_types::BigInt, _>(partition_range.1 as i64),
                         conn,
                     )
                     .await?;
-
                     Ok(())
                 }
                 .scope_boxed()

@@ -1,6 +1,8 @@
 ---
 title: Staking and Governance SDK
 sidebar_label: Staking and Governance
+description: Learn how to use the DeepBookV3 SDK to interact with staking and governance.
+keywords: [ taker fee, maker fee, stake, staking, governance, unstake, submit proposal, vote, claim rebates, deepbook pool, deepbook governance, deepbookv3 ]
 ---
 
 Examples of interacting with staking and governance. These functions typically require a `balanceManagerKey`, `poolKey`, or both. For details on these keys, see [DeepBookV3 SDK](../deepbookv3-sdk.mdx#keys). The SDK includes some default keys that you can view in the `constants.ts` file. 
@@ -146,3 +148,9 @@ vote = (tx: Transaction) => {
   tx.add(this.governance.vote(poolKey, balanceManagerKey, proposalID));
 };
 ```
+
+## Related links
+
+- [DeepBookV3 Indexer repository](https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3): The DeepBookV3 SDK repository on GitHub.
+- [DeepBookV3 SDK node package](https://www.npmjs.com/package/@mysten/deepbook-v3): The DeepBookV3 SDK node package on NPM.
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

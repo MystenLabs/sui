@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use move_core_types::account_address::AccountAddress;
-use move_vm_runtime::natives::move_stdlib::{stdlib_native_function_table, GasParameters};
+use move_vm_runtime::natives::move_stdlib::{GasParameters, stdlib_native_function_table};
 
 fn main() -> Result<()> {
     let cost_table = &move_vm_runtime::dev_utils::gas_schedule::INITIAL_COST_SCHEDULE;

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::values::{values_impl::SignerRef, Value},
+    execution::values::{Value, values_impl::SignerRef},
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::{

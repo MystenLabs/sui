@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compatibility::{compare_ord_iters, Mark},
-    compatibility::{Compatibility, InclusionCheck},
+    compatibility::{Compatibility, InclusionCheck, Mark, compare_ord_iters},
     file_format::*,
-    normalized::{self, Type},
+    normalized::{self, RcIdentifier, RcPool, Type},
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     convert::TryFrom,
+    rc::Rc,
 };
+
+type NormalizedModule = normalized::Module<RcIdentifier>;
 
 // A way to permute pools, and index into them still.
 pub struct Permutation {
@@ -43,16 +45,16 @@ impl Permutation {
     }
 }
 
-fn mk_module(vis: u8) -> normalized::Module {
-    mk_module_entry(vis, false)
+fn mk_module(pool: &mut RcPool, vis: u8) -> NormalizedModule {
+    mk_module_entry(pool, vis, false)
 }
 
-fn max_version(mut module: normalized::Module) -> normalized::Module {
+fn max_version(mut module: NormalizedModule) -> NormalizedModule {
     module.file_format_version = crate::file_format_common::VERSION_MAX;
     module
 }
 
-fn mk_module_entry(vis: u8, is_entry: bool) -> normalized::Module {
+fn mk_module_entry(pool: &mut RcPool, vis: u8, is_entry: bool) -> NormalizedModule {
     let (visibility, is_entry) = if vis == Visibility::DEPRECATED_SCRIPT {
         (Visibility::Public, true)
     } else {
@@ -60,6 +62,7 @@ fn mk_module_entry(vis: u8, is_entry: bool) -> normalized::Module {
     };
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_4,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
@@ -135,14 +138,19 @@ fn mk_module_entry(vis: u8, is_entry: bool) -> normalized::Module {
         variant_handles: vec![],
         variant_instantiation_handles: vec![],
     };
-    normalized::Module::new(&m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
-fn mk_module_plus_code(vis: u8, code: Vec<Bytecode>) -> normalized::Module {
-    mk_module_plus_code_perm(vis, code, Permutation::new(vec![]))
+fn mk_module_plus_code(pool: &mut RcPool, vis: u8, code: Vec<Bytecode>) -> NormalizedModule {
+    mk_module_plus_code_perm(pool, vis, code, Permutation::new(vec![]))
 }
 
-fn mk_module_plus_code_perm(vis: u8, code: Vec<Bytecode>, p: Permutation) -> normalized::Module {
+fn mk_module_plus_code_perm(
+    pool: &mut RcPool,
+    vis: u8,
+    code: Vec<Bytecode>,
+    p: Permutation,
+) -> NormalizedModule {
     let (visibility, is_entry) = if vis == Visibility::DEPRECATED_SCRIPT {
         (Visibility::Public, true)
     } else {
@@ -150,6 +158,7 @@ fn mk_module_plus_code_perm(vis: u8, code: Vec<Bytecode>, p: Permutation) -> nor
     };
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_4,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
@@ -245,20 +254,21 @@ fn mk_module_plus_code_perm(vis: u8, code: Vec<Bytecode>, p: Permutation) -> nor
         variant_handles: vec![],
         variant_instantiation_handles: vec![],
     };
-    normalized::Module::new(&m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
-fn mk_module_plus(vis: u8) -> normalized::Module {
-    mk_module_plus_code(vis, vec![Bytecode::Ret])
+fn mk_module_plus(pool: &mut RcPool, vis: u8) -> NormalizedModule {
+    mk_module_plus_code(pool, vis, vec![Bytecode::Ret])
 }
 
-fn mk_module_plus_perm(vis: u8, permutation: Permutation) -> normalized::Module {
-    mk_module_plus_code_perm(vis, vec![Bytecode::Ret], permutation)
+fn mk_module_plus_perm(pool: &mut RcPool, vis: u8, permutation: Permutation) -> NormalizedModule {
+    mk_module_plus_code_perm(pool, vis, vec![Bytecode::Ret], permutation)
 }
 
-fn make_complex_module_perm(p: Permutation) -> normalized::Module {
+fn make_complex_module_perm(pool: &mut RcPool, p: Permutation) -> NormalizedModule {
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_MAX,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
@@ -536,15 +546,16 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
         ]),
         variant_instantiation_handles: vec![],
     };
-    normalized::Module::new(&m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
 fn mk_module_with_defs(
+    pool: &mut RcPool,
     struct_defs: Vec<(Identifier, StructDefinition)>,
     enum_defs: Vec<(Identifier, EnumDefinition)>,
     function_defs: Vec<(Identifier, FunctionDefinition)>,
     friend_defs: Vec<(Identifier, AccountAddress)>,
-) -> normalized::Module {
+) -> NormalizedModule {
     let mut identifiers = vec![
         Identifier::new("M").unwrap(), // Module name
     ];
@@ -612,6 +623,7 @@ fn mk_module_with_defs(
 
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_MAX,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
@@ -664,136 +676,173 @@ fn mk_module_with_defs(
         variant_handles: vec![],
         variant_instantiation_handles: vec![],
     };
-    normalized::Module::new(&m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
 #[test]
 fn deprecated_unchanged_script_visibility() {
-    let script_module = mk_module(Visibility::DEPRECATED_SCRIPT);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &script_module)
-        .is_ok(),);
+    let pool = &mut RcPool::new();
+    let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &script_module)
+            .is_ok(),
+    );
 }
 
 #[test]
 fn deprecated_remove_script_visibility() {
-    let script_module = mk_module(Visibility::DEPRECATED_SCRIPT);
+    let pool = &mut RcPool::new();
+    let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
     // script -> private, not allowed
-    let private_module = mk_module(Visibility::Private as u8);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &private_module)
-        .is_err());
+    let private_module = mk_module(pool, Visibility::Private as u8);
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &private_module)
+            .is_err()
+    );
     // script -> public, not allowed
-    let public_module = mk_module(Visibility::Public as u8);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &public_module)
-        .is_err());
+    let public_module = mk_module(pool, Visibility::Public as u8);
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &public_module)
+            .is_err()
+    );
     // script -> friend, not allowed
-    let friend_module = mk_module(Visibility::Friend as u8);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &friend_module)
-        .is_err());
+    let friend_module = mk_module(pool, Visibility::Friend as u8);
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &friend_module)
+            .is_err()
+    );
 }
 
 #[test]
 fn deprecated_add_script_visibility() {
-    let script_module = mk_module(Visibility::DEPRECATED_SCRIPT);
+    let pool = &mut RcPool::new();
+    let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
     // private -> script, allowed
-    let private_module = mk_module(Visibility::Private as u8);
-    assert!(Compatibility::full_check()
-        .check(&private_module, &script_module)
-        .is_ok());
+    let private_module = mk_module(pool, Visibility::Private as u8);
+    assert!(
+        Compatibility::full_check()
+            .check(&private_module, &script_module)
+            .is_ok()
+    );
     // public -> script, not allowed
-    let public_module = mk_module(Visibility::Public as u8);
-    assert!(Compatibility::full_check()
-        .check(&public_module, &script_module)
-        .is_err());
+    let public_module = mk_module(pool, Visibility::Public as u8);
+    assert!(
+        Compatibility::full_check()
+            .check(&public_module, &script_module)
+            .is_err()
+    );
     // friend -> script, not allowed
-    let friend_module = mk_module(Visibility::Friend as u8);
-    assert!(Compatibility::full_check()
-        .check(&friend_module, &script_module)
-        .is_err());
+    let friend_module = mk_module(pool, Visibility::Friend as u8);
+    assert!(
+        Compatibility::full_check()
+            .check(&friend_module, &script_module)
+            .is_err()
+    );
 }
 
 #[test]
 fn private_entry_to_public_entry_allowed() {
-    let private_module = max_version(mk_module_entry(Visibility::Private as u8, true));
-    let public_module = max_version(mk_module_entry(Visibility::Public as u8, true));
-    assert!(Compatibility::full_check()
-        .check(&private_module, &public_module)
-        .is_ok());
+    let pool = &mut RcPool::new();
+    let private_module = max_version(mk_module_entry(pool, Visibility::Private as u8, true));
+    let public_module = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
+    assert!(
+        Compatibility::full_check()
+            .check(&private_module, &public_module)
+            .is_ok()
+    );
 
-    assert!(Compatibility::full_check()
-        .check(&public_module, &private_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&public_module, &private_module)
+            .is_err()
+    );
 }
 
 #[test]
 fn public_loses_entry() {
-    let public_entry = max_version(mk_module_entry(Visibility::Public as u8, true));
-    let public = max_version(mk_module_entry(Visibility::Public as u8, false));
-    assert!(Compatibility::full_check()
-        .check(&public, &public_entry)
-        .is_ok());
+    let pool = &mut RcPool::new();
+    let public_entry = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
+    let public = max_version(mk_module_entry(pool, Visibility::Public as u8, false));
+    assert!(
+        Compatibility::full_check()
+            .check(&public, &public_entry)
+            .is_ok()
+    );
 
-    assert!(Compatibility::full_check()
-        .check(&public_entry, &public)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&public_entry, &public)
+            .is_err()
+    );
 }
 
 #[test]
 fn private_entry_signature_change_allowed() {
+    let pool = &mut RcPool::new();
     // Create a private entry function
-    let module = max_version(mk_module_entry(Visibility::Private as u8, true));
+    let module = max_version(mk_module_entry(pool, Visibility::Private as u8, true));
     let mut updated_module = module.clone();
     // Update the signature of the entry fun to now take a u64 argument.
-    updated_module
-        .functions
-        .get_mut(ident_str!("fn"))
-        .unwrap()
-        .parameters = vec![Type::U64];
+    let function_ref = updated_module.functions.get_mut(ident_str!("fn")).unwrap();
+    let new_function = {
+        let mut f: normalized::Function<_> = (**function_ref).clone();
+        f.parameters = Rc::new(vec![Rc::new(Type::U64)]);
+        Rc::new(f)
+    };
+    *function_ref = new_function;
 
     // allow updating signatures of private entry functions
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_ok());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_ok()
+    );
 
     // allow updating signatures of private entry functions
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&updated_module, &module)
-    .is_ok());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&updated_module, &module)
+        .is_ok()
+    );
 
     // disallow updating signatures of private entry functions
-    assert!(Compatibility::full_check()
-        .check(&module, &updated_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&module, &updated_module)
+            .is_err()
+    );
 }
 
 #[test]
 fn entry_fun_compat_tests() {
+    let pool = &mut RcPool::new();
     // fun
-    let private_fun = max_version(mk_module_entry(Visibility::Private as u8, false));
+    let private_fun = max_version(mk_module_entry(pool, Visibility::Private as u8, false));
     // entry fun
-    let entry_fun = max_version(mk_module_entry(Visibility::Private as u8, true));
+    let entry_fun = max_version(mk_module_entry(pool, Visibility::Private as u8, true));
     // public(friend) fun
-    let friend_fun = max_version(mk_module_entry(Visibility::Friend as u8, false));
+    let friend_fun = max_version(mk_module_entry(pool, Visibility::Friend as u8, false));
     // public(friend) entry fun
-    let friend_entry_fun = max_version(mk_module_entry(Visibility::Friend as u8, true));
+    let friend_entry_fun = max_version(mk_module_entry(pool, Visibility::Friend as u8, true));
     // public fun
-    let public_fun = max_version(mk_module_entry(Visibility::Public as u8, false));
+    let public_fun = max_version(mk_module_entry(pool, Visibility::Public as u8, false));
     // public entry fun
-    let public_entry_fun = max_version(mk_module_entry(Visibility::Public as u8, true));
+    let public_entry_fun = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
     // NO function
     let mut no_fun = private_fun.clone();
-    no_fun.functions = BTreeMap::new();
+    no_fun.functions.clear();
 
     let mut valid_combos = vec![
         // Can transition from a private entry fun to anything
@@ -845,13 +894,15 @@ fn entry_fun_compat_tests() {
 
     // Every valid combo is valid under `check_private_entry_linking = false`
     for (prev, new) in valid_combos.into_iter() {
-        assert!(Compatibility {
-            check_datatype_layout: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::EMPTY,
-        }
-        .check(prev, new)
-        .is_ok());
+        assert!(
+            Compatibility {
+                check_datatype_layout: true,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+            }
+            .check(prev, new)
+            .is_ok()
+        );
     }
 
     // Every
@@ -861,99 +912,120 @@ fn entry_fun_compat_tests() {
 
     // Every valid combo is valid under `check_private_entry_linking = false`
     for (prev, new) in valid_entry_fun_changes_with_friend_api_breakage.into_iter() {
-        assert!(Compatibility {
-            check_datatype_layout: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::EMPTY,
-        }
-        .check(prev, new)
-        .is_ok());
+        assert!(
+            Compatibility {
+                check_datatype_layout: true,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+            }
+            .check(prev, new)
+            .is_ok()
+        );
     }
 
     for (prev, new) in invalid_combos.into_iter() {
-        assert!(Compatibility {
-            check_datatype_layout: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::EMPTY,
-        }
-        .check(prev, new)
-        .is_err());
+        assert!(
+            Compatibility {
+                check_datatype_layout: true,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+            }
+            .check(prev, new)
+            .is_err()
+        );
     }
 }
 
 #[test]
 fn public_entry_signature_change_disallowed() {
+    let pool = &mut RcPool::new();
     // Create a public entry function
-    let module = max_version(mk_module_entry(Visibility::Public as u8, true));
+    let module = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
     let mut updated_module = module.clone();
+    let function_ref = updated_module.functions.get_mut(ident_str!("fn")).unwrap();
+    let new_function = {
+        let mut f: normalized::Function<_> = (**function_ref).clone();
+        f.parameters = Rc::new(vec![Rc::new(Type::U64)]);
+        Rc::new(f)
+    };
+    *function_ref = new_function;
     // Update the signature of the entry fun to now take a u64 argument.
-    updated_module
-        .functions
-        .get_mut(ident_str!("fn"))
-        .unwrap()
-        .parameters = vec![Type::U64];
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_err()
+    );
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&updated_module, &module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&updated_module, &module)
+        .is_err()
+    );
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: true,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_err()
+    );
 }
 
 #[test]
 fn friend_entry_signature_change_allowed() {
-    let module = max_version(mk_module_entry(Visibility::Friend as u8, true));
+    let pool = &mut RcPool::new();
+    let module = max_version(mk_module_entry(pool, Visibility::Friend as u8, true));
     let mut updated_module = module.clone();
     // Update the signature of the entry fun to now take a u64 argument.
-    updated_module
-        .functions
-        .get_mut(ident_str!("fn"))
-        .unwrap()
-        .parameters = vec![Type::U64];
+    let function_ref = updated_module.functions.get_mut(ident_str!("fn")).unwrap();
+    let new_function = {
+        let mut f: normalized::Function<_> = (**function_ref).clone();
+        f.parameters = Rc::new(vec![Rc::new(Type::U64)]);
+        Rc::new(f)
+    };
+    *function_ref = new_function;
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_ok());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_ok()
+    );
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: true,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_err()
+    );
 }
 
 #[test]
 fn check_exact_and_unchange_same_module() {
-    let m1 = max_version(mk_module(Visibility::Private as u8));
+    let pool = &mut RcPool::new();
+    let m1 = max_version(mk_module(pool, Visibility::Private as u8));
     assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
     assert!(InclusionCheck::Equal.check(&m1, &m1).is_ok());
 
     // m1 + an extra function
-    let m2 = max_version(mk_module_plus(Visibility::Private as u8));
+    let m2 = max_version(mk_module_plus(pool, Visibility::Private as u8));
     assert!(InclusionCheck::Subset.check(&m1, &m2).is_ok());
     assert!(InclusionCheck::Subset.check(&m2, &m1).is_err());
     assert!(InclusionCheck::Equal.check(&m1, &m2).is_err());
@@ -961,6 +1033,7 @@ fn check_exact_and_unchange_same_module() {
 
     // m1 + a change in the bytecode of fn
     let m3 = max_version(mk_module_plus_code(
+        pool,
         Visibility::Private as u8,
         vec![Bytecode::LdU8(0), Bytecode::Ret],
     ));
@@ -975,13 +1048,15 @@ fn check_exact_and_unchange_same_module() {
 
 #[test]
 fn check_exact_and_unchange_same_module_permutations() {
-    let m1 = max_version(mk_module(Visibility::Private as u8));
-    let m2 = max_version(mk_module_plus(Visibility::Private as u8));
+    let pool = &mut RcPool::new();
+    let m1 = max_version(mk_module(pool, Visibility::Private as u8));
+    let m2 = max_version(mk_module_plus(pool, Visibility::Private as u8));
     let m3 = max_version(mk_module_plus_perm(
+        pool,
         Visibility::Private as u8,
         Permutation::new(vec![1, 0]),
     ));
-    assert_ne!(m2, m3);
+    assert!(!m2.equivalent(&m3));
     assert!(InclusionCheck::Equal.check(&m2, &m3).is_ok());
     assert!(InclusionCheck::Equal.check(&m3, &m2).is_ok());
     // double inclusion
@@ -996,6 +1071,7 @@ fn check_exact_and_unchange_same_module_permutations() {
 
 #[test]
 fn check_exact_and_unchange_same_complex_module_permutations() {
+    let pool = &mut RcPool::new();
     let perms = vec![
         vec![0, 1, 2],
         vec![0, 2, 1],
@@ -1006,7 +1082,12 @@ fn check_exact_and_unchange_same_complex_module_permutations() {
     ];
     let modules: Vec<_> = perms
         .into_iter()
-        .map(|permutation| max_version(make_complex_module_perm(Permutation::new(permutation))))
+        .map(|permutation| {
+            max_version(make_complex_module_perm(
+                pool,
+                Permutation::new(permutation),
+            ))
+        })
         .collect();
 
     for m0 in &modules {
@@ -1021,9 +1102,11 @@ fn check_exact_and_unchange_same_complex_module_permutations() {
 
 #[test]
 fn check_new_changed_missing_declarations() {
-    let empty = mk_module_with_defs(vec![], vec![], vec![], vec![]);
+    let pool = &mut RcPool::new();
+    let empty = mk_module_with_defs(pool, vec![], vec![], vec![], vec![]);
     // struct
     let m1 = mk_module_with_defs(
+        pool,
         vec![(
             Identifier::new("S1").unwrap(),
             StructDefinition {
@@ -1041,6 +1124,7 @@ fn check_new_changed_missing_declarations() {
 
     // change struct S1 to S2
     let m2 = mk_module_with_defs(
+        pool,
         vec![(
             Identifier::new("S2").unwrap(),
             StructDefinition {
@@ -1058,6 +1142,7 @@ fn check_new_changed_missing_declarations() {
 
     // same name different type
     let m3 = mk_module_with_defs(
+        pool,
         vec![(
             Identifier::new("S1").unwrap(),
             StructDefinition {
@@ -1084,6 +1169,7 @@ fn check_new_changed_missing_declarations() {
 
     //enums
     let m1 = mk_module_with_defs(
+        pool,
         vec![],
         vec![(
             Identifier::new("E1").unwrap(),
@@ -1104,6 +1190,7 @@ fn check_new_changed_missing_declarations() {
 
     // change enum E1 to E2
     let m2 = mk_module_with_defs(
+        pool,
         vec![],
         vec![(
             Identifier::new("E2").unwrap(),
@@ -1124,6 +1211,7 @@ fn check_new_changed_missing_declarations() {
 
     // same name different type
     let m3 = mk_module_with_defs(
+        pool,
         vec![],
         vec![(
             Identifier::new("E1").unwrap(),
@@ -1155,6 +1243,7 @@ fn check_new_changed_missing_declarations() {
 
     //functions
     let m1 = mk_module_with_defs(
+        pool,
         vec![],
         vec![],
         vec![(
@@ -1176,6 +1265,7 @@ fn check_new_changed_missing_declarations() {
 
     // change function fn1 to fn2
     let m2 = mk_module_with_defs(
+        pool,
         vec![],
         vec![],
         vec![(
@@ -1197,6 +1287,7 @@ fn check_new_changed_missing_declarations() {
 
     // change fn1 bytecode to abort from return
     let m3 = mk_module_with_defs(
+        pool,
         vec![],
         vec![],
         vec![(
@@ -1229,6 +1320,7 @@ fn check_new_changed_missing_declarations() {
 
 #[test]
 fn test_friend_linking() {
+    let pool = &mut RcPool::new();
     let friend_modules = [
         (Identifier::new("M1").unwrap(), AccountAddress::random()),
         (Identifier::new("M2").unwrap(), AccountAddress::random()),
@@ -1237,10 +1329,11 @@ fn test_friend_linking() {
     ];
 
     // zero friends
-    let m0 = mk_module_with_defs(vec![], vec![], vec![], vec![]);
+    let m0 = mk_module_with_defs(pool, vec![], vec![], vec![], vec![]);
 
     // two friends
     let m1 = mk_module_with_defs(
+        pool,
         vec![],
         vec![],
         vec![],
@@ -1249,6 +1342,7 @@ fn test_friend_linking() {
 
     // 3 friends
     let m2 = mk_module_with_defs(
+        pool,
         vec![],
         vec![],
         vec![],
@@ -1261,6 +1355,7 @@ fn test_friend_linking() {
 
     // 2 friends from m1, but different order
     let m3 = mk_module_with_defs(
+        pool,
         vec![],
         vec![],
         vec![],
@@ -1269,6 +1364,7 @@ fn test_friend_linking() {
 
     // 2 friends, different from m1
     let m4 = mk_module_with_defs(
+        pool,
         vec![],
         vec![],
         vec![],

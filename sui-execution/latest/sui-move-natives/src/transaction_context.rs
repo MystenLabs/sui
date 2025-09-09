@@ -4,6 +4,7 @@
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
+use move_vm_runtime::natives::extensions::NativeExtensionMarker;
 use std::{cell::RefCell, rc::Rc};
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TxContext},
@@ -19,6 +20,8 @@ pub struct TransactionContext {
     pub(crate) tx_context: Rc<RefCell<TxContext>>,
     test_only: bool,
 }
+
+impl NativeExtensionMarker<'_> for TransactionContext {}
 
 impl TransactionContext {
     pub fn new(tx_context: Rc<RefCell<TxContext>>) -> Self {
@@ -55,6 +58,10 @@ impl TransactionContext {
         self.tx_context.borrow().sponsor()
     }
 
+    pub fn rgp(&self) -> u64 {
+        self.tx_context.borrow().rgp()
+    }
+
     pub fn gas_price(&self) -> u64 {
         self.tx_context.borrow().gas_price()
     }
@@ -81,6 +88,7 @@ impl TransactionContext {
         epoch: u64,
         epoch_timestamp_ms: u64,
         ids_created: u64,
+        rgp: u64,
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<AccountAddress>,
@@ -97,6 +105,7 @@ impl TransactionContext {
             epoch,
             epoch_timestamp_ms,
             ids_created,
+            rgp,
             gas_price,
             gas_budget,
             sponsor,

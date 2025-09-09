@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
 use fastcrypto::encoding::Base64;
-use jsonrpsee::{
-    core::RpcResult,
-    http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder},
-    proc_macros::rpc,
-};
+use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
 use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -16,13 +11,11 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
 use crate::{
-    config::WriteConfig,
+    config::NodeConfig,
     error::{client_error_to_error_object, invalid_params},
 };
 
 use super::rpc_module::RpcModule;
-
-pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
@@ -52,13 +45,6 @@ pub trait WriteApi {
     ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
 
-#[derive(clap::Args, Debug, Clone, Default)]
-pub struct WriteArgs {
-    /// The URL of the fullnode RPC we connect to for executing transactions.
-    #[arg(long)]
-    pub fullnode_rpc_url: Option<url::Url>,
-}
-
 pub(crate) struct Write(pub HttpClient);
 
 #[derive(Debug, thiserror::Error)]
@@ -68,20 +54,9 @@ pub enum Error {
 }
 
 impl Write {
-    pub fn new(fullnode_rpc_url: url::Url, config: WriteConfig) -> anyhow::Result<Self> {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            CLIENT_SDK_TYPE_HEADER,
-            HeaderValue::from_str(&config.header_value)?,
-        );
-
-        Ok(Self(
-            HttpClientBuilder::default()
-                .max_request_size(config.max_request_size)
-                .set_headers(headers.clone())
-                .build(&fullnode_rpc_url)
-                .context("Failed to initialize fullnode RPC client")?,
-        ))
+    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
+        let client = config.client(fullnode_rpc_url)?;
+        Ok(Self(client))
     }
 }
 

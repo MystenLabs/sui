@@ -71,6 +71,8 @@ Response: {
         "objectId": "0xea80aa0712647964efcf2b71dfab5b996245ab7302c1d010179a08fb9ca4d078",
         "version": "3"
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }

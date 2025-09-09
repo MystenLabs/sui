@@ -20,8 +20,7 @@ RUN cargo build --profile ${PROFILE} --bin sui-node
 # Production Image
 FROM debian:bullseye-slim AS runtime
 # Use jemalloc as memory allocator
-RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
-ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
+RUN apt-get update && apt-get install -y ca-certificates curl
 ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
 # Both bench and release profiles copy from release dir

@@ -499,7 +499,7 @@ impl OnChainDataUploader {
             rgp,
         );
 
-        let signed_tx = self.wallet_ctx.sign_transaction(&tx);
+        let signed_tx = self.wallet_ctx.sign_transaction(&tx).await;
         let tx_digest = *signed_tx.digest();
 
         let timer_start = Instant::now();
@@ -702,9 +702,9 @@ async fn get_object_arg(
         Owner::Shared {
             initial_shared_version,
         }
-        | Owner::ConsensusV2 {
+        | Owner::ConsensusAddressOwner {
             start_version: initial_shared_version,
-            authenticator: _,
+            ..
         } => ObjectArg::SharedObject {
             id,
             initial_shared_version,

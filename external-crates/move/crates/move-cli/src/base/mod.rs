@@ -8,6 +8,8 @@ pub mod docgen;
 pub mod info;
 pub mod migrate;
 pub mod new;
+pub mod profile;
+pub mod summary;
 pub mod test;
 
 use move_package::source_package::layout::SourcePackageLayout;

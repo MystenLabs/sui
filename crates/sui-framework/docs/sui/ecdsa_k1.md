@@ -29,22 +29,22 @@ Error if the public key cannot be recovered from the signature.
 
 
 
-<a name="sui_ecdsa_k1_EInvalidPubKey"></a>
-
-Error if the public key is invalid.
-
-
-<pre><code><b>const</b> <a href="../sui/ecdsa_k1.md#sui_ecdsa_k1_EInvalidPubKey">EInvalidPubKey</a>: u64 = 2;
-</code></pre>
-
-
-
 <a name="sui_ecdsa_k1_EInvalidSignature"></a>
 
 Error if the signature is invalid.
 
 
 <pre><code><b>const</b> <a href="../sui/ecdsa_k1.md#sui_ecdsa_k1_EInvalidSignature">EInvalidSignature</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_ecdsa_k1_EInvalidPubKey"></a>
+
+Error if the public key is invalid.
+
+
+<pre><code><b>const</b> <a href="../sui/ecdsa_k1.md#sui_ecdsa_k1_EInvalidPubKey">EInvalidPubKey</a>: u64 = 2;
 </code></pre>
 
 

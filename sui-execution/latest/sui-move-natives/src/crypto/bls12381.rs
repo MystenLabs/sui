@@ -6,15 +6,12 @@ use fastcrypto::{
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
+use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
+use move_vm_runtime::{execution::values::VectorRef, native_charge_gas_early_exit};
 use move_vm_runtime::{
-    execution::{
-        values::{Value, VectorRef},
-        Type,
-    },
-    natives::functions::NativeResult,
+    execution::{values::Value, Type},
     pop_arg,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -51,7 +48,7 @@ pub fn bls12381_min_sig_verify(
     // Load the cost parameters from the protocol config
     let bls12381_bls12381_min_sig_verify_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .bls12381_bls12381_min_sig_verify_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -64,9 +61,9 @@ pub fn bls12381_min_sig_verify(
     let public_key_bytes = pop_arg!(args, VectorRef);
     let signature_bytes = pop_arg!(args, VectorRef);
 
-    let msg_ref = &*msg.as_bytes_ref();
-    let public_key_bytes_ref = &*public_key_bytes.as_bytes_ref();
-    let signature_bytes_ref = &*signature_bytes.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
@@ -82,13 +79,13 @@ pub fn bls12381_min_sig_verify(
     let cost = context.gas_used();
 
     let Ok(signature) =
-        <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(signature_bytes_ref)
+        <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref)
     else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     let public_key =
-        match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(public_key_bytes_ref) {
+        match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
             Ok(public_key) => match public_key.validate() {
                 Ok(_) => public_key,
                 Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
@@ -98,7 +95,7 @@ pub fn bls12381_min_sig_verify(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::bool(public_key.verify(msg_ref, &signature).is_ok())],
+        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
     ))
 }
 
@@ -131,7 +128,7 @@ pub fn bls12381_min_pk_verify(
     // Load the cost parameters from the protocol config
     let bls12381_bls12381_min_pk_verify_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .bls12381_bls12381_min_pk_verify_cost_params
         .clone();
 
@@ -145,9 +142,9 @@ pub fn bls12381_min_pk_verify(
     let public_key_bytes = pop_arg!(args, VectorRef);
     let signature_bytes = pop_arg!(args, VectorRef);
 
-    let msg_ref = &*msg.as_bytes_ref();
-    let public_key_bytes_ref = &*public_key_bytes.as_bytes_ref();
-    let signature_bytes_ref = &*signature_bytes.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
@@ -163,13 +160,13 @@ pub fn bls12381_min_pk_verify(
     let cost = context.gas_used();
 
     let signature =
-        match <min_pk::BLS12381Signature as ToFromBytes>::from_bytes(signature_bytes_ref) {
+        match <min_pk::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
             Ok(signature) => signature,
             Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
         };
 
     let public_key =
-        match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(public_key_bytes_ref) {
+        match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
             Ok(public_key) => match public_key.validate() {
                 Ok(_) => public_key,
                 Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
@@ -179,6 +176,6 @@ pub fn bls12381_min_pk_verify(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::bool(public_key.verify(msg_ref, &signature).is_ok())],
+        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
     ))
 }

@@ -1,0 +1,19 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-14:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4081200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-17:
+//# programmable --sender A --inputs 16 immshared(8)
+//> test::random::use_random(Input(1));
+//> test::random::use_value(Input(0))
+Error: Error checking transaction input objects: PostRandomCommandRestrictions

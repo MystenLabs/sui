@@ -44,15 +44,19 @@ except ImportError:
 
 def read_sparse_config(sparse_file=".sparse"):
     """
-    Read the .sparse file and return a list of crates (paths) that should be included.
+    Read the .sparse file and return a tuple of (list of crates, base commit SHA).
     """
     if os.path.isfile(sparse_file):
         crates = []
+        base_commit = None
         with open(sparse_file, "r") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#"):
-                    crates.append(strip_trailing_slash(line))
+                    if line.startswith("base-commit:"):
+                        base_commit = line.split(":", 1)[1].strip()
+                    else:
+                        crates.append(strip_trailing_slash(line))
         # throw error if no crates are found
         if not crates:
             print(f"No crates found in {sparse_file}. Exiting.")
@@ -62,9 +66,9 @@ def read_sparse_config(sparse_file=".sparse"):
         if "crates/sui-surfer" not in crates and "crates/sui-benchmark" in crates:
             crates.append("crates/sui-surfer")
 
-        return crates
+        return crates, base_commit
     else:
-        return None
+        return None, None
 
 
 def update_git_sparse_checkout(crates_to_checkout):
@@ -145,8 +149,8 @@ def modify_cargo_toml(crates_to_checkout, cargo_toml_path="Cargo.toml"):
     # Update workspace.members
     cargo_data["workspace"]["members"] = kept_members
 
-    # Get the merge base of the current commit and origin/main
-    commit_sha = subprocess.check_output(["git", "merge-base", "HEAD", "origin/main"]).decode().strip()
+    # Get the base commit (will use persisted one if available)
+    base_commit = get_merge_base()
 
     # Get the git remote URL (assuming 'origin' is the correct remote)
     try:
@@ -185,7 +189,7 @@ def modify_cargo_toml(crates_to_checkout, cargo_toml_path="Cargo.toml"):
             if strip_trailing_slash(dep_spec.get("path")) == crate_path:
                 del dep_spec["path"]
                 dep_spec["git"] = repo_url
-                dep_spec["rev"] = commit_sha
+                dep_spec["rev"] = base_commit
                 matched_dep = True
                 break
 
@@ -253,18 +257,22 @@ def create_sparse_checkout_worktree():
         # move to the sparse worktree
         os.chdir(sparse_dir)
 
+        # Get initial base commit - always use git command for initial setup
+        base_commit = get_merge_base(ignore_config=True)
+
         # now launch $EDITOR to configure the .sparse file. The default contents of .sparse
         # are `crates/sui-core`. First, write the defaults
         with open(".sparse", "w") as f:
             f.write("# Directories to include in the sparse checkout\n")
+            f.write(f"base-commit:{base_commit}\n")
             f.write("crates/sui-core\n")
         # now launch $EDITOR
         subprocess.check_call([os.getenv("EDITOR", "vi"), ".sparse"])
     else:
         print("Exiting.")
         sys.exit(0)
-    crates_to_checkout = read_sparse_config(".sparse")
-    return crates_to_checkout
+    crates, _ = read_sparse_config(".sparse")
+    return crates
 
 def reset_index():
     ignored_files = get_ignored_files()
@@ -277,15 +285,14 @@ def reset_index():
     subprocess.check_call(["git", "checkout", "Cargo.toml", "Cargo.lock"])
 
 def auto_update_config():
-
-    # get the list of files that have changed between the current commit and the merge base.
+    # Get the list of files that have changed between the current commit and the merge base.
     # Use this to select the directories from the workspace that should be included in the sparse checkout.
 
-    # Get the merge base of the current commit and origin/main
-    commit_sha = subprocess.check_output(["git", "merge-base", "HEAD", "origin/main"]).decode().strip()
+    # Get the base commit (will use persisted one if available)
+    base_commit = get_merge_base()
 
-    # Get the list of files that have changed between the current commit and the merge base
-    changed_files = subprocess.check_output(["git", "diff", "--name-only", commit_sha]).decode().split("\n")
+    # Get the list of files that have changed between the current commit and the base commit
+    changed_files = subprocess.check_output(["git", "diff", "--name-only", base_commit]).decode().split("\n")
 
     cargo_data = load_cargo_toml("Cargo.toml")
 
@@ -302,33 +309,70 @@ def auto_update_config():
     # unique-ify the list
     directories_to_checkout = list(set(directories_to_checkout))
 
-    # write the list of directories to .sparse
-    with open(".sparse", "w") as f:
+    # write the list of directories to .sparse, preserving the existing base commit
+    write_sparse_config(directories_to_checkout, base_commit)
+
+def write_sparse_config(crates, base_commit, sparse_file=".sparse"):
+    """
+    Write the crates and base commit to the .sparse file.
+    """
+    with open(sparse_file, "w") as f:
         f.write("# Directories to include in the sparse checkout\n")
-        for directory in directories_to_checkout:
-            f.write(f"{directory}\n")
+        if base_commit:
+            f.write(f"base-commit:{base_commit}\n")
+        for crate in crates:
+            f.write(f"{crate}\n")
+
+def get_merge_base(ignore_config=False):
+    """
+    Get the merge base of the current commit and origin/main.
+    If ignore_config is True, always use git merge-base command.
+    Otherwise, try to get the persisted base commit from .sparse first.
+    """
+    if not ignore_config:
+        _, base_commit = read_sparse_config()
+        if base_commit:
+            return base_commit
+
+    return subprocess.check_output(["git", "merge-base", "HEAD", "origin/main"]).decode().strip()
+
+def update_base_commit():
+    """
+    Update the base commit in .sparse to the current merge-base.
+    """
+    crates, _ = read_sparse_config()
+    if crates is None:
+        print("No .sparse file found. Exiting.")
+        sys.exit(1)
+
+    # Always use git command to get the new base
+    base_commit = get_merge_base(ignore_config=True)
+    write_sparse_config(crates, base_commit)
+    print(f"Updated base commit to {base_commit}")
 
 def main():
     # if given the `reset` command, reset changes to Cargo.lock and Cargo.toml
-    if len(sys.argv) > 1 and sys.argv[1] == "reset":
-        reset_index()
-        sys.exit(0)
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "reset":
+            reset_index()
+            sys.exit(0)
+        elif sys.argv[1] == "auto":
+            auto_update_config()
+            sys.exit(0)
+        elif sys.argv[1] == "update-base":
+            update_base_commit()
+            sys.exit(0)
+        elif sys.argv[1] == "git":
+            # check if there are any ignored files
+            if get_ignored_files():
+                reset_index()
 
-    if len(sys.argv) > 1 and sys.argv[1] == "auto":
-        auto_update_config()
-        sys.exit(0)
-
-    if len(sys.argv) > 1 and sys.argv[1] == "git":
-        # check if there are any ignored files
-        if get_ignored_files():
-          reset_index()
-
-        # run the git command
-        subprocess.check_call(sys.argv[1:])
-        # fall through to re-generate the Cargo.toml changes
+            # run the git command
+            subprocess.check_call(sys.argv[1:])
+            # fall through to re-generate the Cargo.toml changes
 
     # 1. Read the crates to include from .sparse
-    crates_to_checkout = read_sparse_config(".sparse")
+    crates_to_checkout, _ = read_sparse_config(".sparse")
     if crates_to_checkout is None:
         crates_to_checkout = create_sparse_checkout_worktree()
         assert crates_to_checkout is not None

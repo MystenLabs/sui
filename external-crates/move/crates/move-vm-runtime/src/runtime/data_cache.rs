@@ -14,7 +14,7 @@ use move_core_types::{
     resolver::{ModuleResolver, SerializedPackage},
     vm_status::StatusCode,
 };
-use std::collections::{btree_map::BTreeMap, BTreeSet};
+use std::collections::{BTreeSet, btree_map::BTreeMap};
 
 pub struct AccountDataCache {
     original_id: OriginalId,

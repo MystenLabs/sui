@@ -15,7 +15,7 @@ use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
-use super::owner::{Authenticator, OwnerImpl};
+use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::addr;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
@@ -30,7 +30,6 @@ use crate::data::package_resolver::PackageResolver;
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
-use crate::types::address::Address;
 use crate::types::base64::Base64;
 use crate::types::intersect;
 use crate::{filter, or_filter};
@@ -39,7 +38,6 @@ use async_graphql::dataloader::Loader;
 use async_graphql::{connection::Connection, *};
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
-use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::obj_indices::StoredObjectVersion;
@@ -47,11 +45,9 @@ use sui_indexer::models::objects::{StoredFullHistoryObject, StoredHistoryObject}
 use sui_indexer::schema::{full_objects_history, objects_version};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
-use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::object::{
-    MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
-};
+use sui_types::object::{Object as NativeObject, Owner as NativeOwner};
 use sui_types::TypeTag;
+use tokio::join;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
@@ -137,14 +133,14 @@ pub(crate) struct ObjectKey {
     pub version: UInt53,
 }
 
-/// The object's owner type: Immutable, Shared, Parent, or Address.
+/// The object's owner type: Immutable, Shared, Parent, Address, or ConsensusAddress.
 #[derive(Union, Clone)]
 pub(crate) enum ObjectOwner {
     Immutable(Immutable),
     Shared(Shared),
     Parent(Parent),
     Address(AddressOwner),
-    ConsensusV2(ConsensusV2),
+    ConsensusAddress(ConsensusAddressOwner),
 }
 
 /// An immutable object is an object that can't be mutated, transferred, or deleted.
@@ -180,13 +176,11 @@ pub(crate) struct AddressOwner {
     owner: Option<Owner>,
 }
 
-/// A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
-/// and allows different authentication modes based on the chosen authenticator.
-/// (Initially, only single-owner authentication is supported.)
+/// Same as AddressOwner, but the object is versioned by consensus.
 #[derive(SimpleObject, Clone)]
-pub(crate) struct ConsensusV2 {
+pub(crate) struct ConsensusAddressOwner {
     start_version: UInt53,
-    authenticator: Option<Authenticator>,
+    owner: Option<Owner>,
 }
 
 /// Filter for a point query of an Object.
@@ -623,15 +617,16 @@ impl ObjectImpl<'_> {
             } => Some(ObjectOwner::Shared(Shared {
                 initial_shared_version: initial_shared_version.value().into(),
             })),
-            O::ConsensusV2 {
+            O::ConsensusAddressOwner {
                 start_version,
-                authenticator,
-            } => Some(ObjectOwner::ConsensusV2(ConsensusV2 {
+                owner,
+            } => Some(ObjectOwner::ConsensusAddress(ConsensusAddressOwner {
                 start_version: start_version.value().into(),
-                authenticator: Some(Authenticator::SingleOwner(Address {
-                    address: SuiAddress::from(*authenticator.as_single_owner()),
+                owner: Some(Owner {
+                    address: SuiAddress::from(*owner),
                     checkpoint_viewed_at: self.0.checkpoint_viewed_at,
-                })),
+                    root_version: None,
+                }),
             })),
         }
     }
@@ -708,6 +703,8 @@ impl ObjectImpl<'_> {
     /// `display` is part of the `IMoveObject` interface, but is implemented on `ObjectImpl` to
     /// allow for a convenience function on `Object`.
     pub(crate) async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
+        let resolver: &PackageResolver = ctx.data_unchecked();
+
         let Some(native) = self.0.native_impl() else {
             return Ok(None);
         };
@@ -718,18 +715,30 @@ impl ObjectImpl<'_> {
             .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
             .extend()?;
 
-        let (struct_tag, move_struct) = deserialize_move_struct(move_object, ctx.data_unchecked())
-            .await
-            .extend()?;
+        let type_: TypeTag = move_object.type_().clone().into();
+        let (type_layout, display) = join!(
+            resolver.type_layout(type_.clone()),
+            Display::query(ctx.data_unchecked(), type_.clone()),
+        );
 
-        let Some(display) = Display::query(ctx.data_unchecked(), struct_tag.into())
-            .await
-            .extend()?
-        else {
+        let type_layout = type_layout.map_err(|e| {
+            Error::Internal(format!(
+                "Error fetching layout for type {}: {e}",
+                move_object
+                    .type_()
+                    .to_canonical_string(/* with_prefix */ true)
+            ))
+        })?;
+
+        let Some(display) = display.extend()? else {
             return Ok(None);
         };
 
-        Ok(Some(display.render(&move_struct).extend()?))
+        Ok(Some(
+            display
+                .render(move_object.contents(), &type_layout)
+                .extend()?,
+        ))
     }
 }
 
@@ -1555,38 +1564,6 @@ impl From<&Object> for OwnerImpl {
             checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }
-}
-
-pub(crate) async fn deserialize_move_struct(
-    move_object: &NativeMoveObject,
-    resolver: &PackageResolver,
-) -> Result<(StructTag, MoveStruct), Error> {
-    let struct_tag = StructTag::from(move_object.type_().clone());
-    let contents = move_object.contents();
-    let move_type_layout = resolver
-        .type_layout(TypeTag::from(struct_tag.clone()))
-        .await
-        .map_err(|e| {
-            Error::Internal(format!(
-                "Error fetching layout for type {}: {e}",
-                struct_tag.to_canonical_string(/* with_prefix */ true)
-            ))
-        })?;
-
-    let MoveTypeLayout::Struct(layout) = move_type_layout else {
-        return Err(Error::Internal("Object is not a move struct".to_string()));
-    };
-
-    // TODO (annotated-visitor): Use custom visitors for extracting a dynamic field, and for
-    // creating a GraphQL MoveValue directly (not via an annotated visitor).
-    let move_struct = BoundedVisitor::deserialize_struct(contents, &layout).map_err(|e| {
-        Error::Internal(format!(
-            "Error deserializing move struct for type {}: {e}",
-            struct_tag.to_canonical_string(/* with_prefix */ true)
-        ))
-    })?;
-
-    Ok((struct_tag, move_struct))
 }
 
 /// Constructs a raw query to fetch objects from the database. Objects are filtered out if they

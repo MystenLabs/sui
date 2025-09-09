@@ -14,7 +14,7 @@ note[I15006]: IDE path autocomplete
 4 │ │ }
   │ ╰─^ Possible in-scope names
   │  
-  = members: 'A -> a::m::A', 'Option -> std::option::Option', or 'S -> a::m::S'
+  = members: 'Option -> std::option::Option', 'A -> a::m::A', or 'S -> a::m::S'
   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 
@@ -33,7 +33,7 @@ note[I15006]: IDE path autocomplete
 2 │     public struct S<T> { x: T }
   │                             ^ Possible in-scope names
   │
-  = members: 'A -> a::m::A', 'Option -> std::option::Option', or 'S -> a::m::S'
+  = members: 'Option -> std::option::Option', 'A -> a::m::A', or 'S -> a::m::S'
   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 'T'
@@ -50,7 +50,7 @@ note[I15006]: IDE path autocomplete
 12 │ │ }
    │ ╰─^ Possible in-scope names
    │  
-   = members: 'A -> a::m::A', 'Option -> std::option::Option', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
+   = members: 'Option -> std::option::Option', 'A -> a::m::A', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
    = modules: 'Self -> a::test', 'm -> a::m', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
@@ -95,7 +95,7 @@ note[I15006]: IDE path autocomplete
 10 │   
 11 │ ╭     public fun q():
    │  
-   = members: 'A -> a::m::A', 'Option -> std::option::Option', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
+   = members: 'Option -> std::option::Option', 'A -> a::m::A', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
    = modules: 'Self -> a::test', 'm -> a::m', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
@@ -124,7 +124,7 @@ note[I15006]: IDE path autocomplete
 11 │     public fun q():
    │                ^ Possible in-scope names
    │
-   = members: 'A -> a::m::A', 'Option -> std::option::Option', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
+   = members: 'Option -> std::option::Option', 'A -> a::m::A', 'S -> a::m::S', 'p -> a::test::p', or 'q -> a::test::q'
    = modules: 'Self -> a::test', 'm -> a::m', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 

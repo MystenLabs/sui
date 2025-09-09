@@ -4,7 +4,7 @@
 use crate::{
     cache::{
         arena::{Arena, ArenaBox, ArenaVec},
-        identifier_interner::{resolve_interned, IdentifierKey},
+        identifier_interner::{IdentifierKey, resolve_interned},
     },
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
@@ -1082,14 +1082,14 @@ impl Type {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Unable to load const type signature".to_string()),
-                )
+                );
             }
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Unable to load const type signature".to_string()),
-                )
+                );
             }
         })
     }
@@ -1189,9 +1189,7 @@ macro_rules! impl_deep_subst {
                 F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
             {
                 if depth > TYPE_DEPTH_MAX {
-                    return Err(PartialVMError::new(
-                        StatusCode::VM_MAX_TYPE_DEPTH_REACHED,
-                    ));
+                    return Err(PartialVMError::new(StatusCode::VM_MAX_TYPE_DEPTH_REACHED));
                 }
                 let res = match self {
                     $ty::TyParam(idx) => subst(*idx, depth)?,
@@ -1204,9 +1202,7 @@ macro_rules! impl_deep_subst {
                     $ty::U256 => Type::U256,
                     $ty::Address => Type::Address,
                     $ty::Signer => Type::Signer,
-                    $ty::Vector(ty) => {
-                        Type::Vector(Box::new(ty.apply_subst(subst, depth + 1)?))
-                    }
+                    $ty::Vector(ty) => Type::Vector(Box::new(ty.apply_subst(subst, depth + 1)?)),
                     $ty::Reference(ty) => {
                         Type::Reference(Box::new(ty.apply_subst(subst, depth + 1)?))
                     }

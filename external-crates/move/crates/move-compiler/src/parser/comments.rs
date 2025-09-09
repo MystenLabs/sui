@@ -4,7 +4,7 @@
 
 use crate::{diag, diagnostics::Diagnostics};
 use move_command_line_common::{
-    character_sets::{is_permitted_chars, DisplayChar},
+    character_sets::{DisplayChar, is_permitted_chars},
     files::FileHash,
 };
 use move_ir_types::location::*;

@@ -488,7 +488,6 @@ def generate_lib(output_file: TextIO):
                 "{spc}{version} => Arc::new({cut}::Executor::new(\n"
                 "{spc}    protocol_config,\n"
                 "{spc}    silent,\n"
-                "{spc}    enable_profiler,\n"
                 "{spc})?),\n"
             )
             return "\n".join(

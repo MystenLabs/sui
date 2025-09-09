@@ -274,4 +274,8 @@ impl Workload<dyn Payload> for BatchPaymentWorkload {
             .map(|b| Box::<dyn Payload>::from(b))
             .collect()
     }
+
+    fn name(&self) -> &str {
+        "BatchPayment"
+    }
 }

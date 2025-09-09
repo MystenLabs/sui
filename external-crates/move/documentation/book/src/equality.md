@@ -126,7 +126,7 @@ reference types have the [`drop` ability](./abilities.md). For example
 
 ```move=
 module 0x42::example {
-    public struct Coin as store { value: u64 }
+    public struct Coin has store { value: u64 }
     fun swap_if_equal(c1: Coin, c2: Coin): (Coin, Coin) {
         let are_equal = &c1 == c2; // valid, note `c2` is automatically borrowed
         if (are_equal) (c2, c1) else (c1, c2)

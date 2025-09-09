@@ -1,0 +1,6 @@
+[package]
+name = "Constants"
+edition = "2024.beta"
+
+[addresses]
+constants = "0x0"

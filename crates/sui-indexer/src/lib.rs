@@ -36,7 +36,6 @@ pub mod indexer;
 pub mod indexer_reader;
 pub mod metrics;
 pub mod models;
-pub mod restorer;
 pub mod schema;
 pub mod store;
 pub mod system_package_task;

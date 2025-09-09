@@ -21,7 +21,9 @@ use sui_json_rpc_types::{
     SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::{ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress};
+use sui_types::base_types::{
+    FullObjectRef, ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress,
+};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
@@ -59,7 +61,7 @@ impl TransactionBuilder {
         Self(data_reader)
     }
 
-    async fn select_gas(
+    pub async fn select_gas(
         &self,
         signer: SuiAddress,
         input_gas: Option<ObjectID>,
@@ -97,77 +99,14 @@ impl TransactionBuilder {
         }
     }
 
-    /// Construct the transaction data for a dry run
-    pub async fn tx_data_for_dry_run(
-        &self,
-        sender: SuiAddress,
-        kind: TransactionKind,
-        gas_budget: u64,
-        gas_price: u64,
-        gas_payment: Option<Vec<ObjectID>>,
-        gas_sponsor: Option<SuiAddress>,
-    ) -> TransactionData {
-        let gas_payment = self
-            .input_refs(gas_payment.unwrap_or_default().as_ref())
-            .await
-            .unwrap_or_default();
-        let gas_sponsor = gas_sponsor.unwrap_or(sender);
-        TransactionData::new_with_gas_coins_allow_sponsor(
-            kind,
-            sender,
-            gas_payment,
-            gas_budget,
-            gas_price,
-            gas_sponsor,
-        )
-    }
-
-    /// Construct the transaction data from a transaction kind, and other parameters.
-    /// If the gas_payment list is empty, it will pick the first gas coin that has at least
-    /// the required gas budget that is not in the input coins.
-    pub async fn tx_data(
-        &self,
-        sender: SuiAddress,
-        kind: TransactionKind,
-        gas_budget: u64,
-        gas_price: u64,
-        gas_payment: Vec<ObjectID>,
-        gas_sponsor: Option<SuiAddress>,
-    ) -> Result<TransactionData, anyhow::Error> {
-        let gas_payment = if gas_payment.is_empty() {
-            let input_objs = kind
-                .input_objects()?
-                .iter()
-                .flat_map(|obj| match obj {
-                    InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
-                    _ => None,
-                })
-                .collect();
-            vec![
-                self.select_gas(sender, None, gas_budget, input_objs, gas_price)
-                    .await?,
-            ]
-        } else {
-            self.input_refs(&gas_payment).await?
-        };
-        Ok(TransactionData::new_with_gas_coins_allow_sponsor(
-            kind,
-            sender,
-            gas_payment,
-            gas_budget,
-            gas_price,
-            gas_sponsor.unwrap_or(sender),
-        ))
-    }
-
     pub async fn transfer_object_tx_kind(
         &self,
         object_id: ObjectID,
         recipient: SuiAddress,
     ) -> Result<TransactionKind, anyhow::Error> {
-        let obj_ref = self.get_object_ref(object_id).await?;
+        let full_obj_ref = self.get_full_object_ref(object_id).await?;
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, obj_ref)?;
+        builder.transfer_object(recipient, full_obj_ref)?;
         Ok(TransactionKind::programmable(builder.finish()))
     }
 
@@ -202,7 +141,7 @@ impl TransactionBuilder {
         object_id: ObjectID,
         recipient: SuiAddress,
     ) -> anyhow::Result<()> {
-        builder.transfer_object(recipient, self.get_object_ref(object_id).await?)?;
+        builder.transfer_object(recipient, self.get_full_object_ref(object_id).await?)?;
         Ok(())
     }
 
@@ -481,9 +420,9 @@ impl TransactionBuilder {
             Owner::Shared {
                 initial_shared_version,
             }
-            | Owner::ConsensusV2 {
+            | Owner::ConsensusAddressOwner {
                 start_version: initial_shared_version,
-                authenticator: _,
+                ..
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
@@ -638,9 +577,9 @@ impl TransactionBuilder {
                 Owner::Shared {
                     initial_shared_version,
                 }
-                | Owner::ConsensusV2 {
+                | Owner::ConsensusAddressOwner {
                     start_version: initial_shared_version,
-                    authenticator: _,
+                    ..
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.object_ref().0,
                     initial_shared_version,
@@ -1080,6 +1019,19 @@ impl TransactionBuilder {
             .map(|(oref, _)| oref)
     }
 
+    pub async fn get_full_object_ref(&self, object_id: ObjectID) -> anyhow::Result<FullObjectRef> {
+        let object_data = self
+            .0
+            .get_object_with_options(object_id, SuiObjectDataOptions::new().with_owner())
+            .await?
+            .into_object()?;
+
+        let object_ref = object_data.object_ref();
+        let owner = object_data.owner.unwrap();
+
+        Ok(FullObjectRef::from_object_ref_and_owner(object_ref, &owner))
+    }
+
     async fn get_object_ref_and_type(
         &self,
         object_id: ObjectID,
@@ -1091,5 +1043,26 @@ impl TransactionBuilder {
             .into_object()?;
 
         Ok((object.object_ref(), object.object_type()?))
+    }
+
+    pub async fn get_full_object_ref_and_type(
+        &self,
+        object_id: ObjectID,
+    ) -> anyhow::Result<(FullObjectRef, ObjectType)> {
+        let object_data = self
+            .0
+            .get_object_with_options(
+                object_id,
+                SuiObjectDataOptions::new().with_owner().with_type(),
+            )
+            .await?
+            .into_object()?;
+
+        let object_ref = object_data.object_ref();
+        let object_type = object_data.object_type()?;
+        let owner = object_data.owner.unwrap();
+
+        let full_object_ref = FullObjectRef::from_object_ref_and_owner(object_ref, &owner);
+        Ok((full_object_ref, object_type))
     }
 }

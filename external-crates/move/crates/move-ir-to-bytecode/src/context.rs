@@ -2,8 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         AbilitySet, AddressIdentifierIndex, CodeOffset, Constant, ConstantPoolIndex,
         DatatypeHandle, DatatypeHandleIndex, DatatypeTyParameter, EnumDefInstantiation,
@@ -15,7 +16,6 @@ use move_binary_format::{
         TableIndex, VariantHandle, VariantHandleIndex, VariantInstantiationHandle,
         VariantInstantiationHandleIndex,
     },
-    CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::{
@@ -248,6 +248,7 @@ pub struct MaterializedPools {
 /// However, some fields, like struct_defs and fields, are not used in CompiledScript.
 pub(crate) struct Context<'a> {
     dependencies: CompiledDependencies<'a>,
+    publishable: bool,
 
     // helpers
     aliases: HashMap<ModuleIdent, ModuleName>,
@@ -294,11 +295,13 @@ impl<'a> Context<'a> {
     /// It initializes an "import" of `Self` as the alias for the current_module.
     pub fn new(
         decl_location: Loc,
+        publishable: bool,
         dependencies: CompiledDependencies<'a>,
         current_module: ModuleIdent,
     ) -> Result<Self> {
         let context = Self {
             dependencies,
+            publishable,
             aliases: HashMap::new(),
             modules: HashMap::new(),
             structs: HashMap::new(),
@@ -328,6 +331,10 @@ impl<'a> Context<'a> {
         };
 
         Ok(context)
+    }
+
+    pub fn publishable(&self) -> bool {
+        self.publishable
     }
 
     pub fn take_dependencies(&mut self) -> CompiledDependencies<'a> {

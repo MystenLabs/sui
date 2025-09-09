@@ -34,20 +34,25 @@ pub async fn run_benchmark(
     }
 
     let transactions = ctx.certify_transactions(transactions, skip_signing).await;
-    ctx.validator()
+    let assigned_versions = ctx
+        .validator()
         .assigned_shared_object_versions(&transactions)
         .await;
     match component {
         Component::CheckpointExecutor => {
-            ctx.benchmark_checkpoint_executor(transactions, checkpoint_size)
+            ctx.benchmark_checkpoint_executor(transactions, assigned_versions, checkpoint_size)
                 .await;
         }
         Component::ExecutionOnly => {
-            ctx.benchmark_transaction_execution_in_memory(transactions, print_sample_tx)
-                .await;
+            ctx.benchmark_transaction_execution_in_memory(
+                transactions,
+                assigned_versions,
+                print_sample_tx,
+            )
+            .await;
         }
         _ => {
-            ctx.benchmark_transaction_execution(transactions, print_sample_tx)
+            ctx.benchmark_transaction_execution(transactions, assigned_versions, print_sample_tx)
                 .await;
         }
     }

@@ -12,9 +12,9 @@ warning[W00001]: DEPRECATED. will be removed
   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
 warning[W00001]: DEPRECATED. will be removed
-  ┌─ tests/move_check/verification/double_annotation.move:7:7
+  ┌─ tests/move_check/verification/double_annotation.move:8:7
   │
-7 │     #[verify_only]
+8 │     #[verify_only]
   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
 warning[W00001]: DEPRECATED. will be removed
@@ -24,7 +24,7 @@ warning[W00001]: DEPRECATED. will be removed
    │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
 warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/verification/double_annotation.move:17:7
+   ┌─ tests/move_check/verification/double_annotation.move:18:7
    │
-17 │     #[verify_only]
+18 │     #[verify_only]
    │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks

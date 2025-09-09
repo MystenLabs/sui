@@ -1,12 +1,16 @@
 ---
 title: Custom Upgrade Policies
+description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single-key ownership upgrades.
+keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ] 
+mdx:
+  format: md
 ---
 
-Protecting the ability to upgrade a package on chain using a single key can pose a security risk for several reasons:
+Protecting the ability to upgrade a package on-chain using a single key can pose a security risk for several reasons:
 
 {@include: ../../../snippets/upgrade-single-key-risk.mdx}
 
-To address the security risk of single-key upgrade ownership poses while still providing the opportunity to [upgrade live packages](./upgrade.mdx), Sui offers _custom upgrade policies_. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
+To address the security risk of single-key upgrade ownership while still providing the opportunity to [upgrade live packages](./upgrade.mdx), Sui offers _custom upgrade policies_. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
 
 ## Compatibility {#compatibility}
 
@@ -40,7 +44,7 @@ Package upgrades must occur end-to-end in a single transaction and are composed 
 
 While step 2 is a built-in command, steps 1 and 3 are implemented as Move functions. The Sui framework provides their most basic implementation:
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#fun=authorize_upgrade,commit_upgrade noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#fun=authorize_upgrade,commit_upgrade noComments}
 
 These are the functions that `sui client upgrade` calls for authorization and commit. Custom upgrade policies work by guarding
 access to a package `UpgradeCap` (and therefore to calls of these functions) behind extra conditions that are specific to that policy
@@ -53,7 +57,7 @@ Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and 
 
 The `UpgradeCap` is the central type responsible for coordinating package upgrades.
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeCap noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeCap noComments}
 
 Publishing a package creates the `UpgradeCap` object and upgrading the package updates that object. The owner of this object has permission to:
 
@@ -70,7 +74,7 @@ And its API guarantees the following properties:
 
 ## UpgradeTicket {#upgradeticket}
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeTicket noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeTicket noComments}
 
 An `UpgradeTicket` is proof that an upgrade has been authorized. This authorization is specific to:
 
@@ -109,7 +113,7 @@ BUILDING test
 
 ## UpgradeReceipt {#upgradereceipt}
 
-{@inject: crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeReceipt noComments}
+{@inject:  ../../../../../crates/sui-framework/packages/sui-framework/sources/package.move#struct=UpgradeReceipt noComments}
 
 The `UpgradeReceipt` is proof that the `Upgrade` command ran successfully, and Sui added the new package to the set of created
 objects for the transaction. It is used to update its `UpgradeCap` (identified by `cap: ID`) with the ID of the latest package in its
@@ -128,7 +132,7 @@ When writing custom upgrade policies, prefer:
 These best practices help uphold **informed user consent** and **bounded risk** by making it clear what a package's upgrade policy is
 at the moment a user locks value into it, and ensuring that the policy does not evolve to be more permissive with time, without the package user realizing and choosing to accept the new terms.
 
-## Example: "Day of the Week" upgrade policy {#example-upgrade}
+## Example: Day of the week upgrade policy {#example-upgrade}
 
 Time to put everything into practice by writing a toy upgrade policy that only authorizes upgrades on a particular day of the week (of the package creator's choosing).
 
@@ -145,28 +149,26 @@ The command creates a `policy` directory with a `sources` folder and `Move.toml`
 In the `sources` folder, create a source file named `day_of_week.move`. Copy and paste the following code into the file:
 
 ```move
-module policy::day_of_week {
-    use sui::object::{Self, UID};
-    use sui::package;
-    use sui::tx_context::TxContext;
+module policy::day_of_week;
 
-    struct UpgradeCap has key, store {
-        id: UID,
-        cap: package::UpgradeCap,
-        day: u8,
-    }
+use sui::package;
 
-    /// Day is not a week day (number in range 0 <= day < 7).
-    const ENotWeekDay: u64 = 1;
+/// Day is not a week day (number in range 0 <= day < 7).
+const ENotWeekDay: u64 = 1;
 
-    public fun new_policy(
-        cap: package::UpgradeCap,
-        day: u8,
-        ctx: &mut TxContext,
-    ): UpgradeCap {
-        assert!(day < 7, ENotWeekDay);
-        UpgradeCap { id: object::new(ctx), cap, day }
-    }
+public struct UpgradeCap has key, store {
+    id: UID,
+    cap: package::UpgradeCap,
+    day: u8,
+}
+
+public fun new_policy(
+    cap: package::UpgradeCap,
+    day: u8,
+    ctx: &mut TxContext,
+): UpgradeCap {
+    assert!(day < 7, ENotWeekDay);
+    UpgradeCap { id: object::new(ctx), cap, day }
 }
 ```
 
@@ -185,8 +187,7 @@ After the `new_policy` function, add a `week_day` function to get the current we
 
 ```move
 fun week_day(ctx: &TxContext): u8 {
-    let days_since_unix_epoch =
-        tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
+    let days_since_unix_epoch = ctx.epoch_timestamp_ms() / MS_IN_DAY;
     // The unix epoch (1st Jan 1970) was a Thursday so shift days
     // since the epoch by 3 so that 0 = Monday.
     ((days_since_unix_epoch + 3) % 7 as u8)
@@ -206,7 +207,7 @@ public fun authorize_upgrade(
     ctx: &TxContext,
 ): package::UpgradeTicket {
     assert!(week_day(ctx) == cap.day, ENotAllowedDay);
-    package::authorize_upgrade(&mut cap.cap, policy, digest)
+    cap.cap.authorize_upgrade(policy, digest)
 }
 ```
 
@@ -219,74 +220,71 @@ public fun commit_upgrade(
     cap: &mut UpgradeCap,
     receipt: package::UpgradeReceipt,
 ) {
-    package::commit_upgrade(&mut cap.cap, receipt)
+    cap.cap.commit_upgrade(receipt)
 }
 
 public fun make_immutable(cap: UpgradeCap) {
     let UpgradeCap { id, cap, day: _ } = cap;
-    object::delete(id);
-    package::make_immutable(cap);
+    id.delete();
+    cap.make_immutable()
 }
 ```
 
 The final code in your `day_of_week.move` file should resemble the following:
 
 ```move
-module policy::day_of_week {
-    use sui::object::{Self, UID};
-    use sui::package;
-    use sui::tx_context::TxContext;
+module policy::day_of_week;
 
-    struct UpgradeCap has key, store {
-        id: UID,
-        cap: package::UpgradeCap,
-        day: u8,
-    }
+use sui::package;
 
-    // Day is not a week day (number in range 0 <= day < 7).
-    const ENotWeekDay: u64 = 1;
-    const ENotAllowedDay: u64 = 2;
-    const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
+// Day is not a week day (number in range 0 <= day < 7).
+const ENotWeekDay: u64 = 1;
+const ENotAllowedDay: u64 = 2;
+const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
 
-    public fun new_policy(
-        cap: package::UpgradeCap,
-        day: u8,
-        ctx: &mut TxContext,
-    ): UpgradeCap {
-        assert!(day < 7, ENotWeekDay);
-        UpgradeCap { id: object::new(ctx), cap, day }
-    }
+public struct UpgradeCap has key, store {
+    id: UID,
+    cap: package::UpgradeCap,
+    day: u8,
+}
 
-    fun week_day(ctx: &TxContext): u8 {
-        let days_since_unix_epoch =
-            sui::tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
-        // The unix epoch (1st Jan 1970) was a Thursday so shift days
-        // since the epoch by 3 so that 0 = Monday.
-        ((days_since_unix_epoch + 3) % 7 as u8)
-    }
+public fun new_policy(
+    cap: package::UpgradeCap,
+    day: u8,
+    ctx: &mut TxContext,
+): UpgradeCap {
+    assert!(day < 7, ENotWeekDay);
+    UpgradeCap { id: object::new(ctx), cap, day }
+}
 
-    public fun authorize_upgrade(
-        cap: &mut UpgradeCap,
-        policy: u8,
-        digest: vector<u8>,
-        ctx: &TxContext,
-    ): package::UpgradeTicket {
-        assert!(week_day(ctx) == cap.day, ENotAllowedDay);
-        package::authorize_upgrade(&mut cap.cap, policy, digest)
-    }
+fun week_day(ctx: &TxContext): u8 {
+    let days_since_unix_epoch = ctx.epoch_timestamp_ms() / MS_IN_DAY;
+    // The unix epoch (1st Jan 1970) was a Thursday so shift days
+    // since the epoch by 3 so that 0 = Monday.
+    ((days_since_unix_epoch + 3) % 7 as u8)
+}
 
-    public fun commit_upgrade(
-        cap: &mut UpgradeCap,
-        receipt: package::UpgradeReceipt,
-    ) {
-        package::commit_upgrade(&mut cap.cap, receipt)
-    }
+public fun authorize_upgrade(
+    cap: &mut UpgradeCap,
+    policy: u8,
+    digest: vector<u8>,
+    ctx: &TxContext,
+): package::UpgradeTicket {
+    assert!(week_day(ctx) == cap.day, ENotAllowedDay);
+    cap.cap.authorize_upgrade(policy, digest)
+}
 
-    public fun make_immutable(cap: UpgradeCap) {
-        let UpgradeCap { id, cap, day: _ } = cap;
-        object::delete(id);
-        package::make_immutable(cap);
-    }
+public fun commit_upgrade(
+    cap: &mut UpgradeCap,
+    receipt: package::UpgradeReceipt,
+) {
+    cap.cap.commit_upgrade(receipt)
+}
+
+public fun make_immutable(cap: UpgradeCap) {
+    let UpgradeCap { id, cap, day: _ } = cap;
+    id.delete();
+    cap.make_immutable()
 }
 ```
 
@@ -647,7 +645,7 @@ const signer = (() => {
 		}
 	}
 
-	throw new Error(`keypair not found for sender: ${sender}`);
+	throw new Error(`key pair not found for sender: ${sender}`);
 })();
 ```
 
@@ -709,9 +707,12 @@ console.log(result);
 ```
 
 <details>
-  <summary>
-  `publish.js`
-  </summary>
+
+<summary>
+
+`publish.js`
+
+</summary>
 
 ```js
 import { execSync } from 'child_process';
@@ -744,7 +745,7 @@ const signer = (() => {
 		}
 	}
 
-	throw new Error(`keypair not found for sender: ${sender}`);
+	throw new Error(`key pair not found for sender: ${sender}`);
 })();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -986,7 +987,7 @@ const signer = (() => {
 		}
 	}
 
-	throw new Error(`keypair not found for sender: ${sender}`);
+	throw new Error(`key pair not found for sender: ${sender}`);
 })();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

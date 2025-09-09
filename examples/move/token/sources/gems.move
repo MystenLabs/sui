@@ -27,14 +27,13 @@ module examples::sword {
 /// Module that defines the in-game currency: GEMs which can be purchased with
 /// SUI and used to buy swords (in the `sword` module).
 module examples::gem {
-    use std::{option::none, string::{Self, String}};
-    use sui::{
-        balance::{Self, Balance},
-        coin::{Self, Coin, TreasuryCap},
-        sui::SUI,
-        token::{Self, Token, ActionRequest},
-        tx_context::sender
-    };
+    use std::option::none;
+    use std::string::{Self, String};
+    use sui::balance::{Self, Balance};
+    use sui::coin::{Self, Coin, TreasuryCap};
+    use sui::sui::SUI;
+    use sui::token::{Self, Token, ActionRequest};
+    use sui::tx_context::sender;
 
     /// Trying to purchase Gems with an unexpected amount.
     const EUnknownAmount: u64 = 0;
@@ -52,7 +51,6 @@ module examples::gem {
     const LARGE_BUNDLE: u64 = 1_000_000_000_000;
     const LARGE_AMOUNT: u64 = 100_000;
 
-    #[allow(lint(coin_field))]
     /// Gems can be purchased through the `Store`.
     public struct GemStore has key {
         id: UID,

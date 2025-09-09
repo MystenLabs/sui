@@ -25,11 +25,11 @@ use crate::{
     },
 };
 use move_binary_format::{
+    CompiledModule,
     errors::VMResult,
     file_format::{
-        empty_module, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex,
+        AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex, empty_module,
     },
-    CompiledModule,
 };
 use move_compiler::Compiler;
 use move_core_types::{
@@ -786,9 +786,11 @@ fn relink_type_identity() {
 
     let c1_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
     // Cannot use runtime ID for type!
-    assert!(adapter
-        .load_type_can_fail(&TypeTag::from_str("0x3::b::S").unwrap())
-        .is_err());
+    assert!(
+        adapter
+            .load_type_can_fail(&TypeTag::from_str("0x3::b::S").unwrap())
+            .is_err()
+    );
     let b1_s = adapter.load_type(&TypeTag::from_str("0x6::b::S").unwrap());
 
     assert_eq!(c0_s, c1_s);
@@ -827,9 +829,11 @@ fn relink_defining_module_successive() {
 
     adapter.publish_package(c1_modules);
     let c1_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    assert!(adapter
-        .load_type_can_fail(&TypeTag::from_str("0x2::c::R").unwrap())
-        .is_err());
+    assert!(
+        adapter
+            .load_type_can_fail(&TypeTag::from_str("0x2::c::R").unwrap())
+            .is_err()
+    );
     let c1_r = adapter.load_type(&TypeTag::from_str("0x5::c::R").unwrap());
 
     let mut adapter = adapter.with_linkage(
@@ -844,12 +848,16 @@ fn relink_defining_module_successive() {
 
     adapter.publish_package(c2_modules);
     let c2_s = adapter.load_type(&TypeTag::from_str("0x2::c::S").unwrap());
-    assert!(adapter
-        .load_type_can_fail(&TypeTag::from_str("0x2::c::R").unwrap())
-        .is_err());
-    assert!(adapter
-        .load_type_can_fail(&TypeTag::from_str("0x2::c::Q").unwrap())
-        .is_err());
+    assert!(
+        adapter
+            .load_type_can_fail(&TypeTag::from_str("0x2::c::R").unwrap())
+            .is_err()
+    );
+    assert!(
+        adapter
+            .load_type_can_fail(&TypeTag::from_str("0x2::c::Q").unwrap())
+            .is_err()
+    );
     // Types must be loaded by defining ID. It is the adapter's responsibility to ensure that type
     // tags are loaded with the correct defining module.
     let c2_r = adapter.load_type(&TypeTag::from_str("0x5::c::R").unwrap());

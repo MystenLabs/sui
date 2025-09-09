@@ -2,89 +2,66 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
-use fastcrypto::encoding::{Base64, Encoding};
-use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
+use sui_types::digests::TransactionDigest;
+use sui_types::messages_checkpoint::CheckpointContents;
 use tracing::error;
 
-use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::TransactionEntry;
 use crate::FileType;
 
-pub struct TransactionHandler {
-    pub(crate) state: Mutex<State>,
-}
+#[derive(Clone)]
+pub struct TransactionHandler {}
 
-pub(crate) struct State {
-    pub(crate) transactions: Vec<TransactionEntry>,
-}
-
-#[async_trait::async_trait]
-impl Worker for TransactionHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &mut state,
-            )?;
-        }
-        Ok(())
+impl TransactionHandler {
+    pub fn new() -> Self {
+        TransactionHandler {}
     }
 }
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
-    async fn read(&self) -> Result<Vec<TransactionEntry>> {
-        let mut state = self.state.lock().await;
-        let cloned = state.transactions.clone();
-        state.transactions.clear();
-        Ok(cloned)
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: &Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = TransactionEntry> + Send + Sync>> {
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::Transaction)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "transaction"
     }
 }
 
-impl TransactionHandler {
-    pub fn new() -> Self {
-        let state = Mutex::new(State {
-            transactions: vec![],
-        });
-        TransactionHandler { state }
-    }
-    fn process_transaction(
+#[async_trait::async_trait]
+impl TransactionProcessor<TransactionEntry> for TransactionHandler {
+    async fn process_transaction(
         &self,
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-        effects: &TransactionEffects,
-        state: &mut State,
-    ) -> Result<()> {
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Box<dyn Iterator<Item = TransactionEntry> + Send + Sync>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+
+        let transaction_positions = compute_transaction_positions(&checkpoint.checkpoint_contents);
+
+        let checkpoint_transaction = transaction;
+        let effects = &transaction.effects;
+
         let transaction = &checkpoint_transaction.transaction;
         let txn_data = transaction.transaction_data();
         let gas_object = effects.gas_object();
@@ -100,6 +77,29 @@ impl TransactionHandler {
             .collect::<Vec<_>>()
             .join("-");
         let transaction_digest = transaction.digest().base58_encode();
+        let events_digest = checkpoint_transaction
+            .events
+            .as_ref()
+            .map(|events| events.digest().base58_encode());
+
+        let transaction_position = *transaction_positions
+            .get(transaction.digest())
+            .expect("Expect transaction to exist in checkpoint_contents.")
+            as u64;
+
+        let transaction_data_bcs_length = bcs::to_bytes(&txn_data).unwrap().len() as u64;
+        let effects_bcs_length = bcs::to_bytes(&checkpoint_transaction.effects)
+            .unwrap()
+            .len() as u64;
+        let events_bcs_length = checkpoint_transaction
+            .events
+            .as_ref()
+            .map(|events| bcs::to_bytes(events).unwrap().len() as u64)
+            .unwrap_or(0);
+        let signatures_bcs_length =
+            bcs::to_bytes(&checkpoint_transaction.transaction.data().tx_signatures())
+                .unwrap()
+                .len() as u64;
 
         let mut transfers: u64 = 0;
         let mut split_coins: u64 = 0;
@@ -137,7 +137,7 @@ impl TransactionHandler {
         let effects_json = serde_json::to_string(&checkpoint_transaction.effects)?;
         let entry = TransactionEntry {
             transaction_digest,
-            checkpoint,
+            checkpoint: checkpoint_seq,
             epoch,
             timestamp_ms,
 
@@ -176,27 +176,42 @@ impl TransactionHandler {
             storage_cost: gas_summary.storage_cost,
             storage_rebate: gas_summary.storage_rebate,
             non_refundable_storage_fee: gas_summary.non_refundable_storage_fee,
-
             gas_price: txn_data.gas_price(),
-
-            raw_transaction: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
-
             has_zklogin_sig: transaction.has_zklogin_sig(),
             has_upgraded_multisig: transaction.has_upgraded_multisig(),
             transaction_json: Some(transaction_json),
             effects_json: Some(effects_json),
+            transaction_position,
+            events_digest,
+            raw_transaction: "".to_string(),
+            transaction_data_bcs_length,
+            effects_bcs_length,
+            events_bcs_length,
+            signatures_bcs_length,
         };
-        state.transactions.push(entry);
-        Ok(())
+
+        Ok(Box::new(std::iter::once(entry)))
     }
+}
+
+fn compute_transaction_positions(
+    checkpoint_contents: &CheckpointContents,
+) -> HashMap<TransactionDigest, usize> {
+    let mut digest_to_position: HashMap<TransactionDigest, usize> = HashMap::new();
+
+    for (position, execution_digest) in checkpoint_contents.iter().enumerate() {
+        digest_to_position.insert(execution_digest.transaction, position);
+    }
+
+    digest_to_position
 }
 
 #[cfg(test)]
 mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
-    use fastcrypto::encoding::{Base64, Encoding};
+    use crate::handlers::AnalyticsHandler;
     use simulacrum::Simulacrum;
-    use sui_data_ingestion_core::Worker;
+    use std::sync::Arc;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
 
@@ -218,20 +233,25 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(&checkpoint_data).await?;
-        let transaction_entries = txn_handler.state.lock().await.transactions.clone();
+        let transaction_entries: Vec<_> = txn_handler
+            .process_checkpoint(&Arc::new(checkpoint_data))
+            .await?
+            .collect();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 
         // Check that the transaction was stored correctly.
         assert_eq!(db_txn.transaction_digest, transaction.digest().to_string());
         assert_eq!(
-            db_txn.raw_transaction,
-            Base64::encode(bcs::to_bytes(&transaction.transaction_data()).unwrap())
+            db_txn.transaction_data_bcs_length,
+            bcs::to_bytes(&transaction.transaction_data())
+                .unwrap()
+                .len() as u64
         );
         assert_eq!(db_txn.epoch, checkpoint.epoch);
         assert_eq!(db_txn.timestamp_ms, checkpoint.timestamp_ms);
         assert_eq!(db_txn.checkpoint, checkpoint.sequence_number);
+        assert_eq!(db_txn.transaction_position, 0);
         Ok(())
     }
 }

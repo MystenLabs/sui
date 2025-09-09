@@ -7,7 +7,7 @@ use move_binary_format::file_format::{Bytecode, FunctionInstantiation, StructDef
 use test_generation::{
     abstract_state::AbstractState,
     config::ALLOW_MEMORY_UNSAFE,
-    summaries::{instruction_summary, Effects},
+    summaries::{Effects, instruction_summary},
 };
 
 pub fn run_instruction(

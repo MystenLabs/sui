@@ -7,6 +7,8 @@ module sui::vdf;
 const EInvalidInput: u64 = 0;
 
 /// Hash an arbitrary binary `message` to a class group element to be used as input for `vdf_verify`.
+///
+/// This function is currently only enabled on Devnet.
 public fun hash_to_input(message: &vector<u8>): vector<u8> {
     hash_to_input_internal(message)
 }
@@ -26,6 +28,8 @@ native fun hash_to_input_internal(message: &vector<u8>): vector<u8>;
 /// The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf
 /// crate. The final selection of the discriminant for Mainnet will be computed and announced under a nothing-up-my-sleeve
 /// process.
+///
+/// This function is currently only enabled on Devnet.
 public fun vdf_verify(
     input: &vector<u8>,
     output: &vector<u8>,

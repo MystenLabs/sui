@@ -102,7 +102,13 @@ impl Display for Pretty<'_, DryRunTransactionBlockResponse> {
                 response.effects.gas_cost_summary(),
                 response.input.gas_data().price
             )
-        )
+        )?;
+
+        if let Some(err) = &response.execution_error_source {
+            writeln!(f, "Execution error: {}", err)?;
+        }
+
+        Ok(())
     }
 }
 

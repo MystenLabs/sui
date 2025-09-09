@@ -32,10 +32,6 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
     vm_status::StatusCode,
 };
-#[cfg(feature = "tracing")]
-use move_vm_profiler::GasProfiler;
-#[cfg(feature = "tracing")]
-use move_vm_types::gas::GasMeter;
 use std::time::Instant;
 
 const MODULE_NAME: &str = "Mod";
@@ -385,6 +381,7 @@ fn make_module(
 
     let module = CompiledModule {
         version: 6,
+        publishable: true,
         // Module definition
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
@@ -563,13 +560,6 @@ fn run_with_module(
         .into_iter()
         .map(|tag| vm_session.load_type(&tag))
         .collect::<VMResult<Vec<_>>>();
-    move_vm_profiler::tracing_feature_enabled! {
-        gas.set_profiler(GasProfiler::init(
-            &session.vm_config().profiler_config,
-            entry_name.to_string(),
-            gas.remaining_gas().into(),
-        ));
-    }
     let res = type_args.and_then(|type_args| {
         vm_session.execute_entry_function(
             &module_id,

@@ -137,13 +137,6 @@ pub(crate) enum IOwner {
     SuinsRegistration(SuinsRegistration),
 }
 
-/// An Authenticator represents the access control rules for a ConsensusV2 object.
-#[derive(Clone, Debug, Union)]
-pub(crate) enum Authenticator {
-    /// The object is fully owned by a single address.
-    SingleOwner(Address),
-}
-
 /// An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
 /// represents either an Address (corresponding to a public key of an account) or an Object, but
 /// never both (it is not known up-front whether a given Owner is an Address or an Object).

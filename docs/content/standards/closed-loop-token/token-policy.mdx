@@ -1,8 +1,10 @@
 ---
 title: Token Policy
+description: A `TokenPolicy` is a shared object that defines a token's allowed actions and conditions. Wallets and other financial services often use `TokenPolicy` objects.
+keywords: [ token policy, tokenpolicy,token::new_policy, treasurycap, token::share_policy, new_policy, allow, disallow, add_rule_for_action, remove_rule_for_action, confirm_request, confirm_request_mut, flush ]
 ---
 
-`TokenPolicy` is a shared object that you, as the token owner, can create using the `TreasuryCap`. Having a publicly available `TokenPolicy` enables on-chain discovery of allowed actions and their conditions. This is useful for wallets and other services that want to provide a better user experience for token holders.
+`TokenPolicy` is a shared object that a token owner can create using the `TreasuryCap`. Having a publicly available `TokenPolicy` enables on-chain discovery of allowed actions and their conditions. This is useful for wallets and other services that want to provide a better user experience for token holders.
 
 ## Create and share
 
@@ -80,7 +82,7 @@ public fun flush<T>(
 );
 ```
 
-## Cheatsheet: TokenPolicy API
+## Cheat sheet: TokenPolicy API
 
 | Function                    | Note                                                                 |
 |-----------------------------|----------------------------------------------------------------------|

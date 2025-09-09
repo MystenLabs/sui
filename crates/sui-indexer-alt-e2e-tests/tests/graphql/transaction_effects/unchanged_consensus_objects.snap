@@ -1,0 +1,106 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 7-33:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7759600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 35:
+//# view-object 1,0
+Owner: Shared( 2 )
+Version: 2
+Contents: test::shared_object_tests::SharedCounter {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 3, lines 37-38:
+//# programmable --inputs immshared(1,0)
+//> 0: test::shared_object_tests::get_value(Input(0))
+mutated: object(0,2)
+unchanged_shared: object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 40-41:
+//# programmable --inputs object(1,0)
+//> 0: test::shared_object_tests::increment(Input(0))
+mutated: object(0,2), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2460348, non_refundable_storage_fee: 24852
+
+task 5, lines 43-44:
+//# programmable --inputs immshared(1,0)
+//> 0: test::shared_object_tests::get_value(Input(0))
+mutated: object(0,2)
+unchanged_shared: object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 46:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 48-66:
+//# run-graphql
+Response: {
+  "data": {
+    "readOnlyAccess1": {
+      "unchangedConsensusObjects": {
+        "edges": [
+          {
+            "node": {
+              "object": {
+                "address": "0x2c1514b68c5c8f4b4d519b04d77edfde2c95179e1bdc67d3bafcf69d44a25345",
+                "version": 2,
+                "digest": "FRKyMiZr7yrjXNATpHN8dfXpYBKpdkPoJ4BjQEtTn4S9"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 8, lines 68-85:
+//# run-graphql
+Response: {
+  "data": {
+    "mutableAccess": {
+      "unchangedConsensusObjects": {
+        "edges": []
+      }
+    }
+  }
+}
+
+task 9, lines 87-105:
+//# run-graphql
+Response: {
+  "data": {
+    "readOnlyAccess2": {
+      "unchangedConsensusObjects": {
+        "edges": [
+          {
+            "node": {
+              "object": {
+                "address": "0x2c1514b68c5c8f4b4d519b04d77edfde2c95179e1bdc67d3bafcf69d44a25345",
+                "version": 4,
+                "digest": "DKraZreJRTmvHtMyDoxLsmSeYWtkTCk8VhrPkhKZ9Xmm"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

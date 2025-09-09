@@ -25,7 +25,9 @@ public struct ValidatorOperationCap has drop {
     authorizer_validator_address: address,
 }
 
-public(package) fun unverified_operation_cap_address(cap: &UnverifiedValidatorOperationCap): &address {
+public(package) fun unverified_operation_cap_address(
+    cap: &UnverifiedValidatorOperationCap,
+): &address {
     &cap.authorizer_validator_address
 }
 
@@ -56,10 +58,6 @@ public(package) fun new_unverified_validator_operation_cap_and_transfer(
 
 /// Convert an `UnverifiedValidatorOperationCap` to `ValidatorOperationCap`.
 /// Should only be called by `validator_set` module AFTER verification.
-public(package) fun new_from_unverified(
-    cap: &UnverifiedValidatorOperationCap,
-): ValidatorOperationCap {
-    ValidatorOperationCap {
-        authorizer_validator_address: cap.authorizer_validator_address
-    }
+public(package) fun into_verified(cap: &UnverifiedValidatorOperationCap): ValidatorOperationCap {
+    ValidatorOperationCap { authorizer_validator_address: cap.authorizer_validator_address }
 }

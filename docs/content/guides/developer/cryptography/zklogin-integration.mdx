@@ -1,5 +1,7 @@
 ---
 title: zkLogin Integration Guide
+description: zkLogin can be integrated into applications deployed on Sui.
+keywords: [ zklogin, how to use zklogin, generate ephemeral key pair, fetch JWT, decode JWT, generate salt, generate user Sui address, fetch ZK proof, assemble zkLogin signature, oauth, openid ]
 ---
 
 Here is the high-level flow the wallet or frontend application must implement to support zkLogin-enabled transactions:
@@ -18,13 +20,13 @@ Let's dive into the specific implementation details.
 To use the zkLogin TypeScript SDK in your project, run the following command in your project root:
 
 ```sh npm2yarn
-npm install @mysten/sui
+$ npm install @mysten/sui
 ```
 
 If you want to use the latest experimental version:
 
 ```sh npm2yarn
-npm install @mysten/sui@experimental
+$ npm install @mysten/sui@experimental
 ```
 
 ## Get JWT
@@ -106,6 +108,7 @@ Here's an example request and response for the Mysten Labs-maintained salt serve
 ```sh
 $ curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
 ```
+
 ```sh
 Response: {"salt":"129390038577185583942388216820280642146"}
 ```
@@ -161,6 +164,7 @@ $ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 "keyClaimName":"sub" \
 }'
 ```
+
 ```sh
 $ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 -d '{"jwt":"$JWT_TOKEN", \
@@ -226,7 +230,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Run the proving service in your backend
 
-1. Install [Git Large File Storage](https://git-lfs.com/) (an open-source Git extension for large file versioning) before downloading the zkey.
+1. Install [Git Large File Storage](https://git-lfs.com/) (an open source Git extension for large file versioning) before downloading the zkey.
 
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/). There are zkeys available for all Sui networks. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated.
 
@@ -292,7 +296,7 @@ A few important things to note:
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
+First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional key pair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender` is also defined.
 
 ```typescript
 const ephemeralKeyPair = new Ed25519Keypair();
@@ -319,14 +323,14 @@ the `maxEpoch`, and the ephemeral signature (`userSignature`).
 ```typescript
 import { genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
 
-const addressSeed: string = genAddressSeed(
+const addressSeed = genAddressSeed(
 	BigInt(userSalt!),
 	'sub',
 	decodedJwt.sub,
 	decodedJwt.aud,
 ).toString();
 
-const zkLoginSignature: SerializedSignature = getZkLoginSignature({
+const zkLoginSignature = getZkLoginSignature({
 	inputs: {
 		...partialZkLoginSignature,
 		addressSeed,

@@ -1,0 +1,64 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000000::m_dep_dep;
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+public foo(): u64 {
+L0:	%#2: u64
+L1:	%#3: u64
+L2:	%#5: u64
+L3:	%#6: u64
+L4:	ret#1#1: u64
+L5:	ret#1#5: u64
+L6:	v#1#0: u64
+L7:	x#1#4: u64
+L8:	x#2#8: u64
+B0:
+	0: LdU64(2)
+	1: Call m_dep_dep::baz(u64): u64
+	2: StLoc[4](ret#1#1: u64)
+	3: CopyLoc[4](ret#1#1: u64)
+	4: StLoc[1](%#3: u64)
+	5: MoveLoc[4](ret#1#1: u64)
+	6: StLoc[7](x#1#4: u64)
+	7: CopyLoc[7](x#1#4: u64)
+	8: MoveLoc[7](x#1#4: u64)
+	9: Add
+	10: StLoc[0](%#2: u64)
+	11: MoveLoc[1](%#3: u64)
+	12: MoveLoc[0](%#2: u64)
+	13: Add
+	14: StLoc[6](v#1#0: u64)
+	15: CopyLoc[6](v#1#0: u64)
+	16: MoveLoc[6](v#1#0: u64)
+	17: Add
+	18: Call m_dep_dep::baz(u64): u64
+	19: StLoc[5](ret#1#5: u64)
+	20: CopyLoc[5](ret#1#5: u64)
+	21: StLoc[3](%#6: u64)
+	22: MoveLoc[5](ret#1#5: u64)
+	23: StLoc[8](x#2#8: u64)
+	24: CopyLoc[8](x#2#8: u64)
+	25: MoveLoc[8](x#2#8: u64)
+	26: Add
+	27: StLoc[2](%#5: u64)
+	28: MoveLoc[3](%#6: u64)
+	29: MoveLoc[2](%#5: u64)
+	30: Add
+	31: Ret
+}
+
+public test() {
+B0:
+	0: Call foo(): u64
+	1: Pop
+	2: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

@@ -4,13 +4,13 @@
 use crate::shared::types::{OriginalId, VersionId};
 
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
         FunctionHandleIndex, FunctionInstantiationIndex, JumpTableInner, LocalIndex,
         SignatureIndex, StructDefInstantiationIndex, StructDefinitionIndex, VariantHandleIndex,
         VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex,
     },
-    CompiledModule,
 };
 use move_core_types::{language_storage::ModuleId, resolver::TypeOrigin};
 use std::collections::BTreeMap;

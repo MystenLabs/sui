@@ -70,11 +70,10 @@ fn generate_basic_blocks(
 ) -> BTreeMap<ast::Label, Vec<ast::Bytecode>> {
     let cfg = VMControlFlowGraph::new(input, jump_tables);
     cfg.blocks()
-        .iter()
         .map(|label| {
-            let start = cfg.block_start(*label) as usize;
-            let end = cfg.block_end(*label) as usize;
-            let label = *label as ast::Label;
+            let start = cfg.block_start(label) as usize;
+            let end = cfg.block_end(label) as usize;
+            let label = label as ast::Label;
             let code = input[start..(end + 1)].iter().map(bytecode).collect();
             (label, code)
         })
