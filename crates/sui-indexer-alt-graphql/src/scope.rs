@@ -82,19 +82,9 @@ impl Scope {
     }
 
     /// Create a nested scope for execution context (freshly executed transaction).
-    /// This clears the checkpoint context to indicate fresh execution data.
-    pub(crate) fn with_execution_output(&self) -> Self {
-        Self {
-            checkpoint_viewed_at: None,
-            root_version: self.root_version,
-            execution_objects: Arc::clone(&self.execution_objects),
-            package_store: self.package_store.clone(),
-            resolver_limits: self.resolver_limits.clone(),
-        }
-    }
-
-    /// Create a nested scope for execution context with a batch of execution objects.
-    pub(crate) fn with_execution_objects<I>(&self, objects: I) -> Self
+    /// This clears the checkpoint context to indicate fresh execution data and
+    /// sets execution objects from the transaction output.
+    pub(crate) fn with_execution_output<I>(&self, objects: I) -> Self
     where
         I: IntoIterator<Item = NativeObject>,
     {
@@ -106,7 +96,7 @@ impl Scope {
         );
 
         Self {
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            checkpoint_viewed_at: None,
             root_version: self.root_version,
             execution_objects,
             package_store: self.package_store.clone(),

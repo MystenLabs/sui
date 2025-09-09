@@ -9,11 +9,12 @@ use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::{
     TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
 };
+use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
     digests::{TransactionDigest, TransactionEffectsDigest},
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     event::Event,
     message_envelope::Message,
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
@@ -214,6 +215,38 @@ impl KvLoader {
 }
 
 impl TransactionContents {
+    /// Create a TransactionContents from an ExecutedTransaction.
+    pub fn from_executed_transaction(
+        executed_transaction: &ExecutedTransaction,
+        transaction_data: TransactionData,
+        signatures: Vec<GenericSignature>,
+    ) -> anyhow::Result<Self> {
+        // Parse effects from BCS
+        let effects: TransactionEffects = executed_transaction
+            .effects
+            .as_ref()
+            .and_then(|effects| effects.bcs.as_ref())
+            .context("Effects BCS should be present")?
+            .deserialize()
+            .context("Effects BCS should be valid")?;
+
+        // Parse events from BCS if present
+        let events = executed_transaction
+            .events
+            .as_ref()
+            .and_then(|events| events.bcs.as_ref())
+            .map(|bcs| bcs.deserialize().context("Events BCS should be valid"))
+            .transpose()?
+            .map(|events: TransactionEvents| events.data);
+
+        Ok(Self::ExecutedTransaction {
+            effects: Box::new(effects),
+            events,
+            transaction_data: Box::new(transaction_data),
+            signatures,
+        })
+    }
+
     pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
             Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)
