@@ -41,6 +41,7 @@ pub fn add_to_accumulator_address(
 
     let Some(value) = args.pop_back().unwrap().value_as::<Struct>().ok() else {
         // TODO in the future this is guaranteed/checked via a custom verifier rule
+        debug_assert!(false);
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                 "Balance should be guaranteed under current implementation".to_owned(),
@@ -65,6 +66,7 @@ pub fn add_to_accumulator_address(
         .ok()
         .and_then(|vs| vs.collect::<Vec<_>>().try_into().ok())
     else {
+        debug_assert!(false);
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                 "Balance should be guaranteed under current implementation".to_owned(),
@@ -72,6 +74,7 @@ pub fn add_to_accumulator_address(
         );
     };
     let Some(amount) = amount.value_as::<u64>().ok() else {
+        debug_assert!(false);
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                 "Balance should be guaranteed under current implementation".to_owned(),
@@ -82,14 +85,12 @@ pub fn add_to_accumulator_address(
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     obj_runtime.emit_accumulator_event(
         accumulator,
-        MoveAccumulatorAction::Split,
+        MoveAccumulatorAction::Merge,
         recipient,
         ty_tag,
         MoveAccumulatorValue::U64(amount),
     )?;
-    // TODO this will need to look at the layout of T when this is not guaranteed to be a Balance
-    let withdrawn = Value::struct_(Struct::pack(vec![Value::u64(amount)]));
-    Ok(NativeResult::ok(context.gas_used(), smallvec![withdrawn]))
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
 pub fn withdraw_from_accumulator_address(
