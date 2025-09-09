@@ -41,6 +41,8 @@ pub struct Publication<F: MoveFlavor> {
     #[serde(flatten)]
     pub addresses: PublishAddresses,
 
+    pub version: u64,
+
     /// Additional flavor-specific fields, such as an upgrade capability or information for source
     /// verification
     #[serde(flatten)]
@@ -115,12 +117,14 @@ mod tests {
             chain-id = "mainnet chain ID"
             published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
             original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
+            version = 1
             build-config = { edition = "2024", flavor = "vanilla" }
 
             [published.testnet]
             chain-id = "testnet chain id"
             published-at = "0x0000000000000000000000000000000000000000000000000000000000001234"
             original-id = "0x0000000000000000000000000000000000000000000000000000000000005678"
+            version = 1
             build-config = { edition = "2024", flavor = "vanilla" }
             "###
         );
@@ -143,11 +147,13 @@ mod tests {
             chain-id = "mainnet chain ID"
             published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
             original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
+            version = 1
 
             [published.testnet]
             chain-id = "testnet chain id"
             published-at = "0x0000000000000000000000000000000000000000000000000000000000001234"
             original-id = "0x0000000000000000000000000000000000000000000000000000000000005678"
+            version = 1
             "###
         );
 

@@ -70,7 +70,9 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
 
     /// Returns the published address of this package, if it is published
     pub fn published(&self) -> Option<&PublishAddresses> {
-        self.package().address()
+        self.package()
+            .publication()
+            .map(|publication| &publication.addresses)
     }
 
     /// Returns true if the node is the root of the package graph
