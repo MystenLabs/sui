@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 95;
+const MAX_PROTOCOL_VERSION: u64 = 96;
 
 // Record history of protocol version allocations here:
 //
@@ -781,6 +781,10 @@ struct FeatureFlags {
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
+
+    // Enable including checkpoint artifacts digest in the summary.
+    #[serde(skip_serializing_if = "is_false")]
+    include_checkpoint_artifacts_digest_in_summary: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2184,6 +2188,11 @@ impl ProtocolConfig {
     pub fn consensus_checkpoint_signature_key_includes_digest(&self) -> bool {
         self.feature_flags
             .consensus_checkpoint_signature_key_includes_digest
+    }
+
+    pub fn include_checkpoint_artifacts_digest_in_summary(&self) -> bool {
+        self.feature_flags
+            .include_checkpoint_artifacts_digest_in_summary
     }
 }
 
@@ -3963,6 +3972,13 @@ impl ProtocolConfig {
 
                     // Reudce the frequency of checkpoint splitting under high TPS.
                     cfg.max_transactions_per_checkpoint = Some(20_000);
+                }
+                96 => {
+                    // Enable artifacts digest in devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
