@@ -14,7 +14,7 @@ keywords: [ rpc, sui rpc, graphql, how to use graphql, schema, graphql schema, q
 
 The quickest way to access the GraphQL service for Sui RPC is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides features such as auto-completion (use <kbd>Ctrl</kbd>+<kbd>Space</kbd> or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more.
 
-The online IDE is available for Mainnet and Testnet. You can try the various queries on this page directly in the IDE.
+The online IDE is available for Mainnet, Testnet, and Devnet. You can try the various queries on this page directly in the IDE.
 
 :::info
 
@@ -24,10 +24,11 @@ Both Mainnet and Testnet services are rate-limited to keep network throughput op
 
 - Mainnet: https://graphql.mainnet.sui.io/graphql
 - Testnet: https://graphql.testnet.sui.io/graphql
+- Devnet: https://graphql.devnet.sui.io/graphql
 
 :::caution
 
-Switch any apps that still use the GraphQL Alpha endpoints (`https://sui-mainnet.mystenlabs.com/graphql` and `https://sui-testnet.mystenlabs.com/graphql`) as soon as possible. Migrate your apps to the GraphQL Beta endpoints to avoid disruption of service.
+Switch any apps that still use the GraphQL Alpha endpoints (`https://sui-mainnet.mystenlabs.com/graphql`, `https://sui-testnet.mystenlabs.com/graphql`, and `https://sui-devnet.mystenlabs.com/graphql`) as soon as possible. Migrate your apps to the GraphQL Beta endpoints to avoid disruption of service.
 
 :::
 
@@ -44,13 +45,14 @@ The [official GraphQL introspection documentation](https://graphql.org/learn/int
 Some of the schema updates for the beta version include:
 
 ### Renames and deprecations
-  - `TransactionBlock` is being replaced with `Transaction`
-  - `Owner` has been merged with `Address`
-  - `dryRunTransactionBlock` is being replaced with `simulateTransaction`
-  - `bcs` fields are qualified with the type of BCS data they hold, to avoid confusion.
-  - `changedObject` and `inputObject` filters in `transactions` query are being replaced with `affectedObject`.
-  - `address.coins` and `address.stakedSuis` are being deprecated in favor of `address.objects` with the corresponding `type` filter.
-  - `MoveValue.data` has been deprecated since it does not add value over `MoveValue.json`, which provides a more clear representation of the data.
+
+- `TransactionBlock` is being replaced with `Transaction`
+- `Owner` has been merged with `Address`
+- `dryRunTransactionBlock` is being replaced with `simulateTransaction`
+- `bcs` fields are qualified with the type of BCS data they hold, to avoid confusion.
+- `changedObject` and `inputObject` filters in `transactions` query are being replaced with `affectedObject`.
+- `address.coins` and `address.stakedSuis` are being deprecated in favor of `address.objects` with the corresponding `type` filter.
+- `MoveValue.data` has been deprecated because it does not add value over `MoveValue.json`, which provides a more clear representation of the data.
 
 ### Consistency
 
@@ -62,34 +64,32 @@ APIs for traversing different versions of packages and objects have been added. 
 
 ### Splitting up query APIs
 
-Paginated query APIs were previously responsible for three kinds of query pattern, which will be broken up into three separate APIs:
-    - A dedicated multi-get API that accepts a list of keys and returns a list of results.
-    - A query API that offers the original core functionality: Efficient paginated results without having to supply a checkpoint range, but for limited combinations of filters.
+Paginated query APIs were previously responsible for three kinds of query pattern, which will be broken up into two separate APIs:
+
+- A dedicated multi-get API that accepts a list of keys and returns a list of results.
+- A query API that offers the original core functionality: Efficient paginated results without having to supply a checkpoint range, but for limited combinations of filters.
 
 ### Relaxed consistency cursors
 
-Cursors in GraphQL Alpha indicated the checkpoint that pagination started at. Future pages would be fetched as if from this checkpoint. This is helpful for paginating an address’ owned objects, but cannot express queries that update over time (like tracking a stream of events in real time). Cursors in GraphQL Beta have relaxed this constraint — only cursors for pages whose results do not flow in the same direction as time (such as owned object queries) will remember their checkpoint.
-    - The old behaviour is reproducible by explicitly setting the checkpoint to query from (see “Consistency” above).
+Cursors in GraphQL Alpha indicated the checkpoint that pagination started at. Future pages would be fetched as if from this checkpoint. This is helpful for paginating owned objects of an address, but cannot express queries that update over time (like tracking a stream of events in real time). Cursors in GraphQL Beta have relaxed this constraint — only cursors for pages whose results do not flow in the same direction as time (such as owned object queries) remember their checkpoint.
+
+The old behavior is reproducible by explicitly setting the checkpoint to query from (see the [Consistency](#consistency) section).
 
 ### Preserving Entity IDs
 
-The service will retain the ability to identify entities that have been pruned when they are referred to be other entities. For example, even if an object’s previous transaction has been pruned, the service will still be able to return the transaction’s digest.
+The service retains the ability to identify entities that have been pruned when they are referred to be other entities. For example, even if an object's previous transaction has been pruned, the service is still able to return the transaction digest.
 
 ### Unpruned point lookups
 
-That being said, point look-ups will generally be unpruned, if GraphQL has access to an Archival Service.
+Point look-ups are generally unpruned, if GraphQL has access to an Archival Service.
 
 ### More detailed retention API
 
-The service will provide more details about the retention of its underlying data through the `ServiceConfig.retention` field in the near future.
+The service provides more details about the retention of its underlying data through the `ServiceConfig.retention` field.
 
 ### Governance
 
-APIs related to governance and staking will be removed in favor of using view functions to access the data at its source of truth on-chain.
-
-### Relay Node and ID APIs
-
-Support will be added for `Node` and `ID` APIs, allowing frontends that use Relay to interact natively with paginated endpoints.
+APIs related to governance and staking are removed in favor of using view functions to access the data at its source of truth on-chain.
 
 ## Example queries
 
@@ -163,9 +163,9 @@ query {
 </TabItem>
 </Tabs>
 
-### Find a transaction block by its digest
+### Find a transaction by its digest
 
-Get a transaction block by its digest and show information such as the gas sponsor address, the gas price, the gas budget, and effects from executing that transaction block.
+Get a transaction by its digest and show information such as the gas sponsor address, the gas price, the gas budget, and effects from executing that transaction.
 
 <Tabs groupId="graphql">
 <TabItem label="Beta" value="beta">
@@ -333,13 +333,13 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
 }
 ```
 
-### Filter transaction blocks by a function
+### Filter transactions by a function
 
-Find the last ten transaction blocks that called the `public_transfer` function as a Move call transaction command.
+Find the last ten transactions that called the `public_transfer` function as a Move call transaction command.
 
 :::info
 
-This example makes use of the `last` filter. In this case, returns only the last `10` transaction blocks known to the service.
+This example makes use of the `last` filter. In this case, returns only the last `10` transactions known to the service.
 
 :::
 
@@ -572,7 +572,7 @@ This example uses [fragments](../../../concepts/graphql-rpc.mdx#fragments) and [
 <TabItem label="Beta" value="beta">
 ```graphql
 query ($id: SuiAddress!) {
-  owner(address: $id) {
+  address(address: $id) {
     dynamicFields {
       nodes {
         name { ...Value }
@@ -787,9 +787,9 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
 
 The examples in the following sections demonstrate the typical API calls. The calls are tabbed to show both the JSON-RPC call and the equivalent GraphQL structure. For a comprehensive list of all available GraphQL features, consult the [reference](../../../references/sui-graphql).
 
-### Example 1: Get total transaction blocks
+### Example 1: Get total transactions
 
-Get the total number of transaction blocks in the network.
+Get the total number of transactions in the network.
 
 <Tabs groupId="migrating-json-rpc">
 
@@ -818,9 +818,9 @@ query {
 </TabItem>
 </Tabs>
 
-### Example 2: Get a specific transaction block
+### Example 2: Get a specific transaction
 
-Get the transaction block by its digest.
+Get the transaction by its digest.
 
 <Tabs groupId="migrating-json-rpc">
 
