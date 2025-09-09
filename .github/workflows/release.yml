@@ -46,11 +46,11 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-ghcloud, # ubuntu-x86_64
-            ubuntu-arm64, # ubuntu-arm64
-            windows-ghcloud, # windows-x86_64
+            # ubuntu-ghcloud, # ubuntu-x86_64
+            # ubuntu-arm64, # ubuntu-arm64
+            # windows-ghcloud, # windows-x86_64
             macos-latest-large, # macos-x86_64
-            macos-latest-xlarge # macos-arm64
+            # macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -162,7 +162,7 @@ jobs:
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo update -p blst && cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_existing_archive == '' }}
