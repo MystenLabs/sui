@@ -840,24 +840,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .try_lock()
             .expect("should only ever be called from the commit handler thread");
 
-        let collected_eop =
-            self.process_end_of_publish_transactions(&mut state, end_of_publish_transactions);
-        let (should_accept_tx, lock, final_round) = if collected_eop {
-            // DONE(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
-            let (lock, final_round) = self.advance_eop_state_machine(&mut state);
-            (lock.should_accept_tx(), Some(lock), final_round)
-        } else {
-            (true, None, false)
-        };
-
-        let make_checkpoint = should_accept_tx || final_round;
-
-        if !make_checkpoint {
-            // No need for any further processing
-            // DONE(commit-handler-rewrite): do not insert commit prologue if !should_accept_tx()
-            return;
-        }
-
         // DONE(commit-handler-rewrite): load and activate previous round's jwks
         let authenticator_state_update_transaction =
             self.create_authenticator_state_update(last_committed_round, &commit_info);
@@ -870,16 +852,37 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             user_transactions,
         );
 
+        let collected_eop =
+            self.process_end_of_publish_transactions(&mut state, end_of_publish_transactions);
+        let (should_accept_tx, lock, final_round) = if collected_eop {
+            // DONE(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
+            // DONE(commit-handler-rewrite): [ssm] check if epoch is over
+            let (lock, final_round) = self.advance_eop_state_machine(&mut state);
+            // DONE(commit-handler-rewrite): check tx acceptance state
+            (lock.should_accept_tx(), Some(lock), final_round)
+        } else {
+            (true, None, false)
+        };
+
+        let make_checkpoint = should_accept_tx || final_round;
+
+        if !make_checkpoint {
+            // No need for any further processing
+            // DONE(commit-handler-rewrite): do not insert commit prologue if !should_accept_tx()
+            // DONE(commit-handler-rewrite): commit prologue should not be added to roots after tx processing is closed
+            return;
+        }
+
         // DONE(commit-handler-rewrite): record execution time observations for next epoch
         // If this is the final round, record execution time observations for storage in the
         // end-of-epoch tx.
         if final_round {
             if let Some(estimator) = execution_time_estimator.as_mut() {
                 self.epoch_store.end_of_epoch_execution_time_observations
-                .set(estimator.take_observations())
-                .expect(
-                    "`stored_execution_time_observations` should only be set once at end of epoch",
-                );
+                    .set(estimator.take_observations())
+                    .expect(
+                        "`stored_execution_time_observations` should only be set once at end of epoch",
+                    );
             }
             drop(execution_time_estimator); // make sure this is not used after `take_observations`
         }
@@ -902,6 +905,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 || (state.dkg_failed && !randomness_schedulables.is_empty());
 
             let pending_checkpoint = PendingCheckpoint {
+                // DONE(commit-handler-rewrite): compute checkpoint roots (this should be done at the end)
                 roots: schedulables.iter().map(|s| s.key()).collect(),
                 details: PendingCheckpointInfo {
                     timestamp_ms: commit_info.timestamp,
@@ -938,6 +942,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state
             .output
             .record_consensus_commit_stats(self.last_consensus_stats.clone());
+
+        {
+            // DONE(commit-handler-rewrite): propogate deferral deletion to consensus output cache
+            let mut deferred_transactions = self
+                .epoch_store
+                .consensus_output_cache
+                .deferred_transactions_v2
+                .lock();
+            for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
+                deferred_transactions.remove(&deleted_deferred_key);
+            }
+        }
 
         // DONE(commit-handler-rewrite): send consensus output to quarantine
         self.epoch_store
@@ -1079,7 +1095,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     *transaction.digest(),
                     CancelConsensusCertificateReason::DkgFailed,
                 );
-                // TODO(commit-handler-rewrite): cancelled txns must be scheduled for execution
+                // DONE(commit-handler-rewrite): cancelled txns must be scheduled for execution
                 randomness_transactions_to_schedule.push(transaction);
                 continue;
             }
@@ -1348,7 +1364,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 congested_objects,
                             ),
                         );
-                        // TODO(commit-handler-rewrite): cancelled txns must be scheduled for execution
+                        // DONE(commit-handler-rewrite): cancelled txns must be scheduled for execution
                         scheduled_txns.push(transaction);
                     }
                 }
@@ -1506,6 +1522,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     None
                 }
                 DkgStatus::Successful => {
+                    // DONE(commit-handler-rewrite): do not reserve randomness if !should_accept_tx()
                     // Generate randomness for this commit if DKG is successful and we are still
                     // accepting certs.
                     if state.initial_reconfig_state.should_accept_tx() {
@@ -1554,7 +1571,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         capability_notifications: Vec<AuthorityCapabilitiesV2>,
     ) {
-        // DONE(commit-handler-rewrite): [ssm] record capability notifications
+        // DONE(commit-handler-rewrite): [ssm] record authority capabilities
         for capabilities in capability_notifications {
             self.epoch_store
                 .record_capabilities_v2(&capabilities)
@@ -1752,7 +1769,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         reconfig_state.close_all_certs();
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
-        let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
+        let previous_commits_have_deferred_txns =
+            !self.epoch_store.deferred_transactions_empty_v2();
 
         // DONE(commit-handler-rewrite): [ssm] if we are rejecting all certs, AND there are no deferred transactions to process, transition to RejectAllTx
         if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
@@ -2177,6 +2195,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .inc_num_user_transactions(author);
                 }
 
+                // DONE(commit-handler-rewrite): ignored external transactions must not be recorded as processed.
                 if !initial_reconfig_state.should_accept_consensus_certs() {
                     // DONE(commit-handler-rewrite): ignore txns due to !should_accept_consensus_certs(), unless they were previously deferred
                     // (Note: we no lnoger need to worry about the previously deferred condition, since we are only
@@ -2295,7 +2314,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
+        // TODO(commit-handler-rewrite): update per validator metrics
         // DONE(commit-handler-rewrite): update per validator metrics
+        // TODO and DONE are in same place because this code is shared between old and new commit handler
         for (i, authority) in self.committee.authorities() {
             let hostname = &authority.hostname;
             self.metrics
@@ -2334,6 +2355,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut processed_set = HashSet::new();
 
         let mut all_transactions = Vec::new();
+
+        // All of these TODOs are handled here in the new code, whereas in the old code, they were
+        // each handled separately. The key thing to see is that all messages are marked as processed
+        // here, except for ones that are filtered out earlier (e.g. due to !should_accept_consensus_certs()).
+
+        // DONE(commit-handler-rewrite): record_consensus_message_processed() must be called for deferred txns
+        // DONE(commit-handler-rewrite): cancelled txns must be recorded as processed
+        // DONE(commit-handler-rewrite): consensus messages must be recorded as processed
+        // DONE(commit-handler-rewrite): randomness messages must be recorded as processed
         for (seq, (transaction, cert_origin)) in transactions.into_iter().enumerate() {
             // TODO(consensus-handler-rewrite): the seq + 1 is probably not necessary, because we do not create a
             // SequencedConsensusTransaction for commit prologue any more.
