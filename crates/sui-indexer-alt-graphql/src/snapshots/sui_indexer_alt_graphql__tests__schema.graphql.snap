@@ -1178,10 +1178,6 @@ input EventFilter {
 	"""
 	sender: SuiAddress
 	"""
-	Filter on events by transaction digest.
-	"""
-	transactionDigest: String
-	"""
 	This field is used to specify the type of event emitted.
 	
 	Events can be filtered by their type's package, package::module, or their fully qualified type name.
