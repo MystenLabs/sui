@@ -29,12 +29,6 @@ pub(crate) enum Error {
     WrongLength(usize),
 }
 
-impl SuiAddress {
-    pub fn into_vec(self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-}
-
 /// String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 #[Scalar]
 impl ScalarType for SuiAddress {
@@ -48,6 +42,12 @@ impl ScalarType for SuiAddress {
 
     fn to_value(&self) -> Value {
         Value::String(self.to_string())
+    }
+}
+
+impl SuiAddress {
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
     }
 }
 

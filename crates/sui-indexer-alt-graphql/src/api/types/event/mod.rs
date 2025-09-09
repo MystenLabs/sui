@@ -18,21 +18,18 @@ use sui_types::{
     event::Event as NativeEvent,
 };
 
-use super::{
-    address::Address, checkpoint::filter::checkpoint_bounds, move_module::MoveModule,
-    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
-    transaction::Transaction,
-};
-
 use crate::{
-    api::{
-        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-        types::lookups::tx_bounds,
-    },
+    api::scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
     error::RpcError,
     pagination::Page,
     scope::Scope,
     task::watermark::Watermarks,
+};
+
+use super::{
+    address::Address, checkpoint::filter::checkpoint_bounds, move_module::MoveModule,
+    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::filter::tx_bounds_query, transaction::Transaction,
 };
 
 pub(crate) mod filter;
@@ -148,31 +145,23 @@ impl Event {
             return Ok(Connection::new(false, false));
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| {
-            c.tx_sequence_number
-        })
-        .await?;
+        // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
+        let tx_bounds_query = tx_bounds_query(
+            &cp_bounds,
+            global_tx_hi,
+            page.after().map_or(0, |c| c.tx_sequence_number),
+            page.before()
+                .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1)),
+        );
 
         #[derive(QueryableByName)]
         struct TxSequenceNumber(
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
-        // TODO: (henry) update query to select from ev_emit_mod or ev_struct_inst based on filters.
-        let query = query!(
-            r#"
-            SELECT
-                tx_sequence_number
-            FROM
-                ev_struct_inst
-            WHERE
-                tx_sequence_number >= {BigInt}
-                AND tx_sequence_number < {BigInt}
-            ORDER BY
-                tx_sequence_number {}
-            LIMIT {BigInt}
-            "#,
-            tx_bounds.start as i64,
-            tx_bounds.end as i64,
+
+        let mut query = filter.query(tx_bounds_query)?;
+        query += query!(
+            r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
             if page.is_from_front() {
                 query!("ASC")
             } else {
@@ -195,8 +184,14 @@ impl Event {
             .unique()
             .collect();
 
-        let events =
-            lookups::events_from_sequence_numbers(&scope, ctx, &page, &tx_sequence_numbers).await?;
+        let events = lookups::events_from_sequence_numbers(
+            &scope,
+            ctx,
+            &page,
+            &tx_sequence_numbers,
+            &filter,
+        )
+        .await?;
 
         let (has_prev, has_next, edges) =
             page.paginate_results(events, |(cursor, _)| JsonCursor::new(*cursor));
