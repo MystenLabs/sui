@@ -21,6 +21,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     messages_consensus::ConsensusPosition,
+    messages_grpc::{ValidatorHealthRequest, ValidatorHealthResponse},
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 use sui_types::{
@@ -248,20 +249,12 @@ impl AuthorityAPI for LocalAuthorityClient {
 
     async fn validator_health(
         &self,
-        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
-        let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
-            num_inflight_consensus_transactions: 0,
-            num_inflight_execution_transactions: 0,
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse {
             last_committed_leader_round: 1000,
             last_locally_built_checkpoint: 500,
-        };
-
-        typed_response.try_into().map_err(|e| {
-            sui_types::error::SuiError::GrpcMessageSerializeError {
-                type_info: "ValidatorHealthResponse".to_string(),
-                error: format!("Failed to convert to raw response: {}", e),
-            }
+            ..Default::default()
         })
     }
 }
@@ -488,20 +481,12 @@ impl AuthorityAPI for MockAuthorityApi {
 
     async fn validator_health(
         &self,
-        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
-        let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
-            num_inflight_consensus_transactions: 0,
-            num_inflight_execution_transactions: 0,
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse {
             last_committed_leader_round: 1000,
             last_locally_built_checkpoint: 500,
-        };
-
-        typed_response.try_into().map_err(|e| {
-            sui_types::error::SuiError::GrpcMessageSerializeError {
-                type_info: "ValidatorHealthResponse".to_string(),
-                error: format!("Failed to convert to raw response: {}", e),
-            }
+            ..Default::default()
         })
     }
 }
@@ -608,8 +593,8 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
 
     async fn validator_health(
         &self,
-        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
         unimplemented!()
     }
 }

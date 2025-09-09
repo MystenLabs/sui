@@ -34,7 +34,8 @@ use sui_types::{
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
         HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
         SubmitTxResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse, WaitForEffectsRequest, WaitForEffectsResponse,
+        TransactionInfoResponse, ValidatorHealthRequest, ValidatorHealthResponse,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     },
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
@@ -207,9 +208,9 @@ impl AuthorityAPI for MockAuthority {
 
     async fn validator_health(
         &self,
-        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
-        Ok(sui_types::messages_grpc::RawValidatorHealthResponse::default())
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse::default())
     }
 }
 
@@ -233,7 +234,7 @@ fn create_test_authority_aggregator_with_rgp(
     (aggregator, mock_authorities)
 }
 
-fn create_test_raw_request(gas_price: u64) -> SubmitTxRequest {
+fn create_test_submit_request(gas_price: u64) -> SubmitTxRequest {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 
@@ -272,8 +273,8 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price;
-        let raw_request = create_test_raw_request(gas_price);
-        let tx_digest = *raw_request.transaction.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for mock_authority in &mock_authorities {
@@ -298,7 +299,7 @@ async fn test_submit_transaction_with_amplification() {
                 &client_monitor,
                 &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -321,8 +322,8 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price * 3;
-        let raw_request = create_test_raw_request(gas_price);
-        let tx_digest = *raw_request.transaction.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for mock_authority in &mock_authorities {
@@ -349,7 +350,7 @@ async fn test_submit_transaction_with_amplification() {
                 &client_monitor,
                 &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -372,8 +373,8 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price * 100; // Very high gas price
-        let raw_request = create_test_raw_request(gas_price);
-        let tx_digest = *raw_request.transaction.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for mock_authority in &mock_authorities {
@@ -400,7 +401,7 @@ async fn test_submit_transaction_with_amplification() {
                 &client_monitor,
                 &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -427,8 +428,8 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price * 4;
-        let raw_request = create_test_raw_request(gas_price);
-        let tx_digest = *raw_request.transaction.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for (i, mock_authority) in mock_authorities.iter().enumerate() {
@@ -464,7 +465,7 @@ async fn test_submit_transaction_with_amplification() {
                 &client_monitor,
                 &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -501,8 +502,8 @@ async fn test_submit_transaction_invalid_input() {
 
     // Transaction with 2x RGP for amplification factor = 2
     let gas_price = reference_gas_price * 2;
-    let raw_request = create_test_raw_request(gas_price);
-    let tx_digest = *raw_request.transaction.digest();
+    let request = create_test_submit_request(gas_price);
+    let tx_digest = *request.transaction.digest();
 
     // Set up all authorities to return non-retriable errors
     for mock_authority in &mock_authorities {
@@ -526,7 +527,7 @@ async fn test_submit_transaction_invalid_input() {
             &client_monitor,
             &tx_digest,
             amplification_factor,
-            raw_request,
+            request,
             &options,
         )
         .await;

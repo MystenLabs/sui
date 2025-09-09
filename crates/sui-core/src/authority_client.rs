@@ -29,9 +29,10 @@ use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
-    SubmitTxRequest, SubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
-    TransactionInfoResponse, WaitForEffectsRequest, WaitForEffectsResponse,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawValidatorHealthRequest,
+    RawWaitForEffectsRequest, SubmitTxRequest, SubmitTxResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse, ValidatorHealthRequest,
+    ValidatorHealthResponse, WaitForEffectsRequest, WaitForEffectsResponse,
 };
 
 #[async_trait]
@@ -113,8 +114,8 @@ pub trait AuthorityAPI {
     /// Get validator health metrics (for latency measurement)
     async fn validator_health(
         &self,
-        request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError>;
+        request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError>;
 }
 
 #[derive(Clone)]
@@ -162,7 +163,7 @@ impl NetworkAuthorityClient {
         }
     }
 
-    fn client(&self) -> SuiResult<ValidatorClient<Channel>> {
+    pub(crate) fn client(&self) -> SuiResult<ValidatorClient<Channel>> {
         self.client.clone()
     }
 }
@@ -331,13 +332,16 @@ impl AuthorityAPI for NetworkAuthorityClient {
 
     async fn validator_health(
         &self,
-        request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+        request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        let raw_request: RawValidatorHealthRequest = request.try_into()?;
+
         self.client()?
-            .validator_health(request)
+            .validator_health(raw_request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::<SuiError>::into)?
+            .try_into()
     }
 }
 

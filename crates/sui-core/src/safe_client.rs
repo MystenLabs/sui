@@ -22,7 +22,8 @@ use sui_types::messages_grpc::{
     ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
     HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
     SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
-    VerifiedObjectInfoResponse, WaitForEffectsRequest, WaitForEffectsResponse,
+    ValidatorHealthRequest, ValidatorHealthResponse, VerifiedObjectInfoResponse,
+    WaitForEffectsRequest, WaitForEffectsResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;
@@ -698,25 +699,8 @@ where
     #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn validator_health(
         &self,
-        request: sui_types::messages_grpc::ValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::ValidatorHealthResponse, SuiError> {
-        // Convert typed request to raw for gRPC
-        let raw_request = request.try_into().map_err(|e| {
-            sui_types::error::SuiError::GrpcMessageSerializeError {
-                type_info: "ValidatorHealthRequest".to_string(),
-                error: format!("Failed to convert to raw request: {}", e),
-            }
-        })?;
-
-        // Call the raw gRPC interface
-        let raw_response = self.authority_client.validator_health(raw_request).await?;
-
-        // Convert raw response back to typed
-        raw_response.try_into().map_err(|e| {
-            sui_types::error::SuiError::GrpcMessageDeserializeError {
-                type_info: "RawValidatorHealthResponse".to_string(),
-                error: format!("Failed to convert from raw response: {}", e),
-            }
-        })
+        request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        self.authority_client.validator_health(request).await
     }
 }

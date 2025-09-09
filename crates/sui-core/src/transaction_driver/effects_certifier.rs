@@ -17,7 +17,10 @@ use sui_types::{
     effects::TransactionEffectsAPI as _,
     error::SuiError,
     messages_consensus::ConsensusPosition,
-    messages_grpc::{ExecutedData, RawWaitForEffectsRequest, SubmitTxResult},
+    messages_grpc::{
+        ExecutedData, RawWaitForEffectsRequest, SubmitTxResult, WaitForEffectsRequest,
+        WaitForEffectsResponse,
+    },
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
@@ -36,8 +39,7 @@ use crate::{
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        QuorumTransactionResponse, SubmitTransactionOptions, WaitForEffectsRequest,
-        WaitForEffectsResponse,
+        QuorumTransactionResponse, SubmitTransactionOptions,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -212,7 +214,7 @@ impl EffectsCertifier {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let wait_request = WaitForEffectsRequest {
+        let request = WaitForEffectsRequest {
             transaction_digest: *tx_digest,
             consensus_position,
             include_details: true,
@@ -220,7 +222,7 @@ impl EffectsCertifier {
 
         match timeout(
             WAIT_FOR_EFFECTS_TIMEOUT,
-            client.wait_for_effects(wait_request, options.forwarded_client_addr),
+            client.wait_for_effects(request, options.forwarded_client_addr),
         )
         .await
         {
@@ -563,9 +565,9 @@ impl EffectsCertifier {
             .map(jitter);
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {
-            let wait_request: WaitForEffectsRequest = raw_request.clone().try_into().unwrap();
+            let request: WaitForEffectsRequest = raw_request.clone().try_into().unwrap();
             let result = client
-                .wait_for_effects(wait_request, options.forwarded_client_addr)
+                .wait_for_effects(request, options.forwarded_client_addr)
                 .await;
             match result {
                 Ok(response) => {

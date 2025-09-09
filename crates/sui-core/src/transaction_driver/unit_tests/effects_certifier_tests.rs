@@ -5,11 +5,8 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        effects_certifier::EffectsCertifier,
-        error::TransactionDriverError,
-        message_types::{WaitForEffectsRequest, WaitForEffectsResponse},
-        metrics::TransactionDriverMetrics,
-        SubmitTransactionOptions,
+        effects_certifier::EffectsCertifier, error::TransactionDriverError,
+        metrics::TransactionDriverMetrics, SubmitTransactionOptions,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -36,7 +33,8 @@ use sui_types::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
         HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-        TransactionInfoRequest, TransactionInfoResponse,
+        TransactionInfoRequest, TransactionInfoResponse, ValidatorHealthRequest,
+        ValidatorHealthResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     quorum_driver_types::EffectsFinalityInfo,
     sui_system_state::SuiSystemState,
@@ -94,7 +92,7 @@ impl AuthorityAPI for MockAuthority {
 
     async fn wait_for_effects(
         &self,
-        wait_request: WaitForEffectsRequest,
+        request: WaitForEffectsRequest,
         _client_addr: Option<SocketAddr>,
     ) -> Result<WaitForEffectsResponse, SuiError> {
         let response_delay = *self.response_delays.lock().unwrap();
@@ -103,7 +101,7 @@ impl AuthorityAPI for MockAuthority {
         }
 
         // Choose the right response based on include_details flag
-        let responses = if wait_request.include_details {
+        let responses = if request.include_details {
             &self.full_responses
         } else {
             &self.ack_responses
@@ -111,7 +109,7 @@ impl AuthorityAPI for MockAuthority {
 
         let maybe_response = {
             let responses = responses.lock().unwrap();
-            responses.get(&wait_request.transaction_digest).cloned()
+            responses.get(&request.transaction_digest).cloned()
         };
 
         if let Some(response) = maybe_response {
@@ -122,7 +120,7 @@ impl AuthorityAPI for MockAuthority {
             // to ensure the timeout is triggered.
             sleep(Duration::from_secs(30)).await;
             Err(SuiError::TransactionNotFound {
-                digest: wait_request.transaction_digest,
+                digest: request.transaction_digest,
             })
         }
     }
@@ -196,9 +194,9 @@ impl AuthorityAPI for MockAuthority {
 
     async fn validator_health(
         &self,
-        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
-        Ok(sui_types::messages_grpc::RawValidatorHealthResponse::default())
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse::default())
     }
 }
 
