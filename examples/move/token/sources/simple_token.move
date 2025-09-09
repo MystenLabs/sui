@@ -78,7 +78,7 @@ module examples::simple_token_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `transfer` from a blocked account.
     fun test_denylist_transfer_fail() {
-        let ctx = &mut test::ctx(@0x0);
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let token = test::mint(1000_000000, ctx);
@@ -92,11 +92,11 @@ module examples::simple_token_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `transfer` to a blocked account.
     fun test_denylist_transfer_to_recipient_fail() {
-        let ctx = &mut test::ctx(@0x0);
+        let ctx = &mut test::ctx(BOB);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let token = test::mint(1000_000000, ctx);
-        let mut request = token::transfer(token, BOB, ctx);
+        let mut request = token::transfer(token, ALICE, ctx);
 
         denylist::verify(&policy, &mut request, ctx);
 
@@ -106,14 +106,11 @@ module examples::simple_token_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `spend` from a blocked account.
     fun test_denylist_spend_fail() {
-        let ctx = &mut test::ctx(@0x0);
-        let (mut policy, cap) = test::get_policy(ctx);
-
-        set_rules(&mut policy, &cap, ctx);
-        denylist::add_records(&mut policy, &cap, vector[BOB], ctx);
+        let ctx = &mut test::ctx(ALICE);
+        let (policy, _cap) = policy_with_denylist(ctx);
 
         let token = test::mint(1000_000000, ctx);
-        let mut request = token::transfer(token, BOB, ctx);
+        let mut request = token::spend(token, ctx);
 
         denylist::verify(&policy, &mut request, ctx);
 
@@ -123,7 +120,7 @@ module examples::simple_token_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `to_coin` from a blocked account.
     fun test_denylist_to_coin_fail() {
-        let ctx = &mut test::ctx(@0x0);
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let token = test::mint(1000_000000, ctx);
@@ -137,7 +134,7 @@ module examples::simple_token_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `from_coin` from a blocked account.
     fun test_denylist_from_coin_fail() {
-        let ctx = &mut test::ctx(@0x0);
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let coin = coin::mint_for_testing(1000_000000, ctx);
