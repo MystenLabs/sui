@@ -103,6 +103,7 @@ impl EventFilter {
             if let Some(type_name) = type_.type_name() {
                 query += query!(" AND name = {Text}", type_name.to_string());
             }
+
             if let Some(type_params) = type_.type_params() {
                 if !type_params.is_empty() {
                     query += query!(
