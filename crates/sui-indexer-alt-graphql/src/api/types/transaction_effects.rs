@@ -16,11 +16,12 @@ use sui_indexer_alt_reader::{
     tx_balance_changes::TxBalanceChangeKey,
 };
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
-use sui_rpc_api::client::TransactionExecutionResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
 use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
     execution_status::ExecutionStatus as NativeExecutionStatus,
+    object::Object as NativeObject,
     signature::GenericSignature,
     transaction::{TransactionData, TransactionDataAPI},
 };
@@ -401,37 +402,62 @@ impl EffectsContents {
 }
 
 impl TransactionEffects {
-    /// Create a new TransactionEffects from a TransactionExecutionResponse.
-    pub(crate) fn from_execution_response(
+    /// Create a new TransactionEffects from an ExecutedTransaction.
+    fn from_executed_transaction(
         scope: Scope,
-        response: TransactionExecutionResponse,
+        executed_transaction: &ExecutedTransaction,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
-    ) -> Self {
-        let digest = *response.effects.transaction_digest();
-
-        // Update scope with execution objects cache
-        let scope = scope.with_execution_objects(
-            response
-                .input_objects
-                .into_iter()
-                .chain(response.output_objects),
-        );
-
-        let contents = NativeTransactionContents::ExecutedTransaction {
-            effects: Box::new(response.effects),
-            events: response.events.map(|events| events.data),
-            transaction_data: Box::new(transaction_data),
+    ) -> Result<Self, RpcError> {
+        let contents = NativeTransactionContents::from_executed_transaction(
+            executed_transaction,
+            transaction_data,
             signatures,
-        };
+        )
+        .context("Failed to create TransactionContents from ExecutedTransaction")?;
 
-        Self {
+        let objects = extract_objects_from_executed_transaction(executed_transaction);
+        let digest = contents
+            .digest()
+            .context("Failed to get digest from transaction contents")?;
+        let scope = scope.with_execution_output(objects);
+
+        Ok(Self {
             digest,
             contents: EffectsContents {
                 scope,
                 contents: Some(Arc::new(contents)),
             },
-        }
+        })
+    }
+
+    /// Create a new TransactionEffects from a gRPC ExecuteTransactionResponse.
+    pub(crate) fn from_execution_response(
+        scope: Scope,
+        response: sui_rpc::proto::sui::rpc::v2beta2::ExecuteTransactionResponse,
+        transaction_data: TransactionData,
+        signatures: Vec<GenericSignature>,
+    ) -> Result<Self, RpcError> {
+        let executed_transaction = response
+            .transaction
+            .as_ref()
+            .context("ExecuteTransactionResponse should have transaction")?;
+
+        Self::from_executed_transaction(scope, executed_transaction, transaction_data, signatures)
+    }
+
+    /// Create a new TransactionEffects from a gRPC SimulateTransactionResponse.
+    pub(crate) fn from_simulation_response(
+        scope: Scope,
+        response: sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse,
+        transaction_data: TransactionData,
+    ) -> Result<Self, RpcError> {
+        let executed_transaction = response
+            .transaction
+            .as_ref()
+            .context("SimulateTransactionResponse should have transaction")?;
+
+        Self::from_executed_transaction(scope, executed_transaction, transaction_data, vec![])
     }
 
     /// Load the effects from the store, and return it fully inflated (with contents already
@@ -513,4 +539,23 @@ impl From<Transaction> for TransactionEffects {
             contents: EffectsContents { scope, contents },
         }
     }
+}
+
+/// Extract input and output object contents from an ExecutedTransaction.
+fn extract_objects_from_executed_transaction(
+    executed_transaction: &ExecutedTransaction,
+) -> Vec<NativeObject> {
+    let input_objects = executed_transaction
+        .input_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+
+    let output_objects = executed_transaction
+        .output_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+
+    input_objects.chain(output_objects).collect()
 }
