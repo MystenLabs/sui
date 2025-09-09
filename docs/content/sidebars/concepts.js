@@ -30,6 +30,7 @@ const concepts = [
 						items: [
 							'concepts/object-ownership/address-owned',
 							'concepts/object-ownership/immutable',
+							'concepts/object-ownership/party',
 							'concepts/object-ownership/shared',
 							'concepts/object-ownership/wrapped',
 						],

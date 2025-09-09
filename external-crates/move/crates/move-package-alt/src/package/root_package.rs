@@ -8,8 +8,9 @@ use tracing::debug;
 
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
+use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
 use crate::graph::PackageInfo;
-use crate::schema::{Environment, OriginalID, PackageName, Publication};
+use crate::schema::{Environment, OriginalID, PackageName, ParsedPubs, Publication, RenderToml};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
@@ -35,7 +36,11 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     graph: PackageGraph<F>,
     /// The lockfile we're operating on
     /// Invariant: lockfile.pinned matches graph, except that digests may differ
-    lockfile: ParsedLockfile<F>,
+    lockfile: ParsedLockfile,
+
+    /// The stored publications for the root package
+    pubs: ParsedPubs<F>,
+
     /// The list of published ids for every dependency in the root package
     deps_published_ids: Vec<OriginalID>,
 }
@@ -99,6 +104,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<Self> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
 
+        convert_legacy_lockfile::<F>(&package_path)?;
+
         let Some(graph) =
             PackageGraph::<F>::load_from_lockfile_ignore_digests(&package_path, &env).await?
         else {
@@ -122,7 +129,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
-        let mut lockfile = Self::load_lockfile(&package_path)?;
+        let lockfile = Self::load_lockfile(&package_path)?;
+        let pubs = Self::load_pubfile(&package_path)?;
 
         // check that there is a consistent linkage
         let _linkage = graph.linkage()?;
@@ -136,6 +144,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             graph,
             lockfile,
             deps_published_ids,
+            pubs,
         })
     }
 
@@ -180,32 +189,45 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(())
     }
 
-    /// Set the publish information, coming in from the compiler & result of `Publish` command.
+    /// Update the `Move.published` file for the root package in its loaded environment to
+    /// `publish_data`
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
-        // Write the publish data.
-        self.lockfile
+        self.pubs
             .published
             .insert(self.environment.name().clone(), publish_data);
 
-        self.save_to_disk()
+        std::fs::write(&self.package_path, self.pubs.render_as_toml())?;
+        Ok(())
     }
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
-    /// TODO(Manos): Do we wanna try to read this when loading, to make sure we can operate on it?
-    /// That will avoid doing all the work (to repin / publish etc), and then be unable to operate it.
-    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile<F>> {
+    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile> {
+        convert_legacy_lockfile::<F>(package_path)?;
+
         let path = package_path.lockfile_path();
         debug!("loading lockfile {:?}", path);
 
         if !path.exists() {
-            return Ok(ParsedLockfile::<F>::default());
+            return Ok(ParsedLockfile::default());
         }
 
         let file = FileHandle::new(path)?;
         Ok(toml_edit::de::from_str(file.source())?)
     }
 
-    pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
+    /// Read the pubfile from the root directory, returning an empty structure if none exists
+    fn load_pubfile(path: &PackagePath) -> PackageResult<ParsedPubs<F>> {
+        let path = path.publications_path();
+
+        if !path.exists() {
+            return Ok(ParsedPubs::default());
+        }
+
+        let file = FileHandle::new(path)?;
+        Ok(toml_edit::de::from_str(file.source())?)
+    }
+
+    pub fn lockfile_for_testing(&self) -> &ParsedLockfile {
         &self.lockfile
     }
 
@@ -215,13 +237,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.graph
     }
 
-    pub fn lockfile(&self) -> &ParsedLockfile<F> {
+    pub fn lockfile(&self) -> &ParsedLockfile {
         &self.lockfile
     }
 
     /// Return the publication information for this environment.
     pub fn publication(&self, env: EnvironmentName) -> PackageResult<Publication<F>> {
-        self.lockfile
+        self.pubs
             .published
             .get(&env)
             .ok_or_else(|| {
@@ -362,7 +384,7 @@ pkg_b = { local = "../pkg_b" }"#,
         let (env, root_path) = setup_test_move_project().await;
         let pkg_path = root_path.join("packages").join("graph");
 
-        let mut root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
+        let root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
 
         let new_lockfile = root.lockfile().clone();
 
@@ -372,7 +394,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
     #[test(tokio::test)]
     async fn test_load_and_check_for_env() {
-        let (env, root_path) = setup_test_move_project().await;
+        let (_, root_path) = setup_test_move_project().await;
 
         let path = root_path.join("graph");
         // should fail as devnet does not exist in the manifest
@@ -416,13 +438,13 @@ pkg_b = { local = "../pkg_b" }"#,
         let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
             project.file(
                 "Move.toml",
-                (&basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id())),
+                &basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id()),
             )
         });
 
         pkg_git.change_file(
             "Move.toml",
-            (&basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id())),
+            &basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id()),
         );
         pkg_git_repo.commit();
         pkg_git.change_file(
@@ -431,7 +453,7 @@ pkg_b = { local = "../pkg_b" }"#,
         );
         pkg_git_repo.commit();
 
-        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
+        let (pkg_dep_on_git, _) = git::new_repo("pkg_dep_on_git", |project| {
             project.file(
                 "Move.toml",
                 &format!(

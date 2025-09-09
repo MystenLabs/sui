@@ -33,6 +33,8 @@
 //! [TestPackageGraph::add_package] and [TestPackageGraph::add_dep]. These take closures that
 //! customize the generated packages and deps respectively. See [tests::complex] for a complete example.
 
+#![allow(unused)]
+
 use std::{
     collections::BTreeMap,
     convert::identity,
@@ -40,7 +42,7 @@ use std::{
 };
 
 use heck::CamelCase;
-use indoc::formatdoc;
+use indoc::{formatdoc, indoc};
 use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
@@ -104,6 +106,7 @@ pub struct DepSpec {
 pub struct PubSpec {
     chain_id: EnvironmentID,
     addresses: PublishAddresses,
+    version: u64,
 }
 
 pub struct Scenario {
@@ -126,7 +129,7 @@ impl TestPackageGraph {
     /// Add a dependency to the graph from `a` to `b` for each pair `("a", "b")` in `edges`. The
     /// dependencies will be local dependencies in the `[dependencies]` sections.
     pub fn add_deps(
-        mut self,
+        self,
         edges: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
     ) -> Self {
         edges.into_iter().fold(self, |graph, (source, target)| {
@@ -156,17 +159,19 @@ impl TestPackageGraph {
         self
     }
 
-    /// `builder.add_published("a", original, published_at)` is shorthand for
+    /// `builder.add_published("a", original, published_at, None)` is shorthand for
     /// ```ignore
-    /// builder.add_package("a", |a| a.publish(original, published_at))
+    /// builder.add_package("a", |a| a.publish(original, published_at, None))
     /// ```
     pub fn add_published(
-        mut self,
+        self,
         node: impl AsRef<str>,
         original_id: OriginalID,
         published_at: PublishedID,
     ) -> Self {
-        self.add_package(node, |package| package.publish(original_id, published_at))
+        self.add_package(node, |package| {
+            package.publish(original_id, published_at, None)
+        })
     }
 
     /// Add a dependency from package `source` to package `target` and customize it using `build`
@@ -198,14 +203,14 @@ impl TestPackageGraph {
             let dir = PathBuf::from(package_id.as_str());
 
             let manifest = &self.format_manifest(*node);
-            let lockfile = &self.format_lockfile(*node);
+            let pubfile = &self.format_pubfile(*node);
 
             debug!("Generated test manifest for {package_id}:\n\n{manifest}");
-            debug!("Generated test lockfile for {package_id}:\n\n{lockfile}");
+            debug!("Generated test pubfile for {package_id}:\n\n{pubfile}");
 
             project = project
                 .file(dir.join("Move.toml"), manifest)
-                .file(dir.join("Move.lock"), lockfile);
+                .file(dir.join("Move.published"), pubfile);
         }
 
         Scenario {
@@ -307,37 +312,32 @@ impl TestPackageGraph {
     }
 
     /// Return the contents of a `Move.lock` file for the package represented by
-    /// `node`. The lock file will not contain a `pinned` section, only the `published` section
-    ///
-    /// For publications with no published-at and original-id fields, we generate them sequentially
-    /// starting from 1000 (and set them to the same value)
-    fn format_lockfile(&self, node: NodeIndex) -> String {
+    /// `node`.
+    fn format_pubfile(&self, node: NodeIndex) -> String {
         let mut move_lock = String::new();
 
         for (env, publication) in self.inner[node].pubs.iter() {
             let PubSpec {
-                chain_id,
                 addresses:
                     PublishAddresses {
                         original_id,
                         published_at,
                     },
+                version,
+                ..
             } = publication;
 
             move_lock.push_str(&formatdoc!(
                 r#"
                     [published.{env}]
+                    chain-id = "{DEFAULT_ENV_ID}"
                     published-at = "{published_at}"
                     original-id = "{original_id}"
-                    chain-id = "{DEFAULT_ENV_ID}"
-                    toolchain-version = "test-0.0.0"
-                    build-config = {{}}
-
+                    version = {version}
                     "#,
             ));
         }
 
-        debug!("{move_lock}");
         move_lock
     }
 
@@ -413,7 +413,12 @@ impl PackageSpec {
         }
     }
 
-    pub fn publish(mut self, original_id: OriginalID, published_at: PublishedID) -> Self {
+    pub fn publish(
+        mut self,
+        original_id: OriginalID,
+        published_at: PublishedID,
+        version: Option<u64>,
+    ) -> Self {
         self.pubs.insert(
             DEFAULT_ENV_NAME.to_string(),
             PubSpec {
@@ -422,6 +427,7 @@ impl PackageSpec {
                     original_id,
                     published_at,
                 },
+                version: version.unwrap_or(1),
             },
         );
         self
@@ -550,9 +556,9 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("a/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("a/Move.published"), @"");
 
-        assert_snapshot!(graph.read_file("b/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("b/Move.published"), @"");
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -562,8 +568,11 @@ mod tests {
         // TODO: break this into separate tests
         let graph = TestPackageGraph::new(["a", "b"])
             .add_package("c", |c| {
-                c.package_name("c_name")
-                    .publish(OriginalID::from(0xcc00), PublishedID::from(0xcccc))
+                c.package_name("c_name").publish(
+                    OriginalID::from(0xcc00),
+                    PublishedID::from(0xcccc),
+                    None,
+                )
             })
             .add_deps([("b", "c")])
             .add_dep("a", "b", |dep| {
@@ -619,13 +628,12 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("c/Move.lock"), @r###"
+        assert_snapshot!(graph.read_file("c/Move.published"), @r###"
         [published._test_env]
+        chain-id = "_test_env_id"
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
         original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
-        chain-id = "_test_env_id"
-        toolchain-version = "test-0.0.0"
-        build-config = {}
+        version = 1
         "###);
     }
 
@@ -636,7 +644,7 @@ mod tests {
             .add_legacy_packages(["b"])
             .add_package("d", |d| {
                 d.set_legacy()
-                    .publish(OriginalID::from(0x4444), PublishedID::from(0x5555))
+                    .publish(OriginalID::from(0x4444), PublishedID::from(0x5555), None)
             })
             .add_deps([("a", "b"), ("b", "c"), ("c", "d")])
             .build();

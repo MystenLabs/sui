@@ -31,7 +31,7 @@ fun remove_zero() {
 #[test]
 fun contains_zero() {
     let mut scenario = test_scenario::begin(@0);
-    deny_list::create_for_test(scenario.ctx());
+    deny_list::create_for_testing(scenario.ctx());
     scenario.next_tx(@0);
     let dl: deny_list::DenyList = scenario.take_shared();
     let ty = type_name::into_string(type_name::with_original_ids<X>()).into_bytes();

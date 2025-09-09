@@ -1,0 +1,126 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 12-70:
+//# publish --sender A
+events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [171, 94, 148, 202, 209, 114, 178, 213, 163, 102, 39, 16, 119, 12, 68, 110, 27, 92, 69, 105, 236, 7, 198, 167, 75, 242, 127, 230, 212, 118, 30, 134] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [171, 94, 148, 202, 209, 114, 178, 213, 163, 102, 39, 16, 119, 12, 68, 110, 27, 92, 69, 105, 236, 7, 198, 167, 75, 242, 127, 230, 212, 118, 30, 134, 1, 0, 4, 3, 98, 97, 114, 17, 98, 97, 114, 32, 105, 115, 32, 123, 98, 97, 114, 46, 118, 97, 108, 125, 33, 3, 98, 97, 122, 21, 98, 97, 122, 32, 105, 115, 32, 123, 98, 97, 114, 46, 98, 97, 122, 46, 118, 97, 108, 125, 63, 3, 113, 117, 121, 25, 113, 117, 121, 32, 105, 115, 32, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 125, 46, 3, 113, 117, 95, 77, 120, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 118, 97, 108, 125, 41, 32, 121, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 46, 118, 97, 108, 125, 41, 44, 32, 122, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 46, 113, 117, 122, 46, 118, 97, 108, 125, 41, 63, 33] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 17518000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 72-75:
+//# programmable --sender A --inputs @A 42 true "hello" 43u8
+//> 0: std::option::some<sui::object::ID>(Input(0));
+//> 1: test::mod::new(Input(1), Input(2), Input(3), Result(0), Input(4));
+//> 2: TransferObjects([Result(1)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 77-80:
+//# programmable --sender A --inputs @A 42 true "hello" 43u8
+//> 0: std::option::none<sui::object::ID>();
+//> 1: test::mod::new(Input(1), Input(2), Input(3), Result(0), Input(4));
+//> 2: TransferObjects([Result(1)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2356000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 82:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 84-99:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetObjects": [
+      {
+        "asMoveObject": {
+          "contents": {
+            "display": {
+              "output": {
+                "bar": "bar is 42!",
+                "baz": "baz is true?",
+                "qu_": "x(hello) y(0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e), z(43)?!",
+                "quy": "quy is \n  type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quy\n  quz:   \n    type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quz\n    val: 43\n  val: Some(Address(0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e))."
+              },
+              "errors": null
+            }
+          }
+        }
+      },
+      {
+        "asMoveObject": {
+          "contents": {
+            "display": {
+              "output": {
+                "bar": "bar is 42!",
+                "baz": "baz is true?",
+                "qu_": "x(hello) y(), z(43)?!",
+                "quy": "quy is \n  type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quy\n  quz:   \n    type: 0x88fadaa7a2aa295e5402ec1162b024decbdbb69bb93cdea0b0200f35432157d::mod::Quz\n    val: 43\n  val: None."
+              },
+              "errors": null
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+
+task 6, lines 101-103:
+//# programmable --sender A --inputs object(1,1) "quy" "{bar.baz.qux.quy.val}!"
+//> 0: sui::display::edit<test::mod::Foo>(Input(0), Input(1), Input(2));
+//> 1: sui::display::update_version<test::mod::Foo>(Input(0));
+events: Event { package_id: sui, transaction_module: Identifier("display"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [171, 94, 148, 202, 209, 114, 178, 213, 163, 102, 39, 16, 119, 12, 68, 110, 27, 92, 69, 105, 236, 7, 198, 167, 75, 242, 127, 230, 212, 118, 30, 134, 2, 0, 4, 3, 98, 97, 114, 17, 98, 97, 114, 32, 105, 115, 32, 123, 98, 97, 114, 46, 118, 97, 108, 125, 33, 3, 98, 97, 122, 21, 98, 97, 122, 32, 105, 115, 32, 123, 98, 97, 114, 46, 98, 97, 122, 46, 118, 97, 108, 125, 63, 3, 113, 117, 95, 77, 120, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 118, 97, 108, 125, 41, 32, 121, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 46, 118, 97, 108, 125, 41, 44, 32, 122, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 46, 113, 117, 122, 46, 118, 97, 108, 125, 41, 63, 33, 3, 113, 117, 121, 22, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 46, 118, 97, 108, 125, 33] }
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 3822800,  storage_rebate: 3807144, non_refundable_storage_fee: 38456
+
+task 7, line 105:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 107-122:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetObjects": [
+      {
+        "asMoveObject": {
+          "contents": {
+            "display": {
+              "output": {
+                "bar": "bar is 42!",
+                "baz": "baz is true?",
+                "qu_": "x(hello) y(0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e), z(43)?!",
+                "quy": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e!"
+              },
+              "errors": null
+            }
+          }
+        }
+      },
+      {
+        "asMoveObject": {
+          "contents": {
+            "display": {
+              "output": {
+                "bar": "bar is 42!",
+                "baz": "baz is true?",
+                "qu_": "x(hello) y(), z(43)?!",
+                "quy": "!"
+              },
+              "errors": null
+            }
+          }
+        }
+      }
+    ]
+  }
+}

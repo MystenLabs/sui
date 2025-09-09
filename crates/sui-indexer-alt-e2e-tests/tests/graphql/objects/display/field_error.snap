@@ -1,0 +1,53 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 12-81:
+//# publish --sender A
+events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [156, 46, 73, 248, 160, 97, 146, 232, 75, 201, 176, 74, 160, 64, 106, 183, 99, 43, 90, 121, 96, 15, 43, 20, 83, 65, 3, 53, 245, 13, 101, 139] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [156, 46, 73, 248, 160, 97, 146, 232, 75, 201, 176, 74, 160, 64, 106, 183, 99, 43, 90, 121, 96, 15, 43, 20, 83, 65, 3, 53, 245, 13, 101, 139, 1, 0, 5, 3, 98, 97, 114, 5, 123, 98, 97, 114, 125, 7, 98, 97, 114, 95, 118, 97, 108, 9, 123, 98, 97, 114, 46, 118, 97, 108, 125, 3, 98, 97, 122, 5, 123, 98, 97, 122, 125, 3, 113, 117, 120, 5, 123, 113, 117, 120, 125, 3, 113, 117, 121, 5, 123, 113, 117, 121, 125] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 17480000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 83-85:
+//# programmable --sender A --inputs 42u8 43 44 @A
+//> 0: test::mod::new(Input(0), Input(1), Input(2));
+//> 1: TransferObjects([Result(0)], Input(3))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 17000000, storage_cost: 36176000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 87:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 89-101:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "display": {
+            "output": {
+              "bar": null,
+              "bar_val": "42",
+              "baz": "43",
+              "qux": null,
+              "quy": null
+            },
+            "errors": {
+              "bar": "Failed to extract 'bar'",
+              "qux": "'qux' is a vector, and is not supported in Display",
+              "quy": "'quy' not found in object"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -48,7 +48,7 @@ pub struct OtherCommand {
 }
 
 impl Command {
-    pub fn from(_scope: Scope, command: NativeCommand) -> Self {
+    pub fn from(scope: Scope, command: NativeCommand) -> Self {
         match command {
             NativeCommand::MakeMoveVec(_type_opt, elements) => {
                 Command::MakeMoveVec(MakeMoveVecCommand {
@@ -60,7 +60,10 @@ impl Command {
                     ),
                 })
             }
-            NativeCommand::MoveCall(call) => Command::MoveCall(MoveCallCommand { native: *call }),
+            NativeCommand::MoveCall(call) => Command::MoveCall(MoveCallCommand {
+                native: *call,
+                scope,
+            }),
             NativeCommand::SplitCoins(coin, amounts) => Command::SplitCoins(SplitCoinsCommand {
                 coin: Some(TransactionArgument::from(coin)),
                 amounts: amounts.into_iter().map(TransactionArgument::from).collect(),

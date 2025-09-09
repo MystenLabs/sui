@@ -63,7 +63,7 @@ use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
 use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
@@ -162,8 +162,6 @@ pub struct ValidatorComponents {
     consensus_manager: Arc<ConsensusManager>,
     consensus_store_pruner: ConsensusStorePruner,
     consensus_adapter: Arc<ConsensusAdapter>,
-    // Keeping the handle to the checkpoint service tasks to shut them down during reconfiguration.
-    checkpoint_service_tasks: JoinSet<()>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
@@ -1439,7 +1437,9 @@ impl SuiNode {
         } else {
             Some(replay_waiter)
         };
-        let checkpoint_service_tasks = checkpoint_service.spawn(replay_waiter).await;
+        checkpoint_service
+            .spawn(epoch_store.clone(), replay_waiter)
+            .await;
 
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
@@ -1457,7 +1457,6 @@ impl SuiNode {
             consensus_manager,
             consensus_store_pruner,
             consensus_adapter,
-            checkpoint_service_tasks,
             checkpoint_metrics,
             sui_tx_validator_metrics,
         })
@@ -1912,25 +1911,11 @@ impl SuiNode {
                 consensus_manager,
                 consensus_store_pruner,
                 consensus_adapter,
-                mut checkpoint_service_tasks,
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
             }) = validator_components_lock_guard.take()
             {
                 info!("Reconfiguring the validator.");
-                // Cancel the old checkpoint service tasks.
-                // Waiting for checkpoint builder to finish gracefully is not possible, because it
-                // may wait on transactions while consensus on peers have already shut down.
-                checkpoint_service_tasks.abort_all();
-                while let Some(result) = checkpoint_service_tasks.join_next().await {
-                    if let Err(err) = result {
-                        if err.is_panic() {
-                            std::panic::resume_unwind(err.into_panic());
-                        }
-                        warn!("Error in checkpoint service task: {:?}", err);
-                    }
-                }
-                info!("Checkpoint service has shut down.");
 
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");

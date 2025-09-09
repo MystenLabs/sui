@@ -5,9 +5,9 @@ use prost_types::FieldMask;
 use std::path::PathBuf;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
+use sui_rpc::client::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::changed_object::{IdOperation, OutputObjectState};
-use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     GetCoinInfoRequest, GetCoinInfoResponse, ListOwnedObjectsRequest,
 };
@@ -21,16 +21,11 @@ use test_cluster::TestClusterBuilder;
 async fn test_indexing_with_tto() {
     let cluster = TestClusterBuilder::new().build().await;
 
-    let mut channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
-
-    let mut client = LiveDataServiceClient::new(channel.clone());
+    let mut client = Client::new(cluster.rpc_url().to_owned()).unwrap();
     let address = cluster.get_address_0();
 
     let objects = client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some(address.to_string());
@@ -75,7 +70,7 @@ async fn test_indexing_with_tto() {
 
     let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
-    let transaction = super::super::execute_transaction(&mut channel, &txn).await;
+    let transaction = super::super::execute_transaction(&mut client, &txn).await;
 
     //
     // Run the `start` function to initialize the setup and TTO a coin
@@ -127,7 +122,7 @@ async fn test_indexing_with_tto() {
 
     let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
-    let transaction = super::super::execute_transaction(&mut channel, &txn).await;
+    let transaction = super::super::execute_transaction(&mut client, &txn).await;
 
     let effects = transaction.effects.unwrap();
     let parent = effects
@@ -168,6 +163,7 @@ async fn test_indexing_with_tto() {
     // Parent starts with 1 coin
     assert_eq!(
         client
+            .live_data_client()
             .list_owned_objects({
                 let mut message = ListOwnedObjectsRequest::default();
                 message.owner = Some(parent.0.clone());
@@ -183,6 +179,7 @@ async fn test_indexing_with_tto() {
 
     // 0x0 starts with 0 coins
     assert!(client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some("0x0".to_owned());
@@ -237,10 +234,11 @@ async fn test_indexing_with_tto() {
 
     let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
-    super::super::execute_transaction(&mut channel, &txn).await;
+    super::super::execute_transaction(&mut client, &txn).await;
 
     // Parent ends with 0 coins
     assert!(client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some(parent.0.clone());
@@ -255,6 +253,7 @@ async fn test_indexing_with_tto() {
     // 0x0 ends with 1 coin
     assert_eq!(
         client
+            .live_data_client()
             .list_owned_objects({
                 let mut message = ListOwnedObjectsRequest::default();
                 message.owner = Some("0x0".to_owned());
@@ -277,16 +276,11 @@ async fn test_filter_by_type() {
         .parse::<TypeTag>()
         .unwrap()
         .to_string();
-    let mut channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
-
-    let mut client = LiveDataServiceClient::new(channel.clone());
+    let mut client = Client::new(cluster.rpc_url().to_owned()).unwrap();
     let address = cluster.get_address_0();
 
     let objects = client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some(address.to_string());
@@ -333,7 +327,7 @@ async fn test_filter_by_type() {
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
     let txn = cluster.wallet.sign_transaction(&tx_data).await;
-    let transaction = super::super::execute_transaction(&mut channel, &txn).await;
+    let transaction = super::super::execute_transaction(&mut client, &txn).await;
 
     let effects = transaction.effects.unwrap();
     let gas = effects.gas_object.unwrap();
@@ -386,6 +380,7 @@ async fn test_filter_by_type() {
         treasury,
         ..
     } = client
+        .live_data_client()
         .get_coin_info({
             let mut message = GetCoinInfoRequest::default();
             message.coin_type = Some(trusted.clone());
@@ -403,6 +398,7 @@ async fn test_filter_by_type() {
     assert_eq!(treasury.unwrap().total_supply, Some(0));
 
     let objects = client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some(address.to_string());
@@ -457,7 +453,7 @@ async fn test_filter_by_type() {
 
     let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
-    super::super::execute_transaction(&mut channel, &txn).await;
+    super::super::execute_transaction(&mut client, &txn).await;
 
     // After minting we should have some of the new coins and the supply should have updated
     let GetCoinInfoResponse {
@@ -465,6 +461,7 @@ async fn test_filter_by_type() {
         treasury,
         ..
     } = client
+        .live_data_client()
         .get_coin_info({
             let mut message = GetCoinInfoRequest::default();
             message.coin_type = Some(trusted.clone());
@@ -477,6 +474,7 @@ async fn test_filter_by_type() {
     assert_eq!(treasury.unwrap().total_supply, Some(100_000));
 
     let objects = client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some(address.to_string());
@@ -495,6 +493,7 @@ async fn test_filter_by_type() {
     // Calling `list_owned_objects` with `0x2::coin::Coin` filter (without a type T) should return
     // all coins
     let objects = client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some(address.to_string());
@@ -522,12 +521,7 @@ async fn test_filter_by_type() {
 async fn test_reverse_sorted_coins_by_balance() {
     let cluster = TestClusterBuilder::new().build().await;
 
-    let mut channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
-    let mut client = LiveDataServiceClient::new(channel.clone());
+    let mut client = Client::new(cluster.rpc_url().to_owned()).unwrap();
 
     let address = sui_types::base_types::SuiAddress::random_for_testing_only();
 
@@ -540,10 +534,11 @@ async fn test_reverse_sorted_coins_by_balance() {
             Some(amount),
         )
         .await;
-        super::super::execute_transaction(&mut channel, &txn).await;
+        super::super::execute_transaction(&mut client, &txn).await;
     }
 
     let objects = client
+        .live_data_client()
         .list_owned_objects({
             let mut message = ListOwnedObjectsRequest::default();
             message.owner = Some(address.to_string());

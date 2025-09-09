@@ -131,6 +131,7 @@ pub struct OffchainCluster {
 pub struct OffchainClusterConfig {
     pub indexer_args: IndexerArgs,
     pub consistent_indexer_args: IndexerArgs,
+    pub fullnode_args: FullnodeArgs,
     pub indexer_config: IndexerConfig,
     pub consistent_config: ConsistentConfig,
     pub jsonrpc_config: JsonRpcConfig,
@@ -311,6 +312,7 @@ impl OffchainCluster {
         OffchainClusterConfig {
             indexer_args,
             consistent_indexer_args,
+            fullnode_args,
             indexer_config,
             consistent_config,
             jsonrpc_config,
@@ -409,7 +411,7 @@ impl OffchainCluster {
         let graphql = start_graphql(
             Some(database_url.clone()),
             None,
-            FullnodeArgs::default(),
+            fullnode_args,
             DbArgs::default(),
             BigtableArgs::default(),
             consistent_reader_args,
@@ -657,6 +659,7 @@ impl Default for OffchainClusterConfig {
         Self {
             indexer_args: Default::default(),
             consistent_indexer_args: Default::default(),
+            fullnode_args: Default::default(),
             indexer_config: IndexerConfig::for_test(),
             consistent_config: ConsistentConfig::for_test(),
             jsonrpc_config: Default::default(),

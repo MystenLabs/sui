@@ -6,14 +6,9 @@ keywords: [ object transfers, transferring objects, custom transfer rules, trans
 
 Everything on Sui is an object and your smart contracts are inevitably going to need to move those objects around the network, transferring them from one owner to another. The topics in this section explore the options you have on Sui around transferring objects on the network.
 
-## Custom transfer rules
-
-On Sui, you can create custom transfer rules for objects that define the conditions that must be met for a valid transfer operation. The object you want to create custom transfer rules for cannot have the `store` ability, as that ability enables unrestricted transfers for the type via `sui::transfer::public_transfer` or the `TransferObjects` transaction command.
-
-Go to [Custom Transfer Rules](./transfers/custom-rules.mdx).
-
-## Transfer to object
-
-On Sui, you are not limited to only transferring objects to an address. You can transfer an object to another object, where the receiving object provides access control to the received object. 
-
-Go to [Transfer to Object](./transfers/transfer-to-object.mdx). 
+<Cards>
+<Card title="Custom Transfer Rules" href="/concepts/transfers/custom-rules">
+</Card>
+<Card title="Transfer to Object" href="/concepts/transfers/transfer-to-object">
+</Card>
+</Cards>

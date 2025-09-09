@@ -5,11 +5,12 @@ use std::{fmt, str::FromStr};
 
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use move_core_types::account_address::AccountAddress;
+use serde::{Deserialize, Serialize};
 use sui_types::base_types::{ObjectID, SuiAddress as NativeSuiAddress};
 
 const SUI_ADDRESS_LENGTH: usize = 32;
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub(crate) struct SuiAddress([u8; SUI_ADDRESS_LENGTH]);
 
 #[derive(thiserror::Error, Debug)]
@@ -26,6 +27,12 @@ pub(crate) enum Error {
         SUI_ADDRESS_LENGTH,
     )]
     WrongLength(usize),
+}
+
+impl SuiAddress {
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
 }
 
 /// String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).

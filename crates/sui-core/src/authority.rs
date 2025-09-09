@@ -318,6 +318,8 @@ pub struct AuthorityMetrics {
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
+    pub consensus_finalized_user_transactions: IntGaugeVec,
+    pub consensus_rejected_user_transactions: IntGaugeVec,
     pub consensus_calculated_throughput: IntGauge,
     pub consensus_calculated_throughput_profile: IntGauge,
     pub consensus_block_handler_block_processed: IntCounter,
@@ -700,7 +702,19 @@ impl AuthorityMetrics {
             ).unwrap(),
             consensus_committed_user_transactions: register_int_gauge_vec_with_registry!(
                 "consensus_committed_user_transactions",
-                "Number of committed user transactions, sliced by submitter",
+                "Number of certified & user transactions committed, sliced by submitter and persisted across restarts within each epoch",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            consensus_finalized_user_transactions: register_int_gauge_vec_with_registry!(
+                "consensus_finalized_user_transactions",
+                "Number of user transactions finalized, sliced by submitter",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            consensus_rejected_user_transactions: register_int_gauge_vec_with_registry!(
+                "consensus_rejected_user_transactions",
+                "Number of user transactions rejected, sliced by submitter",
                 &["authority"],
                 registry,
             ).unwrap(),
@@ -1439,10 +1453,6 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.await_transaction_latency.start_timer();
         debug!("await_transaction");
 
-        // TODO(fastpath): Add handling for transactions rejected by Mysticeti fast path.
-        // TODO(fastpath): Can an MFP transaction be reverted after epoch ends? If so,
-        // same warning as above applies: We must be careful not to return a result
-        // here after the epoch ends.
         epoch_store
             .within_alive_epoch(
                 self.notify_read_effects("AuthorityState::await_transaction_effects", digest),

@@ -369,6 +369,9 @@ impl MoveObject {
         if self.type_.is_gas_coin() {
             let balance = self.get_coin_value_unsafe();
             Ok(balance)
+        } else if self.type_.coin_type_maybe().is_some() {
+            // It's a coin, but its not SUI
+            Ok(0)
         } else if self.type_.is_sui_balance_accumulator_field() {
             let value = AccumulatorValue::try_from(self)?;
             let AccumulatorValue::U128(v) = value;

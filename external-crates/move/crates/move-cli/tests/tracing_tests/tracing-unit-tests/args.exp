@@ -1,4 +1,4 @@
-Command `test -t 1 --trace-execution`:
+Command `test -t 1 --trace`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING tracing_unit_tests
 Running Move unit tests

@@ -16,9 +16,13 @@ use sui_indexer_alt_reader::{
     tx_balance_changes::TxBalanceChangeKey,
 };
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
+use sui_rpc_api::client::TransactionExecutionResponse;
 use sui_types::{
-    digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
+    digests::TransactionDigest,
+    effects::TransactionEffectsAPI,
+    execution_status::ExecutionStatus as NativeExecutionStatus,
+    signature::GenericSignature,
+    transaction::{TransactionData, TransactionDataAPI},
 };
 
 use crate::{
@@ -98,7 +102,9 @@ impl EffectsContents {
             return None;
         };
 
-        Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
+        content
+            .cp_sequence_number()
+            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)))
     }
 
     /// Whether the transaction executed successfully or not.
@@ -286,7 +292,7 @@ impl EffectsContents {
         after: Option<CObjectChange>,
         last: Option<u64>,
         before: Option<CObjectChange>,
-    ) -> Result<Option<Connection<CObjectChange, ObjectChange>>, RpcError> {
+    ) -> Result<Option<Connection<String, ObjectChange>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("TransactionEffects", "objectChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -305,7 +311,8 @@ impl EffectsContents {
                 native: object_changes[*edge.cursor].clone(),
             };
 
-            conn.edges.push(Edge::new(edge.cursor, object_change))
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), object_change))
         }
 
         Ok(Some(conn))
@@ -342,17 +349,18 @@ impl EffectsContents {
         let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
         let cursors = page.paginate_indices(unchanged_consensus_objects.len());
 
+        let effects = content.effects()?;
+        let epoch = effects.executed_epoch();
+
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
-            let execution_checkpoint = content.cp_sequence_number();
             let unchanged_consensus_object = UnchangedConsensusObject::from_native(
                 self.scope.clone(),
                 unchanged_consensus_objects[*edge.cursor].clone(),
-                execution_checkpoint,
+                epoch,
             );
-
             conn.edges
-                .push(Edge::new(edge.cursor, unchanged_consensus_object))
+                .push(Edge::new(edge.cursor, unchanged_consensus_object));
         }
 
         Ok(Some(conn))
@@ -393,6 +401,39 @@ impl EffectsContents {
 }
 
 impl TransactionEffects {
+    /// Create a new TransactionEffects from a TransactionExecutionResponse.
+    pub(crate) fn from_execution_response(
+        scope: Scope,
+        response: TransactionExecutionResponse,
+        transaction_data: TransactionData,
+        signatures: Vec<GenericSignature>,
+    ) -> Self {
+        let digest = *response.effects.transaction_digest();
+
+        // Update scope with execution objects cache
+        let scope = scope.with_execution_objects(
+            response
+                .input_objects
+                .into_iter()
+                .chain(response.output_objects),
+        );
+
+        let contents = NativeTransactionContents::ExecutedTransaction {
+            effects: Box::new(response.effects),
+            events: response.events.map(|events| events.data),
+            transaction_data: Box::new(transaction_data),
+            signatures,
+        };
+
+        Self {
+            digest,
+            contents: EffectsContents {
+                scope,
+                contents: Some(Arc::new(contents)),
+            },
+        }
+    }
+
     /// Load the effects from the store, and return it fully inflated (with contents already
     /// fetched). Returns `None` if the effects do not exist (either never existed or were pruned
     /// from the store).
@@ -435,6 +476,9 @@ impl EffectsContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(self.clone());
+        };
 
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
@@ -445,8 +489,11 @@ impl EffectsContents {
             return Ok(self.clone());
         };
 
-        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        if transaction.cp_sequence_number() > self.scope.checkpoint_viewed_at() {
+        let cp_num = transaction
+            .cp_sequence_number()
+            .context("Fetched transaction should have checkpoint sequence number")?;
+
+        if cp_num > checkpoint_viewed_at {
             return Ok(self.clone());
         }
 
