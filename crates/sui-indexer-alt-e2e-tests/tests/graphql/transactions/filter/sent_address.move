@@ -30,22 +30,14 @@ module Test::M1 {
 
 //# advance-epoch
 
-//# run Test::M1::create --sender A --args 1 @B
-
-//# create-checkpoint
-
-//# advance-epoch
-
-//# run Test::M1::create --sender C --args 2 @A
+//# run Test::M1::create --sender B --args 1 @A
 
 //# create-checkpoint
 
 //# run-graphql
 {
-  transactionsA: transactions(filter: { affectedAddress: "@{A}" }) { ...TX }
-  transactionsA_sentByC: transactions(filter: { affectedAddress: "@{A}", sentAddress: "@{C}" }) { ...TX }
-  transactionsB: transactions(filter: { affectedAddress: "@{B}" }) { ...TX }
-  transactionsC: transactions(filter: { affectedAddress: "@{C}" }) { ...TX }
+  transactionsA: transactions(filter: { sentAddress: "@{A}" }) { ...TX }
+  transactionsB: transactions(filter: { sentAddress: "@{B}" }) { ...TX }
 }
 
 fragment TX on TransactionConnection {
