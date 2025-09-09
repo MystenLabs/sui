@@ -35,8 +35,8 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
         HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-        ObjectInfoResponse, RawSubmitTxRequest, RawSubmitTxResponse, RawWaitForEffectsRequest,
-        RawWaitForEffectsResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
+        ObjectInfoResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SubmitTxRequest,
+        SubmitTxResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
         TransactionInfoResponse,
     },
     sui_system_state::SuiSystemState,
@@ -70,25 +70,27 @@ pub struct LocalAuthorityClient {
 impl AuthorityAPI for LocalAuthorityClient {
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         if self.fault_config.fail_before_submit_transaction {
             return Err(SuiError::from("Mock error before submit_transaction"));
         }
         let state = self.state.clone();
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
+
+        let raw_request = request.into_raw()?;
         // TODO(fastpath): handle multiple transactions.
-        if request.transactions.len() != 1 {
+        if raw_request.transactions.len() != 1 {
             return Err(SuiError::UnsupportedFeatureError {
                 error: format!(
                     "Expected exactly 1 transaction in request, got {}",
-                    request.transactions.len()
+                    raw_request.transactions.len()
                 ),
             });
         }
 
-        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transactions[0])
+        let deserialized_transaction = bcs::from_bytes::<Transaction>(&raw_request.transactions[0])
             .map_err(|e| SuiError::TransactionDeserializationError {
                 error: e.to_string(),
             })?;
@@ -117,9 +119,8 @@ impl AuthorityAPI for LocalAuthorityClient {
         };
 
         let submit_result = SubmitTxResult::Submitted { consensus_position };
-        let raw_result = submit_result.try_into()?;
-        Ok(RawSubmitTxResponse {
-            results: vec![raw_result],
+        Ok(SubmitTxResponse {
+            results: vec![submit_result],
         })
     }
 
@@ -387,9 +388,9 @@ impl AuthorityAPI for MockAuthorityApi {
     /// Submit a new transaction to a Sui or Primary account.
     async fn submit_transaction(
         &self,
-        _request: RawSubmitTxRequest,
+        _request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         unimplemented!();
     }
 
@@ -518,9 +519,9 @@ pub struct HandleTransactionTestAuthorityClient {
 impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn submit_transaction(
         &self,
-        _request: RawSubmitTxRequest,
+        _request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         unimplemented!()
     }
 

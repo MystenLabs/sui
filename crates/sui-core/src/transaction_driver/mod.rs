@@ -28,7 +28,7 @@ use mysten_metrics::{monitored_future, TxType};
 use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, error::UserInputError,
-    messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
+    transaction::TransactionDataAPI as _,
 };
 use tokio::{task::JoinSet, time::sleep};
 use tracing::instrument;
@@ -99,7 +99,7 @@ where
         options: SubmitTransactionOptions,
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        let tx_digest = request.transaction.digest();
+        let tx_digest = *request.transaction.digest();
         let tx_type = if request.transaction.is_consensus_tx() {
             TxType::SharedObject
         } else {
@@ -119,7 +119,7 @@ where
             });
         }
 
-        let raw_request = request.into_raw().unwrap();
+        let raw_request = request;
         let timer = Instant::now();
 
         self.metrics.total_transactions_submitted.inc();
@@ -137,7 +137,7 @@ where
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
                     .drive_transaction_once(
-                        tx_digest,
+                        &tx_digest,
                         tx_type,
                         amplification_factor,
                         raw_request.clone(),
@@ -212,7 +212,7 @@ where
         tx_digest: &TransactionDigest,
         tx_type: TxType,
         amplification_factor: u64,
-        raw_request: RawSubmitTxRequest,
+        raw_request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();

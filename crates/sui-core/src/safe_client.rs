@@ -20,8 +20,8 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_grpc::{
     ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
-    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-    RawWaitForEffectsRequest, SubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
+    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
+    SubmitTxRequest, SubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
     TransactionStatus, VerifiedObjectInfoResponse, WaitForEffectsResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
@@ -316,15 +316,13 @@ where
     /// Submit a transaction for certification and execution.
     pub async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<SubmitTxResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
-            .authority_client
+        self.authority_client
             .submit_transaction(request, client_addr)
-            .await?;
-        response.try_into()
+            .await
     }
 
     /// Wait for effects of a transaction that has been submitted to the network

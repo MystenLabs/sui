@@ -31,13 +31,13 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
-    messages_grpc::{ExecutedData, SubmitTxResult},
+    messages_grpc::{ExecutedData, SubmitTxRequest, SubmitTxResponse, SubmitTxResult},
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
+        RawWaitForEffectsResponse, SystemStateRequest, TransactionInfoRequest,
+        TransactionInfoResponse,
     },
     quorum_driver_types::EffectsFinalityInfo,
     sui_system_state::SuiSystemState,
@@ -130,9 +130,9 @@ impl AuthorityAPI for MockAuthority {
 
     async fn submit_transaction(
         &self,
-        _request: RawSubmitTxRequest,
+        _request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         unimplemented!();
     }
 

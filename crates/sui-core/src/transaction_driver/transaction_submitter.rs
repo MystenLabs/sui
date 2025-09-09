@@ -11,7 +11,7 @@ use sui_types::{
     base_types::AuthorityName,
     digests::TransactionDigest,
     error::SuiError,
-    messages_grpc::{RawSubmitTxRequest, SubmitTxResult},
+    messages_grpc::{SubmitTxRequest, SubmitTxResult},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -55,7 +55,7 @@ impl TransactionSubmitter {
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         amplification_factor: u64,
-        raw_request: RawSubmitTxRequest,
+        raw_request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<(AuthorityName, SubmitTxResult), TransactionDriverError>
     where
@@ -179,7 +179,7 @@ impl TransactionSubmitter {
     async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
-        raw_request: &RawSubmitTxRequest,
+        raw_request: &SubmitTxRequest,
         options: &SubmitTransactionOptions,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         validator: AuthorityName,

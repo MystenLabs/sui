@@ -307,9 +307,9 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
+        RawWaitForEffectsResponse, SubmitTxRequest, SubmitTxResponse, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -329,9 +329,9 @@ mod tests {
     impl AuthorityAPI for MockAuthorityClient {
         async fn submit_transaction(
             &self,
-            _request: RawSubmitTxRequest,
+            _request: SubmitTxRequest,
             _client_addr: Option<SocketAddr>,
-        ) -> Result<RawSubmitTxResponse, SuiError> {
+        ) -> Result<SubmitTxResponse, SuiError> {
             unimplemented!();
         }
 

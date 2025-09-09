@@ -29,18 +29,27 @@ use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
-    RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SystemStateRequest,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
+    RawWaitForEffectsResponse, SubmitTxRequest, SubmitTxResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
 };
 
 #[async_trait]
 pub trait AuthorityAPI {
+    /// Submits a transaction to validators for sequencing and execution.
     async fn submit_transaction(
         &self,
         request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<SubmitTxResponse, SuiError>;
+
+    /// Waits for effects of a transaction that has been submitted to the network
+    /// through the `submit_transaction` API.
+    async fn wait_for_effects(
+        &self,
+        request: RawWaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError>;
 
     // TODO(fastpath): Add a soft bundle path for mfp which will return the list of consensus positions
 
@@ -71,14 +80,6 @@ pub trait AuthorityAPI {
         request: HandleSoftBundleCertificatesRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError>;
-
-    /// Wait for effects of a transaction that has been submitted to the network
-    /// through the `submit_transaction` API.
-    async fn wait_for_effects(
-        &self,
-        request: RawWaitForEffectsRequest,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError>;
 
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
@@ -174,11 +175,27 @@ impl AuthorityAPI for NetworkAuthorityClient {
         request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<SubmitTxResponse, SuiError> {
-        let mut request = request.try_into()?.into_request();
+        let mut request = request.into_raw()?.into_request();
         insert_metadata(&mut request, client_addr);
 
         self.client()?
             .submit_transaction(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::<SuiError>::into)?
+            .try_into()
+    }
+
+    async fn wait_for_effects(
+        &self,
+        request: RawWaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+        let mut request = request.into_request();
+        insert_metadata(&mut request, client_addr);
+
+        self.client()?
+            .wait_for_effects(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
@@ -250,21 +267,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner);
 
         response.map_err(Into::into)
-    }
-
-    async fn wait_for_effects(
-        &self,
-        request: RawWaitForEffectsRequest,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
-        let mut request = request.into_request();
-        insert_metadata(&mut request, client_addr);
-
-        self.client()?
-            .wait_for_effects(request)
-            .await
-            .map(tonic::Response::into_inner)
-            .map_err(Into::into)
     }
 
     async fn handle_object_info_request(
