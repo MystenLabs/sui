@@ -13,7 +13,7 @@ mod upgrade;
 use async_graphql::*;
 use sui_types::transaction::Command as NativeCommand;
 
-use crate::api::scalars::{base64::Base64, sui_address::SuiAddress};
+use crate::api::{scalars::{base64::Base64, sui_address::SuiAddress}, types::move_type::MoveType};
 
 pub use make_move_vec::MakeMoveVecCommand;
 pub use merge_coins::MergeCoinsCommand;
@@ -48,47 +48,51 @@ pub struct OtherCommand {
 }
 
 impl Command {
-    pub fn from(scope: Scope, command: NativeCommand) -> Self {
+    pub fn from(scope: Scope, command: NativeCommand) -> Result<Self, anyhow::Error> {
         match command {
-            NativeCommand::MakeMoveVec(_type_opt, elements) => {
-                Command::MakeMoveVec(MakeMoveVecCommand {
+            NativeCommand::MakeMoveVec(type_opt, elements) => {
+                Ok(Command::MakeMoveVec(MakeMoveVecCommand {
+                    type_: match type_opt {
+                        Some(type_input) => Some(MoveType::from_native(type_input.to_type_tag()?, scope.clone())),
+                        None => None,
+                    },
                     elements: Some(
                         elements
                             .into_iter()
                             .map(TransactionArgument::from)
                             .collect(),
                     ),
-                })
+                }))
             }
-            NativeCommand::MoveCall(call) => Command::MoveCall(MoveCallCommand {
+            NativeCommand::MoveCall(call) => Ok(Command::MoveCall(MoveCallCommand {
                 native: *call,
                 scope,
-            }),
-            NativeCommand::SplitCoins(coin, amounts) => Command::SplitCoins(SplitCoinsCommand {
+            })),
+            NativeCommand::SplitCoins(coin, amounts) => Ok(Command::SplitCoins(SplitCoinsCommand {
                 coin: Some(TransactionArgument::from(coin)),
                 amounts: amounts.into_iter().map(TransactionArgument::from).collect(),
-            }),
-            NativeCommand::MergeCoins(coin, coins) => Command::MergeCoins(MergeCoinsCommand {
+            })),
+            NativeCommand::MergeCoins(coin, coins) => Ok(Command::MergeCoins(MergeCoinsCommand {
                 coin: Some(TransactionArgument::from(coin)),
                 coins: coins.into_iter().map(TransactionArgument::from).collect(),
-            }),
+            })),
             NativeCommand::TransferObjects(objects, address) => {
-                Command::TransferObjects(TransferObjectsCommand {
+                Ok(Command::TransferObjects(TransferObjectsCommand {
                     inputs: objects.into_iter().map(TransactionArgument::from).collect(),
                     address: Some(TransactionArgument::from(address)),
-                })
+                }))
             }
-            NativeCommand::Publish(modules, dependencies) => Command::Publish(PublishCommand {
+            NativeCommand::Publish(modules, dependencies) => Ok(Command::Publish(PublishCommand {
                 modules: Some(modules.into_iter().map(Base64::from).collect()),
                 dependencies: Some(dependencies.into_iter().map(SuiAddress::from).collect()),
-            }),
+            })),
             NativeCommand::Upgrade(modules, dependencies, current_package, upgrade_ticket) => {
-                Command::Upgrade(UpgradeCommand {
+                Ok(Command::Upgrade(UpgradeCommand {
                     modules: Some(modules.into_iter().map(Base64::from).collect()),
                     dependencies: Some(dependencies.into_iter().map(SuiAddress::from).collect()),
                     current_package: Some(SuiAddress::from(current_package)),
                     upgrade_ticket: Some(TransactionArgument::from(upgrade_ticket)),
-                })
+                }))
             }
         }
     }

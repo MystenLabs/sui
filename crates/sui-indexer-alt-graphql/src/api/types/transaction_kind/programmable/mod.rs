@@ -80,7 +80,7 @@ impl ProgrammableTransaction {
             let command = Command::from(
                 self.scope.clone(),
                 self.native.commands[*edge.cursor].clone(),
-            );
+            )?;
 
             conn.edges
                 .push(Edge::new(edge.cursor.encode_cursor(), command));
