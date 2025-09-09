@@ -145,6 +145,16 @@ impl CoinMetadata {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
+    /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+    ///
+    /// Both these operations require the object to have both the `key` and `store` abilities.
+    pub(crate) async fn has_public_transfer(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<bool>, RpcError> {
+        self.super_.has_public_transfer(ctx).await
+    }
+
     /// URL for the coin logo.
     pub(crate) async fn icon_url(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
         let Some(native) = self.native(ctx).await? else {

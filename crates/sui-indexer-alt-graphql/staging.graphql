@@ -516,6 +516,12 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
+	"""
 	URL for the coin logo.
 	"""
 	iconUrl: String
@@ -794,6 +800,12 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	Access a dynamic object field on an object using its type and BCS-encoded name.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
@@ -1389,6 +1401,12 @@ interface IMoveObject {
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
+	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
 	moveObjectBcs: Base64
@@ -1925,6 +1943,12 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	Access a dynamic object field on an object using its type and BCS-encoded name.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""

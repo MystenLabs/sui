@@ -62,6 +62,11 @@ pub(crate) struct MoveObject {
         desc = "Access a dynamic object field on an object using its type and BCS-encoded name.",
     ),
     field(
+        name = "has_public_transfer",
+        ty = "Result<Option<bool>, RpcError>",
+        desc = "Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.\n\nBoth these operations require the object to have both the `key` and `store` abilities.",
+    ),
+    field(
         name = "multi_get_dynamic_fields",
         arg(name = "keys", ty = "Vec<DynamicFieldName>"),
         ty = "Result<Vec<Option<DynamicField>>, RpcError<object::Error>>",
@@ -231,6 +236,28 @@ impl MoveObject {
             name,
         )
         .await
+    }
+
+    /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+    ///
+    /// Both these operations require the object to have both the `key` and `store` abilities.
+    pub(crate) async fn has_public_transfer(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<bool>, RpcError> {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let type_ = MoveType::from_native(
+            native.type_().clone().into(),
+            self.super_.super_.scope.clone(),
+        );
+
+        Ok(type_
+            .abilities_impl()
+            .await?
+            .map(|s| s.has_key() && s.has_store()))
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
