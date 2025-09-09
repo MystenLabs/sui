@@ -16,8 +16,8 @@ The quickest way to access the GraphQL service for Sui RPC is through the online
 
 The online IDE is available for Mainnet and Testnet. You can try the various queries on this page directly in the IDE.
 
-- Mainnet: https://sui-mainnet.mystenlabs.com/graphql
-- Testnet: https://sui-testnet.mystenlabs.com/graphql
+- Mainnet: https://graphql.mainnet.sui.io/graphql
+- Testnet: https://graphql.testnet.sui.io/graphql
 
 :::info
 
@@ -41,8 +41,8 @@ Some of the schema updates for the beta version include:
 
 ### Renames and deprecations
   - `TransactionBlock` is being replaced with `Transaction`
-  - `Owner` is being replaced with `Addressable`
-  - `dryRun` is being replaced with `simulate`
+  - `Owner` has been merged with `Address`
+  - `dryRunTransactionBlock` is being replaced with `simulateTransaction`
   - `bcs` fields are qualified with the type of BCS data they hold, to avoid confusion.
   - `changedObject` and `inputObject` filters in `transactions` query are being replaced with `affectedObject`.
   - `address.coins` and `address.stakedSuis` are being deprecated in favor of `address.objects` with the corresponding `type` filter.
@@ -103,15 +103,15 @@ That being said, point look-ups will generally be unpruned, if GraphQL has acces
 
 ### More detailed retention API
 
-The service will provide more details about the retention of its underlying data through the `AvailableRange` type.
+The service will provide more details about the retention of its underlying data through the `ServiceConfig.retention` field.
 
 ### Governance
 
 APIs related to governance and staking will be removed in favor of using view functions to access the data at its source of truth on-chain.
 
-### Relay node plus ID APIs
+### Relay Node and ID APIs
 
-Support will be added for `Node` and `ID` APIs, allowing front-ends that use Relay to interact natively with paginated endpoints.
+Support will be added for `Node` and `ID` APIs, allowing frontends that use Relay to interact natively with paginated endpoints.
 
 ## Example queries
 
