@@ -79,6 +79,7 @@ impl TransactionFilter {
 /// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
 /// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
 /// `hi_inclusive`).
+/// TODO: (henry) merge this with lookups::tx_bounds
 pub(crate) fn tx_bounds_query(
     cp_bounds: &RangeInclusive<u64>,
     global_tx_hi: u64,
