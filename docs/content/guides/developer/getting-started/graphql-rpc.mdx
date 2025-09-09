@@ -56,36 +56,10 @@ GraphQL Beta offers the ability to run a query at a fixed checkpoint (retention 
 
 APIs for traversing different versions of packages and objects have been added. You can now list a package or object's versions, or go from one version of a package or object to another version by number, or the latest version.
 
-### Execution
-
-GraphQL Beta includes a transaction resolution API that can perform input resolution, gas estimation, coin selection, and simulation in one call, in line with the same functionality in gRPC.
-
-
-### View functions
-
-Alongside `simulateTransaction`, there is a facility for calling view functions, to allow re-use of existing Move code to inspect chain state. This is inline with functionality in gRPC.
-
-### Deserialized transaction inputs and outputs
-
-Move Values that were previously shared as binary blobs (pure transaction inputs and intermediate results in simulation) will be replaced with structured outputs, using the `MoveValue` type.
-
-### Full transaction output
-
-Previously, GraphQL Alpha offered access to some parts of the effects through paginated fields, which complicated fetching the effects after simulation or execution (where multiple requests might be required to fetch all data). The alternate was to fetch the effects as BCS but this format is not easy to ingest in ecosystems without robust BCS support. To remedy this, a field will be added to fetch the full `TransactionEffects` structure in JSON.
-
-### Extract nested fields
-
-It will be possible to extract parts of a `MoveValue` out and present them in a structured form. This will allow clients to render parts of values that were previously too large to render whole.
-
-### Treat `MoveValue`s as addresses
-
-Building on the support for extracting fields from MoveValues, it will be possible to treat values of type `address`, `ID`, or `UID` as an `Addressable` GraphQL object. This enables accessing dynamic fields on wrapped objects, or viewing an account that was referred to in an event or object.
-
 ### Splitting up query APIs
 
 Paginated query APIs were previously responsible for three kinds of query pattern, which will be broken up into three separate APIs:
     - A dedicated multi-get API that accepts a list of keys and returns a list of results.
-    - A scanning API that supports arbitrary combinations of filters but requires checkpoint bounds to limit the search range.
     - A query API that offers the original core functionality: Efficient paginated results without having to supply a checkpoint range, but for limited combinations of filters.
 
 ### Relaxed consistency cursors
@@ -244,12 +218,16 @@ query {
 </TabItem>
 </Tabs>
 
-
-
 ### Find the last ten transactions that are not a system transaction
 
 <Tabs groupId="graphql">
 <TabItem label="Beta" value="beta">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
+
 ```graphql
 query {
   transactions(last: 10, filter: {kind: PROGRAMMABLE_TX}) {
@@ -314,6 +292,11 @@ query ($objectID: SuiAddress!) {
 ```
 </TabItem>
 <TabItem label="Alpha (deprecated)" value="alpha">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
 ```graphql
 query ($objectID: SuiAddress!) {
   transactionBlocks(filter: {changedObject: $objectID}) {
@@ -358,6 +341,11 @@ This example makes use of the `last` filter. In this case, returns only the last
 
 <Tabs groupId="graphql">
 <TabItem label="Beta" value="beta">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
 ```graphql
 {
   transactions(
@@ -393,6 +381,11 @@ Find the balance changes of all the transactions where a given address called a 
 
 <Tabs groupId="graphql">
 <TabItem label="Beta" value="beta">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
 ```graphql
 query ($address: SuiAddress!) {
   transactions(filter: {
@@ -930,7 +923,14 @@ The cursor is now passed in the `after` (or `before`) fields on the connection, 
 
 ## New features
 
-The previous examples show GraphQL calls that perform the same function as their JSON-RPC equivalent. There is functionality available to GraphQL that can't be replicated with JSON-RPC. The following examples demonstrate these functions.
+The previous examples show GraphQL calls that perform the same function as their JSON-RPC equivalent. There is functionality available to GraphQL that can't be replicated with JSON-RPC, such as: 
+
+- Time travel queries with checkpoint `{ query { ... } }`.
+- Nested dynamic field look-ups (and paginating dynamic fields with their contents in one request).
+- Fetching live objects by owner kind and type (such as all shared objects of a certain type).
+- Fetching deserialized input and output object contents from a transaction that has just executed.
+
+The following examples demonstrate some of the functions not available with JSON-RPC.
 
 ### Example 4: Getting objects by type
 
