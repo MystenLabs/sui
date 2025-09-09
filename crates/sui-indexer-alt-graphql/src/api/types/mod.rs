@@ -16,6 +16,7 @@ pub(crate) mod gas;
 pub(crate) mod gas_effects;
 pub(crate) mod gas_input;
 mod linkage;
+pub(crate) mod lookups;
 pub(crate) mod move_datatype;
 pub(crate) mod move_function;
 pub(crate) mod move_module;

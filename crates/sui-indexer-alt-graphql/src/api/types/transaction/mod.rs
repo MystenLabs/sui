@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Range, sync::Arc};
+use std::{ops::Deref, ops::Range, sync::Arc};
 
 use anyhow::Context as _;
 use async_graphql::{
@@ -24,23 +24,26 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
-use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, sui_address::SuiAddress},
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
 use super::{
     address::Address,
     checkpoint::filter::checkpoint_bounds,
     epoch::Epoch,
     gas_input::GasInput,
-    transaction::filter::{tx_bounds, TransactionFilter},
+    transaction::filter::TransactionFilter,
     transaction_effects::{EffectsContents, TransactionEffects},
     transaction_kind::TransactionKind,
     user_signature::UserSignature,
+};
+
+use crate::{
+    api::{
+        scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, sui_address::SuiAddress},
+        types::lookups::tx_bounds,
+    },
+    error::RpcError,
+    pagination::Page,
+    scope::Scope,
+    task::watermark::Watermarks,
 };
 
 pub(crate) mod filter;
@@ -230,18 +233,7 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
-
-        // Inclusive cursor bounds
-        let tx_lo = page
-            .after()
-            .map_or(tx_bounds.start, |cursor| cursor.max(tx_bounds.start));
-        let tx_hi = page
-            .before()
-            .map(|cursor: &JsonCursor<u64>| cursor.saturating_add(1))
-            .map_or(tx_bounds.end, |cursor| cursor.min(tx_bounds.end));
-
-        let tx_bounds = tx_lo..tx_hi;
+        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| *c.deref()).await?;
 
         let tx_digest_keys = if affected_address.is_some() || sent_address.is_some() {
             tx_affected_address(ctx, tx_bounds, &page, affected_address, sent_address).await?

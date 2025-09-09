@@ -3,14 +3,6 @@
 
 use std::sync::Arc;
 
-use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
@@ -26,14 +18,25 @@ use sui_types::{
     event::Event as NativeEvent,
 };
 
+use super::{
+    address::Address, checkpoint::filter::checkpoint_bounds, move_module::MoveModule,
+    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::Transaction,
+};
+
+use crate::{
+    api::{
+        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
+        types::lookups::tx_bounds,
+    },
+    error::RpcError,
+    pagination::Page,
+    scope::Scope,
+    task::watermark::Watermarks,
+};
+
 pub(crate) mod filter;
 mod lookups;
-
-use super::{
-    address::Address, checkpoint::filter::checkpoint_bounds, event::filter::pg_tx_bounds,
-    move_module::MoveModule, move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
-    transaction::filter::tx_bounds, transaction::Transaction,
-};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
 pub(crate) struct EventCursor {
@@ -145,9 +148,10 @@ impl Event {
             return Ok(Connection::new(false, false));
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
-        // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
-        let pg_tx_bounds = pg_tx_bounds(&page, tx_bounds);
+        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| {
+            c.tx_sequence_number
+        })
+        .await?;
 
         #[derive(QueryableByName)]
         struct TxSequenceNumber(
@@ -167,8 +171,8 @@ impl Event {
                 tx_sequence_number {}
             LIMIT {BigInt}
             "#,
-            pg_tx_bounds.start as i64,
-            pg_tx_bounds.end as i64,
+            tx_bounds.start as i64,
+            tx_bounds.end as i64,
             if page.is_from_front() {
                 query!("ASC")
             } else {
