@@ -17,7 +17,7 @@ use sui_types::{
     effects::TransactionEffectsAPI as _,
     error::SuiError,
     messages_consensus::ConsensusPosition,
-    messages_grpc::RawWaitForEffectsRequest,
+    messages_grpc::{ExecutedData, RawWaitForEffectsRequest, SubmitTxResult},
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
@@ -36,8 +36,8 @@ use crate::{
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResult,
-        WaitForEffectsRequest, WaitForEffectsResponse,
+        QuorumTransactionResponse, SubmitTransactionOptions, WaitForEffectsRequest,
+        WaitForEffectsResponse,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };

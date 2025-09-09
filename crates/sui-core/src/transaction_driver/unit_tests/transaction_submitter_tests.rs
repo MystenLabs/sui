@@ -5,9 +5,8 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        error::TransactionDriverError, message_types::SubmitTxResult,
-        metrics::TransactionDriverMetrics, transaction_submitter::TransactionSubmitter,
-        SubmitTransactionOptions,
+        error::TransactionDriverError, metrics::TransactionDriverMetrics,
+        transaction_submitter::TransactionSubmitter, SubmitTransactionOptions,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -30,6 +29,7 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
+    messages_grpc::SubmitTxResult,
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,

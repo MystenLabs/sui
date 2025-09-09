@@ -4,7 +4,6 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::transaction_driver::{ExecutedData, SubmitTxResponse, WaitForEffectsResponse};
 use prometheus::core::GenericCounter;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
@@ -20,9 +19,10 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, RawWaitForEffectsRequest,
-    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
+    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+    RawWaitForEffectsRequest, SubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionStatus, VerifiedObjectInfoResponse, WaitForEffectsResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;

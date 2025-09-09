@@ -390,6 +390,154 @@ pub struct RawValidatorHealthResponse {
     pub checkpoint_sequence: Option<u64>,
 }
 
+// =========== ExecutedData and related types ===========
+
+#[derive(Clone)]
+pub struct ExecutedData {
+    pub effects: crate::effects::TransactionEffects,
+    pub events: Option<crate::effects::TransactionEvents>,
+    pub input_objects: Vec<crate::object::Object>,
+    pub output_objects: Vec<crate::object::Object>,
+}
+
+// =========== SubmitTx types ===========
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SubmitTxRequest {
+    pub transaction: crate::transaction::Transaction,
+}
+
+impl SubmitTxRequest {
+    pub fn into_raw(&self) -> Result<RawSubmitTxRequest, crate::error::SuiError> {
+        Ok(RawSubmitTxRequest {
+            transactions: vec![bcs::to_bytes(&self.transaction)
+                .map_err(|e| crate::error::SuiError::TransactionSerializationError {
+                    error: e.to_string(),
+                })?
+                .into()],
+            ..Default::default()
+        })
+    }
+}
+
+#[derive(Clone)]
+pub enum SubmitTxResult {
+    Submitted {
+        consensus_position: crate::messages_consensus::ConsensusPosition,
+    },
+    Executed {
+        effects_digest: crate::digests::TransactionEffectsDigest,
+        // Response should always include details for executed transactions.
+        // TODO(fastpath): validate this field is always present and return an error during deserialization.
+        details: Option<Box<ExecutedData>>,
+        // Whether the transaction was executed using fast path.
+        fast_path: bool,
+    },
+    Rejected {
+        error: crate::error::SuiError,
+    },
+}
+
+impl std::fmt::Debug for SubmitTxResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Submitted { consensus_position } => f
+                .debug_struct("Submitted")
+                .field("consensus_position", consensus_position)
+                .finish(),
+            Self::Executed {
+                effects_digest,
+                fast_path,
+                ..
+            } => f
+                .debug_struct("Executed")
+                .field("effects_digest", &format_args!("{}", effects_digest))
+                .field("fast_path", fast_path)
+                .finish(),
+            Self::Rejected { error } => f.debug_struct("Rejected").field("error", &error).finish(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmitTxResponse {
+    pub results: Vec<SubmitTxResult>,
+}
+
+// =========== WaitForEffects types ===========
+
+pub struct WaitForEffectsRequest {
+    pub transaction_digest: crate::digests::TransactionDigest,
+    /// If consensus position is provided, waits in the server handler for the transaction in it to execute,
+    /// either in fastpath outputs or finalized.
+    /// If it is not provided, only waits for finalized effects of the transaction in the server handler,
+    /// but not for fastpath outputs.
+    pub consensus_position: Option<crate::messages_consensus::ConsensusPosition>,
+    /// Whether to include details of the effects,
+    /// including the effects content, events, input objects, and output objects.
+    pub include_details: bool,
+}
+
+#[derive(Clone)]
+pub enum WaitForEffectsResponse {
+    Executed {
+        effects_digest: crate::digests::TransactionEffectsDigest,
+        details: Option<Box<ExecutedData>>,
+        fast_path: bool,
+    },
+    // The transaction was rejected by consensus.
+    Rejected {
+        // The reason of the reject vote casted by the validator.
+        // If None, the validator did not cast a reject vote.
+        error: Option<crate::error::SuiError>,
+    },
+    // The transaction position is expired, with the local epoch and committed round.
+    // When round is None, the expiration is due to lagging epoch in the request.
+    Expired {
+        epoch: u64,
+        round: Option<u32>,
+    },
+}
+
+impl std::fmt::Debug for WaitForEffectsResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Executed {
+                effects_digest,
+                fast_path,
+                ..
+            } => f
+                .debug_struct("Executed")
+                .field("effects_digest", effects_digest)
+                .field("fast_path", fast_path)
+                .finish(),
+            Self::Rejected { error } => f.debug_struct("Rejected").field("error", error).finish(),
+            Self::Expired { epoch, round } => f
+                .debug_struct("Expired")
+                .field("epoch", epoch)
+                .field("round", round)
+                .finish(),
+        }
+    }
+}
+
+// =========== QuorumTransactionResponse ===========
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct QuorumTransactionResponse {
+    // TODO(fastpath): Stop using QD types
+    pub effects: crate::quorum_driver_types::FinalizedEffects,
+
+    pub events: Option<crate::effects::TransactionEvents>,
+    // Input objects will only be populated in the happy path
+    pub input_objects: Option<Vec<crate::object::Object>>,
+    // Output objects will only be populated in the happy path
+    pub output_objects: Option<Vec<crate::object::Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
+}
+
+// =========== ValidatorHealthRequest and ValidatorHealthResponse ===========
+
 /// Request for validator health information (used for latency measurement)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorHealthRequest {}
@@ -447,5 +595,368 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
         })
+    }
+}
+
+// =========== Parse helpers ===========
+
+impl TryFrom<ExecutedData> for RawExecutedData {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: ExecutedData) -> Result<Self, Self::Error> {
+        let effects = bcs::to_bytes(&value.effects)
+            .map_err(|err| crate::error::SuiError::GrpcMessageSerializeError {
+                type_info: "ExecutedData.effects".to_string(),
+                error: err.to_string(),
+            })?
+            .into();
+        let events = if let Some(events) = &value.events {
+            Some(
+                bcs::to_bytes(events)
+                    .map_err(|err| crate::error::SuiError::GrpcMessageSerializeError {
+                        type_info: "ExecutedData.events".to_string(),
+                        error: err.to_string(),
+                    })?
+                    .into(),
+            )
+        } else {
+            None
+        };
+        let mut input_objects = Vec::with_capacity(value.input_objects.len());
+        for object in value.input_objects {
+            input_objects.push(
+                bcs::to_bytes(&object)
+                    .map_err(|err| crate::error::SuiError::GrpcMessageSerializeError {
+                        type_info: "ExecutedData.input_objects".to_string(),
+                        error: err.to_string(),
+                    })?
+                    .into(),
+            );
+        }
+        let mut output_objects = Vec::with_capacity(value.output_objects.len());
+        for object in value.output_objects {
+            output_objects.push(
+                bcs::to_bytes(&object)
+                    .map_err(|err| crate::error::SuiError::GrpcMessageSerializeError {
+                        type_info: "ExecutedData.output_objects".to_string(),
+                        error: err.to_string(),
+                    })?
+                    .into(),
+            );
+        }
+        Ok(RawExecutedData {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+        })
+    }
+}
+
+impl TryFrom<RawExecutedData> for ExecutedData {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawExecutedData) -> Result<Self, Self::Error> {
+        let effects = bcs::from_bytes(&value.effects).map_err(|err| {
+            crate::error::SuiError::GrpcMessageDeserializeError {
+                type_info: "RawExecutedData.effects".to_string(),
+                error: err.to_string(),
+            }
+        })?;
+        let events = if let Some(events) = value.events {
+            Some(bcs::from_bytes(&events).map_err(|err| {
+                crate::error::SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawExecutedData.events".to_string(),
+                    error: err.to_string(),
+                }
+            })?)
+        } else {
+            None
+        };
+        let mut input_objects = Vec::with_capacity(value.input_objects.len());
+        for object in value.input_objects {
+            input_objects.push(bcs::from_bytes(&object).map_err(|err| {
+                crate::error::SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawExecutedData.input_objects".to_string(),
+                    error: err.to_string(),
+                }
+            })?);
+        }
+        let mut output_objects = Vec::with_capacity(value.output_objects.len());
+        for object in value.output_objects {
+            output_objects.push(bcs::from_bytes(&object).map_err(|err| {
+                crate::error::SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawExecutedData.output_objects".to_string(),
+                    error: err.to_string(),
+                }
+            })?);
+        }
+        Ok(ExecutedData {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+        })
+    }
+}
+
+impl TryFrom<SubmitTxResult> for RawSubmitTxResult {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: SubmitTxResult) -> Result<Self, Self::Error> {
+        let inner = match value {
+            SubmitTxResult::Submitted { consensus_position } => {
+                let consensus_position = consensus_position.into_raw()?;
+                RawValidatorSubmitStatus::Submitted(consensus_position)
+            }
+            SubmitTxResult::Executed {
+                effects_digest,
+                details,
+                fast_path,
+            } => {
+                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
+                RawValidatorSubmitStatus::Executed(raw_executed)
+            }
+            SubmitTxResult::Rejected { error } => {
+                RawValidatorSubmitStatus::Rejected(try_from_response_rejected(Some(error))?)
+            }
+        };
+        Ok(RawSubmitTxResult { inner: Some(inner) })
+    }
+}
+
+impl TryFrom<RawSubmitTxResult> for SubmitTxResult {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawSubmitTxResult) -> Result<Self, Self::Error> {
+        match value.inner {
+            Some(RawValidatorSubmitStatus::Submitted(consensus_position)) => {
+                Ok(SubmitTxResult::Submitted {
+                    consensus_position: consensus_position.as_ref().try_into()?,
+                })
+            }
+            Some(RawValidatorSubmitStatus::Executed(executed)) => {
+                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
+                Ok(SubmitTxResult::Executed {
+                    effects_digest,
+                    details,
+                    fast_path,
+                })
+            }
+            Some(RawValidatorSubmitStatus::Rejected(error)) => {
+                let error = try_from_raw_rejected_status(error)?.unwrap_or(
+                    crate::error::SuiError::GrpcMessageDeserializeError {
+                        type_info: "RawSubmitTxResult.inner.Error".to_string(),
+                        error: "RawSubmitTxResult.inner.Error is None".to_string(),
+                    },
+                );
+                Ok(SubmitTxResult::Rejected { error })
+            }
+            None => Err(crate::error::SuiError::GrpcMessageDeserializeError {
+                type_info: "RawSubmitTxResult.inner".to_string(),
+                error: "RawSubmitTxResult.inner is None".to_string(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawSubmitTxResponse) -> Result<Self, Self::Error> {
+        // TODO(fastpath): handle multiple transactions.
+        if value.results.len() != 1 {
+            return Err(crate::error::SuiError::GrpcMessageDeserializeError {
+                type_info: "RawSubmitTxResponse.results".to_string(),
+                error: format!("Expected exactly 1 result, got {}", value.results.len()),
+            });
+        }
+
+        let results = value
+            .results
+            .into_iter()
+            .map(|result| result.try_into())
+            .collect::<Result<Vec<SubmitTxResult>, crate::error::SuiError>>()?;
+
+        Ok(Self { results })
+    }
+}
+
+fn try_from_raw_executed_status(
+    executed: RawExecutedStatus,
+) -> Result<
+    (
+        crate::digests::TransactionEffectsDigest,
+        Option<Box<ExecutedData>>,
+        bool,
+    ),
+    crate::error::SuiError,
+> {
+    let effects_digest = bcs::from_bytes(&executed.effects_digest).map_err(|err| {
+        crate::error::SuiError::GrpcMessageDeserializeError {
+            type_info: "RawWaitForEffectsResponse.effects_digest".to_string(),
+            error: err.to_string(),
+        }
+    })?;
+    let executed_data = if let Some(details) = executed.details {
+        Some(Box::new(details.try_into()?))
+    } else {
+        None
+    };
+    Ok((effects_digest, executed_data, executed.fast_path))
+}
+
+fn try_from_raw_rejected_status(
+    rejected: RawRejectedStatus,
+) -> Result<Option<crate::error::SuiError>, crate::error::SuiError> {
+    match rejected.error {
+        Some(error_bytes) => {
+            let error = bcs::from_bytes(&error_bytes).map_err(|err| {
+                crate::error::SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawWaitForEffectsResponse.rejected.reason".to_string(),
+                    error: err.to_string(),
+                }
+            })?;
+            Ok(Some(error))
+        }
+        None => Ok(None),
+    }
+}
+
+fn try_from_response_rejected(
+    error: Option<crate::error::SuiError>,
+) -> Result<RawRejectedStatus, crate::error::SuiError> {
+    let error = match error {
+        Some(e) => Some(
+            bcs::to_bytes(&e)
+                .map_err(|err| crate::error::SuiError::GrpcMessageSerializeError {
+                    type_info: "RawRejectedStatus.error".to_string(),
+                    error: err.to_string(),
+                })?
+                .into(),
+        ),
+        None => None,
+    };
+    Ok(RawRejectedStatus { error })
+}
+
+fn try_from_response_executed(
+    effects_digest: crate::digests::TransactionEffectsDigest,
+    details: Option<Box<ExecutedData>>,
+    fast_path: bool,
+) -> Result<RawExecutedStatus, crate::error::SuiError> {
+    let effects_digest = bcs::to_bytes(&effects_digest)
+        .map_err(|err| crate::error::SuiError::GrpcMessageSerializeError {
+            type_info: "RawWaitForEffectsResponse.effects_digest".to_string(),
+            error: err.to_string(),
+        })?
+        .into();
+    let details = if let Some(details) = details {
+        Some((*details).try_into()?)
+    } else {
+        None
+    };
+    Ok(RawExecutedStatus {
+        effects_digest,
+        details,
+        fast_path,
+    })
+}
+
+impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawWaitForEffectsRequest) -> Result<Self, Self::Error> {
+        let transaction_digest = bcs::from_bytes(&value.transaction_digest).map_err(|err| {
+            crate::error::SuiError::GrpcMessageDeserializeError {
+                type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
+                error: err.to_string(),
+            }
+        })?;
+        let consensus_position = match value.consensus_position {
+            Some(cp) => Some(cp.as_ref().try_into()?),
+            None => None,
+        };
+        Ok(Self {
+            consensus_position,
+            transaction_digest,
+            include_details: value.include_details,
+        })
+    }
+}
+
+impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: WaitForEffectsRequest) -> Result<Self, Self::Error> {
+        let transaction_digest = bcs::to_bytes(&value.transaction_digest)
+            .map_err(|err| crate::error::SuiError::GrpcMessageSerializeError {
+                type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
+                error: err.to_string(),
+            })?
+            .into();
+        let consensus_position = match value.consensus_position {
+            Some(cp) => Some(cp.into_raw()?),
+            None => None,
+        };
+        Ok(Self {
+            consensus_position,
+            transaction_digest,
+            include_details: value.include_details,
+        })
+    }
+}
+
+impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawWaitForEffectsResponse) -> Result<Self, Self::Error> {
+        match value.inner {
+            Some(RawValidatorTransactionStatus::Executed(executed)) => {
+                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
+                Ok(Self::Executed {
+                    effects_digest,
+                    details,
+                    fast_path,
+                })
+            }
+            Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
+                let error = try_from_raw_rejected_status(rejected)?;
+                Ok(Self::Rejected { error })
+            }
+            Some(RawValidatorTransactionStatus::Expired(expired)) => Ok(Self::Expired {
+                epoch: expired.epoch,
+                round: expired.round,
+            }),
+            None => Err(crate::error::SuiError::GrpcMessageDeserializeError {
+                type_info: "RawWaitForEffectsResponse.inner".to_string(),
+                error: "RawWaitForEffectsResponse.inner is None".to_string(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: WaitForEffectsResponse) -> Result<Self, Self::Error> {
+        let inner = match value {
+            WaitForEffectsResponse::Executed {
+                effects_digest,
+                details,
+                fast_path,
+            } => {
+                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
+                RawValidatorTransactionStatus::Executed(raw_executed)
+            }
+            WaitForEffectsResponse::Rejected { error } => {
+                let raw_rejected = try_from_response_rejected(error)?;
+                RawValidatorTransactionStatus::Rejected(raw_rejected)
+            }
+            WaitForEffectsResponse::Expired { epoch, round } => {
+                RawValidatorTransactionStatus::Expired(RawExpiredStatus { epoch, round })
+            }
+        };
+        Ok(RawWaitForEffectsResponse { inner: Some(inner) })
     }
 }

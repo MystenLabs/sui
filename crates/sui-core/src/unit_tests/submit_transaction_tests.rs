@@ -28,7 +28,7 @@ use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
-use crate::transaction_driver::{SubmitTxResponse, SubmitTxResult};
+use sui_types::messages_grpc::{SubmitTxResponse, SubmitTxResult};
 
 use super::AuthorityServerHandle;
 

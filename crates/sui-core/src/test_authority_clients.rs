@@ -9,9 +9,7 @@ use std::{
 };
 
 use crate::authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv};
-use crate::{
-    authority::AuthorityState, authority_client::AuthorityAPI, transaction_driver::SubmitTxResult,
-};
+use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
 use mysten_metrics::spawn_monitored_task;
@@ -23,10 +21,6 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     messages_consensus::ConsensusPosition,
-    messages_grpc::{
-        RawSubmitTxRequest, RawSubmitTxResponse, RawWaitForEffectsRequest,
-        RawWaitForEffectsResponse,
-    },
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 use sui_types::{
@@ -41,7 +35,9 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
         HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-        ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        ObjectInfoResponse, RawSubmitTxRequest, RawSubmitTxResponse, RawWaitForEffectsRequest,
+        RawWaitForEffectsResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
+        TransactionInfoResponse,
     },
     sui_system_state::SuiSystemState,
 };

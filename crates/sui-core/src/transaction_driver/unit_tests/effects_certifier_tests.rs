@@ -7,9 +7,7 @@ use crate::{
     transaction_driver::{
         effects_certifier::EffectsCertifier,
         error::TransactionDriverError,
-        message_types::{
-            ExecutedData, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
-        },
+        message_types::{WaitForEffectsRequest, WaitForEffectsResponse},
         metrics::TransactionDriverMetrics,
         SubmitTransactionOptions,
     },
@@ -33,6 +31,7 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
+    messages_grpc::{ExecutedData, SubmitTxResult},
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,

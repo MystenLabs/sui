@@ -29,7 +29,7 @@ use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
     RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
 };
@@ -38,9 +38,9 @@ use sui_types::messages_grpc::{
 pub trait AuthorityAPI {
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError>;
+    ) -> Result<SubmitTxResponse, SuiError>;
 
     // TODO(fastpath): Add a soft bundle path for mfp which will return the list of consensus positions
 
@@ -171,10 +171,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
     /// Submits a transaction to the Sui network for certification and execution.
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
-        let mut request = request.into_request();
+    ) -> Result<SubmitTxResponse, SuiError> {
+        let mut request = request.try_into()?.into_request();
         insert_metadata(&mut request, client_addr);
 
         self.client()?

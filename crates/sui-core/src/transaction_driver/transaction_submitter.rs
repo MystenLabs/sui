@@ -8,8 +8,10 @@ use std::{
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
-    base_types::AuthorityName, digests::TransactionDigest, error::SuiError,
-    messages_grpc::RawSubmitTxRequest,
+    base_types::AuthorityName,
+    digests::TransactionDigest,
+    error::SuiError,
+    messages_grpc::{RawSubmitTxRequest, SubmitTxResult},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -24,7 +26,7 @@ use crate::{
             TransactionRequestError,
         },
         request_retrier::RequestRetrier,
-        SubmitTransactionOptions, SubmitTxResult, TransactionDriverMetrics,
+        SubmitTransactionOptions, TransactionDriverMetrics,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };

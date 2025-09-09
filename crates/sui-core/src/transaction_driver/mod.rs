@@ -12,6 +12,8 @@ mod transaction_submitter;
 pub use error::TransactionDriverError;
 pub use message_types::*;
 pub use metrics::*;
+// Re-export types that were moved to sui_types::messages_grpc
+pub use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResponse, SubmitTxResult};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
 use std::{
