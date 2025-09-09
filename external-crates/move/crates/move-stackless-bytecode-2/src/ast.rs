@@ -5,6 +5,7 @@ use crate::utils::comma_separated;
 
 use move_binary_format::normalized::{Constant, FieldRef, StructRef, Type, VariantRef};
 use move_core_types::account_address::AccountAddress;
+use move_model_2::{model::Model, source_kind::SourceKind};
 use move_symbol_pool::Symbol;
 
 use std::{collections::BTreeMap, rc::Rc, vec};
@@ -12,6 +13,11 @@ use std::{collections::BTreeMap, rc::Rc, vec};
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
+
+pub struct StacklessBytecode<S: SourceKind> {
+    pub model: Model<S>,
+    pub packages: Vec<Package>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Package {

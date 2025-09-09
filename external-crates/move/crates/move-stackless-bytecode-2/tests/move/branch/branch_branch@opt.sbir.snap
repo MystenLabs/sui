@@ -1,27 +1,77 @@
 ---
-source: crates/move-stackless-bytecode-2/tests/tests.rs
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
 ---
   Module: branch
+    Function: conditions (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Copy(lcl_0)
+        reg_2 : bool = GreaterThan(reg_0 : u64, Immediate(U64(10)))
+        JumpIf(reg_2 : bool, LBL_4, LBL_9)
+
+      Label LBL_4:
+        reg_3 : u64 = Copy(lcl_1)
+        reg_5 : bool = LessThan(reg_3 : u64, Immediate(U64(20)))
+        lcl_3 = reg_5 : bool
+        Jump(LBL_11)
+
+      Label LBL_9:
+        lcl_3 = Immediate(false)
+
+      Label LBL_11:
+        reg_7 : bool = Move(lcl_3)
+        JumpIf(reg_7 : bool, LBL_13, LBL_16)
+
+      Label LBL_13:
+        lcl_2 = Immediate(true)
+        Jump(LBL_20)
+
+      Label LBL_16:
+        reg_9 : u64 = Copy(lcl_0)
+        reg_11 : bool = LessThan(reg_9 : u64, Immediate(U64(30)))
+        lcl_2 = reg_11 : bool
+
+      Label LBL_20:
+        reg_12 : bool = Move(lcl_2)
+        JumpIf(reg_12 : bool, LBL_22, LBL_27)
+
+      Label LBL_22:
+        reg_13 : u64 = Move(lcl_0)
+        reg_14 : u64 = Move(lcl_1)
+        reg_15 : u64 = Add(reg_13 : u64, reg_14 : u64)
+        lcl_4 = reg_15 : u64
+        Jump(LBL_31)
+
+      Label LBL_27:
+        reg_16 : u64 = Move(lcl_0)
+        reg_17 : u64 = Move(lcl_1)
+        reg_18 : u64 = Multiply(reg_16 : u64, reg_17 : u64)
+        lcl_4 = reg_18 : u64
+
+      Label LBL_31:
+        reg_19 : u64 = Move(lcl_4)
+        Return(reg_19 : u64)
+
+
     Function: is_even (entry: LBL_0)
       Label LBL_0:
         lcl_2 = Immediate(U64(10))
-        reg_1 = Move(lcl_0)
-        reg_3 = Modulo(reg_1, Immediate(U64(2)))
-        reg_5 = Equal(reg_3, Immediate(U64(0)))
-        JumpIf(reg_5, LBL_8, LBL_13)
+        reg_1 : u64 = Move(lcl_0)
+        reg_3 : u64 = Modulo(reg_1 : u64, Immediate(U64(2)))
+        reg_5 : bool = Equal(reg_3 : u64, Immediate(U64(0)))
+        JumpIf(reg_5 : bool, LBL_8, LBL_13)
 
       Label LBL_8:
-        reg_6 = Move(lcl_2)
-        reg_8 = Add(reg_6, Immediate(U64(20)))
-        lcl_1 = reg_8
+        reg_6 : u64 = Move(lcl_2)
+        reg_8 : u64 = Add(reg_6 : u64, Immediate(U64(20)))
+        lcl_1 = reg_8 : u64
         Jump(LBL_17)
 
       Label LBL_13:
-        reg_9 = Move(lcl_2)
-        reg_11 = Add(reg_9, Immediate(U64(30)))
-        lcl_1 = reg_11
+        reg_9 : u64 = Move(lcl_2)
+        reg_11 : u64 = Add(reg_9 : u64, Immediate(U64(30)))
+        lcl_1 = reg_11 : u64
 
       Label LBL_17:
-        reg_12 = Move(lcl_1)
-        reg_14 = Multiply(reg_12, Immediate(U64(13)))
-        Return(reg_14)
+        reg_12 : u64 = Move(lcl_1)
+        reg_14 : u64 = Multiply(reg_12 : u64, Immediate(U64(13)))
+        Return(reg_14 : u64)
