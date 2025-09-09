@@ -1534,42 +1534,26 @@ mod checked {
 
         let accumulator_events = accumulator_events
             .into_iter()
-            .map(|accum_event| match accum_event.value {
-                MoveAccumulatorValue::U64(amount) => {
-                    let value = AccumulatorValue::Integer(amount);
-                    let address = AccumulatorAddress::new(
-                        accum_event.target_addr.into(),
-                        accum_event.target_ty,
-                    );
+            .map(|accum_event| {
+                let value = match accum_event.value {
+                    MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
+                    MoveAccumulatorValue::EventRef(event_idx) => {
+                        let event = &user_events[event_idx as usize];
+                        let digest = event.digest();
+                        AccumulatorValue::EventDigest(event_idx, digest)
+                    }
+                };
 
-                    let write = AccumulatorWriteV1 {
-                        address,
-                        operation: accum_event.action.into_sui_accumulator_action(),
-                        value,
-                    };
+                let address =
+                    AccumulatorAddress::new(accum_event.target_addr.into(), accum_event.target_ty);
 
-                    AccumulatorEvent::new(
-                        AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
-                        write,
-                    )
-                }
-                MoveAccumulatorValue::EventRef(event_idx) => {
-                    let event = &user_events[event_idx as usize];
-                    let digest = event.digest();
-                    let value = AccumulatorValue::EventDigest(event_idx, digest);
-                    let address = AccumulatorAddress::new(
-                        accum_event.target_addr.into(),
-                        accum_event.target_ty,
-                    );
+                let write = AccumulatorWriteV1 {
+                    address,
+                    operation: accum_event.action.into_sui_accumulator_action(),
+                    value,
+                };
 
-                    let write = AccumulatorWriteV1 {
-                        address,
-                        operation: accum_event.action.into_sui_accumulator_action(),
-                        value,
-                    };
-
-                    AccumulatorEvent::new(AccumulatorObjId::new_unchecked(accum_event.accumulator_id), write)
-                }
+                AccumulatorEvent::new(AccumulatorObjId::new_unchecked(accum_event.accumulator_id), write)
             })
             .collect();
 

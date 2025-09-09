@@ -15,7 +15,6 @@ use sui_types::accumulator_root::{
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 
-use move_core_types::identifier::Identifier;
 use sui_types::digests::Digest;
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
@@ -113,8 +112,9 @@ impl MergedValue {
                 ];
                 builder.programmable_move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
-                    Identifier::new("event").unwrap(),
-                    Identifier::new("update_head").unwrap(),
+                    ACCUMULATOR_SETTLEMENT_MODULE.into(),
+                    sui_types::accumulator_root::ACCUMULATOR_ROOT_SETTLEMENT_SETTLE_EVENTS_FUNC
+                        .into(),
                     vec![],
                     args,
                 );
