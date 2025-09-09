@@ -393,13 +393,14 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::Call(function_ref) => {
             let modules = ctxt.model.modules();
             if let Some(function) = find_function(modules, function_ref) {
-                let args = make_vec!(function.parameters.len(), R(pop!()));
-
                 let type_params = function_ref
                     .type_arguments
                     .iter()
                     .map(|ty| ty.as_ref().clone())
                     .collect::<Vec<_>>();
+
+                let args = make_vec!(function.parameters.len(), R(pop!()));
+
                 let lhs = function
                     .return_
                     .iter()
