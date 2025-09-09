@@ -89,10 +89,33 @@ Attempted to withdraw more than the maximum value of the underlying integer type
 
 
 
+<a name="sui_funds_accumulator_EInvalidSubLimit"></a>
+
+Attempt to split more than the current limit of a <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a></code>.
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EInvalidSubLimit">EInvalidSubLimit</a>: vector&lt;u8&gt; = b"Sub-limit exceeds current withdrawal limit";
+</code></pre>
+
+
+
+<a name="sui_funds_accumulator_EOwnerMismatch"></a>
+
+Attempted to join two withdrawals with different owners.
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOwnerMismatch">EOwnerMismatch</a>: vector&lt;u8&gt; = b"<a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> owners do not match";
+</code></pre>
+
+
+
 <a name="sui_funds_accumulator_withdrawal_owner"></a>
 
 ## Function `withdrawal_owner`
 
+Returns the owner, either a sender's address or an object, of the withdrawal.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_owner">withdrawal_owner</a>&lt;T: store&gt;(withdrawal: &<a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;): <b>address</b>
@@ -117,6 +140,7 @@ Attempted to withdraw more than the maximum value of the underlying integer type
 
 ## Function `withdrawal_limit`
 
+Returns the remaining limit of the withdrawal.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_limit">withdrawal_limit</a>&lt;T: store&gt;(withdrawal: &<a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;): u256
@@ -141,9 +165,10 @@ Attempted to withdraw more than the maximum value of the underlying integer type
 
 ## Function `withdrawal_split`
 
+Split a <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a></code> and take a sub-withdrawal from it with the specified sub-limit.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_split">withdrawal_split</a>&lt;T: store&gt;(withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;, value: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_split">withdrawal_split</a>&lt;T: store&gt;(withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;, sub_limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;
 </code></pre>
 
 
@@ -152,10 +177,10 @@ Attempted to withdraw more than the maximum value of the underlying integer type
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_split">withdrawal_split</a>&lt;T: store&gt;(withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;, value: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
-    <b>assert</b>!(withdrawal.limit &gt;= value);
-    withdrawal.limit = withdrawal.limit - value;
-    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> { owner: withdrawal.owner, limit: value }
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_split">withdrawal_split</a>&lt;T: store&gt;(withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;, sub_limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
+    <b>assert</b>!(withdrawal.limit &gt;= sub_limit, <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EInvalidSubLimit">EInvalidSubLimit</a>);
+    withdrawal.limit = withdrawal.limit - sub_limit;
+    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> { owner: withdrawal.owner, limit: sub_limit }
 }
 </code></pre>
 
@@ -167,6 +192,9 @@ Attempted to withdraw more than the maximum value of the underlying integer type
 
 ## Function `withdrawal_join`
 
+Join two withdrawals together, increasing the limit of <code>self</code> by the limit of <code>other</code>.
+Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOwnerMismatch">EOwnerMismatch</a></code> if the owners are not equal.
+Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOverflow">EOverflow</a></code> if the resulting limit would overflow <code>u256</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_join">withdrawal_join</a>&lt;T: store&gt;(withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;, other: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;)
@@ -179,8 +207,8 @@ Attempted to withdraw more than the maximum value of the underlying integer type
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_join">withdrawal_join</a>&lt;T: store&gt;(withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;, other: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;) {
-    <b>assert</b>!(withdrawal.owner == other.owner);
-    <b>assert</b>!(<a href="../std/u256.md#std_u256_max_value">std::u256::max_value</a>!() - withdrawal.limit &gt;= other.limit);
+    <b>assert</b>!(withdrawal.owner == other.owner, <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOwnerMismatch">EOwnerMismatch</a>);
+    <b>assert</b>!(<a href="../std/u256.md#std_u256_max_value">std::u256::max_value</a>!() - withdrawal.limit &gt;= other.limit, <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOverflow">EOverflow</a>);
     withdrawal.limit = withdrawal.limit + other.limit;
 }
 </code></pre>

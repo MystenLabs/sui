@@ -17,6 +17,14 @@ public use fun withdrawal_owner as Withdrawal.owner;
 #[allow(unused_const)]
 const EOverflow: u64 = 0;
 
+/// Attempt to split more than the current limit of a `Withdrawal`.
+#[error(code = 1)]
+const EInvalidSubLimit: vector<u8> = b"Sub-limit exceeds current withdrawal limit";
+
+/// Attempted to join two withdrawals with different owners.
+#[error(code = 2)]
+const EOwnerMismatch: vector<u8> = b"Withdrawal owners do not match";
+
 /// Allows for withdrawing funds from a given address. The `Withdrawal` can be created in PTBs for
 /// the transaction sender, or dynamically from an object via `withdraw_from_object`.
 /// The redemption of the funds must be initiated from the module that defines `T`.
@@ -28,23 +36,29 @@ public struct Withdrawal<phantom T: store> has drop {
     limit: u256,
 }
 
+/// Returns the owner, either a sender's address or an object, of the withdrawal.
 public fun withdrawal_owner<T: store>(withdrawal: &Withdrawal<T>): address {
     withdrawal.owner
 }
 
+/// Returns the remaining limit of the withdrawal.
 public fun withdrawal_limit<T: store>(withdrawal: &Withdrawal<T>): u256 {
     withdrawal.limit
 }
 
-public fun withdrawal_split<T: store>(withdrawal: &mut Withdrawal<T>, value: u256): Withdrawal<T> {
-    assert!(withdrawal.limit >= value);
-    withdrawal.limit = withdrawal.limit - value;
-    Withdrawal { owner: withdrawal.owner, limit: value }
+/// Split a `Withdrawal` and take a sub-withdrawal from it with the specified sub-limit.
+public fun withdrawal_split<T: store>(withdrawal: &mut Withdrawal<T>, sub_limit: u256): Withdrawal<T> {
+    assert!(withdrawal.limit >= sub_limit, EInvalidSubLimit);
+    withdrawal.limit = withdrawal.limit - sub_limit;
+    Withdrawal { owner: withdrawal.owner, limit: sub_limit }
 }
 
+/// Join two withdrawals together, increasing the limit of `self` by the limit of `other`.
+/// Aborts with `EOwnerMismatch` if the owners are not equal.
+/// Aborts with `EOverflow` if the resulting limit would overflow `u256`.
 public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: Withdrawal<T>) {
-    assert!(withdrawal.owner == other.owner);
-    assert!(std::u256::max_value!() - withdrawal.limit >= other.limit);
+    assert!(withdrawal.owner == other.owner, EOwnerMismatch);
+    assert!(std::u256::max_value!() - withdrawal.limit >= other.limit, EOverflow);
     withdrawal.limit = withdrawal.limit + other.limit;
 }
 
