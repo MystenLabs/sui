@@ -339,12 +339,6 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::Branch(code_offset) => Instruction::Jump(*code_offset as usize),
 
-        IB::LdU8(value) => assign_reg!([push!(Type::U8.into())] = imm!(Value::U8(*value))),
-
-        IB::LdU64(value) => assign_reg!([push!(Type::U64.into())] = imm!(Value::U64(*value))),
-
-        IB::LdU128(bx) => assign_reg!([push!(Type::U128.into())] = imm!(Value::U128(*(*bx)))),
-
         IB::CastU8 => {
             assign_reg!([push!(Type::U8.into())] = primitive_op!(Op::CastU8, R(pop!())))
         }
@@ -433,12 +427,10 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|ty| push!(ty.clone().subst(&type_params).into()))
                 .collect::<Vec<_>>();
 
+            let target = (function_ref.module, function.name);
             Instruction::AssignReg {
                 lhs,
-                rhs: RValue::Call {
-                    function: function.name,
-                    args,
-                },
+                rhs: RValue::Call { target, args },
             }
         }
 
@@ -662,10 +654,11 @@ pub(crate) fn bytecode<K: SourceKind>(
             }
         }
 
+        IB::LdU8(value) => assign_reg!([push!(Type::U8.into())] = imm!(Value::U8(*value))),
         IB::LdU16(value) => assign_reg!([push!(Type::U16.into())] = imm!(Value::U16(*value))),
-
         IB::LdU32(value) => assign_reg!([push!(Type::U32.into())] = imm!(Value::U32(*value))),
-
+        IB::LdU64(value) => assign_reg!([push!(Type::U64.into())] = imm!(Value::U64(*value))),
+        IB::LdU128(bx) => assign_reg!([push!(Type::U128.into())] = imm!(Value::U128(*(*bx)))),
         IB::LdU256(_bx) => assign_reg!([push!(Type::U256.into())] = imm!(Value::U256(*(*_bx)))),
 
         IB::CastU16 => {
@@ -725,8 +718,10 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::VariantSwitch(jt) => {
             let JumpTableInner::Full(offsets) = &jt.jump_table;
+            let enum_ = (jt.enum_.defining_module, jt.enum_.name);
             Instruction::VariantSwitch {
                 condition: R(pop!()),
+                enum_,
                 variants: jt.enum_.variants.keys().cloned().collect(),
                 labels: offsets
                     .iter()

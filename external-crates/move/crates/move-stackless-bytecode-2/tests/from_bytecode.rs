@@ -34,7 +34,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
         modules.push(module);
     }
 
-    let bytecode = from_compiled_modules(modules.clone(), /* optimize */ true)?;
+    let (_mdl, bytecode) = from_compiled_modules(modules.clone(), /* optimize */ true)?;
 
     let test_module_names = test_module_names
         .into_iter()
@@ -60,7 +60,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
         }
     }
 
-    let bytecode = from_compiled_modules(modules, /* optimize */ false)?;
+    let (_mdl, bytecode) = from_compiled_modules(modules, /* optimize */ false)?;
 
     for pkg in &bytecode.packages {
         let pkg_name = pkg
