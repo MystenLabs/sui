@@ -1,4 +1,5 @@
 pub mod legacy;
+pub mod legacy_lockfile;
 pub mod legacy_parser;
 
 use std::collections::{BTreeMap, HashSet};
@@ -6,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
-use move_core_types::account_address::AccountAddress;
+use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use regex::Regex;
 use tracing::debug;
 
@@ -70,6 +71,14 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Package
     };
 
     PackageName::new(name.as_str())
+}
+
+// Safely parses address for both the 0x and non prefixed hex format.
+fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAddressParseError> {
+    if !address_str.starts_with("0x") {
+        return AccountAddress::from_hex(address_str);
+    }
+    AccountAddress::from_hex_literal(address_str)
 }
 
 /// Find all files matching the extension in a given path.

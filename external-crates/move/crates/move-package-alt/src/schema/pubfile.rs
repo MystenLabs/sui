@@ -41,6 +41,8 @@ pub struct Publication<F: MoveFlavor> {
     #[serde(flatten)]
     pub addresses: PublishAddresses,
 
+    pub version: u64,
+
     /// Additional flavor-specific fields, such as an upgrade capability or information for source
     /// verification
     #[serde(flatten)]

@@ -5,21 +5,18 @@
 use crate::{
     compatibility::{
         LegacyBuildInfo, LegacySubstOrRename, LegacySubstitution, LegacyVersion,
-        find_module_name_for_package,
+        find_module_name_for_package, legacy_lockfile::try_load_legacy_lockfile_publications,
     },
     errors::FileHandle,
-    package::{EnvironmentName, paths::PackagePath},
+    package::paths::PackagePath,
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
-        ParsedManifest, PublishAddresses, PublishedID,
+        ManifestGitDependency, OnChainDepInfo, PackageMetadata, PackageName, ParsedManifest,
+        PublishAddresses,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
-use move_core_types::{
-    account_address::{AccountAddress, AccountAddressParseError},
-    identifier::Identifier,
-};
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -28,7 +25,7 @@ use std::{
 use toml::Value as TV;
 use tracing::debug;
 
-use super::legacy::{LegacyData, LegacyEnvironment};
+use super::{legacy::LegacyData, parse_address_literal};
 
 const EMPTY_ADDR_STR: &str = "_";
 
@@ -68,7 +65,7 @@ pub struct LegacyPackageMetadata {
 /// the unsupported sections: `[addresses]`, `[dev-addresses]`, or `[dev-dependencies]`. Although
 /// these fields are not technically required in the old system, we want to process manifests that
 /// don't have them using the modern parser.
-pub fn try_load_legacy(
+pub fn try_load_legacy_manifest(
     path: &PackagePath,
     default_env: &Environment,
 ) -> Option<(FileHandle, ParsedManifest)> {
@@ -95,66 +92,6 @@ pub fn try_load_legacy(
     parse_source_manifest(parsed, path, default_env)
         .ok()
         .map(|parsed| (file_handle, parsed))
-}
-
-fn parse_legacy_lockfile_addresses(
-    path: &PackagePath,
-) -> Result<BTreeMap<EnvironmentName, LegacyEnvironment>> {
-    // we do not want to error if the lockfile does not exist.
-    let file_contents = std::fs::read_to_string(path.lockfile_path())?;
-
-    let toml_val = toml::from_str::<TV>(&file_contents)?;
-
-    let Some(lockfile) = toml_val.as_table() else {
-        bail!(
-            "Lockfile is malformed. Expected a table at the top level, but found a {}",
-            file_contents
-        );
-    };
-
-    let mut publish_info = BTreeMap::new();
-
-    // Extract the environments as a table.
-    let Some(envs) = lockfile.get("env").and_then(|v| v.as_table()) else {
-        return Ok(publish_info);
-    };
-
-    for (name, data) in envs {
-        let env_name = name.to_string();
-        let env_table = data.as_table().unwrap();
-
-        let chain_id = env_table
-            .get("chain-id")
-            .map(|v| v.as_str().unwrap_or_default().to_string());
-        let original_id = env_table
-            .get("original-published-id")
-            .map(|v| parse_address_literal(v.as_str().unwrap_or_default()).unwrap());
-        let latest_id = env_table
-            .get("latest-published-id")
-            .map(|v| parse_address_literal(v.as_str().unwrap_or_default()).unwrap());
-
-        let published_version = env_table
-            .get("published-version")
-            .map(|v| v.as_str().unwrap_or_default().to_string());
-
-        if let (Some(chain_id), Some(original_id), Some(latest_id), Some(published_version)) =
-            (chain_id, original_id, latest_id, published_version)
-        {
-            publish_info.insert(
-                env_name,
-                LegacyEnvironment {
-                    addresses: PublishAddresses {
-                        original_id: OriginalID(original_id),
-                        published_at: PublishedID(latest_id),
-                    },
-                    chain_id,
-                    version: published_version,
-                },
-            );
-        }
-    }
-
-    Ok(publish_info)
 }
 
 fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
@@ -277,7 +214,8 @@ fn parse_source_manifest(
                     legacy_name: metadata.legacy_name,
                     named_addresses: programmatic_addresses,
                     manifest_address_info,
-                    legacy_environments: parse_legacy_lockfile_addresses(path).unwrap_or_default(),
+                    legacy_publications: try_load_legacy_lockfile_publications(path)
+                        .unwrap_or_default(),
                 }),
                 dep_replacements: BTreeMap::new(),
             })
@@ -443,14 +381,6 @@ fn parse_addresses(tval: TV) -> Result<BTreeMap<Identifier, Option<AccountAddres
             x.type_str()
         ),
     }
-}
-
-// Safely parses address for both the 0x and non prefixed hex format.
-fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAddressParseError> {
-    if !address_str.starts_with("0x") {
-        return AccountAddress::from_hex(address_str);
-    }
-    AccountAddress::from_hex_literal(address_str)
 }
 
 fn parse_external_resolver(resolver_val: &TV) -> Result<ExternalDependency> {
@@ -789,6 +719,8 @@ fn derive_modern_name(
 
 #[cfg(test)]
 mod tests {
+    use crate::schema::{OriginalID, PublishedID};
+
     use super::*;
 
     #[test]

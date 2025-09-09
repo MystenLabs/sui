@@ -10,18 +10,16 @@ use super::compute_digest;
 use super::manifest::Manifest;
 use super::paths::PackagePath;
 use crate::compatibility::legacy::LegacyData;
-use crate::compatibility::legacy_parser::try_load_legacy;
+use crate::compatibility::legacy_parser::try_load_legacy_manifest;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
-use crate::schema::{ParsedManifest, ParsedPubs, ReplacementDependency};
+use crate::schema::{ParsedManifest, ParsedPubs, Publication, ReplacementDependency};
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::manifest::Digest,
-    schema::{
-        Environment, OriginalID, PackageMetadata, PackageName, PublishAddresses, PublishedID,
-    },
+    schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
 };
 use std::sync::{LazyLock, Mutex};
 
@@ -48,11 +46,8 @@ pub struct Package<F: MoveFlavor> {
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
 
-    /// Additional information that was stored with the publication record
-    publication: Option<F::PackageMetadata>,
-
-    /// (Optional) Publish information for the loaded environment (original-id, published-at and more).
-    address: Option<PublishAddresses>,
+    /// The `Publication` information for the specified network
+    publication: Option<Publication<F>>,
 
     /// The way this package should be serialized to the lockfile.
     dep_for_self: PinnedDependencyInfo,
@@ -99,7 +94,7 @@ impl<F: MoveFlavor> Package<F> {
         debug!("loading package {:?}", dep_for_self);
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let (file_handle, manifest) = if let Some(result) = try_load_legacy(&path, env) {
+        let (file_handle, manifest) = if let Some(result) = try_load_legacy_manifest(&path, env) {
             result
         } else {
             let m = Manifest::read_from_file(path.manifest_path())?;
@@ -109,20 +104,18 @@ impl<F: MoveFlavor> Package<F> {
         // try to load the address from the modern lockfile
         //   - if it fails, look in the legacy data
         //   - if that fails, use a dummy address
-        let address = Self::get_addrs(&path, env.name())?.or_else(|| {
+        let publication = Self::load_publication(&path, env.name())?.or_else(|| {
             manifest
                 .legacy_data
                 .as_ref()
-                .and_then(|legacy| legacy.publication(env.name()).cloned())
+                .and_then(|legacy| legacy.publication::<F>(env))
         });
         let dummy_addr = create_dummy_addr();
-
-        // TODO: load additional metadata from pubfile
-        let publication = None;
 
         // TODO: try to gather dependencies from the modern lockfile
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
         //     (adding system deps)
+
         let deps = Self::deps_from_manifest(&dep_for_self, &file_handle, &manifest, env).await?;
 
         // compute the digest (TODO: this should only compute over the environment specific data)
@@ -133,12 +126,11 @@ impl<F: MoveFlavor> Package<F> {
             digest,
             metadata: manifest.package,
             path,
-            address,
+            publication,
             dep_for_self,
             legacy_data: manifest.legacy_data,
             deps,
             dummy_addr,
-            publication,
         };
 
         debug!(
@@ -190,46 +182,24 @@ impl<F: MoveFlavor> Package<F> {
         &self.deps
     }
 
-    /// Tries to get the `published addresses` information for the given package,
-    pub fn address(&self) -> Option<&PublishAddresses> {
-        if let Some(address) = &self.address {
-            return Some(address);
-        }
-
-        let Some(ref legacy) = self.legacy_data else {
-            return None;
-        };
-
-        if let Some(lockfile_entry) = legacy.legacy_environments.get(self.environment_name()) {
-            return Some(&lockfile_entry.addresses);
-        }
-
-        if let Some(manifest_addr) = &legacy.manifest_address_info {
-            return Some(manifest_addr);
-        }
-
-        None
-    }
-
     /// Additional flavor-specific information that was recorded when this package was published
     /// (in the `Move.published` file).
-    ///
-    /// Note that this may be None even if `self.published_at` is not None in the case of a legacy
-    /// package.
-    pub fn publication(&self) -> Option<&F::PackageMetadata> {
+    pub fn publication(&self) -> Option<&Publication<F>> {
         self.publication.as_ref()
     }
 
     /// Tries to get the `published-at` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
     pub fn published_at(&self) -> Option<&PublishedID> {
-        self.address().map(|addrs| &addrs.published_at)
+        self.publication()
+            .map(|publication| &publication.addresses.published_at)
     }
 
     /// Tries to get the `original-id` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
     pub fn original_id(&self) -> Option<&OriginalID> {
-        self.address().map(|addrs| &addrs.original_id)
+        self.publication()
+            .map(|publication| &publication.addresses.original_id)
     }
 
     pub fn metadata(&self) -> &PackageMetadata {
@@ -237,10 +207,10 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// Read the publication for the given environment from the package pubfile.
-    fn get_addrs(
+    fn load_publication(
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Option<PublishAddresses>> {
+    ) -> PackageResult<Option<Publication<F>>> {
         let pubfile = path.publications_path();
 
         let Ok(file) = FileHandle::new(path.publications_path()) else {
@@ -256,7 +226,7 @@ impl<F: MoveFlavor> Package<F> {
             return Ok(None);
         };
 
-        Ok(Some(publish.addresses.clone()))
+        Ok(Some(publish.clone()))
     }
 
     /// Compute the direct dependencies for the given environment by combining the default

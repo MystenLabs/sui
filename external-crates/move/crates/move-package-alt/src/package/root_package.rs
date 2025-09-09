@@ -8,6 +8,7 @@ use tracing::debug;
 
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
+use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
 use crate::graph::PackageInfo;
 use crate::schema::{Environment, OriginalID, PackageName, ParsedPubs, Publication, RenderToml};
 use crate::{
@@ -102,6 +103,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
     ) -> PackageResult<Self> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+
+        convert_legacy_lockfile::<F>(&package_path)?;
 
         let Some(graph) =
             PackageGraph::<F>::load_from_lockfile_ignore_digests(&package_path, &env).await?
@@ -199,6 +202,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
     fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile> {
+        convert_legacy_lockfile::<F>(package_path)?;
+
         let path = package_path.lockfile_path();
         debug!("loading lockfile {:?}", path);
 
