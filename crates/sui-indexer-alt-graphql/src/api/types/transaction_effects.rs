@@ -306,11 +306,9 @@ impl EffectsContents {
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
-            let native_change = &object_changes[*edge.cursor];
-
             let object_change = ObjectChange {
                 scope: self.scope.clone(),
-                native: native_change.clone(),
+                native: object_changes[*edge.cursor].clone(),
             };
 
             conn.edges

@@ -465,7 +465,7 @@ impl Object {
     ) -> Self {
         // Set root_version since we're creating an object at a specific version
         let scope = scope.with_root_version(version.into());
-        let super_ = Address::with_address(scope.clone(), address);
+        let super_ = Address::with_address(scope, address);
 
         Self {
             super_,
@@ -974,7 +974,7 @@ impl Object {
                 if let Some(cached_object) = self
                     .super_
                     .scope
-                    .execution_output_object(self.super_.address.into(), version)
+                    .execution_output_object(self.super_.address.into(), version.into())
                 {
                     Ok(Some(cached_object.clone()))
                 } else {
