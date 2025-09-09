@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, HashSet};
+use crate::ast as Out;
 
 use move_stackless_bytecode_2::stackless::ast::{DataOp, RValue, RegId, Trivial};
 
-use crate::ast as Out;
+use std::collections::{BTreeMap, HashSet};
 
 pub fn exp(
     block: move_stackless_bytecode_2::stackless::ast::BasicBlock,
@@ -23,31 +23,34 @@ pub fn exp(
                 lhs,
                 rhs: RValue::Call { function, args },
             } => {
-                // Assign when right value is Call
-                if lhs.is_empty() {
-                    seq.push(Out::Exp::Call(
-                        function.to_string(),
-                        trivials(&mut map, args),
-                    ));
-                } else if lhs.len() == 1 {
-                    let call = Out::Exp::Call(function.to_string(), trivials(&mut map, args));
-                    map.insert(lhs[0], call);
-                } else {
-                    let tmps = lhs
-                        .into_iter()
-                        .map(|reg| {
-                            let tmp = format!("tmp{}", reg);
-                            map.insert(reg, Out::Exp::Variable(tmp.clone()));
-                            tmp
-                        })
-                        .collect();
-                    seq.push(Out::Exp::Assign(
-                        tmps,
-                        Box::new(Out::Exp::Call(
+                match &lhs[..] {
+                    [] => {
+                        seq.push(Out::Exp::Call(
                             function.to_string(),
-                            trivials(&mut map, args.clone()),
-                        )),
-                    ));
+                            trivials(&mut map, args),
+                        ));
+                    }
+                    [reg] => {
+                        let call = Out::Exp::Call(function.to_string(), trivials(&mut map, args));
+                        map.insert(reg.name, call);
+                    }
+                    _ => {
+                        let tmps = lhs
+                            .into_iter()
+                            .map(|reg| {
+                                let tmp = format!("tmp{}", reg);
+                                map.insert(reg.name, Out::Exp::Variable(tmp.clone()));
+                                tmp
+                            })
+                            .collect();
+                        seq.push(Out::Exp::Assign(
+                            tmps,
+                            Box::new(Out::Exp::Call(
+                                function.to_string(),
+                                trivials(&mut map, args.clone()),
+                            )),
+                        ));
+                    }
                 }
             }
             SI::AssignReg {
@@ -55,10 +58,10 @@ pub fn exp(
                 rhs:
                     RValue::Data {
                         op:
-                            DataOp::Unpack
-                            | DataOp::UnpackVariant
-                            | DataOp::UnpackVariantImmRef
-                            | DataOp::UnpackVariantMutRef,
+                            DataOp::Unpack(_)
+                            | DataOp::UnpackVariant(_)
+                            | DataOp::UnpackVariantImmRef(_)
+                            | DataOp::UnpackVariantMutRef(_),
                         args: _,
                     },
             } => {
@@ -76,13 +79,11 @@ pub fn exp(
                 args: trivials(&mut map, args),
             }),
             SI::AssignReg { lhs, rhs } => {
-                if lhs.is_empty() {
-                    panic!("Assign reg with empty lhs {:?}", rhs);
-                } else if lhs.len() > 1 {
-                    panic!("Assign reg with multiple lhs {:?} and rhs {:?}", lhs, rhs);
-                }
+                let [reg] = &lhs[..] else {
+                    panic!("Registe assignment with invalid lhs {:?}", rhs);
+                };
                 let rvalue = rvalue(&mut map, rhs);
-                let res = map.insert(lhs[0], rvalue);
+                let res = map.insert(reg.name, rvalue);
                 assert!(res.is_none());
             }
             SI::StoreLoc { loc, value } => {
@@ -143,7 +144,7 @@ fn trivials(map: &mut BTreeMap<RegId, Out::Exp>, trivs: Vec<Trivial>) -> Vec<Out
 fn trivial(map: &mut BTreeMap<RegId, Out::Exp>, triv: Trivial) -> Out::Exp {
     match triv {
         Trivial::Register(reg_id) => map
-            .remove(&reg_id)
+            .remove(&reg_id.name)
             .unwrap_or_else(|| panic!("Register {reg_id} not found")),
         Trivial::Immediate(value) => Out::Exp::Value(value),
     }

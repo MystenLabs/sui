@@ -195,8 +195,8 @@ fn write_data_op(
     args: &[Exp],
 ) -> Result<(), std::fmt::Error> {
     match op {
-        DataOp::Pack => write!(f, "S .. fields .. args"),
-        DataOp::Unpack => unreachable!(),
+        DataOp::Pack(_) => todo!(),
+        DataOp::Unpack(_)  => todo!(),
         DataOp::ReadRef => write!(f, "*{}", args[0]),
         DataOp::WriteRef => writeln!(f, "*{} = {}", args[0], args[1]),
         DataOp::FreezeRef => write!(f, "freeze({})", args[0]),
@@ -204,7 +204,7 @@ fn write_data_op(
             write!(f, "&mut ({}).{}", args[0], field_ref.field.name)
         }
         DataOp::ImmBorrowField(field_ref) => write!(f, "&( {} ).{}", args[0], field_ref.field.name),
-        DataOp::VecPack => write!(
+        DataOp::VecPack(_) => write!(
             f,
             "vec![{}]",
             args.iter()
@@ -212,17 +212,17 @@ fn write_data_op(
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        DataOp::VecLen => write!(f, "{}.len()", args[0]),
-        DataOp::VecImmBorrow => write!(f, "&{}[{}]", args[0], args[1]),
-        DataOp::VecMutBorrow => write!(f, "&mut {}[{}]", args[0], args[1]),
-        DataOp::VecPushBack => write!(f, "{}.push_back({})", args[0], args[1]),
-        DataOp::VecPopBack => write!(f, "{}.pop_back({})", args[0], args[1]),
-        DataOp::VecUnpack => unreachable!(),
-        DataOp::VecSwap => write!(f, "{}.swap({}, {})", args[0], args[1], args[2]),
-        DataOp::PackVariant => write!(f, "E::V .. fields .. args"),
-        DataOp::UnpackVariant => unreachable!(),
-        DataOp::UnpackVariantImmRef => unreachable!(),
-        DataOp::UnpackVariantMutRef => unreachable!(),
+        DataOp::VecLen(_) => write!(f, "{}.len()", args[0]),
+        DataOp::VecImmBorrow(_) => write!(f, "&{}[{}]", args[0], args[1]),
+        DataOp::VecMutBorrow(_) => write!(f, "&mut {}[{}]", args[0], args[1]),
+        DataOp::VecPushBack(_) => write!(f, "{}.push_back({})", args[0], args[1]),
+        DataOp::VecPopBack(_) => write!(f, "{}.pop_back({})", args[0], args[1]),
+        DataOp::VecUnpack(_) => unreachable!(),
+        DataOp::VecSwap(_) => write!(f, "{}.swap({}, {})", args[0], args[1], args[2]),
+        DataOp::PackVariant(_) => write!(f, "E::V .. fields .. args"),
+        DataOp::UnpackVariant(_) => unreachable!(),
+        DataOp::UnpackVariantImmRef(_) => unreachable!(),
+        DataOp::UnpackVariantMutRef(_) => unreachable!(),
     }
 }
 

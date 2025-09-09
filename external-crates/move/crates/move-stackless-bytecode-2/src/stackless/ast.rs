@@ -76,8 +76,8 @@ pub enum Trivial {
 
 #[derive(Debug, Clone)]
 pub struct Register {
-    pub(crate) name: RegId,
-    pub(crate) ty: Rc<Type<Symbol>>,
+    pub name: RegId,
+    pub ty: Rc<Type<Symbol>>,
 }
 
 #[derive(Debug, Clone)]
