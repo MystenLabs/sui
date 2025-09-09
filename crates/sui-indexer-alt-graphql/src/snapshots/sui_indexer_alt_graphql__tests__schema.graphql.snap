@@ -3537,6 +3537,10 @@ input TransactionFilter {
 	Filter to transaction that occurred strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
+	"""
+	Limit to transactions that were sent by the given address.
+	"""
+	sentAddress: SuiAddress
 }
 
 """

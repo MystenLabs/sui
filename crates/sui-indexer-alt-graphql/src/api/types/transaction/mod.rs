@@ -16,6 +16,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
     tx_digests::TxDigestKey,
 };
+use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -24,10 +25,7 @@ use sui_types::{
 };
 
 use crate::{
-    api::{
-        scalars::sui_address::SuiAddress,
-        scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
-    },
+    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, sui_address::SuiAddress},
     error::RpcError,
     pagination::Page,
     scope::Scope,
@@ -198,7 +196,13 @@ impl Transaction {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CTransaction>,
-        filter: TransactionFilter,
+        TransactionFilter {
+            after_checkpoint,
+            at_checkpoint,
+            before_checkpoint,
+            affected_address,
+            sent_address,
+        }: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(Connection::new(false, false));
@@ -217,9 +221,9 @@ impl Transaction {
         let global_tx_hi = watermarks.high_watermark().transaction();
 
         let Some(cp_bounds) = checkpoint_bounds(
-            filter.after_checkpoint.map(u64::from),
-            filter.at_checkpoint.map(u64::from),
-            filter.before_checkpoint.map(u64::from),
+            after_checkpoint.map(u64::from),
+            at_checkpoint.map(u64::from),
+            before_checkpoint.map(u64::from),
             reader_lo,
             checkpoint_viewed_at,
         ) else {
@@ -229,18 +233,18 @@ impl Transaction {
         let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
 
         // Inclusive cursor bounds
-        let pg_lo = page
+        let tx_lo = page
             .after()
             .map_or(tx_bounds.start, |cursor| cursor.max(tx_bounds.start));
-        let pg_hi = page
+        let tx_hi = page
             .before()
             .map(|cursor: &JsonCursor<u64>| cursor.saturating_add(1))
             .map_or(tx_bounds.end, |cursor| cursor.min(tx_bounds.end));
 
-        let tx_bounds = pg_lo..pg_hi;
+        let tx_bounds = tx_lo..tx_hi;
 
-        let tx_digest_keys = if let Some(affected_address) = filter.affected_address {
-            tx_affected_address(ctx, tx_bounds, &page, affected_address).await?
+        let tx_digest_keys = if affected_address.is_some() || sent_address.is_some() {
+            tx_affected_address(ctx, tx_bounds, &page, affected_address, sent_address).await?
         } else {
             tx_unfiltered(tx_bounds, &page)
         };
@@ -280,37 +284,61 @@ impl Transaction {
 
 async fn tx_affected_address(
     ctx: &Context<'_>,
-    Range {
-        start: tx_lo,
-        end: tx_hi,
-    }: Range<u64>,
+    tx_bounds: Range<u64>,
     page: &Page<CTransaction>,
-    affected_address: SuiAddress,
+    affected_address: Option<SuiAddress>,
+    sent_address: Option<SuiAddress>,
 ) -> Result<Vec<u64>, RpcError> {
-    let pg_reader: &PgReader = ctx.data()?;
-
-    let is_asc = page.is_from_front();
-    let query = query!(
+    // Use sent_address as affected_address if affected_address is not set to use PG index.
+    let affected_address = affected_address.or(sent_address).unwrap();
+    let mut query = query!(
         r#"
 SELECT
     tx_sequence_number
 FROM
     tx_affected_addresses
 WHERE
-    {BigInt} <= tx_sequence_number /* tx_lo */
+    affected = {Bytea} /* affected_address */
+"#,
+        affected_address.into_vec(),
+    );
+    if let Some(sent_address) = sent_address {
+        query += query!(
+            r#"
+AND sender = {Bytea} /* sent_address */
+"#,
+            sent_address.into_vec()
+        );
+    }
+    tx_sequence_numbers(ctx, tx_bounds, page, query).await
+}
+
+async fn tx_sequence_numbers(
+    ctx: &Context<'_>,
+    Range {
+        start: tx_lo,
+        end: tx_hi,
+    }: Range<u64>,
+    page: &Page<CTransaction>,
+    mut query: Query<'_>,
+) -> Result<Vec<u64>, RpcError> {
+    query += query!(
+        r#"
+    AND {BigInt} <= tx_sequence_number /* tx_lo */
     AND tx_sequence_number < {BigInt} /* tx_hi */
-    AND affected = {Bytea} /* affected_address */
 ORDER BY
     tx_sequence_number {} /* order_by_direction */
 LIMIT
-    {BigInt} /* limit */
+    {BigInt} /* limit_with_overhead */
 "#,
         tx_lo as i64,
         tx_hi as i64,
-        affected_address.into_vec(),
         page.order_by_direction(),
-        page.limit_with_overhead() as i64, /* limit */
+        page.limit_with_overhead() as i64,
     );
+
+    let pg_reader: &PgReader = ctx.data()?;
+
     #[derive(QueryableByName)]
     struct TxSequenceNumber {
         #[diesel(sql_type = BigInt)]
@@ -327,7 +355,7 @@ LIMIT
         .await
         .context("Failed to execute query")?;
 
-    let tx_sequence_numbers = if is_asc {
+    let tx_sequence_numbers = if page.is_from_front() {
         wrapped_tx_sequence_numbers
             .iter()
             .map(|t| t.tx_sequence_number as u64)
@@ -345,22 +373,13 @@ LIMIT
 
 /// The tx_sequence_numbers with cursors applied inclusively.
 /// Results are limited to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
-fn tx_unfiltered(
-    Range {
-        start: pg_lo,
-        end: pg_hi,
-    }: Range<u64>,
-    page: &Page<CTransaction>,
-) -> Vec<u64> {
+fn tx_unfiltered(tx_bounds: Range<u64>, page: &Page<CTransaction>) -> Vec<u64> {
     if page.is_from_front() {
-        (pg_lo..pg_hi).take(page.limit_with_overhead()).collect()
+        tx_bounds.take(page.limit_with_overhead()).collect()
     } else {
         // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
         // we reverse the results after applying limits.
-        let mut results: Vec<_> = (pg_lo..pg_hi)
-            .rev()
-            .take(page.limit_with_overhead())
-            .collect();
+        let mut results: Vec<_> = tx_bounds.rev().take(page.limit_with_overhead()).collect();
         results.reverse();
         results
     }
