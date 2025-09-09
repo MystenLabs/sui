@@ -6,7 +6,7 @@ use crate::{
         ast::{self as P},
         filter::{filter_program, FilterContext},
     },
-    shared::{known_attributes::VerificationAttribute, CompilationEnv},
+    shared::{known_attributes::{ModeAttribute, VerificationAttribute}, CompilationEnv},
 };
 
 use move_symbol_pool::Symbol;
@@ -59,6 +59,8 @@ impl FilterContext for Context<'_> {
         if self.env.verify_mode() { // modes contains VERIFY_ONLY
             allowed_modes.insert(VerificationAttribute::SPEC.into());
             allowed_modes.insert(VerificationAttribute::SPEC_ONLY.into());
+            allowed_modes.insert(ModeAttribute::TEST_ONLY.into());
+            allowed_modes.insert(ModeAttribute::TEST.into());
         }
 
         // If the compiler mode intersects with these modes, we should keep this
