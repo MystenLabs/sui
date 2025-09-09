@@ -54,8 +54,6 @@ use std::{
 
 use parking_lot::RwLock;
 
-use move_vm_runtime::natives::extensions::NativeContextExtensions;
-
 /// Test state common to all tests
 pub struct SharedTestingConfig {
     report_stacktrace_on_abort: bool,
@@ -291,10 +289,7 @@ impl SharedTestingConfig {
         test_plan: &ModuleTestPlan,
         function_name: &str,
         arguments: Vec<MoveValue>,
-    ) -> (
-        VMResult<(Vec<Vec<u8>>, NativeContextExtensions)>,
-        TestRunInfo,
-    ) {
+    ) -> (VMResult<Vec<Vec<u8>>>, TestRunInfo) {
         // A nicety since Rust doesn't have `try { .. }` yet
         fn do_call(
             test_config: &SharedTestingConfig,
@@ -303,7 +298,7 @@ impl SharedTestingConfig {
             module_id: ModuleId,
             function_name: &str,
             arguments: Vec<MoveValue>,
-        ) -> VMResult<(Vec<Vec<u8>>, NativeContextExtensions<'extensions>)> {
+        ) -> VMResult<Vec<Vec<u8>>> {
             let link_context = test_config
                 .vm_test_adapter
                 .read()
@@ -324,13 +319,10 @@ impl SharedTestingConfig {
                 tracer,
             );
             serialized_return_values_result.map(|res| {
-                (
-                    res.return_values
-                        .into_iter()
-                        .map(|(bytes, _layout)| bytes)
-                        .collect::<Vec<_>>(),
-                    vm_instance.into_extensions(),
-                )
+                res.return_values
+                    .into_iter()
+                    .map(|(bytes, _layout)| bytes)
+                    .collect::<Vec<_>>()
             })
         }
 
