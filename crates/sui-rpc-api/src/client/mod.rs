@@ -209,6 +209,8 @@ impl Client {
             "transaction.effects.bcs",
             "transaction.events.bcs",
             "transaction.balance_changes",
+            "transaction.input_objects.bcs",
+            "transaction.output_objects.bcs",
         ]));
 
         let (metadata, response, _extentions) = self
@@ -229,6 +231,8 @@ pub struct TransactionExecutionResponse {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
+    pub input_objects: Vec<sui_types::object::Object>,
+    pub output_objects: Vec<sui_types::object::Object>,
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
@@ -391,11 +395,29 @@ fn execute_transaction_response_try_from_proto(
         .map(TryInto::try_into)
         .collect::<Result<_, _>>()?;
 
+    let input_objects = executed_transaction
+        .input_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| TryFromProtoError::invalid("input_objects.bcs", e))?;
+
+    let output_objects = executed_transaction
+        .output_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| TryFromProtoError::invalid("output_objects.bcs", e))?;
+
     TransactionExecutionResponse {
         finality,
         effects,
         events,
         balance_changes,
+        input_objects,
+        output_objects,
     }
     .pipe(Ok)
 }

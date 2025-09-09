@@ -409,6 +409,15 @@ impl TransactionEffects {
         signatures: Vec<GenericSignature>,
     ) -> Self {
         let digest = *response.effects.transaction_digest();
+
+        // Update scope with execution objects cache
+        let scope = scope.with_execution_objects(
+            response
+                .input_objects
+                .into_iter()
+                .chain(response.output_objects),
+        );
+
         let contents = NativeTransactionContents::ExecutedTransaction {
             effects: Box::new(response.effects),
             events: response.events.map(|events| events.data),

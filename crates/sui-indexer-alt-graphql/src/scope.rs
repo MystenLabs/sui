@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use async_graphql::Context;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_package_resolver::{PackageStore, Resolver};
+use sui_types::{
+    base_types::{ObjectID, SequenceNumber},
+    object::Object as NativeObject,
+};
 
 use crate::{config::Limits, error::RpcError, task::watermark::Watermarks};
 
@@ -35,6 +39,11 @@ pub(crate) struct Scope {
     /// the root object, and not the immediate parent.
     root_version: Option<u64>,
 
+    /// Cache of objects available in execution context (freshly executed transaction).
+    /// Maps (ObjectID, SequenceNumber) to the actual object data.
+    /// This enables any Object GraphQL type to access fresh data without database queries.
+    execution_objects: Arc<BTreeMap<(ObjectID, SequenceNumber), NativeObject>>,
+
     /// Access to packages for type resolution.
     package_store: Arc<dyn PackageStore>,
 
@@ -53,6 +62,7 @@ impl Scope {
         Ok(Self {
             checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
             root_version: None,
+            execution_objects: Arc::new(BTreeMap::new()),
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
@@ -65,6 +75,7 @@ impl Scope {
         (checkpoint_viewed_at <= current_cp).then(|| Self {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
             root_version: self.root_version,
+            execution_objects: Arc::clone(&self.execution_objects),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -76,6 +87,28 @@ impl Scope {
         Self {
             checkpoint_viewed_at: None,
             root_version: self.root_version,
+            execution_objects: Arc::clone(&self.execution_objects),
+            package_store: self.package_store.clone(),
+            resolver_limits: self.resolver_limits.clone(),
+        }
+    }
+
+    /// Create a nested scope for execution context with a batch of execution objects.
+    pub(crate) fn with_execution_objects<I>(&self, objects: I) -> Self
+    where
+        I: IntoIterator<Item = NativeObject>,
+    {
+        let execution_objects = Arc::new(
+            objects
+                .into_iter()
+                .map(|obj| ((obj.id(), obj.version()), obj))
+                .collect::<BTreeMap<_, _>>(),
+        );
+
+        Self {
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            root_version: self.root_version,
+            execution_objects,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -86,6 +119,7 @@ impl Scope {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             root_version: Some(root_version),
+            execution_objects: Arc::clone(&self.execution_objects),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -96,6 +130,7 @@ impl Scope {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             root_version: None,
+            execution_objects: Arc::clone(&self.execution_objects),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -120,6 +155,15 @@ impl Scope {
     /// Returns `None` in execution context (freshly executed transaction).
     pub(crate) fn checkpoint_viewed_at_exclusive_bound(&self) -> Option<u64> {
         self.checkpoint_viewed_at.map(|cp| cp + 1)
+    }
+
+    /// Get an object from the execution context cache, if available.
+    pub(crate) fn execution_output_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<&NativeObject> {
+        self.execution_objects.get(&(object_id, version))
     }
 
     /// A package resolver with access to the packages known at this scope.
