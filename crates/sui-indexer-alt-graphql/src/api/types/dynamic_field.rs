@@ -182,6 +182,16 @@ impl DynamicField {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
+    /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+    ///
+    /// Both these operations require the object to have both the `key` and `store` abilities.
+    pub(crate) async fn has_public_transfer(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<bool>, RpcError> {
+        self.super_.has_public_transfer(ctx).await
+    }
+
     /// Access dynamic fields on an object using their types and BCS-encoded names.
     ///
     /// Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
