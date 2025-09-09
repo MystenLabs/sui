@@ -196,7 +196,7 @@ fn write_data_op(
 ) -> Result<(), std::fmt::Error> {
     match op {
         DataOp::Pack(_) => todo!(),
-        DataOp::Unpack(_)  => todo!(),
+        DataOp::Unpack(_) => todo!(),
         DataOp::ReadRef => write!(f, "*{}", args[0]),
         DataOp::WriteRef => writeln!(f, "*{} = {}", args[0], args[1]),
         DataOp::FreezeRef => write!(f, "freeze({})", args[0]),

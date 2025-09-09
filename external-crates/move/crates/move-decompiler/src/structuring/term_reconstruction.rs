@@ -22,37 +22,35 @@ pub fn exp(
             SI::AssignReg {
                 lhs,
                 rhs: RValue::Call { function, args },
-            } => {
-                match &lhs[..] {
-                    [] => {
-                        seq.push(Out::Exp::Call(
-                            function.to_string(),
-                            trivials(&mut map, args),
-                        ));
-                    }
-                    [reg] => {
-                        let call = Out::Exp::Call(function.to_string(), trivials(&mut map, args));
-                        map.insert(reg.name, call);
-                    }
-                    _ => {
-                        let tmps = lhs
-                            .into_iter()
-                            .map(|reg| {
-                                let tmp = format!("tmp{}", reg);
-                                map.insert(reg.name, Out::Exp::Variable(tmp.clone()));
-                                tmp
-                            })
-                            .collect();
-                        seq.push(Out::Exp::Assign(
-                            tmps,
-                            Box::new(Out::Exp::Call(
-                                function.to_string(),
-                                trivials(&mut map, args.clone()),
-                            )),
-                        ));
-                    }
+            } => match &lhs[..] {
+                [] => {
+                    seq.push(Out::Exp::Call(
+                        function.to_string(),
+                        trivials(&mut map, args),
+                    ));
                 }
-            }
+                [reg] => {
+                    let call = Out::Exp::Call(function.to_string(), trivials(&mut map, args));
+                    map.insert(reg.name, call);
+                }
+                _ => {
+                    let tmps = lhs
+                        .into_iter()
+                        .map(|reg| {
+                            let tmp = format!("tmp{}", reg);
+                            map.insert(reg.name, Out::Exp::Variable(tmp.clone()));
+                            tmp
+                        })
+                        .collect();
+                    seq.push(Out::Exp::Assign(
+                        tmps,
+                        Box::new(Out::Exp::Call(
+                            function.to_string(),
+                            trivials(&mut map, args.clone()),
+                        )),
+                    ));
+                }
+            },
             SI::AssignReg {
                 lhs: _,
                 rhs:
