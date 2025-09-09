@@ -401,28 +401,9 @@ impl EffectsContents {
     }
 }
 
-/// Helper function to extract objects from an ExecutedTransaction.
-fn extract_objects_from_executed_transaction(
-    executed_transaction: &ExecutedTransaction,
-) -> Vec<NativeObject> {
-    let input_objects = executed_transaction
-        .input_objects
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
-
-    let output_objects = executed_transaction
-        .output_objects
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
-
-    input_objects.chain(output_objects).collect()
-}
-
 impl TransactionEffects {
     /// Create a new TransactionEffects from an ExecutedTransaction.
-    pub(crate) fn from_executed_transaction(
+    fn from_executed_transaction(
         scope: Scope,
         executed_transaction: &ExecutedTransaction,
         transaction_data: TransactionData,
@@ -439,7 +420,7 @@ impl TransactionEffects {
         let digest = contents
             .digest()
             .context("Failed to get digest from transaction contents")?;
-        let scope = scope.with_execution_objects(objects);
+        let scope = scope.with_execution_output(objects);
 
         Ok(Self {
             digest,
@@ -558,4 +539,23 @@ impl From<Transaction> for TransactionEffects {
             contents: EffectsContents { scope, contents },
         }
     }
+}
+
+/// Extract input and output object contents from an ExecutedTransaction.
+fn extract_objects_from_executed_transaction(
+    executed_transaction: &ExecutedTransaction,
+) -> Vec<NativeObject> {
+    let input_objects = executed_transaction
+        .input_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+
+    let output_objects = executed_transaction
+        .output_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+
+    input_objects.chain(output_objects).collect()
 }

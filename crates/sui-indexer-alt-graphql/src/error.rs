@@ -5,7 +5,6 @@ use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use crate::pagination;
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
-use fastcrypto::error::FastCryptoError;
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -19,16 +18,6 @@ pub(crate) mod code {
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
     pub const RESOURCE_EXHAUSTED: &str = "RESOURCE_EXHAUSTED";
-}
-
-/// Error type for user input validation in transaction operations
-#[derive(thiserror::Error, Debug)]
-pub enum TransactionInputError {
-    #[error("Invalid BCS encoding in transaction data: {0}")]
-    InvalidTransactionBcs(bcs::Error),
-
-    #[error("Invalid signature format in signature {index}: {err}")]
-    InvalidSignatureFormat { index: usize, err: FastCryptoError },
 }
 
 #[derive(thiserror::Error, Debug, Clone)]

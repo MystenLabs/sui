@@ -95,6 +95,50 @@ struct GraphQlTestCluster {
 }
 
 impl GraphQlTestCluster {
+    async fn new(validator_cluster: &TestCluster) -> Self {
+        let graphql_port = get_available_port();
+        let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
+
+        let graphql_args = GraphQlArgs {
+            rpc_listen_address: graphql_listen_address,
+            no_ide: true,
+        };
+
+        let fullnode_args = FullnodeArgs {
+            fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
+        };
+
+        let cancel = CancellationToken::new();
+
+        // Start GraphQL server that connects directly to TestCluster's RPC
+        let graphql_handle = start_graphql(
+            None, // No database - GraphQL will use fullnode RPC for simulateTransaction
+            None, // No bigtable
+            fullnode_args,
+            DbArgs::default(),
+            BigtableArgs::default(),
+            ConsistentReaderArgs::default(),
+            graphql_args,
+            SystemPackageTaskArgs::default(),
+            "0.0.0",
+            GraphQlConfig::default(),
+            vec![], // No pipelines since we're not using database
+            &Registry::new(),
+            cancel.child_token(),
+        )
+        .await
+        .expect("Failed to start GraphQL server");
+
+        let url = Url::parse(&format!("http://{}/graphql", graphql_listen_address))
+            .expect("Failed to parse GraphQL URL");
+
+        Self {
+            url,
+            handle: graphql_handle,
+            cancel,
+        }
+    }
+
     /// Execute a GraphQL mutation or query
     async fn execute_graphql(&self, query: &str, variables: Value) -> anyhow::Result<Value> {
         let request_body = json!({
@@ -124,55 +168,11 @@ impl GraphQlTestCluster {
     }
 }
 
-async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> GraphQlTestCluster {
-    let graphql_port = get_available_port();
-    let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
-
-    let graphql_args = GraphQlArgs {
-        rpc_listen_address: graphql_listen_address,
-        no_ide: true,
-    };
-
-    let fullnode_args = FullnodeArgs {
-        fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
-    };
-
-    let cancel = CancellationToken::new();
-
-    // Start GraphQL server that connects directly to TestCluster's RPC
-    let graphql_handle = start_graphql(
-        None, // No database - GraphQL will use fullnode RPC for simulateTransaction
-        None, // No bigtable
-        fullnode_args,
-        DbArgs::default(),
-        BigtableArgs::default(),
-        ConsistentReaderArgs::default(),
-        graphql_args,
-        SystemPackageTaskArgs::default(),
-        "0.0.0",
-        GraphQlConfig::default(),
-        vec![], // No pipelines since we're not using database
-        &Registry::new(),
-        cancel.child_token(),
-    )
-    .await
-    .expect("Failed to start GraphQL server");
-
-    let url = Url::parse(&format!("http://{}/graphql", graphql_listen_address))
-        .expect("Failed to parse GraphQL URL");
-
-    GraphQlTestCluster {
-        url,
-        handle: graphql_handle,
-        cancel,
-    }
-}
-
 #[sim_test]
 async fn test_simulate_transaction_basic() {
     let validator_cluster = TestClusterBuilder::new().build().await;
 
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
 
     // Create a simple transfer transaction for simulation (no signatures needed!)
     let recipient = SuiAddress::random_for_testing_only();
@@ -234,7 +234,7 @@ async fn test_simulate_transaction_basic() {
 #[sim_test]
 async fn test_simulate_transaction_with_events() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
 
     // Publish our test package which emits events in its init function
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packages/emit_event");
@@ -290,7 +290,7 @@ async fn test_simulate_transaction_with_events() {
 #[sim_test]
 async fn test_simulate_transaction_input_validation() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
 
     // Test invalid Base64 transaction data
     let result = graphql_cluster
@@ -319,7 +319,7 @@ async fn test_simulate_transaction_input_validation() {
 #[sim_test]
 async fn test_simulate_transaction_object_changes() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
 
     // Create a transfer transaction that will modify objects
     let recipient = SuiAddress::random_for_testing_only();

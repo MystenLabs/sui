@@ -8,7 +8,14 @@ use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, Fullnod
 use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
-    api::{scalars::base64::Base64, types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects}}, error::{bad_user_input, upcast, RpcError, TransactionInputError}, pagination::{Page, PaginationConfig}, scope::Scope
+    api::error::TransactionInputError,
+    api::{
+        scalars::base64::Base64,
+        types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects},
+    },
+    error::{bad_user_input, upcast, RpcError},
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
 };
 
 use super::{
@@ -548,7 +555,7 @@ impl Query {
         // Simulate transaction - no signatures needed
         match fullnode_client.simulate_transaction(tx_data.clone()).await {
             Ok(response) => {
-                let scope = Scope::new(ctx)?.with_execution_output();
+                let scope = self.scope(ctx)?;
                 SimulationResult::from_simulation_response(scope, response, tx_data).map_err(upcast)
             }
             Err(GrpcExecutionError(status)) => Ok(SimulationResult {

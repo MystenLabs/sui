@@ -107,9 +107,8 @@ impl FullnodeClient {
         let request = proto::ExecuteTransactionRequest::new({
             let mut tx = proto::Transaction::default();
             tx.bcs = Some(
-                proto::Bcs::serialize(&transaction.inner().intent_message.value).map_err(|e| {
-                    Error::Internal(anyhow!("Failed to serialize transaction: {e}"))
-                })?,
+                proto::Bcs::serialize(&transaction.inner().intent_message.value)
+                    .context("Failed to serialize transaction")?,
             );
             tx
         })

@@ -10,7 +10,10 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
-use crate::error::{bad_user_input, upcast, RpcError, TransactionInputError};
+use crate::{
+    api::error::TransactionInputError,
+    error::{bad_user_input, upcast, RpcError},
+};
 use crate::{
     api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},
     scope::Scope,
@@ -62,7 +65,7 @@ impl Mutation {
             .await
         {
             Ok(response) => {
-                let scope = Scope::new(ctx)?.with_execution_output();
+                let scope = Scope::new(ctx)?;
                 let effects = TransactionEffects::from_execution_response(
                     scope,
                     response,
