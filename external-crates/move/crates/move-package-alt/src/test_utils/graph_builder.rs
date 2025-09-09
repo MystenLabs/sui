@@ -169,7 +169,9 @@ impl TestPackageGraph {
         original_id: OriginalID,
         published_at: PublishedID,
     ) -> Self {
-        self.add_package(node, |package| package.publish(original_id, published_at, None))
+        self.add_package(node, |package| {
+            package.publish(original_id, published_at, None)
+        })
     }
 
     /// Add a dependency from package `source` to package `target` and customize it using `build`
@@ -321,7 +323,7 @@ impl TestPackageGraph {
                         original_id,
                         published_at,
                     },
-                    version,
+                version,
                 ..
             } = publication;
 
@@ -566,8 +568,11 @@ mod tests {
         // TODO: break this into separate tests
         let graph = TestPackageGraph::new(["a", "b"])
             .add_package("c", |c| {
-                c.package_name("c_name")
-                    .publish(OriginalID::from(0xcc00), PublishedID::from(0xcccc), None)
+                c.package_name("c_name").publish(
+                    OriginalID::from(0xcc00),
+                    PublishedID::from(0xcccc),
+                    None,
+                )
             })
             .add_deps([("b", "c")])
             .add_dep("a", "b", |dep| {
