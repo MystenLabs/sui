@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 use async_graphql::{Context, Object, Result};
+use fastcrypto::error::FastCryptoError;
 
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 use sui_types::crypto::ToFromBytes;
@@ -10,10 +11,17 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
-use crate::{
-    api::error::TransactionInputError,
-    error::{bad_user_input, upcast, RpcError},
-};
+use crate::error::{bad_user_input, upcast, RpcError};
+
+/// Error type for user input validation in transaction operations
+#[derive(thiserror::Error, Debug)]
+pub enum TransactionInputError {
+    #[error("Invalid BCS encoding in transaction data: {0}")]
+    InvalidTransactionBcs(bcs::Error),
+
+    #[error("Invalid signature format in signature {index}: {err}")]
+    InvalidSignatureFormat { index: usize, err: FastCryptoError },
+}
 use crate::{
     api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},
     scope::Scope,

@@ -8,7 +8,7 @@ use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, Fullnod
 use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
-    api::error::TransactionInputError,
+    api::mutation::TransactionInputError,
     api::{
         scalars::base64::Base64,
         types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects},
