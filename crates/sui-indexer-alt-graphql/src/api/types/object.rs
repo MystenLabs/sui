@@ -970,10 +970,19 @@ impl Object {
                     return Ok(None);
                 };
 
-                Ok(kv_loader
-                    .load_one_object(self.super_.address.into(), version.into())
-                    .await
-                    .context("Failed to fetch object contents")?)
+                // Check execution context cache first and return if available
+                if let Some(cached_object) = self
+                    .super_
+                    .scope
+                    .execution_output_object(self.super_.address.into(), version.into())
+                {
+                    Ok(Some(cached_object.clone()))
+                } else {
+                    Ok(kv_loader
+                        .load_one_object(self.super_.address.into(), version.into())
+                        .await
+                        .context("Failed to fetch object contents")?)
+                }
             })
             .await
     }
