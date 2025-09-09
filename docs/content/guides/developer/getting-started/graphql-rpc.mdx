@@ -39,11 +39,14 @@ The [official GraphQL introspection documentation](https://graphql.org/learn/int
 
 Some of the schema updates for the beta version include:
 
-### Renames
+### Renames and deprecations
   - `TransactionBlock` is being replaced with `Transaction`
   - `Owner` is being replaced with `Addressable`
   - `dryRun` is being replaced with `simulate`
   - `bcs` fields are qualified with the type of BCS data they hold, to avoid confusion.
+  - `changedObject` and `inputObject` filters in `transactions` query are being replaced with `affectedObject`.
+  - `address.coins` and `address.stakedSuis` are being deprecated in favor of `address.objects` with the corresponding `type` filter.
+  - `MoveValue.data` has been deprecated since it does not add value over `MoveValue.json`, which provides a more clear representation of the data.
 
 ### Consistency
 
@@ -292,7 +295,7 @@ This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variable
 <TabItem label="Beta" value="beta">
 ```graphql
 query ($objectID: SuiAddress!) {
-  transactions(filter: {changedObject: $objectID}) {
+  transactions(filter: {affectedObject: $objectID}) {
     nodes {
       sender {
         address
@@ -501,7 +504,7 @@ fragment MoveValueFields on MoveValue {
   type {
     repr
   }
-  data
+  json
   bcs
 }
 ```
@@ -690,13 +693,22 @@ This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variable
 
 <Tabs groupId="graphql">
 <TabItem label="Beta" value="beta">
-
+  ```graphql
+query ($before: String) {
+  checkpoints(last: 5, before: $before) {
+    pageInfo {
+      hasPreviousPage
+      startCursor
+    }
+    nodes {
+      digest
+      timestamp
+    }
+  }
+}
+```
 </TabItem>
 <TabItem label="Alpha (deprecated)" value="alpha">
-
-</TabItem>
-</Tabs>
-
 ```graphql
 query ($before: String) {
   checkpoints(last: 5, before: $before) {
@@ -711,16 +723,18 @@ query ($before: String) {
   }
 }
 ```
+</TabItem>
+</Tabs>
 
 ### Execute a transaction
 
-Transaction execution takes two arguments, `txBytes` and `signatures`. `txBytes` is the serialized unsigned transaction data, which the [Sui Client CLI](../../../references/cli/client.mdx) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](../../../references/cli/keytool.mdx) command `sui keytool sign` can generate the `signatures`.
+Transaction execution takes two arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](../../../references/cli/client.mdx) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](../../../references/cli/keytool.mdx) command `sui keytool sign` can generate the `signatures`.
 
 <Tabs groupId="graphql">
 <TabItem label="Beta" value="beta">
 ```graphql
 mutation ($tx: String!, $sigs: [String!]!) {
-  executeTransaction(txBytes: $tx, signatures: $sigs) {
+  executeTransaction(transactionDataBcs: $tx, signatures: $sigs) {
     errors
     effects {
       status
@@ -904,10 +918,10 @@ query {
 ```graphql
 query {
   address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
-    coins(
+    objects(
       first: 3,
-      after: "IAB3ha2PEA4ESRF4UErsJufJEwYpmSbCq7UNpxIHnLhG",
-      type: "0x2::sui::SUI"
+      after: "vBIzCwAAAADMAQBQlGUkKZV2Gebvp5pASmcU0RJuY/VR9LbH+3ZED4EYyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAARjb2luAAAAAAAAAARDb2luAAAAAAAAAAEAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAA3N1aQAAAAAAAAADU1VJAAAAAAAAAAAB/////XBZUf9feyhb9cW+AOBraL10O9t0D9JAr+tIq2wXDJdl5/zP5w==",
+      filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }
     ) {
       nodes {
         address

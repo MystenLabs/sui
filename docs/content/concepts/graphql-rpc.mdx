@@ -161,7 +161,7 @@ fragment MoveValueFields on MoveValue {
   type {
     repr
   }
-  data
+  json
   bcs
 }
 ```
@@ -172,8 +172,8 @@ GraphQL supports queries that fetch multiple kinds of data, potentially nested. 
 
 ```graphql
 query {
-  epoch(id: 97) {
-    transactionBlocks(first: 10) {
+  epoch(epochId: 97) {
+    transactions(first: 10) {
       pageInfo {
         hasNextPage
         endCursor
@@ -231,11 +231,11 @@ This property requires that cursors that are used together (for example when sup
 
 #### Available range
 
-The GraphQL service does not support consistent pagination for arbitrarily old cursors. A cursor can grow stale, if the checkpoint it is from is no longer in the **available range**. You can query the upper- and lower-bounds of that range as follows:
+The GraphQL service does not support consistent pagination for arbitrarily old cursors. A cursor can grow stale, if the checkpoint it is from is no longer in the **available range**. Data outside of the available range may also be pruned away. This range might be different depending on the specific query and filters used. You can query the upper- and lower-bounds of that range for your query as follows:
 
 ```graphql
 {
-  availableRange {
+  retention(type: "Query", field: "transactions", filter: "affectedAddresses") {
     first { sequenceNumber }
     last { sequenceNumber }
   }
@@ -279,10 +279,9 @@ In addition to rate limits, queries are also validated against a number of rules
     maxQueryDepth
     maxQueryNodes
     maxOutputNodes
-    maxDbQueryCost
     defaultPageSize
     maxPageSize
-    requestTimeoutMs
+    queryTimeoutMs
     maxQueryPayloadSize
     maxTypeArgumentDepth
     maxTypeArgumentWidth
