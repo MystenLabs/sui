@@ -237,11 +237,6 @@ impl From<&[&TransactionEffects]> for CheckpointArtifacts {
     fn from(effects: &[&TransactionEffects]) -> Self {
         let mut latest_object_states = BTreeMap::new();
         for e in effects {
-            // if let TransactionEffects::V1(_) = e {
-            //     // Skip V1 effects - they don't support the written() method
-            //     // and checkpoint artifacts are not used with V1 effects
-            //     continue;
-            // }
             for (id, seq, digest) in e.written() {
                 if let Some((old_seq, _)) = latest_object_states.insert(id, (seq, digest)) {
                     assert!(
@@ -373,7 +368,7 @@ impl CheckpointSummary {
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
         randomness_rounds: Vec<RandomnessRound>,
-        checkpoint_artifact_digests: Vec<CheckpointArtifactsDigest>,
+        checkpoint_commitments: Vec<CheckpointCommitment>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
 
@@ -387,11 +382,6 @@ impl CheckpointSummary {
             .expect("version specific data should serialize"),
             _ => unimplemented!("unrecognized version_specific_data version for CheckpointSummary"),
         };
-
-        let checkpoint_commitments = checkpoint_artifact_digests
-            .into_iter()
-            .map(CheckpointCommitment::CheckpointArtifactsDigest)
-            .collect();
 
         Self {
             epoch,

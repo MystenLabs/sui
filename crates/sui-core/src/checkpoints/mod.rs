@@ -2049,16 +2049,16 @@ impl CheckpointBuilder {
                 .copied()
                 .collect();
 
-            let artifacts_digest = if self
+            let checkpoint_commitments = if self
                 .epoch_store
                 .protocol_config()
                 .include_checkpoint_artifacts_digest_in_summary()
             {
                 let artifacts = CheckpointArtifacts::from(&effects[..]);
                 let artifacts_digest = artifacts.digest()?;
-                vec![artifacts_digest]
+                vec![artifacts_digest.into()]
             } else {
-                vec![]
+                Default::default()
             };
 
             let summary = CheckpointSummary::new(
@@ -2072,7 +2072,7 @@ impl CheckpointBuilder {
                 end_of_epoch_data,
                 timestamp_ms,
                 matching_randomness_rounds,
-                artifacts_digest,
+                checkpoint_commitments,
             );
             summary.report_checkpoint_age(
                 &self.metrics.last_created_checkpoint_age,

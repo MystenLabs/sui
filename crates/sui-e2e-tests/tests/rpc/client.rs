@@ -86,6 +86,11 @@ async fn get_full_checkpoint() {
 
 #[sim_test]
 async fn get_checkpoint_artifacts() {
+    // TODO: remove this once artifacts digest is enabled on mainnet.
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_cluster = TestClusterBuilder::new().build().await;
 
     // Send a tx just to make sure a few checkpoints are created
