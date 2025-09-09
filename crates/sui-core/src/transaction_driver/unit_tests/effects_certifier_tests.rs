@@ -35,9 +35,8 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
-        RawWaitForEffectsResponse, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse,
     },
     quorum_driver_types::EffectsFinalityInfo,
     sui_system_state::SuiSystemState,
@@ -85,17 +84,23 @@ impl MockAuthority {
 
 #[async_trait]
 impl AuthorityAPI for MockAuthority {
+    async fn submit_transaction(
+        &self,
+        _request: SubmitTxRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<SubmitTxResponse, SuiError> {
+        unimplemented!();
+    }
+
     async fn wait_for_effects(
         &self,
-        request: RawWaitForEffectsRequest,
+        wait_request: WaitForEffectsRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+    ) -> Result<WaitForEffectsResponse, SuiError> {
         let response_delay = *self.response_delays.lock().unwrap();
         if let Some(delay) = response_delay {
             sleep(delay).await;
         }
-
-        let wait_request: WaitForEffectsRequest = request.try_into()?;
 
         // Choose the right response based on include_details flag
         let responses = if wait_request.include_details {
@@ -110,13 +115,7 @@ impl AuthorityAPI for MockAuthority {
         };
 
         if let Some(response) = maybe_response {
-            let raw_response = RawWaitForEffectsResponse::try_from(response).map_err(|e| {
-                SuiError::GrpcMessageSerializeError {
-                    type_info: "WaitForEffectsResponse conversion".to_string(),
-                    error: e.to_string(),
-                }
-            })?;
-            Ok(raw_response)
+            Ok(response)
         } else {
             // No response configured - this simulates a scenario where effects are not available.
             // Since the actual timeout in effects_certifier is 10 seconds, we sleep longer
@@ -126,14 +125,6 @@ impl AuthorityAPI for MockAuthority {
                 digest: wait_request.transaction_digest,
             })
         }
-    }
-
-    async fn submit_transaction(
-        &self,
-        _request: SubmitTxRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTxResponse, SuiError> {
-        unimplemented!();
     }
 
     async fn handle_transaction(

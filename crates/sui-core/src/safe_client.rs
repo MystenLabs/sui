@@ -20,9 +20,9 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_grpc::{
     ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
-    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
-    SubmitTxRequest, SubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
-    TransactionStatus, VerifiedObjectInfoResponse, WaitForEffectsResponse,
+    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+    SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
+    VerifiedObjectInfoResponse, WaitForEffectsRequest, WaitForEffectsResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;
@@ -329,16 +329,14 @@ where
     /// through the `submit_transaction` API.
     pub async fn wait_for_effects(
         &self,
-        request: RawWaitForEffectsRequest,
+        request: WaitForEffectsRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<WaitForEffectsResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
+        let wait_for_effects_resp = self
             .authority_client
             .wait_for_effects(request, client_addr)
             .await?;
-
-        let wait_for_effects_resp = WaitForEffectsResponse::try_from(response)?;
 
         match &wait_for_effects_resp {
             WaitForEffectsResponse::Executed {

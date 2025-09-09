@@ -30,8 +30,8 @@ use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
     HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
-    RawWaitForEffectsResponse, SubmitTxRequest, SubmitTxResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionInfoResponse,
+    SubmitTxRequest, SubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionInfoResponse, WaitForEffectsRequest, WaitForEffectsResponse,
 };
 
 #[async_trait]
@@ -47,9 +47,9 @@ pub trait AuthorityAPI {
     /// through the `submit_transaction` API.
     async fn wait_for_effects(
         &self,
-        request: RawWaitForEffectsRequest,
+        request: WaitForEffectsRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError>;
+    ) -> Result<WaitForEffectsResponse, SuiError>;
 
     // TODO(fastpath): Add a soft bundle path for mfp which will return the list of consensus positions
 
@@ -188,17 +188,19 @@ impl AuthorityAPI for NetworkAuthorityClient {
 
     async fn wait_for_effects(
         &self,
-        request: RawWaitForEffectsRequest,
+        request: WaitForEffectsRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
-        let mut request = request.into_request();
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        let raw_request: RawWaitForEffectsRequest = request.try_into()?;
+        let mut request = raw_request.into_request();
         insert_metadata(&mut request, client_addr);
 
         self.client()?
             .wait_for_effects(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::<SuiError>::into)?
+            .try_into()
     }
 
     /// Initiate a new transfer to a Sui or Primary account.

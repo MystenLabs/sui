@@ -15,7 +15,7 @@ use sui_types::error::{SuiError, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
-use sui_types::messages_grpc::RawWaitForEffectsRequest;
+use sui_types::messages_grpc::{WaitForEffectsRequest, WaitForEffectsResponse};
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -28,7 +28,6 @@ use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::execution_scheduler::SchedulingSource;
-use crate::transaction_driver::{WaitForEffectsRequest, WaitForEffectsResponse};
 
 use super::AuthorityServerHandle;
 
@@ -124,12 +123,11 @@ async fn test_wait_for_effects_position_mismatch() {
             .0
     });
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position1),
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let response = test_context.client.wait_for_effects(request, None).await;
 
@@ -148,12 +146,11 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
         index: TransactionIndex::MIN,
     };
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         include_details: true,
-    })
-    .unwrap();
+    };
 
     // Validator does not reject the transaction, but it is rejected by the commit.
     let state_clone = test_context.state.clone();
@@ -169,8 +166,6 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     match response {
@@ -195,12 +190,11 @@ async fn test_wait_for_effects_epoch_mismatch() {
         index: TransactionIndex::MIN,
     };
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let response = test_context.client.wait_for_effects(request, None).await;
 
@@ -220,12 +214,11 @@ async fn test_wait_for_effects_timeout() {
         index: TransactionIndex::MIN,
     };
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let response = test_context.client.wait_for_effects(request, None).await;
 
@@ -245,12 +238,11 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
         index: TransactionIndex::MIN,
     };
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let state_clone = test_context.state.clone();
     tokio::spawn(async move {
@@ -271,8 +263,6 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     match response {
@@ -325,20 +315,17 @@ async fn test_wait_for_effects_fastpath_certified_only() {
 
     // -------- First, test getting effects acknowledgement with consensus position. --------
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-    })
-    .unwrap();
+    };
 
     let response = test_context
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     let exec_effects = exec_handle.await.unwrap();
@@ -356,19 +343,16 @@ async fn test_wait_for_effects_fastpath_certified_only() {
 
     // -------- Then, test getting effects with details when consensus position is provided. --------
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let response = test_context
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     match response {
@@ -385,12 +369,11 @@ async fn test_wait_for_effects_fastpath_certified_only() {
 
     // -------- Finally, test getting effects acknowledgement without consensus position. --------
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: None,
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let response = test_context.client.wait_for_effects(request, None).await;
 
@@ -411,13 +394,12 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
         index: TransactionIndex::MIN,
     };
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-    })
-    .unwrap();
+    };
 
     let state_clone = test_context.state.clone();
     let exec_handle = tokio::spawn(async move {
@@ -440,8 +422,6 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     let exec_effects = exec_handle.await.unwrap();
@@ -495,20 +475,17 @@ async fn test_wait_for_effects_finalized() {
 
     // -------- First, test getting effects acknowledgement with consensus position. --------
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-    })
-    .unwrap();
+    };
 
     let response = test_context
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     let exec_effects = exec_handle.await.unwrap();
@@ -526,19 +503,16 @@ async fn test_wait_for_effects_finalized() {
 
     // -------- Then, test getting full effects without consensus position. --------
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: None,
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let response = test_context
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     match response {
@@ -572,12 +546,11 @@ async fn test_wait_for_effects_expired() {
         index: TransactionIndex::MIN,
     };
 
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    let request = WaitForEffectsRequest {
         transaction_digest: tx_digest,
         consensus_position: Some(tx_position),
         include_details: true,
-    })
-    .unwrap();
+    };
 
     let state_clone = test_context.state.clone();
     tokio::spawn(async move {
@@ -612,8 +585,6 @@ async fn test_wait_for_effects_expired() {
         .client
         .wait_for_effects(request, None)
         .await
-        .unwrap()
-        .try_into()
         .unwrap();
 
     assert!(matches!(response, WaitForEffectsResponse::Expired { .. }));

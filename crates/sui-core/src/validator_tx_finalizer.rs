@@ -307,9 +307,9 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
-        RawWaitForEffectsResponse, SubmitTxRequest, SubmitTxResponse, SystemStateRequest,
-        TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+        SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -333,6 +333,14 @@ mod tests {
             _client_addr: Option<SocketAddr>,
         ) -> Result<SubmitTxResponse, SuiError> {
             unimplemented!();
+        }
+
+        async fn wait_for_effects(
+            &self,
+            _request: WaitForEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<WaitForEffectsResponse, SuiError> {
+            unimplemented!()
         }
 
         async fn handle_transaction(
@@ -390,14 +398,6 @@ mod tests {
             _request: HandleCertificateRequestV3,
             _client_addr: Option<SocketAddr>,
         ) -> Result<HandleCertificateResponseV3, SuiError> {
-            unimplemented!()
-        }
-
-        async fn wait_for_effects(
-            &self,
-            _request: RawWaitForEffectsRequest,
-            _client_addr: Option<SocketAddr>,
-        ) -> Result<RawWaitForEffectsResponse, SuiError> {
             unimplemented!()
         }
 

@@ -35,9 +35,9 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
         HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-        ObjectInfoResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SubmitTxRequest,
-        SubmitTxResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse,
+        ObjectInfoResponse, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse, WaitForEffectsRequest,
+        WaitForEffectsResponse,
     },
     sui_system_state::SuiSystemState,
 };
@@ -124,6 +124,14 @@ impl AuthorityAPI for LocalAuthorityClient {
         })
     }
 
+    async fn wait_for_effects(
+        &self,
+        _request: WaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_transaction(
         &self,
         transaction: Transaction,
@@ -193,14 +201,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
-        unimplemented!()
-    }
-
-    async fn wait_for_effects(
-        &self,
-        _request: RawWaitForEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 
@@ -394,6 +394,14 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!();
     }
 
+    async fn wait_for_effects(
+        &self,
+        _request: WaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        unimplemented!()
+    }
+
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -425,14 +433,6 @@ impl AuthorityAPI for MockAuthorityApi {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
-        unimplemented!()
-    }
-
-    async fn wait_for_effects(
-        &self,
-        _request: RawWaitForEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 
@@ -525,6 +525,14 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         unimplemented!()
     }
 
+    async fn wait_for_effects(
+        &self,
+        _request: WaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
@@ -560,14 +568,6 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
-        unimplemented!()
-    }
-
-    async fn wait_for_effects(
-        &self,
-        _request: RawWaitForEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 

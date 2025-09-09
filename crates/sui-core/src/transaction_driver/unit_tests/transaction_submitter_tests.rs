@@ -32,9 +32,9 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawWaitForEffectsRequest,
-        RawWaitForEffectsResponse, SubmitTxRequest, SubmitTxResponse, SubmitTxResult,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+        SubmitTxResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
+        TransactionInfoResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
@@ -132,9 +132,9 @@ impl AuthorityAPI for MockAuthority {
 
     async fn wait_for_effects(
         &self,
-        _request: RawWaitForEffectsRequest,
+        _request: WaitForEffectsRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+    ) -> Result<WaitForEffectsResponse, SuiError> {
         unimplemented!();
     }
 
