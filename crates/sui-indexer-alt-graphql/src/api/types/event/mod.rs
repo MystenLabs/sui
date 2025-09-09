@@ -145,34 +145,23 @@ impl Event {
             return Ok(Connection::new(false, false));
         };
 
-        let cursor_tx_bounds = page.after().map_or(0, |c| c.tx_sequence_number)
-            ..page
-                .before()
-                .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1));
         // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
-        // Digest to tx_sequence_number is 1:1. If we have a digest filter, query tx_digests for the corresponding tx_sequence_number.
         let tx_bounds_query = tx_bounds_query(
             &cp_bounds,
             global_tx_hi,
-            cursor_tx_bounds.start,
-            cursor_tx_bounds.end,
+            page.after().map_or(0, |c| c.tx_sequence_number),
+            page.before()
+                .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1)),
         );
-
-        let query_from_filters = filter.query(tx_bounds_query)?;
 
         #[derive(QueryableByName)]
         struct TxSequenceNumber(
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
 
-        let query = query!(
-            r#"
-            {}
-            ORDER BY
-                tx_sequence_number {}
-            LIMIT {BigInt}
-            "#,
-            query_from_filters,
+        let mut query = filter.query(tx_bounds_query)?;
+        query += query!(
+            r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
             if page.is_from_front() {
                 query!("ASC")
             } else {
