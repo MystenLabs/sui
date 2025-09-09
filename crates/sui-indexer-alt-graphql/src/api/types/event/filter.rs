@@ -53,21 +53,3 @@ pub(super) fn tx_ev_bounds(
 
     ev_lo..ev_hi
 }
-
-/// The transaction sequence number bounds with pagination cursors applied inclusively.
-pub(super) fn pg_tx_bounds(
-    page: &Page<CEvent>,
-    tx_bounds: std::ops::Range<u64>,
-) -> std::ops::Range<u64> {
-    let pg_lo = page
-        .after()
-        .map(|c| c.tx_sequence_number)
-        .map_or(tx_bounds.start, |tx_lo| tx_lo.max(tx_bounds.start));
-
-    let pg_hi = page
-        .before()
-        .map(|c| c.tx_sequence_number.saturating_add(1))
-        .map_or(tx_bounds.end, |tx_hi| tx_hi.min(tx_bounds.end));
-
-    pg_lo..pg_hi
-}
