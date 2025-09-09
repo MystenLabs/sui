@@ -44,7 +44,7 @@ task 7, line 69:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 8, lines 71-137:
+task 8, lines 71-139:
 //# run-graphql
 Response: {
   "data": {
@@ -452,7 +452,49 @@ Response: {
         }
       ]
     },
-    "eventsOfP2M2": {
+    "eventsByTypeModuleP1M1": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x2fa260e63f163a5fad8d40290689f9f3eac64cbc2793bbf2e1701a74b0243c89::M1::EventA"
+            }
+          },
+          "transaction": {
+            "digest": "Hf9CW2PMW9KWQP87pExFT9b2kW9iCT4omk4G6sDE373n",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0x2fa260e63f163a5fad8d40290689f9f3eac64cbc2793bbf2e1701a74b0243c89::M1::EventB"
+            }
+          },
+          "transaction": {
+            "digest": "Hf9CW2PMW9KWQP87pExFT9b2kW9iCT4omk4G6sDE373n",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsByTypeModuleP2M2": {
       "nodes": [
         {
           "sequenceNumber": 0,
@@ -574,55 +616,13 @@ Response: {
         }
       ]
     },
-    "eventsOfP2ByDigest": {
-      "nodes": [
-        {
-          "sequenceNumber": 0,
-          "sender": {
-            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-          },
-          "contents": {
-            "type": {
-              "repr": "0x5c6a96382bf44876617a7c716ae8f466a071283ede94e4557ace1e3bcec00e18::M2::EventC"
-            }
-          },
-          "transaction": {
-            "digest": "7xd4iAaMixWryhxPKah2hAAJs75mnr4UKBChz8rqTHRz",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 2
-              }
-            }
-          }
-        },
-        {
-          "sequenceNumber": 1,
-          "sender": {
-            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-          },
-          "contents": {
-            "type": {
-              "repr": "0x5c6a96382bf44876617a7c716ae8f466a071283ede94e4557ace1e3bcec00e18::M2::EventD"
-            }
-          },
-          "transaction": {
-            "digest": "7xd4iAaMixWryhxPKah2hAAJs75mnr4UKBChz8rqTHRz",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 2
-              }
-            }
-          }
-        }
-      ]
-    },
     "eventsOfP1SentByAShouldBeEmpty": {
       "nodes": []
     }
   }
 }
 
-task 9, lines 139-146:
+task 9, lines 141-148:
 //# run-graphql
 Response: {
   "data": null,

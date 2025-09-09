@@ -90,7 +90,7 @@ module P2::M2 {
       ...E
     }
   }
-  eventOfP1M1: events(first: 50, filter: {type: "@{P1}::M1"}) {
+  eventOfP1M1: events(first: 50, filter: {module: "@{P1}::M1"}) {
     nodes {
         ...E
     }
@@ -100,17 +100,19 @@ module P2::M2 {
       ...E
     }
   }
-  eventsOfP2M2: events(first: 50, filter: {type: "@{P2}::M2"}) {
-    nodes {
-        ...E
-    }
-  }
-  eventsOfP2SentByB: events(first: 50, filter: {sender: "@{B}", module: "@{P2}"}) {
+  # This should match events of type P1::M1::EventA (filtering by event type module)
+  eventsByTypeModuleP1M1: events(first: 50, filter: {type: "@{P1}::M1"}) {
     nodes {
       ...E
     }
   }
-  eventsOfP2ByDigest: events(first: 50, filter: {module: "@{P2}", transactionDigest: "@{digest_6}"}) {
+  # This should match events of type P2::M2::EventB (filtering by event type module)
+  eventsByTypeModuleP2M2: events(first: 50, filter: {type: "@{P2}::M2"}) {
+    nodes {
+      ...E
+    }
+  }
+  eventsOfP2SentByB: events(first: 50, filter: {sender: "@{B}", module: "@{P2}"}) {
     nodes {
       ...E
     }

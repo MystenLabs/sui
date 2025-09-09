@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses P1=0x0 --simulator
+//# init --protocol-version 70 --accounts A B --addresses P1=0x0 P2=0x0 --simulator
 
 //# publish --sender A
 module P1::M1 {
@@ -9,6 +9,11 @@ module P1::M1 {
 
     public struct T1 has copy, drop {}
     public struct T2 has copy, drop {}
+    public struct T3 has copy, drop {}
+
+    public fun new_T3(): T3 {
+        T3 {}
+    }
 
     public struct EventA<T> has copy, drop {
         value: T
@@ -28,6 +33,22 @@ module P1::M1 {
     }
 }
 
+//# publish --sender B --dependencies P1
+module P2::M2 {
+    use sui::event;
+    use P1::M1::{T3};
+
+    public struct EventC<T> has copy, drop {
+        value: T
+    }
+    
+    public fun emit_T3() {
+        // Use a public constructor function from P1::M1
+        let t3_instance = P1::M1::new_T3();
+        event::emit(EventC<T3> { value: t3_instance })
+    }
+}
+
 //# create-checkpoint
 
 //# run P1::M1::emit_T1 --sender A
@@ -37,6 +58,8 @@ module P1::M1 {
 //# run P1::M1::emit_both --sender A
 
 //# run P1::M1::emit_both --sender B
+
+//# run P2::M2::emit_T3 --sender B
 
 //# create-checkpoint
 
@@ -62,7 +85,8 @@ module P1::M1 {
       ...E
     }
   }
-  eventsOfP1M1EventAByDigest: events(first: 50, filter: {type: "@{P1}::M1::EventA", transactionDigest: "@{digest_6}"}) {
+  # This should only match events whose TYPE is from P1, not events emitted by P1 modules
+  eventsOfTypeP1EmittedByP2: events(first: 50, filter: {type: "@{P1}"}) {
     nodes {
       ...E
     }
@@ -71,6 +95,7 @@ module P1::M1 {
 
 fragment E on Event {
   sequenceNumber
+  transactionModule { package { address } }
   sender { address }
   contents { type { repr } }
   transaction {
