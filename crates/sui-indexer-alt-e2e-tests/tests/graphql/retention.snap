@@ -18,22 +18,24 @@ task 4, line 12:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 5, lines 14-29:
+task 5, lines 14-30:
 //# run-graphql
 Response: {
   "data": {
-    "queryTransactionsRetention": {
-      "first": {
-        "sequenceNumber": 0
-      },
-      "last": {
-        "sequenceNumber": 3
+    "serviceConfig": {
+      "retention": {
+        "first": {
+          "sequenceNumber": 0
+        },
+        "last": {
+          "sequenceNumber": 3
+        }
       }
     }
   }
 }
 
-task 6, lines 31-41:
+task 6, lines 32-44:
 //# run-graphql
 Response: {
   "data": null,
@@ -42,12 +44,13 @@ Response: {
       "message": "Retention range not found for: Query.invalid()",
       "locations": [
         {
-          "line": 2,
-          "column": 3
+          "line": 3,
+          "column": 5
         }
       ],
       "path": [
-        "queryInvalidRetention"
+        "serviceConfig",
+        "retention"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"

@@ -13,10 +13,11 @@
 
 //# run-graphql
 {
-  queryTransactionsRetention: retention(type: "Query", field: "transactions") {
+  serviceConfig {
+    retention(type: "Query", field: "transactions") {
     ...RetentionFragment
+    }
   }
-
 }
 
 fragment RetentionFragment on AvailableRange {
@@ -30,12 +31,14 @@ fragment RetentionFragment on AvailableRange {
 
 //# run-graphql
 {
-  queryInvalidRetention: retention(type: "Query", field: "invalid") {
-    first {
-      sequenceNumber
-    }
-    last {
-      sequenceNumber
+  serviceConfig {
+    retention(type: "Query", field: "invalid") {
+      first {
+        sequenceNumber
+      }
+      last {
+        sequenceNumber
+      }
     }
   }
 }

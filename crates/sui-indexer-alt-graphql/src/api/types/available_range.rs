@@ -18,8 +18,7 @@ pub(crate) enum Error {
     NotFound(String, String, String),
 }
 
-/// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available
-/// (for data that can be tied to a particular checkpoint)
+/// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint)
 ///
 /// Both `type_` and `field` are required. The `filter` is optional and provides retention information for filtered queries.
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
@@ -65,22 +64,26 @@ impl AvailableRange {
         retention_key: RetentionKey,
     ) -> Result<Self, RpcError<Error>> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let pipeline = pipeline(retention_key)?;
+        let pipelines = pipeline(retention_key)?;
 
-        // TODO: (henry) Make this a Vec<String> instead of a String? If a query uses multiple pipelines, we should use the strictest retention (max lo watermark).
-        let lo_watermark = watermarks.pipeline_lo_watermark(&pipeline)?;
-
-        let cp_lo = lo_watermark.checkpoint();
+        let lo_checkpoint =
+            pipelines
+                .iter()
+                .try_fold(0, |acc: u64, pipeline| -> Result<u64, RpcError<Error>> {
+                    let watermark = watermarks.pipeline_lo_watermark(pipeline)?;
+                    let checkpoint = watermark.checkpoint();
+                    Ok(acc.max(checkpoint))
+                })?;
 
         Ok(Self {
             scope: scope.clone(),
-            first: cp_lo,
+            first: lo_checkpoint,
         })
     }
 }
 
 /// Determine the pipeline name based on the query parameters
-fn pipeline(retention_key: RetentionKey) -> Result<String, RpcError<Error>> {
+fn pipeline(retention_key: RetentionKey) -> Result<Vec<String>, RpcError<Error>> {
     // Map query type, function, and filter to pipeline names
     // TODO: (henry) Could use some suggestions on how to store Query, field, filter to pipeline mapping
     match (
@@ -92,15 +95,25 @@ fn pipeline(retention_key: RetentionKey) -> Result<String, RpcError<Error>> {
             .filter(|s| !s.is_empty())
             .map(|s| s.as_str()),
     ) {
-        ("Query", "transactions", None) => Ok("tx_digests".to_string()),
-        ("Query", "transactions", Some("affectedAddresses")) => {
-            Ok("tx_affected_addresses".to_string())
-        }
-        ("Query", "transactions", Some("affectedObjects")) => Ok("tx_affected_objects".to_string()),
-        ("Query", "checkpoints", _) => Ok("tx_digests".to_string()),
-        ("Query", "events", None) => Ok("ev_struct_inst".to_string()),
-        ("Query", "events", Some("module")) => Ok("ev_emit_mod".to_string()),
-        ("Query", "events", Some("type")) => Ok("ev_emit_mod".to_string()),
+        ("Query", "transactions", None) => Ok(vec!["tx_digests".to_string()]),
+        ("Query", "transactions", Some("affectedAddresses")) => Ok(vec![
+            "tx_digests".to_string(),
+            "tx_affected_addresses".to_string(),
+        ]),
+        ("Query", "transactions", Some("affectedObject")) => Ok(vec![
+            "tx_digests".to_string(),
+            "tx_affected_objects".to_string(),
+        ]),
+        ("Query", "checkpoints", _) => Ok(vec![
+            "cp_sequence_numbers".to_string(),
+            "tx_digests".to_string(),
+        ]),
+        ("Query", "events", None) => Ok(vec![
+            "ev_struct_inst".to_string(),
+            "ev_emit_mod".to_string(),
+        ]),
+        ("Query", "events", Some("module")) => Ok(vec!["ev_emit_mod".to_string()]),
+        ("Query", "events", Some("type")) => Ok(vec!["ev_emit_mod".to_string()]),
         _ => Err(bad_user_input(Error::NotFound(
             retention_key.type_,
             retention_key.field,

@@ -8,28 +8,20 @@ use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, Fullnod
 use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
-<<<<<<< HEAD
     api::mutation::TransactionInputError,
-    api::{
-        scalars::base64::Base64,
-        types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects},
-    },
     error::{bad_user_input, upcast, RpcError},
-=======
-    api::types::available_range::{self, AvailableRange, RetentionKey},
-    error::RpcError,
->>>>>>> 17414d4e09 (graphql-alt: Query.retention)
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
     scalars::{
-        digest::Digest, domain::Domain, sui_address::SuiAddress, type_filter::TypeInput,
-        uint53::UInt53,
+        base64::Base64, digest::Digest, domain::Domain, sui_address::SuiAddress,
+        type_filter::TypeInput, uint53::UInt53,
     },
     types::{
         address::Address,
+        available_range::{self, AvailableRange, RetentionKey},
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         coin_metadata::CoinMetadata,
         epoch::Epoch,
@@ -41,10 +33,12 @@ use super::{
         object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
+        simulation_result::SimulationResult,
         transaction::{
             filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
             CTransaction, Transaction,
         },
+        transaction_effects::TransactionEffects,
     },
 };
 
