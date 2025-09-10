@@ -2161,7 +2161,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 };
                 if parsed.rejected {
                     // TODO(fastpath): Add metrics for rejected transactions.
-                    if parsed.transaction.kind.is_mfp_transaction() {
+                    if matches!(
+                        parsed.transaction.kind,
+                        ConsensusTransactionKind::UserTransaction(_)
+                    ) {
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                         num_rejected_user_transactions[author] += 1;
@@ -2170,7 +2173,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // TODO(fastpath): Handle unlocking.
                     continue;
                 }
-                if parsed.transaction.kind.is_mfp_transaction() {
+                if matches!(
+                    parsed.transaction.kind,
+                    ConsensusTransactionKind::UserTransaction(_)
+                ) {
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
                     num_finalized_user_transactions[author] += 1;
