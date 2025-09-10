@@ -7,6 +7,8 @@ use async_graphql::{
     connection::{Connection, CursorType, Edge, EmptyFields},
     registry::MetaField,
 };
+use sui_pg_db::query::Query;
+use sui_sql_macro::query;
 
 use crate::api::scalars::cursor::JsonCursor;
 
@@ -88,6 +90,13 @@ impl PaginationConfig {
     }
 }
 
+impl PageLimits {
+    /// Limits for fetching a single item.
+    pub(crate) fn singleton() -> Self {
+        Self { default: 1, max: 1 }
+    }
+}
+
 impl<C> Page<C> {
     /// Convert connection parameters into a page. Entries for the page are drawn from the range
     /// `(after, before)` (Both bounds are optional). The number of entries in the page is
@@ -155,6 +164,15 @@ impl<C> Page<C> {
 
     pub(crate) fn is_from_front(&self) -> bool {
         matches!(self.end, End::Front)
+    }
+
+    /// Direction for sorting SQL queries.
+    pub(crate) fn order_by_direction(&self) -> Query {
+        if self.is_from_front() {
+            query!("ASC")
+        } else {
+            query!("DESC")
+        }
     }
 }
 

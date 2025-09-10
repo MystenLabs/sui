@@ -41,7 +41,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 task 7, lines 35-38:
 //# run A2::m::call --type-args 0x0::m::A --sender A
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 8, lines 39-41:
 //# run A2::m::call --type-args A0::m::B --sender A
@@ -60,7 +60,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 task 11, lines 48-51:
 //# run A2::m::call --type-args 0x0::m::B --sender A
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 12, lines 52-54:
 //# run A2::m::call --type-args A0::m::C --sender A
@@ -79,4 +79,4 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 task 15, line 61:
 //# run A2::m::call --type-args 0x0::m::C --sender A
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000

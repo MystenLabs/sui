@@ -18,7 +18,7 @@ task 2, line 13:
 
 task 3, line 15:
 //# transfer-object 1,0 --sender A --recipient B
-Error: Error checking transaction input objects: MovePackageAsObject { object_id: object(1,0) }
+Error: Error checking transaction input objects: A move object is expected, instead a move package is passed: object(1,0)
 
 task 4, line 17:
 //# view-object 1,0

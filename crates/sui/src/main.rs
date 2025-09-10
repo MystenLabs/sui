@@ -3,7 +3,7 @@
 
 use clap::*;
 use colored::Colorize;
-use sui::client_commands::SuiClientCommands::{ReplayBatch, ReplayTransaction};
+use sui::client_commands::SuiClientCommands::ReplayTransaction;
 use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
@@ -38,14 +38,6 @@ async fn main() {
                 .with_env()
                 .init()
         }
-
-        SuiCommand::Client {
-            cmd: Some(ReplayBatch { .. }),
-            ..
-        } => telemetry_subscribers::TelemetryConfig::new()
-            .with_log_level("info")
-            .with_env()
-            .init(),
 
         SuiCommand::Client {
             cmd: Some(ReplayTransaction {

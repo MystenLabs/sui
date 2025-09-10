@@ -1,0 +1,27 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-13:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": Only one of [kind, affectedAddress] can be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 55
+        }
+      ],
+      "path": [
+        "invalid_kind_affected_address"
+      ]
+    }
+  ]
+}

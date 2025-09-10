@@ -247,7 +247,7 @@ pub(crate) mod object_query {
     pub(crate) struct ObjectFragment {
         #[allow(dead_code)]
         pub address: SuiAddress,
-        pub version: u64,
+        pub version: Option<u64>,
         pub object_bcs: Option<Base64>,
     }
 
@@ -297,7 +297,9 @@ pub(crate) mod object_query {
                             .0;
                         let bytes = CryptoBase64::decode(&b64)?;
                         let obj: Object = bcs::from_bytes(&bytes)?;
-                        let version = frag.version;
+                        let version = frag
+                            .version
+                            .ok_or_else(|| anyhow::anyhow!("Object version is None for object"))?;
                         Ok::<_, anyhow::Error>(Some((obj, version)))
                     }
                     None => Ok::<_, anyhow::Error>(None),

@@ -1,25 +1,93 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 4 tasks
+processed 11 tasks
 
 init:
 A: object(0,0)
 
-task 1, lines 8-24:
+task 1, lines 8-54:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9994000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 26:
+task 2, line 56:
 //# run a::m::create_parent --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 28:
-//# run a::m::claim_and_wrap --sender A --args object(2,0) 0
+task 3, line 58:
+//# run a::m::claim_and_wrap --sender A --args object(2,0)
 created: object(3,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 4978000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
+
+task 4, line 60:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: a::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    wrapped: std::option::Option<sui::object::UID> {
+        vec: vector[
+            sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        ],
+    },
+}
+
+task 5, line 62:
+//# view-object 3,0
+Owner: Object ID: ( fake(2,0) )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_object::ClaimedStatus> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: sui::derived_object::Claimed {
+        pos0: sui::object::ID {
+            bytes: _,
+        },
+    },
+    value: sui::derived_object::ClaimedStatus::Reserved{},
+}
+
+task 6, line 64:
+//# run a::m::transfer_to_wrapped --sender A --args object(2,0)
+created: object(6,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 3708800,  storage_rebate: 2460348, non_refundable_storage_fee: 24852
+
+task 7, line 66:
+//# run a::m::receive_from_derived_wrapped --sender A --args object(2,0) receiving(6,0)
+mutated: object(0,0), object(2,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 3708800,  storage_rebate: 3671712, non_refundable_storage_fee: 37088
+
+task 8, line 68:
+//# run a::m::create_parent --sender A
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 70:
+//# run a::m::transfer_to_wrapped --sender A --args object(8,0)
+created: object(9,0)
+mutated: object(0,0), object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
+
+task 10, line 72:
+//# run a::m::claim_and_wrap_and_receive --sender A --args object(8,0) receiving(9,0)
+created: object(10,0)
+mutated: object(0,0), object(8,0), object(9,0)
+gas summary: computation_cost: 1000000, storage_cost: 6201600,  storage_rebate: 3430944, non_refundable_storage_fee: 34656

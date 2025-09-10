@@ -59,8 +59,8 @@ const references = [
 					id: 'references/sui-graphql',
 				},
 				items: [
-					graphqlAlpha,
 					graphqlBeta,
+					graphqlAlpha,
 				],
 			},
 			{
@@ -166,7 +166,6 @@ const references = [
 		},
 		items: [
 			'references/contribute/sui-environment',
-			'references/contribute/contribution-process',
 			'references/contribute/contribute-to-sui-repos',
 			{
 				type: 'link',

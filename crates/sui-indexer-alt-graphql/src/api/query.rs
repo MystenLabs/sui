@@ -1,31 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, Context, Object};
+use anyhow::anyhow;
+use async_graphql::{connection::Connection, Context, Object, Result};
 use futures::future::try_join_all;
-use sui_types::digests::ChainIdentifier;
+use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
+use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
-    error::RpcError,
+    api::mutation::TransactionInputError,
+    api::{
+        scalars::base64::Base64,
+        types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects},
+    },
+    error::{bad_user_input, upcast, RpcError},
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
-    scalars::{digest::Digest, sui_address::SuiAddress, type_filter::TypeInput, uint53::UInt53},
+    scalars::{
+        digest::Digest, domain::Domain, sui_address::SuiAddress, type_filter::TypeInput,
+        uint53::UInt53,
+    },
     types::{
         address::Address,
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
+        coin_metadata::CoinMetadata,
         epoch::Epoch,
         event::{filter::EventFilter, CEvent, Event},
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
+        name_service::name_to_address,
         object::{self, Object, ObjectKey, VersionFilter},
         object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
-        transaction::{filter::TransactionFilter, CTransaction, Transaction},
-        transaction_effects::TransactionEffects,
+        transaction::{
+            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+            CTransaction, Transaction,
+        },
     },
 };
 
@@ -100,6 +114,17 @@ impl Query {
         let filter = filter.unwrap_or_default();
 
         Checkpoint::paginate(ctx, scope, page, filter).await
+    }
+
+    /// Fetch the CoinMetadata for a given coin type.
+    ///
+    /// Returns `null` if no CoinMetadata object exists for the given coin type.
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<CoinMetadata>, RpcError<object::Error>> {
+        CoinMetadata::by_coin_type(ctx, self.scope(ctx)?, coin_type.into()).await
     }
 
     /// Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
@@ -317,7 +342,7 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "objectVersions");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -373,7 +398,7 @@ impl Query {
         last: Option<u64>,
         before: Option<move_package::CPackage>,
         filter: Option<PackageCheckpointFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "packages");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -401,7 +426,7 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "packageVersions");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -437,6 +462,21 @@ impl Query {
         ServiceConfig
     }
 
+    /// Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
+    async fn suins_name(
+        &self,
+        ctx: &Context<'_>,
+        address: Domain,
+        root_version: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError> {
+        let mut scope = self.scope(ctx)?;
+        if let Some(version) = root_version {
+            scope = scope.with_root_version(version.into());
+        }
+
+        name_to_address(ctx, &scope, &address).await
+    }
+
     /// Fetch a transaction by its digest.
     ///
     /// Returns `null` if the transaction does not exist in the store, either because it never existed or because it was pruned.
@@ -467,7 +507,7 @@ impl Query {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
@@ -491,6 +531,43 @@ impl Query {
         type_: TypeInput,
     ) -> Result<Option<MoveType>, RpcError<move_type::Error>> {
         MoveType::canonicalize(type_.into(), self.scope(ctx)?).await
+    }
+
+    /// Simulate a transaction to preview its effects without executing it on chain.
+    ///
+    /// - `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
+    ///
+    /// Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
+    async fn simulate_transaction(
+        &self,
+        ctx: &Context<'_>,
+        transaction_data_bcs: Base64,
+    ) -> Result<SimulationResult, RpcError<TransactionInputError>> {
+        let fullnode_client: &FullnodeClient = ctx.data()?;
+
+        // Parse transaction data from BCS
+        let tx_data: TransactionData = {
+            let bytes: &Vec<u8> = &transaction_data_bcs.0;
+            bcs::from_bytes(bytes)
+                .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionBcs(err)))?
+        };
+
+        // Simulate transaction - no signatures needed
+        match fullnode_client.simulate_transaction(tx_data.clone()).await {
+            Ok(response) => {
+                let scope = self.scope(ctx)?;
+                SimulationResult::from_simulation_response(scope, response, tx_data).map_err(upcast)
+            }
+            Err(GrpcExecutionError(status)) => Ok(SimulationResult {
+                effects: None,
+                events: None,
+                outputs: None,
+                error: Some(status.to_string()),
+            }),
+            Err(other_error) => Err(anyhow!(other_error)
+                .context("Failed to simulate transaction")
+                .into()),
+        }
     }
 }
 

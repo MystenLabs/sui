@@ -7,23 +7,20 @@ source: crates/move-package-alt/tests/test_runner.rs
 [move]
 version = 4
 
+[pinned._test_env.bar]
+source = { local = "../bar" }
+use_environment = "_test_env"
+manifest_digest = "7CF677A61E2A8A49F782366D611EC014DB85EC46CC4987F1508407F22005182B"
+deps = {}
+
+[pinned._test_env.baz]
+source = { local = "../baz" }
+use_environment = "_test_env"
+manifest_digest = "CB9239900A57672C111EDB16949CB9564EAF02FC5C327FD62AFD04D9518405C9"
+deps = { bar = "bar" }
+
 [pinned._test_env.example]
 source = { root = true }
 use_environment = "_test_env"
-manifest_digest = "7078326A6155C6DCCDC0E8914B68F5D8A53C6EA81A5761CA237A3CD1BE7B6F32"
-deps = {}
-
-[pinned.mainnet.bar]
-source = { local = "../bar" }
-manifest_digest = "cab4"
-deps = {}
-
-[pinned.mainnet.baz]
-source = { local = "../baz" }
-manifest_digest = "cab3"
-deps = { bar = "bar" }
-
-[pinned.mainnet.example]
-source = { root = true }
-manifest_digest = "cb4a8948faa586ccc1694d80e25941a5227d8b9e"
+manifest_digest = "73E3CDCE3E6F576C907FA039F70F592F9DD4BC7DE41DE8D8D63800938EF11834"
 deps = { baz = "baz" }

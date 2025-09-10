@@ -273,7 +273,7 @@ gas summary: computation_cost: 1000000, storage_cost: 11293600,  storage_rebate:
 
 task 14, lines 84-86:
 //# transfer-object 1,1 --sender A --recipient A
-Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,0)::first_coin::FIRST_COIN" }
+Error: Error checking transaction input objects: Address @A is denied for coin object(1,0)::first_coin::FIRST_COIN
 
 task 15, line 87:
 //# transfer-object 1,2 --sender A --recipient A

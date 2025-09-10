@@ -1,0 +1,237 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-32:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 22366800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 34:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 36-61:
+//# run-graphql --cursors "J" "P"
+Response: {
+  "data": {
+    "package": {
+      "all": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": false
+        },
+        "nodes": [
+          {
+            "name": "A"
+          },
+          {
+            "name": "B"
+          },
+          {
+            "name": "C"
+          },
+          {
+            "name": "D"
+          },
+          {
+            "name": "E"
+          },
+          {
+            "name": "F"
+          },
+          {
+            "name": "G"
+          },
+          {
+            "name": "H"
+          },
+          {
+            "name": "I"
+          },
+          {
+            "name": "J"
+          },
+          {
+            "name": "K"
+          },
+          {
+            "name": "L"
+          },
+          {
+            "name": "M"
+          },
+          {
+            "name": "N"
+          },
+          {
+            "name": "O"
+          },
+          {
+            "name": "P"
+          },
+          {
+            "name": "Q"
+          },
+          {
+            "name": "R"
+          },
+          {
+            "name": "S"
+          },
+          {
+            "name": "T"
+          },
+          {
+            "name": "U"
+          },
+          {
+            "name": "V"
+          },
+          {
+            "name": "W"
+          },
+          {
+            "name": "X"
+          },
+          {
+            "name": "Y"
+          },
+          {
+            "name": "Z"
+          }
+        ]
+      },
+      "first": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": true
+        },
+        "nodes": [
+          {
+            "name": "A"
+          },
+          {
+            "name": "B"
+          },
+          {
+            "name": "C"
+          }
+        ]
+      },
+      "last": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": false
+        },
+        "nodes": [
+          {
+            "name": "X"
+          },
+          {
+            "name": "Y"
+          },
+          {
+            "name": "Z"
+          }
+        ]
+      },
+      "firstBefore": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": true
+        },
+        "nodes": [
+          {
+            "name": "A"
+          },
+          {
+            "name": "B"
+          },
+          {
+            "name": "C"
+          }
+        ]
+      },
+      "lastAfter": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": false
+        },
+        "nodes": [
+          {
+            "name": "X"
+          },
+          {
+            "name": "Y"
+          },
+          {
+            "name": "Z"
+          }
+        ]
+      },
+      "firstAfter": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true
+        },
+        "nodes": [
+          {
+            "name": "K"
+          },
+          {
+            "name": "L"
+          },
+          {
+            "name": "M"
+          }
+        ]
+      },
+      "lastBefore": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true
+        },
+        "nodes": [
+          {
+            "name": "M"
+          },
+          {
+            "name": "N"
+          },
+          {
+            "name": "O"
+          }
+        ]
+      },
+      "afterBefore": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true
+        },
+        "nodes": [
+          {
+            "name": "K"
+          },
+          {
+            "name": "L"
+          },
+          {
+            "name": "M"
+          },
+          {
+            "name": "N"
+          },
+          {
+            "name": "O"
+          }
+        ]
+      }
+    }
+  }
+}

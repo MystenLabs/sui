@@ -916,7 +916,7 @@ async fn test_dev_inspect_uses_unbound_object() {
     };
     let kind = TransactionKind::programmable(pt);
 
-    let result = fullnode
+    let err = fullnode
         .dev_inspect_transaction_block(
             sender,
             kind,
@@ -927,9 +927,14 @@ async fn test_dev_inspect_uses_unbound_object() {
             None,
             None,
         )
-        .await;
-    let Err(err) = result else { panic!() };
-    assert!(err.to_string().contains("ObjectNotFound"));
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(
+        err.contains("Could not find the referenced object"),
+        "{err}"
+    );
 }
 
 #[tokio::test]
@@ -1840,11 +1845,14 @@ async fn test_publish_non_existing_dependent_module() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let transaction = epoch_store.verify_transaction(transaction).unwrap();
-    let response = authority
+
+    let err = authority
         .handle_transaction(&epoch_store, transaction)
-        .await;
-    assert!(std::string::ToString::to_string(&response.unwrap_err())
-        .contains("DependentPackageNotFound"));
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("Dependent package not found"), "{err}");
     // Check that gas was not charged.
     assert_eq!(
         authority

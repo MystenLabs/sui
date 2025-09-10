@@ -11,6 +11,8 @@ The guide is split into two parts:
 1. [Smart Contracts](#smart-contracts): The Move code that sets up the coin flip logic.
 1. [Frontend](#frontend): A UI that enables the players to place bets and take profits, and the admin to manage the house. 
 
+<ImportContent source="prerequisites.mdx" mode="snippet" />
+
 :::tip Additional resources
 
 Source code locations for the smart contracts and frontend: 
@@ -29,12 +31,6 @@ Source code locations for the smart contracts and frontend:
 - **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics.mdx#storage-fund-rewards).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
 
-
-## What you need
-
-Before getting started, make sure you have:
-
-- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
 
 ## Smart contracts {#smart-contracts}
 
@@ -693,18 +689,24 @@ To skip building the frontend and test out your newly deployed package, use the 
 
 :::
 
-### Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-Before getting started, make sure you have:
+- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
 
-- [Deployed the complete `satoshi_flip` Move package](#smart-contracts) and understand its design.
-- Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) to use as the package manager.
+- [x] [Deployed the complete `satoshi_flip` Move package](#smart-contracts) and understand its design.
+
+- [x] Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) to use as the package manager.
+
+</TabItem>
+</Tabs>
+
 
 :::tip Additional resources
 
-- Tooling: [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
-- Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
+- [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
+- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
 
 :::
 

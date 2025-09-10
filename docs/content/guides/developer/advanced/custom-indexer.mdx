@@ -20,17 +20,20 @@ While this example uses PostgreSQL with [Diesel](https://diesel.rs/guides/gettin
 
 :::
 
-## Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-Before starting this exercise, ensure you have:
+- [x] [Rust and Cargo](https://rustup.rs/)
+- [x] [PostgreSQL](https://www.postgresql.org/download/)
+- [x] [Diesel CLI](https://diesel.rs/guides/getting-started#installing-diesel-cli)
 
-### Required software
+<details className="nudge-details">
 
-You need the following stack installed on your machine.
+<summary>
 
-- [Rust and Cargo](https://rustup.rs/)
-- [PostgreSQL](https://www.postgresql.org/download/)
-- [Diesel CLI](https://diesel.rs/guides/getting-started#installing-diesel-cli)
+Check installation
+
+</summary>
 
 If you're unsure whether your system has the necessary software properly installed, you can verify installation with the following commands.
 
@@ -39,9 +42,12 @@ $ psql --version
 $ diesel --version
 ```
 
-### Recommended reading
+</details>
 
-Read the [Custom Indexing Framework](../../../concepts/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](../../../concepts/custom-indexer/pipeline-architecture.mdx) topics first to understand the overall architecture and concurrent pipeline concepts.
+- [x] Read the [Custom Indexing Framework](../../../concepts/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](../../../concepts/custom-indexer/pipeline-architecture.mdx) topics first to understand the overall architecture and concurrent pipeline concepts.
+
+</TabItem>
+</Tabs>
 
 ## What you build
 

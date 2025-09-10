@@ -11,6 +11,7 @@ use async_graphql::{
 };
 use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
+use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_reader::{
     consistent_reader::{self, ConsistentReader},
     kv_loader::KvLoader,
@@ -23,7 +24,9 @@ use sui_indexer_alt_reader::{
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 use sui_pg_db::sql;
 use sui_types::{
-    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress, TransactionDigest},
+    base_types::{
+        SequenceNumber, SuiAddress as NativeSuiAddress, TransactionDigest, VersionDigest,
+    },
     digests::ObjectDigest,
     object::Object as NativeObject,
     transaction::GenesisObject,
@@ -37,18 +40,19 @@ use crate::{
         cursor::{BcsCursor, JsonCursor},
         owner_kind::OwnerKind,
         sui_address::SuiAddress,
-        type_filter::TypeInput,
+        type_filter::{TypeFilter, TypeInput},
         uint53::UInt53,
     },
-    error::{bad_user_input, feature_unavailable, RpcError},
+    error::{bad_user_input, feature_unavailable, upcast, RpcError},
     intersect,
-    pagination::{Page, PaginationConfig},
+    pagination::{Page, PageLimits, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
     address::Address,
     balance::{self, Balance},
+    coin_metadata::CoinMetadata,
     dynamic_field::DynamicField,
     move_object::MoveObject,
     move_package::MovePackage,
@@ -64,12 +68,12 @@ use super::{
     name = "IObject",
     field(
         name = "version",
-        ty = "UInt53",
+        ty = "Result<Option<UInt53>, RpcError>",
         desc = "The version of this object that this content comes from.",
     ),
     field(
         name = "digest",
-        ty = "String",
+        ty = "Result<Option<String>, RpcError>",
         desc = "32-byte hash that identifies the object's contents, encoded in Base58.",
     ),
     field(
@@ -92,7 +96,7 @@ use super::{
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CVersion>"),
         arg(name = "filter", ty = "Option<VersionFilter>"),
-        ty = "Result<Option<Connection<String, Object>>, RpcError<Error>>",
+        ty = "Result<Option<Connection<String, Object>>, RpcError>",
         desc = "Paginate all versions of this object after this one."
     ),
     field(
@@ -102,7 +106,7 @@ use super::{
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CVersion>"),
         arg(name = "filter", ty = "Option<VersionFilter>"),
-        ty = "Result<Option<Connection<String, Object>>, RpcError<Error>>",
+        ty = "Result<Option<Connection<String, Object>>, RpcError>",
         desc = "Paginate all versions of this object before this one."
     ),
     field(
@@ -122,6 +126,7 @@ use super::{
     )
 )]
 pub(crate) enum IObject {
+    CoinMetadata(CoinMetadata),
     DynamicField(DynamicField),
     MoveObject(MoveObject),
     MovePackage(MovePackage),
@@ -131,8 +136,7 @@ pub(crate) enum IObject {
 #[derive(Clone)]
 pub(crate) struct Object {
     pub(crate) super_: Address,
-    pub(crate) version: SequenceNumber,
-    pub(crate) digest: ObjectDigest,
+    pub(crate) version_digest: Option<VersionDigest>,
     pub(crate) contents: Arc<OnceCell<Option<NativeObject>>>,
 }
 
@@ -206,28 +210,40 @@ impl Object {
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self) -> Result<UInt53, RpcError> {
-        Ok(self.version.into())
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        if let Some((version, _)) = self.version_digest {
+            return Ok(Some(version.into()));
+        }
+
+        // Fall back to loading from contents
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(contents.version().into()))
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self) -> Result<String, RpcError> {
-        Ok(Base58::encode(self.digest.inner()))
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        if let Some((_, digest)) = self.version_digest {
+            return Ok(Some(Base58::encode(digest.inner())));
+        }
+
+        // Fall back to loading from contents
+        let Some(contents) = self.contents(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(Base58::encode(contents.digest().inner())))
     }
 
     /// Attempts to convert the object into a MoveObject.
-    async fn as_move_object(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<MoveObject>, RpcError<Error>> {
+    async fn as_move_object(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>, RpcError> {
         MoveObject::from_object(self, ctx).await
     }
 
     /// Attempts to convert the object into a MovePackage.
-    async fn as_move_package(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<MovePackage>, RpcError<Error>> {
+    async fn as_move_package(&self, ctx: &Context<'_>) -> Result<Option<MovePackage>, RpcError> {
         MovePackage::from_object(self, ctx).await
     }
 
@@ -252,6 +268,14 @@ impl Object {
         before: Option<balance::Cursor>,
     ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
         self.super_.balances(ctx, first, after, last, before).await
+    }
+
+    /// The domain explicitly configured as the default SuiNS name for this address.
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<String>, RpcError> {
+        self.super_.default_suins_name(ctx).await
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -287,10 +311,7 @@ impl Object {
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    pub(crate) async fn object_bcs(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError<Error>> {
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
         let Some(object) = self.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -308,28 +329,34 @@ impl Object {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IObject", "objectVersionsAfter");
         let page = Page::from_params(limits, first, after, last, before)?;
 
+        let Some(version) = self.version(ctx).await? else {
+            return Ok(None);
+        };
+
         // Apply any filter that was supplied to the query, but add an additional version
         // lowerbound constraint.
         let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            after_version: Some(self.version.into()),
+            after_version: Some(version),
             ..VersionFilter::default()
         }) else {
-            return Ok(Connection::new(false, false));
+            return Ok(Some(Connection::new(false, false)));
         };
 
-        Object::paginate_by_version(
-            ctx,
-            self.super_.scope.without_root_version(),
-            page,
-            self.super_.address,
-            filter,
-        )
-        .await
+        Ok(Some(
+            Object::paginate_by_version(
+                ctx,
+                self.super_.scope.without_root_version(),
+                page,
+                self.super_.address,
+                filter,
+            )
+            .await?,
+        ))
     }
 
     /// Paginate all versions of this object before this one.
@@ -341,28 +368,34 @@ impl Object {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<String, Object>, RpcError<Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IObject", "objectVersionsBefore");
         let page = Page::from_params(limits, first, after, last, before)?;
 
+        let Some(version) = self.version(ctx).await? else {
+            return Ok(None);
+        };
+
         // Apply any filter that was supplied to the query, but add an additional version
         // upperbound constraint.
         let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            before_version: Some(self.version.into()),
+            before_version: Some(version),
             ..VersionFilter::default()
         }) else {
-            return Ok(Connection::new(false, false));
+            return Ok(Some(Connection::new(false, false)));
         };
 
-        Object::paginate_by_version(
-            ctx,
-            self.super_.scope.without_root_version(),
-            page,
-            self.super_.address,
-            filter,
-        )
-        .await
+        Ok(Some(
+            Object::paginate_by_version(
+                ctx,
+                self.super_.scope.without_root_version(),
+                page,
+                self.super_.address,
+                filter,
+            )
+            .await?,
+        ))
     }
 
     /// Objects owned by this object, optionally filtered by type.
@@ -381,7 +414,7 @@ impl Object {
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError<Error>> {
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
         let Some(object) = self.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -396,7 +429,7 @@ impl Object {
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError<Error>> {
+    ) -> Result<Option<Transaction>, RpcError> {
         let Some(object) = self.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -411,7 +444,7 @@ impl Object {
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError<Error>> {
+    ) -> Result<Option<BigInt>, RpcError> {
         let Some(object) = self.contents(ctx).await?.as_ref() else {
             return Ok(None);
         };
@@ -436,8 +469,19 @@ impl Object {
 
         Self {
             super_,
-            version,
-            digest,
+            version_digest: Some((version, digest)),
+            contents: Arc::new(OnceCell::new()),
+        }
+    }
+
+    /// Construct an object that is represented by just its address. This does not check that the
+    /// object exists, so should not be used to "fetch" an address provided as user input. When the
+    /// object's contents are fetched from the latest version of that object as of the current
+    /// checkpoint.
+    pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
+        Self {
+            super_: Address::with_address(scope, address),
+            version_digest: None,
             contents: Arc::new(OnceCell::new()),
         }
     }
@@ -458,19 +502,23 @@ impl Object {
         if bounds > 1 {
             Err(bad_user_input(Error::OneBound))
         } else if let Some(v) = key.version {
-            Ok(Self::at_version(ctx, scope, key.address, v).await?)
+            Self::at_version(ctx, scope, key.address, v)
+                .await
+                .map_err(upcast)
         } else if let Some(v) = key.root_version {
-            Ok(Self::version_bounded(ctx, scope, key.address, v).await?)
+            Self::version_bounded(ctx, scope, key.address, v)
+                .await
+                .map_err(upcast)
         } else if let Some(cp) = key.at_checkpoint {
             let scope = scope
                 .with_checkpoint_viewed_at(cp.into())
                 .ok_or_else(|| bad_user_input(Error::Future(cp.into())))?;
 
-            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
-        } else if let Some(cp) = scope.checkpoint_viewed_at() {
-            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp.into()).await?)
+            Self::checkpoint_bounded(ctx, scope, key.address, cp)
+                .await
+                .map_err(upcast)
         } else {
-            Ok(None)
+            Self::latest(ctx, scope, key.address).await.map_err(upcast)
         }
     }
 
@@ -481,7 +529,7 @@ impl Object {
         scope: Scope,
         address: SuiAddress,
         root_version: UInt53,
-    ) -> Result<Option<Self>, RpcError<Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(stored) = pg_loader
@@ -498,6 +546,20 @@ impl Object {
         Object::from_stored_version(scope.with_root_version(root_version.into()), stored)
     }
 
+    /// Get the latest version of the object at the given address, as of the latest checkpoint
+    /// according to `scope`.
+    pub(crate) async fn latest(
+        ctx: &Context<'_>,
+        scope: Scope,
+        address: SuiAddress,
+    ) -> Result<Option<Self>, RpcError> {
+        let Some(cp) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
+
+        Self::checkpoint_bounded(ctx, scope, address, cp.into()).await
+    }
+
     /// Fetch the latest version of the object at the given address as of the checkpoint with
     /// sequence number `at_checkpoint`.
     pub(crate) async fn checkpoint_bounded(
@@ -505,7 +567,7 @@ impl Object {
         scope: Scope,
         address: SuiAddress,
         at_checkpoint: UInt53,
-    ) -> Result<Option<Self>, RpcError<Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(stored) = pg_loader
@@ -532,19 +594,20 @@ impl Object {
         scope: Scope,
         address: SuiAddress,
         version: UInt53,
-    ) -> Result<Option<Self>, RpcError<Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
 
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let kv_loader: &KvLoader = ctx.data()?;
 
-        let contents = contents(ctx, address, version);
+        let contents = kv_loader.load_one_object(address.into(), version.into());
         let stored_version =
             pg_loader.load_one(VersionedObjectVersionKey(address.into(), version.into()));
         let (contents, stored_version) = join!(contents, stored_version);
 
-        let Some(c) = contents? else {
+        let Some(c) = contents.context("Failed to fetch object contents")? else {
             return Ok(None);
         };
 
@@ -579,8 +642,7 @@ impl Object {
 
         Self {
             super_: address,
-            version: contents.version(),
-            digest: contents.digest(),
+            version_digest: Some((contents.version(), contents.digest())),
             contents: Arc::new(OnceCell::from(Some(contents))),
         }
     }
@@ -592,7 +654,7 @@ impl Object {
     fn from_stored_version(
         scope: Scope,
         stored: StoredObjVersion,
-    ) -> Result<Option<Self>, RpcError<Error>> {
+    ) -> Result<Option<Self>, RpcError> {
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
@@ -617,9 +679,11 @@ impl Object {
 
         Ok(Some(Object {
             super_: address,
-            version: SequenceNumber::from_u64(stored.object_version as u64),
-            digest: ObjectDigest::try_from(&digest[..])
-                .context("Failed to deserialize Object Digest")?,
+            version_digest: Some((
+                SequenceNumber::from_u64(stored.object_version as u64),
+                ObjectDigest::try_from(&digest[..])
+                    .context("Failed to deserialize Object Digest")?,
+            )),
             contents: Arc::new(OnceCell::new()),
         }))
     }
@@ -633,7 +697,7 @@ impl Object {
         page: Page<CVersion>,
         address: NativeSuiAddress,
         filter: VersionFilter,
-    ) -> Result<Connection<String, Object>, RpcError<Error>> {
+    ) -> Result<Connection<String, Object>, RpcError> {
         use obj_versions::dsl as v;
 
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
@@ -843,8 +907,7 @@ impl Object {
             let address = Address::with_address(scope.clone(), id.into());
             let object = Object {
                 super_: address,
-                version,
-                digest,
+                version_digest: Some((version, digest)),
                 contents: Arc::new(OnceCell::new()),
             };
             conn.edges.push(Edge::new(cursor.encode_cursor(), object));
@@ -853,14 +916,73 @@ impl Object {
         Ok(conn)
     }
 
+    /// Fetch a singleton object of a given type, assuming there is at most one live object of that
+    /// type in the live object set.
+    ///
+    /// Returns `None` if there is no live object of the given type.
+    pub(crate) async fn singleton(
+        ctx: &Context<'_>,
+        scope: Scope,
+        type_: StructTag,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let filter = ObjectFilter {
+            type_: Some(TypeFilter::Type(type_)),
+            owner_kind: None,
+            owner: None,
+        };
+
+        // Query for objects of this type with a limit of 1
+        let page = Page::from_params(&PageLimits::singleton(), Some(1), None, None, None)?;
+        let mut connection = Self::paginate_live(ctx, scope, page, filter).await?;
+
+        // Get the first (and should be only) result
+        Ok(connection.edges.pop().map(|edge| edge.node))
+    }
+
     /// Return the object's contents, lazily loading it if necessary.
     pub(crate) async fn contents(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<NativeObject>, RpcError<Error>> {
+    ) -> Result<&Option<NativeObject>, RpcError> {
         self.contents
             .get_or_try_init(async || {
-                contents(ctx, self.super_.address.into(), self.version.into()).await
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+                let kv_loader: &KvLoader = ctx.data()?;
+
+                let version = if let Some((version, _)) = self.version_digest {
+                    version.into()
+                } else if let Some(cp) = self.super_.scope.checkpoint_viewed_at() {
+                    // If we don't have a version, we need to do a checkpoint-bounded lookup first
+                    // to get the version, then fetch contents with that version.
+                    let Some(stored) = pg_loader
+                        .load_one(CheckpointBoundedObjectVersionKey(
+                            self.super_.address.into(),
+                            cp,
+                        ))
+                        .await
+                        .context("Failed to fetch object version")?
+                    else {
+                        return Ok(None);
+                    };
+
+                    UInt53::from(stored.object_version as u64)
+                } else {
+                    return Ok(None);
+                };
+
+                // Check execution context cache first and return if available
+                if let Some(cached_object) = self
+                    .super_
+                    .scope
+                    .execution_output_object(self.super_.address.into(), version.into())
+                {
+                    Ok(Some(cached_object.clone()))
+                } else {
+                    Ok(kv_loader
+                        .load_one_object(self.super_.address.into(), version.into())
+                        .await
+                        .context("Failed to fetch object contents")?)
+                }
             })
             .await
     }
@@ -887,17 +1009,4 @@ impl VersionFilter {
             }),
         }
     }
-}
-
-/// Lazily load the contents of the object from the store.
-async fn contents(
-    ctx: &Context<'_>,
-    address: SuiAddress,
-    version: UInt53,
-) -> Result<Option<NativeObject>, RpcError<Error>> {
-    let kv_loader: &KvLoader = ctx.data()?;
-    Ok(kv_loader
-        .load_one_object(address.into(), version.into())
-        .await
-        .context("Failed to fetch object contents")?)
 }

@@ -11,7 +11,9 @@ use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
     message_envelope::Message,
-    messages_checkpoint::{CheckpointContents as NativeCheckpointContents, CheckpointSummary},
+    messages_checkpoint::{
+        CheckpointCommitment, CheckpointContents as NativeCheckpointContents, CheckpointSummary,
+    },
 };
 
 use crate::{
@@ -28,7 +30,10 @@ use super::{
     checkpoint::filter::{checkpoint_bounds, cp_by_epoch, cp_unfiltered, CheckpointFilter},
     epoch::Epoch,
     gas::GasCostSummary,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+        CTransaction, Transaction,
+    },
     validator_aggregated_signature::ValidatorAggregatedSignature,
 };
 
@@ -80,6 +85,22 @@ impl Checkpoint {
 
 #[Object]
 impl CheckpointContents {
+    /// A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
+    /// e.g., object checkpoint states
+    async fn artifacts_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+
+        for commitment in &summary.checkpoint_commitments {
+            if let CheckpointCommitment::CheckpointArtifactsDigest(digest) = commitment {
+                return Ok(Some(digest.base58_encode()));
+            }
+        }
+
+        Ok(None)
+    }
+
     /// A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
     async fn digest(&self) -> Result<Option<String>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
@@ -175,7 +196,7 @@ impl CheckpointContents {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
             return Ok(None);

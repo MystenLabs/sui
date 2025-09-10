@@ -36,3 +36,11 @@ Party objects whose owning address corresponds to an object ID are not supported
 ## When to use party objects
 
 Use party objects when you want an object to be versioned by consensus, such as for operational convenience. If an object is only used with other party or shared objects, converting it to a party object has no additional performance cost.
+
+Party objects can be used by multiple inflight transactions at the same time. This contrasts with address-owned objects, which only allow a single inflight transaction. Many applications can benefit from the ability to pipeline multiple transactions on the same party object.
+
+:::info
+
+`Coin`s can be party objects, including `Coin<SUI>`. However, you can't use a party object `Coin<SUI>` for gas payment. To use a party object `Coin<SUI>` for gas, you must first transfer it back to address-owned.
+
+:::

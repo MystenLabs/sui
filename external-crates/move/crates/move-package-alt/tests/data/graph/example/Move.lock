@@ -4,37 +4,17 @@
 [move]
 version = 4
 
-[pinned._test_env.example]
-source = { root = true }
-use_environment = "_test_env"
-manifest_digest = "7078326A6155C6DCCDC0E8914B68F5D8A53C6EA81A5761CA237A3CD1BE7B6F32"
-deps = {}
-
-[pinned.mainnet.bar]
+[pinned._test_env.bar]
 source = { local = "../bar" }
 manifest_digest = "cab4"
 deps = {}
 
-[pinned.mainnet.baz]
+[pinned._test_env.baz]
 source = { local = "../baz" }
 manifest_digest = "cab3"
 deps = { bar = "bar" }
 
-[pinned.mainnet.example]
+[pinned._test_env.example]
 source = { root = true }
 manifest_digest = "cb4a8948faa586ccc1694d80e25941a5227d8b9e"
 deps = { baz = "baz" }
-
-[published.mainnet]
-published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-chain-id = "35834a8a"
-toolchain-version = "1.45"
-build-config = {}
-
-[published.testnet]
-published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-chain-id = "4c78adac"
-toolchain-version = "1.45"
-build-config = {}

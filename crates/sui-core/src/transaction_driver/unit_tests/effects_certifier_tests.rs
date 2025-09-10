@@ -406,7 +406,6 @@ async fn test_transaction_rejected_non_retriable() {
     assert!(result.is_err());
     match result.unwrap_err() {
         TransactionDriverError::InvalidTransaction {
-            local_error: _,
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -543,7 +542,6 @@ async fn test_transaction_rejected_with_conflicts() {
     assert!(result.is_err());
     match result.unwrap_err() {
         TransactionDriverError::InvalidTransaction {
-            local_error: _,
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -688,7 +686,6 @@ async fn test_mixed_rejected_and_expired() {
     assert!(result.is_err());
     match result.unwrap_err() {
         TransactionDriverError::InvalidTransaction {
-            local_error: _,
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -821,7 +818,6 @@ async fn test_mixed_rejected_reasons() {
         assert!(result.is_err());
         match result.unwrap_err() {
             TransactionDriverError::InvalidTransaction {
-                local_error: _,
                 submission_non_retriable_errors,
                 submission_retriable_errors: _,
             } => {
@@ -872,7 +868,6 @@ async fn test_mixed_rejected_reasons() {
         assert!(result.is_err());
         match result.unwrap_err() {
             TransactionDriverError::InvalidTransaction {
-                local_error: _,
                 submission_non_retriable_errors,
                 submission_retriable_errors: _,
             } => {

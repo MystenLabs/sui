@@ -45,7 +45,7 @@ expression: "results.join(\"\\n\")"
  4 │ --move-call zero_x_zero::option::is_none<u64> a
  5 │ --move-call std::Option::is_none<u64> a
    ·                  ───┬──
-   ·                     ╰── Module not found in package: "Option".
+   ·                     ╰── Module not found in package: Option.
  6 │ --move-call std::option::isnone<u64> a
    ╰────
   help: Did you mean 'option'?
@@ -86,4 +86,3 @@ expression: "results.join(\"\\n\")"
     ·                                       ╰── Not enough type parameters supplied for Move call
  10 │ --move-call std::option::is_none<u64, bool> a 
     ╰────
-
