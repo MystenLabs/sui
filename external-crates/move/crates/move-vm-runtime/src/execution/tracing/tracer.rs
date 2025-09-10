@@ -25,7 +25,7 @@ use move_trace_format::{
     },
     value::SerializableMoveValue,
 };
-// use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
+
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
 
