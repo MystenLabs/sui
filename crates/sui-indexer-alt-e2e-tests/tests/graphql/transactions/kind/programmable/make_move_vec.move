@@ -71,7 +71,7 @@
 
 //# run-graphql
 { 
-  # Test empty vector
+  # Test empty vector with type field
   emptyVector: transaction(digest: "@{digest_5}") {
     kind {
       ... on ProgrammableTransaction {
@@ -79,6 +79,10 @@
           nodes {
             __typename
             ... on MakeMoveVecCommand {
+              type {
+                repr
+                signature
+              }
               elements {
                 __typename
                 ... on Input { ix }
