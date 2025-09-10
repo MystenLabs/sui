@@ -1,26 +1,76 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 2 tasks
+processed 6 tasks
 
 init:
 A: object(0,0)
 
-task 1, lines 6-13:
+task 1, lines 6-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 21:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 23-30:
 //# run-graphql
 Response: {
   "data": null,
   "errors": [
     {
-      "message": "Failed to parse \"TransactionFilter\": Only one of [kind, affectedAddress] can be specified",
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, function, kind] can be specified",
       "locations": [
         {
           "line": 2,
-          "column": 55
+          "column": 24
         }
       ],
       "path": [
-        "invalid_kind_affected_address"
+        "transactions"
+      ]
+    }
+  ]
+}
+
+task 4, lines 32-39:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, function, kind] can be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 24
+        }
+      ],
+      "path": [
+        "transactions"
+      ]
+    }
+  ]
+}
+
+task 5, lines 41-48:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, function, kind] can be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 24
+        }
+      ],
+      "path": [
+        "transactions"
       ]
     }
   ]

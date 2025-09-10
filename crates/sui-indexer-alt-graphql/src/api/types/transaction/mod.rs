@@ -35,9 +35,13 @@ use super::{
     user_signature::UserSignature,
 };
 
+use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::{
     api::{
-        scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, sui_address::SuiAddress},
+        scalars::{
+            base64::Base64, cursor::JsonCursor, digest::Digest, module_filter::ModuleFilter,
+            sui_address::SuiAddress,
+        },
         types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
     },
     error::RpcError,
@@ -203,6 +207,7 @@ impl Transaction {
             after_checkpoint,
             at_checkpoint,
             before_checkpoint,
+            function,
             kind,
             affected_address,
             sent_address,
@@ -236,7 +241,9 @@ impl Transaction {
 
         let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| *c.deref()).await?;
 
-        let tx_digest_keys = if let Some(kind) = kind {
+        let tx_digest_keys = if let Some(function) = function {
+            tx_call(ctx, tx_bounds, &page, function, sent_address).await?
+        } else if let Some(kind) = kind {
             tx_kind(ctx, tx_bounds, &page, kind, sent_address).await?
         } else if affected_address.is_some() || sent_address.is_some() {
             tx_affected_address(ctx, tx_bounds, &page, affected_address, sent_address).await?
@@ -275,6 +282,61 @@ impl Transaction {
 
         Ok(conn)
     }
+}
+
+async fn tx_call(
+    ctx: &Context<'_>,
+    tx_bounds: Range<u64>,
+    page: &Page<CTransaction>,
+    function: FqNameFilter,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    let (package, module, member) = match function {
+        FqNameFilter::Module(module_filter) => match module_filter {
+            ModuleFilter::Package(package) => (package, None, None),
+            ModuleFilter::Module(package, module) => (package, Some(module), None),
+        },
+        FqNameFilter::FqName(package, module, member) => (package, Some(module), Some(member)),
+    };
+
+    let mut query = query!(
+        r#"
+SELECT
+    tx_sequence_number
+FROM
+    tx_calls
+WHERE
+    package = {Bytea} /* package */
+"#,
+        package.into_vec(),
+    );
+
+    if let Some(module) = module {
+        query += query!(
+            r#"
+    AND module = {Text} /* module */
+"#,
+            module,
+        );
+
+        if let Some(member) = member {
+            query += query!(
+                r#"
+    AND function = {Text} /* member */
+"#,
+                member,
+            );
+        }
+    }
+    if let Some(sent_address) = sent_address {
+        query += query!(
+            r#"
+    AND sender = {Bytea} /* sender */
+"#,
+            sent_address.into_vec(),
+        );
+    }
+    tx_sequence_numbers(ctx, tx_bounds, page, query).await
 }
 
 async fn tx_kind(
