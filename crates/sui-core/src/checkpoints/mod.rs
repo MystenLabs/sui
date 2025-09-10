@@ -35,7 +35,7 @@ use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
-use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
@@ -2049,6 +2049,18 @@ impl CheckpointBuilder {
                 .copied()
                 .collect();
 
+            let checkpoint_commitments = if self
+                .epoch_store
+                .protocol_config()
+                .include_checkpoint_artifacts_digest_in_summary()
+            {
+                let artifacts = CheckpointArtifacts::from(&effects[..]);
+                let artifacts_digest = artifacts.digest()?;
+                vec![artifacts_digest.into()]
+            } else {
+                Default::default()
+            };
+
             let summary = CheckpointSummary::new(
                 self.epoch_store.protocol_config(),
                 epoch,
@@ -2060,6 +2072,7 @@ impl CheckpointBuilder {
                 end_of_epoch_data,
                 timestamp_ms,
                 matching_randomness_rounds,
+                checkpoint_commitments,
             );
             summary.report_checkpoint_age(
                 &self.metrics.last_created_checkpoint_age,
@@ -3192,6 +3205,7 @@ mod tests {
                 sui_types::gas::GasCostSummary::default(),
                 None,
                 0,
+                Vec::new(),
                 Vec::new(),
             );
             store
