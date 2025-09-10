@@ -1182,11 +1182,11 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -3389,9 +3389,9 @@ async fn test_clear_cache_reverts_wrap_move_call() {
 
     build_and_commit(
         authority_state.get_cache_commit(),
-            authority_state.epoch_store_for_testing().epoch(),
-            &[*create_effects.transaction_digest()],
-        );
+        authority_state.epoch_store_for_testing().epoch(),
+        &[*create_effects.transaction_digest()],
+    );
 
     assert!(create_effects.status().is_ok());
     assert_eq!(create_effects.created().len(), 1);
@@ -3481,12 +3481,12 @@ async fn test_clear_cache_reverts_unwrap_move_call() {
 
     build_and_commit(
         authority_state.get_cache_commit(),
-            authority_state.epoch_store_for_testing().epoch(),
-            &[
-                *create_effects.transaction_digest(),
-                *wrap_effects.transaction_digest(),
-            ],
-        );
+        authority_state.epoch_store_for_testing().epoch(),
+        &[
+            *create_effects.transaction_digest(),
+            *wrap_effects.transaction_digest(),
+        ],
+    );
 
     assert!(wrap_effects.status().is_ok());
     assert_eq!(wrap_effects.created().len(), 1);
@@ -3756,12 +3756,12 @@ async fn test_clear_cache_removes_added_ofield() {
 
     build_and_commit(
         authority_state.get_cache_commit(),
-            authority_state.epoch_store_for_testing().epoch(),
-            &[
-                *create_outer_effects.transaction_digest(),
-                *create_inner_effects.transaction_digest(),
-            ],
-        );
+        authority_state.epoch_store_for_testing().epoch(),
+        &[
+            *create_outer_effects.transaction_digest(),
+            *create_inner_effects.transaction_digest(),
+        ],
+    );
 
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call(
@@ -3877,13 +3877,13 @@ async fn test_clear_cache_reverts_removed_ofield() {
 
     build_and_commit(
         authority_state.get_cache_commit(),
-            authority_state.epoch_store_for_testing().epoch(),
-            &[
-                *create_outer_effects.transaction_digest(),
-                *create_inner_effects.transaction_digest(),
-                *add_effects.transaction_digest(),
-            ],
-        );
+        authority_state.epoch_store_for_testing().epoch(),
+        &[
+            *create_outer_effects.transaction_digest(),
+            *create_inner_effects.transaction_digest(),
+            *add_effects.transaction_digest(),
+        ],
+    );
 
     let field_v0 = add_effects.created()[0].0;
     let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();

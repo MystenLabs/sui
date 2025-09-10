@@ -19,20 +19,10 @@ pub trait SuiResolver: BackingPackageStore {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
 }
 
-<<<<<<< HEAD
-impl<T: BackingPackageStore> SuiResolver for T {
-||||||| 0f914b9774
-impl<T> SuiResolver for T
-where
-    T: ResourceResolver<Error = SuiError>,
-    T: BackingPackageStore,
-{
-=======
 impl<T> SuiResolver for T
 where
     T: BackingPackageStore,
 {
->>>>>>> origin/main
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore {
         self
     }

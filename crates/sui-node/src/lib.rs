@@ -649,11 +649,11 @@ impl SuiNode {
         let rpc_index = if is_full_node && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
             Some(Arc::new(
                 RpcIndexStore::new(
-                &config.db_path(),
-                &store,
-                &checkpoint_store,
-                &epoch_store,
-                &cache_traits.backing_package_store,
+                    &config.db_path(),
+                    &store,
+                    &checkpoint_store,
+                    &epoch_store,
+                    &cache_traits.backing_package_store,
                     config.rpc().and_then(|c| c.index_initialization_config()),
                 )
                 .await,
@@ -804,11 +804,11 @@ impl SuiNode {
 
         let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
             Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
-                    auth_agg.load_full(),
-                    state.clone(),
-                    end_of_epoch_receiver,
-                    &config.db_path(),
-                    &prometheus_registry,
+                auth_agg.load_full(),
+                state.clone(),
+                end_of_epoch_receiver,
+                &config.db_path(),
+                &prometheus_registry,
                 &config,
             )))
         } else {
@@ -1413,10 +1413,10 @@ impl SuiNode {
             let config = config.clone();
             let epoch_store = epoch_store.clone();
             let sui_tx_validator = SuiTxValidator::new(
-                    state.clone(),
-                    consensus_adapter.clone(),
-                    checkpoint_service.clone(),
-                    sui_tx_validator_metrics.clone(),
+                state.clone(),
+                consensus_adapter.clone(),
+                checkpoint_service.clone(),
+                sui_tx_validator_metrics.clone(),
             );
             let consensus_manager = consensus_manager.clone();
             async move {
@@ -1426,9 +1426,9 @@ impl SuiNode {
                         epoch_store,
                         consensus_handler_initializer,
                         sui_tx_validator,
-            )
-            .await;
-        }
+                    )
+                    .await;
+            }
         });
         let replay_waiter = consensus_manager.replay_waiter();
 
@@ -1603,37 +1603,37 @@ impl SuiNode {
         let mut additional_certs = Vec::new();
 
         for tx in epoch_store.get_all_pending_consensus_transactions() {
-                match tx.kind {
+            match tx.kind {
                 // Shared object txns cannot be re-executed at this point, because we must wait for
                 // consensus replay to assign shared object versions.
                 ConsensusTransactionKind::CertifiedTransaction(tx) if !tx.is_consensus_tx() => {
-                        let tx = *tx;
+                    let tx = *tx;
                     // new_unchecked is safe because we never submit a transaction to consensus
                     // without verifying it
                     let tx = VerifiedExecutableTransaction::new_from_certificate(
                         VerifiedCertificate::new_unchecked(tx),
                     );
-                        // we only need to re-execute if we previously signed the effects (which indicates we
-                        // returned the effects to a client).
-                        if let Some(fx_digest) = epoch_store
-                            .get_signed_effects_digest(tx.digest())
-                            .expect("db error")
-                        {
+                    // we only need to re-execute if we previously signed the effects (which indicates we
+                    // returned the effects to a client).
+                    if let Some(fx_digest) = epoch_store
+                        .get_signed_effects_digest(tx.digest())
+                        .expect("db error")
+                    {
                         pending_consensus_certificates.push((
                             Schedulable::Transaction(tx),
                             ExecutionEnv::new().with_expected_effects_digest(fx_digest),
                         ));
-                        } else {
+                    } else {
                         additional_certs.push((
                             Schedulable::Transaction(tx),
                             ExecutionEnv::new()
                                 .with_scheduling_source(SchedulingSource::NonFastPath),
                         ));
-                        }
                     }
+                }
                 _ => (),
             }
-                }
+        }
 
         let digests = pending_consensus_certificates
             .iter()
