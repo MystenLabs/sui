@@ -2286,6 +2286,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         );
                         continue;
                     }
+
+                    ConsensusTransactionKind::CheckpointSignature(_) => {
+                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
+                        debug_fatal!(
+                            "BUG: saw deprecated CheckpointSignature tx for commit round {}",
+                            commit_info.round
+                        );
+                        continue;
+                    }
                     _ => {}
                 }
 
@@ -3355,16 +3364,6 @@ mod tests {
 
         // THEN check for no inflight or suspended transactions.
         state.execution_scheduler().check_empty_for_testing();
-
-        // WHEN processing the same output multiple times
-        // THEN the consensus stats do not update
-        for _ in 0..2 {
-            consensus_handler
-                .handle_consensus_commit(committed_sub_dag.clone())
-                .await;
-            let last_consensus_stats_2 = consensus_handler.last_consensus_stats.clone();
-            assert_eq!(last_consensus_stats_1, last_consensus_stats_2);
-        }
     }
 
     #[tokio::test]
@@ -3592,7 +3591,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_checkpoint_signature_dedup_v1_vs_v2() {
+    async fn test_checkpoint_signature_dedup() {
         telemetry_subscribers::init_for_testing();
 
         let network_config =
@@ -3624,20 +3623,6 @@ mod tests {
             SignedCheckpointSummary::new(epoch, summary, &*state.secret, state.name)
         };
 
-        // Prepare V1 pair: same (authority, seq), different digests => same key
-        let v1_s1 = make_signed();
-        let v1_s2 = make_signed();
-        // Validate assumption: digests differ
-        assert_ne!(v1_s1.data().digest(), v1_s2.data().digest());
-        let v1_a =
-            ConsensusTransaction::new_checkpoint_signature_message(CheckpointSignatureMessage {
-                summary: v1_s1,
-            });
-        let v1_b =
-            ConsensusTransaction::new_checkpoint_signature_message(CheckpointSignatureMessage {
-                summary: v1_s2,
-            });
-
         // Prepare V2 pair: same (authority, seq), different digests => different keys
         let v2_s1 = make_signed();
         let v2_s1_clone = v2_s1.clone();
@@ -3666,13 +3651,7 @@ mod tests {
         let to_tx = |ct: &ConsensusTransaction| Transaction::new(bcs::to_bytes(ct).unwrap());
         let block = VerifiedBlock::new_for_test(
             TestBlock::new(100, 0)
-                .set_transactions(vec![
-                    to_tx(&v1_a),
-                    to_tx(&v1_b),
-                    to_tx(&v2_a),
-                    to_tx(&v2_b),
-                    to_tx(&v2_dup),
-                ])
+                .set_transactions(vec![to_tx(&v2_a), to_tx(&v2_b), to_tx(&v2_dup)])
                 .build(),
         );
         let commit = CommittedSubDag::new(
@@ -3704,10 +3683,6 @@ mod tests {
 
         use crate::consensus_handler::SequencedConsensusTransactionKey as SK;
         use sui_types::messages_consensus::ConsensusTransactionKey as CK;
-
-        // V1 collapses digest: both map to the same key and are processed once.
-        let v1_key = SK::External(CK::CheckpointSignature(state.name, 42));
-        assert!(epoch_store.is_consensus_message_processed(&v1_key).unwrap());
 
         // V2 distinct digests: both must be processed. If these were collapsed to one CheckpointSeq num, only one would process.
         let v2_key_a = SK::External(CK::CheckpointSignatureV2(state.name, 42, v2_digest_a));
