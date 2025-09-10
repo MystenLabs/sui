@@ -30,16 +30,18 @@ pub enum NamedAddress {
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
+    /// Return the `PackageInfo` for the root package
     pub fn root_package_info(&self) -> PackageInfo<F> {
         self.package_info(self.root_index)
     }
 
+    /// Return a `PackageInfo` for `node`
     pub(crate) fn package_info(&self, node: NodeIndex) -> PackageInfo<F> {
         PackageInfo { graph: self, node }
     }
 
-    #[cfg(test)]
-    pub(crate) fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
+    /// Return the `PackageInfo` for id `id`, if one exists
+    pub fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
         self.package_ids
             .get_by_left(id)
             .map(|node| self.package_info(*node))
@@ -84,7 +86,8 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
 
     /// Returns the published address of this package, if it is published
     ///
-    /// This applies the address overrides from the package graph - see [Self::set_overrides]
+    /// Note that if the graph has been updated (using [PackageGraph::add_publish_overrides]), the
+    /// updated address is returned.
     pub fn published(&self) -> Option<&PublishAddresses> {
         self.package()
             .publication()

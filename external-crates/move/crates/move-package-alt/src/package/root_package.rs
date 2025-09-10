@@ -12,8 +12,8 @@ use super::{EnvironmentID, manifest::Manifest};
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
 use crate::graph::PackageInfo;
 use crate::schema::{
-    Environment, OriginalID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile, Publication,
-    RenderToml,
+    Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
+    Publication, RenderToml,
 };
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
@@ -23,8 +23,10 @@ use crate::{
     schema::ParsedLockfile,
 };
 
+/// We store the publication file that we read so that we can update it later in
+/// [RootPackage::write_publish_data]
 #[derive(Debug)]
-enum AddressSource<F: MoveFlavor> {
+enum PublicationSource<F: MoveFlavor> {
     /// Addresses are stored in the `Published.toml` file and retrieved from dependencies' files
     Published(ParsedPublishedFile<F>),
 
@@ -56,7 +58,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     lockfile: ParsedLockfile,
 
     /// The stored publications for the root package
-    pubs: AddressSource<F>,
+    pubs: PublicationSource<F>,
 
     /// The list of published ids for every dependency in the root package
     deps_published_ids: Vec<OriginalID>,
@@ -129,28 +131,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         // load the package as if in the build_env
         let mut result = Self::load(root, build_env).await?;
 
-        debug!("ephemeral root package loaded; updating addresses to {pubfile:?}");
-
-        // turn the local pubs into publications
-
-        let localpubs = pubfile
-            .published
-            .iter()
-            .map(|(id, local_pub)| {
-                (
-                    id.clone(),
-                    Publication {
-                        chain_id: chain_id.clone(),
-                        addresses: local_pub.addresses.clone(),
-                        version: local_pub.version,
-                        metadata: local_pub.metadata.clone(),
-                    },
-                )
-            })
-            .collect();
         // update the packages to use the ephemeral addresses
-        result.graph.add_publish_overrides(localpubs);
-        result.pubs = AddressSource::Ephemeral {
+        result
+            .graph
+            .add_publish_overrides(localpubs_to_publications(&pubfile));
+        result.pubs = PublicationSource::Ephemeral {
             file: pubfile_path.as_ref().to_path_buf(),
             pubs: pubfile,
         };
@@ -224,7 +209,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             graph,
             lockfile,
             deps_published_ids,
-            pubs: AddressSource::Published(pubs),
+            pubs: PublicationSource::Published(pubs),
         })
     }
 
@@ -281,13 +266,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let package_id = self.name().to_string();
 
         match &mut self.pubs {
-            AddressSource::Published(pubfile) => {
+            PublicationSource::Published(pubfile) => {
                 pubfile
                     .published
                     .insert(self.environment.name().clone(), publish_data);
                 std::fs::write(&self.package_path, pubfile.render_as_toml())?;
             }
-            AddressSource::Ephemeral { file, pubs } => {
+            PublicationSource::Ephemeral { file, pubs } => {
                 pubs.published.insert(package_id, publish_data.into());
                 std::fs::write(&file, pubs.render_as_toml())?;
             }
@@ -380,6 +365,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.lockfile
     }
 
+    /// Return the publication information for the root package in the current environment
+    pub fn publication(&self) -> Option<&Publication<F>> {
+        self.graph.root_package().publication()
+    }
+
     // *** PATHS RELATED FUNCTIONS ***
 
     /// Return the package path wrapper
@@ -397,6 +387,26 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 }
 
+fn localpubs_to_publications<F: MoveFlavor>(
+    pubfile: &ParsedEphemeralPubs<F>,
+) -> BTreeMap<PackageID, Publication<F>> {
+    pubfile
+        .published
+        .iter()
+        .map(|(id, local_pub)| {
+            (
+                id.clone(),
+                Publication::<F> {
+                    chain_id: pubfile.chain_id.clone(),
+                    addresses: local_pub.addresses.clone(),
+                    version: local_pub.version,
+                    metadata: local_pub.metadata.clone(),
+                },
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
@@ -409,6 +419,7 @@ mod tests {
             Vanilla,
             vanilla::{self, DEFAULT_ENV_NAME, default_environment},
         },
+        graph::NamedAddress,
         schema::{LockfileDependencyInfo, PackageID, PublishAddresses, PublishedID},
         test_utils::{
             self, basic_manifest_with_env,
@@ -681,7 +692,6 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
     async fn ephemeral_root() {
         let scenario = TestPackageGraph::new(["dummy"])
             .add_published("root", OriginalID::from(1), PublishedID::from(1))
-            .add_deps([("root", "dummy")])
             .build();
 
         let mut ephemeral = tempfile::NamedTempFile::new().unwrap();
@@ -700,7 +710,6 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
         .unwrap();
 
         // load root package with ephemeral file
-
         let root = RootPackage::<Vanilla>::load_ephemeral(
             scenario.path_for("root"),
             None,
@@ -710,16 +719,18 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
         .await
         .unwrap();
 
-        // check the root package's addresses
-        let root_addrs = root
+        // check the root package's named address
+        let root_addr = root
             .package_graph()
             .root_package_info()
-            .published()
+            .named_addresses()
             .unwrap()
-            .clone();
+            .into_iter()
+            .next()
+            .unwrap()
+            .1;
 
-        assert_eq!(root_addrs.original_id, OriginalID::from(2));
-        assert_eq!(root_addrs.published_at, PublishedID::from(3));
+        assert_eq!(root_addr, NamedAddress::RootPackage(Some(2.into())));
     }
 
     /// Ephemerally loading a dependency that is both published and in the ephemeral file produces

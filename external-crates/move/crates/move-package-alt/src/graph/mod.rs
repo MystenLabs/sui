@@ -143,7 +143,8 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .collect()
     }
 
-    /// Update the address overrides for this package graph
+    /// For each entry in `overrides`, override the package publication in `self` for the
+    /// corresponding package ID. Warns if the package ID is unrecognized.
     pub(crate) fn add_publish_overrides(&mut self, overrides: BTreeMap<PackageID, Publication<F>>) {
         for (id, publish) in overrides {
             let Some(index) = self.package_ids.get_by_left(&id) else {
