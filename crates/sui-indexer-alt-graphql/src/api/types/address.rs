@@ -3,7 +3,7 @@
 
 use async_graphql::{
     connection::{Connection, Edge},
-    Context, Interface, Object,
+    Context, Enum, Interface, Object,
 };
 use futures::future::try_join_all;
 use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::DynamicFieldType};
@@ -24,7 +24,20 @@ use super::{
     name_service::address_to_name,
     object::{self, Object, ObjectKey},
     object_filter::{ObjectFilter, Validator as OFValidator},
+    transaction::{
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+        CTransaction, Transaction,
+    },
 };
+
+/// The possible relationship types for a transaction: sent or affected.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum AddressTransactionRelationship {
+    /// Transactions this address has sent.
+    Sent,
+    /// Transactions that this address was involved in, either as the sender, sponsor, or as the owner of some object that was created, modified or transferred.
+    Affected,
+}
 
 /// Interface implemented by GraphQL types representing entities that are identified by an address.
 ///
@@ -286,6 +299,48 @@ impl Address {
         }
 
         Ok(Some(move_objects))
+    }
+
+    /// Transactions associated with this address.
+    ///
+    /// Similar behavior to the `transactions` in Query but supporting the additional `AddressTransactionRelationship` filter, which defaults to `SENT`.
+    pub(crate) async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        relation: Option<AddressTransactionRelationship>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Address", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Default relation to SENT if not provided
+        let relation = relation.unwrap_or(AddressTransactionRelationship::Sent);
+
+        // Create address-specific filter based on relationship
+        let address_filter = match relation {
+            AddressTransactionRelationship::Sent => TransactionFilter {
+                sent_address: Some(self.address.into()),
+                ..Default::default()
+            },
+            AddressTransactionRelationship::Affected => TransactionFilter {
+                affected_address: Some(self.address.into()),
+                ..Default::default()
+            },
+        };
+
+        // Intersect with user-provided filter
+        let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Transaction::paginate(ctx, self.scope.clone(), page, filter)
+            .await
+            .map(Some)
     }
 }
 
