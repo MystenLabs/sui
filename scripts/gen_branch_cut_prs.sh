@@ -87,8 +87,11 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
       
       # Add comment as GITHUB_ACTOR to trigger CI
       if [[ -n "$PR_NUMBER" ]]; then
-        echo "Adding comment to trigger CI..."
-        gh pr comment "$PR_NUMBER" --body "Triggering CI as $GITHUB_ACTOR"
+        echo "Pushing empty commit to trigger CI..."
+        git config user.name "Eugene Boguslavsky"
+        git config user.email "eugene@mystenlabs.com"
+        git commit --allow-empty -m "Trigger CI"
+        git push
       fi
     else
       echo "Warning: PR created but could not extract URL from output:"
