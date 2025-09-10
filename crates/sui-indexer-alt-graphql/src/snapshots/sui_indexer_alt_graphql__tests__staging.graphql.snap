@@ -636,6 +636,36 @@ type CommandEdge {
 }
 
 """
+A value produced or modified during command execution.
+
+This can represent either a return value from a command or an argument that was mutated by reference.
+"""
+type CommandOutput {
+	"""
+	The transaction argument that this value corresponds to (if any).
+	"""
+	argument: TransactionArgument
+	"""
+	The structured Move value, if available.
+	"""
+	value: MoveValue
+}
+
+"""
+The intermediate results for each command of a transaction simulation.
+"""
+type CommandResult {
+	"""
+	Changes made to arguments that were mutably borrowed by each command in this transaction.
+	"""
+	mutatedReferences: [CommandOutput!]
+	"""
+	Return results of each command in this transaction.
+	"""
+	returnValues: [CommandOutput!]
+}
+
+"""
 Object is exclusively owned by a single adderss and sequenced via consensis.
 """
 type ConsensusAddressOwner {
@@ -3313,6 +3343,10 @@ type SimulationResult {
 	`None` if the simulation failed or no events would be emitted.
 	"""
 	events: [Event!]
+	"""
+	The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
+	"""
+	outputs: [CommandResult!]
 }
 
 """
