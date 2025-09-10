@@ -11,7 +11,11 @@ use crate::{
     scope::Scope,
 };
 
-pub(crate) struct ServiceConfig;
+pub(crate) struct ServiceConfig {
+    /// Retention queries will use this scope if it is populated, instead of creating a fresh scope from
+    /// information in the request-wide [Context].
+    pub(crate) scope: Scope,
+}
 
 #[Object]
 impl ServiceConfig {
@@ -209,10 +213,9 @@ impl ServiceConfig {
         field: String,
         filter: Option<String>,
     ) -> Result<AvailableRange, RpcError<AvailableRangeError>> {
-        let scope = Scope::new(ctx)?;
         AvailableRange::new(
             ctx,
-            &scope,
+            &self.scope,
             RetentionKey {
                 type_,
                 field,
