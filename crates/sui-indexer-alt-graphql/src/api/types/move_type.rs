@@ -251,6 +251,15 @@ impl MoveType {
         }
     }
 
+    /// Construct a `MoveType` directly from a `TypeInput`. Use this when you already have a
+    /// `TypeInput` (which is MoveType's internal representation) and don't want conversion to fail.
+    pub(crate) fn from_input(input: TypeInput, scope: Scope) -> Self {
+        Self {
+            native: input,
+            scope,
+        }
+    }
+
     /// Get the native `TypeTag` for this type, if it is valid.
     pub(crate) fn to_type_tag(&self) -> Option<TypeTag> {
         self.native.to_type_tag().ok()
