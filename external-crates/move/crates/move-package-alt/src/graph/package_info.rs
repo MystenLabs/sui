@@ -4,6 +4,7 @@ use derive_where::derive_where;
 use petgraph::{Direction, graph::NodeIndex, visit::EdgeRef};
 
 use crate::{
+    compatibility::legacy_parser::NO_NAME_LEGACY_PACKAGE_NAME,
     dependency::PinnedDependencyInfo,
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
@@ -42,6 +43,12 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     /// The name that the package has declared for itself
     pub fn name(&self) -> &PackageName {
         self.package().name()
+    }
+
+    /// Returns the `display_name` for a given package.
+    /// Invariant: For modern packages, this is always equal to `name().as_str()`
+    pub fn display_name(&self) -> &str {
+        self.package().display_name()
     }
 
     /// The unique ID for this package in the package graph
@@ -130,7 +137,10 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     fn legacy_named_addresses(&self) -> PackageResult<BTreeMap<PackageName, NamedAddress>> {
         let mut result: BTreeMap<PackageName, NamedAddress> = BTreeMap::new();
 
-        result.insert(self.package().name().clone(), self.node_to_addr(self.node));
+        // We only add the package name if it is not the special "unnamed" package name
+        if self.package().name().as_str() != NO_NAME_LEGACY_PACKAGE_NAME {
+            result.insert(self.package().name().clone(), self.node_to_addr(self.node));
+        }
 
         for edge in self.graph.inner.edges(self.node) {
             let dep = Self {
@@ -146,7 +156,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
                 if existing.is_some_and(|existing| existing != addr) {
                     return Err(PackageError::DuplicateNamedAddress {
                         address: name,
-                        package: self.package().name().clone(),
+                        package: self.package().display_name().to_string(),
                     });
                 }
             }
@@ -162,7 +172,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
                 if existing.is_some_and(|existing| existing != new_addr) {
                     return Err(PackageError::DuplicateNamedAddress {
                         address: name,
-                        package: self.package().name().clone(),
+                        package: self.package().display_name().to_string(),
                     });
                 }
             }
