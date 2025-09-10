@@ -8,10 +8,13 @@ use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, Fullnod
 use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
-    api::mutation::TransactionInputError,
     api::{
+        mutation::TransactionInputError,
         scalars::base64::Base64,
-        types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects},
+        types::{
+            epoch::CEpoch, simulation_result::SimulationResult,
+            transaction_effects::TransactionEffects,
+        },
     },
     error::{bad_user_input, upcast, RpcError},
     pagination::{Page, PaginationConfig},
@@ -137,6 +140,23 @@ impl Query {
     ) -> Result<Option<Epoch>, RpcError> {
         let scope = self.scope(ctx)?;
         Epoch::fetch(ctx, scope, epoch_id).await
+    }
+
+    /// Paginate epochs that are in the network.
+    async fn epochs(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CEpoch>,
+        last: Option<u64>,
+        before: Option<CEpoch>,
+    ) -> Result<Option<Connection<String, Epoch>>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "epochs");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Epoch::paginate(ctx, &scope, page).await
     }
 
     /// Paginate events that are emitted in the network, optionally filtered by event filters.
