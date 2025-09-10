@@ -29,42 +29,42 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 5, line 105:
 //# run test::execution_error_tests::abort_with_clever_u8 --sender B
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_u8 (function index 3) at offset 1, Abort Code: 13906834328962203649
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u8 (function index 3) at offset 1 at line 36
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 3, instruction: 1, function_name: Some("abort_with_clever_u8") }, 13906834328962203649), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834328962203649), message: Some("test::execution_error_tests::abort_with_clever_u8 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(0) } }
 
 task 6, line 107:
 //# run test::execution_error_tests::abort_with_clever_u16 --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_u16 (function index 4) at offset 1, Abort Code: 13906834341847236611
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u16 (function index 4) at offset 1 at line 39
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 4, instruction: 1, function_name: Some("abort_with_clever_u16") }, 13906834341847236611), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834341847236611), message: Some("test::execution_error_tests::abort_with_clever_u16 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(0) } }
 
 task 7, line 109:
 //# run test::execution_error_tests::abort_with_clever_u64 --sender B
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_u64 (function index 5) at offset 1, Abort Code: 13906834354732269573
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u64 (function index 5) at offset 1 at line 42
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 5, instruction: 1, function_name: Some("abort_with_clever_u64") }, 13906834354732269573), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834354732269573), message: Some("test::execution_error_tests::abort_with_clever_u64 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(5), 1)] }), command: Some(0) } }
 
 task 8, line 111:
 //# run test::execution_error_tests::abort_with_clever_address --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_address (function index 6) at offset 1, Abort Code: 13906834367617302535
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_address (function index 6) at offset 1 at line 45
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 6, instruction: 1, function_name: Some("abort_with_clever_address") }, 13906834367617302535), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834367617302535), message: Some("test::execution_error_tests::abort_with_clever_address at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 1)] }), command: Some(0) } }
 
 task 9, line 113:
 //# run test::execution_error_tests::abort_with_clever_string --sender B
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_string (function index 7) at offset 1, Abort Code: 13906834380502335497
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_string (function index 7) at offset 1 at line 48
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 7, instruction: 1, function_name: Some("abort_with_clever_string") }, 13906834380502335497), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834380502335497), message: Some("test::execution_error_tests::abort_with_clever_string at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
 
 task 10, line 115:
 //# run test::execution_error_tests::abort_with_clever_code --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_code (function index 8) at offset 1, Abort Code: 13839280398976811019
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_code (function index 8) at offset 1 at line 51 with clever code 15
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 8, instruction: 1, function_name: Some("abort_with_clever_code") }, 13839280398976811019), source: Some(VMError { major_status: ABORTED, sub_status: Some(13839280398976811019), message: Some("test::execution_error_tests::abort_with_clever_code at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
 
 task 11, line 117:
 //# run test::execution_error_tests::abort_with_clever_raw --sender B
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_raw (function index 9) at offset 1, Abort Code: 13906834406272401421
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_raw (function index 9) at offset 1 at line 54
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 9, instruction: 1, function_name: Some("abort_with_clever_raw") }, 13906834406272401421), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834406272401421), message: Some("test::execution_error_tests::abort_with_clever_raw at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(9), 1)] }), command: Some(0) } }
 
 task 12, line 119:
 //# run test::execution_error_tests::assert_failure --sender B
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::assert_failure (function index 10) at offset 1, Abort Code: 13906834423451484159
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::assert_failure (function index 10) at offset 1 at line 57
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 10, instruction: 1, function_name: Some("assert_failure") }, 13906834423451484159), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834423451484159), message: Some("test::execution_error_tests::assert_failure at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 1)] }), command: Some(0) } }
 
 task 13, lines 121-122:
