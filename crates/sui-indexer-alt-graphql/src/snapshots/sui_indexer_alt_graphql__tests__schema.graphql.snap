@@ -3235,10 +3235,6 @@ type Query {
 	"""
 	protocolConfigs(version: UInt53): ProtocolConfigs
 	"""
-	Range of checkpoints for which data is available for a query type, field and optional filter.
-	"""
-	retention(type: String!, field: String!, filter: String): AvailableRange!
-	"""
 	Configuration for this RPC service.
 	"""
 	serviceConfig: ServiceConfig!
@@ -3460,6 +3456,10 @@ type ServiceConfig {
 	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	queryTimeoutMs: Int
+	"""
+	Range of checkpoints for which data is available for a query type, field and optional filter.
+	"""
+	retention(type: String!, field: String!, filter: String): AvailableRange!
 }
 
 """
