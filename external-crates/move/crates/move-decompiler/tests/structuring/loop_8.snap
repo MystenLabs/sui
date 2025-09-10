@@ -2,5 +2,5 @@
 source: crates/move-decompiler/tests/tests.rs
 ---
 loop {
-    { }
+    continue;
 }

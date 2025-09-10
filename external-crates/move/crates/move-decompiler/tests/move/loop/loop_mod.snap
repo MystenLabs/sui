@@ -25,7 +25,6 @@ module loop_mod {
     public fun loop_0 () {
         while(        *l0) {
             do_0(l0)
-            continue;
         }
         do_1(l0)
         return 
@@ -35,7 +34,6 @@ module loop_mod {
         do_0(l0)
         while(        *l0) {
             do_1(l0)
-            continue;
         }
         do_2(l0)
         return 

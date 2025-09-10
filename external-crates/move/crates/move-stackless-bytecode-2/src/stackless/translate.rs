@@ -214,6 +214,20 @@ pub(crate) fn bytecode<K: SourceKind>(
         };
     }
 
+    macro_rules! binop {
+        ($op:expr, $lhs:ident => $ty:expr) => {{
+            let rhs = pop!();
+            let $lhs = pop!();
+            binary_op_type_assert!($lhs, rhs);
+            let ty = $ty;
+            assign_reg!([push!(ty)] = primitive_op!($op, Register($lhs), Register(rhs)))
+        }};
+    }
+
+    // TODO: Everywhere we call pop!() we should check that the type is what we expect
+    // TODO: Almost everywhere we call pop!() appears to be out of order -- we should reverse the
+    // order we grab inputs.
+
     match op {
         IB::Pop => Instruction::Drop(pop!()),
 
@@ -458,113 +472,38 @@ pub(crate) fn bytecode<K: SourceKind>(
             )
         }
 
-        IB::Add => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::Add, Register(operand.clone()), Register(other_operand))
-            )
+        IB::Add => binop!(Op::Add, lhs => lhs.ty.clone()),
+        IB::Sub => binop!(Op::Subtract, lhs => lhs.ty.clone()),
+        IB::Mod => binop!(Op::Modulo, lhs => lhs.ty.clone()),
+        IB::Mul => binop!(Op::Multiply, lhs => lhs.ty.clone()),
+        IB::Div => binop!(Op::Divide, lhs => lhs.ty.clone()),
+
+        IB::BitAnd => binop!(Op::BitAnd, lhs => N::Type::Bool.into()),
+        IB::BitOr => binop!(Op::BitOr, lhs => N::Type::Bool.into()),
+        IB::Xor => binop!(Op::Xor, lhs => N::Type::Bool.into()),
+        IB::And => binop!(Op::And, lhs => N::Type::Bool.into()),
+        IB::Or => binop!(Op::Or, lhs => N::Type::Bool.into()),
+        IB::Eq => binop!(Op::Equal, lhs => N::Type::Bool.into()),
+        IB::Neq => binop!(Op::NotEqual, lhs => N::Type::Bool.into()),
+        IB::Lt => binop!(Op::LessThan, lhs => N::Type::Bool.into()),
+        IB::Gt => binop!(Op::GreaterThan, lhs => N::Type::Bool.into()),
+        IB::Le => binop!(Op::LessThanOrEqual, lhs => N::Type::Bool.into()),
+        IB::Ge => binop!(Op::GreaterThanOrEqual, lhs => N::Type::Bool.into()),
+
+        IB::Shl => {
+            // TODO: Check the types
+            let rhs = pop!();
+            let lhs = pop!();
+            let ty = lhs.ty.clone();
+            assign_reg!([push!(ty)] = primitive_op!((Op::ShiftLeft), Register(lhs), Register(rhs)))
         }
 
-        IB::Sub => {
-            let subtraend = pop!();
-            let minuend = pop!();
-            binary_op_type_assert!(minuend, subtraend);
-            assign_reg!(
-                [push!(minuend.ty.clone())] =
-                    primitive_op!(Op::Subtract, Register(minuend.clone()), Register(subtraend))
-            )
-        }
-
-        IB::Mul => {
-            let multiplier = pop!();
-            let multiplicand = pop!();
-            binary_op_type_assert!(multiplicand, multiplier);
-            assign_reg!(
-                [push!(multiplicand.ty.clone())] = primitive_op!(
-                    Op::Multiply,
-                    Register(multiplicand.clone()),
-                    Register(multiplier)
-                )
-            )
-        }
-
-        IB::Mod => {
-            let divisor = pop!();
-            let dividend = pop!();
-            binary_op_type_assert!(dividend, divisor);
-            assign_reg!(
-                [push!(dividend.ty.clone())] =
-                    primitive_op!(Op::Modulo, Register(dividend.clone()), Register(divisor))
-            )
-        }
-
-        IB::Div => {
-            let divisor = pop!();
-            let dividend = pop!();
-            binary_op_type_assert!(dividend, divisor);
-            assign_reg!(
-                [push!(dividend.ty.clone())] =
-                    primitive_op!(Op::Divide, Register(dividend.clone()), Register(divisor))
-            )
-        }
-
-        IB::BitOr => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::BitOr,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::BitAnd => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::BitAnd,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Xor => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::Xor, Register(operand.clone()), Register(other_operand))
-            )
-        }
-
-        IB::Or => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::Or, Register(operand.clone()), Register(other_operand))
-            )
-        }
-
-        IB::And => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::And, Register(operand.clone()), Register(other_operand))
-            )
+        IB::Shr => {
+            // TODO: Check the types
+            let rhs = pop!();
+            let lhs = pop!();
+            let ty = lhs.ty.clone();
+            assign_reg!([push!(ty)] = primitive_op!((Op::ShiftRight), Register(lhs), Register(rhs)))
         }
 
         IB::Not => {
@@ -572,100 +511,9 @@ pub(crate) fn bytecode<K: SourceKind>(
             assign_reg!([push!(reg.ty.clone())] = primitive_op!(Op::Not, Register(reg.clone())))
         }
 
-        IB::Eq => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::Equal,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-        IB::Neq => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::NotEqual,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Lt => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::LessThan,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Gt => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::GreaterThan,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Le => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::LessThanOrEqual,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Ge => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::GreaterThanOrEqual,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
         IB::Abort => Instruction::Abort(Register(ctxt.pop_register())),
 
         IB::Nop => Instruction::Nop,
-
-        IB::Shl => {
-            let ty = ctxt.nth_register(2).ty.clone();
-            assign_reg!(
-                [push!(ty)] = primitive_op!(Op::ShiftLeft, Register(pop!()), Register(pop!()))
-            )
-        }
-
-        IB::Shr => {
-            let ty = ctxt.nth_register(2).ty.clone();
-            assign_reg!(
-                [push!(ty)] = primitive_op!(Op::ShiftRight, Register(pop!()), Register(pop!()))
-            )
-        }
 
         IB::VecPack(bx) => {
             let mut args = vec![];
