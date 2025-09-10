@@ -1020,7 +1020,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // DONE(commit-handler-rewrite): enqueue transactions
         let mut schedulables = schedulables;
         schedulables.extend(randomness_schedulables);
-        self.transaction_manager_sender.send(
+        self.execution_scheduler_sender.send(
             schedulables,
             assigned_versions,
             SchedulingSource::NonFastPath,
@@ -2003,8 +2003,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
-        let mut num_finalized_user_transactions = vec![0; self.committee.size()];
-        let mut num_rejected_user_transactions = vec![0; self.committee.size()];
         // TODO(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
         transactions.extend({
             let reconfig_state = self
@@ -2149,6 +2147,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) -> Vec<(SequencedConsensusTransactionKind, u32)> {
         let mut transactions = Vec::new();
         let epoch = self.epoch_store.epoch();
+        let mut num_finalized_user_transactions = vec![0; self.committee.size()];
+        let mut num_rejected_user_transactions = vec![0; self.committee.size()];
         for (block, parsed_transactions) in consensus_commit.transactions() {
             let author = block.author.value();
             // TODO: consider only messages within 1~3 rounds of the leader?
