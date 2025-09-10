@@ -1560,6 +1560,10 @@ type MakeMoveVecCommand {
 	The values to pack into the vector, all of the same type.
 	"""
 	elements: [TransactionArgument!]
+	"""
+	If the elements are not objects, or the vector is empty, a type must be supplied.
+	"""
+	type: MoveType
 }
 
 """
