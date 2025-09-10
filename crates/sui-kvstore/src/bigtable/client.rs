@@ -393,7 +393,7 @@ impl KeyValueStoreReader for BigTableClient {
             .iter()
             .zip(response)
             .map(|(&digest, row)| {
-                let mut transaction_events: Option<TransactionEvents> = None;
+                let mut transaction_events: Option<Option<TransactionEvents>> = None;
                 let mut timestamp_ms = 0;
 
                 for (column, value) in row {
@@ -406,7 +406,11 @@ impl KeyValueStoreReader for BigTableClient {
                     }
                 }
 
-                let events = transaction_events.context("events field is missing")?.data;
+                let events = transaction_events
+                    .context("events field is missing")?
+                    .map(|e| e.data)
+                    .unwrap_or_default();
+
                 Ok((
                     digest,
                     TransactionEventsData {
