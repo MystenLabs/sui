@@ -46,24 +46,8 @@ pub(crate) struct Verifier<'m> {
 }
 
 impl Executor {
-<<<<<<< HEAD
-    pub(crate) fn new(
-        protocol_config: &ProtocolConfig,
-        silent: bool,
-        enable_profiler: Option<PathBuf>,
-    ) -> Result<Self, SuiError> {
-        Ok(Executor(Arc::new(new_move_runtime(
-||||||| 0f914b9774
-    pub(crate) fn new(
-        protocol_config: &ProtocolConfig,
-        silent: bool,
-        enable_profiler: Option<PathBuf>,
-    ) -> Result<Self, SuiError> {
-        Ok(Executor(Arc::new(new_move_vm(
-=======
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
-        Ok(Executor(Arc::new(new_move_vm(
->>>>>>> origin/main
+        Ok(Executor(Arc::new(new_move_runtime(
             all_natives(silent, protocol_config),
             protocol_config,
         )?)))

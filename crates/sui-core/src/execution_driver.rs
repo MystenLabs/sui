@@ -1,26 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::{Arc, Weak},
-    time::Duration,
-};
+use std::sync::{Arc, Weak};
 
-<<<<<<< HEAD
-||||||| 0f914b9774
-use mysten_common::fatal;
-=======
 use mysten_common::{fatal, random::get_rng};
->>>>>>> origin/main
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
-use sui_protocol_config::Chain;
-use tokio::{
-    sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
-    time::sleep,
-};
-use tracing::{error, error_span, info, trace, Instrument};
+use sui_types::error::SuiError;
+use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
+use tracing::{error_span, info, trace, warn, Instrument};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
@@ -29,10 +18,6 @@ use crate::execution_scheduler::PendingCertificate;
 #[path = "unit_tests/execution_driver_tests.rs"]
 mod execution_driver_tests;
 
-// Execution should not encounter permanent failures, so any failure can and needs
-// to be retried.
-pub const EXECUTION_MAX_ATTEMPTS: u32 = 10;
-const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
 /// When a notification that a new pending transaction is received we activate
@@ -46,15 +31,6 @@ pub async fn execution_process(
 
     // Rate limit concurrent executions to # of cpus.
     let limit = Arc::new(Semaphore::new(num_cpus::get()));
-
-    let is_mainnet = {
-        let Some(state) = authority_state.upgrade() else {
-            info!("Authority state has shutdown. Exiting ...");
-            return;
-        };
-
-        state.get_chain_identifier().chain() == Chain::Mainnet
-    };
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
@@ -138,30 +114,8 @@ pub async fn execution_process(
             if authority.is_tx_already_executed(&digest) {
                 return;
             }
-            let mut attempts = 0;
-            loop {
-                fail_point_async!("transaction_execution_delay");
-<<<<<<< HEAD
-                attempts += 1;
-                let res = authority
-                    .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store_clone)
-                    .await;
-                if let Err(e) = res {
-                    // Tighten this check everywhere except mainnet - if we don't see an increase in
-                    // these crashes we will remove the retries.
-                    if !is_mainnet || attempts == EXECUTION_MAX_ATTEMPTS {
-                        panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
-||||||| 0f914b9774
 
-            match authority.try_execute_immediately(
-                &certificate,
-                expected_effects_digest,
-                &epoch_store_clone,
-            ).await {
-                Err(SuiError::ValidatorHaltedAtEpochEnd) => {
-                    warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
-                    return;
-=======
+            fail_point_async!("transaction_execution_delay");
 
             match authority.try_execute_immediately(
                 &certificate,
@@ -171,15 +125,11 @@ pub async fn execution_process(
                 Err(SuiError::ValidatorHaltedAtEpochEnd) => {
                     warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
                     return;
->>>>>>> origin/main
-                    }
-                    // Assume only transient failure can happen. Permanent failure is probably
-                    // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
-                    sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
-                } else {
-                    break;
                 }
+                Err(e) => {
+                    fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
+                }
+                _ => (),
             }
             authority
                 .metrics

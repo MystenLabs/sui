@@ -90,15 +90,15 @@ impl<'backing> TemporaryStore<'backing> {
             // Ensure that input objects and receiving objects must not overlap.
             assert!(
                 objects
-                .keys()
-                .collect::<HashSet<_>>()
-                .intersection(
-                    &receiving_objects
-                        .iter()
-                        .map(|oref| &oref.0)
-                        .collect::<HashSet<_>>()
-                )
-                .next()
+                    .keys()
+                    .collect::<HashSet<_>>()
+                    .intersection(
+                        &receiving_objects
+                            .iter()
+                            .map(|oref| &oref.0)
+                            .collect::<HashSet<_>>()
+                    )
+                    .next()
                     .is_none()
             );
         }
@@ -555,7 +555,7 @@ impl TemporaryStore<'_> {
                                 "Gas object must be owned by sender or sponsor"
                             );
                         } else {
-                        assert!(sender == a, "Input object must be owned by sender");
+                            assert!(sender == a, "Input object must be owned by sender");
                         }
                         Some(id)
                     }
@@ -645,7 +645,7 @@ impl TemporaryStore<'_> {
                     // authenticated set at the top of this loop and it wasn't so this is a failure.
                     owner @ Owner::Shared { .. } => {
                         panic!(
-                        "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
+                            "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                              Potentially covering objects in: {authenticated_for_mutation:#?}"
                         );
                     }
@@ -1022,14 +1022,14 @@ impl ChildObjectResolver for TemporaryStore<'_> {
         // transaction since `Receiving` doesn't have copy.
         debug_assert!(
             !self
-            .execution_results
-            .written_objects
+                .execution_results
+                .written_objects
                 .contains_key(receiving_object_id)
         );
         debug_assert!(
             !self
-            .execution_results
-            .deleted_object_ids
+                .execution_results
+                .deleted_object_ids
                 .contains(receiving_object_id)
         );
         self.store.get_object_received_at_version(
