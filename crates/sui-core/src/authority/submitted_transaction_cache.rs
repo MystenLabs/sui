@@ -3,19 +3,77 @@
 
 use lru::LruCache;
 use parking_lot::RwLock;
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+};
+use std::collections::BTreeSet;
 use std::net::IpAddr;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 use sui_types::digests::TransactionDigest;
 use sui_types::traffic_control::Weight;
 use tracing::debug;
 
 pub(crate) const DEFAULT_CACHE_CAPACITY: usize = 100_000;
 
+pub struct SubmittedTransactionCacheMetrics {
+    pub transactions_tracked: IntGauge,
+    pub spam_detected: IntCounter,
+    pub submission_count_exceeded: Histogram,
+    pub amplification_factor_distribution: Histogram,
+}
+
+impl SubmittedTransactionCacheMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            transactions_tracked: register_int_gauge_with_registry!(
+                "submitted_transaction_cache_transactions_tracked",
+                "Number of transactions currently tracked in the submission cache",
+                registry,
+            )
+            .unwrap(),
+            spam_detected: register_int_counter_with_registry!(
+                "submitted_transaction_cache_spam_detected",
+                "Number of transactions that exceeded submission limits",
+                registry,
+            )
+            .unwrap(),
+            submission_count_exceeded: register_histogram_with_registry!(
+                "submitted_transaction_cache_submission_count_exceeded",
+                "Distribution of submission counts when spam is detected",
+                vec![
+                    1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0,
+                    10000.0,
+                ],
+                registry,
+            )
+            .unwrap(),
+            amplification_factor_distribution: register_histogram_with_registry!(
+                "submitted_transaction_cache_amplification_factor_distribution",
+                "Distribution of amplification factors used for transaction submissions",
+                vec![
+                    1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0,
+                    10000.0,
+                ],
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_test() -> Self {
+        Self::new(&Registry::new())
+    }
+}
+
 /// Cache for tracking submitted transactions to prevent DoS through excessive resubmissions.
 /// Uses LRU eviction to automatically remove least recently used entries when at capacity.
 /// Tracks submission counts and enforces gas-price-based amplification limits.
 pub(crate) struct SubmittedTransactionCache {
     inner: RwLock<Inner>,
+    metrics: Arc<SubmittedTransactionCacheMetrics>,
 }
 
 struct Inner {
@@ -28,12 +86,15 @@ struct SubmissionMetadata {
     submission_count: u32,
     /// Maximum allowed submissions based on gas price amplification
     max_allowed_submissions: u32,
-    /// List of client IP addresses that have submitted this transaction
-    submitter_client_addrs: Vec<IpAddr>,
+    /// Set of client IP addresses that have submitted this transaction
+    submitter_client_addrs: BTreeSet<IpAddr>,
 }
 
 impl SubmittedTransactionCache {
-    pub(crate) fn new(cache_capacity: Option<usize>) -> Self {
+    pub(crate) fn new(
+        cache_capacity: Option<usize>,
+        metrics: Arc<SubmittedTransactionCacheMetrics>,
+    ) -> Self {
         let capacity = cache_capacity
             .and_then(NonZeroUsize::new)
             .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_CAPACITY).unwrap());
@@ -42,7 +103,12 @@ impl SubmittedTransactionCache {
             inner: RwLock::new(Inner {
                 transactions: LruCache::new(capacity),
             }),
+            metrics,
         }
+    }
+
+    pub(crate) fn metrics(&self) -> Arc<SubmittedTransactionCacheMetrics> {
+        self.metrics.clone()
     }
 
     pub(crate) fn record_submitted_tx(
@@ -58,8 +124,7 @@ impl SubmittedTransactionCache {
         if let Some(metadata) = inner.transactions.get_mut(digest) {
             // Track additional client addresses for resubmissions
             if let Some(addr) = submitter_client_addr {
-                if !metadata.submitter_client_addrs.contains(&addr) {
-                    metadata.submitter_client_addrs.push(addr);
+                if metadata.submitter_client_addrs.insert(addr) {
                     debug!("Added new client address {addr} for transaction {digest}");
                 }
             }
@@ -76,6 +141,13 @@ impl SubmittedTransactionCache {
 
             inner.transactions.put(*digest, metadata);
 
+            self.metrics
+                .transactions_tracked
+                .set(inner.transactions.len() as i64);
+            self.metrics
+                .amplification_factor_distribution
+                .observe(amplification_factor as f64);
+
             debug!(
                 "First submission of transaction {digest} (max_allowed: {max_allowed_submissions})",
             );
@@ -84,11 +156,11 @@ impl SubmittedTransactionCache {
 
     /// Increments the submission count when we see a transaction in consensus output.
     /// This tracks how many times the transaction has appeared in consensus (from any validator).
-    /// Returns the spam weight and list of submitter client addresses if the transaction exceeds allowed submissions.
+    /// Returns the spam weight and set of submitter client addresses if the transaction exceeds allowed submissions.
     pub(crate) fn increment_submission_count(
         &self,
         digest: &TransactionDigest,
-    ) -> Option<(Weight, Vec<IpAddr>)> {
+    ) -> Option<(Weight, BTreeSet<IpAddr>)> {
         let mut inner = self.inner.write();
 
         if let Some(metadata) = inner.transactions.get_mut(digest) {
@@ -96,6 +168,10 @@ impl SubmittedTransactionCache {
 
             if metadata.submission_count > metadata.max_allowed_submissions {
                 let spam_weight = Weight::one();
+                self.metrics.spam_detected.inc();
+                self.metrics
+                    .submission_count_exceeded
+                    .observe(metadata.submission_count as f64);
 
                 debug!(
                     "Transaction {} seen in consensus {} times, exceeds limit {} (spam_weight: {:?})",
@@ -141,7 +217,10 @@ mod tests {
 
     #[test]
     fn test_first_submission_allowed() {
-        let cache = SubmittedTransactionCache::new(None);
+        let cache = SubmittedTransactionCache::new(
+            None,
+            Arc::new(SubmittedTransactionCacheMetrics::new_test()),
+        );
         let digest = create_test_digest(1);
 
         cache.record_submitted_tx(&digest, 1, None);
@@ -155,7 +234,10 @@ mod tests {
 
     #[test]
     fn test_amplification_factor() {
-        let cache = SubmittedTransactionCache::new(None);
+        let cache = SubmittedTransactionCache::new(
+            None,
+            Arc::new(SubmittedTransactionCacheMetrics::new_test()),
+        );
         let digest = create_test_digest(1);
 
         // Record with amplification_factor=5, should allow 5 submissions
@@ -186,7 +268,10 @@ mod tests {
     #[test]
     fn test_lru_eviction() {
         // Create a cache with capacity for only 3 transactions
-        let cache = SubmittedTransactionCache::new(Some(3));
+        let cache = SubmittedTransactionCache::new(
+            Some(3),
+            Arc::new(SubmittedTransactionCacheMetrics::new_test()),
+        );
 
         // Add 3 transactions
         for i in 1..=3 {
@@ -215,7 +300,10 @@ mod tests {
     #[test]
     fn test_lru_access_updates_position() {
         // Create a cache with capacity for only 3 transactions
-        let cache = SubmittedTransactionCache::new(Some(3));
+        let cache = SubmittedTransactionCache::new(
+            Some(3),
+            Arc::new(SubmittedTransactionCacheMetrics::new_test()),
+        );
 
         // Add 3 transactions
         for i in 1..=3 {
@@ -241,7 +329,10 @@ mod tests {
 
     #[test]
     fn test_multiple_client_addresses() {
-        let cache = SubmittedTransactionCache::new(None);
+        let cache = SubmittedTransactionCache::new(
+            None,
+            Arc::new(SubmittedTransactionCacheMetrics::new_test()),
+        );
         let digest = create_test_digest(1);
         let addr1 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let addr2 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
@@ -278,7 +369,10 @@ mod tests {
     #[test]
     fn test_retry_tracking() {
         // Create a cache with capacity for only 3 transactions
-        let cache = SubmittedTransactionCache::new(Some(3));
+        let cache = SubmittedTransactionCache::new(
+            Some(3),
+            Arc::new(SubmittedTransactionCacheMetrics::new_test()),
+        );
         let digest1 = create_test_digest(1);
         let digest2 = create_test_digest(2);
         let digest3 = create_test_digest(3);

@@ -92,7 +92,9 @@ use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
 use super::shared_object_version_manager::AssignedVersions;
-use super::submitted_transaction_cache::SubmittedTransactionCache;
+use super::submitted_transaction_cache::{
+    SubmittedTransactionCache, SubmittedTransactionCacheMetrics,
+};
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use super::transaction_reject_reason_cache::TransactionRejectReasonCache;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -972,6 +974,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
+        submitted_transaction_cache_metrics: Option<Arc<SubmittedTransactionCacheMetrics>>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1135,7 +1138,11 @@ impl AuthorityPerEpochStore {
         };
 
         let submitted_transaction_cache = if protocol_config.mysticeti_fastpath() {
-            Some(SubmittedTransactionCache::new(None))
+            Some(SubmittedTransactionCache::new(
+                None,
+                submitted_transaction_cache_metrics
+                    .expect("should be Some if mysticeti_fastpath is true"),
+            ))
         } else {
             None
         };
@@ -1335,6 +1342,9 @@ impl AuthorityPerEpochStore {
             expensive_safety_check_config,
             self.chain,
             previous_epoch_last_checkpoint,
+            self.submitted_transaction_cache
+                .as_ref()
+                .map(|submitted_transaction_cache| submitted_transaction_cache.metrics()),
         )
     }
 
