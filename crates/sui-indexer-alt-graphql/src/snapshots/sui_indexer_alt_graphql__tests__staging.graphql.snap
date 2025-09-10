@@ -1162,6 +1162,35 @@ type Epoch {
 	validatorSet: ValidatorSet
 }
 
+type EpochConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [EpochEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Epoch!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type EpochEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Epoch!
+}
+
 type Event {
 	"""
 	The Move value emitted for this event.
@@ -3067,6 +3096,10 @@ type Query {
 	Returns `null` if the epoch does not exist yet, or was pruned.
 	"""
 	epoch(epochId: UInt53): Epoch
+	"""
+	Paginate epochs that are in the network.
+	"""
+	epochs(first: Int, after: String, last: Int, before: String): EpochConnection
 	"""
 	Paginate events that are emitted in the network, optionally filtered by event filters.
 	"""
