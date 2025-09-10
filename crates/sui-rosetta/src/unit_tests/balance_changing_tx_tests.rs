@@ -818,7 +818,9 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
                             // Todo: amend this method and tests to cover other coin types too (eg. test_publish_and_move_call also mints MY_COIN)
-                            if amount.currency.metadata.coin_type == GAS::type_().to_string() {
+                            if amount.currency.metadata.coin_type
+                                == sui_types::TypeTag::from(GAS::type_()).to_canonical_string(true)
+                            {
                                 *changes.entry(addr.address).or_default() += amount.value
                             }
                         }
