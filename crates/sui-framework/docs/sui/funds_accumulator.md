@@ -177,7 +177,10 @@ Split a <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdra
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_split">withdrawal_split</a>&lt;T: store&gt;(withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;, sub_limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdrawal_split">withdrawal_split</a>&lt;T: store&gt;(
+    withdrawal: &<b>mut</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;,
+    sub_limit: u256,
+): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
     <b>assert</b>!(withdrawal.limit &gt;= sub_limit, <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EInvalidSubLimit">EInvalidSubLimit</a>);
     withdrawal.limit = withdrawal.limit - sub_limit;
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> { owner: withdrawal.owner, limit: sub_limit }

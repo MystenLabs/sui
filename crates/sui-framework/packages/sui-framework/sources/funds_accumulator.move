@@ -47,7 +47,10 @@ public fun withdrawal_limit<T: store>(withdrawal: &Withdrawal<T>): u256 {
 }
 
 /// Split a `Withdrawal` and take a sub-withdrawal from it with the specified sub-limit.
-public fun withdrawal_split<T: store>(withdrawal: &mut Withdrawal<T>, sub_limit: u256): Withdrawal<T> {
+public fun withdrawal_split<T: store>(
+    withdrawal: &mut Withdrawal<T>,
+    sub_limit: u256,
+): Withdrawal<T> {
     assert!(withdrawal.limit >= sub_limit, EInvalidSubLimit);
     withdrawal.limit = withdrawal.limit - sub_limit;
     Withdrawal { owner: withdrawal.owner, limit: sub_limit }
