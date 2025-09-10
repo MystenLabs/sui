@@ -60,7 +60,7 @@ use super::{
     move_package::MovePackage,
     object_filter::{ObjectFilter, Validator as OFValidator},
     owner::Owner,
-    transaction::Transaction,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
@@ -125,6 +125,16 @@ use super::{
         name = "storage_rebate",
         ty = "Result<Option<BigInt>, RpcError<Error>>",
         desc = "The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object."
+    ),
+    field(
+        name = "received_transactions",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<CTransaction>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<CTransaction>"),
+        arg(name = "filter", ty = "Option<TransactionFilter>"),
+        ty = "Result<Option<Connection<String, Transaction>>, RpcError>",
+        desc = "The transactions that sent objects to this object."
     )
 )]
 pub(crate) enum IObject {
@@ -556,6 +566,36 @@ impl Object {
         };
 
         Ok(Some(BigInt::from(object.storage_rebate)))
+    }
+
+    /// The transactions that sent objects to this object
+    pub(crate) async fn received_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IObject", "receivedTransactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Create filter for transactions that affected this object's address
+        let address_filter = TransactionFilter {
+            affected_address: Some(self.super_.address.into()),
+            ..Default::default()
+        };
+
+        // Intersect with user-provided filter
+        let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Transaction::paginate(ctx, self.super_.scope.clone(), page, filter)
+            .await
+            .map(Some)
     }
 }
 

@@ -38,7 +38,7 @@ use super::{
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     owner::Owner,
-    transaction::Transaction,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
 
 pub(crate) struct DynamicField {
@@ -331,6 +331,21 @@ impl DynamicField {
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
+    }
+
+    /// The transactions that sent objects to this object.
+    pub(crate) async fn received_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        self.super_
+            .received_transactions(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
