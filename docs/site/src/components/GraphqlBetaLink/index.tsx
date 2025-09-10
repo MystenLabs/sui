@@ -3,34 +3,66 @@
 
 import React, { useEffect, useState } from "react";
 import { useLocation } from "@docusaurus/router";
-import Link from "@docusaurus/Link";
+import { matchPath } from "@docusaurus/router";
+import routes from "@generated/routes";
+
+function routeExists(candidate: string, routeTree: any[]): boolean {
+  for (const r of routeTree) {
+    // Docusaurus routes have `path`, `exact`, and optional nested `routes`
+    if (r.path) {
+      const m =
+        r.path !== "*" && matchPath(candidate, { path: r.path, exact: true });
+      if (m) return true;
+    }
+    if (r.routes && routeExists(candidate, r.routes)) return true;
+  }
+  return false;
+}
 
 export default function GraphqlBetaLink({ title }) {
-  /*const { pathname } = useLocation();
+  const { pathname } = useLocation();
   const [betaExists, setBetaExists] = useState(false);
 
+  // Compute the candidate beta path by swapping alpha -> beta
   const betaPath = pathname.replace("/alpha/", "/beta/");
 
   useEffect(() => {
-    if (pathname.includes("/alpha/")) {
-      fetch(betaPath, { method: "HEAD" })
-        .then((res) => {
-          if (res.ok) setBetaExists(true);
-        })
-        .catch(() => {});
+    const candidate = pathname.replace("/alpha/", "/beta/");
+
+    if (candidate === pathname) {
+      setBetaExists(false);
+      return;
     }
-  }, [pathname, betaPath]);
-  */
+
+    try {
+      setBetaExists(routeExists(candidate, routes as any));
+    } catch {
+      setBetaExists(false);
+    }
+  }, [pathname]);
+
   return (
     <div className="bg-yellow-100 text-yellow-900 p-4 rounded mb-6 text-center border border-yellow-300">
-      <>
-        ⚠️ This is the <strong className="mx-1">beta</strong> version of the Sui
-        GraphQL schema. The beta schema will replace the{" "}
-        <Link href="/references/sui-api/sui-graphql/alpha/reference">
-          alpha GraphQL schema
-        </Link>{" "}
-        upon its official release.
-      </>
+      <p className="flex items-center justify-center mb-0">
+        {betaExists ? (
+          <>
+            ⚠️ This is the <strong className="mx-2">alpha</strong> version of{" "}
+            {title}.
+            <a href={betaPath} className="underline text-yellow-800 ml-1">
+              Switch to beta version →
+            </a>
+          </>
+        ) : (
+          <>
+            ⚠️ This is the <strong className="mx-2">alpha</strong> version. The
+            operation or type does not exist in the{" "}
+            <a href="/references/sui-api/sui-graphql/beta/reference">
+              beta version
+            </a>
+            .
+          </>
+        )}
+      </p>
     </div>
   );
 }

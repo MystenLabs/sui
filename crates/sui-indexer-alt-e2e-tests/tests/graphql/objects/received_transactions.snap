@@ -1,0 +1,113 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-22:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6931200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 24-26:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 27:
+//# run P0::m::create_and_transfer --sender A --args 100 @0x2
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 29-31:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, line 32:
+//# run P0::m::create_and_transfer --sender B --args 200 @0x2
+created: object(5,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, line 34:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 36-68:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "allReceived": {
+        "edges": [
+          {
+            "node": {
+              "digest": "3nAdntSTyPtE63NP5cZR3pCUed3fmv1Vx71MdPmQSSfm",
+              "sender": {
+                "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+              },
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 1
+                }
+              }
+            }
+          },
+          {
+            "node": {
+              "digest": "sVmBHDHcJCLoKNtxpgeMxufaUoD4bmVwdc7Se8MTQKn",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              },
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2
+                }
+              }
+            }
+          },
+          {
+            "node": {
+              "digest": "2rPJDzqsFDTM6hvK8Nb9T2L1jSsVssucENwKFL3f1U19",
+              "sender": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              },
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 3
+                }
+              }
+            }
+          }
+        ]
+      },
+      "fromCheckpoint2": {
+        "edges": [
+          {
+            "node": {
+              "digest": "sVmBHDHcJCLoKNtxpgeMxufaUoD4bmVwdc7Se8MTQKn",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          }
+        ]
+      },
+      "fromA": {
+        "edges": [
+          {
+            "node": {
+              "digest": "sVmBHDHcJCLoKNtxpgeMxufaUoD4bmVwdc7Se8MTQKn",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

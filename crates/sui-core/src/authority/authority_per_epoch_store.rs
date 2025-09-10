@@ -4456,6 +4456,23 @@ impl AuthorityPerEpochStore {
             return Ok(ConsensusCertificateResult::Ignored);
         }
 
+        let fail_dkg_early = self.protocol_config().cancel_for_failed_dkg_early();
+
+        if fail_dkg_early
+            && dkg_failed
+            && self.randomness_state_enabled()
+            && transaction.transaction_data().uses_randomness()
+        {
+            debug!(
+                "Canceling randomness-using transaction {:?} because DKG failed",
+                transaction.digest(),
+            );
+            return Ok(ConsensusCertificateResult::Cancelled((
+                transaction,
+                CancelConsensusCertificateReason::DkgFailed,
+            )));
+        }
+
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             &transaction,
@@ -4514,7 +4531,8 @@ impl AuthorityPerEpochStore {
             return Ok(deferral_result);
         }
 
-        if dkg_failed
+        if !fail_dkg_early
+            && dkg_failed
             && self.randomness_state_enabled()
             && transaction.transaction_data().uses_randomness()
         {

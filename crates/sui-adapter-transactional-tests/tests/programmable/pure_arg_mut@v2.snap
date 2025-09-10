@@ -30,7 +30,7 @@ task 3, lines 54-58:
 //> test::m1::modify_u8(Input(0));
 //> test::m1::assert_string(Input(1));
 // In statically checked PTBs, tests that each type can be borrowed mutably separately
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::assert_string (function index 6) at offset 11, Abort Code: 13906834324667236351
+Error: Transaction Effects Status: Move Abort in test::m1::assert_string (function index 6) at offset 11 at line 34
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 6, instruction: 11, function_name: Some("assert_string") }, 13906834324667236351), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834324667236351), message: Some("test::m1::assert_string at offset 11"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 11)] }), command: Some(1) } }
 
 task 4, lines 59-63:

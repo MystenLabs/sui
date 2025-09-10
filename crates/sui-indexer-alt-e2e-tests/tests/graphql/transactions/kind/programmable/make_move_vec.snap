@@ -88,7 +88,7 @@ Response: {
   }
 }
 
-task 9, lines 72-94:
+task 9, lines 72-98:
 //# run-graphql
 Response: {
   "data": {
@@ -98,6 +98,10 @@ Response: {
           "nodes": [
             {
               "__typename": "MakeMoveVecCommand",
+              "type": {
+                "repr": "u64",
+                "signature": "u64"
+              },
               "elements": []
             }
           ]

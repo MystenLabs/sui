@@ -899,14 +899,21 @@ impl ConsensusOutputQuarantine {
         let mut shared_input_object_ids: Vec<_> = transactions
             .iter()
             .filter_map(|tx| {
-                if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                    kind: ConsensusTransactionKind::CertifiedTransaction(tx),
-                    ..
-                }) = &tx.0.transaction
-                {
-                    Some(tx.shared_input_objects().map(|obj| obj.id))
-                } else {
-                    None
+                match &tx.0.transaction {
+                    SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                        kind: ConsensusTransactionKind::CertifiedTransaction(tx),
+                        ..
+                    }) => Some(itertools::Either::Left(
+                        tx.shared_input_objects().map(|obj| obj.id),
+                    )),
+                    SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                        kind: ConsensusTransactionKind::UserTransaction(tx),
+                        ..
+                    // Bug fix that required a protocol flag.
+                    }) if protocol_config.use_mfp_txns_in_load_initial_object_debts() => Some(
+                        itertools::Either::Right(tx.shared_input_objects().map(|obj| obj.id)),
+                    ),
+                    _ => None,
                 }
             })
             .flatten()

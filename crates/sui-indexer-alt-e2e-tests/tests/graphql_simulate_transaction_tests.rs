@@ -14,6 +14,7 @@ use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
     fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
@@ -26,12 +27,58 @@ use url::Url;
 use sui_types::base_types::SuiAddress;
 use test_cluster::{TestCluster, TestClusterBuilder};
 
+// Structs for parsing command results
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandResult {
+    return_values: Option<Vec<CommandOutput>>,
+    mutated_references: Option<Vec<CommandOutput>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandOutput {
+    argument: Option<TransactionArgument>,
+    value: Option<MoveValue>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveValue {
+    #[serde(rename = "type")]
+    type_: MoveType,
+    bcs: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveType {
+    repr: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TransactionArgument {
+    #[serde(flatten)]
+    kind: ArgumentKind,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+#[allow(dead_code)]
+enum ArgumentKind {
+    TxResult { cmd: Option<u16>, ix: Option<u16> },
+    Input { ix: Option<u16> },
+    GasCoin {},
+}
+
 // Struct for parsing SimulationResult from GraphQL response
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SimulationResult {
     effects: Option<TransactionEffects>,
     events: Option<Events>,
+    outputs: Option<Vec<CommandResult>>,
     error: Option<String>,
 }
 
@@ -437,6 +484,210 @@ async fn test_simulate_transaction_object_changes() {
         .as_str()
         .unwrap();
     assert_eq!(created_type, sui_coin_type);
+
+    graphql_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_simulate_transaction_command_results() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // First, publish the command_results package
+    let package_path =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packages/command_results");
+    let publish_tx = validator_cluster
+        .test_transaction_builder()
+        .await
+        .publish(package_path)
+        .build();
+    let signed_tx = validator_cluster.sign_transaction(&publish_tx).await;
+    let publish_result = validator_cluster.execute_transaction(signed_tx).await;
+
+    // Find the published package ID from created objects
+    let package_id = publish_result
+        .effects
+        .unwrap()
+        .created()
+        .iter()
+        .find(|obj| obj.owner.is_immutable())
+        .unwrap()
+        .reference
+        .object_id;
+
+    // Now create a programmable transaction that calls our Move functions exactly like move_call.move:
+    // Command 0: create_test_object(Input(42)) -> TestObject
+    // Command 1: get_object_value(Result(0)) -> u64 (should return 42)
+    // Command 2: check_gas_coin(Gas) -> u64 (gas coin value)
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{Argument, CallArg, Command};
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+
+    // Input 0: Pure value 42
+    ptb.input(CallArg::Pure(bcs::to_bytes(&42u64).unwrap()))
+        .unwrap();
+
+    // Input 1: Pure value 100 (for mutation)
+    ptb.input(CallArg::Pure(bcs::to_bytes(&100u64).unwrap()))
+        .unwrap();
+
+    // Command 0: create_test_object(Input(42))
+    ptb.command(Command::move_call(
+        package_id,
+        move_core_types::ident_str!("test_commands").to_owned(),
+        move_core_types::ident_str!("create_test_object").to_owned(),
+        vec![],
+        vec![Argument::Input(0)], // Input(42)
+    ));
+
+    // Command 1: update_object_value(&mut Result(0), Input(100)) - MUTATES the object!
+    ptb.command(Command::move_call(
+        package_id,
+        move_core_types::ident_str!("test_commands").to_owned(),
+        move_core_types::ident_str!("update_object_value").to_owned(),
+        vec![],
+        vec![Argument::Result(0), Argument::Input(1)], // Mutate Result(0) with Input(100)
+    ));
+
+    // Command 2: get_object_value(&Result(0)) - should now return 100 after mutation
+    ptb.command(Command::move_call(
+        package_id,
+        move_core_types::ident_str!("test_commands").to_owned(),
+        move_core_types::ident_str!("get_object_value").to_owned(),
+        vec![],
+        vec![Argument::Result(0)], // Result(0) - the mutated TestObject
+    ));
+
+    // Command 3: check_gas_coin(&Gas) - takes gas coin by reference
+    ptb.command(Command::move_call(
+        package_id,
+        move_core_types::ident_str!("test_commands").to_owned(),
+        move_core_types::ident_str!("check_gas_coin").to_owned(),
+        vec![],
+        vec![Argument::GasCoin], // GasCoin
+    ));
+
+    // Build the programmable transaction
+    let pt = ptb.finish();
+    let gas_objects = validator_cluster
+        .wallet
+        .get_gas_objects_owned_by_address(validator_cluster.get_address_0(), None)
+        .await
+        .unwrap();
+    let tx_data = sui_types::transaction::TransactionData::new_programmable(
+        validator_cluster.get_address_0(),
+        vec![gas_objects[0]],
+        pt,
+        10_000_000, // gas budget
+        validator_cluster.get_reference_gas_price().await,
+    );
+
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: Base64!) {
+                simulateTransaction(transactionDataBcs: $txData) {
+                    effects { status }
+                    outputs {
+                        returnValues {
+                            argument {
+                                ... on Input { ix }
+                                ... on TxResult { cmd ix }
+                                ... on GasCoin { _ }
+                            }
+                            value {
+                                type { repr }
+                                bcs
+                            }
+                        }
+                        mutatedReferences {
+                            argument {
+                                ... on Input { ix }
+                                ... on TxResult { cmd ix }
+                                ... on GasCoin { _ }
+                            }
+                            value {
+                                type { repr }
+                                bcs
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            json!({ "txData": tx_bytes.encoded() }),
+        )
+        .await
+        .unwrap();
+
+    let simulation: SimulationResult =
+        serde_json::from_value(result.pointer("/data/simulateTransaction").unwrap().clone())
+            .unwrap();
+
+    assert_eq!(simulation.effects.as_ref().unwrap().status, "SUCCESS");
+
+    let results = simulation.outputs.expect("outputs field should be present");
+    assert_eq!(results.len(), 4, "Should have exactly 4 commands");
+
+    // Verify command result structure with specific expectations per command
+    for (i, cmd) in results.iter().enumerate() {
+        match i {
+            0 => {
+                // Command 0: create_test_object(Input(42)) -> TestObject
+                let returns = cmd.return_values.as_ref().unwrap();
+                assert_eq!(returns.len(), 1);
+                let value = returns[0].value.as_ref().unwrap();
+                assert!(value.type_.repr.contains("TestObject"));
+                assert!(!value.bcs.is_empty());
+                assert!(cmd.mutated_references.as_ref().unwrap().is_empty());
+            }
+            1 => {
+                // Command 1: update_object_value(&mut Result(0), Input(100))
+                let mutated = cmd.mutated_references.as_ref().unwrap();
+                assert_eq!(mutated.len(), 1);
+                let mutated_ref = &mutated[0];
+
+                let ArgumentKind::TxResult { cmd, ix } =
+                    &mutated_ref.argument.as_ref().unwrap().kind
+                else {
+                    panic!("Expected TxResult argument");
+                };
+                assert_eq!(*cmd, Some(0));
+                assert_eq!(*ix, Some(0));
+
+                let value = mutated_ref.value.as_ref().unwrap();
+                assert!(value.type_.repr.contains("TestObject"));
+                assert!(!value.bcs.is_empty());
+            }
+            2 => {
+                // Command 2: get_object_value(&Result(0)) -> u64 (should return 100 after mutation)
+                let returns = cmd.return_values.as_ref().unwrap();
+                assert_eq!(returns.len(), 1);
+
+                let value = returns[0].value.as_ref().unwrap();
+                assert_eq!(value.type_.repr, "u64");
+                assert!(!value.bcs.is_empty());
+                assert!(returns[0].argument.is_none());
+                assert!(cmd.mutated_references.as_ref().unwrap().is_empty());
+            }
+            3 => {
+                // Command 3: check_gas_coin(&Gas) -> u64
+                let returns = cmd.return_values.as_ref().unwrap();
+                assert_eq!(returns.len(), 1);
+
+                let value = returns[0].value.as_ref().unwrap();
+                assert_eq!(value.type_.repr, "u64");
+                assert!(!value.bcs.is_empty());
+                assert!(returns[0].argument.is_none());
+                assert!(cmd.mutated_references.as_ref().unwrap().is_empty());
+            }
+            _ => panic!("Unexpected command index: {}", i),
+        }
+    }
 
     graphql_cluster.stopped().await;
 }

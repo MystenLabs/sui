@@ -1,5 +1,5 @@
 ---
-title: GraphQL for Sui RPC (Alpha)
+title: GraphQL for Sui RPC (Beta)
 beta: devnet, testnet, mainnet
 description: Use GraphQL to make Sui RPC calls. This feature is currently in Beta. 
 keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
@@ -25,6 +25,16 @@ For more details on GraphQL fundamentals, see the introductory documentation fro
 
 :::
 
+:::caution
+
+Switch any apps that still use the GraphQL Alpha endpoints (`https://sui-mainnet.mystenlabs.com/graphql`, `https://sui-testnet.mystenlabs.com/graphql`, and `https://sui-devnet.mystenlabs.com/graphql`) to the GraphQL Beta endpoints as soon as possible to avoid disruption of service.
+
+- GraphQL Beta Mainnet: https://graphql.mainnet.sui.io/graphql
+- GraphQL Beta Testnet: https://graphql.testnet.sui.io/graphql
+- GraphQL Beta Devnet: https://graphql.devnet.sui.io/graphql
+
+:::
+
 ## Headers
 
 The service accepts the following optional headers:
@@ -35,7 +45,7 @@ The service accepts the following optional headers:
 By default, each request returns the service's version in the response header: `x-sui-rpc-version`.
 
 ```sh
-$ curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
+$ curl -i -X POST https://graphql.testnet.sui.io/graphql\
      --header 'x-sui-rpc-show-usage: true'                 \
      --header 'Content-Type: application/json'             \
      --data '{
@@ -46,28 +56,35 @@ $ curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
 The response for the previous request looks similar to the following:
 
 ```sh
-HTTP/2 200
+HTTP/2 200 
 content-type: application/json
-content-length: 159
-x-sui-rpc-version: 2024.1.0
-date: Tue, 30 Jan 2024 23:50:43 GMT
+content-length: 179
+x-sui-rpc-version: 1.56.1-
+vary: origin, access-control-request-method, access-control-request-headers
+access-control-allow-origin: *
+date: Tue, 09 Sep 2025 23:34:04 GMT
 via: 1.1 google
 alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
 
 {
-  "data": {
-    "epoch": {
-      "referenceGasPrice": "1000"
-    }
+  "data": { 
+    "epoch": { 
+      "referenceGasPrice": "1000" 
+    } 
   },
   "extensions": {
     "usage": {
-      "inputNodes": 2,
-      "outputNodes": 2,
-      "depth": 2,
-      "variables": 0,
-      "fragments": 0,
-      "queryPayload": 37
+      "input": { 
+        "nodes": 2, 
+        "depth": 2 
+      },
+      "payload": { 
+        "query_payload_size": 67, 
+        "tx_payload_size": 0 
+      },
+      "output": { 
+        "nodes": 2 
+      }
     }
   }
 }
@@ -161,7 +178,7 @@ fragment MoveValueFields on MoveValue {
   type {
     repr
   }
-  data
+  json
   bcs
 }
 ```
@@ -172,8 +189,8 @@ GraphQL supports queries that fetch multiple kinds of data, potentially nested. 
 
 ```graphql
 query {
-  epoch(id: 97) {
-    transactionBlocks(first: 10) {
+  epoch(epochId: 97) {
+    transactions(first: 10) {
       pageInfo {
         hasNextPage
         endCursor
@@ -231,13 +248,15 @@ This property requires that cursors that are used together (for example when sup
 
 #### Available range
 
-The GraphQL service does not support consistent pagination for arbitrarily old cursors. A cursor can grow stale, if the checkpoint it is from is no longer in the **available range**. You can query the upper- and lower-bounds of that range as follows:
+Different queries are subject to their own retention policies. For example, live object set queries only work for recent checkpoints (measured in minutes or hours), and transaction pagination might work going back to only a certain checkpoint (measured in weeks or months) with different retentions supported based on the filters applied. Data outside these ranges are pruned away. You can query the upper- and lower-bounds of that range for your query as follows:
 
 ```graphql
 {
-  availableRange {
-    first { sequenceNumber }
-    last { sequenceNumber }
+  serviceConfig {
+    retention(type: "Query", field: "transactions", filter: "affectedAddress") {
+      first { sequenceNumber }
+      last { sequenceNumber }
+    }
   }
 }
 ```
@@ -279,10 +298,9 @@ In addition to rate limits, queries are also validated against a number of rules
     maxQueryDepth
     maxQueryNodes
     maxOutputNodes
-    maxDbQueryCost
     defaultPageSize
     maxPageSize
-    requestTimeoutMs
+    queryTimeoutMs
     maxQueryPayloadSize
     maxTypeArgumentDepth
     maxTypeArgumentWidth
@@ -295,5 +313,5 @@ In addition to rate limits, queries are also validated against a number of rules
 ## Related links
 
 <RelatedLink to="/guides/developer/getting-started/graphql-rpc.mdx" />
-<RelatedLink to="/guides/developer/advanced/graphql-migration.mdx" />
 <RelatedLink to="/references/sui-graphql.mdx" />
+<RelatedLink to="/concepts/graphql-indexer" />

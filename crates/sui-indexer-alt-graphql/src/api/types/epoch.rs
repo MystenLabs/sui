@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::try_join;
@@ -20,6 +21,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use tokio::sync::OnceCell;
 
+use crate::api::scalars::cursor::JsonCursor;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     api::types::safe_mode::{from_system_state, SafeMode},
@@ -45,6 +47,8 @@ use super::{
         CTransaction, Transaction,
     },
 };
+
+pub(crate) type CEpoch = JsonCursor<usize>;
 
 pub(crate) struct Epoch {
     pub(crate) epoch_id: u64,
@@ -516,6 +520,28 @@ impl Epoch {
             end: OnceCell::new(),
             cp_sequence_numbers: OnceCell::new(),
         }))
+    }
+
+    /// Paginate through epochs.
+    pub(crate) async fn paginate(
+        ctx: &Context<'_>,
+        scope: &Scope,
+        page: Page<CEpoch>,
+    ) -> Result<Option<Connection<String, Epoch>>, RpcError> {
+        let Some(latest_epoch) = Epoch::fetch(ctx, scope.clone(), None).await? else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        let cursors = page.paginate_indices(1 + latest_epoch.epoch_id as usize);
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        for edge in cursors.edges {
+            let epoch = Epoch::with_id(scope.clone(), *edge.cursor as u64);
+
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), epoch));
+        }
+
+        Ok(Some(conn))
     }
 
     /// Get the epoch start information.
