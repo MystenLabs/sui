@@ -261,6 +261,7 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 //             Enable party transfer on mainnet.
 // Version 95: Change type name id base cost to 52, increase max transactions per checkpoint to 20000.
 // Version 96: Enable authority capabilities v2.
+//             Fix bug where MFP transaction shared inputs' debts were not loaded
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
