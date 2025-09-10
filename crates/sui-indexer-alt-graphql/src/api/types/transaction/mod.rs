@@ -38,7 +38,7 @@ use super::{
 use crate::{
     api::{
         scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, sui_address::SuiAddress},
-        types::lookups::tx_bounds,
+        types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
     },
     error::RpcError,
     pagination::Page,
@@ -203,6 +203,7 @@ impl Transaction {
             after_checkpoint,
             at_checkpoint,
             before_checkpoint,
+            kind,
             affected_address,
             sent_address,
         }: TransactionFilter,
@@ -235,7 +236,9 @@ impl Transaction {
 
         let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| *c.deref()).await?;
 
-        let tx_digest_keys = if affected_address.is_some() || sent_address.is_some() {
+        let tx_digest_keys = if let Some(kind) = kind {
+            tx_kind(ctx, tx_bounds, &page, kind, sent_address).await?
+        } else if affected_address.is_some() || sent_address.is_some() {
             tx_affected_address(ctx, tx_bounds, &page, affected_address, sent_address).await?
         } else {
             tx_unfiltered(tx_bounds, &page)
@@ -271,6 +274,38 @@ impl Transaction {
         conn.has_next_page = next;
 
         Ok(conn)
+    }
+}
+
+async fn tx_kind(
+    ctx: &Context<'_>,
+    tx_bounds: Range<u64>,
+    page: &Page<CTransaction>,
+    kind: TransactionKindInput,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    match (kind, sent_address) {
+        // We can simplify the query to just the `tx_affected_addresses` table if ProgrammableTX
+        // and sender are specified.
+        (TransactionKindInput::ProgrammableTx, Some(_)) => {
+            tx_affected_address(ctx, tx_bounds, page, None, sent_address).await
+        }
+        (TransactionKindInput::SystemTx, Some(_)) => Ok(vec![]),
+        // Otherwise, we can ignore the sender always, and just query the `tx_kinds` table.
+        (_, None) => {
+            let query = query!(
+                r#"
+    SELECT
+        tx_sequence_number
+    FROM
+        tx_kinds
+    WHERE
+        tx_kind = {BigInt} /* kind */
+    "#,
+                kind as i64,
+            );
+            tx_sequence_numbers(ctx, tx_bounds, page, query).await
+        }
     }
 }
 
