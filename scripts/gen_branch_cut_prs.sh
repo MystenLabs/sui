@@ -75,7 +75,7 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
     --base main \
     --head "$BRANCH" \
     --title "$BODY" \
-    --reviewer "ebmifa,pei-mysten,tharbert" \
+    --reviewer "ebmifa" \
     --body "$BODY" 2>&1); then
     
     # Extract PR URL from output
