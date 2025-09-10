@@ -56,9 +56,9 @@ Custom indexers are a good choice for app or protocol-specific logic and data la
 
 Primary interfaces to access Sui access data in the future include:
 
-- [gRPC API](../../../concepts/grpc-overview.mdx) will replace JSON-RPC on Full nodes, and is currently available in beta. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Refer to the [high-level timeline for gRPC availability](#grpc-api).
-- General-purpose Indexer will include a performant and scalable implementation of the [Sui indexer framework](../../../concepts/custom-indexing-framework.mdx). It is currently available in alpha. Use it to load data at scale from Full nodes into a Postgres relational database.
-- [GraphQL RPC](/references/sui-graphql.mdx) will include a lightweight GraphQL RPC Server that you can use to read data from the General-purpose Indexer's relational database. It is currently available in alpha. You can use it as an alternative to gRPC, including for migration from JSON-RPC for an existing application. Refer to the [high-level timeline for GraphQL availability](#graphql-rpc).
+- [gRPC API](../../../concepts/grpc-overview.mdx) replaces JSON-RPC on Full nodes, and is currently available in beta. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Refer to the [high-level timeline for gRPC availability](#grpc-api).
+- [General-purpose Indexer](../../../concepts/graphql-indexer.mdx) is a performant and scalable implementation of the [custom indexing framework](../../../concepts/custom-indexing-framework.mdx). It is currently available in beta. Use it to load network data at scale into a Postgres relational database.
+- [GraphQL RPC](../../../concepts/graphql-indexer.mdx) includes a lightweight GraphQL RPC Server that you can use to read data from the General-purpose Indexer's relational database. It is currently available in beta. You can use it as an alternative to gRPC, including for migration from JSON-RPC for an existing application. Refer to the [high-level timeline for GraphQL availability](#graphql-rpc).
 
 You could still utilize an [RPC provider](https://sui.io/developers#dev-tools) (filter by `RPC`) or a [Data indexer operator](https://github.com/sui-foundation/awesome-sui?tab=readme-ov-file#indexers--data-services) with these options, assuming some or all of those providers choose to operate the General-purpose Indexer and the GraphQL RPC Server.
 
@@ -90,29 +90,27 @@ The target times indicated below are tentative and subject to updates based on p
 
 ### General-purpose Indexer
 
-As mentioned, General-purpose Indexer will include a performant and scalable implementation of the [indexer framework](../../../concepts/custom-indexing-framework.mdx). The underlying framework uses the full node RPCs to ingest the data, initially using the current generally available JSON-RPC, and later using the gRPC API.
+As mentioned, [General-purpose Indexer](../../../concepts/graphql-indexer.mdx) includes a performant and scalable implementation of the [custom indexing framework](../../../concepts/custom-indexing-framework.mdx). The underlying framework uses the remote checkpoint store and full node RPCs to ingest the data.
 
-General-purpose Indexer will be declarative such that you can seamlessly configure it to load different kinds of Sui network data into Postgres relational tables in parallel. This change is being implemented to improve the performance of the data ingestion into the Postgres database. In addition, you can configure pruning for different tables in the Postgres database, allowing you to tune it for the desired combination of performance and cost characteristics.
+General-purpose Indexer is declarative in the sense that you can seamlessly configure it to load different kinds of Sui network data into Postgres relational tables in parallel. This improves the performance of the data ingestion into the Postgres-compatible database. In addition, you can configure pruning for different tables in the Postgres-compatible database, allowing you to tune it for the desired combination of performance and cost characteristics.
 
 :::info
 
-General-purpose Indexer is currently in alpha and not recommended for production use. A sneak preview of how you could set up General-purpose Indexer today is available [on GitHub](https://github.com/amnn/sui-sender-indexer).
+General-purpose Indexer is in beta, which is a somewhat stable release that is subject to change based on user feedback. You can use it for testing and production readiness in non-production environments.
 
 :::
 
 ### GraphQL RPC
 
-The [GraphQL RPC Server](/references/sui-graphql.mdx) will provide a performant GraphQL RPC layer while reading data from the General-purpose Indexer's Postgres database. GraphQL RPC will be an alternative to gRPC API. If you are already using JSON-RPC in your application today, you would have an option to migrate to GraphQL RPC by either operating the combined stack of General-purpose Indexer, Postgres database, and GraphQL RPC server on your own, or by utilizing it as a service from an RPC provider or data indexer operator.
+The [GraphQL RPC Server](../../../concepts/graphql-indexer.mdx) is a performant GraphQL RPC layer that reads data from the General-purpose Indexer's Postgres-compatible database, [Archival Service](#archival-store-and-service), and a full node. GraphQL RPC is an alternative to gRPC API. If you are already using JSON-RPC in your application today, you have an option to migrate to GraphQL RPC by either self-operating the combined stack of General-purpose Indexer, Postgres-compatible database, and GraphQL RPC server, or by utilizing it as a service from an RPC provider or indexer operator.
 
-GraphQL RPC Server will be a lightweight server component that will allow you to combine data from multiple Postgres database tables using GraphQL's expressive querying system, which is appealing to frontend developers.
+GraphQL RPC Server is a lightweight server component that allows you to combine data from multiple tables in the Postgres-compatible database using GraphQL's expressive querying system, which is appealing to frontend developers.
 
 See [When to use gRPC vs GraphQL with General-purpose Indexer](#when-to-use-grpc-vs-graphql-with-general-purpose-indexer) for a comparison with the gRPC API.
 
 :::info
 
-GraphQL RPC Server is currently in alpha and not recommended for production use. Check out [this getting started document for GraphQL RPCs](guides/developer/getting-started/graphql-rpc.mdx) that refers to the Mysten Labs-managed stack of GraphQL RPC Server along with the underlying Postgres database and General-purpose Indexer.
-
-Based on valuable feedback from the community, the GraphQL RPC release stage has been updated to alpha. Refer to the high-level timeline for beta and GA releases in this document.
+GraphQL RPC Server is in beta, which is a somewhat stable release that is subject to change based on user feedback. You can use it for testing and production readiness in non-production environments.
 
 :::
 
