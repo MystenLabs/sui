@@ -96,7 +96,7 @@ fn pipeline(retention_key: RetentionKey) -> Result<Vec<String>, RpcError<Error>>
             .map(|s| s.as_str()),
     ) {
         ("Query", "transactions", None) => Ok(vec!["tx_digests".to_string()]),
-        ("Query", "transactions", Some("affectedAddresses")) => Ok(vec![
+        ("Query", "transactions", Some("affectedAddress")) => Ok(vec![
             "tx_digests".to_string(),
             "tx_affected_addresses".to_string(),
         ]),
