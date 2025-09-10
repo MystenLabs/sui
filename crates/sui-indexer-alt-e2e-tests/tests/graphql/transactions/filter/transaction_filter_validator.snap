@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 6 tasks
+processed 9 tasks
 
 init:
 A: object(0,0)
@@ -22,7 +22,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, function, kind] can be specified",
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, affectedObject, function, kind] can be specified",
       "locations": [
         {
           "line": 2,
@@ -42,7 +42,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, function, kind] can be specified",
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, affectedObject, function, kind] can be specified",
       "locations": [
         {
           "line": 2,
@@ -62,7 +62,67 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, function, kind] can be specified",
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, affectedObject, function, kind] can be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 24
+        }
+      ],
+      "path": [
+        "transactions"
+      ]
+    }
+  ]
+}
+
+task 6, lines 50-57:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, affectedObject, function, kind] can be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 24
+        }
+      ],
+      "path": [
+        "transactions"
+      ]
+    }
+  ]
+}
+
+task 7, lines 59-66:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, affectedObject, function, kind] can be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 24
+        }
+      ],
+      "path": [
+        "transactions"
+      ]
+    }
+  ]
+}
+
+task 8, lines 68-75:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": At most one of [affectedAddress, affectedObject, function, kind] can be specified",
       "locations": [
         {
           "line": 2,
