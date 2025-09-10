@@ -14,7 +14,9 @@ async fn test_currency_defaults() {
         symbol: "SUI".to_string(),
         decimals: 9,
         metadata: CurrencyMetadata {
-            coin_type: "0x2::sui::SUI".to_string(),
+            coin_type:
+                "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                    .to_string(),
         },
     };
 
