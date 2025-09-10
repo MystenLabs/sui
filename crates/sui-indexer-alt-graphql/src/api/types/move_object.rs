@@ -53,13 +53,13 @@ pub(crate) struct MoveObject {
         name = "dynamic_field",
         arg(name = "name", ty = "DynamicFieldName"),
         ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
-        desc = "Access a dynamic field on an object using its type and BCS-encoded name.",
+        desc = "Access a dynamic field on an object using its type and BCS-encoded name.\n\nReturns `null` if a dynamic field with that name could not be found attached to this object.",
     ),
     field(
         name = "dynamic_object_field",
         arg(name = "name", ty = "DynamicFieldName"),
         ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
-        desc = "Access a dynamic object field on an object using its type and BCS-encoded name.",
+        desc = "Access a dynamic object field on an object using its type and BCS-encoded name.\n\nReturns `null` if a dynamic object field with that name could not be found attached to this object.",
     ),
     field(
         name = "has_public_transfer",
@@ -179,6 +179,8 @@ impl MoveObject {
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
@@ -222,6 +224,8 @@ impl MoveObject {
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic object field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,

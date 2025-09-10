@@ -162,6 +162,8 @@ impl Address {
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic field with that name could not be found attached to the object with this address.
     pub(crate) async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
@@ -199,6 +201,8 @@ impl Address {
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic object field with that name could not be found attached to the object with this address.
     pub(crate) async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,
