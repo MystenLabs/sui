@@ -214,8 +214,7 @@ where
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
-        let amplification_factor =
-            amplification_factor.min(auth_agg.committee.num_members() as u64);
+        let amplification_factor = auth_agg.committee.num_members() as u64;
 
         let (name, submit_txn_result) = self
             .submitter
