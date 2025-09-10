@@ -2,6 +2,7 @@
 title: Module `sui::funds_accumulator`
 ---
 
+A module for accumulating funds, i.e. Balance-like types.
 
 
 -  [Struct `Withdrawal`](#sui_funds_accumulator_Withdrawal)

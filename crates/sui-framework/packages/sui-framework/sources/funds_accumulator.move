@@ -1,4 +1,7 @@
-// Accumulator but with lots of private generics
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// A module for accumulating funds, i.e. Balance-like types.
 module sui::funds_accumulator;
 
 /// Allows calling `.split()` on a `Withdrawal` create a sub withdrawal from it.
