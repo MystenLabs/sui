@@ -3,7 +3,7 @@
 
 use crate::{
     base_types::{SuiAddress, VersionDigest},
-    digests::ObjectDigest,
+    digests::{Digest, ObjectDigest},
     object::{Object, Owner},
 };
 use move_core_types::language_storage::TypeTag;
@@ -87,6 +87,7 @@ pub enum AccumulatorOperation {
 pub enum AccumulatorValue {
     Integer(u64),
     IntegerTuple(u64, u64),
+    EventDigest(u64 /* event index in the transaction */, Digest),
 }
 
 /// Accumulator objects are named by an address (can be an account address or a UID)

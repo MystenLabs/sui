@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 95;
+const MAX_PROTOCOL_VERSION: u64 = 96;
 
 // Record history of protocol version allocations here:
 //
@@ -1266,6 +1266,7 @@ pub struct ProtocolConfig {
     event_emit_value_size_derivation_cost_per_byte: Option<u64>,
     event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_output_cost_per_byte: Option<u64>,
+    event_emit_auth_stream_cost: Option<u64>,
 
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -2458,6 +2459,7 @@ impl ProtocolConfig {
             event_emit_value_size_derivation_cost_per_byte: Some(2),
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
+            event_emit_auth_stream_cost: None,
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -3963,6 +3965,9 @@ impl ProtocolConfig {
 
                     // Reudce the frequency of checkpoint splitting under high TPS.
                     cfg.max_transactions_per_checkpoint = Some(20_000);
+                }
+                96 => {
+                    cfg.event_emit_auth_stream_cost = Some(52);
                 }
                 // Use this template when making changes:
                 //

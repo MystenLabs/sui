@@ -1,0 +1,314 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-23:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 4909600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 25:
+//# run test::event_streams::emit_event --sender A --args 10
+events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+accumulators_written: fake(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 27:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 29-31:
+//# view-object 2,0
+Owner: Object ID: ( _ )
+Version: 2
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
+        address: test,
+    },
+    value: sui::accumulator_settlement::EventStreamHead {
+        mmr: vector[
+            vector[
+                182u8,
+                41u8,
+                70u8,
+                150u8,
+                187u8,
+                42u8,
+                254u8,
+                19u8,
+                140u8,
+                199u8,
+                149u8,
+                239u8,
+                9u8,
+                247u8,
+                113u8,
+                119u8,
+                129u8,
+                30u8,
+                242u8,
+                248u8,
+                160u8,
+                13u8,
+                155u8,
+                212u8,
+                31u8,
+                209u8,
+                169u8,
+                207u8,
+                166u8,
+                162u8,
+                110u8,
+                11u8,
+            ],
+        ],
+        checkpoint_seq: 0u64,
+        num_events: 1u64,
+    },
+}
+
+task 5, line 32:
+//# run test::event_streams::emit_event --sender A --args 20
+events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+accumulators_written: fake(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 34:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 36-38:
+//# view-object 2,0
+Owner: Object ID: ( _ )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
+        address: test,
+    },
+    value: sui::accumulator_settlement::EventStreamHead {
+        mmr: vector[
+            vector[],
+            vector[
+                70u8,
+                49u8,
+                47u8,
+                45u8,
+                126u8,
+                253u8,
+                48u8,
+                101u8,
+                81u8,
+                49u8,
+                130u8,
+                136u8,
+                82u8,
+                83u8,
+                181u8,
+                47u8,
+                4u8,
+                168u8,
+                48u8,
+                241u8,
+                55u8,
+                245u8,
+                53u8,
+                236u8,
+                196u8,
+                54u8,
+                92u8,
+                233u8,
+                118u8,
+                190u8,
+                44u8,
+                24u8,
+            ],
+        ],
+        checkpoint_seq: 0u64,
+        num_events: 2u64,
+    },
+}
+
+task 8, line 39:
+//# run test::event_streams::emit_event --sender A --args 30
+events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [30, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+accumulators_written: fake(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 41:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 43-45:
+//# view-object 2,0
+Owner: Object ID: ( _ )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
+        address: test,
+    },
+    value: sui::accumulator_settlement::EventStreamHead {
+        mmr: vector[
+            vector[
+                128u8,
+                186u8,
+                167u8,
+                188u8,
+                11u8,
+                26u8,
+                140u8,
+                190u8,
+                194u8,
+                210u8,
+                179u8,
+                62u8,
+                187u8,
+                170u8,
+                229u8,
+                5u8,
+                223u8,
+                70u8,
+                61u8,
+                237u8,
+                81u8,
+                111u8,
+                137u8,
+                170u8,
+                6u8,
+                239u8,
+                246u8,
+                90u8,
+                95u8,
+                68u8,
+                53u8,
+                104u8,
+            ],
+            vector[
+                70u8,
+                49u8,
+                47u8,
+                45u8,
+                126u8,
+                253u8,
+                48u8,
+                101u8,
+                81u8,
+                49u8,
+                130u8,
+                136u8,
+                82u8,
+                83u8,
+                181u8,
+                47u8,
+                4u8,
+                168u8,
+                48u8,
+                241u8,
+                55u8,
+                245u8,
+                53u8,
+                236u8,
+                196u8,
+                54u8,
+                92u8,
+                233u8,
+                118u8,
+                190u8,
+                44u8,
+                24u8,
+            ],
+        ],
+        checkpoint_seq: 0u64,
+        num_events: 3u64,
+    },
+}
+
+task 11, line 46:
+//# run test::event_streams::emit_event --sender A --args 40
+events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [40, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+accumulators_written: fake(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 48:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 13, lines 50-55:
+//# view-object 2,0
+Owner: Object ID: ( _ )
+Version: 5
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
+        address: test,
+    },
+    value: sui::accumulator_settlement::EventStreamHead {
+        mmr: vector[
+            vector[],
+            vector[],
+            vector[
+                134u8,
+                160u8,
+                26u8,
+                5u8,
+                77u8,
+                171u8,
+                149u8,
+                175u8,
+                245u8,
+                255u8,
+                184u8,
+                200u8,
+                33u8,
+                96u8,
+                194u8,
+                245u8,
+                35u8,
+                198u8,
+                144u8,
+                94u8,
+                172u8,
+                68u8,
+                133u8,
+                47u8,
+                231u8,
+                96u8,
+                160u8,
+                239u8,
+                59u8,
+                16u8,
+                91u8,
+                128u8,
+            ],
+        ],
+        checkpoint_seq: 0u64,
+        num_events: 4u64,
+    },
+}

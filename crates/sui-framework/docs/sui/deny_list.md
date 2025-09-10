@@ -39,17 +39,24 @@ list.
 -  [Function `per_type_list`](#sui_deny_list_per_type_list)
 
 
-<pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
+<pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
+<b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
+<b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
+<b>use</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata">sui::accumulator_metadata</a>;
+<b>use</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement">sui::accumulator_settlement</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
+<b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;

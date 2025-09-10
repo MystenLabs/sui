@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "95",
+              "maxSupportedProtocolVersion": "96",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1622,6 +1622,7 @@
                 "ed25519_ed25519_verify_msg_cost_per_byte": {
                   "u64": "2"
                 },
+                "event_emit_auth_stream_cost": null,
                 "event_emit_cost_base": {
                   "u64": "52"
                 },
@@ -5365,6 +5366,108 @@
   ],
   "components": {
     "schemas": {
+      "AccumulatorEvent": {
+        "type": "object",
+        "required": [
+          "accumulatorObj",
+          "address",
+          "operation",
+          "ty",
+          "value"
+        ],
+        "properties": {
+          "accumulatorObj": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/AccumulatorOperation"
+          },
+          "ty": {
+            "$ref": "#/components/schemas/TypeTag"
+          },
+          "value": {
+            "$ref": "#/components/schemas/AccumulatorValue"
+          }
+        }
+      },
+      "AccumulatorOperation": {
+        "type": "string",
+        "enum": [
+          "merge",
+          "split"
+        ]
+      },
+      "AccumulatorValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "integer"
+            ],
+            "properties": {
+              "integer": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "integerTuple"
+            ],
+            "properties": {
+              "integerTuple": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "eventDigest"
+            ],
+            "properties": {
+              "eventDigest": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  {
+                    "$ref": "#/components/schemas/Digest"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
       },
@@ -10584,6 +10687,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "accumulatorEvents": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AccumulatorEvent"
+                }
               },
               "created": {
                 "description": "ObjectRef and owner of new objects created.",

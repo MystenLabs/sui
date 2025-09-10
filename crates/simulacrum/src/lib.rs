@@ -50,8 +50,8 @@ use self::epoch_state::EpochState;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
 pub use self::store::SimulatorStore;
+use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -207,7 +207,13 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = transaction
             .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+        self.execute_transaction_impl(transaction)
+    }
 
+    fn execute_transaction_impl(
+        &mut self,
+        transaction: VerifiedTransaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let (inner_temporary_store, _, effects, execution_error_opt) =
             self.epoch_state.execute_transaction(
                 &self.store,
@@ -233,9 +239,26 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         Ok((effects, execution_error_opt.err()))
     }
 
+    fn execute_system_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        let transaction = VerifiedTransaction::new_unchecked(transaction);
+        self.execute_transaction_impl(transaction)
+    }
+
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
     /// created.
     pub fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
+        if self.epoch_state.protocol_config().enable_accumulators() {
+            let settlement_txns = self.checkpoint_builder.get_settlement_txns();
+
+            for txn in settlement_txns {
+                self.execute_system_transaction(txn)
+                    .expect("settlement txn cannot fail");
+            }
+        }
+
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
         let (checkpoint, contents, _) = self
             .checkpoint_builder
@@ -833,6 +856,10 @@ mod tests {
         let checkpoint = sim.create_checkpoint();
 
         assert_eq!(&checkpoint.epoch_rolling_gas_cost_summary, gas_summary);
-        assert_eq!(checkpoint.network_total_transactions, 2); // genesis + 1 txn
+        if sim.epoch_state.protocol_config().enable_accumulators() {
+            assert_eq!(checkpoint.network_total_transactions, 3); // genesis + 1 user txn + 1 settlement txn
+        } else {
+            assert_eq!(checkpoint.network_total_transactions, 2); // genesis + 1 user txn
+        };
     }
 }
