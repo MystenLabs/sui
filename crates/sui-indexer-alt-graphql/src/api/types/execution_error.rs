@@ -1,16 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{self, Context as _};
 use async_graphql::Object;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::fmt::Write;
 use sui_package_resolver::{CleverError, ErrorConstants};
-use sui_types::{
-    execution_status::{
-        ExecutionFailureStatus, ExecutionStatus as NativeExecutionStatus, MoveLocation,
-    },
-    transaction::ProgrammableTransaction,
+use sui_types::execution_status::{
+    ExecutionFailureStatus, ExecutionStatus as NativeExecutionStatus,
 };
 use tokio::sync::OnceCell;
 
@@ -146,26 +142,16 @@ impl ExecutionError {
 
 impl ExecutionError {
     /// Factory method to create ExecutionError from execution failure status.
-    /// Resolves module ID in-place for Move aborts.
     pub(crate) async fn from_execution_status(
         scope: &Scope,
         status: &NativeExecutionStatus,
-        programmable_tx: Option<&ProgrammableTransaction>,
     ) -> Result<Option<Self>, RpcError> {
         let NativeExecutionStatus::Failure { error, command } = status else {
             return Ok(None);
         };
 
-        // Clone the error so we can modify it in-place
-        let mut native_error: ExecutionFailureStatus = error.clone();
-
-        // Resolve the module ID for Move aborts to ensure we use the correct package version
-        // when resolving clever errors later. This is critical for package upgrades.
-        resolve_module_id_for_move_abort(scope, &mut native_error, *command, programmable_tx)
-            .await?;
-
         Ok(Some(Self {
-            native: native_error,
+            native: error.clone(),
             command: *command,
             clever: OnceCell::new(),
             scope: scope.clone(),
@@ -174,6 +160,9 @@ impl ExecutionError {
 
     /// Helper method to get the clever error, using OnceCell for lazy initialization.
     /// Returns the resolved clever error if available, or None if resolution fails.
+    ///
+    /// Since protocol version 48, the Sui protocol layer automatically resolves module ID, which makes
+    /// clever error resolution available. Before version 48, this will return None.
     async fn clever_error(&self) -> &Option<CleverError> {
         let ExecutionFailureStatus::MoveAbort(location, raw_code) = &self.native else {
             // Not a Move abort, no clever error possible
@@ -277,53 +266,4 @@ impl ExecutionError {
             }
         }
     }
-}
-
-/// Resolves the runtime module ID in Move aborts to the storage package ID.
-///
-/// This is necessary because when a Move abort occurs, the error contains the runtime
-/// module ID, but to resolve clever errors we need the storage package ID where the
-/// module actually lives. This is especially important for upgraded packages where
-/// the runtime module ID might differ from the storage package ID.
-async fn resolve_module_id_for_move_abort(
-    scope: &Scope,
-    native_error: &mut ExecutionFailureStatus,
-    command: Option<usize>,
-    programmable_tx: Option<&ProgrammableTransaction>,
-) -> Result<(), RpcError> {
-    use sui_types::execution_status::MoveLocationOpt;
-    use sui_types::transaction::Command;
-
-    // Only resolve for Move aborts that have location information
-    let module = match native_error {
-        ExecutionFailureStatus::MoveAbort(MoveLocation { module, .. }, _) => module,
-        ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(
-            MoveLocation { module, .. },
-        ))) => module,
-        _ => return Ok(()),
-    };
-
-    // We need both a command index and a programmable transaction to resolve
-    let Some(command_idx) = command else {
-        return Ok(());
-    };
-    let Some(ptb) = programmable_tx else {
-        return Ok(());
-    };
-
-    // Find the Move call command that caused this abort
-    let Some(Command::MoveCall(ptb_call)) = ptb.commands.get(command_idx) else {
-        return Ok(());
-    };
-
-    let module_new = module.clone();
-
-    // Resolve runtime module ID to storage package ID
-    *module = scope
-        .package_resolver()
-        .resolve_module_id(module_new, ptb_call.package.into())
-        .await
-        .context("Error resolving Move location")?;
-
-    Ok(())
 }
