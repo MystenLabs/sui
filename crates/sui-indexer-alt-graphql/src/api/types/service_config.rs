@@ -4,9 +4,11 @@
 use async_graphql::{Context, Object, Result};
 
 use crate::{
+    api::types::available_range::{AvailableRange, Error as AvailableRangeError, RetentionKey},
     config::Limits,
     error::RpcError,
     pagination::{is_connection, PaginationConfig},
+    scope::Scope,
 };
 
 pub(crate) struct ServiceConfig;
@@ -197,5 +199,25 @@ impl ServiceConfig {
     ) -> Result<Option<usize>, RpcError> {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_disassembled_module_size))
+    }
+
+    /// Range of checkpoints for which data is available for a query type, field and optional filter.
+    async fn retention(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: String,
+        filter: Option<String>,
+    ) -> Result<AvailableRange, RpcError<AvailableRangeError>> {
+        let scope = Scope::new(ctx)?;
+        AvailableRange::new(
+            ctx,
+            &scope,
+            RetentionKey {
+                type_,
+                field,
+                filter,
+            },
+        )
     }
 }
