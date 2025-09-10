@@ -40,9 +40,37 @@ module Test::M1 {
 
 //# run-graphql
 {
+  transactions(filter: { function: "@{Test}::M1::create", affectedObject: "@{A}" }) {
+    edges {
+      cursor
+    }
+  }
+}
+
+//# run-graphql
+{
   transactions(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{A}" }) {
     edges {
       cursor
     }
   }
 }
+
+//# run-graphql
+{
+  transactions(filter: { kind: PROGRAMMABLE_TX, affectedObject: "@{A}" }) {
+    edges {
+      cursor
+    }
+  }
+}
+
+//# run-graphql
+{
+  transactions(filter: { affectedAddress: "@{A}", affectedObject: "@{A}" }) {
+    edges {
+      cursor
+    }
+  }
+}
+

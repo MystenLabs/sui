@@ -35,12 +35,11 @@ use super::{
     user_signature::UserSignature,
 };
 
-use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::{
     api::{
         scalars::{
-            base64::Base64, cursor::JsonCursor, digest::Digest, module_filter::ModuleFilter,
-            sui_address::SuiAddress,
+            base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
+            module_filter::ModuleFilter, sui_address::SuiAddress,
         },
         types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
     },
@@ -210,6 +209,7 @@ impl Transaction {
             function,
             kind,
             affected_address,
+            affected_object,
             sent_address,
         }: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
@@ -247,6 +247,8 @@ impl Transaction {
             tx_kind(ctx, tx_bounds, &page, kind, sent_address).await?
         } else if affected_address.is_some() || sent_address.is_some() {
             tx_affected_address(ctx, tx_bounds, &page, affected_address, sent_address).await?
+        } else if let Some(affected_object) = affected_object {
+            tx_affected_object(ctx, tx_bounds, &page, affected_object, sent_address).await?
         } else {
             tx_unfiltered(tx_bounds, &page)
         };
@@ -357,13 +359,13 @@ async fn tx_kind(
         (_, None) => {
             let query = query!(
                 r#"
-    SELECT
-        tx_sequence_number
-    FROM
-        tx_kinds
-    WHERE
-        tx_kind = {BigInt} /* kind */
-    "#,
+SELECT
+    tx_sequence_number
+FROM
+    tx_kinds
+WHERE
+    tx_kind = {BigInt} /* kind */
+"#,
                 kind as i64,
             );
             tx_sequence_numbers(ctx, tx_bounds, page, query).await
@@ -392,14 +394,37 @@ WHERE
         affected_address.into_vec(),
     );
     if let Some(sent_address) = sent_address {
-        query += query!(
-            r#"
-AND sender = {Bytea} /* sent_address */
-"#,
-            sent_address.into_vec()
-        );
+        query += filter_sender(sent_address);
     }
     tx_sequence_numbers(ctx, tx_bounds, page, query).await
+}
+
+async fn tx_affected_object(
+    ctx: &Context<'_>,
+    tx_bounds: Range<u64>,
+    page: &Page<CTransaction>,
+    affected_object: SuiAddress,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    let mut query = query!(
+        r#"
+SELECT
+    tx_sequence_number
+FROM
+    tx_affected_objects
+WHERE
+    affected = {Bytea} /* affected_object */
+"#,
+        affected_object.into_vec(),
+    );
+    if let Some(sent_address) = sent_address {
+        query += filter_sender(sent_address);
+    }
+    tx_sequence_numbers(ctx, tx_bounds, page, query).await
+}
+
+fn filter_sender(sent_address: SuiAddress) -> Query<'static> {
+    query!(" AND sender = {Bytea}", sent_address.into_vec())
 }
 
 async fn tx_sequence_numbers(

@@ -3720,6 +3720,12 @@ input TransactionFilter {
 	"""
 	affectedAddress: SuiAddress
 	"""
+	Limit to transactions that interacted with the given object.
+	The object could have been created, read, modified, deleted, wrapped, or unwrapped by the transaction.
+	Objects that were passed as a `Receiving` input are not considered to have been affected by a transaction unless they were actually received.
+	"""
+	affectedObject: SuiAddress
+	"""
 	Filter to transactions that occurred strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
