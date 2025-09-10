@@ -33,6 +33,11 @@ pub(crate) struct TransactionFilter {
     /// The address could be a sender, sponsor, or recipient of the transaction.
     pub affected_address: Option<SuiAddress>,
 
+    /// Limit to transactions that interacted with the given object.
+    /// The object could have been created, read, modified, deleted, wrapped, or unwrapped by the transaction.
+    /// Objects that were passed as a `Receiving` input are not considered to have been affected by a transaction unless they were actually received.
+    pub affected_object: Option<SuiAddress>,
+
     /// Limit to transactions that were sent by the given address.
     pub sent_address: Option<SuiAddress>,
 }
@@ -52,11 +57,12 @@ pub(crate) struct TransactionFilterValidator;
 impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
         let filters = filter.affected_address.is_some() as u8
+            + filter.affected_object.is_some() as u8
             + filter.function.is_some() as u8
             + filter.kind.is_some() as u8;
         if filters > 1 {
             return Err(InputValueError::custom(
-                "At most one of [affectedAddress, function, kind] can be specified",
+                "At most one of [affectedAddress, affectedObject, function, kind] can be specified",
             ));
         }
 
@@ -89,6 +95,7 @@ impl TransactionFilter {
             function: intersect!(function, intersect::by_eq)?,
             kind: intersect!(kind, intersect::by_eq)?,
             affected_address: intersect!(affected_address, intersect::by_eq)?,
+            affected_object: intersect!(affected_object, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
         })
     }
