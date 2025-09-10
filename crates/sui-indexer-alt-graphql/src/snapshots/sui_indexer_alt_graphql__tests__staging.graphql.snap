@@ -2480,12 +2480,36 @@ type Object implements IAddressable & IObject {
 	"""
 	digest: String
 	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
 	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
 	If the address does not own any coins of a given type, a balance of zero is returned for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	
