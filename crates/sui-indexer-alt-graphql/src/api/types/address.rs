@@ -35,8 +35,7 @@ use super::{
 pub(crate) enum AddressTransactionRelationship {
     /// Transactions this address has sent.
     Sent,
-    /// Transactions that this address was involved in, either as the sender, sponsor, or as the
-    /// owner of some object that was created, modified or transferred.
+    /// Transactions that this address was involved in, either as the sender, sponsor, or as the owner of some object that was created, modified or transferred.
     Affected,
 }
 
@@ -304,8 +303,7 @@ impl Address {
 
     /// Transactions associated with this address.
     ///
-    /// Similar behavior to the `transactions` in Query but supporting the additional
-    /// `AddressTransactionRelationship` filter, which defaults to `SENT`.
+    /// Similar behavior to the `transactions` in Query but supporting the additional `AddressTransactionRelationship` filter, which defaults to `SENT`.
     pub(crate) async fn transactions(
         &self,
         ctx: &Context<'_>,
