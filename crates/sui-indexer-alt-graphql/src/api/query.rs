@@ -9,10 +9,6 @@ use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
     api::mutation::TransactionInputError,
-    api::{
-        scalars::base64::Base64,
-        types::{simulation_result::SimulationResult, transaction_effects::TransactionEffects},
-    },
     error::{bad_user_input, upcast, RpcError},
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -20,11 +16,12 @@ use crate::{
 
 use super::{
     scalars::{
-        digest::Digest, domain::Domain, sui_address::SuiAddress, type_filter::TypeInput,
-        uint53::UInt53,
+        base64::Base64, digest::Digest, domain::Domain, sui_address::SuiAddress,
+        type_filter::TypeInput, uint53::UInt53,
     },
     types::{
         address::Address,
+        available_range::{self, AvailableRange, RetentionKey},
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         coin_metadata::CoinMetadata,
         epoch::Epoch,
@@ -36,10 +33,12 @@ use super::{
         object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
+        simulation_result::SimulationResult,
         transaction::{
             filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
             CTransaction, Transaction,
         },
+        transaction_effects::TransactionEffects,
     },
 };
 
@@ -457,9 +456,30 @@ impl Query {
         }
     }
 
+    /// Range of checkpoints for which data is available for a query type, field and optional filter.
+    async fn retention(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: String,
+        filter: Option<String>,
+    ) -> Result<AvailableRange, RpcError<available_range::Error>> {
+        let scope = self.scope(ctx)?;
+        AvailableRange::new(
+            ctx,
+            &scope,
+            RetentionKey {
+                type_,
+                field,
+                filter,
+            },
+        )
+    }
+
     /// Configuration for this RPC service.
-    async fn service_config(&self) -> ServiceConfig {
-        ServiceConfig
+    async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(ServiceConfig { scope })
     }
 
     /// Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
