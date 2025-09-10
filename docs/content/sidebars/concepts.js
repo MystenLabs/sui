@@ -94,20 +94,21 @@ const concepts = [
 				],
 			},
 			'concepts/grpc-overview',
-			'concepts/graphql-rpc',
-			'concepts/archival-store',
 			'concepts/gaming'
 		],
 	},
 	{ 
 		type: 'category',
-		label: 'Custom Indexing Framework',
+		label: 'GraphQL and Indexer Framework',
 		link: {
 			type: 'doc',
-			id: 'concepts/custom-indexing-framework',
+			id: 'concepts/graphql-indexer',
 		},
 		items: [
-			'concepts/custom-indexer/pipeline-architecture'
+			'concepts/graphql-rpc',
+			'concepts/custom-indexing-framework',
+			'concepts/custom-indexer/pipeline-architecture',
+			'concepts/archival-store'
 		]
 	},
 	{

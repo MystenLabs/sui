@@ -1,7 +1,7 @@
 ---
-title: Querying Sui RPC with GraphQL (Alpha)
+title: Querying Sui RPC with GraphQL
 description: Introductory guide to making queries of the Sui RPC using the GraphQL service.
-keywords: [ rpc, sui rpc, graphql, how to use graphql, schema, graphql schema, query transactions, query blocks, query block information, query dynamic field, execute transaction ]
+keywords: [ rpc, sui rpc, graphql, how to use graphql, schema, graphql schema, query transactions, query blocks, query block info, query dynamic field, execute transaction ]
 ---
 
 :::info
@@ -12,26 +12,93 @@ keywords: [ rpc, sui rpc, graphql, how to use graphql, schema, graphql schema, q
 
 :::
 
-The quickest way to access the GraphQL service for Sui RPC is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides features such as auto-completion (use Ctrl+Space or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more.
+The quickest way to access the GraphQL service for Sui RPC is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides features such as auto-completion (use <kbd>Ctrl</kbd>+<kbd>Space</kbd> or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more.
 
-The online IDE is available for [Mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [Testnet](https://sui-testnet.mystenlabs.com/graphql). This guide contains various queries that you can try directly in the IDE.
+The online IDE is available for Mainnet, Testnet, and Devnet. You can try the various queries on this page directly in the IDE.
 
 :::info
-- Any existing addresses/object IDs in these examples refer to `mainnet` data only.
-- Both [Mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [Testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
+
+Both Mainnet and Testnet services are rate-limited to keep network throughput optimized.
+
 :::
 
-For more details about some concepts used in the examples below, please see the [GraphQL concepts](../../../concepts/graphql-rpc.mdx) page, and consult the [reference](../../../references/sui-graphql.mdx) for full documentation on the supported schema.
+- Mainnet: https://graphql.mainnet.sui.io/graphql
+- Testnet: https://graphql.testnet.sui.io/graphql
+- Devnet: https://graphql.devnet.sui.io/graphql
 
+:::caution
+
+Switch any apps that still use the GraphQL Alpha endpoints (`https://sui-mainnet.mystenlabs.com/graphql`, `https://sui-testnet.mystenlabs.com/graphql`, and `https://sui-devnet.mystenlabs.com/graphql`) as soon as possible. Migrate your apps to the GraphQL Beta endpoints to avoid disruption of service.
+
+:::
+
+For more details about some concepts used in the following examples, see the [GraphQL concepts](../../../concepts/graphql-rpc.mdx) page. Consult the [GraphQL reference](../../../references/sui-graphql.mdx) for full documentation on the supported schema.
 
 ## Discovering the schema
 
-GraphQL introspection exposes the schema supported by the RPC service. The IDE's "Docs" pane (Book icon, top-left) and Search dialog (<kbd>Cmd</kbd>+<kbd>K</kbd> on macOS or <kbd>Ctrl</kbd>+<kbd>K</kbd> on Windows and Linux) offer a way to browse introspection output interactively.
+GraphQL introspection exposes the schema supported by the RPC service. The IDE's **Docs** pane (Book icon, top-left) and **Search** dialog (<kbd>Cmd</kbd> + <kbd>K</kbd> on macOS or <kbd>Ctrl</kbd> + <kbd>K</kbd> on Windows and Linux) offer a way to browse introspection output interactively.
 
-The [official documentation](https://graphql.org/learn/introspection/) provides an overview on introspection, and how to interact with it programmatically.
+The [official GraphQL introspection documentation](https://graphql.org/learn/introspection/) provides an overview on introspection and how to interact with it programmatically.
 
-## Finding the reference gas price for latest epoch
+## Beta schema changes
 
+Some of the schema updates for the beta version include:
+
+### Renames and deprecations
+
+- `TransactionBlock` is being replaced with `Transaction`
+- `Owner` has been merged with `Address`
+- `dryRunTransactionBlock` is being replaced with `simulateTransaction`
+- `bcs` fields are qualified with the type of BCS data they hold, to avoid confusion.
+- `changedObject` and `inputObject` filters in `transactions` query are being replaced with `affectedObject`.
+- `address.coins` and `address.stakedSuis` are being deprecated in favor of `address.objects` with the corresponding `type` filter.
+- `MoveValue.data` has been deprecated because it does not add value over `MoveValue.json`, which provides a more clear representation of the data.
+
+### Consistency
+
+GraphQL Beta offers the ability to run a query at a fixed checkpoint (retention permitting). This allows clients to query the chain state at a particular snapshot in time over multiple arbitrary requests (GraphQL Alpha offered consistency across multiple requests as long as they were for pages of a paginated query).
+
+### Versioning
+
+APIs for traversing different versions of packages and objects have been added. You can now list a package or object's versions, or go from one version of a package or object to another version by number, or the latest version.
+
+### Splitting up query APIs
+
+Paginated query APIs were previously responsible for three kinds of query pattern, which will be broken up into two separate APIs:
+
+- A dedicated multi-get API that accepts a list of keys and returns a list of results.
+- A query API that offers the original core functionality: Efficient paginated results without having to supply a checkpoint range, but for limited combinations of filters.
+
+### Relaxed consistency cursors
+
+Cursors in GraphQL Alpha indicated the checkpoint that pagination started at. Future pages would be fetched as if from this checkpoint. This is helpful for paginating owned objects of an address, but cannot express queries that update over time (like tracking a stream of events in real time). Cursors in GraphQL Beta have relaxed this constraint — only cursors for pages whose results do not flow in the same direction as time (such as owned object queries) remember their checkpoint.
+
+The old behavior is reproducible by explicitly setting the checkpoint to query from (see the [Consistency](#consistency) section).
+
+### Preserving Entity IDs
+
+The service retains the ability to identify entities that have been pruned when they are referred to be other entities. For example, even if an object's previous transaction has been pruned, the service is still able to return the transaction digest.
+
+### Unpruned point lookups
+
+Point look-ups are generally unpruned, if GraphQL has access to an Archival Service.
+
+### More detailed retention API
+
+The service provides more details about the retention of its underlying data through the `ServiceConfig.retention` field.
+
+### Governance
+
+APIs related to governance and staking are removed in favor of using view functions to access the data at its source of truth on-chain.
+
+## Example queries
+
+The following queries show some common tasks you can perform with GraphQL.
+
+### Find the reference gas price for latest epoch
+
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
 ```graphql
 query {
   epoch {
@@ -39,14 +106,27 @@ query {
   }
 }
 ```
-
-## Finding information about a specific historical epoch
-
-This example finds the total stake rewards, the reference gas price, the number of checkpoints and the total gas fees for epoch 100. Note that in the query, the `id` argument is optional, and defaults to the latest epoch.
-
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 query {
-  epoch(id: 100) # note that id is optional, and without it, latest epoch is returned
+  epoch {
+    referenceGasPrice
+  }
+}
+```
+</TabItem>
+</Tabs>
+
+### Find a specific historical epoch
+
+Find the total stake rewards, the reference gas price, the number of checkpoints and the total gas fees for epoch 100. In the query, the `epochId` argument is optional and defaults to the latest epoch.
+
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+```graphql
+query {
+  epoch(epochId: 100)
   {
     epochId
     totalStakeRewards
@@ -61,14 +141,37 @@ query {
   }
 }
 ```
-
-## Finding a transaction block by its digest
-
-This example gets a transaction block by its digest and shows information such as the gas sponsor's address, the gas price, the gas budget, and effects from executing that transaction block.
-
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 query {
-  transactionBlock(digest: "FdKFgsQ9iRrxW6b1dh9WPGuNuaJWMXHJn1wqBQSqVqK2") {
+  epoch(id: 100)
+  {
+    epochId
+    totalStakeRewards
+    referenceGasPrice
+    totalCheckpoints
+    totalGasFees
+    totalStakeSubsidies
+    storageFund {
+      totalObjectStorageRebates
+      nonRefundableBalance
+    }
+  }
+}
+```
+</TabItem>
+</Tabs>
+
+### Find a transaction by its digest
+
+Get a transaction by its digest and show information such as the gas sponsor address, the gas price, the gas budget, and effects from executing that transaction.
+
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+```graphql
+query {
+  transaction(digest: "FdK...qK2") {
     gasInput {
       gasSponsor {
         address
@@ -90,9 +193,59 @@ query {
   }
 }
 ```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
+```graphql
+query {
+  transactionBlock(digest: "FdK...qK2") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint {
+        sequenceNumber
+      }
+      epoch {
+        epochId
+        referenceGasPrice
+      }
+    }
+  }
+}
+```
+</TabItem>
+</Tabs>
 
-## Finding the last ten transactions that are not a system transaction
+### Find the last ten transactions that are not a system transaction
 
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
+
+```graphql
+query {
+  transactions(last: 10, filter: {kind: PROGRAMMABLE_TX}) {
+    nodes {
+      digest
+      kind {
+        __typename
+      }
+    }
+  }
+}
+```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 query {
   transactionBlocks(last: 10, filter: {kind: PROGRAMMABLE_TX}) {
@@ -105,15 +258,49 @@ query {
   }
 }
 ```
+</TabItem>
+</Tabs>
 
-## Finding all transactions that touched a given object
 
-This example finds all the transactions that touched (modified/transferred/deleted) a given object. This is useful for when we want to trace the flow of a Coin/StakeSui/NFT.
+
+### Find all transactions that touched a given object
+
+Find all the transactions that touched (modified/transferred/deleted) a given object. Useful when you want to trace the flow of a `Coin`, `StakeSui`, `NFT`, or similar object.
 
 :::info
-This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
+
+This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
+
 :::
 
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+```graphql
+query ($objectID: SuiAddress!) {
+  transactions(filter: {affectedObject: $objectID}) {
+    nodes {
+      sender {
+        address
+      }
+      digest
+      effects {
+        objectChanges {
+          nodes {
+            address
+          }
+        }
+      }
+    }
+  }
+}
+```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
 ```graphql
 query ($objectID: SuiAddress!) {
   transactionBlocks(filter: {changedObject: $objectID}) {
@@ -133,22 +320,50 @@ query ($objectID: SuiAddress!) {
   }
 }
 ```
+</TabItem>
+</Tabs>
 
-**Variables**:
+#### Variables
+
+When using the online IDE, copy the following JSON to the **Variables** window, below the main editor.
+
 ```json
 {
   "objectID": "0x11c6ae8432156527fc2e12e05ac7db79f2e972510a823a4ef2e670f27ad7b52f"
 }
 ```
 
-## Filtering transaction blocks by a function
+### Filter transactions by a function
 
-This example finds the last ten transaction blocks that called the `public_transfer` function, (as a move call transaction command).
+Find the last ten transactions that called the `public_transfer` function as a Move call transaction command.
 
 :::info
-This example makes usage of the filter `last`, which indicates that the user only wants the last ten transaction blocks known to the service.
+
+This example makes use of the `last` filter. In this case, returns only the last `10` transactions known to the service.
+
 :::
 
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
+```graphql
+{
+  transactions(
+    last: 10,
+      filter: {
+        function: "0x2::transfer::public_transfer"
+      }
+  ) {
+    nodes { digest }
+  }
+}
+```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 {
   transactionBlocks(
@@ -161,11 +376,44 @@ This example makes usage of the filter `last`, which indicates that the user onl
   }
 }
 ```
+</TabItem>
+</Tabs>
 
-## Finding transaction balance changes
+### Find transaction balance changes
 
-This example finds the balance changes of all the transactions where a given address called a staking-related function. This is useful when you want to get your staking or unstaking history.
+Find the balance changes of all the transactions where a given address called a staking-related function. Useful when you want to get your staking or unstaking history.
 
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+:::caution
+
+This example demonstrates future functionality.
+
+:::
+```graphql
+query ($address: SuiAddress!) {
+  transactions(filter: {
+    function: "0x3::sui_system::request_add_stake"
+    sentAddress: $address
+  }) {
+    nodes {
+      digest
+      effects {
+        balanceChanges {
+          nodes {
+            owner {
+              address
+            }
+            amount
+          }
+        }
+      }
+    }
+  }
+}
+```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 query ($address: SuiAddress!) {
   transactionBlocks(filter: {
@@ -188,20 +436,77 @@ query ($address: SuiAddress!) {
   }
 }
 ```
+</TabItem>
+</Tabs>
 
-**Variables**:
+#### Variables
+
+When using the online IDE, copy the following JSON to the **Variables** window, below the main editor.
+
 ```json
 {
   "address": "0xa9ad44383140a07cc9ea62d185c12c4d9ef9c6a8fd2f47e16316229815862d23"
 }
 ```
 
-## Fetching a dynamic field on an object
+### Fetch a dynamic field on an object
 
 :::info
+
 This example uses aliases and [fragments](../../../concepts/graphql-rpc.mdx#fragments).
+
 :::
 
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+```graphql
+query DynamicField {
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Lock",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
+}
+
+fragment DynamicFieldSelect on DynamicField {
+  name {
+    ...MoveValueFields
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
+}
+
+fragment DynamicFieldValueSelection on DynamicFieldValue {
+  __typename
+  ... on MoveValue {
+    ...MoveValueFields
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      ...MoveValueFields
+    }
+  }
+}
+
+fragment MoveValueFields on MoveValue {
+  type {
+    repr
+  }
+  json
+  bcs
+}
+```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 query DynamicField {
   object(
@@ -248,15 +553,54 @@ fragment MoveValueFields on MoveValue {
   bcs
 }
 ```
+</TabItem>
+</Tabs>
 
-## Fetching all dynamic fields on an object
 
-This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx), by using the <UnsafeLink href="/references/sui-api/sui-graphql/reference/queries/owner">owner</UnsafeLink> query, so can be used for iterating over the elements of on-chain data structures, like tables and bags. See [The Move Book](https://move-book.com/programmability/dynamic-collections.html) to learn more about dynamic collections available in Move.
+
+### Fetch all dynamic fields on an object
+
+Paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx) by using the <a href="/references/sui-api/sui-graphql/reference/queries/owner" data-noBrokenLinkCheck='true'>owner</a> query. Can be used for iterating over the elements of on-chain data structures, like tables and bags. See [The Move Book](https://move-book.com/programmability/dynamic-collections.html) to learn more about dynamic collections available in Move.
 
 :::info
+
 This example uses [fragments](../../../concepts/graphql-rpc.mdx#fragments) and [variables](../../../concepts/graphql-rpc.mdx#variables).
+
 :::
 
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+```graphql
+query ($id: SuiAddress!) {
+  address(address: $id) {
+    dynamicFields {
+      nodes {
+        name { ...Value }
+        value {
+          __typename
+          ... on MoveValue {
+            ...Value
+          }
+          ... on MoveObject {
+            contents {
+              ...Value
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment Value on MoveValue {
+  type {
+    repr
+  }
+  json
+}
+```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 query ($id: SuiAddress!) {
   owner(address: $id) {
@@ -286,9 +630,21 @@ fragment Value on MoveValue {
   json
 }
 ```
+</TabItem>
+</Tabs>
 
-## Paginating checkpoints forward, five at a time {#page-forward}
+### Paginate checkpoints forward five at a time {#page-forward}
 
+Set up a paginated query starting at the genesis checkpoint, reading five checkpoints at a time in increasing order of sequence number. The value of `pageInfo.hasNextPage` determines whether there is another page to read. The value of `pageInfo.endCursor` is used as the cursor to read `$after`.
+
+:::info
+
+This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
+
+:::
+
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
 ```graphql
 query ($after: String) {
   checkpoints(first: 5, after: $after) {
@@ -303,8 +659,28 @@ query ($after: String) {
   }
 }
 ```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
+```graphql
+query ($after: String) {
+  checkpoints(first: 5, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      digest
+      timestamp
+    }
+  }
+}
+```
+</TabItem>
+</Tabs>
 
-Sets up a paginated query, starting at the genesis checkpoint, reading five checkpoints at a time, in increasing order of sequence number. The value of `pageInfo.hasNextPage` determines whether there is another page to be read, and the value of `pageInfo.endCursor` is fed back in as the cursor to read `$after`.
+### Paginate checkpoints backwards five at a time {#page-back}
+
+Set up a paginated query starting at the latest indexed checkpoint, reading five checkpoints at a time in decreasing order of sequence number. The value of `pageInfo.hasPreviousPage` determines whether there is another page to read. The value of `pageInfo.startCursor` is used as the cursor to read `$before`.
 
 :::info
 
@@ -312,8 +688,8 @@ This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variable
 
 :::
 
-## Paginating checkpoints backwards, five at a time {#page-back}
-
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
 ```graphql
 query ($before: String) {
   checkpoints(last: 5, before: $before) {
@@ -328,17 +704,51 @@ query ($before: String) {
   }
 }
 ```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
+```graphql
+query ($before: String) {
+  checkpoints(last: 5, before: $before) {
+    pageInfo {
+      hasPreviousPage
+      startCursor
+    }
+    nodes {
+      digest
+      timestamp
+    }
+  }
+}
+```
+</TabItem>
+</Tabs>
 
-Sets up a paginated query, starting at the latest indexed checkpoint, reading five checkpoints at a time, in decreasing order of sequence number. The value of `pageInfo.hasPreviousPage` determines whether there is another page to be read, and the value of `pageInfo.startCursor` is fed back in as the cursor to read `$before`.
+### Execute a transaction
 
-:::info
-This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
-:::
+Transaction execution takes two arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](../../../references/cli/client.mdx) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](../../../references/cli/keytool.mdx) command `sui keytool sign` can generate the `signatures`.
 
-## Executing a transaction
-
-Transaction execution takes in two arguments, `txBytes` and `signatures`. `txBytes` is the serialized unsigned transaction data, which can be generated when using the Sui CLI's `client call` [command](../../../references/cli/client.mdx), to call a Move function by passing the `--serialize-unsigned-transaction` flag. The `signatures` can be generated using Sui CLI's [keytool](../../../references/cli/keytool.mdx) command `sui keytool sign`. More information on Sui CLI can be found [here](/references/cli).
-
+<Tabs groupId="graphql">
+<TabItem label="Beta" value="beta">
+```graphql
+mutation ($tx: String!, $sigs: [String!]!) {
+  executeTransaction(transactionDataBcs: $tx, signatures: $sigs) {
+    errors
+    effects {
+      status
+      epoch {
+        startTimestamp
+      }
+      gasEffects {
+        gasSummary {
+          computationCost
+        }
+      }
+    }
+  }
+}
+```
+</TabItem>
+<TabItem label="Alpha (deprecated)" value="alpha">
 ```graphql
 mutation ($tx: String!, $sigs: [String!]!) {
   executeTransactionBlock(txBytes: $tx, signatures: $sigs) {
@@ -357,8 +767,13 @@ mutation ($tx: String!, $sigs: [String!]!) {
   }
 }
 ```
+</TabItem>
+</Tabs>
 
-**Variables**:
+#### Variables
+
+When using the online IDE, copy the following JSON to the **Variables** window, below the main editor.
+
 ```json
 {
   "tx": "AAACACAZXApmrHgzTs3FGDyXWka+wmMCy2IwOdKLmTWHb5PnFQEASlCnLAw4qfzLF3unH9or5/L7YpOlReaSEWfoEwhTqpavSxAAAAAAACCUFUCOn8ljIxcG9O+CA1bzqjunqr4DLDSzSoNCkUvu2AEBAQEBAAEAALNQHmLi4jgC5MuwwmiMvZEeV5kuyh+waCS60voE7fpzAa3v/tOFuqDvQ+bjBpKTfjyL+6yIg+5eC3dKReVwghH/rksQAAAAAAAgxtZtKhXTr1zeFAo1JzEqVKn9J1H74ddbCJNVZGo2I1izUB5i4uI4AuTLsMJojL2RHleZLsofsGgkutL6BO36c+gDAAAAAAAAQEIPAAAAAAAA",
@@ -368,18 +783,200 @@ mutation ($tx: String!, $sigs: [String!]!) {
 }
 ```
 
-## Other examples
+## Migrating to GraphQL from JSON-RPC {#migrate}
 
-You can find other examples in the [repository](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples), grouped into sub-directories. For example, there are directories for [transaction block effects](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples/transaction_block_effects), [protocol configs](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples/protocol_configs), [stake connection](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples/stake_connection), and more.
+The examples in the following sections demonstrate the typical API calls. The calls are tabbed to show both the JSON-RPC call and the equivalent GraphQL structure. For a comprehensive list of all available GraphQL features, consult the [reference](../../../references/sui-graphql).
+
+### Example 1: Get total transactions
+
+Get the total number of transactions in the network.
+
+<Tabs groupId="migrating-json-rpc">
+
+<TabItem value="json-rpc1" label="JSON-RPC">
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTotalTransactionBlocks",
+  "params": []
+}
+```
+
+</TabItem>
+<TabItem value="graphql1" label="GraphQL">
+
+```graphql
+query {
+  checkpoint {
+    networkTotalTransactions
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Example 2: Get a specific transaction
+
+Get the transaction by its digest.
+
+<Tabs groupId="migrating-json-rpc">
+
+<TabItem value="json-rpc2" label="JSON-RPC">
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF",
+    {
+      "showInput": true,
+      "showRawInput": false,
+      "showEffects": true,
+      "showEvents": true,
+      "showObjectChanges": false,
+      "showBalanceChanges": false
+    }
+  ]
+}
+```
+
+</TabItem>
+<TabItem value="graphql2" label="GraphQL">
+
+```graphql
+query {
+  transaction(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint {
+        sequenceNumber
+      }
+      epoch {
+        epochId
+        referenceGasPrice
+      }
+    }
+  }
+}
+```
+</TabItem>
+</Tabs>
+
+### Example 3: Get coin objects owned by an address
+
+Return all `Coin<0x2::sui::SUI>` objects that an address owns.
+
+<Tabs groupId="migrating-json-rpc">
+
+<TabItem value="json-rpc3" label="JSON-RPC">
+
+```json
+query {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "suix_getCoins",
+  "params": [
+    "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9", //owner
+    "0x2::sui::SUI",                                                      //coin type
+    "0xe5c651321915b06c81838c2e370109b554a448a78d3a56220f798398dde66eab", //cursor
+    3 //limit
+  ]
+}
+```
+
+</TabItem>
+<TabItem value="graphql3" label="GraphQL">
+
+```graphql
+query {
+  address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
+    objects(
+      first: 3,
+      after: "vBIzCwAAAADMAQBQlGUkKZV2Gebvp5pASmcU0RJuY/VR9LbH+3ZED4EYyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAARjb2luAAAAAAAAAARDb2luAAAAAAAAAAEAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAA3N1aQAAAAAAAAADU1VJAAAAAAAAAAAB/////XBZUf9feyhb9cW+AOBraL10O9t0D9JAr+tIq2wXDJdl5/zP5w==",
+      filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }
+    ) {
+      nodes {
+        address
+      }
+    }
+  }
+}
+```
 
 :::info
-Examples in the repository are designed to work with the version of GraphQL built at the same revision. The links above point to examples intended for [GraphQL v2024.1](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release), the latest production version at the time of writing.
+
+The cursor is now passed in the `after` (or `before`) fields on the connection, and the limit in the `first` or `last` fields.
+
 :::
+
+</TabItem>
+</Tabs>
+
+## New features
+
+The previous examples show GraphQL calls that perform the same function as their JSON-RPC equivalent. There is functionality available to GraphQL that can't be replicated with JSON-RPC, such as: 
+
+- Time travel queries with checkpoint `{ query { ... } }`.
+- Nested dynamic field look-ups (and paginating dynamic fields with their contents in one request).
+- Fetching live objects by owner kind and type (such as all shared objects of a certain type).
+- Fetching deserialized input and output object contents from a transaction that has just executed.
+
+The following examples demonstrate some of the functions not available with JSON-RPC.
+
+### Example 4: Getting objects by type
+
+Fetch the latest versions of objects of type `0x2::package::Publisher` that are currently live on-chain.
+
+```graphql
+query {
+  objects(filter: { type: "0x2::package::Publisher" }) {
+    nodes {
+      address
+      digest
+      asMoveObject {
+        contents { json }
+      }
+    }
+  }
+}
+```
+
+### Example 5: Paging through package versions
+
+Find all versions of the Sui framework and list their modules:
+
+```graphql
+query {
+  packageVersions(address: "0x2") {
+    nodes {
+      version
+      modules {
+        nodes {
+          name
+        }
+      }
+    }
+  } 
+}
+```
 
 ## Related links
 
-<RelatedLink to="/guides/developer/advanced/graphql-migration.mdx" />
 <RelatedLink to="/concepts/graphql-rpc.mdx" />
 <RelatedLink to="/references/sui-graphql.mdx" />
-<RelatedLink href="https://sui-testnet.mystenlabs.com/graphql" label="Sui Testnet GraphiQL" desc="Sui GraphiQL IDE for the Testnet network." />
-<RelatedLink href="https://sui-mainnet.mystenlabs.com/graphql" label="Sui Mainnet GraphiQL" desc="Sui GraphiQL IDE for the Mainnet network." />
+<RelatedLink to="/concepts/graphql-indexer" />
+<RelatedLink href="https://graphql.testnet.sui.io/graphql" label="Sui Testnet GraphiQL" desc="Sui GraphiQL IDE for the Testnet network." />
+<RelatedLink href="https://graphql.mainnet.sui.io/graphql" label="Sui Mainnet GraphiQL" desc="Sui GraphiQL IDE for the Mainnet network." />
