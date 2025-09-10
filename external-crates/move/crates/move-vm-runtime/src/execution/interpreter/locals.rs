@@ -3,7 +3,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::execution::values::{values_impl::Value, MemBox};
+use crate::execution::values::{MemBox, values_impl::Value};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
