@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "95",
+              "maxSupportedProtocolVersion": "96",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1323,6 +1323,7 @@
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "correct_gas_payment_limit_check": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
