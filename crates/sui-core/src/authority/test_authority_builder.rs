@@ -291,7 +291,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
                 .unwrap_or(0),
-            Some(Arc::new(SubmittedTransactionCacheMetrics::new(&registry))),
+            Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
         )
         .expect("failed to create authority per epoch store");
         let committee_store = Arc::new(CommitteeStore::new(

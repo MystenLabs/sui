@@ -428,7 +428,7 @@ pub struct AuthorityPerEpochStore {
     pub(crate) tx_reject_reason_cache: Option<TransactionRejectReasonCache>,
 
     /// A cache that tracks submitted transactions to prevent DoS through excessive resubmissions.
-    pub(crate) submitted_transaction_cache: Option<SubmittedTransactionCache>,
+    pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -974,7 +974,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
-        submitted_transaction_cache_metrics: Option<Arc<SubmittedTransactionCacheMetrics>>,
+        submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1137,15 +1137,8 @@ impl AuthorityPerEpochStore {
             None
         };
 
-        let submitted_transaction_cache = if protocol_config.mysticeti_fastpath() {
-            Some(SubmittedTransactionCache::new(
-                None,
-                submitted_transaction_cache_metrics
-                    .expect("should be Some if mysticeti_fastpath is true"),
-            ))
-        } else {
-            None
-        };
+        let submitted_transaction_cache =
+            SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
 
         let s = Arc::new(Self {
             name,
@@ -1342,9 +1335,7 @@ impl AuthorityPerEpochStore {
             expensive_safety_check_config,
             self.chain,
             previous_epoch_last_checkpoint,
-            self.submitted_transaction_cache
-                .as_ref()
-                .map(|submitted_transaction_cache| submitted_transaction_cache.metrics()),
+            self.submitted_transaction_cache.metrics(),
         )
     }
 

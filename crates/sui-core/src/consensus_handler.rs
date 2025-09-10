@@ -791,13 +791,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                     // Transaction has appeared in consensus output, we can increment the submission count
                     // for this tx for DoS protection.
-                    if let Some(submitted_cache) = &self.epoch_store.submitted_transaction_cache {
+                    if self.epoch_store.protocol_config().mysticeti_fastpath() {
                         if let ConsensusTransactionKind::UserTransaction(tx) =
                             &parsed.transaction.kind
                         {
                             let digest = tx.digest();
-                            if let Some((spam_weight, submitter_client_addrs)) =
-                                submitted_cache.increment_submission_count(digest)
+                            if let Some((spam_weight, submitter_client_addrs)) = self
+                                .epoch_store
+                                .submitted_transaction_cache
+                                .increment_submission_count(digest)
                             {
                                 if let Some(ref traffic_controller) = self.state.traffic_controller
                                 {

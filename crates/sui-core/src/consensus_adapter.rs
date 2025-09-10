@@ -764,13 +764,13 @@ impl ConsensusAdapter {
         }
 
         // Record submitted transactions early for DoS protection
-        if let Some(submitted_cache) = &epoch_store.submitted_transaction_cache {
+        if epoch_store.protocol_config().mysticeti_fastpath() {
             for transaction in &transactions {
                 if let ConsensusTransactionKind::UserTransaction(tx) = &transaction.kind {
                     let amplification_factor = (tx.data().transaction_data().gas_price()
                         / epoch_store.reference_gas_price().max(1))
                     .max(1);
-                    submitted_cache.record_submitted_tx(
+                    epoch_store.submitted_transaction_cache.record_submitted_tx(
                         tx.digest(),
                         amplification_factor as u32,
                         submitter_client_addr,

@@ -584,9 +584,9 @@ impl SuiNode {
                 .get_highest_executed_checkpoint_seq_number()
                 .expect("checkpoint store read cannot fail")
                 .unwrap_or(0),
-            Some(Arc::new(SubmittedTransactionCacheMetrics::new(
+            Arc::new(SubmittedTransactionCacheMetrics::new(
                 &registry_service.default_registry(),
-            ))),
+            )),
         )?;
 
         info!("created epoch store");
