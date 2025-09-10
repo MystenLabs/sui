@@ -1394,6 +1394,7 @@
                 "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
+                "use_mfp_txns_in_load_initial_object_debts": false,
                 "validate_identifier_inputs": false,
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,

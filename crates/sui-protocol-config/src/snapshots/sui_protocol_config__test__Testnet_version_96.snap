@@ -112,6 +112,7 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  use_mfp_txns_in_load_initial_object_debts: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
