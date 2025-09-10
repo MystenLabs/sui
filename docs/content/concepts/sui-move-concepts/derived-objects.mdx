@@ -1,14 +1,36 @@
 ---
 title: Derived Objects
-description: Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, creating a per-parent namespace.
-keywords: [ Derived objects, registry, dynamic fields, registry pointer ]
+description: Derived objects enable deterministic object addressing, Transfer-to-Object capabilities, guaranteed uniqueness, and native parallelization for building scalable composable systems on Sui.
+keywords: [ Derived objects, deterministic addressing, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
 ---
 
-Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, creating a per-parent namespace. This gives you the benefits of a registry (unique slots per key) without storing child objects inside the parent. After creation, you no longer need the parent to interact with derived objects and can use them as inputs to your programmable transaction blocks (PTBs).
+Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, unlocking powerful patterns for building scalable, composable systems on Sui. The core insight is that **object addresses can be known before creation**, enabling pre-computation of destinations, guaranteed uniqueness per key, and seamless parallelization of operations.
 
-Classic registries (dynamic fields) require a parent registry object that owns children. Because mutation of a child typically requires a mutable borrow through the parent, unrelated writes get funneled through the parent. This can create a contention/consensus hotspot if the parent is shared.
+## Core capabilities
 
-Derived objects keep the parent-key namespace but the derived object is either a wrapped or top-level object (not stored in the parent). It can be owned (fast path), shared, or immutable. You avoid sequencing unrelated mutations through the parent (for all operations besides creation), while maintaining the guaranteed uniqueness per parent-key relationship.
+Derived objects provide four fundamental capabilities:
+
+### Deterministic addressing
+
+Object IDs can be computed ahead of time using `derived_object::derive_address(parent_id, key)`. This means applications can predict where objects will live before they exist, enabling sophisticated coordination patterns and reducing the need for on-chain lookups.
+
+### Transfer-to-Object (TTO) compatibility
+
+Because addresses are computable, objects can receive transfers even before they exist. Send assets to a derived address, then create the object later to claim them. This enables patterns like:
+
+- Pre-funding accounts before user onboarding.
+- Conditional object creation based on received assets.
+- Cross-chain bridging to deterministic destinations.
+
+### One-per-key uniqueness
+
+Each `(parent, key)` pair maps to exactly one object address. This gives you registry-like uniqueness guarantees without the registry bottleneck. Perfect for soulbound tokens, per-user configurations, or any scenario requiring unique slots.
+
+### Native parallelization
+
+Unlike dynamic fields that funnel operations through a parent object, derived objects operate independently after creation. Unrelated keys can be modified in parallel, eliminating consensus hotspots while maintaining namespace guarantees.
+
+These capabilities combine to enable entirely new design patterns that were previously impossible or inefficient on other blockchains.
 
 **On-chain benefits**
 
@@ -37,11 +59,67 @@ The following matrix highlights some of the differences between using dynamic fi
 | Supports deletion? | ✅ Yes | ✅ Yes |
 | Supports reclaiming? | ❌ Currently no | ✅ Yes |
 
-## Examples
+## Use cases
 
-The following code examples explore the differences between a dynamic field table registry, a registry that uses a pointer, and the derived object approach.
+Derived objects enable many useful patterns:
 
-### Classic registry
+### Gaming: Deterministic loot boxes
+
+Players can compute loot box addresses before opening. This allows for pre-funding, conditional reveals, and parallel processing.
+
+```move
+public fun derive_loot_box_address(game_id: ID, player: address, box_type: u8): address {
+    let key = bcs::to_bytes(&player);
+    vector::append(&mut key, bcs::to_bytes(&box_type));
+    derived_object::derive_address(game_id, key)
+}
+```
+
+### DeFi: Per-user trading accounts
+
+Each user gets a unique trading account that can receive assets before the user even creates it, enabling seamless onboarding.
+
+```move
+public fun create_trading_account(exchange_id: &mut UID, ctx: &mut TxContext): TradingAccount {
+    let account = TradingAccount {
+        id: derived_object::claim(exchange_id, ctx.sender()),
+        balance: 0,
+        positions: vector::empty(),
+    };
+    account
+}
+```
+
+### Social: Content addressing
+
+Social media posts, NFT collections, or any content can have deterministic addresses based on creator and content hash.
+
+```move
+public fun derive_post_address(platform_id: ID, creator: address, content_hash: vector<u8>): address {
+    let key = bcs::to_bytes(&creator);
+    vector::append(&mut key, content_hash);
+    derived_object::derive_address(platform_id, key)
+}
+```
+
+### Cross-chain: Bridged asset destinations
+
+Bridge contracts can compute destination addresses on Sui before assets arrive, enabling atomic cross-chain swaps.
+
+```move
+
+public fun derive_bridge_vault(bridge_id: ID, source_chain: u8, source_tx: vector<u8>): address {
+    let key = bcs::to_bytes(&source_chain);
+    vector::append(&mut key, source_tx);
+    derived_object::derive_address(bridge_id, key)
+}
+```
+
+### Registries: Comparison between traditional and derived object patterns {#registries}
+
+The following code examples demonstrate the registry use case, comparing dynamic field tables, pointer-based registries, and derived objects. While registries are just one application of derived objects, the following patterns illustrate the core tradeoffs.
+
+#### Classic registry
 
 Perhaps the biggest advantage for classic registries are the straightforward queries. This increased discoverability comes at the cost of parallelization, however, as all operations must go through the parent object.
 
@@ -82,7 +160,7 @@ public fun receive_from_vault<T key + store>(
 }
 ```
 
-### Registry with pointer
+#### Registry with pointer
 
 If parallelization is an important aspect for your project needs, you could create a registry that uses a pointer. This approach provides good parallelization, but makes discoverability a 2-sequential-network-hop operation. To find a vault, you first have to find its pointer.
 
@@ -124,7 +202,7 @@ public fun receive_from_vault<T key + store>(
 }
 ```
 
-### Derived objects
+#### Derived objects
 
 Using derived objects doesn't require a tradeoff between discoverability and parallelization.  
 
@@ -168,4 +246,5 @@ public fun receive_from_vault<T key + store>(
 
 <RelatedLink to="/concepts/dynamic-fields" />
 <RelatedLink to="/concepts/object-ownership" />
+<RelatedLink to="/concepts/transfers/transfer-to-object">
 <RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/derived_object.move" label="`derived_object` module" desc="The code that defines derived objects on Sui." />
