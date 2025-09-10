@@ -1,9 +1,9 @@
 [package]
-name = "username_registry"
+name = "profiles"
 edition = "2024.beta"
 
 [dependencies]
 Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
-username_registry = "0x0"
+profiles = "0x0"
