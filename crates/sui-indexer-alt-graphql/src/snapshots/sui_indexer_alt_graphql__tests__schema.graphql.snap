@@ -3646,6 +3646,10 @@ input TransactionFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
+	An input filter selecting for either system or programmable transactions.
+	"""
+	kind: TransactionKindInput
+	"""
 	Limit to transactions that were sent by the given address.
 	"""
 	sentAddress: SuiAddress
@@ -3689,6 +3693,21 @@ type TransactionInputEdge {
 Different types of transactions that can be executed on the Sui network.
 """
 union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction | ProgrammableSystemTransaction
+
+"""
+An input filter selecting for either system or programmable transactions.
+"""
+enum TransactionKindInput {
+	"""
+	A system transaction can be one of several types of transactions.
+	See [unions/transaction-block-kind] for more details.
+	"""
+	SYSTEM_TX
+	"""
+	A user submitted transaction block.
+	"""
+	PROGRAMMABLE_TX
+}
 
 """
 Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.
