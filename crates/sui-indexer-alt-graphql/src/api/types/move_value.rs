@@ -19,6 +19,7 @@ use crate::{
 
 use super::{display::Display, move_type::MoveType};
 
+#[derive(Clone)]
 pub(crate) struct MoveValue {
     pub(crate) type_: MoveType,
     pub(crate) native: Vec<u8>,

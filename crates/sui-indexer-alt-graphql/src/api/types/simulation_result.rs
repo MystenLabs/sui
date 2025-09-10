@@ -8,7 +8,7 @@ use sui_types::transaction::TransactionData;
 
 use crate::{error::RpcError, scope::Scope};
 
-use super::{event::Event, transaction_effects::TransactionEffects};
+use super::{command_result::CommandResult, event::Event, transaction_effects::TransactionEffects};
 
 /// The result of simulating a transaction, including the predicted effects, events, and any errors.
 #[derive(Clone, SimpleObject)]
@@ -22,6 +22,9 @@ pub struct SimulationResult {
     ///
     /// `None` if the simulation failed or no events would be emitted.
     pub events: Option<Vec<Event>>,
+
+    /// The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
+    pub outputs: Option<Vec<CommandResult>>,
 
     /// Error message if the simulation failed.
     ///
@@ -73,9 +76,19 @@ impl SimulationResult {
                 .collect()
         });
 
+        // Extract command results from the response
+        let outputs = Some(
+            response
+                .outputs
+                .into_iter()
+                .map(|output| CommandResult::from_proto(output, scope.clone()))
+                .collect(),
+        );
+
         Ok(Self {
             effects,
             events,
+            outputs,
             error: None,
         })
     }
