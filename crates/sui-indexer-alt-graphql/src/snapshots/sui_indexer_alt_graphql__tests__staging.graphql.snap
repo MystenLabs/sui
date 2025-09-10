@@ -1274,6 +1274,10 @@ type ExecutionError {
 	"""
 	constant: String
 	"""
+	The function that the abort originated from. Only populated for Move aborts and primitive runtime errors that have function name information.
+	"""
+	function: MoveFunction
+	"""
 	The error's name. Only populated for clever errors.
 	"""
 	identifier: String
@@ -1281,6 +1285,16 @@ type ExecutionError {
 	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
 	"""
 	instructionOffset: Int
+	"""
+	Human readable explanation of why the transaction failed.
+	
+	For Move aborts, the error message will be resolved to a human-readable form if possible, otherwise it will fall back to displaying the abort code and location.
+	"""
+	message: String!
+	"""
+	The module that the abort originated from. Only populated for Move aborts and primitive runtime errors.
+	"""
+	module: MoveModule
 	"""
 	The source line number for the abort. Only populated for clever errors.
 	"""
