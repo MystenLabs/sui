@@ -11,7 +11,6 @@ pub enum TransactionArgument {
     GasCoin(GasCoin),
     Input(Input),
     Result(TxResult),
-    Unknown(UnknownArgument),
 }
 
 /// Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
@@ -38,13 +37,6 @@ pub struct TxResult {
     pub ix: Option<u16>,
 }
 
-/// An unknown or unsupported argument type.
-#[derive(SimpleObject, Clone)]
-pub struct UnknownArgument {
-    /// The raw argument kind value for debugging.
-    pub kind: Option<i32>,
-}
-
 impl From<NativeArgument> for TransactionArgument {
     fn from(argument: NativeArgument) -> Self {
         match argument {
@@ -62,22 +54,22 @@ impl From<NativeArgument> for TransactionArgument {
     }
 }
 
-impl From<proto::Argument> for TransactionArgument {
-    fn from(arg: proto::Argument) -> Self {
+impl TryFrom<proto::Argument> for TransactionArgument {
+    type Error = ();
+
+    fn try_from(arg: proto::Argument) -> Result<Self, Self::Error> {
         use proto::argument::ArgumentKind;
 
         match arg.kind() {
-            ArgumentKind::Gas => TransactionArgument::GasCoin(GasCoin { dummy: None }),
-            ArgumentKind::Input => TransactionArgument::Input(Input {
+            ArgumentKind::Gas => Ok(TransactionArgument::GasCoin(GasCoin { dummy: None })),
+            ArgumentKind::Input => Ok(TransactionArgument::Input(Input {
                 ix: Some(arg.input.unwrap_or_default() as u16),
-            }),
-            ArgumentKind::Result => TransactionArgument::Result(TxResult {
+            })),
+            ArgumentKind::Result => Ok(TransactionArgument::Result(TxResult {
                 cmd: Some(arg.result.unwrap_or_default() as u16),
                 ix: arg.subresult.map(|subresult| subresult as u16),
-            }),
-            _ => TransactionArgument::Unknown(UnknownArgument {
-                kind: Some(arg.kind().into()),
-            }),
+            })),
+            _ => Err(()),
         }
     }
 }

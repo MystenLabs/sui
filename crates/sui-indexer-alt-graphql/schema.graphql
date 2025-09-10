@@ -642,9 +642,9 @@ type CommandOutput {
 	"""
 	argument: TransactionArgument
 	"""
-	BCS-encoded representation of the value.
+	The structured Move value, if available.
 	"""
-	value: Base64
+	value: MoveValue
 }
 
 """
@@ -3496,7 +3496,7 @@ type Transaction {
 """
 An argument to a programmable transaction command.
 """
-union TransactionArgument = GasCoin | Input | TxResult | UnknownArgument
+union TransactionArgument = GasCoin | Input | TxResult
 
 type TransactionConnection {
 	"""
@@ -3745,16 +3745,6 @@ type UnchangedConsensusObjectEdge {
 	The item at the end of the edge
 	"""
 	node: UnchangedConsensusObject!
-}
-
-"""
-An unknown or unsupported argument type.
-"""
-type UnknownArgument {
-	"""
-	The raw argument kind value for debugging.
-	"""
-	kind: Int
 }
 
 """

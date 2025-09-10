@@ -39,7 +39,21 @@ struct CommandResult {
 #[serde(rename_all = "camelCase")]
 struct CommandOutput {
     argument: Option<TransactionArgument>,
-    value: Option<String>, // Base64 encoded
+    value: Option<MoveValue>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveValue {
+    #[serde(rename = "type")]
+    type_: MoveType,
+    bcs: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveType {
+    repr: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -585,13 +599,20 @@ async fn test_simulate_transaction_command_results() {
                                 ... on TxResult { cmd ix }
                                 ... on GasCoin { _ }
                             }
-                            value
+                            value {
+                                type { repr }
+                                bcs
+                            }
                         }
                         mutatedReferences {
                             argument {
                                 ... on Input { ix }
                                 ... on TxResult { cmd ix }
                                 ... on GasCoin { _ }
+                            }
+                            value {
+                                type { repr }
+                                bcs
                             }
                         }
                     }
@@ -618,33 +639,38 @@ async fn test_simulate_transaction_command_results() {
             0 => {
                 // Command 0: create_test_object(Input(42)) -> TestObject
                 let returns = cmd.return_values.as_ref().unwrap();
-                assert_eq!(returns.len(), 1, "Command 0 should return exactly 1 value");
-                assert!(returns[0].value.is_some());
-                assert!(returns[0].argument.is_none());
+                assert_eq!(returns.len(), 1);
+                let value = returns[0].value.as_ref().unwrap();
+                assert!(value.type_.repr.contains("TestObject"));
+                assert!(!value.bcs.is_empty());
                 assert!(cmd.mutated_references.as_ref().unwrap().is_empty());
             }
             1 => {
                 // Command 1: update_object_value(&mut Result(0), Input(100))
-                let returns = cmd.return_values.as_ref().unwrap();
-                assert_eq!(returns.len(), 0);
                 let mutated = cmd.mutated_references.as_ref().unwrap();
                 assert_eq!(mutated.len(), 1);
-
                 let mutated_ref = &mutated[0];
-                assert!(mutated_ref.argument.is_some());
 
-                let arg = mutated_ref.argument.as_ref().unwrap();
-                let ArgumentKind::TxResult { cmd, ix } = &arg.kind else {
-                    panic!("Expected TxResult argument, got {:?}", arg.kind);
+                let ArgumentKind::TxResult { cmd, ix } =
+                    &mutated_ref.argument.as_ref().unwrap().kind
+                else {
+                    panic!("Expected TxResult argument");
                 };
                 assert_eq!(*cmd, Some(0));
                 assert_eq!(*ix, Some(0));
+
+                let value = mutated_ref.value.as_ref().unwrap();
+                assert!(value.type_.repr.contains("TestObject"));
+                assert!(!value.bcs.is_empty());
             }
             2 => {
                 // Command 2: get_object_value(&Result(0)) -> u64 (should return 100 after mutation)
                 let returns = cmd.return_values.as_ref().unwrap();
                 assert_eq!(returns.len(), 1);
-                assert!(returns[0].value.is_some());
+
+                let value = returns[0].value.as_ref().unwrap();
+                assert_eq!(value.type_.repr, "u64");
+                assert!(!value.bcs.is_empty());
                 assert!(returns[0].argument.is_none());
                 assert!(cmd.mutated_references.as_ref().unwrap().is_empty());
             }
@@ -652,7 +678,10 @@ async fn test_simulate_transaction_command_results() {
                 // Command 3: check_gas_coin(&Gas) -> u64
                 let returns = cmd.return_values.as_ref().unwrap();
                 assert_eq!(returns.len(), 1);
-                assert!(returns[0].value.is_some());
+
+                let value = returns[0].value.as_ref().unwrap();
+                assert_eq!(value.type_.repr, "u64");
+                assert!(!value.bcs.is_empty());
                 assert!(returns[0].argument.is_none());
                 assert!(cmd.mutated_references.as_ref().unwrap().is_empty());
             }

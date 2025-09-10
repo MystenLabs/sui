@@ -81,7 +81,7 @@ impl SimulationResult {
             response
                 .outputs
                 .into_iter()
-                .map(CommandResult::from)
+                .map(|output| CommandResult::from_proto(output, scope.clone()))
                 .collect(),
         );
 
