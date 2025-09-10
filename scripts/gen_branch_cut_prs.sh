@@ -37,7 +37,8 @@ fi
 
 # Make sure GITHUB_ACTOR is set.
 if [[ -z "${GITHUB_ACTOR:-}" ]]; then
-  GITHUB_ACTOR="$(whoami 2>/dev/null || echo github-actions[bot])"
+  echo "GITHUB_ACTOR is not set"
+  exit 1
 fi
 
 # Configure git user
@@ -80,6 +81,15 @@ if [[ "$PR_TYPE" == *snapshot* ]]; then
     # Extract PR URL from output
     if PR_URL=$(echo "$PR_OUTPUT" | grep -Eo 'https://github.com/[^ ]+'); then
       echo "Successfully created PR: $PR_URL"
+      
+      # Extract PR number from URL
+      PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+      
+      # Add comment as GITHUB_ACTOR to trigger CI
+      if [[ -n "$PR_NUMBER" ]]; then
+        echo "Adding comment to trigger CI..."
+        gh pr comment "$PR_NUMBER" --body "Triggering CI as $GITHUB_ACTOR"
+      fi
     else
       echo "Warning: PR created but could not extract URL from output:"
       echo "$PR_OUTPUT"
@@ -134,6 +144,15 @@ elif [[ "$PR_TYPE" == *version-bump* ]]; then
     # Extract PR URL from output
     if PR_URL=$(echo "$PR_OUTPUT" | grep -Eo 'https://github.com/[^ ]+'); then
       echo "Successfully created PR: $PR_URL"
+      
+      # Extract PR number from URL
+      PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+      
+      # Add comment as GITHUB_ACTOR to trigger CI
+      if [[ -n "$PR_NUMBER" ]]; then
+        echo "Adding comment to trigger CI..."
+        gh pr comment "$PR_NUMBER" --body "Triggering CI as $GITHUB_ACTOR"
+      fi
     else
       echo "Warning: PR created but could not extract URL from output:"
       echo "$PR_OUTPUT"
