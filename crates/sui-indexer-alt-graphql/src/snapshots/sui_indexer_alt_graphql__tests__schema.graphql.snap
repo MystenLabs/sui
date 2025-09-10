@@ -3732,6 +3732,10 @@ input TransactionFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
+	Filter transactions by move function called. Calls can be filtered by the `package`, `package::module`, or the `package::module::name` of their function.
+	"""
+	function: String
+	"""
 	An input filter selecting for either system or programmable transactions.
 	"""
 	kind: TransactionKindInput

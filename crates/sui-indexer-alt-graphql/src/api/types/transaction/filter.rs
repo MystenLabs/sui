@@ -8,7 +8,7 @@ use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
 use crate::{
-    api::scalars::{sui_address::SuiAddress, uint53::UInt53},
+    api::scalars::{fq_name_filter::FqNameFilter, sui_address::SuiAddress, uint53::UInt53},
     intersect,
 };
 
@@ -22,6 +22,9 @@ pub(crate) struct TransactionFilter {
 
     /// Filter to transaction that occurred strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
+
+    /// Filter transactions by move function called. Calls can be filtered by the `package`, `package::module`, or the `package::module::name` of their function.
+    pub function: Option<FqNameFilter>,
 
     /// An input filter selecting for either system or programmable transactions.
     pub kind: Option<TransactionKindInput>,
@@ -48,15 +51,23 @@ pub(crate) struct TransactionFilterValidator;
 
 impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
-        let filters = filter.kind.is_some() as u8 + filter.affected_address.is_some() as u8;
+        let filters = filter.affected_address.is_some() as u8
+            + filter.function.is_some() as u8
+            + filter.kind.is_some() as u8;
         if filters > 1 {
             return Err(InputValueError::custom(
-                "Only one of [kind, affectedAddress] can be specified",
+                "At most one of [affectedAddress, function, kind] can be specified",
             ));
         }
 
         Ok(())
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("Invalid filter, expected: {0}")]
+    InvalidFormat(&'static str),
 }
 
 impl TransactionFilter {
@@ -75,6 +86,7 @@ impl TransactionFilter {
             after_checkpoint: intersect!(after_checkpoint, intersect::by_max)?,
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
+            function: intersect!(function, intersect::by_eq)?,
             kind: intersect!(kind, intersect::by_eq)?,
             affected_address: intersect!(affected_address, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
