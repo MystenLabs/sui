@@ -25,7 +25,7 @@ use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{NotifyRead, CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME};
 use mysten_common::{assert_reachable, debug_fatal, fatal};
-use mysten_metrics::{monitored_future, monitored_scope, spawn_monitored_task, MonitoredFutureExt};
+use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -38,7 +38,6 @@ use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
-use tokio::task::JoinSet;
 use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
