@@ -2957,9 +2957,9 @@ impl CheckpointService {
         }
 
         let (builder_finished_tx, builder_finished_rx) = tokio::sync::oneshot::channel();
-        let mut tasks = JoinSet::new();
-        tasks.spawn(monitored_future!(aggregator.run()));
-        tasks.spawn(monitored_future!(state_hasher.run()));
+
+        let state_hasher_task = spawn_monitored_task!(state_hasher.run());
+        let aggregator_task = spawn_monitored_task!(aggregator.run());
 
         spawn_monitored_task!(async move {
             epoch_store
@@ -2969,9 +2969,16 @@ impl CheckpointService {
                 })
                 .await
                 .ok();
+
+            // state hasher will terminate as soon as it has finished processing all messages from builder
+            state_hasher_task
+                .await
+                .expect("state hasher should exit normally");
+
             // builder must shut down before aggregator and state_hasher, since it sends
             // messages to them
-            tasks.shutdown().await;
+            aggregator_task.abort();
+            aggregator_task.await.ok();
         });
 
         // If this times out, the validator may still start up. The worst that can
