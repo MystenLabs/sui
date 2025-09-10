@@ -600,6 +600,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
 	storageRebate: BigInt
@@ -910,6 +914,10 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
@@ -1525,6 +1533,10 @@ interface IObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
 	storageRebate: BigInt
@@ -2074,6 +2086,10 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
 	storageRebate: BigInt
@@ -2208,6 +2224,10 @@ type MovePackage implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
@@ -2532,6 +2552,10 @@ type Object implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
