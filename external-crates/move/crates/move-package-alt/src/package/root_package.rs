@@ -332,11 +332,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<ParsedEphemeralPubs<F>> {
         if let Ok(file) = FileHandle::new(&pubfile) {
             let parsed: ParsedEphemeralPubs<F> = toml_edit::de::from_str(file.source())?;
-            if build_env.is_some() && build_env.as_ref() != Some(&parsed.build_env) {
-                return Err(PackageError::EphemeralEnvMismatch {
-                    file_build_env: parsed.build_env,
-                    passed_build_env: build_env.unwrap(),
-                });
+            if let Some(build_env) = build_env {
+                if build_env != parsed.build_env {
+                    return Err(PackageError::EphemeralEnvMismatch {
+                        file_build_env: parsed.build_env,
+                        passed_build_env: build_env,
+                    });
+                }
             }
             if chain_id != parsed.chain_id {
                 return Err(PackageError::EphemeralChainMismatch {
@@ -360,7 +362,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             debug!("writing empty file {file:?}");
             std::fs::write(&file, pubs.render_as_toml())?;
 
-            return Ok(pubs);
+            Ok(pubs)
         }
     }
 

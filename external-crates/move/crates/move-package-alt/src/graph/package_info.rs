@@ -31,18 +31,18 @@ pub enum NamedAddress {
 
 impl<F: MoveFlavor> PackageGraph<F> {
     pub fn root_package_info(&self) -> PackageInfo<F> {
-        PackageGraph::<F>::package_info(&self, self.root_index)
+        self.package_info(self.root_index)
     }
 
     pub(crate) fn package_info(&self, node: NodeIndex) -> PackageInfo<F> {
-        PackageInfo::<F> { graph: self, node }
+        PackageInfo { graph: self, node }
     }
 
     #[cfg(test)]
     pub(crate) fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
         self.package_ids
             .get_by_left(id)
-            .map(|node| PackageGraph::<F>::package_info(&self, *node))
+            .map(|node| self.package_info(*node))
     }
 }
 
