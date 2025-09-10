@@ -4,7 +4,16 @@ description: Derived objects enable deterministic object addressing, Transfer-to
 keywords: [ Derived objects, deterministic addressing, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
 ---
 
-Derived objects enable you to deterministically compute object IDs from a parent object ID plus a key, unlocking powerful patterns for building scalable, composable systems on Sui. The core insight is that **object addresses can be known before creation**, enabling pre-computation of destinations, guaranteed uniqueness per key, and seamless parallelization of operations.
+Derived objects enable you to deterministically compute object IDs from a parent object ID and a key, both on- and off-chain. Put another way, the derived object logic means you can can compute the ID of an object before it's even created on the network. 
+
+
+
+<details>
+<summary>
+`derived_object` package source
+</summary>
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/derived_object.move" mode="code" />
+</details>
 
 ## Core capabilities
 
@@ -246,5 +255,5 @@ public fun receive_from_vault<T key + store>(
 
 <RelatedLink to="/concepts/dynamic-fields" />
 <RelatedLink to="/concepts/object-ownership" />
-<RelatedLink to="/concepts/transfers/transfer-to-object">
+<RelatedLink to="/concepts/transfers/transfer-to-object" />
 <RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/derived_object.move" label="`derived_object` module" desc="The code that defines derived objects on Sui." />
