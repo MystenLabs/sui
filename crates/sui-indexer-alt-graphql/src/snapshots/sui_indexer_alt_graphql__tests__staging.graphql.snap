@@ -98,6 +98,8 @@ type Address implements IAddressable {
 	defaultSuinsName: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to the object with this address.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -108,6 +110,8 @@ type Address implements IAddressable {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to the object with this address.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -507,6 +511,8 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -517,6 +523,8 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -822,6 +830,8 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -832,6 +842,8 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -1440,6 +1452,8 @@ interface IMoveObject {
 	contents: MoveValue
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -1450,6 +1464,8 @@ interface IMoveObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -1987,6 +2003,8 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -1997,6 +2015,8 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -2481,6 +2501,8 @@ type Object implements IAddressable & IObject {
 	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -2489,6 +2511,8 @@ type Object implements IAddressable & IObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
