@@ -11,6 +11,7 @@ use async_graphql::{
 };
 use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
+use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_reader::{
     consistent_reader::{self, ConsistentReader},
@@ -28,6 +29,7 @@ use sui_types::{
         SequenceNumber, SuiAddress as NativeSuiAddress, TransactionDigest, VersionDigest,
     },
     digests::ObjectDigest,
+    dynamic_field::DynamicFieldType,
     object::Object as NativeObject,
     transaction::GenesisObject,
 };
@@ -53,7 +55,7 @@ use super::{
     address::Address,
     balance::{self, Balance},
     coin_metadata::CoinMetadata,
-    dynamic_field::DynamicField,
+    dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
     object_filter::{ObjectFilter, Validator as OFValidator},
@@ -276,6 +278,110 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<String>, RpcError> {
         self.super_.default_suins_name(ctx).await
+    }
+
+    /// Access a dynamic field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic field with that name could not be found attached to this object.
+    pub(crate) async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<Error>> {
+        DynamicField::by_name(
+            ctx,
+            self.super_.scope.clone(),
+            self.super_.address.into(),
+            DynamicFieldType::DynamicField,
+            name,
+        )
+        .await
+        .map_err(upcast)
+    }
+
+    /// Dynamic fields owned by this object.
+    pub(crate) async fn dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Object", "dynamicFields");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let dynamic_fields = DynamicField::paginate(
+            ctx,
+            self.super_.scope.clone(),
+            self.super_.address.into(),
+            page,
+        )
+        .await?;
+
+        Ok(Some(dynamic_fields))
+    }
+
+    /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic object field with that name could not be found attached to this object.
+    pub(crate) async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<Error>> {
+        DynamicField::by_name(
+            ctx,
+            self.super_.scope.clone(),
+            self.super_.address.into(),
+            DynamicFieldType::DynamicObject,
+            name,
+        )
+        .await
+        .map_err(upcast)
+    }
+
+    /// Access dynamic fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+        try_join_all(keys.into_iter().map(|key| {
+            DynamicField::by_name(
+                ctx,
+                self.super_.scope.clone(),
+                self.super_.address.into(),
+                DynamicFieldType::DynamicField,
+                key,
+            )
+        }))
+        .await
+        .map_err(upcast)
+    }
+
+    /// Access dynamic object fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_object_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+        try_join_all(keys.into_iter().map(|key| {
+            DynamicField::by_name(
+                ctx,
+                self.super_.scope.clone(),
+                self.super_.address.into(),
+                DynamicFieldType::DynamicObject,
+                key,
+            )
+        }))
+        .await
+        .map_err(upcast)
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
