@@ -27,7 +27,6 @@ use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
-use prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_execution::{self, Executor};
@@ -3098,24 +3097,12 @@ impl AuthorityPerEpochStore {
     /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
     /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
     /// This function returns unit error and is responsible for emitting log messages for internal errors
-    fn verify_consensus_transaction(
+    pub(crate) fn verify_consensus_transaction(
         &self,
         transaction: SequencedConsensusTransaction,
-        skipped_consensus_txns: &IntCounter,
     ) -> Option<VerifiedSequencedConsensusTransaction> {
         let _scope = monitored_scope("VerifyConsensusTransaction");
-        if self
-            .is_consensus_message_processed(&transaction.transaction.key())
-            .expect("Storage error")
-        {
-            trace!(
-                consensus_index=?transaction.consensus_index.transaction_index,
-                tracking_id=?transaction.transaction.get_tracking_id(),
-                "handle_consensus_transaction UserTransaction [skip]",
-            );
-            skipped_consensus_txns.inc();
-            return None;
-        }
+
         // Signatures are verified as part of the consensus payload verification in SuiTxValidator
         match &transaction.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -3268,10 +3255,20 @@ impl AuthorityPerEpochStore {
         let verified_transactions: Vec<_> = transactions
             .into_iter()
             .filter_map(|transaction| {
-                self.verify_consensus_transaction(
-                    transaction,
-                    &authority_metrics.skipped_consensus_txns,
-                )
+                if self
+                    .is_consensus_message_processed(&transaction.transaction.key())
+                    .expect("Storage error")
+                {
+                    trace!(
+                        consensus_index=?transaction.consensus_index.transaction_index,
+                        tracking_id=?transaction.transaction.get_tracking_id(),
+                        "handle_consensus_transaction UserTransaction [skip]",
+                    );
+                    authority_metrics.skipped_consensus_txns.inc();
+                    None
+                } else {
+                    self.verify_consensus_transaction(transaction)
+                }
             })
             .collect();
         let mut system_transactions = Vec::with_capacity(verified_transactions.len());

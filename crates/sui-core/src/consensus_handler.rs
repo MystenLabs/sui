@@ -2363,7 +2363,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
         transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
-    ) -> Vec<SequencedConsensusTransaction> {
+    ) -> Vec<VerifiedSequencedConsensusTransaction> {
         // We need a set here as well, since the processed_cache is a LRU cache and can drop
         // entries while we're iterating over the sequenced transactions.
         let mut processed_set = HashSet::new();
@@ -2405,12 +2405,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 transaction,
             };
 
-            let key = sequenced_transaction.key();
+            let Some(verified_transaction) = self
+                .epoch_store
+                .verify_consensus_transaction(sequenced_transaction)
+            else {
+                continue;
+            };
+
+            let key = verified_transaction.0.key();
             let in_set = !processed_set.insert(key.clone());
-            let in_cache = self
-                .processed_cache
-                .put(sequenced_transaction.key(), ())
-                .is_some();
+            let in_cache = self.processed_cache.put(key.clone(), ()).is_some();
 
             if in_set || in_cache {
                 self.metrics.skipped_consensus_txns_cache_hit.inc();
@@ -2427,7 +2431,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
             state.output.record_consensus_message_processed(key);
 
-            all_transactions.push(sequenced_transaction);
+            all_transactions.push(verified_transaction);
         }
 
         all_transactions
@@ -2435,12 +2439,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     fn build_commit_handler_input(
         &self,
-        transactions: Vec<SequencedConsensusTransaction>,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
     ) -> CommitHandlerInput {
         let epoch = self.epoch_store.epoch();
         let mut commit_handler_input = CommitHandlerInput::default();
 
-        for transaction in transactions.into_iter() {
+        for VerifiedSequencedConsensusTransaction(transaction) in transactions.into_iter() {
             match transaction.transaction {
                 SequencedConsensusTransactionKind::External(consensus_transaction) => {
                     match consensus_transaction.kind {
@@ -3690,6 +3694,148 @@ mod tests {
         assert!(epoch_store
             .is_consensus_message_processed(&v2_key_b)
             .unwrap());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_verify_consensus_transaction_filters_mismatched_authorities() {
+        telemetry_subscribers::init_for_testing();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let consensus_committee = epoch_store.epoch_start_state().get_consensus_committee();
+
+        // Create a different authority than our test authority
+        use fastcrypto::traits::KeyPair;
+        let (_, wrong_keypair) = sui_types::crypto::get_authority_key_pair();
+        let wrong_authority: AuthorityName = wrong_keypair.public().into();
+
+        // Create EndOfPublish transaction with mismatched authority
+        let mismatched_eop = ConsensusTransaction::new_end_of_publish(wrong_authority);
+
+        // Create valid EndOfPublish transaction with correct authority
+        let valid_eop = ConsensusTransaction::new_end_of_publish(state.name);
+
+        // Create CheckpointSignature with mismatched authority
+        let epoch = epoch_store.epoch();
+        let contents =
+            CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
+        let summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+            epoch,
+            42, // sequence number
+            10, // network_total_transactions
+            &contents,
+            None, // previous_digest
+            GasCostSummary::default(),
+            None,       // end_of_epoch_data
+            0,          // timestamp
+            Vec::new(), // randomness_rounds
+        );
+
+        // Create a signed checkpoint with the wrong authority
+        let mismatched_checkpoint_signed =
+            SignedCheckpointSummary::new(epoch, summary.clone(), &wrong_keypair, wrong_authority);
+        let mismatched_checkpoint_digest = mismatched_checkpoint_signed.data().digest();
+        let mismatched_checkpoint =
+            ConsensusTransaction::new_checkpoint_signature_message_v2(CheckpointSignatureMessage {
+                summary: mismatched_checkpoint_signed,
+            });
+
+        // Create a valid checkpoint signature with correct authority
+        let valid_checkpoint_signed =
+            SignedCheckpointSummary::new(epoch, summary, &*state.secret, state.name);
+        let valid_checkpoint_digest = valid_checkpoint_signed.data().digest();
+        let valid_checkpoint =
+            ConsensusTransaction::new_checkpoint_signature_message_v2(CheckpointSignatureMessage {
+                summary: valid_checkpoint_signed,
+            });
+
+        let to_tx = |ct: &ConsensusTransaction| Transaction::new(bcs::to_bytes(ct).unwrap());
+
+        // Create a block with both valid and invalid transactions
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(100, 0)
+                .set_transactions(vec![
+                    to_tx(&mismatched_eop),
+                    to_tx(&valid_eop),
+                    to_tx(&mismatched_checkpoint),
+                    to_tx(&valid_checkpoint),
+                ])
+                .build(),
+        );
+        let commit = CommittedSubDag::new(
+            block.reference(),
+            vec![block.clone()],
+            block.timestamp_ms(),
+            CommitRef::new(10, CommitDigest::MIN),
+        );
+
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let throughput = ConsensusThroughputCalculator::new(None, metrics.clone());
+        let backpressure = BackpressureManager::new_for_tests();
+        let consensus_adapter =
+            make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
+        let mut handler = ConsensusHandler::new(
+            epoch_store.clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            state.execution_scheduler().clone(),
+            consensus_adapter,
+            state.get_object_cache_reader().clone(),
+            Arc::new(ArcSwap::default()),
+            consensus_committee.clone(),
+            metrics,
+            Arc::new(throughput),
+            backpressure.subscribe(),
+        );
+
+        handler.handle_consensus_commit(commit).await;
+
+        use crate::consensus_handler::SequencedConsensusTransactionKey as SK;
+        use sui_types::messages_consensus::ConsensusTransactionKey as CK;
+
+        // Check that valid transactions were processed
+        let valid_eop_key = SK::External(CK::EndOfPublish(state.name));
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&valid_eop_key)
+                .unwrap(),
+            "Valid EndOfPublish should have been processed"
+        );
+
+        let valid_checkpoint_key = SK::External(CK::CheckpointSignatureV2(
+            state.name,
+            42,
+            valid_checkpoint_digest,
+        ));
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&valid_checkpoint_key)
+                .unwrap(),
+            "Valid CheckpointSignature should have been processed"
+        );
+
+        // Check that mismatched authority transactions were NOT processed (filtered out by verify_consensus_transaction)
+        let mismatched_eop_key = SK::External(CK::EndOfPublish(wrong_authority));
+        assert!(
+            !epoch_store.is_consensus_message_processed(&mismatched_eop_key).unwrap(),
+            "Mismatched EndOfPublish should NOT have been processed (filtered by verify_consensus_transaction)"
+        );
+
+        let mismatched_checkpoint_key = SK::External(CK::CheckpointSignatureV2(
+            wrong_authority,
+            42,
+            mismatched_checkpoint_digest,
+        ));
+        assert!(
+            !epoch_store.is_consensus_message_processed(&mismatched_checkpoint_key).unwrap(),
+            "Mismatched CheckpointSignature should NOT have been processed (filtered by verify_consensus_transaction)"
+        );
     }
 
     fn extract(v: Vec<VerifiedSequencedConsensusTransaction>) -> Vec<String> {
