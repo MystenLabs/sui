@@ -14,7 +14,7 @@ The main command for replaying a transaction follows. For all available flags an
 sui replay --digest <digest>
 ```
 
-After running this command, the tool generates a directory corresponding to the digest in `<cur_directory>/.replay/<digest>`, unless you set the `--output-dir` flag. The output directory will NOT be automatically overwritten if you attempt to replay the same transaction more than once. If overwriting this directory is indeed your intention, you allow it using the `--overwrite` flag.
+After running this command, the tool generates a directory corresponding to the digest in `<cur_directory>/.replay/<digest>`, unless you set the `--output-dir` flag. The output directory is **not** automatically overwritten if you attempt to replay the same transaction more than once. If you want to overwrite this directory, include the `--overwrite` flag.
 
 
 After successfully running the previous command, your console provides a response similar to the following:
