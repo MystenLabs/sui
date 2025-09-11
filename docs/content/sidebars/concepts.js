@@ -76,7 +76,9 @@ const concepts = [
 						},
 						items: ['concepts/dynamic-fields/tables-bags'],
 					},
-					'concepts/sui-move-concepts/conventions',
+					'concepts/sui-move-concepts/',
+					'concepts/sui-move-concepts/conventions'
+					
 				],
 			},
 			{
