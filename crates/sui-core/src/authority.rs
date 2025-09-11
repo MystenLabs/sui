@@ -3708,6 +3708,7 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
+        self.execution_scheduler.reconfigure();
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3743,6 +3744,7 @@ impl AuthorityState {
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
+        self.execution_scheduler.reconfigure();
         *execution_lock = new_epoch;
     }
 
