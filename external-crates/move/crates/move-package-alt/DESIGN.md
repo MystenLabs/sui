@@ -778,11 +778,21 @@ publication file.
  - if `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`;
    if that is missing then we error. The build environment determines how we resolve dependencies
    for the package
+   > Error: When creating a new test publication file, you must pass `--build-env <env>`, for
+   > example
+   >
+   >   sui client test-publish <pubfile> --build-env testnet
+   >
 
  - if `--build-env <env>` is present and different from the `build-env` in the file, we
    fail[^test-pub-mvp].
+   > Error: the addresses in `<pubfile>` are for dependencies built with `--build-env <pubfile-build-env>`;
+   > they should not be used for publishing with `--build-env <env>`
 
- - if `<file>` exists and `chain-id` doesn't match, we fail[^test-pub-mvp].
+ - if `<file>` exists and `chain-id` doesn't match, we don't need to explicitly fail[^test-pub-mvp]
+   in this stage, but the dependency addresses will be marked with `chain-id`, so we will get an
+   error from the pre-publication checks indicating that the chain id of the dependency is different
+   from the current chain ID
 
 We then load the package graph from the lockfile for `build-env` (repinning if necessary). We check
 that all of the dependencies besides the root package are present in `<file>`[^test-pub-mvp]. We then publish the
