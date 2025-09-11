@@ -8781,7 +8781,7 @@
             "required": [
               "reservation",
               "type",
-              "typeParam",
+              "typeArg",
               "withdrawFrom"
             ],
             "properties": {
@@ -8791,11 +8791,11 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "balanceWithdraw"
+                  "fundsWithdrawal"
                 ]
               },
-              "typeParam": {
-                "$ref": "#/components/schemas/SuiWithdrawTypeParam"
+              "typeArg": {
+                "$ref": "#/components/schemas/SuiWithdrawalTypeArg"
               },
               "withdrawFrom": {
                 "$ref": "#/components/schemas/SuiWithdrawFrom"
@@ -10456,7 +10456,7 @@
           "sender"
         ]
       },
-      "SuiWithdrawTypeParam": {
+      "SuiWithdrawalTypeArg": {
         "oneOf": [
           {
             "type": "object",
