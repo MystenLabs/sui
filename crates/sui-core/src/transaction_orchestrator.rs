@@ -295,6 +295,21 @@ where
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *verified_transaction.digest();
 
+        // Add transaction to WAL log.
+        let is_new_transaction = self
+            .pending_tx_log
+            .write_pending_transaction_maybe(&verified_transaction)
+            .await
+            .map_err(|e| {
+                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
+                QuorumDriverError::QuorumDriverInternalError(e)
+            })?;
+        if is_new_transaction {
+            debug!("Added transaction to WAL log for TransactionDriver");
+        } else {
+            debug!("Transaction already in pending_tx_log");
+        }
+
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
@@ -308,8 +323,11 @@ where
             .map(Duration::from_secs)
             .unwrap_or(WAIT_FOR_FINALITY_TIMEOUT);
 
-        // Allow duplicated submissions in tests.
-        let num_calls = if cfg!(msim) || in_antithesis() {
+        let num_submissions = if !is_new_transaction {
+            // No need to submit when the transaction is already being processed.
+            0
+        } else if cfg!(msim) || in_antithesis() {
+            // Allow duplicated submissions in tests.
             let r = rand::thread_rng().gen_range(1..=100);
             let n = if r <= 10 {
                 3
@@ -328,7 +346,7 @@ where
 
         // Wait for one of the execution futures to succeed, or all of them to fail.
         let mut execution_futures = FuturesUnordered::new();
-        for i in 0..num_calls {
+        for i in 0..num_submissions {
             // Generate jitter values outside the async block
             let should_delay = i > 0 && rand::thread_rng().gen_bool(0.8);
             let delay_ms = if should_delay {
@@ -382,28 +400,32 @@ where
 
         loop {
             tokio::select! {
-                r = execution_futures.next() => {
-                    match r {
-                        Some(Ok(resp)) => {
+                // This branch is disabled if execution_futures is empty.
+                Some(result) = execution_futures.next() => {
+                    match result {
+                        Ok(resp) => {
                             // First success gets returned.
                             debug!(?tx_digest, "Execution succeeded, returning response");
                             return Ok((resp, false));
                         }
-                        Some(Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator)) => {
+                        Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
                             debug!(
                                 "Transaction is already being processed"
                             );
-                            last_execution_error = Some(QuorumDriverError::PendingExecutionInTransactionOrchestrator);
+                            // Avoid overriding errors with transaction already being processed.
+                            if last_execution_error.is_none() {
+                                last_execution_error = Some(QuorumDriverError::PendingExecutionInTransactionOrchestrator);
+                            }
                         }
-                        Some(Err(e)) => {
+                        Err(e) => {
                             debug!(?e, "Execution attempt failed, wait for other attempts");
                             last_execution_error = Some(e);
                         }
-                        None => {
-                            // Only returns error when all attempts have failed.
-                            debug!("Execution attempts failed");
-                            return Err(last_execution_error.unwrap());
-                        }
+                    };
+
+                    // Last error must have been recorded.
+                    if execution_futures.is_empty() {
+                        return Err(last_execution_error.unwrap());
                     }
                 }
 
@@ -602,29 +624,6 @@ where
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
         let tx_digest = *verified_transaction.digest();
         debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-        // Add transaction to WAL log for TransactionDriver path
-        let is_new_transaction = self
-            .pending_tx_log
-            .write_pending_transaction_maybe(verified_transaction)
-            .await
-            .map_err(|e| {
-                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
-                QuorumDriverError::QuorumDriverInternalError(e)
-            })?;
-
-        if !is_new_transaction {
-            debug!(
-                ?tx_digest,
-                "Transaction already in pending_tx_log, returning PendingExecutionInTransactionOrchestrator"
-            );
-            // Return the special error to signal that we should wait for effects
-            return Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator);
-        }
-
-        debug!(
-            ?tx_digest,
-            "Added transaction to WAL log for TransactionDriver"
-        );
 
         let td_response = td
             .drive_transaction(
@@ -697,19 +696,12 @@ where
         client_addr: Option<SocketAddr>,
     ) -> SuiResult<impl Future<Output = SuiResult<QuorumDriverResult>> + '_> {
         let tx_digest = *transaction.digest();
+
         let ticket = self.notifier.register_one(&tx_digest);
-        // TODO(william) need to also write client adr to pending tx log below
-        // so that we can re-execute with this client addr if we restart
-        if self
-            .pending_tx_log
-            .write_pending_transaction_maybe(&transaction)
-            .await?
-        {
-            debug!(?tx_digest, "no pending request in flight, submitting.");
-            self.quorum_driver()
-                .submit_transaction_no_ticket(request.clone(), client_addr)
-                .await?;
-        }
+        self.quorum_driver()
+            .submit_transaction_no_ticket(request.clone(), client_addr)
+            .await?;
+
         // It's possible that the transaction effects is already stored in DB at this point.
         // So we also subscribe to that. If we hear from `effects_await` first, it means
         // the ticket misses the previous notification, and we want to ask quorum driver
@@ -983,7 +975,7 @@ where
         });
     }
 
-    pub fn load_all_pending_transactions(&self) -> SuiResult<Vec<VerifiedTransaction>> {
+    fn load_all_pending_transactions(&self) -> SuiResult<Vec<VerifiedTransaction>> {
         self.pending_tx_log.load_all_pending_transactions()
     }
 }
