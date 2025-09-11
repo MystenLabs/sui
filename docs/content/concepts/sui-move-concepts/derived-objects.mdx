@@ -8,9 +8,9 @@ Derived objects enable you to deterministically compute object IDs from a parent
 
 Most objects on Sui get an ID assigned to them upon object creation that is guarnateed to be unique to every other object on the network. Derived objects, on the other hand, have an ID that is claimed from the mapping of a parent object and a key. This `parent-key` mapping ensures that the claimed ID is a singular namespace because the objects derived from the parent object (unique ID that exists on-chain) are paired with individual keys. It's this mapping that makes the resulting ID of derived objects deterministic.
 
-When you claim an ID from the `derived_object` module, you pass the parent object and key. The parent object already exists on-chain, either at package publish time or through a transaction with the smart contract. The parent object is [shared](/concepts/object-ownership/shared.mdx) so that any user can create a derived object using the same parent. 
+When you claim an ID from the `derived_object` module, you pass the parent object and key. The parent object already exists on-chain, either at package publish time or through a transaction with the smart contract. The parent object can be [shared, owned, party, or even a wrapped UID](../object-ownership.mdx).  
 
-The key is typically an address or other object ID, which are themselves unique. This is not a requirement, though, as the `derived_object` module uses a `ClaimedStatus` enum to mark already claimed IDs as `Reserved`. Trying to claim an ID with a `Reserved` enum value results in transaction failure. So, you could use something like the US lowercase alphabet as your key, but would then be limited to 24 derived objects from one parent.
+The key can be an address or other object ID, which are themselves unique. This is not a requirement, though, as the `derived_object` module uses a `ClaimedStatus` enum to mark already claimed IDs as `Reserved`. Trying to claim an ID with a `Reserved` enum value results in transaction failure. So, you could use something like the US lowercase alphabet as your key, but would then be limited to 26 derived objects from one parent.
 
 Although claiming the ID of the derived object requires a parent object, the derived object is not a child of the parent. This is an important distinction as the the lack of a hierarchal relationship means that using the derived object as inputs to your transactions does not require sequential processing through the parent. The derived object is its own entity; the parent only exists to ensure its uniqueness. This relationship provides parallelization that is not possible with parent-child relationships.
 
@@ -36,8 +36,18 @@ Object IDs can be computed ahead of time using `derived_object::derive_address(p
 Because addresses are computable, objects can receive transfers even before they exist. Send assets to a derived address, then create the object later to claim them. This enables patterns like:
 
 - Pre-funding accounts before user onboarding.
-- Conditional object creation based on received assets.
+- Conditional object creation based on received assets. So, an object is created only after SUI is received.
 - Cross-chain bridging to deterministic destinations.
+
+Players can compute loot box addresses before opening. This allows for pre-funding, conditional reveals, and parallel processing.
+
+```move
+public fun derive_loot_box_address(game_id: ID, player: address, box_type: u8): address {
+    let key = bcs::to_bytes(&player);
+    vector::append(&mut key, bcs::to_bytes(&box_type));
+    derived_object::derive_address(game_id, key)
+}
+```
 
 ### One-per-key uniqueness
 
@@ -57,7 +67,7 @@ These capabilities combine to enable entirely new design patterns that were prev
 
 **Off-chain benefits**
 
--	Fewer hops: Clients can compute or look up the derived ID directly instead of going through the parent.
+-	Fewer hops: Clients can compute or look up the derived object ID directly without requiring a sequential operation to find it through the parent.
 -	Better discoverability/indexing: Explorers/SDKs can infer or cache the parent-key namespace with fewer sequential queries.
 -	Lean SDK calls: Less querying needed, minimizing the SDK codebase and requiring less network traffic.
 
