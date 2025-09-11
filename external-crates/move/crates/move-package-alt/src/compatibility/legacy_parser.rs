@@ -29,6 +29,8 @@ use super::{legacy::LegacyData, parse_address_literal};
 
 const EMPTY_ADDR_STR: &str = "_";
 
+/// For packages that do not have a name defined, we are using a predefined name
+/// to be able to identify their status.
 pub(crate) const NO_NAME_LEGACY_PACKAGE_NAME: &str = "unnamed_legacy_package";
 
 pub const PACKAGE_NAME: &str = "package";

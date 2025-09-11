@@ -154,10 +154,7 @@ impl<F: MoveFlavor> Package<F> {
         if let Some(legacy_data) = self.legacy_data.as_ref() {
             &legacy_data.legacy_name
         } else {
-            self.metadata
-                .name
-                .as_ref()
-                .as_str()
+            self.metadata.name.as_ref().as_str()
         }
     }
 
