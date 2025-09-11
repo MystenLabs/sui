@@ -23,6 +23,7 @@ use sui_types::{
     messages_consensus::TimestampMs,
     object::Object,
     storage::{EpochInfo, ObjectKey},
+    transaction::Transaction,
 };
 use tonic::{
     body::BoxBody,
@@ -373,54 +374,50 @@ impl KeyValueStoreReader for BigTableClient {
         &mut self,
         transaction_digests: &[TransactionDigest],
     ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>> {
-        // Fetch just the events for the transaction.
-        let response = self
-            .multi_get(
-                TRANSACTIONS_TABLE,
-                transaction_digests
-                    .iter()
-                    .map(|tx| tx.inner().to_vec())
-                    .collect(),
+        let query = self.multi_get(
+            TRANSACTIONS_TABLE,
+            transaction_digests
+                .iter()
+                .map(|tx| tx.inner().to_vec())
+                .collect(),
                 Some(RowFilter {
                     filter: Some(Filter::ColumnQualifierRegexFilter(
-                        format!("^({EVENTS_COLUMN_QUALIFIER}|{TIMESTAMP_COLUMN_QUALIFIER})$")
+                        format!("^({EVENTS_COLUMN_QUALIFIER}|{TIMESTAMP_COLUMN_QUALIFIER}|{TRANSACTION_COLUMN_QUALIFIER})$")
                             .into(),
                     )),
                 }),
-            )
-            .await?;
+        );
+        let mut results = vec![];
 
-        transaction_digests
-            .iter()
-            .zip(response)
-            .map(|(&digest, row)| {
-                let mut transaction_events: Option<Option<TransactionEvents>> = None;
-                let mut timestamp_ms = 0;
-
-                for (column, value) in row {
-                    match std::str::from_utf8(&column)? {
-                        EVENTS_COLUMN_QUALIFIER => {
-                            transaction_events = Some(bcs::from_bytes(&value)?)
-                        }
-                        TIMESTAMP_COLUMN_QUALIFIER => timestamp_ms = bcs::from_bytes(&value)?,
-                        _ => error!("unexpected column {:?} in transactions table", column),
-                    }
+        for row in query.await? {
+            let mut transaction_events: Option<Option<TransactionEvents>> = None;
+            let mut timestamp_ms = 0;
+            let mut transaction: Option<Transaction> = None;
+            for (column, value) in row {
+                match std::str::from_utf8(&column)? {
+                    EVENTS_COLUMN_QUALIFIER => transaction_events = Some(bcs::from_bytes(&value)?),
+                    TRANSACTION_COLUMN_QUALIFIER => transaction = Some(bcs::from_bytes(&value)?),
+                    TIMESTAMP_COLUMN_QUALIFIER => timestamp_ms = bcs::from_bytes(&value)?,
+                    _ => error!("unexpected column {:?} in transactions table", column),
                 }
+            }
+            let events = transaction_events
+                .context("events field is missing")?
+                .map(|e| e.data)
+                .unwrap_or_default();
 
-                let events = transaction_events
-                    .context("events field is missing")?
-                    .map(|e| e.data)
-                    .unwrap_or_default();
+            let transaction = transaction.context("transaction field is missing")?;
 
-                Ok((
-                    digest,
-                    TransactionEventsData {
-                        events,
-                        timestamp_ms,
-                    },
-                ))
-            })
-            .collect()
+            results.push((
+                transaction.digest().clone(),
+                TransactionEventsData {
+                    events,
+                    timestamp_ms,
+                },
+            ));
+        }
+
+        Ok(results)
     }
 }
 
