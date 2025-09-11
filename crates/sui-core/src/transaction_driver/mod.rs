@@ -36,7 +36,9 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
-    validator_client_monitor::{ValidatorClientMetrics, ValidatorClientMonitor},
+    validator_client_monitor::{
+        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
+    },
 };
 use sui_config::NodeConfig;
 
@@ -216,6 +218,7 @@ where
         let auth_agg = self.authority_aggregator.load();
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
+        let start_time = Instant::now();
 
         let (name, submit_txn_result) = self
             .submitter
@@ -230,7 +233,8 @@ where
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
-        self.certifier
+        let result = self
+            .certifier
             .get_certified_finalized_effects(
                 &auth_agg,
                 &self.client_monitor,
@@ -240,7 +244,16 @@ where
                 submit_txn_result,
                 options,
             )
-            .await
+            .await;
+
+        self.client_monitor
+            .record_interaction_result(OperationFeedback {
+                authority_name: name,
+                display_name: auth_agg.get_display_name(&name),
+                operation: OperationType::Finalization,
+                result: Ok(start_time.elapsed()),
+            });
+        result
     }
 
     fn enable_reconfig(
