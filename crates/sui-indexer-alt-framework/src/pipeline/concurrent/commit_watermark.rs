@@ -550,4 +550,130 @@ mod tests {
         setup.cancel.cancel();
         let _ = setup.commit_watermark_handle.await;
     }
+
+    #[tokio::test]
+    async fn test_double_checkpoint_stalls_progress() {
+        // This test reproduces the bug where receiving a checkpoint twice
+        // causes batch_rows to exceed total_rows, stalling progress because
+        // is_complete() will never return true (it checks batch_rows == total_rows)
+
+        let config = CommitterConfig::default();
+        let initial_watermark = Some(CommitterWatermark {
+            checkpoint_hi_inclusive: 0,
+            ..Default::default()
+        });
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
+
+        // Send checkpoint 1 complete
+        let checkpoint_1 = create_watermark_part_for_checkpoint(1);
+        setup
+            .watermark_tx
+            .send(vec![checkpoint_1.clone()])
+            .await
+            .unwrap();
+
+        // Wait for checkpoint 1 to be processed
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Verify checkpoint 1 was committed
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+
+        // Now send complete checkpoint 3 out of order.
+        let checkpoint_3 = WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: 3,
+                epoch_hi_inclusive: 3,
+                tx_hi: 300,
+                timestamp_ms_hi_inclusive: 3000,
+            },
+            batch_rows: 8,
+            total_rows: 8,
+        };
+        setup
+            .watermark_tx
+            .send(vec![checkpoint_3.clone()])
+            .await
+            .unwrap();
+
+        // Wait for checkpoint 3 to be added to precommitted
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Now send checkpoint 2 partially (3 out of 10 rows)
+        let checkpoint_2_partial = WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: 2,
+                epoch_hi_inclusive: 2,
+                tx_hi: 200,
+                timestamp_ms_hi_inclusive: 2000,
+            },
+            batch_rows: 3,
+            total_rows: 10,
+        };
+        setup
+            .watermark_tx
+            .send(vec![checkpoint_2_partial])
+            .await
+            .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Checkpoint 2 should not be committed yet (incomplete)
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+
+        // Now send checkpoint 3 again (duplicate).
+        // This simulates a scenario where a checkpoint is processed twice
+        // due to retry logic or streaming. The batch_rows will now be 16
+        // while total_rows remains 8, causing is_complete to return false.
+        setup.watermark_tx.send(vec![checkpoint_3]).await.unwrap();
+
+        // Process the duplicate
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+        // Send the remaining rows for checkpoint 2 (7 rows)
+        let checkpoint_2_rest = WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: 2,
+                epoch_hi_inclusive: 2,
+                tx_hi: 200,
+                timestamp_ms_hi_inclusive: 2000,
+            },
+            batch_rows: 7,
+            total_rows: 10,
+        };
+        setup
+            .watermark_tx
+            .send(vec![checkpoint_2_rest])
+            .await
+            .unwrap();
+
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // At this point, checkpoint 2 has complete rows so we should have progressed.
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+
+        // Send checkpoint 4 and 5 to demonstrate the stall
+        let checkpoint_4 = create_watermark_part_for_checkpoint(4);
+        setup.watermark_tx.send(vec![checkpoint_4]).await.unwrap();
+        let checkpoint_5 = create_watermark_part_for_checkpoint(5);
+        setup.watermark_tx.send(vec![checkpoint_5]).await.unwrap();
+
+        // Give some time for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // Even with checkpoint 4 and 5 complete, we're still stuck at checkpoint 2 because
+        // is_complete would return false for checkpoint 3.
+        let final_watermark = setup.store.get_watermark();
+        assert_eq!(
+            final_watermark.checkpoint_hi_inclusive, 2,
+            "Pipeline is stalled - cannot progress checkpoint 3 due to batch_rows > total_rows"
+        );
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
 }
