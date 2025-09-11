@@ -305,6 +305,120 @@ only be used in the case of a legacy package whose address isn't recorded in its
 In the dependency graph, we store a dependency graph for each environment. See the Move.lock example
 above.
 
+## Selecting an environment
+
+In the new system, each environment potentially represents an entirely different dependency graph,
+so the environment that we choose matters a great deal, and we must always be operating in the
+context of an environment. However, we'd like the environment selection process to be as unintrusive
+as possible (while still doing the "right thing").
+
+The first principle of environment selection is that all commands (build, test, publish, etc) should
+select environments in the same way.
+
+The second principle is that we should only allow publishing to a chain with a chain ID that matches
+the chain that the dependencies were published for and that the root package was built for (although
+see below for localnet publication).
+
+Since the established publication workflow publishes publishes to the chain identified by the active
+CLI environment, we use the active environment to select the environment to build for. However, we
+need to be careful because while the manifest environment names are global and have associated chain
+IDs (in the sense that they are contained in manifest files and used by dependents), CLI
+environments are local to a machine and may encapsulate things like different RPC endpoints as well
+as the actual underlying chain.
+
+Putting these constraints together leads to a somewhat complicated process for selecting the build
+environment. Suppose that the active CLI environment is named "e" and that the chain ID for the
+associated RPC is "i"[^cached-chain-id] (and the user hasn't provided a command-line argument to
+override):
+
+
+1. If the exact pair ("e", "i") is contained in the `[environments]` table of the manifest, we use
+   that as the build environment
+
+2. If an environment named "e" exists in the manifest but the associated chain ID "i'" doesn't match, we
+   produce an error (perhaps this could be a warning during build/test and an error on publish).
+   This can happen if the user messes up their manifest or local environment, or if the network has
+   been wiped and restarted
+    > Error: Environment `e` has chain ID `i` in your local environment, but `Move.toml` expects `e`
+    > to have chain ID `i'`; this may indicate that `e` has been wiped or that you have a
+    > misconfigured environment.
+
+3. If no environment named "e" exists in the manifest, we use the chain ID to try to select the
+   correct environment. This situation might happen e.g. if the user decides to call their local
+   environment `main` instead of `mainnet`, or if they have `testnet_1`, `testnet_2`, etc. If there
+   is a _unique_ environment named `e'` with chain ID `i`, we choose that environment and emit an
+   info message.
+    > Note: `Move.toml` does not define an `e` environment; building for `e'` instead
+
+4. If there are multiple environments `e1`, `e2` in the manifest having chain ID `i`, we produce an
+   error, requiring the user to specify the build env. This may happen if there are `testnet_alpha`
+   and `testnet_beta` environments in the manifest and the user's active CLI environment is
+   `testnet`.
+    > Error: There is no `e` environment in the manifest, but environments `e1` and `e2` are
+    > available. Run `sui move build --build-env e1` or `sui move build --build-env e2`
+
+5. If there are no environments in the manifest with chain ID `i`, then we assume `i` is an
+   ephemeral network (e.g. `localnet` or `devnet`). If `Pub.e.toml` exists, we will use the
+   `build-env` from that file (Note that if the chain-id in `Pub.e.toml` doesn't match and we are
+   publishing, we will get warning or error from the chain-id consistency checks).
+
+6. If there is no `Pub.e.toml` file, we produce an error, depending on the command:
+   For build:
+    > Error: Your active environment `e` is not present in `Move.toml`, so you must specify the
+    > environment to use to determine dependencies. Pass `--build-env <env-name>`, e.g.
+    >
+    >   sui move build --build-env testnet
+    >
+    > Note: adding local networks to `Move.toml` is discouraged; see `sui client test-publish --help`
+    > for information on managing local networks.
+
+   TODO: this message might be confusing since we have implicit environments
+
+   For publish:
+    > Error: Your active environment `e` is not present in `Move.toml`, so you cannot publish to
+    > `e`.
+    >
+    >   - If you want to create a temporary publication on `e` and record the addresses in a local
+    >     file, use the `test-publish` command instead
+    >
+    >        sui client test-publish --help
+    >
+    >   - If you want to publish to `e` and record the addresses in the shared `Published.toml`
+    >     file, you will need to add the following to `Move.toml`:
+    >
+    >        [environments]
+    >        e = "i"
+    >
+
+[^cached-chain-id]: We want to support offline builds, which means we need to have the CLI locally
+    cache the chain IDs for each environment. We will update that cache whenever we actually contact
+    an endpoint and whenever we update the local set of environments (and of course we must make
+    sure it is up-to-date before publishing)
+
+
+## Modes
+
+We had considered using an environments like feature to support things like test-only or spec-only
+dependencies (like the `[dev-dependencies]` section in rust or the old system). However, this leads
+to a lot of complexity around integrating environments and modes.
+
+Instead, we add an optional `modes` field to each dependency which contains a list of the modes to
+enable the dependency for (if missing, we include the dep for all modes).
+
+The set of allowed modes should be determined the same way they are for the Move compiler.
+
+The advantage of this approach is that in each environment, each dependency has a well-defined set
+of modes, and the dependency graph for a particular mode is always a subgraph of the dependency
+graph for environment ignoring modes. Therefore we don't have to worry about conflicts between
+environment overrides and mode overrides.
+
+Mode filtering happens after package graph generation but before compilation. Since linkage happens
+after compilation, that means we won't introduce any artificial dependency conflicts by treating all
+modes simultaneously for the earlier stages. Keeping all modes through pinning means that we can pin
+once-and-for-all for each environment. It also means that we fetch test-only deps even when not
+building for test, which is good because it means we support offline test builds even if you've only
+done a non-test build before (or vice-versa).
+
 ## From start to package graph
 
 1. check for repin

@@ -64,7 +64,7 @@ impl PackagePath {
     }
 
     pub fn publications_path(&self) -> PathBuf {
-        self.0.join("Publications.toml")
+        self.0.join("Published.toml")
     }
 
     pub fn publocal_path(&self) -> PathBuf {
