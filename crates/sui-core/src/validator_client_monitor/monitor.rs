@@ -76,9 +76,10 @@ where
         }
     }
 
-    fn update_cached_scores_all_monitors(&self, authority_agg: &AuthorityAggregator<A>) {
+    fn update_cached_scores_all_monitors(&self) {
+        let authority_agg = self.authority_aggregator.load();
         for monitor in self.monitors.values() {
-            monitor.update_cached_scores(authority_agg);
+            monitor.update_cached_scores(&authority_agg);
         }
     }
 
@@ -154,7 +155,7 @@ where
                 }
             }
 
-            self.update_cached_scores_all_monitors(&authority_agg);
+            self.update_cached_scores_all_monitors();
         }
     }
 }

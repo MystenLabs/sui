@@ -174,7 +174,7 @@ impl TransactionSubmitter {
     }
 
     #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(validator_display_name = ?display_name))]
-    async fn submit_transaction_once<A>(
+    pub(crate) async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
         raw_request: &RawSubmitTxRequest,
