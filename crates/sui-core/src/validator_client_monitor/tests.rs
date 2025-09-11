@@ -282,68 +282,16 @@ mod client_stats_tests {
             0.1
         );
 
-        // Second update uses EMA
+        // Second update calculates arithmetic mean of the moving window
         stats.update_average_latency(OperationType::Submit, Duration::from_millis(200));
         let latency = stats
             .average_latencies
             .get(&OperationType::Submit)
             .unwrap()
             .get();
-        // With decay factor 0.9, new value = 0.1 * 0.9 + 0.2 * (1 - 0.9) = 0.09 + 0.02 = 0.11
-        assert!((latency - 0.11).abs() < 0.001);
-    }
-
-    #[tokio::test]
-    async fn test_global_stats_update() {
-        let config = ValidatorClientMonitorConfig::default();
-        let mut stats = ClientObservedStats::new(config);
-
-        // First update sets initial value
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(100));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.1); // 100ms = 0.1s
-
-        // Update with higher latency - should immediately jump to new max
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(300));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.3); // 300ms = 0.3s
-
-        // Update with lower latency - should apply decay
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(100));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        // With decay factor 0.99: 0.3 * 0.99 + 0.1 * (1 - 0.99) = 0.297 + 0.001 = 0.298
-        assert!((max_latency.get() - 0.298).abs() < 0.001);
-
-        // Another lower update to verify continued decay
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(50));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        // With decay factor 0.99: 0.298 * 0.99 + 0.05 * (1 - 0.99) = 0.29502 + 0.0005 = 0.29552
-        assert!((max_latency.get() - 0.29552).abs() < 0.001);
-
-        // Update with higher latency again - should jump to new max
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(500));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.5); // 500ms = 0.5s
+        println!("latency: {}", latency);
+        // With MovingWindow: (0.1 + 0.2) / 2 = 0.15
+        assert!((latency - 0.15).abs() < 0.001);
     }
 
     #[tokio::test]
@@ -423,79 +371,11 @@ mod client_stats_tests {
             .unwrap()
             .reliability
             .get();
-        // With decay factor 0.5: 1.0 * 0.5 + 0.0 * 0.5 = 0.5
-        assert_eq!(new_reliability, 0.5);
+        assert!((new_reliability - (2.0 / 3.0)).abs() < 1e-10);
     }
 
     #[tokio::test]
-    async fn test_global_max_latency_with_multiple_validators() {
-        let config = ValidatorClientMonitorConfig::default();
-        let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
-
-        let validators = create_test_validator_names(3);
-
-        // Validator 1: 100ms latency
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validators[0],
-                display_name: validators[0].concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(100)),
-            },
-            &metrics,
-        );
-
-        // Check global max is 100ms
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.1);
-
-        // Validator 2: 50ms latency (lower, should apply decay)
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validators[1],
-                display_name: validators[1].concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(50)),
-            },
-            &metrics,
-        );
-
-        // Max should decay towards 50ms
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        // 0.1 * 0.99 + 0.05 * (1 - 0.99) = 0.099 + 0.0005 = 0.0995
-        assert!((max_latency.get() - 0.0995).abs() < 0.001);
-
-        // Validator 3: 200ms latency (higher, should immediately become new max)
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validators[2],
-                display_name: validators[2].concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(200)),
-            },
-            &metrics,
-        );
-
-        // Max should jump to 200ms
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.2);
-    }
-
-    #[tokio::test]
-    async fn test_decay_factor_differences() {
+    async fn test_moving_window_average_differences() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
         let metrics = create_test_metrics();
@@ -524,14 +404,6 @@ mod client_stats_tests {
             .get();
         assert_eq!(validator_latency, 0.1);
 
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap()
-            .get();
-        assert_eq!(max_latency, 0.1);
-
         // Update with lower value (50ms)
         stats.record_interaction_result(
             OperationFeedback {
@@ -543,7 +415,7 @@ mod client_stats_tests {
             &metrics,
         );
 
-        // Validator latency should decay faster (factor 0.1)
+        // Validator latency should average now at 75ms
         let validator_latency = stats
             .validator_stats
             .get(&validator)
@@ -552,24 +424,7 @@ mod client_stats_tests {
             .get(&OperationType::Submit)
             .unwrap()
             .get();
-        // old * decay + new * (1-decay) = 0.1 * 0.9 + 0.05 * (1 - 0.9) = 0.09 + 0.005 = 0.095
-        assert!((validator_latency - 0.095).abs() < 0.001);
-
-        // Max latency should decay slower (factor 0.01)
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap()
-            .get();
-        // Since new value (0.05) is less than current (0.1), we apply decay
-        // old * decay + new * (1-decay) = 0.1 * 0.99 + 0.05 * (1 - 0.99) = 0.099 + 0.0005 = 0.0995
-        assert!((max_latency - 0.0995).abs() < 0.001);
-
-        // Since max decays slower, it should be closer to the original value than validator average
-        // validator_latency = 0.055, max_latency = 0.0505
-        // Actually validator average went lower, so this assertion was wrong
-        // Let's just verify both decayed correctly
+        assert!((validator_latency - 0.075).abs() < 1e-10);
     }
 
     #[tokio::test]
