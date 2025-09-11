@@ -453,12 +453,20 @@ impl ModuleCache {
             | Type::U16
             | Type::U32
             | Type::U256 => DepthFormula::constant(1),
-            // we should not see the reference here, we could instead give an invariant violation
-            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+            Type::Vector(ty) => {
                 let mut inner = self.calculate_depth_of_type(ty, depth_cache)?;
                 // add 1 for the vector itself
                 inner.add(1);
                 inner
+            }
+            Type::Reference(ty) | Type::MutableReference(ty) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(
+                            format!("Reference type: {:?} encountered in depth calculation", ty)
+                                .to_owned(),
+                        ),
+                );
             }
             Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
             Type::Datatype(cache_idx) => {
