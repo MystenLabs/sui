@@ -13,11 +13,10 @@ use crate::{
         metrics::TransactionDriverMetrics,
         SubmitTransactionOptions,
     },
-    validator_client_monitor::ValidatorClientMonitor,
+    validator_client_monitor::{TxType, ValidatorClientMonitor},
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
-use mysten_metrics::TxType;
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
@@ -247,9 +246,7 @@ fn create_test_executed_data() -> ExecutedData {
 async fn test_successful_certified_effects() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -356,9 +353,7 @@ async fn test_successful_certified_effects() {
 async fn test_transaction_rejected_non_retriable() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -422,9 +417,7 @@ async fn test_transaction_rejected_non_retriable() {
 async fn test_transaction_rejected_retriable() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -489,9 +482,7 @@ async fn test_transaction_rejected_retriable() {
 async fn test_transaction_rejected_with_conflicts() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -558,9 +549,7 @@ async fn test_transaction_rejected_with_conflicts() {
 async fn test_transaction_expired() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -621,9 +610,7 @@ async fn test_transaction_expired() {
 async fn test_mixed_rejected_and_expired() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -745,9 +732,7 @@ async fn test_mixed_rejected_and_expired() {
 async fn test_mixed_rejected_reasons() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -1033,9 +1018,7 @@ async fn test_mixed_rejected_reasons() {
 async fn test_forked_execution() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -1120,9 +1103,7 @@ async fn test_forked_execution() {
 async fn test_aborted_with_multiple_effects() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -1209,9 +1190,7 @@ async fn test_aborted_with_multiple_effects() {
 async fn test_full_effects_retry_loop() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -1298,9 +1277,7 @@ async fn test_full_effects_retry_loop() {
 async fn test_full_effects_digest_mismatch() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -1385,9 +1362,7 @@ async fn test_full_effects_digest_mismatch() {
 async fn test_request_retrier_exhaustion() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
