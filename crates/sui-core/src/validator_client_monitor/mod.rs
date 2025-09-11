@@ -20,7 +20,19 @@ use std::time::Duration;
 pub enum OperationType {
     Submit,
     Effects,
+    Finalization,
     HealthCheck,
+}
+
+impl OperationType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            OperationType::Submit => "submit",
+            OperationType::Effects => "effects",
+            OperationType::Finalization => "finalization",
+            OperationType::HealthCheck => "health_check",
+        }
+    }
 }
 
 /// Feedback from TransactionDriver operations
