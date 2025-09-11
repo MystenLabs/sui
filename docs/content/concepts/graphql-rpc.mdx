@@ -243,10 +243,9 @@ Cursors are used to bound results from below (with `after`) and above (with `bef
 
 #### Consistency
 
-Cursors for queries that paginate live objects also guarantee **consistent** pagination. If the first paginated query reads the state of the network at checkpoint `X`, then a future call to fetch the next page of results using the cursors returned by the first query continues to read from the network at checkpoint `X`, even if data for future checkpoints is now available.
+Cursors for queries that paginate live objects also guarantee **consistent** pagination. If the first paginated query reads the state of the network at checkpoint `X`, then a future call to fetch the next page of results using the cursors returned by the first query continues to read from the network at checkpoint `X`, even if data for future checkpoints is now available. At the time of writing the available range offers roughly 1 hour to finish pagination.
 
 This property requires that cursors that are used together (for example when supplying an `after` and `before` bound) are fixed on the same checkpoint, otherwise the query produces an error.
-
 
 ### Page limits
 
@@ -310,8 +309,7 @@ Different queries are subject to their own retention policies. For example, live
 }
 ```
 
-The results are the first and last checkpoint for which pagination continues to work and produce a consistent result. At the time of writing the available range offers roughly 1 hour to finish pagination.
-
+The results are the first and last checkpoint for which pagination continues to work and produce a consistent result.
 ## Related links
 
 <RelatedLink to="/guides/developer/getting-started/graphql-rpc.mdx" />
