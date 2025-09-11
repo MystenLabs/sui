@@ -415,7 +415,7 @@ impl KeyValueStoreReader for BigTableClient {
             let transaction = transaction.context("transaction field is missing")?;
 
             results.push((
-                transaction.digest().clone(),
+                *transaction.digest(),
                 TransactionEventsData {
                     events,
                     timestamp_ms,
