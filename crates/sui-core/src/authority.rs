@@ -3710,6 +3710,8 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
+        self.execution_scheduler
+            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3742,9 +3744,12 @@ impl AuthorityState {
                 .map(|c| *c.sequence_number())
                 .unwrap_or_default(),
         );
+        self.execution_scheduler
+            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
+
         *execution_lock = new_epoch;
     }
 

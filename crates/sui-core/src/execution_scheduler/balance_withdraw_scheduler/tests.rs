@@ -27,7 +27,7 @@ use tracing::debug;
 #[derive(Clone)]
 struct TestScheduler {
     mock_read: Arc<MockBalanceRead>,
-    schedulers: BTreeMap<String, Arc<BalanceWithdrawScheduler>>,
+    schedulers: BTreeMap<String, BalanceWithdrawScheduler>,
 }
 
 impl TestScheduler {

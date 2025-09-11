@@ -4943,6 +4943,11 @@ impl AuthorityPerEpochStore {
             .map(|estimator| estimator.get_observations())
             .unwrap_or_default()
     }
+
+    /// Whether this node is a validator in this epoch.
+    pub fn is_validator(&self) -> bool {
+        self.committee.authority_exists(&self.name)
+    }
 }
 
 impl ExecutionComponents {
