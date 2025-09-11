@@ -9,7 +9,6 @@ use std::{
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
-use mysten_metrics::TxType;
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
@@ -39,7 +38,7 @@ use crate::{
         ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResult,
         WaitForEffectsRequest, WaitForEffectsResponse,
     },
-    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
+    validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
 };
 
 #[cfg(test)]
@@ -61,7 +60,7 @@ impl EffectsCertifier {
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor>,
         tx_digest: &TransactionDigest,
         tx_type: TxType,
         // This keeps track of the current target for getting full effects.
@@ -260,7 +259,7 @@ impl EffectsCertifier {
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor>,
         tx_digest: &TransactionDigest,
         tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
@@ -553,7 +552,7 @@ impl EffectsCertifier {
         name: AuthorityName,
         display_name: String,
         client: &Arc<SafeClient<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor>,
         raw_request: &RawWaitForEffectsRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<WaitForEffectsResponse, SuiError>

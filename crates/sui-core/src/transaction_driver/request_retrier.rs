@@ -33,7 +33,7 @@ pub(crate) struct RequestRetrier<A: Clone> {
 impl<A: Clone> RequestRetrier<A> {
     pub(crate) fn new(
         auth_agg: &Arc<AuthorityAggregator<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor>,
     ) -> Self {
         let selected_validators = client_monitor.select_shuffled_preferred_validators(
             &auth_agg.committee,
@@ -127,6 +127,7 @@ mod tests {
     use crate::{
         authority_aggregator::{AuthorityAggregatorBuilder, TimeoutConfig},
         test_authority_clients::MockAuthorityApi,
+        validator_client_monitor::TxType,
     };
 
     use super::*;
@@ -143,7 +144,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
-        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
         let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
 
         for _ in 0..4 {
@@ -163,7 +164,8 @@ mod tests {
 
         // Add retriable errors.
         {
-            let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+            let client_monitor =
+                Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
             let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
 
             // 25% stake.
@@ -199,7 +201,8 @@ mod tests {
 
         // Add mix of retriable and non-retriable errors.
         {
-            let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+            let client_monitor =
+                Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
             let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
 
             // 25% stake retriable error.

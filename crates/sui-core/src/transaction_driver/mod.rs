@@ -22,7 +22,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
-use mysten_metrics::{monitored_future, TxType};
+use mysten_metrics::monitored_future;
 use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, error::UserInputError,
@@ -37,7 +37,8 @@ use crate::{
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
     validator_client_monitor::{
-        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
+        OperationFeedback, OperationType, TxType, ValidatorClientMetrics,
+        ValidatorClientMonitorPool,
     },
 };
 use sui_config::NodeConfig;
@@ -56,7 +57,7 @@ pub struct TransactionDriver<A: Clone> {
     metrics: Arc<TransactionDriverMetrics>,
     submitter: TransactionSubmitter,
     certifier: EffectsCertifier,
-    client_monitor: Arc<ValidatorClientMonitor<A>>,
+    client_monitor_pool: Arc<ValidatorClientMonitorPool<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -76,8 +77,8 @@ where
         let monitor_config = node_config
             .and_then(|nc| nc.validator_client_monitor_config.clone())
             .unwrap_or_default();
-        let client_monitor =
-            ValidatorClientMonitor::new(monitor_config, client_metrics, shared_swap.clone());
+        let client_monitor_pool =
+            ValidatorClientMonitorPool::new(monitor_config, client_metrics, shared_swap.clone());
 
         let driver = Arc::new(Self {
             authority_aggregator: shared_swap,
@@ -85,7 +86,7 @@ where
             metrics: metrics.clone(),
             submitter: TransactionSubmitter::new(metrics.clone()),
             certifier: EffectsCertifier::new(metrics),
-            client_monitor,
+            client_monitor_pool,
         });
 
         driver.enable_reconfig(reconfig_observer);
@@ -219,12 +220,13 @@ where
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
+        let client_monitor = self.client_monitor_pool.get_monitor(tx_type);
 
         let (name, submit_txn_result) = self
             .submitter
             .submit_transaction(
                 &auth_agg,
-                &self.client_monitor,
+                &client_monitor,
                 tx_digest,
                 amplification_factor,
                 raw_request,
@@ -237,7 +239,7 @@ where
             .certifier
             .get_certified_finalized_effects(
                 &auth_agg,
-                &self.client_monitor,
+                &client_monitor,
                 tx_digest,
                 tx_type,
                 name,
@@ -246,13 +248,12 @@ where
             )
             .await;
 
-        self.client_monitor
-            .record_interaction_result(OperationFeedback {
-                authority_name: name,
-                display_name: auth_agg.get_display_name(&name),
-                operation: OperationType::Finalization,
-                result: Ok(start_time.elapsed()),
-            });
+        client_monitor.record_interaction_result(OperationFeedback {
+            authority_name: name,
+            display_name: auth_agg.get_display_name(&name),
+            operation: OperationType::Finalization,
+            result: Ok(start_time.elapsed()),
+        });
         result
     }
 
