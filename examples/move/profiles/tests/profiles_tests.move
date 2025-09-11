@@ -115,8 +115,14 @@ fun test_multiple_users_different_addresses() {
     // Alice creates profile
     let alice_profile = registry.new_profile(b"alice_user".to_string(), scenario.ctx());
 
+    alice_profile.share();
     // Switch to Bob
     scenario.next_tx(BOB);
+
+    let alice_profile_id = derived_object::derive_address(object::id(&registry), ALICE);
+
+    // take Alice (with a known ID)
+    let alice_profile = scenario.take_shared_by_id<profiles::Profile>(alice_profile_id.to_id());
 
     // Bob creates profile
     let bob_profile = registry.new_profile(b"bob_user".to_string(), scenario.ctx());
@@ -133,8 +139,9 @@ fun test_multiple_users_different_addresses() {
     assert!(registry.profile_exists(ALICE));
     assert!(registry.profile_exists(BOB));
 
+    test_scenario::return_shared(alice_profile);
+
     // Clean up
-    alice_profile.share();
     bob_profile.share();
     destroy(registry);
     scenario.end();
