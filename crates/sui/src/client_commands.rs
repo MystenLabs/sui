@@ -649,7 +649,7 @@ pub enum SuiClientCommands {
     ReplayBatch {},
 
     /// Replay all transactions in a range of checkpoints (deprecated; use `sui replay` instead)
-    #[command(name = "replay-checkpoint")]
+    #[clap(name = "replay-checkpoint")]
     ReplayCheckpoints {},
 }
 
