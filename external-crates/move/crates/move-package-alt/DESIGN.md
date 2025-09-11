@@ -352,7 +352,7 @@ graph:
      - `p.deps` contains the same keys as the dependencies of `Move.toml`
      - `p.source` has been cached locally
 
- - all environments in Move.published or Move.lock are in Move.toml
+ - all environments in Published.toml or Move.lock are in Move.toml
 
 These can also be violated if a user mucks around with their lockfiles - I think we should just do
 best-effort on that. We may provide an additional tool to help fix things up (e.g. `sui move
@@ -390,11 +390,12 @@ Non-default system dependencies can be specified like that: `system_dependencies
 Like externally resolved dependencies, system dependencies will be pinned to different versions
 for each environment.
 
-The default system deps for Sui would be `sui` and `std`. The available system deps are `std`,
-`sui`, `system`, `deepbook-v2`, `bridge`, `monorepo-sui`, `monorepo-std`. The `monorepo` deps are
-converted to local dependencies are are used for our internal tests (they would expand to `sui = {
-local = "path_to_monorepo/crates/sui-framework/packages/sui" }` and would fail if they are used
-outside the monorepo.
+TODO: maybe this isn't necessary; we can just disable local deps in the monorepo and put them in explicitly:
+> The default system deps for Sui would be `sui` and `std`. The available system deps are `std`,
+> `sui`, `system`, `deepbook-v2`, `bridge`, `monorepo-sui`, `monorepo-std`. The `monorepo` deps are
+> converted to local dependencies are are used for our internal tests (they would expand to `sui = {
+> local = "path_to_monorepo/crates/sui-framework/packages/sui" }` and would fail if they are used
+> outside the monorepo.
 
 ## Fetching
 
@@ -454,7 +455,7 @@ For example, we can perform the following checks:
     > in the [dep-replacements] section:
     >
     > [dep-replacements]
-    > foo = { published-at = "0x....", original-id = "0x..." }
+    > mainnet.foo = { published-at = "0x....", original-id = "0x..." }
     >
     > here published-at should refer to the current version of the package and
     > original-id should refer to the first version of the package.
@@ -589,8 +590,8 @@ publishing any packages that haven't yet been published. This would be a nice co
 working with a group of related packages (esp. during testing). We should only allow it for local
 ephemeral environments and devnet, since publication relies on the user to update the lockfiles of the
 published packages; for non-ephemeral networks these would be sitting in the cache and not easy to
-push back upstream. Put another way, the `Move.published` files in the cache should be read-only (but the
-`Move.pub.local` files can be created/updated). (TODO: Move.pub.local files aren't described yet).
+push back upstream. Put another way, the `Published.toml` files in the cache should be read-only (but the
+`Pub.<env>.toml` files can be created/updated). (TODO: `Pub.<env>.toml` files aren't described yet).
 
 Some users will want to perform the actual publication step outside of the CLI (for example if they
 want to go through a separate signing process for the transaction). For these transactions, I don't
@@ -689,9 +690,10 @@ the source code to disambiguate if necessary.
 
 Although there's no facility for writing named addresses in the modern system, we're keeping around
 the named addresses from legacy packages and using them. This means we need to perform a pass to
-collect all of them from transitive dependencies.
+collect all of them from transitive dependencies. For legacy packages only, we
+include these in the named addresses we hand to the compiler.
 
-If a legacy package depends on a modern package, it will not inherit addresses.
+If a legacy package depends on a modern package, it will not inherit addresses from that package.
 
 ## What we see in the wild
 
