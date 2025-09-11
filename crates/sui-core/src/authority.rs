@@ -4971,6 +4971,8 @@ impl AuthorityState {
         &self,
         system_packages: Vec<ObjectRef>,
         binary_config: &BinaryConfig,
+        next_epoch_protocol_version: ProtocolVersion,
+        max_supported_protocol_version: ProtocolVersion,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
         let objects = self.get_objects(&ids).await;
@@ -5019,9 +5021,19 @@ impl AuthorityState {
 
             let new_ref = new_object.compute_object_reference();
             if new_ref != system_package_ref {
-                debug_fatal!(
-                    "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
-                );
+                if next_epoch_protocol_version > max_supported_protocol_version {
+                    error!(
+                        "Framework mismatch during protocol upgrade -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}\n\
+                        Next epoch protocol version: {:?}. \
+                        This node needs to be upgraded to support the new protocol version (max supported: {:?}).",
+                        next_epoch_protocol_version,
+                        max_supported_protocol_version
+                    );
+                } else {
+                    debug_fatal!(
+                        "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
+                    );
+                }
                 return None;
             }
 
@@ -5594,15 +5606,40 @@ impl AuthorityState {
         // rules of the current epoch, including the current epoch's max Move binary format version
         let config = epoch_store.protocol_config();
         let binary_config = to_binary_config(config);
+        let current_protocol_version = epoch_store.protocol_version();
+
+        // Determine the max supported protocol version based on build configuration
+        #[cfg(msim)]
+        let max_supported_protocol_version = ProtocolVersion::MAX_ALLOWED;
+        #[cfg(not(msim))]
+        let max_supported_protocol_version = ProtocolVersion::MAX;
+
         let Some(next_epoch_system_package_bytes) = self
-            .get_system_package_bytes(next_epoch_system_packages.clone(), &binary_config)
+            .get_system_package_bytes(
+                next_epoch_system_packages.clone(),
+                &binary_config,
+                next_epoch_protocol_version,
+                max_supported_protocol_version,
+            )
             .await
         else {
-            debug_fatal!(
-                "upgraded system packages {:?} are not locally available, cannot create \
-                ChangeEpochTx. validator binary must be upgraded to the correct version!",
-                next_epoch_system_packages
-            );
+            if next_epoch_protocol_version > max_supported_protocol_version {
+                error!(
+                    "Upgraded system packages {:?} are not locally available for protocol version {:?}. \
+                    This node needs to be upgraded to support the new protocol version (max supported: {:?}). \
+                    Current protocol version: {:?}",
+                    next_epoch_system_packages,
+                    next_epoch_protocol_version,
+                    max_supported_protocol_version,
+                    current_protocol_version
+                );
+            } else {
+                debug_fatal!(
+                    "upgraded system packages {:?} are not locally available, cannot create \
+                    ChangeEpochTx. validator binary must be upgraded to the correct version!",
+                    next_epoch_system_packages
+                );
+            }
             // the checkpoint builder will keep retrying forever when it hits this error.
             // Eventually, one of two things will happen:
             // - The operator will upgrade this binary to one that has the new packages locally,
