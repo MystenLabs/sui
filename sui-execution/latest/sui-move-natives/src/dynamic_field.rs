@@ -300,6 +300,8 @@ pub fn borrow_child_object(
         assert!(err.major_status() != StatusCode::MISSING_DATA);
     })?;
 
+    charge_cache_or_load_gas!(context, cache_info);
+
     let child_ref_size = abstract_size(
         get_extension!(context, ObjectRuntime)?.protocol_config,
         &child_ref,
@@ -311,8 +313,6 @@ pub fn borrow_child_object(
             .dynamic_field_borrow_child_object_child_ref_cost_per_byte
             * u64::from(child_ref_size).into()
     );
-
-    charge_cache_or_load_gas!(context, cache_info);
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child_ref]))
 }
@@ -368,12 +368,15 @@ pub fn remove_child_object(
         }
         ObjectResult::Loaded(gv) => gv,
     };
+
     if !global_value.exists()? {
         return Ok(NativeResult::err(context.gas_used(), E_KEY_DOES_NOT_EXIST));
     }
     let child = global_value.move_from().inspect_err(|err| {
         assert!(err.major_status() != StatusCode::MISSING_DATA);
     })?;
+
+    charge_cache_or_load_gas!(context, cache_info);
 
     let child_size = abstract_size(
         context.extensions().get::<ObjectRuntime>()?.protocol_config,
@@ -386,8 +389,6 @@ pub fn remove_child_object(
             .dynamic_field_remove_child_object_child_cost_per_byte
             * u64::from(child_size).into()
     );
-
-    charge_cache_or_load_gas!(context, cache_info);
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
 }
