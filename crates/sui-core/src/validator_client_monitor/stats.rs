@@ -22,8 +22,6 @@ use tracing::debug;
 const RELIABILITY_MOVING_WINDOW_SIZE: usize = 100;
 /// Size of the moving window for latency measurements
 const LATENCY_MOVING_WINDOW_SIZE: usize = 100;
-/// Size of the moving window for max latency measurements
-const MAX_LATENCY_MOVING_WINDOW_SIZE: usize = 100;
 
 /// Complete client-observed statistics for validator interactions.
 ///
@@ -35,8 +33,6 @@ const MAX_LATENCY_MOVING_WINDOW_SIZE: usize = 100;
 pub struct ClientObservedStats {
     /// Per-validator statistics mapping authority names to their client-observed metrics
     pub validator_stats: HashMap<AuthorityName, ValidatorClientStats>,
-    /// Global statistics used for normalization and comparison
-    pub global_stats: GlobalStats,
     /// Configuration parameters for scoring and exclusion policies
     pub config: ValidatorClientMonitorConfig,
 }
@@ -84,23 +80,10 @@ impl ValidatorClientStats {
     }
 }
 
-/// Global statistics across all validators.
-///
-/// Used to track network-wide performance metrics that serve as baselines
-/// for scoring individual validators. Currently tracks maximum latencies
-/// for normalization purposes.
-#[derive(Debug, Clone, Default)]
-pub struct GlobalStats {
-    /// Maximum observed latencies for each operation type across all validators.
-    /// Used to normalize individual validator latencies in score calculations.
-    pub max_latencies: HashMap<OperationType, MovingWindow>,
-}
-
 impl ClientObservedStats {
     pub fn new(config: ValidatorClientMonitorConfig) -> Self {
         Self {
             validator_stats: HashMap::new(),
-            global_stats: GlobalStats::default(),
             config,
         }
     }
@@ -141,34 +124,6 @@ impl ClientObservedStats {
             .consecutive_failures
             .with_label_values(&[&feedback.display_name])
             .set(validator_stats.consecutive_failures as i64);
-
-        if let Ok(latency) = feedback.result {
-            self.update_global_stats(feedback.operation, latency);
-        }
-    }
-
-    /// Update global maximum latency statistics.
-    ///
-    /// For max latencies, we use a special update strategy:
-    /// - If the new latency is higher than the current max, we immediately update to it
-    /// - Otherwise, we apply decay to gradually lower the max over time
-    ///
-    /// This ensures we always capture peak latencies while still allowing the max to decrease
-    /// when network conditions improve to reduce the impact of outliers.
-    pub fn update_global_stats(&mut self, operation: OperationType, latency: Duration) {
-        let latency_secs = latency.as_secs_f64();
-
-        match self.global_stats.max_latencies.entry(operation) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().add_value(latency_secs);
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(MovingWindow::new(
-                    latency_secs,
-                    MAX_LATENCY_MOVING_WINDOW_SIZE,
-                ));
-            }
-        }
     }
 
     /// Get validator scores for all validators in the committee.
@@ -176,6 +131,8 @@ impl ClientObservedStats {
     /// Returns a map of all tracked validators to their scores.
     /// Score is 0 if the validator is excluded or has no stats.
     pub fn get_all_validator_stats(&self, committee: &Committee) -> HashMap<AuthorityName, f64> {
+        let max_latencies = self.calculate_max_latencies(committee);
+
         committee
             .names()
             .map(|validator| {
@@ -188,7 +145,7 @@ impl ClientObservedStats {
                     if is_excluded {
                         0.0
                     } else {
-                        self.calculate_client_score(stats, &self.global_stats)
+                        self.calculate_client_score(stats, &max_latencies)
                     }
                 } else {
                     0.0
@@ -196,6 +153,42 @@ impl ClientObservedStats {
                 (*validator, score)
             })
             .collect()
+    }
+
+    fn calculate_max_latencies(&self, committee: &Committee) -> HashMap<OperationType, f64> {
+        let mut max_latencies = HashMap::new();
+
+        for validator in committee.names() {
+            let stats = self.validator_stats.get(validator).unwrap();
+            // We are specifically excluding from the max latencies calculations the validators that are meant to be excluded
+            // from the score calculations anyways. Only the ones participating in the pool should be considered to avoid score inflation.
+            let is_excluded = if let Some(exclusion_time) = stats.exclusion_time {
+                exclusion_time.elapsed() < self.config.failure_cooldown
+            } else {
+                false
+            };
+
+            for op in OperationType::iter() {
+                let latency = if is_excluded {
+                    0.0
+                } else {
+                    stats
+                        .average_latencies
+                        .get(&op)
+                        .map(|mw| mw.get())
+                        .unwrap_or(0.0)
+                };
+                if let Some(max_latency) = max_latencies.get(&op) {
+                    if latency > *max_latency {
+                        max_latencies.insert(op, latency);
+                    }
+                } else {
+                    max_latencies.insert(op, latency);
+                }
+            }
+        }
+
+        max_latencies
     }
 
     /// Calculate client-observed score for a single validator.
@@ -214,7 +207,7 @@ impl ClientObservedStats {
     fn calculate_client_score(
         &self,
         stats: &ValidatorClientStats,
-        global_stats: &GlobalStats,
+        max_latencies: &HashMap<OperationType, f64>,
     ) -> f64 {
         let mut latency_score = 0.0;
         let mut total_weight = 0.0;
@@ -226,8 +219,8 @@ impl ClientObservedStats {
                 OperationType::HealthCheck => self.config.score_weights.health_check_latency_weight,
             };
 
-            // Skip if global stats are missing for this operation
-            let Some(max_latency) = global_stats.max_latencies.get(&op).map(|ma| ma.get()) else {
+            // Skip if max latency is missing for this operation
+            let Some(max_latency) = max_latencies.get(&op) else {
                 continue;
             };
 
@@ -236,7 +229,7 @@ impl ClientObservedStats {
                 .average_latencies
                 .get(&op)
                 .map(|ma| ma.get())
-                .unwrap_or(max_latency);
+                .unwrap_or(*max_latency);
 
             // Lower latency ratios are better (inverted for scoring)
             let latency_ratio = (latency / max_latency).min(1.0);
