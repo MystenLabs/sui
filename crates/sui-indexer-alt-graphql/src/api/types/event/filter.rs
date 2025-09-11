@@ -51,7 +51,13 @@ pub(crate) struct EventFilter {
 impl EventFilter {
     /// Builds a SQL query to select and filter events based on sender, module, and type filters.
     /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
-    pub(crate) fn query<'q>(&self, tx_bounds_subquery: Query<'q>) -> Result<Query<'q>, RpcError> {
+    pub(crate) fn query<'q>(
+        &self,
+        Range {
+            start: tx_lo,
+            end: tx_hi,
+        }: Range<u64>,
+    ) -> Result<Query<'q>, RpcError> {
         let table = match (&self.module, &self.type_) {
             (Some(_), Some(_)) => {
                 return Err(feature_unavailable(
@@ -64,18 +70,17 @@ impl EventFilter {
 
         let mut query = query!(
             r#"
-            WITH bounds AS ({})
             SELECT
                 tx_sequence_number
             FROM
-                bounds,
                 {}
             WHERE
-                tx_sequence_number >= bounds.tx_lo
-                AND tx_sequence_number < bounds.tx_hi
+                tx_sequence_number >= {BigInt}
+                AND tx_sequence_number < {BigInt}
             "#,
-            tx_bounds_subquery,
-            table
+            table,
+            tx_lo as i64,
+            tx_hi as i64,
         );
 
         if let Some(sender) = self.sender {
