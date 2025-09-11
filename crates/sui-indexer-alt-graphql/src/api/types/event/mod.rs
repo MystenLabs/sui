@@ -27,9 +27,9 @@ use crate::{
 };
 
 use super::{
-    address::Address, checkpoint::filter::checkpoint_bounds, move_module::MoveModule,
-    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
-    transaction::filter::tx_bounds_query, transaction::Transaction,
+    address::Address, checkpoint::filter::checkpoint_bounds, lookups::tx_bounds,
+    move_module::MoveModule, move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::Transaction,
 };
 
 pub(crate) mod filter;
@@ -145,28 +145,20 @@ impl Event {
             return Ok(Connection::new(false, false));
         };
 
-        // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
-        let tx_bounds_query = tx_bounds_query(
-            &cp_bounds,
-            global_tx_hi,
-            page.after().map_or(0, |c| c.tx_sequence_number),
-            page.before()
-                .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1)),
-        );
+        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| {
+            c.tx_sequence_number
+        })
+        .await?;
 
         #[derive(QueryableByName)]
         struct TxSequenceNumber(
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
 
-        let mut query = filter.query(tx_bounds_query)?;
+        let mut query = filter.query(tx_bounds)?;
         query += query!(
             r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
-            if page.is_from_front() {
-                query!("ASC")
-            } else {
-                query!("DESC")
-            },
+            page.order_by_direction(),
             page.limit_with_overhead() as i64,
         );
 
