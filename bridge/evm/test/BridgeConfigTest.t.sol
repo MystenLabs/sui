@@ -9,7 +9,7 @@ contract BridgeConfigTest is BridgeBaseTest {
         setUpBridgeTest();
     }
 
-    function testBridgeConfigInitialization() public {
+    function testBridgeConfigInitialization() public view {
         assertTrue(config.tokenAddressOf(1) == wBTC);
         assertTrue(config.tokenAddressOf(2) == wETH);
         assertTrue(config.tokenAddressOf(3) == USDC);
@@ -28,16 +28,16 @@ contract BridgeConfigTest is BridgeBaseTest {
         assertTrue(config.supportedChains(0));
     }
 
-    function testGetAddress() public {
+    function testGetAddress() public view {
         assertEq(config.tokenAddressOf(1), wBTC);
     }
 
-    function testIsTokenSupported() public {
+    function testIsTokenSupported() public view {
         assertTrue(config.isTokenSupported(1));
         assertTrue(!config.isTokenSupported(0));
     }
 
-    function testTokenSuiDecimalOf() public {
+    function testTokenSuiDecimalOf() public view {
         assertEq(config.tokenSuiDecimalOf(1), 8);
     }
 
@@ -97,8 +97,6 @@ contract BridgeConfigTest is BridgeBaseTest {
     }
 
     function testAddTokensAddressFailure() public {
-        MockUSDC _newToken = new MockUSDC();
-
         // Create update tokens payload
         bool _isNative = true;
         uint8 _numTokenIDs = 1;
@@ -374,7 +372,15 @@ contract BridgeConfigTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedDestinationChains)
+                (
+                    address(committee),
+                    chainID,
+                    supportedTokens,
+                    tokenPrices,
+                    tokenIds,
+                    suiDecimals,
+                    _supportedDestinationChains
+                )
             ),
             opts
         );
@@ -463,7 +469,15 @@ contract BridgeConfigTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), 12, supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedDestinationChains)
+                (
+                    address(committee),
+                    12,
+                    supportedTokens,
+                    tokenPrices,
+                    tokenIds,
+                    suiDecimals,
+                    _supportedDestinationChains
+                )
             ),
             opts
         );
