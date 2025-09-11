@@ -7,6 +7,7 @@ module profiles::profiles;
 
 use std::string::String;
 use sui::derived_object;
+use sui::transfer::Receiving;
 
 /// Error codes
 #[error(code = 0)]
@@ -116,6 +117,16 @@ public fun total_users(registry: &ProfilesRegistry): u64 {
 /// This uses the derived_object exists function to check deterministically
 public fun profile_exists(registry: &ProfilesRegistry, user_address: address): bool {
     derived_object::exists(&registry.id, user_address)
+}
+
+/// Receive items transferred to the `Profile` object as the owner.
+public fun receive<T: key + store>(
+    profile: &mut Profile,
+    object: Receiving<T>,
+    ctx: &TxContext,
+): T {
+    assert!(profile.owner == ctx.sender(), ENotOwner);
+    transfer::public_receive(&mut profile.id, object)
 }
 
 macro fun validate_username($name: String) {
