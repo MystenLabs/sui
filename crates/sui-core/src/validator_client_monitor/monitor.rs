@@ -189,11 +189,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// TransactionDriver to report client-observed validator interactions.
     /// TODO: Consider adding a byzantine flag to the feedback.
     pub fn record_interaction_result(&self, feedback: OperationFeedback) {
-        let operation_str = match feedback.operation {
-            OperationType::Submit => "submit",
-            OperationType::Effects => "effects",
-            OperationType::HealthCheck => "health_check",
-        };
+        let operation_str = feedback.operation.as_str();
 
         match feedback.result {
             Ok(latency) => {

@@ -217,6 +217,9 @@ impl ClientObservedStats {
                 OperationType::Submit => self.config.score_weights.submit_latency_weight,
                 OperationType::Effects => self.config.score_weights.effects_latency_weight,
                 OperationType::HealthCheck => self.config.score_weights.health_check_latency_weight,
+                OperationType::Finalization => {
+                    self.config.score_weights.finalization_latency_weight
+                }
             };
 
             // Skip if max latency is missing for this operation
