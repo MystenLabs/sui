@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use fastcrypto::{
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     traits::{ToFromBytes, VerifyingKey},
@@ -46,9 +46,7 @@ pub fn ed25519_verify(
     debug_assert!(args.len() == 3);
 
     // Load the cost parameters from the protocol config
-    let ed25519_verify_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let ed25519_verify_cost_params = get_extension!(context, NativesCostTable)?
         .ed25519_verify_cost_params
         .clone();
     // Charge the base cost for this oper

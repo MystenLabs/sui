@@ -51,7 +51,7 @@ macro_rules! get_or_fetch_object {
             }
         };
 
-        let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut()?;
+        let object_runtime: &mut ObjectRuntime = $crate::get_extension_mut!($context)?;
         object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
@@ -341,9 +341,7 @@ pub fn remove_child_object(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
 
-    let dynamic_field_remove_child_object_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let dynamic_field_remove_child_object_cost_params = get_extension!(context, NativesCostTable)?
         .dynamic_field_remove_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -379,7 +377,7 @@ pub fn remove_child_object(
     charge_cache_or_load_gas!(context, cache_info);
 
     let child_size = abstract_size(
-        context.extensions().get::<ObjectRuntime>()?.protocol_config,
+        get_extension!(context, ObjectRuntime)?.protocol_config,
         &child,
     );
 
@@ -412,9 +410,7 @@ pub fn has_child_object(
     assert!(ty_args.is_empty());
     assert!(args.len() == 2);
 
-    let dynamic_field_has_child_object_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let dynamic_field_has_child_object_cost_params = get_extension!(context, NativesCostTable)?
         .dynamic_field_has_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -424,7 +420,7 @@ pub fn has_child_object(
 
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let has_child = object_runtime.child_object_exists(parent, child_id)?;
     Ok(NativeResult::ok(
         context.gas_used(),
@@ -454,11 +450,10 @@ pub fn has_child_object_with_ty(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
 
-    let dynamic_field_has_child_object_with_ty_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
-        .dynamic_field_has_child_object_with_ty_cost_params
-        .clone();
+    let dynamic_field_has_child_object_with_ty_cost_params =
+        get_extension!(context, NativesCostTable)?
+            .dynamic_field_has_child_object_with_ty_cost_params
+            .clone();
     native_charge_gas_early_exit!(
         context,
         dynamic_field_has_child_object_with_ty_cost_params
@@ -494,7 +489,7 @@ pub fn has_child_object_with_ty(
             * u64::from(tag.abstract_size_for_gas_metering()).into()
     );
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let (cache_info, has_child) = object_runtime.child_object_exists_and_has_type(
         parent,
         child_id,
