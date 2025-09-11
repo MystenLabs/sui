@@ -22,13 +22,17 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
-use mysten_metrics::monitored_future;
+use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
+use rand::Rng;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, error::UserInputError,
     messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
 };
-use tokio::{task::JoinSet, time::sleep};
+use tokio::{
+    task::JoinSet,
+    time::{interval, sleep},
+};
 use tracing::instrument;
 use transaction_submitter::*;
 
@@ -40,6 +44,7 @@ use crate::{
         OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
+use strum::IntoEnumIterator;
 use sui_config::NodeConfig;
 
 /// Options for submitting a transaction.
@@ -88,8 +93,134 @@ where
             client_monitor,
         });
 
+        let driver_clone = driver.clone();
+
+        spawn_logged_monitored_task!(Self::run_latency_checks(driver_clone));
+
         driver.enable_reconfig(reconfig_observer);
         driver
+    }
+
+    // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
+    async fn run_latency_checks(self: Arc<Self>) {
+        const MAX_DELAY_BETWEEN_REQUESTS_MS: u64 = 5_000;
+        const INTERVAL_BETWEEN_RUNS_MS: u64 = 10_000;
+        let mut interval = interval(Duration::from_secs(INTERVAL_BETWEEN_RUNS_MS));
+
+        loop {
+            interval.tick().await;
+
+            // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
+            let mut tasks = JoinSet::new();
+            for tx_type in TxType::iter() {
+                // Send the latency requests to all validators.
+                // TODO: do not send requests to all validators, but only to a subset of validators. For example order the validators by their
+                // score ascending and then take a `K` of them.
+                let self_clone = self.clone();
+                let auth_agg = self_clone.authority_aggregator.load().clone();
+                let clients: Vec<_> = auth_agg
+                    .authority_clients
+                    .iter()
+                    .map(|(name, client)| (*name, client.clone()))
+                    .collect();
+
+                for (name, client) in clients {
+                    let metrics_clone = self_clone.metrics.clone();
+                    let display_name = self_clone
+                        .authority_aggregator
+                        .load()
+                        .get_display_name(&name);
+                    let options = SubmitTransactionOptions::default();
+                    let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
+
+                    // Clone values for each task
+                    let self_task_clone = self_clone.clone();
+                    let auth_agg_clone = auth_agg.clone();
+
+                    tasks.spawn(async move {
+                        // Add some random delay to the task to avoid all tasks running at the same time
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                        let start_time = Instant::now();
+
+                        // Submit the ping transaction to the validator.
+                        let submit_txn_result = match self_task_clone
+                            .submitter
+                            .submit_transaction_once(
+                                client.clone(),
+                                &RawSubmitTxRequest {
+                                    transactions: vec![],
+                                    soft_bundle: false,
+                                    ping: true,
+                                },
+                                &options,
+                                &self_task_clone.client_monitor,
+                                name,
+                                display_name.clone(),
+                            )
+                            .await
+                        {
+                            Ok(submit_txn_result) => submit_txn_result,
+                            Err(e) => {
+                                tracing::info!(
+                                    "Failed to submit ping transaction to validator {}: {}",
+                                    display_name.clone(),
+                                    e
+                                );
+                                return Err(TransactionDriverError::Internal {
+                                    error: e.to_string(),
+                                });
+                            }
+                        };
+
+                        // Wait for quorum effects using EffectsCertifier
+                        let result = self_task_clone
+                            .certifier
+                            .get_certified_finalized_effects(
+                                &auth_agg_clone,
+                                &self_task_clone.client_monitor,
+                                &TransactionDigest::ZERO,
+                                tx_type,
+                                name,
+                                submit_txn_result,
+                                &options,
+                                true,
+                            )
+                            .await?;
+
+                        self_task_clone.client_monitor.record_interaction_result(
+                            OperationFeedback {
+                                authority_name: name,
+                                display_name: auth_agg_clone.get_display_name(&name),
+                                operation: if tx_type == TxType::SingleWriter {
+                                    OperationType::FastPath
+                                } else {
+                                    OperationType::Consensus
+                                },
+                                result: Ok(start_time.elapsed()),
+                            },
+                        );
+
+                        metrics_clone
+                            .ping_latency
+                            .with_label_values(&[&display_name, tx_type.as_str()])
+                            .observe(start_time.elapsed().as_secs_f64());
+
+                        tracing::debug!(
+                            "Ping transaction to validator {} completed end to end in {} seconds",
+                            display_name,
+                            start_time.elapsed().as_secs_f64()
+                        );
+                        Ok(result)
+                    });
+                }
+
+                while let Some(result) = tasks.join_next().await {
+                    if let Err(e) = result {
+                        tracing::info!("Failed to drive ping transaction: {}", e);
+                    }
+                }
+            }
+        }
     }
 
     #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
@@ -219,6 +350,7 @@ where
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
+        let ping = raw_request.ping;
 
         let (name, submit_txn_result) = self
             .submitter
@@ -244,6 +376,7 @@ where
                 name,
                 submit_txn_result,
                 options,
+                ping,
             )
             .await;
 
