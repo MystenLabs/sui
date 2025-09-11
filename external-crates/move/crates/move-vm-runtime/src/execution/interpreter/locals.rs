@@ -57,16 +57,22 @@ impl BaseHeap {
         }
     }
 
-    /// Allocate a slot for the value in the base heap, and then
+    /// Allocate a slot for the value in the base heap
+    pub fn allocate_value(&mut self, value: Value) -> BaseHeapId {
+        let next_id = BaseHeapId(self.next_id);
+        self.next_id += 1;
+        self.values.insert(next_id, MemBox::new(value));
+        next_id
+    }
+
+    /// Allocate a slot for the value in the base heap, and then borrow it
     pub fn allocate_and_borrow_loc(
         &mut self,
         value: Value,
     ) -> PartialVMResult<(BaseHeapId, Value)> {
-        let next_id = BaseHeapId(self.next_id);
-        self.next_id += 1;
-        self.values.insert(next_id, MemBox::new(value));
-        let ref_ = self.borrow_loc(next_id)?;
-        Ok((next_id, ref_))
+        let id = self.allocate_value(value);
+        let ref_ = self.borrow_loc(id)?;
+        Ok((id, ref_))
     }
 
     /// Moves a location out of memory
@@ -93,8 +99,8 @@ impl BaseHeap {
         self.values
             .get(&ndx)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Local index out of bounds: {}", ndx))
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Heap index invalid: {}", ndx))
             })
             .map(|value| value.as_ref_value())
     }
@@ -189,17 +195,6 @@ impl StackFrame {
         }
         let _ = self.slice[ndx].replace(x);
         Ok(())
-    }
-
-    /// Returns if the location is invalid
-    pub fn is_invalid(&self, ndx: usize) -> PartialVMResult<bool> {
-        self.slice
-            .get(ndx)
-            .map(|value| matches!(&*value.borrow(), &Value::Invalid))
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Local index out of bounds: {}", ndx))
-            })
     }
 
     /// Gets an index, or returns an error if the index is out of range or the value is unset.
