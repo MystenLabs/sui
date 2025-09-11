@@ -35,8 +35,8 @@ use crate::{
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResult,
-        WaitForEffectsRequest, WaitForEffectsResponse,
+        ExecutedData, PingType, QuorumTransactionResponse, SubmitTransactionOptions,
+        SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
 };
@@ -68,6 +68,7 @@ impl EffectsCertifier {
         // Guaranteed to be not the Rejected variant.
         submit_txn_result: SubmitTxResult,
         options: &SubmitTransactionOptions,
+        ping: bool,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -127,8 +128,15 @@ impl EffectsCertifier {
                     .expect("there should be at least 1 target");
                 current_target = name;
                 full_effects_start_time = Some(Instant::now());
-                self.get_full_effects(client, tx_digest, consensus_position, options)
-                    .await
+                self.get_full_effects(
+                    client,
+                    tx_digest,
+                    tx_type,
+                    consensus_position,
+                    options,
+                    ping,
+                )
+                .await
             },
         );
 
@@ -195,7 +203,14 @@ impl EffectsCertifier {
             current_target = name;
             full_effects_start_time = Some(Instant::now());
             full_effects_result = self
-                .get_full_effects(client, tx_digest, consensus_position, options)
+                .get_full_effects(
+                    client,
+                    tx_digest,
+                    tx_type,
+                    consensus_position,
+                    options,
+                    ping,
+                )
                 .await;
         }
     }
@@ -205,17 +220,28 @@ impl EffectsCertifier {
         &self,
         client: Arc<SafeClient<A>>,
         tx_digest: &TransactionDigest,
+        tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
+        ping: bool,
     ) -> Result<(TransactionEffectsDigest, Box<ExecutedData>, bool), TransactionRequestError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        let ping = if ping {
+            match tx_type {
+                TxType::SingleWriter => Some(PingType::FastPath),
+                TxType::SharedObject => Some(PingType::Consensus),
+            }
+        } else {
+            None
+        };
+
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
             transaction_digest: *tx_digest,
             consensus_position,
             include_details: true,
-            ping: None,
+            ping,
         })
         .unwrap();
 

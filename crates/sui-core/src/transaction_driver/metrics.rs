@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use mysten_metrics::COUNT_BUCKETS;
+use mysten_metrics::{COUNT_BUCKETS, LATENCY_SEC_BUCKETS};
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram,
@@ -32,6 +32,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) certified_effects_ack_successes: IntCounterVec,
     pub(crate) validator_selections: IntCounterVec,
     pub(crate) submit_amplification_factor: Histogram,
+    pub(crate) ping_latency: HistogramVec,
 }
 
 impl TransactionDriverMetrics {
@@ -153,6 +154,14 @@ impl TransactionDriverMetrics {
                 "transaction_driver_submit_amplification_factor",
                 "The amplification factor used by transaction driver to submit to validators",
                 COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            ping_latency: register_histogram_vec_with_registry!(
+                "transaction_driver_ping_latency",
+                "Latency of the end to end ping request",
+                &["validator", "tx_type"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
