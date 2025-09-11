@@ -4,9 +4,8 @@
 use once_cell::sync::Lazy;
 use tracing::warn;
 
-pub mod decay_moving_average;
-pub mod moving_window;
 pub mod logging;
+pub mod moving_window;
 pub mod random;
 pub mod random_util;
 pub mod sync;
