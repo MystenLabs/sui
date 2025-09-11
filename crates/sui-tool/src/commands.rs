@@ -273,6 +273,10 @@ pub enum ToolCommand {
         /// and output will be reduced to necessary status information.
         #[clap(long = "verbose")]
         verbose: bool,
+        /// Number of retries for failed HTTP requests when downloading snapshot files.
+        /// Defaults to 3 retries. Set to 0 to disable retries.
+        #[clap(long = "max-retries", default_value = "3")]
+        max_retries: usize,
     },
 
     // Restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
@@ -342,6 +346,10 @@ pub enum ToolCommand {
         /// downloaded, and (if --verify is provided) will be verified via committee signature.
         #[clap(long = "all-checkpoints")]
         all_checkpoints: bool,
+        /// Number of retries for failed HTTP requests when downloading snapshot files.
+        /// Defaults to 3 retries. Set to 0 to disable retries.
+        #[clap(long = "max-retries", default_value = "3")]
+        max_retries: usize,
     },
 
     #[clap(name = "replay")]
@@ -683,6 +691,7 @@ impl ToolCommand {
                 latest,
                 verbose,
                 all_checkpoints,
+                max_retries,
             } => {
                 if !verbose {
                     tracing_handle
@@ -815,6 +824,7 @@ impl ToolCommand {
                     network,
                     verify,
                     all_checkpoints,
+                    max_retries,
                 )
                 .await?;
             }
@@ -830,6 +840,7 @@ impl ToolCommand {
                 no_sign_request,
                 latest,
                 verbose,
+                max_retries,
             } => {
                 if !verbose {
                     tracing_handle
@@ -966,6 +977,7 @@ impl ToolCommand {
                     snapshot_store_config,
                     skip_indexes,
                     num_parallel_downloads,
+                    max_retries,
                 )
                 .await?;
             }
