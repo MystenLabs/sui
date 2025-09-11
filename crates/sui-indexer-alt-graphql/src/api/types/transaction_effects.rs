@@ -18,9 +18,12 @@ use sui_indexer_alt_reader::{
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
 use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
 use sui_types::{
-    digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus, object::Object as NativeObject,
-    signature::GenericSignature, transaction::TransactionData,
+    digests::TransactionDigest,
+    effects::TransactionEffectsAPI,
+    execution_status::ExecutionStatus as NativeExecutionStatus,
+    object::Object as NativeObject,
+    signature::GenericSignature,
+    transaction::{TransactionData, TransactionDataAPI},
 };
 
 use crate::{
@@ -139,7 +142,16 @@ impl EffectsContents {
         let effects = content.effects()?;
         let status = effects.status();
 
-        ExecutionError::from_execution_status(&self.scope, status).await
+        // Extract programmable transaction if available
+        let programmable_tx = content
+            .data()
+            .ok()
+            .and_then(|tx_data| match tx_data.into_kind() {
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => Some(tx),
+                _ => None,
+            });
+
+        ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref()).await
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.

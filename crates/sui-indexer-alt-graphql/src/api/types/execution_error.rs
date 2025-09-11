@@ -5,8 +5,11 @@ use async_graphql::Object;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::fmt::Write;
 use sui_package_resolver::{CleverError, ErrorConstants};
-use sui_types::execution_status::{
-    ExecutionFailureStatus, ExecutionStatus as NativeExecutionStatus,
+use sui_types::{
+    execution_status::{
+        ExecutionFailureStatus, ExecutionStatus as NativeExecutionStatus, MoveLocation,
+    },
+    transaction::ProgrammableTransaction,
 };
 use tokio::sync::OnceCell;
 
@@ -145,13 +148,21 @@ impl ExecutionError {
     pub(crate) async fn from_execution_status(
         scope: &Scope,
         status: &NativeExecutionStatus,
+        programmable_tx: Option<&ProgrammableTransaction>,
     ) -> Result<Option<Self>, RpcError> {
         let NativeExecutionStatus::Failure { error, command } = status else {
             return Ok(None);
         };
 
+        // Clone the error so we can modify it in-place
+        let mut native_error: ExecutionFailureStatus = error.clone();
+
+        // Resolve the module ID for Move aborts to ensure we use the correct package version
+        // when resolving clever errors later. This is only necessary before version 48.
+        resolve_module_id_for_move_abort(scope, &mut native_error, *command, programmable_tx).await;
+
         Ok(Some(Self {
-            native: error.clone(),
+            native: native_error,
             command: *command,
             clever: OnceCell::new(),
             scope: scope.clone(),
@@ -265,5 +276,53 @@ impl ExecutionError {
                 Ok(msg)
             }
         }
+    }
+}
+
+/// Resolves runtime module ID to storage package ID for Move aborts.
+///
+/// Only needed for protocol versions before v48. Starting with v48, the Move VM
+/// automatically resolves abort locations to storage IDs, so `resolve_module_id` will
+/// return LinkageNotFound (expected) and this function becomes a no-op.
+async fn resolve_module_id_for_move_abort(
+    scope: &Scope,
+    native_error: &mut ExecutionFailureStatus,
+    command: Option<usize>,
+    programmable_tx: Option<&ProgrammableTransaction>,
+) {
+    use sui_types::execution_status::MoveLocationOpt;
+    use sui_types::transaction::Command;
+
+    // Only resolve for Move aborts that have location information
+    let module = match native_error {
+        ExecutionFailureStatus::MoveAbort(MoveLocation { module, .. }, _) => module,
+        ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(
+            MoveLocation { module, .. },
+        ))) => module,
+        _ => return,
+    };
+
+    // We need both a command index and a programmable transaction to resolve
+    let Some(command_idx) = command else {
+        return;
+    };
+    let Some(ptb) = programmable_tx else {
+        return;
+    };
+
+    // Find the Move call command that caused this abort
+    let Some(Command::MoveCall(ptb_call)) = ptb.commands.get(command_idx) else {
+        return;
+    };
+
+    let module_new = module.clone();
+
+    // Try to resolve runtime module ID to storage package ID, ignore any errors
+    if let Ok(resolved_module) = scope
+        .package_resolver()
+        .resolve_module_id(module_new, ptb_call.package.into())
+        .await
+    {
+        *module = resolved_module;
     }
 }
