@@ -23,7 +23,10 @@ impl Refine for LoopToSeq {
 
         if matches!(seq.last(), Some(Exp::Break)) {
             // If there is a continue, we cannot drop the break.
-            if seq.iter().any(|e| e.contains_continue()) {
+            if seq
+                .iter()
+                .any(|e| e.contains_continue() || e.contains_break())
+            {
                 return false;
             }
             // If the last expression is a break, we can just drop it.

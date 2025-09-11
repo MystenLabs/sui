@@ -56,6 +56,34 @@ pub enum Exp {
 // -------------------------------------------------------------------------------------------------
 
 impl Exp {
+    pub fn contains_break(&self) -> bool {
+        match self {
+            Exp::Continue => false,
+            Exp::Break => true,
+            // Ignore nested loops and whiles
+            Exp::Loop(_) | Exp::While(_, _) => false,
+            // Check sub-expressions
+            Exp::Seq(seq) => seq.iter().any(|e| e.contains_break()),
+            Exp::IfElse(_, conseq, alt) => {
+                conseq.contains_break()
+                    || if let Some(alt) = &**alt {
+                        alt.contains_break()
+                    } else {
+                        false
+                    }
+            }
+            Exp::Switch(_, cases) => cases.iter().any(|e| e.contains_break()),
+            Exp::Assign(_, exp) => exp.contains_break(),
+            Exp::LetBind(_, exp) => exp.contains_break(),
+            Exp::Call(_, exps) => exps.iter().any(|e| e.contains_break()),
+            Exp::Abort(exp) => exp.contains_break(),
+            Exp::Primitive { op: _, args } => args.iter().any(|e| e.contains_break()),
+            Exp::Data { op: _, args } => args.iter().any(|e| e.contains_break()),
+            Exp::Borrow(_, exp) => exp.contains_break(),
+            Exp::Return(_) | Exp::Value(_) | Exp::Variable(_) | Exp::Constant(_) => false,
+        }
+    }
+
     pub fn contains_continue(&self) -> bool {
         match self {
             Exp::Continue => true,
