@@ -8,7 +8,7 @@ use crate::{
         error::TransactionDriverError, metrics::TransactionDriverMetrics,
         transaction_submitter::TransactionSubmitter, SubmitTransactionOptions,
     },
-    validator_client_monitor::ValidatorClientMonitor,
+    validator_client_monitor::{TxType, ValidatorClientMonitor},
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
@@ -259,9 +259,7 @@ async fn test_submit_transaction_with_amplification() {
         create_test_authority_aggregator_with_rgp(reference_gas_price);
     let authority_aggregator = Arc::new(authority_aggregator);
 
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let submitter = TransactionSubmitter::new(metrics);
 
@@ -494,9 +492,7 @@ async fn test_submit_transaction_invalid_input() {
         create_test_authority_aggregator_with_rgp(reference_gas_price);
     let authority_aggregator = Arc::new(authority_aggregator);
 
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
-        authority_aggregator.clone(),
-    ));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let submitter = TransactionSubmitter::new(metrics);
 

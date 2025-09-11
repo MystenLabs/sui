@@ -4,6 +4,7 @@
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::validator_client_monitor::stats::ClientObservedStats;
+use crate::validator_client_monitor::TxType;
 use crate::validator_client_monitor::{
     metrics::ValidatorClientMetrics, OperationFeedback, OperationType,
 };
@@ -12,6 +13,7 @@ use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
+use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
 use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
@@ -21,26 +23,15 @@ use tokio::{
 };
 use tracing::{debug, info, warn};
 
-/// Monitors validator interactions from the client's perspective.
-///
-/// This component:
-/// - Collects client-side metrics from TransactionDriver operations
-/// - Runs periodic health checks on all validators from the client
-/// - Maintains client-observed statistics for reliability and latency
-/// - Provides intelligent validator selection based on client-observed performance
-/// - Handles epoch changes by cleaning up stale validator data
-///
-/// The monitor runs a background task for health checks and uses
-/// exponential moving averages to smooth client-side measurements.
-pub struct ValidatorClientMonitor<A: Clone> {
+/// Pool of monitors for different transaction types. It allows us to both manage multiple monitors per specific
+/// transaction type and also run health check operations updating all the monitors.
+pub struct ValidatorClientMonitorPool<A: Clone> {
     config: ValidatorClientMonitorConfig,
-    metrics: Arc<ValidatorClientMetrics>,
-    client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
-    cached_scores: RwLock<Option<HashMap<AuthorityName, f64>>>,
+    monitors: HashMap<TxType, Arc<ValidatorClientMonitor>>,
 }
 
-impl<A> ValidatorClientMonitor<A>
+impl<A> ValidatorClientMonitorPool<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -49,36 +40,46 @@ where
         metrics: Arc<ValidatorClientMetrics>,
         authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     ) -> Arc<Self> {
-        info!(
-            "Validator client monitor starting with config: {:?}",
-            config
-        );
-
-        let monitor = Arc::new(Self {
-            config: config.clone(),
-            metrics,
-            client_stats: RwLock::new(ClientObservedStats::new(config)),
+        let mut monitors = HashMap::new();
+        for tx_type in TxType::iter() {
+            monitors.insert(
+                tx_type,
+                ValidatorClientMonitor::new(config.clone(), metrics.clone(), tx_type),
+            );
+        }
+        let pool = Arc::new(Self {
+            config,
             authority_aggregator,
-            cached_scores: RwLock::new(None),
+            monitors,
         });
 
-        let monitor_clone = monitor.clone();
+        let pool_clone = pool.clone();
         tokio::spawn(async move {
-            monitor_clone.run_health_checks().await;
+            pool_clone.run_health_checks().await;
         });
 
-        monitor
+        pool
     }
 
-    #[cfg(test)]
-    pub fn new_for_test(authority_aggregator: Arc<AuthorityAggregator<A>>) -> Arc<Self> {
-        use prometheus::Registry;
+    // Gets a monitor for a specific transaction type.
+    pub fn get_monitor(&self, tx_type: TxType) -> Arc<ValidatorClientMonitor> {
+        self.monitors
+            .get(&tx_type)
+            .unwrap_or_else(|| panic!("Monitor for transaction type {:?} not found", tx_type))
+            .clone()
+    }
 
-        Self::new(
-            ValidatorClientMonitorConfig::default(),
-            Arc::new(ValidatorClientMetrics::new(&Registry::default())),
-            Arc::new(ArcSwap::new(authority_aggregator)),
-        )
+    // Records the interaction result to all monitors. This is mostly used to update records during health checks which don't necessary refer to a specific monitor.
+    fn record_interaction_result_all_monitors(&self, feedback: OperationFeedback) {
+        for monitor in self.monitors.values() {
+            monitor.record_interaction_result(feedback.clone());
+        }
+    }
+
+    fn update_cached_scores_all_monitors(&self, authority_agg: &AuthorityAggregator<A>) {
+        for monitor in self.monitors.values() {
+            monitor.update_cached_scores(authority_agg);
+        }
     }
 
     /// Background task that runs periodic health checks on all validators.
@@ -95,9 +96,9 @@ where
             let authority_agg = self.authority_aggregator.load();
 
             let current_validators: Vec<_> = authority_agg.committee.names().cloned().collect();
-            self.client_stats
-                .write()
-                .retain_validators(&current_validators);
+            for monitor in self.monitors.values() {
+                monitor.retain_validators(&current_validators);
+            }
 
             let mut tasks = JoinSet::new();
 
@@ -106,7 +107,7 @@ where
                 let display_name = authority_agg.get_display_name(&name);
                 let client = safe_client.clone();
                 let timeout_duration = self.config.health_check_timeout;
-                let monitor = self.clone();
+                let pool = self.clone();
 
                 tasks.spawn(async move {
                     let start = Instant::now();
@@ -119,7 +120,7 @@ where
                         // TODO: Actually use the response details.
                         Ok(Ok(_response)) => {
                             let latency = start.elapsed();
-                            monitor.record_interaction_result(OperationFeedback {
+                            pool.record_interaction_result_all_monitors(OperationFeedback {
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
@@ -128,7 +129,7 @@ where
                         }
                         Ok(Err(_)) => {
                             let _latency = start.elapsed();
-                            monitor.record_interaction_result(OperationFeedback {
+                            pool.record_interaction_result_all_monitors(OperationFeedback {
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
@@ -136,7 +137,7 @@ where
                             });
                         }
                         Err(_) => {
-                            monitor.record_interaction_result(OperationFeedback {
+                            pool.record_interaction_result_all_monitors(OperationFeedback {
                                 authority_name: name,
                                 display_name,
                                 operation: OperationType::HealthCheck,
@@ -153,18 +154,63 @@ where
                 }
             }
 
-            self.update_cached_scores();
+            self.update_cached_scores_all_monitors(&authority_agg);
         }
     }
 }
 
-impl<A: Clone> ValidatorClientMonitor<A> {
+/// Monitors validator interactions from the client's perspective.
+///
+/// This component:
+/// - Collects client-side metrics from TransactionDriver operations
+/// - Runs periodic health checks on all validators from the client
+/// - Maintains client-observed statistics for reliability and latency
+/// - Provides intelligent validator selection based on client-observed performance
+/// - Handles epoch changes by cleaning up stale validator data
+///
+/// The monitor runs a background task for health checks and uses
+/// exponential moving averages to smooth client-side measurements.
+pub struct ValidatorClientMonitor {
+    metrics: Arc<ValidatorClientMetrics>,
+    client_stats: RwLock<ClientObservedStats>,
+    cached_scores: RwLock<Option<HashMap<AuthorityName, f64>>>,
+    tx_type: TxType,
+}
+
+impl ValidatorClientMonitor {
+    pub fn new(
+        config: ValidatorClientMonitorConfig,
+        metrics: Arc<ValidatorClientMetrics>,
+        tx_type: TxType,
+    ) -> Arc<Self> {
+        info!("Validator client monitor starting for type: {:?}", tx_type);
+
+        Arc::new(Self {
+            metrics,
+            client_stats: RwLock::new(ClientObservedStats::new(config)),
+            cached_scores: RwLock::new(None),
+            tx_type,
+        })
+    }
+
+    #[cfg(test)]
+    pub fn new_for_test(tx_type: TxType) -> Arc<Self> {
+        use prometheus::Registry;
+
+        Self::new(
+            ValidatorClientMonitorConfig::default(),
+            Arc::new(ValidatorClientMetrics::new(&Registry::default())),
+            tx_type,
+        )
+    }
+}
+
+impl ValidatorClientMonitor {
     /// Calculate and cache scores for all validators.
     ///
     /// This method is called periodically after health checks complete to update
     /// the cached validator scores.
-    fn update_cached_scores(&self) {
-        let authority_agg = self.authority_aggregator.load();
+    fn update_cached_scores(&self, authority_agg: &AuthorityAggregator<impl Clone>) {
         let committee = &authority_agg.committee;
 
         let score_map = self.client_stats.read().get_all_validator_stats(committee);
@@ -174,7 +220,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             let display_name = authority_agg.get_display_name(validator);
             self.metrics
                 .performance_score
-                .with_label_values(&[&display_name])
+                .with_label_values(&[&display_name, self.tx_type.as_str()])
                 .set(*score);
         }
 
@@ -190,28 +236,29 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// TODO: Consider adding a byzantine flag to the feedback.
     pub fn record_interaction_result(&self, feedback: OperationFeedback) {
         let operation_str = feedback.operation.as_str();
+        let tx_type_str = self.tx_type.as_str();
 
         match feedback.result {
             Ok(latency) => {
                 self.metrics
                     .observed_latency
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, tx_type_str])
                     .observe(latency.as_secs_f64());
                 self.metrics
                     .operation_success
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, tx_type_str])
                     .inc();
             }
             Err(()) => {
                 self.metrics
                     .operation_failure
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, tx_type_str])
                     .inc();
             }
         }
 
         let mut client_stats = self.client_stats.write();
-        client_stats.record_interaction_result(feedback, &self.metrics);
+        client_stats.record_interaction_result(feedback, &self.metrics, self.tx_type);
     }
 
     /// Select validators based on client-observed performance with shuffled top k.
@@ -255,9 +302,13 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         validator_with_scores.into_iter().map(|(v, _)| v).collect()
     }
 
+    pub fn retain_validators(&self, validators: &[AuthorityName]) {
+        self.client_stats.write().retain_validators(validators);
+    }
+
     #[cfg(test)]
-    pub fn force_update_cached_scores(&self) {
-        self.update_cached_scores();
+    pub fn force_update_cached_scores(&self, authority_agg: &AuthorityAggregator<impl Clone>) {
+        self.update_cached_scores(authority_agg);
     }
 
     #[cfg(test)]

@@ -10,6 +10,9 @@ mod tests;
 
 pub use metrics::ValidatorClientMetrics;
 pub use monitor::ValidatorClientMonitor;
+pub use monitor::ValidatorClientMonitorPool;
+use mysten_metrics::TX_TYPE_SHARED_OBJ_TX;
+use mysten_metrics::TX_TYPE_SINGLE_WRITER_TX;
 use strum::EnumIter;
 use sui_types::base_types::AuthorityName;
 
@@ -31,6 +34,21 @@ impl OperationType {
             OperationType::Effects => "effects",
             OperationType::Finalization => "finalization",
             OperationType::HealthCheck => "health_check",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+pub enum TxType {
+    SingleWriter,
+    SharedObject,
+}
+
+impl TxType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TxType::SingleWriter => TX_TYPE_SINGLE_WRITER_TX,
+            TxType::SharedObject => TX_TYPE_SHARED_OBJ_TX,
         }
     }
 }

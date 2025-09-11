@@ -31,8 +31,9 @@ use crate::authority_aggregator::{
     ProcessTransactionResult,
 };
 use crate::authority_client::AuthorityAPI;
+use crate::validator_client_monitor::TxType;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::{spawn_monitored_task, GaugeGuard, TxType};
+use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_macros::fail_point;
 use sui_types::error::{SuiError, SuiResult};

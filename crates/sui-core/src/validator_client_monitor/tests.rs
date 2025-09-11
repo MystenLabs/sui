@@ -49,7 +49,7 @@ mod client_stats_tests {
             result: Ok(Duration::from_millis(100)),
         };
 
-        stats.record_interaction_result(feedback, &metrics);
+        stats.record_interaction_result(feedback, &metrics, TxType::SingleWriter);
 
         // Check validator stats were created and updated
         let validator_stats = stats.validator_stats.get(&validator).unwrap();
@@ -85,7 +85,7 @@ mod client_stats_tests {
                 operation: OperationType::Submit,
                 result: Err(()),
             };
-            stats.record_interaction_result(feedback, &metrics);
+            stats.record_interaction_result(feedback, &metrics, TxType::SingleWriter);
 
             let validator_stats = stats.validator_stats.get(&validator).unwrap();
             assert_eq!(validator_stats.consecutive_failures, i + 1);
@@ -124,6 +124,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(50)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -141,6 +142,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(200)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -153,6 +155,7 @@ mod client_stats_tests {
                 result: Err(()),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Create a committee with both validators
@@ -197,6 +200,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(50)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -210,6 +214,7 @@ mod client_stats_tests {
                     result: Err(()),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -251,6 +256,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(100)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -312,6 +318,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(100)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Create a committee with the validator
@@ -344,6 +351,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(100)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         let initial_reliability = stats
@@ -363,6 +371,7 @@ mod client_stats_tests {
                 result: Err(()),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         let new_reliability = stats
@@ -391,6 +400,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(100)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Both should start at 100ms
@@ -413,6 +423,7 @@ mod client_stats_tests {
                 result: Ok(Duration::from_millis(50)),
             },
             &metrics,
+            TxType::SingleWriter,
         );
 
         // Validator latency should average now at 75ms
@@ -465,6 +476,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(latency)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -487,6 +499,7 @@ mod client_stats_tests {
                     result: Ok(Duration::from_millis(latency)),
                 },
                 &metrics,
+                TxType::SingleWriter,
             );
         }
 
@@ -526,7 +539,7 @@ mod client_monitor_tests {
     #[tokio::test]
     async fn test_validator_selection_top_k_basic() {
         let auth_agg = get_authority_aggregator(4);
-        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let monitor = ValidatorClientMonitor::new_for_test(TxType::SingleWriter);
 
         let committee = auth_agg.committee.clone();
         let validators = committee.names().cloned().collect::<Vec<_>>();
@@ -548,7 +561,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Select validators with k=2
         let selected = monitor.select_shuffled_preferred_validators(&committee, 2);
@@ -569,7 +582,7 @@ mod client_monitor_tests {
     #[tokio::test]
     async fn test_validator_selection_with_failures() {
         let auth_agg = get_authority_aggregator(5);
-        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let monitor = ValidatorClientMonitor::new_for_test(TxType::SingleWriter);
 
         let committee = auth_agg.committee.clone();
         let validators = committee.names().cloned().collect::<Vec<_>>();
@@ -595,7 +608,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Select validators with k=3
         let selected = monitor.select_shuffled_preferred_validators(&committee, 3);
@@ -617,7 +630,7 @@ mod client_monitor_tests {
     #[tokio::test]
     async fn test_validator_selection_empty_committee() {
         let auth_agg = get_authority_aggregator(2);
-        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let monitor = ValidatorClientMonitor::new_for_test(TxType::SingleWriter);
 
         let committee = auth_agg.committee.clone();
         let validators = committee.names().cloned().collect::<Vec<_>>();
@@ -652,7 +665,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Should still select validators from the provided committee
         let selected = monitor.select_shuffled_preferred_validators(&other_committee, 2);
@@ -665,7 +678,7 @@ mod client_monitor_tests {
     #[tokio::test]
     async fn test_validator_selection_more_k_than_validators() {
         let auth_agg = get_authority_aggregator(2);
-        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let monitor = ValidatorClientMonitor::new_for_test(TxType::SingleWriter);
 
         let committee = auth_agg.committee.clone();
         let validators = committee.names().cloned().collect::<Vec<_>>();
@@ -687,7 +700,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Request more validators than available
         let selected = monitor.select_shuffled_preferred_validators(&committee, 5);
@@ -715,7 +728,8 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone());
+        let pool = ValidatorClientMonitorPool::new(config, metrics, auth_agg_swap.clone());
+        let monitor = pool.get_monitor(TxType::SingleWriter);
 
         // Record stats for all initial validators
         for validator in &initial_validators {
@@ -789,7 +803,8 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone());
+        let pool = ValidatorClientMonitorPool::new(config, metrics, auth_agg_swap.clone());
+        let monitor = pool.get_monitor(TxType::SingleWriter);
 
         // Record stats for initial validators
         for validator in &initial_validators {
