@@ -383,7 +383,11 @@ impl KeyValueStoreReader for BigTableClient {
                     .collect(),
                 Some(RowFilter {
                     filter: Some(Filter::ColumnQualifierRegexFilter(
-                        EVENTS_COLUMN_QUALIFIER.into(),
+                        format!(
+                            "^{}$|^{}$",
+                            EVENTS_COLUMN_QUALIFIER, TIMESTAMP_COLUMN_QUALIFIER
+                        )
+                        .into(),
                     )),
                 }),
             )
