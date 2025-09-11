@@ -210,7 +210,7 @@ impl TestPackageGraph {
 
             project = project
                 .file(dir.join("Move.toml"), manifest)
-                .file(dir.join("Move.published"), pubfile);
+                .file(dir.join("Published.toml"), pubfile);
         }
 
         Scenario {
@@ -557,9 +557,9 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("a/Move.published"), @"");
+        assert_snapshot!(graph.read_file("a/Published.toml"), @"");
 
-        assert_snapshot!(graph.read_file("b/Move.published"), @"");
+        assert_snapshot!(graph.read_file("b/Published.toml"), @"");
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -629,7 +629,7 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("c/Move.published"), @r###"
+        assert_snapshot!(graph.read_file("c/Published.toml"), @r###"
         [published._test_env]
         chain-id = "_test_env_id"
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
