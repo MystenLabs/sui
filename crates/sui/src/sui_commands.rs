@@ -1685,11 +1685,12 @@ pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyho
         .read_api()
         .get_chain_identifier()
         .await?;
+    let err_msg = format!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently {chain_id}");
     let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
-        .ok_or_else(|| anyhow::anyhow!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently: {chain_id}"))?;
+        .ok_or_else(|| anyhow::anyhow!(err_msg.clone()))?;
     Ok(match chain_id.chain() {
         Chain::Mainnet => SR2::Node::Mainnet,
         Chain::Testnet => SR2::Node::Testnet,
-        Chain::Unknown => bail!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently"),
+        Chain::Unknown => bail!(err_msg),
     })
 }
