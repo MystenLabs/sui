@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMetrics};
-use mysten_common::decay_moving_average::DecayMovingAverage;
+use mysten_common::moving_window::MovingWindow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -18,12 +18,12 @@ use tracing::debug;
 // 2. Some reports are more critical than others. For example, a health check
 //    report is more critical than a submit report in terms of failures status.
 
-/// Decay factor for reliability EMA - lower values give more weight to recent observations
-const RELIABILITY_DECAY_FACTOR: f64 = 0.5;
-/// Decay factor for latency EMA - higher values smooth out spikes better
-const LATENCY_DECAY_FACTOR: f64 = 0.9;
-/// Decay factor for max latency - higher values keep max stable over time
-const MAX_LATENCY_DECAY_FACTOR: f64 = 0.99;
+/// Size of the moving window for reliability measurements
+const RELIABILITY_MOVING_WINDOW_SIZE: usize = 100;
+/// Size of the moving window for latency measurements
+const LATENCY_MOVING_WINDOW_SIZE: usize = 100;
+/// Size of the moving window for max latency measurements
+const MAX_LATENCY_MOVING_WINDOW_SIZE: usize = 100;
 
 /// Complete client-observed statistics for validator interactions.
 ///
@@ -48,10 +48,10 @@ pub struct ClientObservedStats {
 /// to smooth measurements while maintaining responsiveness to changes.
 #[derive(Debug, Clone)]
 pub struct ValidatorClientStats {
-    /// Exponential moving average of success rate (0.0 to 1.0)
-    pub reliability: DecayMovingAverage,
-    /// EMA latencies for each operation type (Submit, Effects, HealthCheck)
-    pub average_latencies: HashMap<OperationType, DecayMovingAverage>,
+    /// Moving window of success rate (0.0 to 1.0)
+    pub reliability: MovingWindow,
+    /// Moving window of latencies for each operation type (Submit, Effects, HealthCheck)
+    pub average_latencies: HashMap<OperationType, MovingWindow>,
     /// Counter for consecutive failures - resets on success
     pub consecutive_failures: u32,
     /// Time when validator was temporarily excluded due to failures.
@@ -62,7 +62,7 @@ pub struct ValidatorClientStats {
 impl ValidatorClientStats {
     pub fn new(init_reliability: f64) -> Self {
         Self {
-            reliability: DecayMovingAverage::new(init_reliability, RELIABILITY_DECAY_FACTOR),
+            reliability: MovingWindow::new(init_reliability, RELIABILITY_MOVING_WINDOW_SIZE),
             average_latencies: HashMap::new(),
             consecutive_failures: 0,
             exclusion_time: None,
@@ -72,14 +72,12 @@ impl ValidatorClientStats {
     pub fn update_average_latency(&mut self, operation: OperationType, new_latency: Duration) {
         match self.average_latencies.entry(operation) {
             Entry::Occupied(mut entry) => {
-                entry
-                    .get_mut()
-                    .update_moving_average(new_latency.as_secs_f64());
+                entry.get_mut().add_value(new_latency.as_secs_f64());
             }
             Entry::Vacant(entry) => {
-                entry.insert(DecayMovingAverage::new(
+                entry.insert(MovingWindow::new(
                     new_latency.as_secs_f64(),
-                    LATENCY_DECAY_FACTOR,
+                    LATENCY_MOVING_WINDOW_SIZE,
                 ));
             }
         }
@@ -95,7 +93,7 @@ impl ValidatorClientStats {
 pub struct GlobalStats {
     /// Maximum observed latencies for each operation type across all validators.
     /// Used to normalize individual validator latencies in score calculations.
-    pub max_latencies: HashMap<OperationType, DecayMovingAverage>,
+    pub max_latencies: HashMap<OperationType, MovingWindow>,
 }
 
 impl ClientObservedStats {
@@ -124,12 +122,12 @@ impl ClientObservedStats {
 
         match feedback.result {
             Ok(latency) => {
-                validator_stats.reliability.update_moving_average(1.0);
+                validator_stats.reliability.add_value(1.0);
                 validator_stats.consecutive_failures = 0;
                 validator_stats.update_average_latency(feedback.operation, latency);
             }
             Err(()) => {
-                validator_stats.reliability.update_moving_average(0.0);
+                validator_stats.reliability.add_value(0.0);
                 validator_stats.consecutive_failures += 1;
 
                 // Exclude validator temporarily after too many consecutive failures
@@ -162,19 +160,12 @@ impl ClientObservedStats {
 
         match self.global_stats.max_latencies.entry(operation) {
             Entry::Occupied(mut entry) => {
-                let current_max = entry.get().get();
-                if latency_secs > current_max {
-                    // New latency is higher - immediately update to this value
-                    entry.get_mut().override_moving_average(latency_secs);
-                } else {
-                    // New latency is lower - apply decay to gradually reduce max
-                    entry.get_mut().update_moving_average(latency_secs);
-                }
+                entry.get_mut().add_value(latency_secs);
             }
             Entry::Vacant(entry) => {
-                entry.insert(DecayMovingAverage::new(
+                entry.insert(MovingWindow::new(
                     latency_secs,
-                    MAX_LATENCY_DECAY_FACTOR,
+                    MAX_LATENCY_MOVING_WINDOW_SIZE,
                 ));
             }
         }
