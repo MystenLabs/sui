@@ -160,6 +160,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.package_graph().root_package().name()
     }
 
+    /// Returns the `display_name` for the root package.
+    /// Invariant: For modern packages, this is always equal to `name().as_str()`
+    pub fn display_name(&self) -> &str {
+        self.package_graph().root_package().display_name()
+    }
+
     /// The path to the root of the package
     pub fn path(&self) -> &PackagePath {
         &self.package_path
@@ -250,7 +256,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 PackageError::Generic(format!(
                     "Could not find publication info for {} environment in package {}",
                     env,
-                    self.name()
+                    self.display_name()
                 ))
             })
             .cloned()

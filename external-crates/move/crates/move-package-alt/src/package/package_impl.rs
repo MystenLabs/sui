@@ -150,6 +150,14 @@ impl<F: MoveFlavor> Package<F> {
         self.metadata.name.as_ref()
     }
 
+    pub fn display_name(&self) -> &str {
+        if let Some(legacy_data) = self.legacy_data.as_ref() {
+            &legacy_data.legacy_name
+        } else {
+            self.metadata.name.as_ref().as_str()
+        }
+    }
+
     pub fn digest(&self) -> &Digest {
         &self.digest
     }

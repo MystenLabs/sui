@@ -25,7 +25,6 @@ use crate::graph::LinkageError;
 use crate::graph::RenameError;
 use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
-use crate::schema::PackageName;
 
 /// Result type for package operations
 pub type PackageResult<T> = Result<T, PackageError>;
@@ -74,7 +73,7 @@ pub enum PackageError {
     )]
     DuplicateNamedAddress {
         address: Identifier,
-        package: PackageName,
+        package: String,
     },
 }
 
