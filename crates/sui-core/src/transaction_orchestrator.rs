@@ -398,7 +398,7 @@ where
         // Wait for execution timeout.
         let mut timeout_future = tokio::time::sleep(finality_timeout).boxed();
 
-        loop {
+        let result = loop {
             tokio::select! {
                 // This branch is disabled if execution_futures is empty.
                 Some(result) = execution_futures.next() => {
@@ -406,7 +406,7 @@ where
                         Ok(resp) => {
                             // First success gets returned.
                             debug!(?tx_digest, "Execution succeeded, returning response");
-                            return Ok((resp, false));
+                            break Ok((resp, false));
                         }
                         Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
                             debug!(
@@ -425,7 +425,7 @@ where
 
                     // Last error must have been recorded.
                     if execution_futures.is_empty() {
-                        return Err(last_execution_error.unwrap());
+                        break Err(last_execution_error.unwrap());
                     }
                 }
 
@@ -471,7 +471,7 @@ where
                                     output_objects,
                                     auxiliary_data: None,
                                 };
-                                return Ok((response, true));
+                                break Ok((response, true));
                             }
                         }
                         Err(_) => {
@@ -500,10 +500,20 @@ where
                         }
                     }
 
-                    return Err(QuorumDriverError::TimeoutBeforeFinality);
+                    break Err(QuorumDriverError::TimeoutBeforeFinality);
                 }
             }
+        };
+
+        // Clean up transaction from WAL log
+        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
+            warn!(
+                ?tx_digest,
+                "Failed to finish transaction in pending transaction log: {err}"
+            );
         }
+
+        result
     }
 
     #[instrument(level = "error", skip_all, fields(tx_digest = ?verified_transaction.digest()))]
@@ -663,14 +673,6 @@ where
             effects_queue_result.map(|(transaction, response)| (transaction, response.clone())),
         ) {
             debug!(?tx_digest, "No subscriber found for TD effects: {}", err);
-        }
-
-        // Clean up transaction from WAL log
-        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
-            warn!(
-                ?tx_digest,
-                "Failed to finish transaction in pending transaction log: {err}"
-            );
         }
 
         match td_response {
@@ -975,7 +977,7 @@ where
         });
     }
 
-    fn load_all_pending_transactions(&self) -> SuiResult<Vec<VerifiedTransaction>> {
+    pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
         self.pending_tx_log.load_all_pending_transactions()
     }
 }
