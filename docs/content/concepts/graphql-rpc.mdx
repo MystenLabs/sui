@@ -185,7 +185,7 @@ fragment MoveValueFields on MoveValue {
 
 ## Pagination
 
-GraphQL supports queries that fetch multiple kinds of data, potentially nested. For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`.
+GraphQL supports queries that fetch multiple kinds of data, potentially nested. For example, the following query retrieves the first 10 transactions in epoch `97` (along with the digest, the sender's address, the gas object returned after paying for the transaction, the gas price, and the gas budget).
 
 ```graphql
 query {
