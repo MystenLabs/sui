@@ -4,9 +4,17 @@ description: Derived objects enable deterministic object addressing, Transfer-to
 keywords: [ Derived objects, deterministic addressing, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
 ---
 
-Derived objects enable you to deterministically compute object IDs from a parent object ID and a key, both on- and off-chain. Put another way, the derived object logic means you can can compute the ID of an object before it's even created on the network. 
+Derived objects enable you to deterministically compute object IDs from a parent object ID and a key, both on- and off-chain. This means you can compute the ID of a derived object before you ever create it on the blockchain. 
 
+Most objects on Sui get an ID assigned to them upon object creation that is guarnateed to be unique to every other object on the network. Derived objects, on the other hand, have an ID that is claimed from the mapping of a parent object and a key. This `parent-key` mapping ensures that the claimed ID is a singular namespace because the objects derived from the parent object (unique ID that exists on-chain) are paired with individual keys. It's this mapping that makes the resulting ID of derived objects deterministic.
 
+When you claim an ID from the `derived_object` module, you pass the parent object and key. The parent object already exists on-chain, either at package publish time or through a transaction with the smart contract. The parent object is [shared](/concepts/object-ownership/shared.mdx) so that any user can create a derived object using the same parent. 
+
+The key is typically an address or other object ID, which are themselves unique. This is not a requirement, though, as the `derived_object` module uses a `ClaimedStatus` enum to mark already claimed IDs as `Reserved`. Trying to claim an ID with a `Reserved` enum value results in transaction failure. So, you could use something like the US lowercase alphabet as your key, but would then be limited to 24 derived objects from one parent.
+
+Although claiming the ID of the derived object requires a parent object, the derived object is not a child of the parent. This is an important distinction as the the lack of a hierarchal relationship means that using the derived object as inputs to your transactions does not require sequential processing through the parent. The derived object is its own entity; the parent only exists to ensure its uniqueness. This relationship provides parallelization that is not possible with parent-child relationships.
+
+Because you can compute the ID of a derived object off-chain, your client logic is able to treat as-yet unclaimed IDs as if they already exist. If your key is a limited one, such as the US alphabet, and two clients tried to claim the ID from the same parent using the `r` key, then the first one to submit the transaction claims the ID and the subsequent client transaction fails.
 
 <details>
 <summary>
@@ -68,67 +76,11 @@ The following matrix highlights some of the differences between using dynamic fi
 | Supports deletion? | ✅ Yes | ✅ Yes |
 | Supports reclaiming? | ❌ Currently no | ✅ Yes |
 
-## Use cases
+## Registries {#registries}
 
-Derived objects enable many useful patterns:
+The possibilities and uses for derived objects are only limited by your imagination (or AI prompt quotas). One of the more obvious implementations is their application in registries. The following examples compare dynamic field tables, pointer-based, and derived objects registries to illustrate the core tradeoffs between the different patterns.
 
-### Gaming: Deterministic loot boxes
-
-Players can compute loot box addresses before opening. This allows for pre-funding, conditional reveals, and parallel processing.
-
-```move
-public fun derive_loot_box_address(game_id: ID, player: address, box_type: u8): address {
-    let key = bcs::to_bytes(&player);
-    vector::append(&mut key, bcs::to_bytes(&box_type));
-    derived_object::derive_address(game_id, key)
-}
-```
-
-### DeFi: Per-user trading accounts
-
-Each user gets a unique trading account that can receive assets before the user even creates it, enabling seamless onboarding.
-
-```move
-public fun create_trading_account(exchange_id: &mut UID, ctx: &mut TxContext): TradingAccount {
-    let account = TradingAccount {
-        id: derived_object::claim(exchange_id, ctx.sender()),
-        balance: 0,
-        positions: vector::empty(),
-    };
-    account
-}
-```
-
-### Social: Content addressing
-
-Social media posts, NFT collections, or any content can have deterministic addresses based on creator and content hash.
-
-```move
-public fun derive_post_address(platform_id: ID, creator: address, content_hash: vector<u8>): address {
-    let key = bcs::to_bytes(&creator);
-    vector::append(&mut key, content_hash);
-    derived_object::derive_address(platform_id, key)
-}
-```
-
-### Cross-chain: Bridged asset destinations
-
-Bridge contracts can compute destination addresses on Sui before assets arrive, enabling atomic cross-chain swaps.
-
-```move
-
-public fun derive_bridge_vault(bridge_id: ID, source_chain: u8, source_tx: vector<u8>): address {
-    let key = bcs::to_bytes(&source_chain);
-    vector::append(&mut key, source_tx);
-    derived_object::derive_address(bridge_id, key)
-}
-```
-
-### Registries: Comparison between traditional and derived object patterns {#registries}
-
-The following code examples demonstrate the registry use case, comparing dynamic field tables, pointer-based registries, and derived objects. While registries are just one application of derived objects, the following patterns illustrate the core tradeoffs.
-
-#### Classic registry
+### Classic registry
 
 Perhaps the biggest advantage for classic registries are the straightforward queries. This increased discoverability comes at the cost of parallelization, however, as all operations must go through the parent object.
 
@@ -169,9 +121,9 @@ public fun receive_from_vault<T key + store>(
 }
 ```
 
-#### Registry with pointer
+### Registry with pointer
 
-If parallelization is an important aspect for your project needs, you could create a registry that uses a pointer. This approach provides good parallelization, but makes discoverability a 2-sequential-network-hop operation. To find a vault, you first have to find its pointer.
+If parallelization is an important aspect for your project needs, you could create a registry that uses a pointer. This approach provides good parallelization, but requires 2 sequential network hops to discover. To find a vault, you first have to find its pointer.
 
 ```move
 const EVaultAlreadyExists: u64 = 0;
@@ -211,7 +163,7 @@ public fun receive_from_vault<T key + store>(
 }
 ```
 
-#### Derived objects
+### Derived objects
 
 Using derived objects doesn't require a tradeoff between discoverability and parallelization.  
 
