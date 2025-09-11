@@ -817,17 +817,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.process_execution_time_observations(&mut state, execution_time_observations);
         self.process_checkpoint_signature_messages(checkpoint_signature_messages);
 
-        let randomness_state_updated = self.process_randomness_dkg_messages(
+        let randomness_dkg_updates = self.process_randomness_dkg_messages(
             randomness_manager.as_deref_mut(),
             randomness_dkg_messages,
-        ) | self.process_randomness_dkg_confirmations(
+        );
+
+        let randomness_dkg_confirmation_updates = self.process_randomness_dkg_confirmations(
             &mut state,
             randomness_manager.as_deref_mut(),
             randomness_dkg_confirmations,
         );
 
         // DONE(commit-handler-rewrite): [ssm] advance randomness state if needed
-        if randomness_state_updated {
+        if randomness_dkg_updates || randomness_dkg_confirmation_updates {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
                 randomness_manager
                     .advance_dkg(&mut state.output, commit_info.round)
@@ -867,7 +869,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         };
 
         let make_checkpoint = should_accept_tx || final_round;
-
         if !make_checkpoint {
             // No need for any further processing
             // DONE(commit-handler-rewrite): do not insert commit prologue if !should_accept_tx()
@@ -890,48 +891,46 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         // DONE(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
-        if make_checkpoint {
-            let checkpoint_height = self
-                .epoch_store
-                .calculate_pending_checkpoint_height(commit_info.round);
+        let checkpoint_height = self
+            .epoch_store
+            .calculate_pending_checkpoint_height(commit_info.round);
 
-            // DONE(commit-handler-rewrite): [ssm] write pending randomness checkpoint if we have a new randomness round, OR dkg failed while there are pending randomness txns
+        // DONE(commit-handler-rewrite): [ssm] write pending randomness checkpoint if we have a new randomness round, OR dkg failed while there are pending randomness txns
 
-            // Determine whether to write pending checkpoint for user tx with randomness.
-            // - If randomness is not generated for this commit, we will skip the
-            //   checkpoint with the associated height. Therefore checkpoint heights may
-            //   not be contiguous.
-            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
-            //   for randomness tx that are canceled.
-            let should_write_random_checkpoint = state.randomness_round.is_some()
-                || (state.dkg_failed && !randomness_schedulables.is_empty());
+        // Determine whether to write pending checkpoint for user tx with randomness.
+        // - If randomness is not generated for this commit, we will skip the
+        //   checkpoint with the associated height. Therefore checkpoint heights may
+        //   not be contiguous.
+        // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
+        //   for randomness tx that are canceled.
+        let should_write_random_checkpoint = state.randomness_round.is_some()
+            || (state.dkg_failed && !randomness_schedulables.is_empty());
 
+        let pending_checkpoint = PendingCheckpoint {
+            // DONE(commit-handler-rewrite): compute checkpoint roots (this should be done at the end)
+            roots: schedulables.iter().map(|s| s.key()).collect(),
+            details: PendingCheckpointInfo {
+                timestamp_ms: commit_info.timestamp,
+                last_of_epoch: final_round && !should_write_random_checkpoint,
+                checkpoint_height,
+            },
+        };
+        self.epoch_store
+            .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
+            .expect("failed to write pending checkpoint");
+
+        if should_write_random_checkpoint {
             let pending_checkpoint = PendingCheckpoint {
-                // DONE(commit-handler-rewrite): compute checkpoint roots (this should be done at the end)
-                roots: schedulables.iter().map(|s| s.key()).collect(),
+                roots: randomness_schedulables.iter().map(|s| s.key()).collect(),
                 details: PendingCheckpointInfo {
                     timestamp_ms: commit_info.timestamp,
-                    last_of_epoch: final_round && !should_write_random_checkpoint,
-                    checkpoint_height,
+                    last_of_epoch: final_round,
+                    checkpoint_height: checkpoint_height + 1,
                 },
             };
             self.epoch_store
                 .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
                 .expect("failed to write pending checkpoint");
-
-            if should_write_random_checkpoint {
-                let pending_checkpoint = PendingCheckpoint {
-                    roots: randomness_schedulables.iter().map(|s| s.key()).collect(),
-                    details: PendingCheckpointInfo {
-                        timestamp_ms: commit_info.timestamp,
-                        last_of_epoch: final_round,
-                        checkpoint_height: checkpoint_height + 1,
-                    },
-                };
-                self.epoch_store
-                    .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
-                    .expect("failed to write pending checkpoint");
-            }
         }
 
         let notifications: Vec<_> = state
@@ -967,15 +966,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // DONE(commit-handler-rewrite): notify checkpoint service
         // Only after batch is written, notify checkpoint service to start building any new
         // pending checkpoints.
-        if make_checkpoint {
-            debug!(
-                ?commit_info.round,
-                "Notifying checkpoint service about new pending checkpoint(s)",
-            );
-            self.checkpoint_service
-                .notify_checkpoint()
-                .expect("failed to notify checkpoint service");
-        }
+        debug!(
+            ?commit_info.round,
+            "Notifying checkpoint service about new pending checkpoint(s)",
+        );
+        self.checkpoint_service
+            .notify_checkpoint()
+            .expect("failed to notify checkpoint service");
 
         // DONE(commit-handler-rewrite): Once commit processing is recorded, kick off randomness generation.
         if let Some(randomness_round) = state.randomness_round {
