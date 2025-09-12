@@ -576,12 +576,17 @@ public struct DenyCap<phantom T> has key, store {
     id: UID,
 }
 
-// TODO: enable deprecation in a follow up PR
+// TODO: replace deprecation message in a follow up PR
 // #[deprecated(note = b"For new coins, use `new_currency_with_otw` and use `make_regulated`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2` and then use migration functions in `coin_registry`")]
 // #[allow(deprecated_usage)]
 /// This creates a new currency, via `create_currency`, but with an extra capability that
 /// allows for specific addresses to have their coins frozen. Those addresses cannot interact
 /// with the coin as input objects.
+#[
+    deprecated(
+        note = b"For new coins, use `create_regulated_currency_v2`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2`",
+    ),
+]
 public fun create_regulated_currency<T: drop>(
     witness: T,
     decimals: u8,
