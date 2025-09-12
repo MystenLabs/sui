@@ -9,8 +9,7 @@ function updateCliOutput() {
   try {
     console.log('📋 Running CLI command...');
     
-    // Replace 'your-cli-command --help' with your actual command
-    const command = 'sui client --help'; // Start with a simple command that definitely works
+    const command = 'sui client --help';
     console.log('Command:', command);
     
     const output = execSync(command, { 
@@ -22,7 +21,6 @@ function updateCliOutput() {
     console.log('Output length:', output.length);
     console.log('First 100 chars:', output.substring(0, 100));
 
-    // Update this path to your actual MDX file
     const mdxFile = path.join(process.cwd(), '..', 'content', 'references', 'cli', 'client.mdx');
     console.log('Target file:', mdxFile);
     
