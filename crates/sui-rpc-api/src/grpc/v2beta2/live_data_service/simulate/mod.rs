@@ -109,7 +109,9 @@ pub fn simulate_transaction(
         //
         // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
         // overwrite the resolved budget with the more accurate estimate.
-        if request.transaction().gas_payment().budget.is_none() {
+        if request.transaction().gas_payment().budget.is_none()
+            && request.transaction().bcs_opt().is_none()
+        {
             let simulation_result = executor
                 .simulate_transaction(transaction.clone(), TransactionChecks::Enabled)
                 .map_err(anyhow::Error::from)?;
