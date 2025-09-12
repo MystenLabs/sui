@@ -10,6 +10,8 @@ use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
 
+use super::CEvent;
+use crate::api::types::lookups::TxBoundsFilter;
 use crate::{
     api::scalars::{
         module_filter::ModuleFilter, sui_address::SuiAddress, type_filter::TypeFilter,
@@ -18,8 +20,6 @@ use crate::{
     error::{feature_unavailable, RpcError},
     pagination::Page,
 };
-
-use super::CEvent;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct EventFilter {
@@ -170,6 +170,20 @@ impl EventFilter {
         }
 
         true
+    }
+}
+
+impl TxBoundsFilter for EventFilter {
+    fn after_checkpoint(&self) -> Option<UInt53> {
+        self.after_checkpoint
+    }
+
+    fn at_checkpoint(&self) -> Option<UInt53> {
+        self.at_checkpoint
+    }
+
+    fn before_checkpoint(&self) -> Option<UInt53> {
+        self.before_checkpoint
     }
 }
 

@@ -1,15 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Range, RangeInclusive};
-
 use anyhow::Context as _;
 use async_graphql::Context;
 use diesel::{sql_types::BigInt, QueryableByName};
+use std::ops::Range;
+use std::sync::Arc;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
 
-use crate::{error::RpcError, pagination::Page};
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
+use crate::{api::scalars::uint53::UInt53, error::RpcError, pagination::Page};
+
+pub(crate) trait TxBoundsFilter {
+    fn after_checkpoint(&self) -> Option<UInt53>;
+    fn at_checkpoint(&self) -> Option<UInt53>;
+    fn before_checkpoint(&self) -> Option<UInt53>;
+}
 
 /// The tx_sequence_numbers within checkpoint bounds
 /// The checkpoint lower and upper bounds are used to determine the inclusive lower (tx_lo) and exclusive
@@ -25,11 +34,33 @@ use crate::{error::RpcError, pagination::Page};
 /// `hi_inclusive`).
 pub(crate) async fn tx_bounds<C>(
     ctx: &Context<'_>,
-    cp_bounds: &RangeInclusive<u64>,
-    global_tx_hi: u64,
+    scope: &Scope,
+    filter: &impl TxBoundsFilter,
+    reader_lo: u64,
     page: &Page<C>,
     f: fn(&C) -> u64,
-) -> Result<Range<u64>, RpcError> {
+) -> Result<Option<Range<u64>>, RpcError> {
+    if page.limit() == 0 {
+        return Ok(None);
+    }
+
+    let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+        return Ok(None);
+    };
+
+    let Some(cp_bounds) = checkpoint_bounds(
+        filter.after_checkpoint().map(u64::from),
+        filter.at_checkpoint().map(u64::from),
+        filter.before_checkpoint().map(u64::from),
+        reader_lo,
+        checkpoint_viewed_at,
+    ) else {
+        return Ok(None);
+    };
+
+    let watermarks: &Arc<Watermarks> = ctx.data()?;
+    let global_tx_hi = watermarks.high_watermark().transaction();
+
     let pg_reader: &PgReader = ctx.data()?;
     let query = query!(
         r#"
@@ -95,5 +126,5 @@ SELECT
         .before()
         .map_or(tx_hi, |cursor| f(cursor).saturating_add(1).min(tx_hi));
 
-    Ok(tx_lo..tx_hi)
+    Ok(Some(tx_lo..tx_hi))
 }

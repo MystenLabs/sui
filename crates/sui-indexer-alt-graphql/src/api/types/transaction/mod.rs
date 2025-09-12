@@ -26,7 +26,6 @@ use sui_types::{
 
 use super::{
     address::Address,
-    checkpoint::filter::checkpoint_bounds,
     epoch::Epoch,
     gas_input::GasInput,
     transaction::filter::TransactionFilter,
@@ -202,45 +201,28 @@ impl Transaction {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CTransaction>,
-        TransactionFilter {
-            after_checkpoint,
-            at_checkpoint,
-            before_checkpoint,
-            function,
-            kind,
-            affected_address,
-            affected_object,
-            sent_address,
-        }: TransactionFilter,
+        filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(Connection::new(false, false));
-        };
-
         let mut conn = Connection::new(false, false);
-
-        if page.limit() == 0 {
-            return Ok(Connection::new(false, false));
-        }
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
         let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
 
-        let global_tx_hi = watermarks.high_watermark().transaction();
-
-        let Some(cp_bounds) = checkpoint_bounds(
-            after_checkpoint.map(u64::from),
-            at_checkpoint.map(u64::from),
-            before_checkpoint.map(u64::from),
-            reader_lo,
-            checkpoint_viewed_at,
-        ) else {
-            return Ok(Connection::new(false, false));
+        let Some(tx_bounds) =
+            tx_bounds(ctx, &scope, &filter, reader_lo, &page, |c| *c.deref()).await?
+        else {
+            return Ok(conn);
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| *c.deref()).await?;
-
+        let TransactionFilter {
+            function,
+            kind,
+            affected_address,
+            affected_object,
+            sent_address,
+            ..
+        } = filter;
         let tx_digest_keys = if let Some(function) = function {
             tx_call(ctx, tx_bounds, &page, function, sent_address).await?
         } else if let Some(kind) = kind {

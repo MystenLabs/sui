@@ -3,6 +3,7 @@
 
 use async_graphql::{CustomValidator, Enum, InputObject, InputValueError};
 
+use crate::api::types::lookups::TxBoundsFilter;
 use crate::{
     api::scalars::{fq_name_filter::FqNameFilter, sui_address::SuiAddress, uint53::UInt53},
     intersect,
@@ -94,5 +95,19 @@ impl TransactionFilter {
             affected_object: intersect!(affected_object, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
         })
+    }
+}
+
+impl TxBoundsFilter for TransactionFilter {
+    fn after_checkpoint(&self) -> Option<UInt53> {
+        self.after_checkpoint
+    }
+
+    fn at_checkpoint(&self) -> Option<UInt53> {
+        self.at_checkpoint
+    }
+
+    fn before_checkpoint(&self) -> Option<UInt53> {
+        self.before_checkpoint
     }
 }
