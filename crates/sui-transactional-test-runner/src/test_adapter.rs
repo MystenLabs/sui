@@ -17,6 +17,7 @@ use fastcrypto::traits::ToFromBytes;
 use iso8601::Duration as IsoDuration;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_command_line_common::error_bitset::ErrorBitset;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     editions::{Edition, Flavor},
@@ -72,6 +73,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::execution_status::ExecutionFailureStatus;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
@@ -1821,6 +1823,20 @@ impl SuiTestAdapter {
                     format!("Debug of error: {error:?} at command {command:?}")
                 } else {
                     format!("Execution Error: {}", error_opt.unwrap())
+                };
+                let error = match error {
+                    ExecutionFailureStatus::MoveAbort(loc, code)
+                        if ErrorBitset::from_u64(*code).is_some() =>
+                    {
+                        let clever_code = ErrorBitset::from_u64(*code).unwrap();
+                        let line_number = format!("at line {}", clever_code.line_number().unwrap());
+                        let code = match clever_code.error_code() {
+                            Some(code) => format!("{line_number} with clever code {}", code),
+                            None => line_number,
+                        };
+                        format!("Move Abort in {loc} {code}")
+                    }
+                    _ => format!("{error}"),
                 };
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
                     "Transaction Effects Status: {error}\n{execution_msg}",

@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! WritePathPendingTransactionLog is used in the transaction write path (e.g. in
-//! TransactionOrchestrator) for transaction submission processing. It helps to achieve:
+//! WritePathPendingTransactionLog is used in TransactionOrchestrator
+//! to deduplicate transaction submission processing. It helps to achieve:
 //! 1. At one time, a transaction is only processed once.
 //! 2. When Fullnode crashes and restarts, the pending transaction will be loaded and retried.
 
-use crate::mutex_table::MutexTable;
+use std::collections::HashSet;
 use std::path::PathBuf;
+
+use parking_lot::Mutex;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::EmptySignInfo;
 use sui_types::error::{SuiError, SuiResult};
@@ -17,17 +19,16 @@ use typed_store::rocks::MetricConf;
 use typed_store::DBMapUtils;
 use typed_store::{rocks::DBMap, traits::Map};
 
-pub type IsFirstRecord = bool;
-const NUM_SHARDS: usize = 4096;
-
 #[derive(DBMapUtils)]
 struct WritePathPendingTransactionTable {
     logs: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, EmptySignInfo>>,
 }
 
 pub struct WritePathPendingTransactionLog {
+    // Disk storage for pending transactions.
     pending_transactions: WritePathPendingTransactionTable,
-    mutex_table: MutexTable<TransactionDigest>,
+    // In-memory set of pending transactions.
+    transactions_set: Mutex<HashSet<TransactionDigest>>,
 }
 
 impl WritePathPendingTransactionLog {
@@ -40,7 +41,7 @@ impl WritePathPendingTransactionLog {
         );
         Self {
             pending_transactions,
-            mutex_table: MutexTable::new(NUM_SHARDS),
+            transactions_set: Mutex::new(HashSet::new()),
         }
     }
 
@@ -52,42 +53,38 @@ impl WritePathPendingTransactionLog {
     pub async fn write_pending_transaction_maybe(
         &self,
         tx: &VerifiedTransaction,
-    ) -> SuiResult<IsFirstRecord> {
+    ) -> SuiResult<bool> {
         let tx_digest = tx.digest();
-        let _guard = self.mutex_table.acquire_lock(*tx_digest);
-        if self.pending_transactions.logs.contains_key(tx_digest)? {
-            Ok(false)
-        } else {
-            self.pending_transactions
-                .logs
-                .insert(tx_digest, tx.serializable_ref())?;
-            Ok(true)
+        let mut transactions_set = self.transactions_set.lock();
+        if transactions_set.contains(tx_digest) {
+            return Ok(false);
         }
+        self.pending_transactions
+            .logs
+            .insert(tx_digest, tx.serializable_ref())?;
+        transactions_set.insert(*tx_digest);
+        Ok(true)
     }
 
-    // This function does not need to be behind a lock because:
-    // 1. there could be more than one callsite but the deletion is idempotent.
-    // 2. it does not race with the insert (`write_pending_transaction_maybe`)
-    //    in a way that we care.
-    //    2.a. for one transaction, `finish_transaction` shouldn't predate
-    //        `write_pending_transaction_maybe`.
-    //    2.b  for concurrent requests of one transaction, a call to this
-    //        function may happen in between hence making the second request
-    //        thinks it is the first record. It's preventable by checking this
-    //        transaction again after the call of `write_pending_transaction_maybe`.
     pub fn finish_transaction(&self, tx: &TransactionDigest) -> SuiResult {
+        let mut transactions_set = self.transactions_set.lock();
         let mut write_batch = self.pending_transactions.logs.batch();
         write_batch.delete_batch(&self.pending_transactions.logs, std::iter::once(tx))?;
-        write_batch.write().map_err(SuiError::from)
+        write_batch.write().map_err(SuiError::from)?;
+        transactions_set.remove(tx);
+        Ok(())
     }
 
     pub fn load_all_pending_transactions(&self) -> SuiResult<Vec<VerifiedTransaction>> {
-        Ok(self
+        let mut transactions_set = self.transactions_set.lock();
+        let transactions = self
             .pending_transactions
             .logs
             .safe_iter()
             .map(|item| item.map(|(_tx_digest, tx)| VerifiedTransaction::from(tx)))
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect::<Result<Vec<_>, _>>()?;
+        transactions_set.extend(transactions.iter().map(|t| *t.digest()));
+        Ok(transactions)
     }
 }
 

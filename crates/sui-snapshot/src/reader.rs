@@ -23,6 +23,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::AuthorityStore;
@@ -35,7 +36,6 @@ use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::global_state_hash::GlobalStateHash;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tokio::time::Duration;
 use tokio::time::Instant;
 use tracing::{error, info};
 
@@ -52,9 +52,46 @@ pub struct StateSnapshotReaderV1 {
     object_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     m: MultiProgress,
     concurrency: usize,
+    max_retries: usize,
 }
 
 impl StateSnapshotReaderV1 {
+    async fn copy_file_with_retry<S: ObjectStoreGetExt, D: ObjectStorePutExt>(
+        src: &Path,
+        dest: &Path,
+        src_store: &S,
+        dest_store: &D,
+        max_retries: usize,
+    ) -> Result<()> {
+        let mut attempts = 0;
+        let max_attempts = max_retries + 1;
+        loop {
+            attempts += 1;
+            match copy_file(src, dest, src_store, dest_store).await {
+                Ok(()) => return Ok(()),
+                Err(e) if attempts >= max_attempts => {
+                    return Err(anyhow::anyhow!(
+                        "Failed to download {} after {} attempts: {}",
+                        src,
+                        attempts,
+                        e
+                    ));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to download {} (attempt {}/{}): {}, retrying in {}ms",
+                        src,
+                        attempts,
+                        max_attempts,
+                        e,
+                        1000 * attempts
+                    );
+                    tokio::time::sleep(Duration::from_millis(1000 * attempts as u64)).await;
+                }
+            }
+        }
+    }
+
     pub async fn new(
         epoch: u64,
         remote_store_config: &ObjectStoreConfig,
@@ -62,6 +99,7 @@ impl StateSnapshotReaderV1 {
         download_concurrency: NonZeroUsize,
         m: MultiProgress,
         skip_reset_local_store: bool,
+        max_retries: usize,
     ) -> Result<Self> {
         let epoch_dir = format!("epoch_{}", epoch);
         let remote_object_store = if remote_store_config.no_sign_request {
@@ -87,11 +125,12 @@ impl StateSnapshotReaderV1 {
         }
         // Download MANIFEST first
         let manifest_file_path = Path::from(epoch_dir.clone()).child("MANIFEST");
-        copy_file(
+        Self::copy_file_with_retry(
             &manifest_file_path,
             &manifest_file_path,
             &remote_object_store,
             &local_object_store,
+            max_retries,
         )
         .await?;
         let manifest = Self::read_manifest(path_to_filesystem(
@@ -186,6 +225,7 @@ impl StateSnapshotReaderV1 {
             object_files,
             m,
             concurrency: download_concurrency.get(),
+            max_retries,
         })
     }
 

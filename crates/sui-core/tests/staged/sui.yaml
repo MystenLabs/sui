@@ -83,14 +83,6 @@ AuthorityQuorumSignInfo:
           CONTENT: U8
           SIZE: 48
     - signers_map: BYTES
-BalanceWithdrawArg:
-  STRUCT:
-    - reservation:
-        TYPENAME: Reservation
-    - type_param:
-        TYPENAME: WithdrawTypeParam
-    - withdraw_from:
-        TYPENAME: WithdrawFrom
 CallArg:
   ENUM:
     0:
@@ -102,9 +94,9 @@ CallArg:
         NEWTYPE:
           TYPENAME: ObjectArg
     2:
-      BalanceWithdraw:
+      FundsWithdrawal:
         NEWTYPE:
-          TYPENAME: BalanceWithdrawArg
+          TYPENAME: FundsWithdrawalArg
 ChainIdentifier:
   NEWTYPESTRUCT:
     TYPENAME: CheckpointDigest
@@ -674,6 +666,14 @@ FullCheckpointContents:
         SEQ:
           SEQ:
             TYPENAME: GenericSignature
+FundsWithdrawalArg:
+  STRUCT:
+    - reservation:
+        TYPENAME: Reservation
+    - type_arg:
+        TYPENAME: WithdrawalTypeArg
+    - withdraw_from:
+        TYPENAME: WithdrawFrom
 GasCostSummary:
   STRUCT:
     - computationCost: U64
@@ -1384,7 +1384,7 @@ WithdrawFrom:
   ENUM:
     0:
       Sender: UNIT
-WithdrawTypeParam:
+WithdrawalTypeArg:
   ENUM:
     0:
       Balance:

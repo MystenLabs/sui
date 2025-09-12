@@ -93,7 +93,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
     )
     .await?;
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
     insert_keys(&perpetual_db, 1000)?;
     let root_accumulator =
         ECMHLiveObjectSetDigest::from(accumulate_live_object_set(&perpetual_db, true).digest());
@@ -112,9 +112,10 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
         MultiProgress::new(),
         false, // skip_reset_local_store
+        3,     // max_retries
     )
     .await?;
-    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None);
+    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     snapshot_reader
         .read(&restored_perpetual_db, abort_registration, None)
@@ -149,7 +150,7 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
     )
     .await?;
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
     let root_accumulator =
         ECMHLiveObjectSetDigest::from(accumulate_live_object_set(&perpetual_db, true).digest());
     snapshot_writer
@@ -167,9 +168,10 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
         MultiProgress::new(),
         false, // skip_reset_local_store
+        3,     // max_retries
     )
     .await?;
-    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None);
+    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     snapshot_reader
         .read(&restored_perpetual_db, abort_registration, None)

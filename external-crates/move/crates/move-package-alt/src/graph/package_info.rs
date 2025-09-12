@@ -4,6 +4,7 @@ use derive_where::derive_where;
 use petgraph::{Direction, graph::NodeIndex, visit::EdgeRef};
 
 use crate::{
+    compatibility::legacy_parser::NO_NAME_LEGACY_PACKAGE_NAME,
     dependency::PinnedDependencyInfo,
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
@@ -29,12 +30,21 @@ pub enum NamedAddress {
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
+    /// Return the `PackageInfo` for the root package
     pub fn root_package_info(&self) -> PackageInfo<F> {
         self.package_info(self.root_index)
     }
 
+    /// Return a `PackageInfo` for `node`
     pub(crate) fn package_info(&self, node: NodeIndex) -> PackageInfo<F> {
         PackageInfo { graph: self, node }
+    }
+
+    /// Return the `PackageInfo` for id `id`, if one exists
+    pub fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
+        self.package_ids
+            .get_by_left(id)
+            .map(|node| self.package_info(*node))
     }
 }
 
@@ -42,6 +52,12 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     /// The name that the package has declared for itself
     pub fn name(&self) -> &PackageName {
         self.package().name()
+    }
+
+    /// Returns the `display_name` for a given package.
+    /// Invariant: For modern packages, this is always equal to `name().as_str()`
+    pub fn display_name(&self) -> &str {
+        self.package().display_name()
     }
 
     /// The unique ID for this package in the package graph
@@ -69,6 +85,9 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     }
 
     /// Returns the published address of this package, if it is published
+    ///
+    /// Note that if the graph has been updated (using [PackageGraph::add_publish_overrides]), the
+    /// updated address is returned.
     pub fn published(&self) -> Option<&PublishAddresses> {
         self.package()
             .publication()
@@ -103,6 +122,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
 
     /// Return a dependency that resolves to this package
     pub(crate) fn dep_for_self(&self) -> &PinnedDependencyInfo {
+        // TODO: maybe pull this from the graph instead of storing it in the `Package`?
         self.package().dep_for_self()
     }
 
@@ -130,14 +150,12 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     fn legacy_named_addresses(&self) -> PackageResult<BTreeMap<PackageName, NamedAddress>> {
         let mut result: BTreeMap<PackageName, NamedAddress> = BTreeMap::new();
 
-        result.insert(self.package().name().clone(), self.node_to_addr(self.node));
+        // We only add the package name if it is not the special "unnamed" package name
+        if self.package().name().as_str() != NO_NAME_LEGACY_PACKAGE_NAME {
+            result.insert(self.package().name().clone(), self.node_to_addr(self.node));
+        }
 
-        for edge in self.graph.inner.edges(self.node) {
-            let dep = Self {
-                graph: self.graph,
-                node: edge.target(),
-            };
-
+        for (_, dep) in self.direct_deps() {
             let transitive_result = dep.legacy_named_addresses()?;
 
             for (name, addr) in transitive_result {
@@ -146,7 +164,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
                 if existing.is_some_and(|existing| existing != addr) {
                     return Err(PackageError::DuplicateNamedAddress {
                         address: name,
-                        package: self.package().name().clone(),
+                        package: self.package().display_name().to_string(),
                     });
                 }
             }
@@ -162,7 +180,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
                 if existing.is_some_and(|existing| existing != new_addr) {
                     return Err(PackageError::DuplicateNamedAddress {
                         address: name,
-                        package: self.package().name().clone(),
+                        package: self.package().display_name().to_string(),
                     });
                 }
             }
@@ -174,7 +192,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     /// Return the NamedAddress for `node`
     fn node_to_addr(&self, node: NodeIndex) -> NamedAddress {
         let package = self.graph.inner[node].clone();
-        if self.is_root() {
+        if package.is_root() {
             return NamedAddress::RootPackage(package.original_id().cloned());
         }
         if let Some(oid) = package.original_id() {

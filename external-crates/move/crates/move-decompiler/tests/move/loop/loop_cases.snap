@@ -1,0 +1,94 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module loop_cases {
+    public fun loop_test () {
+        let l0 = U64(0);
+        while(U64(10) >= l0) {
+            l0 = U64(1) + l0;
+            continue;
+        }
+        return 
+    }
+
+    public fun loop_test_2 () {
+        let l0 = U64(0);
+        loop {
+            l0 = U64(1) + l0;
+            if (U64(1) == l0 % U64(2)) {
+                continue;
+            } else {
+            }
+            if (U64(10) == l0) {
+                break;
+            }
+            continue;
+        }
+        return 
+    }
+
+    public fun loop_test_3 () {
+        let l0 = U64(0);
+        while(U64(10) >= l0) {
+            l0 = U64(1) + l0;
+            continue;
+        }
+        return 
+    }
+
+    public fun loop_test_4 () {
+        loop {
+            continue;
+        }
+    }
+
+    public fun loop_test_5 () {
+        loop {
+            continue;
+        }
+    }
+
+    public fun loop_test_6 () {
+        let l1 = U64(0);
+        while(U64(10) > l0) {
+            l1 = U64(1) + l1;
+            let l0 = l0 - U64(1);
+            continue;
+        }
+        return 
+    }
+
+    public fun loop_test_7 () {
+        return U64(10) * l0
+    }
+
+    public fun loop_test_8 () {
+        let l0 = U64(0);
+        let l1 = U64(5);
+        while(U64(10) >= l0) {
+            l0 = U64(1) + l0;
+            l1 = l0 + l1 * U64(2);
+            continue;
+        }
+        return 
+    }
+
+    public fun loop_test_9 () {
+        let l0 = U64(0);
+        let l1 = U64(5);
+        loop {
+            l0 = U64(1) + l0;
+            l1 = l0 + l1 * U64(2);
+            if (U64(0) == l1 - l0 % U64(3)) {
+                l1 = U64(100);
+            } else {
+            }
+            if (U64(10) >= l0) {
+                break;
+            }
+            continue;
+        }
+        return 
+    }
+
+}

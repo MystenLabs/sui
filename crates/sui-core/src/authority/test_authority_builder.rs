@@ -10,6 +10,7 @@ use crate::authority::authority_store_tables::{
     AuthorityPerpetualTables, AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::submitted_transaction_cache::SubmittedTransactionCacheMetrics;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
@@ -25,6 +26,7 @@ use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
@@ -221,6 +223,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
                     &path.join("store"),
                     Some(perpetual_tables_options),
+                    None,
                 ));
                 // unwrap ok - for testing only.
                 AuthorityStore::open_with_committee_for_testing(
@@ -290,6 +293,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
                 .unwrap_or(0),
+            Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
         )
         .expect("failed to create authority per epoch store");
         let committee_store = Arc::new(CommitteeStore::new(
@@ -374,6 +378,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             pruner_db,
             policy_config,
             firewall_config,
+            Arc::new(AtomicU64::new(0)),
         )
         .await;
 

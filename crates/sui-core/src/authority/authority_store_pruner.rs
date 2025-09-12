@@ -16,6 +16,7 @@ use prometheus::{
 };
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
+use std::sync::atomic::AtomicU64;
 use std::sync::{Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
@@ -548,6 +549,28 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    #[cfg(tidehunter)]
+    fn prune_th(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+        num_epochs_to_retain: u64,
+        pruning_watermark: Arc<AtomicU64>,
+    ) -> anyhow::Result<()> {
+        // TODO: add support for checkpoints db pruning
+        use std::sync::atomic::Ordering;
+        let epoch_id = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| c.epoch)
+            .unwrap_or_default();
+        if epoch_id >= num_epochs_to_retain {
+            let watermark = epoch_id - num_epochs_to_retain + 1;
+            info!("relocation: setting pruning watermark to {}", watermark);
+            pruning_watermark.store(watermark, Ordering::Relaxed);
+            perpetual_db.objects.db.start_relocation()?;
+        }
+        Ok(())
+    }
+
     fn compact_next_sst_file(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         delay_days: usize,
@@ -629,17 +652,6 @@ impl AuthorityStorePruner {
         Ok(pruned_checkpoint + delta)
     }
 
-    #[allow(clippy::all)]
-    #[allow(dead_code)]
-    fn th_pruning_config() -> AuthorityStorePruningConfig {
-        let mut config = AuthorityStorePruningConfig::default();
-        config.num_epochs_to_retain = u64::MAX;
-        config.num_epochs_to_retain_for_checkpoints = None;
-        config.num_epochs_to_retain_for_indexes = None;
-        config.periodic_compaction_threshold_days = None;
-        config
-    }
-
     fn setup_pruning(
         config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
@@ -649,14 +661,13 @@ impl AuthorityStorePruner {
         jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        #[allow(unused_variables)] pruner_watermark: Arc<AtomicU64>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
-        #[cfg(tidehunter)]
-        let config = Self::th_pruning_config();
 
         let tick_duration =
             Duration::from_millis(Self::pruning_tick_duration_ms(epoch_duration_ms));
@@ -667,35 +678,6 @@ impl AuthorityStorePruner {
         };
         let mut objects_prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-        let mut checkpoints_prune_interval =
-            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-        let mut indexes_prune_interval =
-            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-
-        let perpetual_db_for_compaction = perpetual_db.clone();
-        if let Some(delay_days) = config.periodic_compaction_threshold_days {
-            spawn_monitored_task!(async move {
-                let last_processed = Arc::new(Mutex::new(HashMap::new()));
-                loop {
-                    let db = perpetual_db_for_compaction.clone();
-                    let state = Arc::clone(&last_processed);
-                    let result = tokio::task::spawn_blocking(move || {
-                        Self::compact_next_sst_file(db, delay_days, state)
-                    })
-                    .await;
-                    let mut sleep_interval_secs = 1;
-                    match result {
-                        Err(err) => error!("Failed to compact sst file: {:?}", err),
-                        Ok(Err(err)) => error!("Failed to compact sst file: {:?}", err),
-                        Ok(Ok(None)) => {
-                            sleep_interval_secs = 3600;
-                        }
-                        _ => {}
-                    }
-                    tokio::time::sleep(Duration::from_secs(sleep_interval_secs)).await;
-                }
-            });
-        }
 
         metrics
             .num_epochs_to_retain_for_objects
@@ -706,28 +688,78 @@ impl AuthorityStorePruner {
                 .unwrap_or_default() as i64,
         );
 
-        tokio::task::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
-                            error!("Failed to prune objects: {:?}", err);
-                        }
-                    },
-                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
-                            error!("Failed to prune checkpoints: {:?}", err);
-                        }
-                    },
-                    _ = indexes_prune_interval.tick(), if config.num_epochs_to_retain_for_indexes.is_some() => {
-                        if let Err(err) = Self::prune_indexes(jsonrpc_index.as_deref(), &config, epoch_duration_ms, &metrics) {
-                            error!("Failed to prune indexes: {:?}", err);
+        #[cfg(tidehunter)]
+        {
+            if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints() {
+                tokio::task::spawn(async move {
+                    loop {
+                        objects_prune_interval.tick().await;
+                        if let Err(err) = Self::prune_th(
+                            &perpetual_db,
+                            &checkpoint_store,
+                            num_epochs_to_retain,
+                            pruner_watermark.clone(),
+                        ) {
+                            error!("Failed to prune tidehunter: {:?}", err);
                         }
                     }
-                    _ = &mut recv => break,
-                }
+                });
             }
-        });
+        }
+        #[cfg(not(tidehunter))]
+        {
+            let mut checkpoints_prune_interval =
+                tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+            let mut indexes_prune_interval =
+                tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+
+            let perpetual_db_for_compaction = perpetual_db.clone();
+            if let Some(delay_days) = config.periodic_compaction_threshold_days {
+                spawn_monitored_task!(async move {
+                    let last_processed = Arc::new(Mutex::new(HashMap::new()));
+                    loop {
+                        let db = perpetual_db_for_compaction.clone();
+                        let state = Arc::clone(&last_processed);
+                        let result = tokio::task::spawn_blocking(move || {
+                            Self::compact_next_sst_file(db, delay_days, state)
+                        })
+                        .await;
+                        let mut sleep_interval_secs = 1;
+                        match result {
+                            Err(err) => error!("Failed to compact sst file: {:?}", err),
+                            Ok(Err(err)) => error!("Failed to compact sst file: {:?}", err),
+                            Ok(Ok(None)) => {
+                                sleep_interval_secs = 3600;
+                            }
+                            _ => {}
+                        }
+                        tokio::time::sleep(Duration::from_secs(sleep_interval_secs)).await;
+                    }
+                });
+            }
+            tokio::task::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
+                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
+                                error!("Failed to prune objects: {:?}", err);
+                            }
+                        },
+                        _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
+                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
+                                error!("Failed to prune checkpoints: {:?}", err);
+                            }
+                        },
+                        _ = indexes_prune_interval.tick(), if config.num_epochs_to_retain_for_indexes.is_some() => {
+                            if let Err(err) = Self::prune_indexes(jsonrpc_index.as_deref(), &config, epoch_duration_ms, &metrics) {
+                                error!("Failed to prune indexes: {:?}", err);
+                            }
+                        }
+                        _ = &mut recv => break,
+                    }
+                }
+            });
+        }
         sender
     }
 
@@ -741,6 +773,7 @@ impl AuthorityStorePruner {
         epoch_duration_ms: u64,
         registry: &Registry,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
+        pruner_watermark: Arc<AtomicU64>, // used by tidehunter relocation filters
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
@@ -762,6 +795,7 @@ impl AuthorityStorePruner {
                 jsonrpc_index,
                 pruner_db,
                 AuthorityStorePruningMetrics::new(registry),
+                pruner_watermark,
             ),
         }
     }
@@ -966,7 +1000,7 @@ mod tests {
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
         let to_keep = {
-            let db = Arc::new(AuthorityPerpetualTables::open(path, None));
+            let db = Arc::new(AuthorityPerpetualTables::open(path, None, None));
             let (to_keep, to_delete, tombstones) = generate_test_data(
                 db.clone(),
                 num_versions_per_object,
@@ -1028,7 +1062,7 @@ mod tests {
     #[tokio::test]
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.keep();
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
+        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None, None));
         let total_unique_object_ids = 10_000;
         let num_versions_per_object = 10;
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;

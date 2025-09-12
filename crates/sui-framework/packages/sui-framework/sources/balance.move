@@ -6,6 +6,8 @@
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance;
 
+use sui::funds_accumulator::Withdrawal;
+
 /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
 public use fun sui::coin::from_balance as Balance.into_coin;
 
@@ -93,6 +95,29 @@ public fun destroy_zero<T>(balance: Balance<T>) {
     let Balance { value: _ } = balance;
 }
 
+/// Send a `Balance` to an address's funds accumulator.
+public(package) fun send_funds<T>(balance: Balance<T>, recipient: address) {
+    sui::funds_accumulator::add_impl(balance, recipient);
+}
+
+/// Redeem a `Withdrawal<Balance<T>>` to get the underlying `Balance<T>` from an address's funds
+/// accumulator.
+public(package) fun redeem_funds<T>(
+    withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
+): Balance<T> {
+    withdrawal.redeem()
+}
+
+/// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.
+public(package) fun withdraw_funds_from_object<T>(
+    obj: &mut UID,
+    value: u64,
+): Withdrawal<Balance<T>> {
+    sui::funds_accumulator::withdraw_from_object(obj, value as u256)
+}
+
+// === SUI specific operations ===
+
 const SUI_TYPE_NAME: vector<u8> =
     b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
 
@@ -128,6 +153,8 @@ public(package) fun destroy_supply<T>(self: Supply<T>): u64 {
     value
 }
 
+// === Test functions ===
+
 #[test_only]
 /// Create a `Balance` of any coin for testing purposes.
 public fun create_for_testing<T>(value: u64): Balance<T> {
@@ -153,16 +180,12 @@ public fun create_supply_for_testing<T>(): Supply<T> {
 
 #[allow(unused_function)]
 fun send_to_account<T>(balance: Balance<T>, recipient: address) {
-    let Balance { value } = balance;
-    let accumulator = sui::accumulator::accumulator_address<Balance<T>>(recipient);
-    sui::accumulator::emit_deposit_event<Balance<T>>(accumulator, recipient, value);
+    balance.send_funds(recipient)
 }
 
 #[allow(unused_function)]
 fun withdraw_from_account<T>(amount: u64, ctx: &TxContext): Balance<T> {
     let owner = ctx.sender();
-    let accumulator = sui::accumulator::accumulator_address<Balance<T>>(owner);
-    let credit = Balance { value: amount };
-    sui::accumulator::emit_withdraw_event<Balance<T>>(accumulator, owner, amount);
-    credit
+    let withdrawal = sui::funds_accumulator::create_withdrawal<Balance<T>>(owner, amount as u256);
+    withdrawal.redeem()
 }
