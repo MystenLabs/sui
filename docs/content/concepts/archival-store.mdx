@@ -5,7 +5,7 @@ beta: testnet, mainnet
 keywords: [ grpc, g rpc, RPC, sui full node grpc, full node rpc, what is grpc, grpc on sui, graphql, graph ql, what is graphql, graphql rpc ]
 ---
 
-The Archival Store and Service provide a scalable, consistent foundation for accessing historical data on Sui beyond what Full nodes or indexer databases typically retain. They power rich developer experiences through [gRPC](./grpc-overview.mdx) and [GraphQL](./graphql-rpc.mdx) APIs while keeping storage and operations manageable.
+The Archival Store and Service provide a scalable, consistent foundation for accessing historical data on Sui beyond what Full nodes or indexer databases typically retain. They power rich developer experiences through [gRPC](./grpc-overview.mdx) and [GraphQL](./graphql-indexer.mdx) APIs while keeping storage and operations manageable.
 
 :::note
 
@@ -19,12 +19,10 @@ GraphQL RPC will integrate with the Archival Service after the GraphQL RPC and G
 
 :::
 
-<!-- Update the GraphQL link to the overall GraphQL + General-purpose Indexer concept doc -->
-
 ## Overview
 
-- **Archival Store**: A long-term storage system (e.g., [Bigtable](https://cloud.google.com/bigtable)) that holds checkpoint-indexed Sui data.
-- **Archival Service**: A [gRPC API (LedgerService)](./grpc-overview.mdx) layer that exposes access to this store, enabling point lookups of historical data.
+- **Archival Store:** A long-term storage system (such as [Bigtable](https://cloud.google.com/bigtable)) that holds checkpoint-indexed Sui data.
+- **Archival Service:** A [gRPC API (LedgerService)](./grpc-overview.mdx) layer that exposes access to this store, enabling point lookups of historical data.
 
 Together, they let developers and data providers access older transactions, object versions, and checkpoints that Full nodes no longer store.
 
@@ -42,13 +40,13 @@ Though their goals and usage patterns differ, both developers and RPC / data pro
 
 - Operate a differentiated infrastructure service by offering historical data access to developers.
 - Extend the retention horizon of GraphQL or gRPC-based APIs by using the Archival Service.
-- Maintain operational independence by running your own Archival Store and Service (using [Bigtable](https://cloud.google.com/bigtable) or a custom backend).
+- Maintain operational independence by running your own Archival Store and Service (using Bigtable) or a custom backend).
 
 ## Accessing the Archival Service
 
 ### Developers
 
-Access the Archival Service hosted by any participating provider. Sui Foundation offers a public good service on a [Bigtable](https://cloud.google.com/bigtable)-based store. This service has strict rate limits:
+Access the Archival Service hosted by any participating provider. Sui Foundation offers a public good service on a Bigtable-based store. This service has strict rate limits:
 
 - Testnet: archive.testnet.sui.io
 - Mainnet: archive.mainnet.sui.io
@@ -58,14 +56,14 @@ Access the Archival Service hosted by any participating provider. Sui Foundation
 Operate the Archival Store and Service yourself:
 
 - Deploy the Archival Service binary.
-- Maintain a store like [Bigtable](https://cloud.google.com/bigtable).
+- Maintain a store like Bigtable.
 - Populate the store with checkpoints using an ingestion mechanism.
 
 Refer to [populating the Archival Store](#populating-the-archival-store) and [running the Archival Service](#running-the-archival-service).
 
 ## Populating the Archival Store
 
-Run an indexer pipeline to keep the Archival Store updated. Sui Foundation provides an ingestion mechanism for [Bigtable](https://cloud.google.com/bigtable):
+Run an indexer pipeline to keep the Archival Store updated. Sui Foundation provides an ingestion mechanism for Bigtable:
 
 - Tool: [sui-kv-store](https://github.com/MystenLabs/sui/tree/main/crates/sui-kvstore)
 - Run the following script to initialize the Bigtable cluster:
@@ -98,6 +96,9 @@ The Archival Service implements the [gRPC API's](./grpc-overview.mdx) `LedgerSer
 
 ### GraphQL RPC
 
-- [GraphQL RPC](./graphql-rpc.mdx) will delegate historical lookups to the Archival Service using the planned integration after the upcoming beta release. It will enable cost-efficient setup of a General-purpose Indexer database with limited retention.
+- [GraphQL RPC](./graphql-indexer.mdx) will delegate historical lookups to the Archival Service using the planned integration after the upcoming beta release. It will enable cost-efficient setup of a General-purpose Indexer database with limited retention.
 
-<!-- Update the GraphQL link to the overall GraphQL + General-purpose Indexer concept doc -->
+## Related links
+
+<RelatedLink to="" />
+<RelatedLink href="https://cloud.google.com/bigtable" label="Bigtable" desc="Low-latency, Cassandra, and HBase-compatible NoSQL database service for machine learning, operational analytics, and user-facing applications." />

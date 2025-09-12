@@ -16,7 +16,7 @@ task 2, lines 36-39:
 //# programmable --sender A --inputs @A
 //> TransferObjects([], Input(0));
 // not an object
-Error: Error checking transaction input objects: EmptyCommandInput
+Error: Error checking transaction input objects: TransferObjects, MergeCoin, and Publish cannot have empty arguments. If MakeMoveVec has empty arguments, it must have a type specified
 
 task 3, lines 40-44:
 //# programmable --sender A --inputs @A

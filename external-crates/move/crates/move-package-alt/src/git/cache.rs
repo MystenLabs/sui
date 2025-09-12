@@ -29,6 +29,7 @@ fn get_cache_path() -> &'static str {
             tempdir.path().to_string_lossy().to_string()
         }
 
+        #[allow(unused)]
         #[cfg(not(test))]
         {
             move_command_line_common::env::MOVE_HOME.to_string()
@@ -379,7 +380,7 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
         return Err(GitError::nonzero_exit_status(&cmd, &cwd, output.status));
     }
 
-    String::from_utf8(output.stdout).map_err(|e| GitError::non_utf_output(&cmd, &cwd))
+    String::from_utf8(output.stdout).map_err(|_| GitError::non_utf_output(&cmd, &cwd))
 }
 
 /// Output the `cmd` and its args in a concise form (without quoting or showing the working directory)
@@ -454,7 +455,7 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
             "downloading temporary git repo with full history to {}",
             path_to_clone_str
         );
-        let mut args = vec![
+        let args = vec![
             "-c",
             "advice.detachedHead=false",
             "clone",
@@ -580,7 +581,7 @@ mod tests {
             .unwrap();
 
         // Fetch the dependency
-        let checkout_path = git_tree.fetch().await.unwrap();
+        let _ = git_tree.fetch().await.unwrap();
 
         // Verify only packages/pkg_a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["packages/pkg_a/Move.toml"]);
@@ -710,11 +711,12 @@ mod tests {
             .await
             .unwrap();
 
-        fs::create_dir_all(git_tree.path_to_tree());
+        fs::create_dir_all(git_tree.path_to_tree()).unwrap();
         fs::write(
             git_tree.path_to_tree().join("garbage.txt"),
             "something to dirty the repo",
-        );
+        )
+        .unwrap();
 
         let result = git_tree.fetch().await;
         assert!(result.is_err());
@@ -738,13 +740,14 @@ mod tests {
             .await
             .unwrap();
 
-        fs::create_dir_all(git_tree.path_to_tree());
+        fs::create_dir_all(git_tree.path_to_tree()).unwrap();
         fs::write(
             git_tree.path_to_tree().join("garbage.txt"),
             "something to dirty the repo",
-        );
+        )
+        .unwrap();
 
-        let result = git_tree.fetch_allow_dirty().await.unwrap();
+        git_tree.fetch_allow_dirty().await.unwrap();
     }
 
     /// Fetching should succeed if a clean checkout exists
@@ -802,14 +805,15 @@ mod tests {
         git_tree.fetch().await.unwrap();
 
         // create dirty file in dep's parent directory
-        fs::create_dir_all(git_tree.path_to_tree().parent().unwrap());
+        fs::create_dir_all(git_tree.path_to_tree().parent().unwrap()).unwrap();
         fs::write(
             git_tree.path_to_tree().join("garbage.txt"),
             "something to dirty the repo",
-        );
+        )
+        .unwrap();
 
         // fetch again - subtree should still be clean so it should succeed
-        let result = git_tree.fetch().await.unwrap();
+        git_tree.fetch().await.unwrap();
     }
 
     #[tokio::test]

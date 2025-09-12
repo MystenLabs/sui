@@ -53,4 +53,4 @@ gas summary: computation_cost: 1000000, storage_cost: 12220800,  storage_rebate:
 task 5, lines 69-70:
 //# programmable --sender A --inputs object(1,1) object(1,2) @A
 //> TransferObjects([Input(0), Input(1)], Input(2))
-Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,0)::regulated_coin2::REGULATED_COIN2" }
+Error: Error checking transaction input objects: Address @A is denied for coin object(1,0)::regulated_coin2::REGULATED_COIN2

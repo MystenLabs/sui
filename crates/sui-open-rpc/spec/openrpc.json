@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.56.0"
+    "version": "1.57.0"
   },
   "methods": [
     {
@@ -1310,6 +1310,7 @@
                 "ban_entry_init": false,
                 "better_adapter_type_resolution_errors": false,
                 "bridge": false,
+                "cancel_for_failed_dkg_early": false,
                 "check_for_init_during_upgrade": false,
                 "commit_root_state_digest": false,
                 "consensus_batched_block_sync": false,
@@ -1323,6 +1324,7 @@
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "correct_gas_payment_limit_check": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
@@ -1394,6 +1396,7 @@
                 "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
+                "use_mfp_txns_in_load_initial_object_debts": false,
                 "validate_identifier_inputs": false,
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
@@ -5565,6 +5568,9 @@
           }
         }
       },
+      "CheckpointArtifactsDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
       "CheckpointCommitment": {
         "oneOf": [
           {
@@ -5575,6 +5581,18 @@
             "properties": {
               "ECMHLiveObjectSetDigest": {
                 "$ref": "#/components/schemas/ECMHLiveObjectSetDigest"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "CheckpointArtifactsDigest"
+            ],
+            "properties": {
+              "CheckpointArtifactsDigest": {
+                "$ref": "#/components/schemas/CheckpointArtifactsDigest"
               }
             },
             "additionalProperties": false
@@ -8764,7 +8782,7 @@
             "required": [
               "reservation",
               "type",
-              "typeParam",
+              "typeArg",
               "withdrawFrom"
             ],
             "properties": {
@@ -8774,11 +8792,11 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "balanceWithdraw"
+                  "fundsWithdrawal"
                 ]
               },
-              "typeParam": {
-                "$ref": "#/components/schemas/SuiWithdrawTypeParam"
+              "typeArg": {
+                "$ref": "#/components/schemas/SuiWithdrawalTypeArg"
               },
               "withdrawFrom": {
                 "$ref": "#/components/schemas/SuiWithdrawFrom"
@@ -10440,7 +10458,7 @@
           "sender"
         ]
       },
-      "SuiWithdrawTypeParam": {
+      "SuiWithdrawalTypeArg": {
         "oneOf": [
           {
             "type": "object",

@@ -47,8 +47,6 @@ Commands:
   upgrade                     Upgrade Move modules
   verify-bytecode-meter       Run the bytecode verifier on the package
   verify-source               Verify local Move packages against on-chain packages, and optionally their dependencies
-  profile-transaction         Profile the gas usage of a transaction. Unless an output filepath is not specified, outputs a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph
-                                  tool such as speedscope
   replay-transaction          Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug
   replay-batch                Replay transactions listed in a file
   replay-checkpoint           Replay all transactions in a range of checkpoints
@@ -440,102 +438,11 @@ This command will fetch the transaction dependencies from the full node specifie
 the past, it is advised to set the client full node to one that has non-pruned chain data for that transaction.
 This will also verify that the resulting effects from the locally executed transaction match the effects of the transaction stored on-chain.
 
-You can add additional flags `--gas-info` and `--ptb-info` to this command to see more information about the transaction.
-
 ```sh
 $ sui client replay-transaction --tx-digest 51MzJP2Uesvza8vXGpPCGbfLrY6UCfdvdoErN1z4oXPW
 ```
-```sh
-╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Transaction Effects                                                                               │
-├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Digest: 51MzJP2Uesvza8vXGpPCGbfLrY6UCfdvdoErN1z4oXPW                                              │
-│ Status: Success                                                                                   │
-│ Executed Epoch: 237                                                                               │
-│                                                                                                   │
-│ Mutated Objects:                                                                                  │
-│  ┌──                                                                                              │
-│  │ ID: 0x0000000000000000000000000000000000000000000000000000000000000006                         │
-│  │ Owner: Shared                                                                                  │
-│  │ Version: 20303014                                                                              │
-│  │ Digest: 3FyU88FpFFa2mhDFJWcabwQNdfaVaWvvnbjkfErD6AgJ                                           │
-│  └──                                                                                              │
-│                                                                                                   │
-│ Shared Objects:                                                                                   │
-│  ┌──                                                                                              │
-│  │ ID: 0x0000000000000000000000000000000000000000000000000000000000000006                         │
-│  │ Version: 20303013                                                                              │
-│  │ Digest: 7uGV3aHa9NDAWLX1UUyV1DG7wAuhfFkzSGo514wtco1C                                           │
-│  └──                                                                                              │
-│                                                                                                   │
-│ Gas Object:                                                                                       │
-│  ┌──                                                                                              │
-│  │ ID: 0x0000000000000000000000000000000000000000000000000000000000000000                         │
-│  │ Owner: Account Address ( 0x0000000000000000000000000000000000000000000000000000000000000000 )  │
-│  │ Version: 0                                                                                     │
-│  │ Digest: 11111111111111111111111111111111                                                       │
-│  └──                                                                                              │
-│                                                                                                   │
-│ Gas Cost Summary:                                                                                 │
-│    Storage Cost: 0                                                                                │
-│    Computation Cost: 0                                                                            │
-│    Storage Rebate: 0                                                                              │
-│    Non-refundable Storage Fee: 0                                                                  │
-│                                                                                                   │
-│ Transaction Dependencies:                                                                         │
-│    EvDLzYeKbrxDNHJomgrr2zwAJ7FJDtb2uNwfbonF2uGK                                                   │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-Execution finished successfully. Local and on-chain effects match.
-```
 
-Use `sui client replay-batch --path <FILEPATH>` to replay several transactions listed in a newline-separated file. This
-will verify that all transactions local execution results match the effects on-chain.
-
-### Profile a transaction
-
-Use the `sui client profile-transaction --tx-digest <TRANSACTION-DIGEST>` command to re-execute a transaction locally
-and produce a gas profile. Similar to the `replay` command, this command fetches the transaction dependencies from the
-Full node specified in the client environment that are needed to execute the transaction. During the local execution of the transaction,
-this command records all the Move function invocations and the gas cost breakdown for each invocation.
-
-To enable the profiler, you must either install or build the Sui Client binary locally with the `--features tracing` flag if it has not already been built with that feature enabled.
-
-```sh
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features tracing sui
-```
-
-The command outputs a profile to the current working directory in the format `gas_profile_{tx_digest}_{unix_timestamp}.json`.
-You can include the optional flag `--profile-output </PATH/OUTPUT.json>` to write the profile to `/PATH/OUTPUT_{tx_digest}_{unix_timestamp}.json` instead.
-Use [speedscope](https://www.speedscope.app/) to inspect the profile.
-
-To install speedscope run
-
-```sh
-$ npm install -g speedscope
-```
-
-To open a profile in speedscope run
-
-```sh
-$ speedscope <PATH/PROFILE-OUTPUT-FILE>
-```
-
-When looking at the profile in speedscope, there are three different views available from the top left menu: **Timer Order**,
-**Left Heavy**, and **Sandwich**. In each view, each bar's vertical width corresponds to the percentage of gas consumption incurred by the function,
-and you can hover your mouse over a bar or click a bar to see the computation units accrued by the function invocation. The transaction's total computation units, along with the storage computation units, are multiplied by the gas price to determine the gas cost of the transaction based on a tier system.
-
-**Time Order** shows the callstack of function invocations from left to right in the order
-of invocation, while **Left Heavy** combines repeated sequences of nested invocations into a single combined call stack. **Left Heavy** 
-displays these sequences from left to right by total incurred gas consumption per combined call stack. This is useful when there have
-been hundreds of repeated calls to the same function to quickly observe the total gas consumption over all calls to that function.
-In both these views, you can click the top section and drag to zoom in and out over different sections of the profile.
-
-**Sandwich** view shows a list of discrete values that correspond to gas consumption per function, with **Total** showing
-gas cost incurred in all the functions called by the function, and **Self** showing the gas cost done by only the given function.
-
-Observing a transaction's gas consumption provides useful insight of expected gas cost usage of a smart contract.
-When developing a smart contract, you can [run a local network](../../guides/developer/getting-started/local-network.mdx) and publish the package to the local network. Then create a transaction that calls
-your published smart contract, and finally run the profiler on the transaction to see a breakdown of the gas cost.
+Learn more about replaying a transaction and how it can be used for debugging or profiling in the [Transaction Replay](./replay.mdx), [Debugging Transactions](../ide/debugger.mdx), and [Transaction Trace Analysis](./trace-analysis.mdx) guides.
 
 ## Publish a Move package
 

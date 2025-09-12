@@ -4,27 +4,28 @@
 use anyhow::anyhow;
 use async_graphql::{Context, Object, Result};
 use fastcrypto::error::FastCryptoError;
-use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 
+use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
-use crate::{
-    api::types::execution_result::ExecutionResult,
-    error::{bad_user_input, RpcError},
-};
+use crate::error::{bad_user_input, upcast, RpcError};
 
-/// Error type for user input validation in executeTransaction
+/// Error type for user input validation in transaction operations
 #[derive(thiserror::Error, Debug)]
-enum TransactionInputError {
+pub enum TransactionInputError {
     #[error("Invalid BCS encoding in transaction data: {0}")]
     InvalidTransactionBcs(bcs::Error),
 
     #[error("Invalid signature format in signature {index}: {err}")]
     InvalidSignatureFormat { index: usize, err: FastCryptoError },
 }
+use crate::{
+    api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},
+    scope::Scope,
+};
 
 pub struct Mutation;
 
@@ -68,14 +69,24 @@ impl Mutation {
 
         // Execute transaction - capture gRPC errors for ExecutionResult.errors
         match fullnode_client
-            .execute_transaction(tx_data, parsed_signatures)
+            .execute_transaction(tx_data.clone(), parsed_signatures.clone())
             .await
         {
-            // TODO: Implement effects for ExecutionResult
-            Ok(_response) => Ok(ExecutionResult {
-                effects: None,
-                errors: None,
-            }),
+            Ok(response) => {
+                let scope = Scope::new(ctx)?;
+                let effects = TransactionEffects::from_execution_response(
+                    scope,
+                    response,
+                    tx_data,
+                    parsed_signatures,
+                )
+                .map_err(upcast)?;
+
+                Ok(ExecutionResult {
+                    effects: Some(effects),
+                    errors: None,
+                })
+            }
             Err(GrpcExecutionError(status)) => Ok(ExecutionResult {
                 effects: None,
                 errors: Some(vec![status.to_string()]),

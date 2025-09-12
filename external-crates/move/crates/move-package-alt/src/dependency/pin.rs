@@ -87,7 +87,7 @@ impl PinnedDependencyInfo {
             let transformed = match dep.0.dep_info {
                 Resolved::Local(ref loc) => loc.clone().pin(parent)?,
                 Resolved::Git(ref git) => git.pin().await?,
-                Resolved::OnChain(_) => Pinned::OnChain(todo!()),
+                Resolved::OnChain(_) => todo!(),
             };
 
             // TODO: can avoid clones above if we don't use `map` here
@@ -158,25 +158,13 @@ impl PinnedDependencyInfo {
         matches!(self.0.dep_info, Pinned::Root)
     }
 
-    /// Return a duplicate of `self` with a new `rename-from` field
-    pub fn with_rename_from(mut self, name: PackageName) -> Self {
-        self.0.rename_from = Some(name);
-        self
-    }
-
-    /// Set the `override = true` field on this dependency
-    pub fn with_override(mut self, is_override: bool) -> Self {
-        self.0.is_override = is_override;
-        self
-    }
-
     /// Return the absolute path to the directory that this package would be fetched into, without
     /// actually fetching it
     pub fn unfetched_path(&self) -> PathBuf {
         match &self.0.dep_info {
             Pinned::Git(dep) => dep.inner.path_to_tree(),
             Pinned::Local(dep) => dep.absolute_path_to_package.clone(),
-            Pinned::OnChain(dep) => todo!(),
+            Pinned::OnChain(_dep) => todo!(),
             Pinned::Root => {
                 // Note: the root dependency should always come from either the lockfile or
                 // manifest in the folder containing the root package; we use this to compute the
@@ -235,7 +223,7 @@ impl LocalDepInfo {
                 absolute_path_to_package: parent.unfetched_path().join(&self.local).clean(),
                 relative_path_from_root_package: self.local.clean(),
             }),
-            Pinned::OnChain(on_chain_dep_info) => todo!(),
+            Pinned::OnChain(_) => todo!(),
         };
 
         Ok(info)

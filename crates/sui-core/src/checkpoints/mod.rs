@@ -25,7 +25,7 @@ use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{NotifyRead, CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME};
 use mysten_common::{assert_reachable, debug_fatal, fatal};
-use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
+use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -75,7 +75,7 @@ use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::transaction::{
     TransactionDataAPI, TransactionKey, TransactionKind, VerifiedTransaction,
 };
-use tokio::{sync::Notify, task::JoinSet, time::timeout};
+use tokio::{sync::Notify, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
 use typed_store::Map;
@@ -2927,9 +2927,11 @@ impl CheckpointService {
     /// operation. Upon startup, we may have a number of consensus commits and resulting
     /// checkpoints that were built but not committed to disk. We want to reprocess the
     /// commits and rebuild the checkpoints before starting normal operation.
-    pub async fn spawn(&self, consensus_replay_waiter: Option<ReplayWaiter>) -> JoinSet<()> {
-        let mut tasks = JoinSet::new();
-
+    pub async fn spawn(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        consensus_replay_waiter: Option<ReplayWaiter>,
+    ) {
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
 
         // Clean up state hashes computed after the last committed checkpoint
@@ -2954,12 +2956,29 @@ impl CheckpointService {
         }
 
         let (builder_finished_tx, builder_finished_rx) = tokio::sync::oneshot::channel();
-        tasks.spawn(monitored_future!(async move {
-            builder.run(consensus_replay_waiter).await;
-            builder_finished_tx.send(()).ok();
-        }));
-        tasks.spawn(monitored_future!(aggregator.run()));
-        tasks.spawn(monitored_future!(state_hasher.run()));
+
+        let state_hasher_task = spawn_monitored_task!(state_hasher.run());
+        let aggregator_task = spawn_monitored_task!(aggregator.run());
+
+        spawn_monitored_task!(async move {
+            epoch_store
+                .within_alive_epoch(async move {
+                    builder.run(consensus_replay_waiter).await;
+                    builder_finished_tx.send(()).ok();
+                })
+                .await
+                .ok();
+
+            // state hasher will terminate as soon as it has finished processing all messages from builder
+            state_hasher_task
+                .await
+                .expect("state hasher should exit normally");
+
+            // builder must shut down before aggregator and state_hasher, since it sends
+            // messages to them
+            aggregator_task.abort();
+            aggregator_task.await.ok();
+        });
 
         // If this times out, the validator may still start up. The worst that can
         // happen is that we will crash later on instead of immediately. The eventual
@@ -2977,8 +2996,6 @@ impl CheckpointService {
         {
             debug_fatal!("Timed out waiting for checkpoints to be rebuilt");
         }
-
-        tasks
     }
 }
 
@@ -3409,7 +3426,7 @@ mod tests {
             3,
             100_000,
         );
-        let _tasks = checkpoint_service.spawn(None).await;
+        checkpoint_service.spawn(epoch_store.clone(), None).await;
 
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))

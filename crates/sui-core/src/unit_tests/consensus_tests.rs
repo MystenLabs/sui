@@ -360,6 +360,7 @@ async fn submit_transaction_to_consensus_adapter() {
             Some(&epoch_store.get_reconfig_state_read_lock_guard()),
             &epoch_store,
             None,
+            None,
         )
         .unwrap();
     waiter.await.unwrap();
@@ -405,6 +406,7 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
             &transactions,
             Some(&epoch_store.get_reconfig_state_read_lock_guard()),
             &epoch_store,
+            None,
             None,
         )
         .unwrap();
@@ -491,6 +493,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
                 &transactions,
                 Some(&epoch_store.get_reconfig_state_read_lock_guard()),
                 &epoch_store,
+                None,
                 None,
             )
             .unwrap();

@@ -18,4 +18,4 @@ task 2, lines 16-20:
 //> test::random::use_random(Input(1));
 //> TransferObjects([Result(0)], Input(3));
 //> test::random::use_clock(Input(0))
-Error: Error checking transaction input objects: PostRandomCommandRestrictions
+Error: Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins

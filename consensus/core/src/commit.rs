@@ -112,7 +112,6 @@ pub struct CommitV1 {
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
     blocks: Vec<BlockRef>,
-    // TODO(fastpath): record rejected transactions.
 }
 
 impl CommitAPI for CommitV1 {

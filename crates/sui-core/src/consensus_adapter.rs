@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::net::IpAddr;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -372,7 +373,7 @@ impl ConsensusAdapter {
             if transaction.is_end_of_publish() {
                 info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
             }
-            self.submit_unchecked(&[transaction], epoch_store, None);
+            self.submit_unchecked(&[transaction], epoch_store, None, None);
         }
     }
 
@@ -620,8 +621,15 @@ impl ConsensusAdapter {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
-        self.submit_batch(&[transaction], lock, epoch_store, tx_consensus_position)
+        self.submit_batch(
+            &[transaction],
+            lock,
+            epoch_store,
+            tx_consensus_position,
+            submitter_client_addr,
+        )
     }
 
     pub fn submit_batch(
@@ -630,24 +638,51 @@ impl ConsensusAdapter {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
-            // In soft bundle, we need to check if all transactions are of CertifiedTransaction
-            // kind. The check is required because we assume this in submit_and_wait_inner.
-            for transaction in transactions {
-                fp_ensure!(
-                    matches!(
-                        transaction.kind,
-                        ConsensusTransactionKind::CertifiedTransaction(_)
-                    ),
-                    SuiError::InvalidTxKindInSoftBundle
-                );
-                // TODO(fastpath): support batch of UserTransaction.
+            // When batching multiple transactions, ensure they are all of the same kind
+            // (either all CertifiedTransaction or all UserTransaction).
+            // This makes classifying the transactions easier in later steps.
+            let first_kind = &transactions[0].kind;
+            let is_user_tx_batch =
+                matches!(first_kind, ConsensusTransactionKind::UserTransaction(_));
+            let is_cert_batch = matches!(
+                first_kind,
+                ConsensusTransactionKind::CertifiedTransaction(_)
+            );
+
+            for transaction in &transactions[1..] {
+                if is_user_tx_batch {
+                    fp_ensure!(
+                        matches!(
+                            transaction.kind,
+                            ConsensusTransactionKind::UserTransaction(_)
+                        ),
+                        SuiError::InvalidTxKindInSoftBundle
+                    );
+                } else if is_cert_batch {
+                    fp_ensure!(
+                        matches!(
+                            transaction.kind,
+                            ConsensusTransactionKind::CertifiedTransaction(_)
+                        ),
+                        SuiError::InvalidTxKindInSoftBundle
+                    );
+                } else {
+                    // Other transaction kinds cannot be batched
+                    return Err(SuiError::InvalidTxKindInSoftBundle);
+                }
             }
         }
 
         epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
-        Ok(self.submit_unchecked(transactions, epoch_store, tx_consensus_position))
+        Ok(self.submit_unchecked(
+            transactions,
+            epoch_store,
+            tx_consensus_position,
+            submitter_client_addr,
+        ))
     }
 
     /// Performs weakly consistent checks on internal buffers to quickly
@@ -668,6 +703,7 @@ impl ConsensusAdapter {
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
         let async_stage = self
@@ -676,6 +712,7 @@ impl ConsensusAdapter {
                 transactions.to_vec(),
                 epoch_store.clone(),
                 tx_consensus_position,
+                submitter_client_addr,
             )
             .in_current_span();
         // Number of these tasks is weakly limited based on `num_inflight_transactions`.
@@ -689,6 +726,7 @@ impl ConsensusAdapter {
         transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) {
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
         //
@@ -706,6 +744,7 @@ impl ConsensusAdapter {
                 transactions,
                 &epoch_store,
                 tx_consensus_position,
+                submitter_client_addr,
             ))
             .await
             .ok(); // result here indicates if epoch ended earlier, we don't care about it
@@ -718,9 +757,26 @@ impl ConsensusAdapter {
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) {
         if transactions.is_empty() {
             return;
+        }
+
+        // Record submitted transactions early for DoS protection
+        if epoch_store.protocol_config().mysticeti_fastpath() {
+            for transaction in &transactions {
+                if let ConsensusTransactionKind::UserTransaction(tx) = &transaction.kind {
+                    let amplification_factor = (tx.data().transaction_data().gas_price()
+                        / epoch_store.reference_gas_price().max(1))
+                    .max(1);
+                    epoch_store.submitted_transaction_cache.record_submitted_tx(
+                        tx.digest(),
+                        amplification_factor as u32,
+                        submitter_client_addr,
+                    );
+                }
+            }
         }
 
         // If tx_consensus_positions channel is provided, the caller is looking for a
@@ -729,8 +785,8 @@ impl ConsensusAdapter {
         let skip_processed_checks = tx_consensus_positions.is_some();
 
         // Current code path ensures:
-        // - If transactions.len() > 1, it is a soft bundle. Otherwise transactions should have been submitted individually.
-        // - If is_soft_bundle, then all transactions are of UserTransaction kind.
+        // - If transactions.len() > 1, it is a soft bundle. System transactions should have been submitted individually.
+        // - If is_soft_bundle, then all transactions are of CertifiedTransaction or UserTransaction kind.
         // - If not is_soft_bundle, then transactions must contain exactly 1 tx, and transactions[0] can be of any kind.
         let is_soft_bundle = transactions.len() > 1;
 
@@ -746,10 +802,10 @@ impl ConsensusAdapter {
             let transaction_key = SequencedConsensusTransactionKey::External(transaction.key());
             transaction_keys.push(transaction_key);
         }
-        let tx_type = if !is_soft_bundle {
-            classify(&transactions[0])
-        } else {
+        let tx_type = if is_soft_bundle {
             "soft_bundle"
+        } else {
+            classify(&transactions[0])
         };
         tracing::Span::current().record("tx_type", tx_type);
         tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
@@ -787,15 +843,18 @@ impl ConsensusAdapter {
         };
 
         // Log warnings for administrative transactions that fail to get sequenced
-        let _monitor = if !is_soft_bundle
-            && matches!(
-                transactions[0].kind,
-                ConsensusTransactionKind::EndOfPublish(_)
-                    | ConsensusTransactionKind::CapabilityNotification(_)
-                    | ConsensusTransactionKind::CapabilityNotificationV2(_)
-                    | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
-                    | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
-            ) {
+        let _monitor = if matches!(
+            transactions[0].kind,
+            ConsensusTransactionKind::EndOfPublish(_)
+                | ConsensusTransactionKind::CapabilityNotification(_)
+                | ConsensusTransactionKind::CapabilityNotificationV2(_)
+                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+        ) {
+            assert!(
+                !is_soft_bundle,
+                "System transactions should have been submitted individually"
+            );
             let transaction_keys = transaction_keys.clone();
             Some(CancelOnDrop(spawn_monitored_task!(async {
                 let mut i = 0u64;
@@ -953,6 +1012,7 @@ impl ConsensusAdapter {
                 None,
                 epoch_store,
                 None,
+                None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             } else {
@@ -1001,7 +1061,7 @@ impl ConsensusAdapter {
                         .inc();
                     retries += 1;
 
-                    if !is_soft_bundle && transactions[0].kind.is_dkg() {
+                    if transactions[0].kind.is_dkg() {
                         // Shorter delay for DKG messages, which are time-sensitive and happen at
                         // start-of-epoch when submit errors due to active reconfig are likely.
                         time::sleep(Duration::from_millis(100)).await;
@@ -1201,6 +1261,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 None,
                 epoch_store,
                 None,
+                None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             } else {
@@ -1351,7 +1412,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        self.submit_batch(transactions, None, epoch_store, None)
+        self.submit_batch(transactions, None, epoch_store, None, None)
             .map(|_| ())
     }
 

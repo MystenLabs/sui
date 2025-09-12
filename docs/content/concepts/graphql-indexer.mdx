@@ -1,0 +1,367 @@
+---
+title: GraphQL and General-Purpose Indexer (Beta)
+description: The GraphQL RPC Beta service offers a structured way for your clients to interact with data on the Sui blockchain. It accesses data processed by a general-purpose indexer and can connect to an archival store for historical network state.
+beta: devnet, testnet, mainnet
+keywords: [ indexer, archival store, graphql, custom indexer ]
+---
+
+The GraphQL and `sui-indexer-alt` (Indexer) stack are part of the [Sui data access infrastructure](../guides/developer/getting-started/data-serving.mdx). The stack provides access to on-chain data through a high-performance GraphQL service backed by a scalable and general-purpose indexer. This stack is optimized for developers who need flexible queries, structured output, and historical access to data (with configurable retention) across the Sui network.
+
+GraphQL is ideal for applications that require rich query patterns over structured data, such as fetching owned objects, transaction history, specific onchain attributes, and more. The GraphQL service runs on top of a Postgres-compatible database that is updated by different Indexer pipelines in parallel.
+
+The general-purpose indexer includes configurable checkpoint-based pipelines that extract data from the Sui remote checkpoint store and full nodes. The pipelines write processed data to a database optimized for GraphQL query access.
+Together, the GraphQL service and Indexer offer a modular and production-ready data stack for builders, wallet developers, explorers, and indexer/data providers.
+
+:::info
+
+<ImportContent source="data-serving-msg.mdx" mode="snippet" />
+
+:::
+
+## Key components
+
+The key components of the stack include the following:
+
+- **General-purpose Indexer:** Ingests and transforms Sui checkpoint data using configurable and parallel pipelines, and writes it into a Postgres-compatible database. Can be configured to use the Sui remote checkpoint store and a full node as its sources.
+- **Postgres-compatible database:** Stores indexed data for GraphQL queries. Tested using [GCP AlloyDB](https://cloud.google.com/products/alloydb), but you can run any Postgres-compatible database. You're encouraged to test alternative databases and share feedback on performance, cost, and operational characteristics.
+- **GraphQL service:** Serves structured queries over indexed data. Follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql). Also take a look at the [getting started guide](/guides/developer/getting-started/graphql-rpc).
+- **Archival Service:** Enables point lookups for historical data from a key-value store. If unavailable, the GraphQL service falls back to the Postgres-compatible database for lookups, which might be limited by that database's retention policy. See [Archival Store and Service](./archival-store.mdx) for more information.
+- **Consistent Store:** Answers questions about the latest state of the network within the last hour (objects owned by addresses, objects by type, balances by address and type). Consistency is guaranteed by pinning queries to a specific (recent) checkpoint.
+- **Full node:** Enables transaction execution and simulation. Currently, JSON-RPC is used but there will be a switch to [gRPC](/concepts/grpc-overview) soon as the long-term full node API in the future.
+
+## When to use GraphQL 
+
+Use [GraphQL](/concepts/graphql-rpc) if your application:
+
+- Requires historical (with configurable retention) or filtered access to data (e.g., all transactions sent by an address)
+- Needs to display structured results in a frontend (e.g., wallets, dashboards)
+- Benefits from flexible, composable queries that reduce overfetching
+- Relies on multiple data entities (e.g., transactions + objects + events) in a single request, or in a consistent fashion when spread over multiple requests (as if the responses came from a snapshot at some checkpoint).
+
+## Deployment options
+
+You can run or use the GraphQL and Indexer data stack in the following configurations:
+
+### Fully managed service
+
+As a developer, you can access GraphQL as a service from an indexer operator or data provider who runs and operates the full stack behind the scenes. Reach out to your data provider and ask if they already offer or plan to offer this service.
+
+### Partial self-managed
+
+As a developer, you can:
+
+- Run the Indexer pipelines and GraphQL service, while using the Archival Service and a full node from an RPC provider or indexer operator.
+- Configure and manage a Postgres-compatible database (local Postgres, AlloyDB, and so on) as the primary data store.
+- Deploy the self-managed components on cloud infrastructure or baremetal.
+
+:::info
+
+You cannot run and operate the GraphQL service in self-managed configurations just yet. The functionality will become available after required changes are made to how the GraphQL service integrates with the Archival Service.
+
+:::
+
+### Fully self-managed
+
+As a developer, indexer operator, or RPC provider, you can:
+
+- Run the complete stack: Indexer pipelines, GraphQL service, Postgres-compatible database, Archival Service, Consistent Store and full node on cloud infrastructure or bare metal.
+- Serve GraphQL to your own applications or to other builders and third-party services.
+
+## Working with the GraphQL service
+
+The GraphQL service exposes a query surface conforming to [GraphQL concepts](/concepts/graphql-rpc). It allows pagination, filtering, and consistent snapshot queries. The service also supports runtime configuration for schema, query cost limits, and logging.
+
+The GraphQL schema is defined in the [GraphQL reference](/references/sui-graphql). You can explore supported types and fields there, use the GraphiQL IDE to test queries, and read documentation on the up-to-date schema.
+
+The GraphQL service is deployed as a single binary implementing a stateless, horizontally scalable service. Queries are served with data from one or more of a Postgres-compatible database (filters over historical data), Archival Service (point lookups), Consistent Store (live data), or full node (execution and simulation), based on need. Access to these stores must be configured with the service on start-up, otherwise the service might fail to respond correctly to requests. More details on how to set-up, configure, and run the service is available in its [README](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-graphql).
+
+Requests to GraphQL are subject to various limits, to ensure resources are shared fairly between clients. Each limit is configurable, and the values configured for an instance can be queried through [`Query.serviceConfig`](/references/sui-api/sui-graphql/beta/reference/operations/queries/service-config). Requests that do not meet limits return with an error. The following limits are in effect:
+
+- **Request size:** Requests may not limit a certain size in bytes. The limit is spread across a transaction payload limit, which applies to all values and variable bindings that are parameters to transaction signing, execution, and simulation fields (default: 175KB), and a query payload limit which applies to all other parts of the query (default: 5KB).
+- **Request timeout:** Time spent on each request is bounded, with different bounds for execution (default: 74s) and regular reads (default: 40s).
+- **Query input nodes and depth:** The query cannot be too complex, meaning it cannot contain too many input nodes or field names (default: 300) or be too deeply nested (default: 20).
+- **Output nodes:** The service estimates the maximum number of output nodes the query might produce, assuming every requested field is present, every paginated field returns full pages, and every multi-get finds all requested keys. This estimate must be bounded (default: 1,000,000).
+- **Page and multi-get size:** Each paginated field (default: 50) and multi-get (default: 200) is subject to a maximum size. Certain paginated fields might override this to provide a higher or lower maximum.
+- **(TBD) Rich queries:** A request can contain only a bounded number (default: 5) of queries that require dedicated access to the database (cannot be grouped with other requests).
+
+## Working with General-purpose Indexer
+
+General-purpose indexer fetches checkpoints data from either a remote object store, local files, or a full node RPC, and indexes data into multiple database tables via a set of specialized pipelines. Each pipeline is responsible for extracting specific data and writing to its target tables.
+
+<details>
+<summary>
+Full list of tables and their schemas
+</summary>
+<ImportContent source="crates/sui-indexer-alt-schema/src/schema.rs" mode="code" />
+</details>
+
+Below are brief descriptions of the various categories of pipelines based on the type of data they handle:
+
+### Blockchain raw content pipelines
+
+**Tables:** 
+
+- `kv_checkpoints`
+- `kv_transactions`
+- `kv_objects`
+- `kv_packages` 
+
+These pipelines capture the core blockchain data in its raw form, preserving complete checkpoint information, full transaction and objects contents, and Move package bytecode and metadata. They ensure the complete blockchain state is available for direct lookup by key (for example, object ID and version, transaction digest, checkpoint sequence number). Some production deployments use the Archival Store for looking up checkpoints, transactions, and objects contents instead of the corresponding `kv_` tables.
+
+The following pipelines create indexed views that allow efficient filtering and querying based on different attributes (for example, object owner, transaction type, affected addresses, event type). These indexes help identify the keys of interest, which can then fetch detailed content from the raw content `kv_` tables:
+
+### Transaction pipelines
+
+**Tables** 
+
+- `tx_digests`
+- `tx_kinds`
+- `tx_calls`
+- `tx_affected_addresses`
+- `tx_affected_objects`
+- `tx_balance_changes`
+
+These pipelines extract and index key transaction attributes to support efficient filtering and querying. `tx_kinds`, `tx_calls`, `tx_affected_addresses`, and `tx_affected_objects` enable fast lookups of transactions based on types, function calls, sender and receiver addresses, and changed objects. `tx_digests` enable conversions between transaction sequence numbers and transaction digests needed for looking up transactions in `kv_` tables by digests and `tx_balance_changes` stores balance changes information of each transaction.
+
+### Object pipelines
+
+**Tables**
+
+- `obj_info`
+- `obj_versions`
+- `coin_balance_buckets`
+
+These pipelines manage current and historical object information. They store active object metadata, maintain version histories for each object, and categorize coin balances into buckets for efficient coin queries sorted by balances. `obj_versions` table is particularly important for the GraphQL service. It tracks the version history of all blockchain objects, storing object ID, version number, digest, and checkpoint sequence number. The GraphQL service uses this table as an efficient index to resolve object queries by version bounds, checkpoint bounds, or exact versions without loading full object data, enabling features like version pagination and temporal consistency.
+
+Pruning policies can be configured for `obj_info` and `coin_balance_buckets` to retain historical data within a specified time range, balancing query needs with storage management. This allows supporting use cases that require querying recent object history without retaining all historical data indefinitely.
+
+### Epoch information pipelines
+
+**Tables**
+
+- `kv_epoch_starts`
+- `kv_epoch_ends`
+- `kv_feature_flags`
+- `kv_protocol_configs`
+
+These pipelines capture protocol upgrades and epoch transition points. They track the system state, reward distribution, validator committee and protocol configurations of each epoch, providing a historical record of network evolution.
+
+### Event processing pipelines
+
+**Tables**
+
+- `ev_emit_mod`
+- `ev_struct_inst`
+
+These pipelines index blockchain events for efficient querying by sender, emitting module, or event type.
+
+### Utility and support pipelines
+
+**Tables**
+
+- `cp_sequence_numbers`
+- `watermarks`
+
+These pipelines provide support infrastructure, such as checkpoint sequence number tracking for pruning and watermark tracking for ensuring consistent reads across different tables in a GraphQL query.
+
+### Other pipelines
+
+**Tables**
+
+- `sum_displays` 
+
+`sum_displays` tables stores the latest version of the `Display` object for each object type, used for rendering [the off-chain representation (display) for a type](/standards/display).
+
+### Indexer pipeline architecture and deployment
+
+General-purpose indexer is built using the Indexer framework, where each pipeline is structured as a set of layered components that interact with each other. Each layer has a distinct role in the data processing flow:
+
+- **Ingestion layer:** Fetches checkpoint data and distributes it to pipelines with back pressure management.
+- **Process layer:** Transforms checkpoint data into structured records specific to each pipeline’s purpose.
+- **Committer layer:** Writes processed data into the database while tracking progress through watermarks.
+- **Optional pruner layer:** Manages data retention by removing old records from pipelines that support pruning operations. It operates independently from the main processing pipeline and runs at configurable intervals to delete data older than the specified retention period.
+
+Each Indexer instance can run one or more pipelines, allowing deployments to be scaled and tuned according to workload. In some deployments, the pipelines described previously (except `kv_` checkpoints, objects, and transactions) are spread across a number of pods, grouping lightweight pipelines together and isolating heavyweight pipelines in their own deployments. This grouping helps mitigate ingestion bottlenecks, as all pipelines within a pod share the same ingestion service, and the slowest pipeline limits the overall throughput for that pod.
+
+The pipeline composition, concurrency, and deployment grouping is configured via a TOML config file. A built-in [`GenerateConfig` command](https://github.com/MystenLabs/sui/blob/58eabc882671ceb6266473a5531253a90b22a66f/crates/sui-indexer-alt/src/main.rs#L109) is provided to output sample configuration files for different deployment setups. The configuration generated by this command includes all pipelines in a single indexer deployment.
+
+As an example, the following configuration is used to run separate indexer deployments for each of the following pipelines:
+
+#### coin_balance_buckets
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 10000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[pruner]
+retention = 14400
+max-chunk-size = 2000
+prune-concurrency = 2
+
+[committer]
+write-concurrency = 5
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.coin_balance_buckets.pruner]
+```
+
+#### cp_sequence_numbers
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 10000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[committer]
+write-concurrency = 10
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.cp_sequence_numbers]
+```
+
+#### obj_info
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 10000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[pruner]
+interval-ms = 30000
+retention = 14400
+max-chunk-size = 500
+prune-concurrency = 20
+
+[committer]
+write-concurrency = 10
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.obj_info.pruner]
+```
+
+#### obj_versions
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 5000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[committer]
+write-concurrency = 10
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.obj_versions]
+```
+
+#### kv_packages
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 5000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[committer]
+write-concurrency = 5
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.kv_packages]
+```
+
+#### tx_affected_addresses
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 5000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[committer]
+write-concurrency = 10
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.tx_affected_addresses]
+```
+
+#### tx_balance_changes
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 5000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[committer]
+write-concurrency = 10
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.tx_balance_changes]
+```
+
+#### Remaining tables
+
+And a single additional deployment that handles all the remaining tables:
+
+```toml
+[ingestion]
+checkpoint-buffer-size = 5000
+ingest-concurrency = 200
+retry-interval-ms = 200
+
+[committer]
+write-concurrency = 5
+collect-interval-ms = 500
+watermark-interval-ms = 500
+
+[pipeline.sum_displays]
+
+[pipeline.kv_epoch_ends]
+
+[pipeline.kv_epoch_starts]
+
+[pipeline.kv_feature_flags]
+
+[pipeline.kv_protocol_configs]
+
+[pipeline.tx_digests]
+```
+
+### When to build a custom indexer
+
+This document focuses on the general-purpose Indexer that powers GraphQL. If you want to build your own pipelines for application-specific data (for example, Deepbook order books, Walrus blob metadata, Seal access events, and so on), refer to the [Build Your First Custom Indexer](/guides/developer/advanced/custom-indexer).
+
+You can run custom indexers separately to populate an app-specific database. You can then build your own lightweight RPC server with your choice of query mechanism (GraphQL, gRPC, or JSON-RPC) to serve app-specific data from that database.
+
+## Working with Consistent Store
+
+The Consistent Store is a combined indexer and RPC service that is responsible for indexing live data on-chain, and serving queries about it for recent checkpoints. Retention (the number of checkpoints to serve information for) is configurable and is typically measured in minutes or hours. Its indexer fetches checkpoints from the same sources as the general-purpose Indexer, and writes data to an embedded RocksDB store, while requests are served through gRPC, answering the following queries:
+
+- Owner's live objects at a recent checkpoint, optionally filtered by type.
+- Live objects for a given type at a recent checkpoint.
+- Address balance at a recent checkpoint.
+
+This service is not stateless as it maintains its own database. A new instance can be spun up similar to the indexer, by syncing it from genesis, or possibly by restoring it from a formal snapshot.
+
+## Related links
+
+<RelatedLink to="/concepts/graphql-rpc" />
+<RelatedLink to="/concepts/custom-indexing-framework" />
+<RelatedLink to="/concepts/custom-indexer/pipeline-architecture" />
+<RelatedLink to="/concepts/archival-store" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer" />
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt" label="Sui Indexer Alt" desc="The `sui-indexer-alt` crate in the Sui repo." />
+<RelatedLink href="https://github.com/MystenLabs/mvr/tree/main/crates/mvr-indexer" label="Move Registry" desc="The indexer that the Move Registry (MVR) implements." />
+<RelatedLink href="https://github.com/MystenLabs/deepbookv3/tree/main/crates/indexer" label="DeepBook Indexer" desc="The indexer that DeepBook implements." />
+<RelatedLink href="/references/sui-api/sui-graphql/beta/reference" label="GraphQL Beta schema" desc="Schema documentation for GraphQL Beta" />

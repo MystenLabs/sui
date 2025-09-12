@@ -36,6 +36,7 @@ arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
 better_any = "0.1.1"
+bimap = "0.6.2"
 bitvec = "0.19.4"
 byteorder = "1.4.3"
 bytes = "1.0.1"
@@ -91,6 +92,7 @@ petgraph = "0.8.1"
 phf = { version = "0.11", features = ["macros"] }
 plotters = { version = "0.3.0", default-features = false, features = ["evcxr", "line_series", "histogram"] }
 pretty = "0.10.0"
+pretty_assertions = "1.4.1"
 prettydiff = "0.4.0"
 primitive-types = { version = "0.10.1", features = ["impl-serde"] }
 proc-macro2 = "1.0.24"

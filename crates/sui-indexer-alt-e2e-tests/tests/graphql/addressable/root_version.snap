@@ -1,0 +1,347 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 10-12:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 14-16:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 18-20:
+//# programmable --sender A --inputs @A
+//> 0: sui::bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 22-24:
+//# programmable --sender A --inputs @A
+//> 0: sui::object_bag::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 26:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 28-31:
+//# programmable --sender A --inputs object(1,0) 1u64 object(2,0) 2u64 object(3,0) 3u64 object(4,0)
+//> 0: sui::bag::add<u64, sui::bag::Bag>(Input(2), Input(3), Input(4));
+//> 1: sui::bag::add<u64, sui::bag::Bag>(Input(2), Input(5), Input(6));
+//> 2: sui::bag::add<u64, sui::bag::Bag>(Input(0), Input(1), Input(2));
+created: object(7,0), object(7,1), object(7,2)
+mutated: object(0,0), object(1,0)
+wrapped: object(2,0), object(3,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 8352400,  storage_rebate: 6124536, non_refundable_storage_fee: 61864
+
+task 8, lines 33-36:
+//# programmable --sender A --inputs object(5,0) 400u64 500u64
+//> 0: SplitCoins(Gas, [Input(1), Input(2)]);
+//> 1: sui::object_bag::add<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(1), NestedResult(0,0));
+//> 2: sui::object_bag::add<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(2), NestedResult(0,1));
+created: object(8,0), object(8,1), object(8,2), object(8,3)
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 9272000,  storage_rebate: 2362536, non_refundable_storage_fee: 23864
+
+task 9, line 38:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 10, lines 40-53:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetObjects": [
+      {
+        "version": 7,
+        "asMoveObject": {
+          "contents": {
+            "json": {
+              "id": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+              "size": "1"
+            }
+          }
+        }
+      },
+      null,
+      null,
+      null
+    ]
+  }
+}
+
+task 11, lines 55-72:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": {
+        "multiGetObjects": [
+          {
+            "version": 2,
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+                  "size": "0"
+                }
+              }
+            }
+          },
+          {
+            "version": 3,
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+                  "size": "0"
+                }
+              }
+            }
+          },
+          {
+            "version": 4,
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0x2d258a843438e1572a5d174eb7ce3ab8a83cfdd7114bee0aa1196f23eb71a0fe",
+                  "size": "0"
+                }
+              }
+            }
+          },
+          {
+            "version": 5,
+            "asMoveObject": {
+              "contents": {
+                "json": {
+                  "id": "0x662c6e9804a6c6e19a24701069d4a222dd5549bbbb782453a7f45b2202f463c9",
+                  "size": "0"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12, lines 74-89:
+//# run-graphql --cursors bcs(1u64)
+Response: {
+  "data": {
+    "address": {
+      "dynamicField": {
+        "value": {
+          "json": {
+            "id": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+            "size": "2"
+          }
+        }
+      }
+    },
+    "object": {
+      "asMoveObject": {
+        "dynamicField": {
+          "value": {
+            "json": {
+              "id": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+              "size": "2"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 13, lines 91-106:
+//# run-graphql --cursors bcs(2u64) bcs(3u64)
+Response: {
+  "data": {
+    "address": {
+      "df2": {
+        "value": {
+          "json": {
+            "id": "0x2d258a843438e1572a5d174eb7ce3ab8a83cfdd7114bee0aa1196f23eb71a0fe",
+            "size": "0"
+          }
+        }
+      },
+      "df3": {
+        "value": {
+          "json": {
+            "id": "0x662c6e9804a6c6e19a24701069d4a222dd5549bbbb782453a7f45b2202f463c9",
+            "size": "0"
+          }
+        }
+      },
+      "multiGetDynamicFields": [
+        {
+          "value": {
+            "json": {
+              "id": "0x2d258a843438e1572a5d174eb7ce3ab8a83cfdd7114bee0aa1196f23eb71a0fe",
+              "size": "0"
+            }
+          }
+        },
+        {
+          "value": {
+            "json": {
+              "id": "0x662c6e9804a6c6e19a24701069d4a222dd5549bbbb782453a7f45b2202f463c9",
+              "size": "0"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14, lines 108-133:
+//# run-graphql --cursors bcs(400u64) bcs(500u64)
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "df400": {
+          "value": {
+            "contents": {
+              "json": {
+                "balance": "400",
+                "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+              }
+            }
+          }
+        },
+        "df500": {
+          "value": {
+            "contents": {
+              "json": {
+                "balance": "500",
+                "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+              }
+            }
+          }
+        },
+        "multiGetDynamicObjectFields": [
+          {
+            "value": {
+              "contents": {
+                "json": {
+                  "balance": "400",
+                  "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+                }
+              }
+            }
+          },
+          {
+            "value": {
+              "contents": {
+                "json": {
+                  "balance": "500",
+                  "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "address": {
+      "df400": {
+        "value": {
+          "contents": {
+            "json": {
+              "balance": "400",
+              "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+            }
+          }
+        }
+      },
+      "df500": {
+        "value": {
+          "contents": {
+            "json": {
+              "balance": "500",
+              "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+            }
+          }
+        }
+      },
+      "multiGetDynamicObjectFields": [
+        {
+          "value": {
+            "contents": {
+              "json": {
+                "balance": "400",
+                "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+              }
+            }
+          }
+        },
+        {
+          "value": {
+            "contents": {
+              "json": {
+                "balance": "500",
+                "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15, lines 135-140:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

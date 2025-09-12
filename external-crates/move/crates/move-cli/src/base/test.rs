@@ -70,8 +70,8 @@ pub struct Test {
     pub rand_num_iters: Option<u64>,
 
     // Enable tracing for tests
-    #[clap(long = "trace-execution")]
-    pub trace_execution: bool,
+    #[clap(long = "trace")]
+    pub trace: bool,
 }
 
 impl Test {
@@ -85,7 +85,7 @@ impl Test {
         let rerooted_path = reroot_path(path)?;
         let compute_coverage = self.compute_coverage;
         // save disassembly if trace execution is enabled
-        let save_disassembly = self.trace_execution;
+        let save_disassembly = self.trace;
         let result = run_move_unit_tests(
             &rerooted_path,
             config,
@@ -115,7 +115,7 @@ impl Test {
             compute_coverage: _,
             seed,
             rand_num_iters,
-            trace_execution,
+            trace,
         } = self;
         UnitTestingConfig {
             gas_limit,
@@ -126,7 +126,7 @@ impl Test {
             verbose: verbose_mode,
             seed,
             rand_num_iters,
-            trace_execution,
+            trace,
             ..UnitTestingConfig::default_with_bound(None)
         }
     }

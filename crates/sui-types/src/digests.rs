@@ -1120,6 +1120,41 @@ impl fmt::Debug for AdditionalConsensusStateDigest {
     }
 }
 
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct CheckpointArtifactsDigest(Digest);
+
+impl CheckpointArtifactsDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+
+    pub const fn inner(&self) -> &[u8; 32] {
+        self.0.inner()
+    }
+
+    pub const fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
+
+    pub fn base58_encode(&self) -> String {
+        Base58::encode(self.0)
+    }
+}
+
+impl From<[u8; 32]> for CheckpointArtifactsDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+}
+
+impl fmt::Display for CheckpointArtifactsDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::digests::{ChainIdentifier, SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE};

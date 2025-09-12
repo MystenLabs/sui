@@ -61,6 +61,7 @@ feature_flags:
       default_none_duration_for_new_keys: true
   consensus_choice: Mysticeti
   consensus_network: Tonic
+  correct_gas_payment_limit_check: true
   zklogin_max_epoch_upper_bound_delta: 30
   mysticeti_leader_scoring_and_schedule: true
   reshare_at_same_initial_version: true
@@ -74,6 +75,7 @@ feature_flags:
   soft_bundle: true
   enable_coin_deny_list_v2: true
   passkey_auth: true
+  authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
@@ -110,7 +112,8 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
-  enable_coin_registry: true
+  use_mfp_txns_in_load_initial_object_debts: true
+  cancel_for_failed_dkg_early: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

@@ -5,8 +5,6 @@ effort: large
 keywords: [ trustless, swap, atomic swaps, shared objects, composability, example app, example dApp, example swap, swap example, how to swap tokens  ]
 ---
 
-<ImportContent source="app-examples-swap-source.mdx" mode="snippet" />
-
 This guide demonstrates how to make an app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 
 There are three main sections to this guide:
@@ -14,6 +12,10 @@ There are three main sections to this guide:
 1. [Smart Contracts](#smart-contracts): The Move code that holds the state and perform the swaps.
 1. [Backend](#backend): A service that indexes chain state to discover trades, and an API service to read this data.
 1. [Frontend](#frontend): A UI that enables users to list objects for sale and to accept trades.
+
+<ImportContent source="prerequisites.mdx" mode="snippet" />
+
+<ImportContent source="app-examples-swap-source.mdx" mode="snippet" />
 
 ## What the guide teaches
 
@@ -25,20 +27,6 @@ The guide also shows how to build an app that:
 - **Is trustless:** Users do not have to trust (or pay) any third parties; the chain manages the swap.
 - **Avoids rug-pulls:** Guarantees that the object a user wants to trade for isn't tampered with after initiating the trade.
 - **Preserves liveness:** Users are able to pull out of the trade and reclaim their object at any time, in case the other party stops responding.
-
-## What you need
-
-Before getting started, make sure you have:
-
-- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
-- [Configured a valid network environment](../../../references/cli/client.mdx#set-current-environment), as the guide has you deploy the module on Testnet.
-- [Acquired Devnet or Testnet](../getting-started/get-coins.mdx) tokens for development purposes.
-  :::tip
-      
-  <ImportContent source="faucet-online.mdx" mode="snippet" />
-
-  :::
-- Read the basics of [object ownership](../sui-101/object-ownership.mdx).
 
 ## Directory structure
 
@@ -616,22 +604,29 @@ With the code successfully deployed on Testnet, you can now [create a frontend](
 
 In this final part of the app example, you build a frontend (UI) that allows end users to discover trades and interact with listed escrows.
 
-### Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
+
+- [x] [Completed the smart contracts](#smart-contracts) and understand their design.
+
+- [x] [Implemented the backend](#backend) to learn how to index on-chain data and expose it through an API.
+
+- [x] [Deployed your smart contracts and started the backend indexer](#deployment).
+                 
+- [x] Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) to use as the package manager.
+
+</TabItem>
+</Tabs>
 
 <ImportContent source="app-examples-swap-source.mdx" mode="snippet" />
 
-Before getting started, make sure you have:
-
-- [Completed the smart contracts](#smart-contracts) and understand their design.
-- [Implemented the backend](#backend) to learn how to index on-chain data and expose it through an API.
-- [Deployed your smart contracts and started the backend indexer](#deployment).
-- Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) to use as the package manager.
-
 :::tip Additional resources
 
-- Tooling: [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript). For basic usage on how to interact with Sui with TypeScript.
-- Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). To learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp). This is used within this project to quickly scaffold a React-based Sui dApp.
+- [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript). For basic usage on how to interact with Sui with TypeScript.
+- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). To learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp). This is used within this project to quickly scaffold a React-based Sui dApp.
 
 :::
 

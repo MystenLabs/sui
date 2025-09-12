@@ -245,7 +245,7 @@ impl ExecutionScheduler {
         for (cert, version, _) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
-                .process_balance_withdraws()
+                .process_funds_withdrawals()
                 .expect("Balance withdraws should have already been checked");
             assert!(!tx_withdraws.is_empty());
             if let Some(prev_version) = prev_version {

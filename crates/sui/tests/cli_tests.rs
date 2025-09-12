@@ -1000,7 +1000,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     assert!(resp.is_err());
     let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Gas price 1 under reference gas price"));
+    assert!(
+        err_string.contains("Gas price 1 under reference gas price"),
+        "Error: {err_string}"
+    );
 
     // FIXME: uncomment once we figure out what is going on with `resolve_and_type_check`
     // let err_string = format!("{} ", resp.err().unwrap());

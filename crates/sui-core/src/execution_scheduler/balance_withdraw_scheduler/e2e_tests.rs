@@ -21,7 +21,7 @@ use sui_types::{
     gas_coin::GAS,
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::BalanceWithdrawArg,
+    transaction::FundsWithdrawalArg,
 };
 use tokio::sync::mpsc::{self, unbounded_channel};
 use tokio::time::timeout;
@@ -92,9 +92,10 @@ impl TestEnv {
             .into_iter()
             .enumerate()
             .map(|(idx, amount)| {
-                let withdraw = BalanceWithdrawArg::new_with_amount(amount, GAS::type_tag().into());
+                let withdraw =
+                    FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag().into());
                 let mut ptb = ProgrammableTransactionBuilder::new();
-                ptb.balance_withdraw(withdraw).unwrap();
+                ptb.funds_withdrawal(withdraw).unwrap();
                 let tx_data = TestTransactionBuilder::new(
                     self.sender,
                     self.gas_object.compute_object_reference(),

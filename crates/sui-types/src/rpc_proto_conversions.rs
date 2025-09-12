@@ -232,6 +232,10 @@ impl From<crate::messages_checkpoint::CheckpointCommitment> for CheckpointCommit
                 message.digest = Some(digest.digest.to_string());
                 CheckpointCommitmentKind::EcmhLiveObjectSet
             }
+            crate::messages_checkpoint::CheckpointCommitment::CheckpointArtifactsDigest(digest) => {
+                message.digest = Some(digest.to_string());
+                CheckpointCommitmentKind::CheckpointArtifacts
+            }
         };
 
         message.set_kind(kind);
@@ -2301,7 +2305,7 @@ impl From<crate::transaction::CallArg> for Input {
                 }
             },
             //TODO
-            I::BalanceWithdraw(_) => InputKind::Unknown,
+            I::FundsWithdrawal(_) => InputKind::Unknown,
         };
 
         message.set_kind(kind);

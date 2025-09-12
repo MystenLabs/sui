@@ -91,7 +91,7 @@ task 10, lines 67-71:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 // Transfers an existing party object back to party again
-Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(2,1) is owned by account address @A, but given owner/signer address is @B" }
+Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(2,1) is owned by account address @A, but given owner/signer address is @B
 
 task 11, lines 72-74:
 //# programmable --inputs object(2,1) @A --sender A
@@ -133,7 +133,7 @@ Contents: ex::m::Pub {
 
 task 15, lines 86-88:
 //# transfer-object 2,1 --sender A --recipient A
-Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(2,1) is owned by account address @B, but given owner/signer address is @A" }
+Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(2,1) is owned by account address @B, but given owner/signer address is @A
 
 task 16, line 89:
 //# transfer-object 2,1 --sender B --recipient B
@@ -156,7 +156,7 @@ task 18, lines 94-97:
 //# programmable --inputs object(2,0) @B --sender B
 //> ex::m::priv_fastpath(Input(0), Input(1));
 // Transfers party object back to fastpath and a different owner via `transfer`
-Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(2,0) is owned by account address @A, but given owner/signer address is @B" }
+Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(2,0) is owned by account address @A, but given owner/signer address is @B
 
 task 19, lines 98-99:
 //# programmable --inputs object(2,0) @B --sender A

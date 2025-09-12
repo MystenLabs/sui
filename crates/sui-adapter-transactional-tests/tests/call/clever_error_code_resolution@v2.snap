@@ -1,0 +1,15 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 6-11:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3716400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 13:
+//# run Test::M1::foo
+Error: Transaction Effects Status: Move Abort in Test::M1::foo (function index 0) at offset 1 at line 10 with clever code 10
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: Test, name: Identifier("M1") }, function: 0, instruction: 1, function_name: Some("foo") }, 13837872847998943233), source: Some(VMError { major_status: ABORTED, sub_status: Some(13837872847998943233), message: Some("Test::M1::foo at offset 1"), exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }

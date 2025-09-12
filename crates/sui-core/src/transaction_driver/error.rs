@@ -59,6 +59,9 @@ impl TransactionRequestError {
 /// NOTE: every error should indicate if it is retriable.
 #[derive(Eq, PartialEq, Clone)]
 pub enum TransactionDriverError {
+    /// TransactionDriver encountered an internal error.
+    /// Retriable.
+    Internal { error: String },
     /// Transient failure during transaction processing that prevents the transaction from finalization.
     /// Retriable with new transaction submission / call to TransactionDriver.
     Aborted {
@@ -66,6 +69,9 @@ pub enum TransactionDriverError {
         submission_retriable_errors: AggregatedRequestErrors,
         observed_effects_digests: AggregatedEffectsDigests,
     },
+    /// The transaction failed validation from local state.
+    /// Non-retriable.
+    ValidationFailed { error: String },
     /// Over validity threshold of validators rejected the transaction as invalid.
     /// Non-retriable.
     InvalidTransaction {
@@ -82,7 +88,7 @@ pub enum TransactionDriverError {
     },
     /// Transaction timed out but we return last retriable error if it exists.
     /// Non-retriable.
-    TimeOutWithLastRetriableError {
+    TimeoutWithLastRetriableError {
         last_error: Option<Box<TransactionDriverError>>,
         attempts: u32,
         timeout: Duration,
@@ -92,10 +98,12 @@ pub enum TransactionDriverError {
 impl TransactionDriverError {
     pub fn is_retriable(&self) -> bool {
         match self {
+            TransactionDriverError::Internal { .. } => true,
             TransactionDriverError::Aborted { .. } => true,
+            TransactionDriverError::ValidationFailed { .. } => false,
             TransactionDriverError::InvalidTransaction { .. } => false,
             TransactionDriverError::ForkedExecution { .. } => false,
-            TransactionDriverError::TimeOutWithLastRetriableError { .. } => false,
+            TransactionDriverError::TimeoutWithLastRetriableError { .. } => true,
         }
     }
 
@@ -129,6 +137,13 @@ impl TransactionDriverError {
         write!(f, "{}", msgs.join(" "))
     }
 
+    fn display_validation_failed(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TransactionDriverError::ValidationFailed { error } = self else {
+            return Ok(());
+        };
+        write!(f, "Transaction failed validation: {}", error)
+    }
+
     fn display_invalid_transaction(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let TransactionDriverError::InvalidTransaction {
             submission_non_retriable_errors,
@@ -138,9 +153,11 @@ impl TransactionDriverError {
             return Ok(());
         };
         let mut msgs = vec!["Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable).".to_string()];
-        msgs.push(format!(
-            "Non-retriable errors: [{submission_non_retriable_errors}]."
-        ));
+        if submission_non_retriable_errors.total_stake > 0 {
+            msgs.push(format!(
+                "Non-retriable errors: [{submission_non_retriable_errors}]."
+            ));
+        }
         if submission_retriable_errors.total_stake > 0 {
             msgs.push(format!(
                 "Retriable errors: [{submission_retriable_errors}]."
@@ -180,12 +197,14 @@ impl TransactionDriverError {
 impl std::fmt::Display for TransactionDriverError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            TransactionDriverError::Internal { error } => write!(f, "Internal error: {}", error),
             TransactionDriverError::Aborted { .. } => self.display_aborted(f),
+            TransactionDriverError::ValidationFailed { .. } => self.display_validation_failed(f),
             TransactionDriverError::InvalidTransaction { .. } => {
                 self.display_invalid_transaction(f)
             }
             TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
-            TransactionDriverError::TimeOutWithLastRetriableError {
+            TransactionDriverError::TimeoutWithLastRetriableError {
                 last_error,
                 attempts,
                 timeout,
@@ -213,7 +232,7 @@ impl std::fmt::Debug for TransactionDriverError {
 
 impl std::error::Error for TransactionDriverError {}
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Default)]
 pub struct AggregatedRequestErrors {
     pub errors: Vec<(String, Vec<AuthorityName>, StakeUnit)>,
     pub total_stake: StakeUnit,

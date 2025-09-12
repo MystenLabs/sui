@@ -283,7 +283,9 @@ impl LocalValidatorAggregatorProxy {
         let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
             tx_driver_percentage
         } else {
-            choose_transaction_driver_percentage()
+            // We don't need to gate transaction driver for benchmark since we
+            // are not running it on mainnet.
+            choose_transaction_driver_percentage(None)
         };
 
         Self::new_impl(
@@ -362,6 +364,7 @@ impl LocalValidatorAggregatorProxy {
                     transaction: tx.clone(),
                 },
                 SubmitTransactionOptions::default(),
+                Some(Duration::from_secs(60)),
             )
             .await?;
         Ok(ExecutionEffects::FinalizedTransactionEffects(
@@ -637,7 +640,6 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
-        // TODO(fastpath): Add support for TransactionDriver
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 10 {
@@ -785,9 +787,9 @@ impl From<CallArg> for BenchMoveCallArg {
                     unimplemented!("Receiving is not supported for benchmarks")
                 }
             },
-            CallArg::BalanceWithdraw(_) => {
-                // TODO(address-balances): Support BalanceWithdraw in benchmarks.
-                todo!("BalanceWithdraw is not supported for benchmarks")
+            CallArg::FundsWithdrawal(_) => {
+                // TODO(address-balances): Support FundsWithdrawal in benchmarks.
+                todo!("FundsWithdrawal is not supported for benchmarks")
             }
         }
     }

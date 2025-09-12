@@ -147,7 +147,7 @@ where
         let td_percentage = if !epoch_store.protocol_config().mysticeti_fastpath() {
             0
         } else {
-            choose_transaction_driver_percentage()
+            choose_transaction_driver_percentage(Some(epoch_store.get_chain_identifier()))
         };
 
         let transaction_driver = if td_percentage > 0 {
@@ -201,8 +201,7 @@ where
     fields(
         tx_digest = ?request.transaction.digest(),
         tx_type = ?request_type,
-    ),
-    err)]
+    ))]
     pub async fn execute_transaction_block(
         &self,
         request: ExecuteTransactionRequestV3,
@@ -254,7 +253,7 @@ where
     }
 
     // Utilize the handle_certificate_v3 validator api to request input/output objects
-    #[instrument(name = "tx_orchestrator_execute_transaction_v3", level = "trace", skip_all,
+    #[instrument(name = "tx_orchestrator_execute_transaction_v3", level = "debug", skip_all,
                  fields(tx_digest = ?request.transaction.digest()))]
     pub async fn execute_transaction_v3(
         &self,
@@ -579,7 +578,7 @@ where
         );
 
         let td_response = td
-            .drive_transaction_with_timeout(
+            .drive_transaction(
                 SubmitTxRequest {
                     transaction: request.transaction.clone(),
                 },
@@ -590,7 +589,7 @@ where
             )
             .await
             .map_err(|e| match e {
-                TransactionDriverError::TimeOutWithLastRetriableError {
+                TransactionDriverError::TimeoutWithLastRetriableError {
                     last_error,
                     attempts,
                     timeout,
