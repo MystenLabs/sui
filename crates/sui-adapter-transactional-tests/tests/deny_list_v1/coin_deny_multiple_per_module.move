@@ -7,7 +7,6 @@
 //# init --accounts A --addresses test=0x0
 
 //# publish --sender A
-
 module test::first_coin {
     use sui::coin;
 

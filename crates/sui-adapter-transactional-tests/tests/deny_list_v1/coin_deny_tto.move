@@ -6,7 +6,6 @@
 //# init --accounts A --addresses test=0x0
 
 //# publish --sender A
-
 module test::regulated_coin {
     use sui::coin;
     use sui::coin::Coin;
