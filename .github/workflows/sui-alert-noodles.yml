@@ -45,6 +45,7 @@ jobs:
             echo "$LAST_COMMIT" > .last_file_commit
           else
             echo "changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Save commit hash to cache
         uses: actions/cache@v3
