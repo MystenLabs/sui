@@ -6,6 +6,7 @@ module a::m {
     public fun foo() {}
 }
 
+#[allow(deprecated_usage)]
 module b::m1 {
     fun t<T>() {}
     public fun foo() {
@@ -20,10 +21,12 @@ module b::m1 {
 module b::m2 {
     fun t<T>() {}
 
+    #[allow(deprecated_usage)]
     public fun foo() {
         a::m::foo();
     }
 
+    #[allow(deprecated_usage)]
     public fun s() {
         t<a::m::S>();
     }
