@@ -10,6 +10,7 @@ use crate::authority::authority_store_tables::{
     AuthorityPerpetualTables, AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::submitted_transaction_cache::SubmittedTransactionCacheMetrics;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
@@ -290,6 +291,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
                 .unwrap_or(0),
+            Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
         )
         .expect("failed to create authority per epoch store");
         let committee_store = Arc::new(CommitteeStore::new(

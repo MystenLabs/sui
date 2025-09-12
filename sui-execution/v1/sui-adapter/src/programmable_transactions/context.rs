@@ -1209,7 +1209,7 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
-            CallArg::BalanceWithdraw(_) => {
+            CallArg::FundsWithdrawal(_) => {
                 unreachable!("Impossible to hit BalanceWithdraw in v1")
             }
         })

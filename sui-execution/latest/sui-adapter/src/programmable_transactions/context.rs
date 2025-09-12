@@ -1837,7 +1837,7 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
-            CallArg::BalanceWithdraw(_) => {
+            CallArg::FundsWithdrawal(_) => {
                 // TODO(address-balances): Add support for balance withdraws.
                 InputValue::new_balance_withdraw()
             }

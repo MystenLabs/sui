@@ -50,7 +50,7 @@ use sui_types::transaction::{
     Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, Reservation,
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
-    WithdrawTypeParam,
+    WithdrawalTypeArg,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -2235,7 +2235,7 @@ pub enum SuiCallArg {
     Pure(SuiPureValue),
     // Reservation to withdraw balance. This will be converted into a Withdrawal struct and passed into Move.
     // It is allowed to have multiple withdraw arguments even for the same balance type.
-    BalanceWithdraw(SuiBalanceWithdrawArg),
+    FundsWithdrawal(SuiFundsWithdrawalArg),
 }
 
 impl SuiCallArg {
@@ -2271,14 +2271,14 @@ impl SuiCallArg {
                     digest,
                 })
             }
-            CallArg::BalanceWithdraw(arg) => SuiCallArg::BalanceWithdraw(SuiBalanceWithdrawArg {
+            CallArg::FundsWithdrawal(arg) => SuiCallArg::FundsWithdrawal(SuiFundsWithdrawalArg {
                 reservation: match arg.reservation {
                     Reservation::EntireBalance => SuiReservation::EntireBalance,
                     Reservation::MaxAmountU64(amount) => SuiReservation::MaxAmountU64(amount),
                 },
-                type_param: match arg.type_param {
-                    WithdrawTypeParam::Balance(type_input) => {
-                        SuiWithdrawTypeParam::Balance(type_input.to_type_tag()?.into())
+                type_arg: match arg.type_arg {
+                    WithdrawalTypeArg::Balance(type_input) => {
+                        SuiWithdrawalTypeArg::Balance(type_input.to_type_tag()?.into())
                     }
                 },
                 withdraw_from: match arg.withdraw_from {
@@ -2373,7 +2373,7 @@ pub enum SuiReservation {
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub enum SuiWithdrawTypeParam {
+pub enum SuiWithdrawalTypeArg {
     Balance(SuiTypeTag),
 }
 
@@ -2385,9 +2385,9 @@ pub enum SuiWithdrawFrom {
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SuiBalanceWithdrawArg {
+pub struct SuiFundsWithdrawalArg {
     pub reservation: SuiReservation,
-    pub type_param: SuiWithdrawTypeParam,
+    pub type_arg: SuiWithdrawalTypeArg,
     pub withdraw_from: SuiWithdrawFrom,
 }
 

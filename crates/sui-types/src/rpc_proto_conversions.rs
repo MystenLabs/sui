@@ -2305,7 +2305,7 @@ impl From<crate::transaction::CallArg> for Input {
                 }
             },
             //TODO
-            I::BalanceWithdraw(_) => InputKind::Unknown,
+            I::FundsWithdrawal(_) => InputKind::Unknown,
         };
 
         message.set_kind(kind);

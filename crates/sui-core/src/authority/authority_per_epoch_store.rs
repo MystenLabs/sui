@@ -92,6 +92,9 @@ use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
 use super::shared_object_version_manager::AssignedVersions;
+use super::submitted_transaction_cache::{
+    SubmittedTransactionCache, SubmittedTransactionCacheMetrics,
+};
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use super::transaction_reject_reason_cache::TransactionRejectReasonCache;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -423,6 +426,9 @@ pub struct AuthorityPerEpochStore {
 
     /// A cache that maintains the reject vote reason for a transaction.
     pub(crate) tx_reject_reason_cache: Option<TransactionRejectReasonCache>,
+
+    /// A cache that tracks submitted transactions to prevent DoS through excessive resubmissions.
+    pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -968,6 +974,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
+        submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1130,6 +1137,9 @@ impl AuthorityPerEpochStore {
             None
         };
 
+        let submitted_transaction_cache =
+            SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
+
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
@@ -1171,6 +1181,7 @@ impl AuthorityPerEpochStore {
             end_of_epoch_execution_time_observations: OnceCell::new(),
             consensus_tx_status_cache,
             tx_reject_reason_cache,
+            submitted_transaction_cache,
             settlement_registrations: Default::default(),
         });
 
@@ -1324,6 +1335,7 @@ impl AuthorityPerEpochStore {
             expensive_safety_check_config,
             self.chain,
             previous_epoch_last_checkpoint,
+            self.submitted_transaction_cache.metrics(),
         )
     }
 

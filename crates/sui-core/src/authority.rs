@@ -244,6 +244,7 @@ pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
+pub mod submitted_transaction_cache;
 pub mod test_authority_builder;
 pub mod transaction_deferral;
 pub mod transaction_reject_reason_cache;
