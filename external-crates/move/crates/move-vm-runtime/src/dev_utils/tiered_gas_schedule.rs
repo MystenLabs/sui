@@ -21,9 +21,7 @@ use crate::jit::execution::ast::Type;
 use crate::shared::{
     gas::{GasMeter, SimpleInstruction},
     views::{SizeConfig, TypeView, ValueView},
-    views::{TypeView, ValueView},
 };
-use move_vm_profiler::GasProfiler;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{

@@ -11,16 +11,8 @@ use crate::execution_value::SuiResolver;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-<<<<<<< HEAD
     language_storage::ModuleId,
     resolver::{ModuleResolver, SerializedPackage},
-||||||| 0f914b9774
-    language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
-=======
-    language_storage::ModuleId,
-    resolver::{LinkageResolver, ModuleResolver},
->>>>>>> origin/main
 };
 use move_vm_types::data_store::LinkageResolver;
 use sui_types::storage::{get_module, PackageObject};

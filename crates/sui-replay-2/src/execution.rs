@@ -369,4 +369,18 @@ impl ModuleResolver for ReplayStore<'_> {
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         unreachable!("unexpected ModuleResolver::get_module({})", id)
     }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [move_core_types::account_address::AccountAddress; N],
+    ) -> Result<[Option<move_core_types::resolver::SerializedPackage>; N], Self::Error> {
+        unreachable!("unexpected ModuleResolver::get_packages_static({:?})", ids)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[move_core_types::account_address::AccountAddress],
+    ) -> Result<Vec<Option<move_core_types::resolver::SerializedPackage>>, Self::Error> {
+        unreachable!("unexpected ModuleResolver::get_packages({:?})", ids)
+    }
 }

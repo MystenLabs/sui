@@ -15,20 +15,10 @@ use crate::{
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-<<<<<<< HEAD
 use move_core_types::resolver::SerializedPackage;
 use move_core_types::{
     account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
 };
-||||||| 0f914b9774
-use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
-=======
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
->>>>>>> origin/main
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};

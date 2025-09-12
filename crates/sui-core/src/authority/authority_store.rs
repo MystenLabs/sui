@@ -391,10 +391,10 @@ impl AuthorityStore {
         object_key: FullObjectKey,
         epoch_id: EpochId,
     ) -> SuiResult<Option<MarkerValue>> {
-            Ok(self
-                .perpetual_tables
-                .object_per_epoch_marker_table_v2
-                .get(&(epoch_id, object_key))?)
+        Ok(self
+            .perpetual_tables
+            .object_per_epoch_marker_table_v2
+            .get(&(epoch_id, object_key))?)
     }
 
     pub fn get_latest_marker(
@@ -402,24 +402,24 @@ impl AuthorityStore {
         object_id: FullObjectID,
         epoch_id: EpochId,
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-            let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
-            let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
+        let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
+        let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
 
-            let marker_entry = self
-                .perpetual_tables
-                .object_per_epoch_marker_table_v2
-                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
-                .next();
-            match marker_entry {
-                Some(Ok(((epoch, key), marker))) => {
-                    // because of the iterator bounds these cannot fail
-                    assert_eq!(epoch, epoch_id);
-                    assert_eq!(key.id(), object_id);
-                    Ok(Some((key.version(), marker)))
-                }
-                Some(Err(e)) => Err(e.into()),
-                None => Ok(None),
+        let marker_entry = self
+            .perpetual_tables
+            .object_per_epoch_marker_table_v2
+            .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
+            .next();
+        match marker_entry {
+            Some(Ok(((epoch, key), marker))) => {
+                // because of the iterator bounds these cannot fail
+                assert_eq!(epoch, epoch_id);
+                assert_eq!(key.id(), object_id);
+                Ok(Some((key.version(), marker)))
             }
+            Some(Err(e)) => Err(e.into()),
+            None => Ok(None),
+        }
     }
 
     /// Returns future containing the state hash for the given epoch
@@ -769,12 +769,12 @@ impl AuthorityStore {
         )?;
 
         // Add batched writes for objects and locks.
-            write_batch.insert_batch(
-                &self.perpetual_tables.object_per_epoch_marker_table_v2,
-                markers
-                    .iter()
-                    .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
-            )?;
+        write_batch.insert_batch(
+            &self.perpetual_tables.object_per_epoch_marker_table_v2,
+            markers
+                .iter()
+                .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
+        )?;
         write_batch.insert_batch(
             &self.perpetual_tables.objects,
             deleted
@@ -1407,7 +1407,7 @@ impl AuthorityStore {
             .simplified_unwrap_then_delete();
         let new_simplified_unwrap_then_delete =
             ProtocolConfig::get_for_version(new_protocol_version, cur_epoch_store.get_chain())
-        .simplified_unwrap_then_delete();
+                .simplified_unwrap_then_delete();
         // If in the new epoch the simplified_unwrap_then_delete is enabled for the first time,
         // we re-accumulate state root.
         let should_reaccumulate =

@@ -1171,16 +1171,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         .named_address_mapping
                         .insert(package, before_upgrade);
                 }
-<<<<<<< HEAD
                 let (warnings_opt, data, (output, modules)) = result?;
-||||||| 0f914b9774
-                let (warnings_opt, output, data, modules) = result?;
-=======
-                let (warnings_opt, output, data, modules) = result?;
                 // skip storing modules if this is a dry run
                 if !dry_run {
->>>>>>> origin/main
-                store_modules(self, syntax, data, modules);
+                    store_modules(self, syntax, data, modules);
                 }
                 Ok(merge_output(warnings_opt, output))
             }
@@ -1661,8 +1655,8 @@ impl SuiTestAdapter {
             payments
                 .into_iter()
                 .map(|payment| {
-            self.fake_to_real_object_id(payment)
-                .expect("Could not find specified payment object")
+                    self.fake_to_real_object_id(payment)
+                        .expect("Could not find specified payment object")
                 })
                 .collect::<Vec<ObjectID>>()
         };
@@ -1670,9 +1664,9 @@ impl SuiTestAdapter {
         payments
             .into_iter()
             .map(|payment| {
-        self.get_object(&payment, None)
-            .unwrap()
-            .compute_object_reference()
+                self.get_object(&payment, None)
+                    .unwrap()
+                    .compute_object_reference()
             })
             .collect()
     }
@@ -2210,8 +2204,8 @@ impl<'a> GetModule for &'a SuiTestAdapter {
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
         if let Some(m) = self
             .compiled_state
-                .dep_modules()
-                .find(|m| &m.self_id() == id)
+            .dep_modules()
+            .find(|m| &m.self_id() == id)
         {
             Ok(Some(Cow::Borrowed(m)))
         } else {
