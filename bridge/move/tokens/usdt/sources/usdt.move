@@ -13,7 +13,6 @@ module bridged_usdt::usdt {
 
     const DECIMAL: u8 = 6;
 
-    #[allow(deprecated_usage)]
     fun init(otw: USDT, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(
             otw,

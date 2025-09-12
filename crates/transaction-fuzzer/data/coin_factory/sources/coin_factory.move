@@ -9,7 +9,6 @@ module coiner::coin_factory {
 
     public struct COIN_FACTORY has drop {}
 
-    #[allow(deprecated_usage)]
     fun init(witness: COIN_FACTORY, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_FACTORY", b"", b"", option::none(), ctx);
         // this actually does not make any sense in real life (metadata should actually be frozen)

@@ -12,7 +12,6 @@ module examples::simple_token {
     /// OTW and the type for the Token.
     public struct SIMPLE_TOKEN has drop {}
 
-    #[allow(deprecated_usage)]
     // Most of the magic happens in the initializer for the demonstration
     // purposes; however half of what's happening here could be implemented as
     // a single / set of PTBs.
@@ -42,7 +41,6 @@ module examples::simple_token {
         token::add_rule_for_action<T, Denylist>(policy, cap, token::from_coin_action(), ctx);
     }
 
-    #[allow(deprecated_usage)]
     /// Internal: not necessary, but moving this call to a separate function for
     /// better visibility of the Closed Loop setup in `init`.
     fun create_currency<T: drop>(otw: T, ctx: &mut TxContext): TreasuryCap<T> {

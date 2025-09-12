@@ -5,7 +5,6 @@ use sui::coin;
 
 public struct TEST has drop {}
 
-#[allow(deprecated_usage)]
 fun init(witness: TEST, ctx: &mut TxContext) {
     let (treasury, metadata) = coin::create_currency(
         witness,

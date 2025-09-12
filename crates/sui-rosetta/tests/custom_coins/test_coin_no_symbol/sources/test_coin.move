@@ -8,7 +8,6 @@ module test_coin::test_coin {
 
     public struct TEST_COIN has drop {}
 
-    #[allow(deprecated_usage)]
     fun init(witness: TEST_COIN, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(
             witness,
