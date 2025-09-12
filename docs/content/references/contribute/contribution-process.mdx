@@ -6,40 +6,65 @@ keywords: [ contribute docs, style guide compliance, add new docs page, change e
 pagination_prev: null
 ---
 
-As open source software, Sui depends on community contributions. This page covers the process for contributing to Sui's documentation.
+The Sui documentation is open source and thrives on community contributions. Whether you’re fixing a typo, clarifying explanations, or adding entirely new content, your work benefits the whole community. This page explains how to contribute to the documentation using either GitHub’s web editor or your local development environment.
 
-To make changes to the documentation, you can fork and clone the Sui repository to your local machine and make changes from your preferred IDE of choice, or by the web interface on GitHub. This guide covers both scenarios.
+## Follow the style guide
 
-## Style guide compliance
+All documentation changes must follow the [Sui style guide](./style-guide.mdx). Reviewers will provide feedback to ensure consistency in tone and quality. Don’t be discouraged if your pull request (PR) receives multiple review comments, as this process helps maintain clarity and uniformity across all docs. After your PR is merged, future updates may refine your content further.
 
-All changes to the documentation must follow the [style guide](./style-guide.mdx), as well as the review process and information on the editors throughout the process. Do not be offended by the number of change requests your docs PR might receive. This is not a reflection on your writing abilities, but an effort to keep a consistent tone across the documentation set. Depending on reviewer and workload, some reviews are more thorough than others. After your PR merges, your content might be changed at a later date to align better with Sui writing standards.
+When writing, keep these key principles in mind:
 
-To create more engaging content, be sure to follow these rules in particular:
+- Use active voice.  
+- Write in present tense.  
+- Be clear and concise. Use only as many words as needed.  
 
-- Always prefer [active voice](./style-guide.mdx#active-voice).
-- [Present tense](./style-guide.mdx#present-tense) verbs are almost always the right choice.
-- Be [concise](./style-guide.mdx#general-considerations). Use only the words strictly necessary to convey an idea.
+## GitHub web editor
 
-## Set up local environment {#local-environment}
+If you’re new to Git or prefer a simpler workflow, you can make small edits directly in GitHub’s web interface.
 
-Cloning the documentation locally is recommended when you are creating larger, more significant changes to the docs. See [Sui Environment Setup](./sui-environment.mdx) for instructions on forking the Sui repository, if necessary. The documentation is in the `docs/content` directory.
+- **Add a new page**  
+  1. Go to the `docs/content` directory.  
+  1. Open the relevant subdirectory.  
+  1. Click **Add file** → **Create new file**.  
+  1. Write your content and commit your changes.  
 
-1. If you are using the recommended Visual Studio Code IDE, install [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) to ensure that your formatting is consistent.
-1. After you make all your changes, stage all files with changes (`git add .` to add all modified files), create a local commit (`git commit -m “message”`), and then push all your changes to your forked repository (`git push`).
-1. To view your changes via `localhost`, enter `pnpm install` into a terminal at the `docs/site` directory to install dependencies, then `pnpm start` to view the changes on `localhost:3000` to ensure that the website works as intended. You might need to [install the `pnpm` package manager](https://pnpm.io/installation) if you don't already have it.
+- **Edit an existing page**  
+  1. From the documentation website, you can use the "Edit this page" link at the bottom of each documentation page.
+  1. From GitHub, navigate to the file you want to update. Click the **pencil icon** in the top-right.  
+  1. Make your edits and commit them.  
 
-## For beginners {#for-beginners}
+## Set up a local environment {#local-environment}
 
-Editing the documentation via the GitHub web interface is recommended if you are not familiar with working in an IDE, or for smaller changes and fixes.
+Cloning the documentation locally is recommended when you are creating larger, more significant changes to the docs. See [Sui Environment Setup](./sui-environment.mdx) for instructions on forking and cloning the Sui repository. Documentation is located in the `docs/content` directory.
 
-**Add new page**
+1. **Install dependencies**  
+   - If you use [Visual Studio Code](https://code.visualstudio.com/), install the [Prettier extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) to keep formatting consistent.  
+1. **Make your changes**  
+   - Edit or add files in the `docs/content` directory.  
+   - Stage and commit changes:  
+     ```bash
+     git add .
+     git commit -m "Describe your changes"
+     git push
+     ```  
+1. **Preview locally**  
+   - Navigate to the `docs/site` directory.  
+   - Install dependencies (If you don’t have `pnpm` installed, see the [pnpm installation guide](https://pnpm.io/installation)):  
+     ```bash
+     pnpm install
+     ```  
+   - Start the local dev server:  
+     ```bash
+     pnpm start
+     ```  
+   - Open `http://localhost:3000` to verify your updates.  
 
-Navigate to the `docs/content` directory, then navigate to the appropriate subdirectory and click the `Add file` button in the top-right. Select `create new file` to create a new file and edit it directly on GitHub's web interface.
-
-**Change existing page**
-
-To change an existing page, navigate to the file you want to edit, click on the pencil icon in the top-right, and edit your changes there.
 
 ## Review process {#review-process}
 
-When you are finished creating your changes in your own fork or using the web interface, submit a PR to the Sui repository. When you do so, you can view the deployment on Vercel and double-check that everything behaves the way you intend. For every unique commit in a PR, Vercel generates a new preview. A reviewer then takes responsibility for providing clear and actionable feedback to your PR. As the owner of the PR, it is your responsibility to modify your PR to address the feedback that has been provided to you by the reviewer. Keep in mind that you may receive feedback from multiple reviewers. After a reviewer has approved your PR, it is merged into `main` and your contributions are made public.
+When your changes are ready:  
+
+1. Submit a PR to the `main` branch of the Sui repository.  
+1. A [Vercel](https://vercel.com) preview will be generated so you can verify your changes. The preview is what you can expect to see online after your changes have been merged.
+1. Reviewers will provide feedback. It’s your responsibility to update your PR based on their comments. Multiple reviewers might give input.  
+1. After at least one reviewer approves your PR, it gets merged into `main`, and your contribution goes live. Changes are reflected on the live website within 5-10 minutes after the PR has merged into `main`. 
