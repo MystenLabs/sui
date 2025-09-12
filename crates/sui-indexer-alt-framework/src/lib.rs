@@ -41,6 +41,20 @@ pub struct IndexerArgs {
     /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
     /// ingestion will start just after the lowest checkpoint watermark across all active
     /// pipelines.
+    ///
+    /// NOTE: This value is validated against the current watermark for each pipeline. Only
+    /// sequential pipelines fail to start if --first-checkpoint is in the future. Concurrent
+    /// pipelines will start and commit data, but they won't update the watermark.
+    ///
+    /// For testing purposes, you can bypass this check by manually updating the `watermarks`
+    /// table in your database:
+    ///
+    /// ```sql
+    /// INSERT INTO watermarks (pipeline, checkpoint_hi_inclusive) VALUES ('<pipeline>', <first_checkpoint> - 1);
+    /// ```
+    ///
+    /// However, this is NOT recommended in a production environment as it will create
+    /// inconsistencies in your indexed data.
     #[arg(long)]
     pub first_checkpoint: Option<u64>,
 
