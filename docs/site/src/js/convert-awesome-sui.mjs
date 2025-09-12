@@ -26,10 +26,6 @@ const readmeTargetPath = path.join(
   __dirname,
   "../../../content/references/awesome-sui.mdx",
 );
-const detailsTargetDir = path.join(
-  __dirname,
-  "../../../content/references/awesome-sui",
-);
 const mediaTargetDir = path.join(
   __dirname,
   "../../static/awesome-sui/media",
@@ -72,10 +68,10 @@ function processContent(content) {
     /^- (.+?)( - .+)?$/gm,
     (match, mainText, dashSeparatedItems) => {
       // Start outer wrapper div
-      let result = `<div className="border border-solid border-sui-gray-50 rounded-lg my-4">\n\n`;
+      let result = `<div className="border border-solid border-sui-gray-50 dark:border-sui-gray-90 rounded-lg my-4">\n\n`;
       
       // Add heading div with p-4, and h4 with mb-0
-      result += `<div className="bg-sui-gray-50 p-4 rounded-t">\n\n<h4 className="mb-0">${mainText.trim()}</h4>\n\n</div>`;
+      result += `<div className="bg-sui-gray-50 dark:bg-sui-gray-90 p-4 rounded-t">\n\n<h4 className="mb-0">${mainText.trim()}</h4>\n\n</div>`;
 
       if (dashSeparatedItems) {
         // Content after " - " becomes a paragraph in content div
@@ -100,6 +96,25 @@ function processContent(content) {
     },
   );
 
+  // Store the "Further Information" links for later processing
+  const furtherInfoLinks = new Map();
+  let linkCounter = 0;
+  
+  processedContent = processedContent.replace(
+    /^- \[Further Information\]\([^)]+\)$/gm,
+    (match) => {
+      const linkMatch = match.match(/\[Further Information\]\(\.\/awesome-sui\/([^)]+)\.mdx\)/);
+      if (linkMatch) {
+        const filename = linkMatch[1].replace(/-/g, '_');
+        const placeholder = `##### Further Information <!-- PLACEHOLDER_${linkCounter} -->`;
+        furtherInfoLinks.set(linkCounter, filename);
+        linkCounter++;
+        return placeholder;
+      }
+      return `##### Further Information`;
+    },
+  );
+
   // Add closing div tags
   const lines = processedContent.split("\n");
   const result = [];
@@ -112,7 +127,7 @@ function processContent(content) {
     // Check if this line starts a new div section
     if (
       line.startsWith(
-        '<div className="border border-solid border-sui-gray-50 rounded-lg my-4">',
+        '<div className="border border-solid border-sui-gray-50 dark:border-sui-gray-90 rounded-lg my-4">',
       )
     ) {
       if (insideDiv) {
@@ -167,30 +182,49 @@ function processContent(content) {
     result.push("</div>");
   }
 
-  return result.join("\n");
+  // Now inline the "Further Information" content using the stored placeholders
+  let finalContent = result.join("\n");
+  
+  // Replace placeholders with actual content
+  finalContent = finalContent.replace(
+    /##### Further Information <!-- PLACEHOLDER_(\d+) -->/g,
+    (match, placeholderIndex) => {
+      const filename = furtherInfoLinks.get(parseInt(placeholderIndex));
+      if (filename) {
+        const detailFilePath = path.join(detailsSourceDir, `${filename}.md`);
+        
+        try {
+          if (fs.existsSync(detailFilePath)) {
+            const detailContent = fs.readFileSync(detailFilePath, "utf8");
+            const processedDetailContent = processDetailContent(detailContent);
+            
+            return `##### Further Information\n\n${processedDetailContent}`;
+          } else {
+            console.log(`⚠️ Detail file not found: ${detailFilePath}`);
+            return `##### Further Information`;
+          }
+        } catch (error) {
+          console.log(`⚠️ Error reading detail file ${detailFilePath}:`, error.message);
+          return `##### Further Information`;
+        }
+      }
+      return `##### Further Information`;
+    },
+  );
+
+  return finalContent;
 }
 
-// Generate MDX frontmatter for detail files
-function generateDetailFrontmatter(filename) {
-  // Convert filename to title (e.g., "sdk_sui_typescript.md" -> "SDK Sui TypeScript")
-  const title = filename
-    .replace(/\.md$/, "")
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
 
-  return `---
-title: ${title}
-description: ${title} details from Awesome Sui.
----
-
-`;
-}
-
-// Process detail file content to remove level-1 headings
+// Process detail file content to remove level-1 headings and convert all headings to bold paragraphs
 function processDetailContent(content) {
   // Remove the first level-1 heading if it exists
-  return content.replace(/^# [^\n]*\n\n?/, "");
+  let processedContent = content.replace(/^# [^\n]*\n\n?/, "");
+  
+  // Convert all remaining headings (## to ######) to bold paragraphs
+  processedContent = processedContent.replace(/^#{2,6}\s+(.+)$/gm, "**$1**");
+  
+  return processedContent;
 }
 
 // Convert README.md
@@ -217,49 +251,11 @@ if (!fs.existsSync(readmeTargetDir)) {
   fs.mkdirSync(readmeTargetDir, { recursive: true });
 }
 
-if (!fs.existsSync(detailsTargetDir)) {
-  fs.mkdirSync(detailsTargetDir, { recursive: true });
-}
-
-if (!fs.existsSync(mediaTargetDir)) {
-  fs.mkdirSync(mediaTargetDir, { recursive: true });
-}
-
 // Write the main README MDX file
 console.log("Writing README target file:", readmeTargetPath);
 fs.writeFileSync(readmeTargetPath, readmeMdxContent, "utf8");
 
-// Process all MD files in the details folder
-if (fs.existsSync(detailsSourceDir)) {
-  const detailFiles = fs
-    .readdirSync(detailsSourceDir)
-    .filter((file) => file.endsWith(".md"));
-
-  console.log(`Processing ${detailFiles.length} detail files...`);
-
-  detailFiles.forEach((filename) => {
-    const sourcePath = path.join(detailsSourceDir, filename);
-    const targetPath = path.join(
-      detailsTargetDir,
-      filename.replace(".md", ".mdx"),
-    );
-
-    console.log(`Converting ${filename} -> ${path.basename(targetPath)}`);
-
-    const content = fs.readFileSync(sourcePath, "utf8");
-    const processedContent = processDetailContent(content);
-    const frontmatter = generateDetailFrontmatter(filename);
-    const mdxContent = frontmatter + processedContent;
-
-    fs.writeFileSync(targetPath, mdxContent, "utf8");
-  });
-
-  console.log(
-    `✅ Successfully converted README.md and ${detailFiles.length} detail files`,
-  );
-} else {
-  console.log("⚠️ Details folder not found, only converted README.md");
-}
+console.log("✅ Successfully converted README.md");
 
 // Copy media files to static folder
 if (fs.existsSync(mediaSourceDir)) {
