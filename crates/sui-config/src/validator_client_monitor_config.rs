@@ -170,11 +170,17 @@ pub struct ScoreWeights {
     #[serde(default = "default_health_check_latency_weight")]
     pub health_check_latency_weight: f64,
 
-    /// Weight for finalization latency.
+    /// Weight for fast path latency.
     ///
     /// Controls importance of finalization speed.
-    #[serde(default = "default_finalization_latency_weight")]
-    pub finalization_latency_weight: f64,
+    #[serde(default = "default_fast_path_latency_weight")]
+    pub fast_path_latency_weight: f64,
+
+    /// Weight for consensus latency.
+    ///
+    /// Controls importance of consensus speed.
+    #[serde(default = "default_consensus_latency_weight")]
+    pub consensus_latency_weight: f64,
 }
 
 impl Default for ValidatorClientMonitorConfig {
@@ -197,7 +203,8 @@ impl Default for ScoreWeights {
             submit_latency_weight: default_submit_latency_weight(),
             effects_latency_weight: default_effects_latency_weight(),
             health_check_latency_weight: default_health_check_latency_weight(),
-            finalization_latency_weight: default_finalization_latency_weight(),
+            fast_path_latency_weight: default_fast_path_latency_weight(),
+            consensus_latency_weight: default_consensus_latency_weight(),
         }
     }
 }
@@ -240,6 +247,10 @@ fn default_health_check_latency_weight() -> f64 {
     0.1
 }
 
-fn default_finalization_latency_weight() -> f64 {
+fn default_fast_path_latency_weight() -> f64 {
+    0.9
+}
+
+fn default_consensus_latency_weight() -> f64 {
     0.9
 }
