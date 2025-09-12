@@ -754,3 +754,21 @@ h5 {
   margin-top: 1.2em;       /* spacing for readability */
   margin-bottom: 0.6em;
 }
+
+/* Force bullets to act like hidden line breaks with spacing */
+.theme-doc-markdown p .badge + * {
+  display: block !important;   /* forces new line */
+  visibility: hidden;          /* hides the bullet */
+  height: 0;                   /* no visible element */
+  margin: 0 0 0.75rem 0;       /* <-- adjust bottom margin for spacing */
+  padding: 0;
+}
+
+.theme-doc-markdown p .badge + .bullet,
+.theme-doc-markdown p .badge + [role="separator"] {
+  display: block !important;
+  visibility: hidden;
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
