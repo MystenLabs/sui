@@ -2,23 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
-use sui_types::SUI_COIN_REGISTRY_OBJECT_ID;
+use sui_types::{SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 
 use sui_macros::sim_test;
 
 #[sim_test]
 async fn test_create_coin_registry_object() {
-    #[cfg(msim)]
-    {
-        use sui_core::authority::framework_injection;
-        let framework = sui_framework_snapshot::load_bytecode_snapshot(95).unwrap();
-        framework_injection::set_system_packages(framework);
-    }
+    let framework = sui_framework_snapshot::load_bytecode_snapshot(95)
+        .unwrap()
+        .into_iter()
+        .map(|p| p.genesis_object())
+        .collect::<Vec<_>>();
+
+    let package = framework
+        .iter()
+        .find(|f| f.id() == SUI_FRAMEWORK_PACKAGE_ID)
+        .unwrap()
+        .data
+        .try_as_package()
+        .unwrap();
+
+    // Make sure that `coin_registry` does not exist on previous protocol version.
+    assert!(!package
+        .serialized_module_map()
+        .contains_key("coin_registry"));
 
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(95.into())
         .with_epoch_duration_ms(10000)
+        .with_objects(framework)
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(95, 96))
         .build()
         .await;
