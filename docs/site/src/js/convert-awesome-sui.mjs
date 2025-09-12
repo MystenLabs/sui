@@ -200,12 +200,12 @@ const processedReadmeContent = processContent(readmeContent);
 
 const readmeMdxContent = `---
 title: Awesome Sui
-description: A curated list of awesome developer tools and infrastructure projects within the Sui ecosystem
+description: A curated list of awesome developer tools and infrastructure projects within the Sui ecosystem.
 ---
 
 :::info
 
-Visit the [Awesome Sui repo](https://github.com/sui-foundation/awesome-sui/tree/main) on GitHub for the source content for these pages.
+Visit the [Awesome Sui repo](https://github.com/sui-foundation/awesome-sui/tree/main) on GitHub for the source content of these pages.
 
 :::
 
