@@ -214,7 +214,10 @@ impl ValidatorClientMonitor {
     fn update_cached_scores(&self, authority_agg: &AuthorityAggregator<impl Clone>) {
         let committee = &authority_agg.committee;
 
-        let score_map = self.client_stats.read().get_all_validator_stats(committee);
+        let score_map = self
+            .client_stats
+            .read()
+            .get_all_validator_stats(committee, &self.metrics);
 
         for (validator, score) in score_map.iter() {
             debug!("Validator {}: score {}", validator, score);

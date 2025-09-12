@@ -133,8 +133,20 @@ impl ClientObservedStats {
     ///
     /// Returns a map of all tracked validators to their scores.
     /// Score is 0 if the validator is excluded or has no stats.
-    pub fn get_all_validator_stats(&self, committee: &Committee) -> HashMap<AuthorityName, f64> {
+    pub fn get_all_validator_stats(
+        &self,
+        committee: &Committee,
+        metrics: &ValidatorClientMetrics,
+    ) -> HashMap<AuthorityName, f64> {
         let max_latencies = self.calculate_max_latencies(committee);
+
+        // Add to metrics the max latencies
+        for (op, max_latency) in max_latencies.iter() {
+            metrics
+                .max_latency
+                .with_label_values(&[op.as_str()])
+                .set(*max_latency);
+        }
 
         committee
             .names()
@@ -158,7 +170,10 @@ impl ClientObservedStats {
             .collect()
     }
 
-    fn calculate_max_latencies(&self, committee: &Committee) -> HashMap<OperationType, f64> {
+    pub(crate) fn calculate_max_latencies(
+        &self,
+        committee: &Committee,
+    ) -> HashMap<OperationType, f64> {
         let mut max_latencies = HashMap::new();
 
         for validator in committee.names() {
