@@ -381,10 +381,11 @@ mod tests {
     #[test(tokio::test)]
     #[ignore] // TODO
     async fn git_partial_sha() {
-        let git_project = git::new("git_project", |project| project.file("dummy.txt", "dummy"));
+        let git_project =
+            git::new("git_project", |project| project.file("dummy.txt", "dummy")).await;
 
         let repo = "child.git"; // TODO: get repo from git_project
-        let sha = git_project.commits().remove(0);
+        let sha = git_project.commits().await.remove(0);
 
         let dep = new_git(repo, Some(&sha[0..12]), "");
         let pinned = dep.pin().await.unwrap_as_git();
