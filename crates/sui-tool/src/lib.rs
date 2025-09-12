@@ -826,6 +826,7 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: SnapshotVerifyMode,
     all_checkpoints: bool,
+    max_retries: usize,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     m.println(format!(
@@ -888,6 +889,7 @@ pub async fn download_formal_snapshot(
             NonZeroUsize::new(num_parallel_downloads).unwrap(),
             m_clone,
             false, // skip_reset_local_store
+            max_retries,
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
@@ -1006,6 +1008,7 @@ pub async fn download_db_snapshot(
     snapshot_store_config: ObjectStoreConfig,
     skip_indexes: bool,
     num_parallel_downloads: usize,
+    max_retries: usize,
 ) -> Result<(), anyhow::Error> {
     let remote_store = if snapshot_store_config.no_sign_request {
         snapshot_store_config.make_http()?
@@ -1070,7 +1073,36 @@ pub async fn download_db_snapshot(
                 async move {
                     counter_cloned.fetch_add(1, Ordering::Relaxed);
                     let file_path = get_path(format!("epoch_{}/{}", epoch, file).as_str());
-                    copy_file(&file_path, &file_path, &remote_store, &local_store).await?;
+
+                    let mut attempts = 0;
+                    let max_attempts = max_retries + 1;
+                    loop {
+                        attempts += 1;
+                        match copy_file(&file_path, &file_path, &remote_store, &local_store).await {
+                            Ok(()) => break,
+                            Err(e) if attempts >= max_attempts => {
+                                return Err(anyhow::anyhow!(
+                                    "Failed to download {} after {} attempts: {}",
+                                    file_path,
+                                    attempts,
+                                    e
+                                ));
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to download {} (attempt {}/{}): {}, retrying in {}ms",
+                                    file_path,
+                                    attempts,
+                                    max_attempts,
+                                    e,
+                                    1000 * attempts
+                                );
+                                tokio::time::sleep(Duration::from_millis(1000 * attempts as u64))
+                                    .await;
+                            }
+                        }
+                    }
+
                     Ok::<::object_store::path::Path, anyhow::Error>(file_path.clone())
                 }
             })

@@ -112,6 +112,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
         MultiProgress::new(),
         false, // skip_reset_local_store
+        3,     // max_retries
     )
     .await?;
     let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
@@ -167,6 +168,7 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
         MultiProgress::new(),
         false, // skip_reset_local_store
+        3,     // max_retries
     )
     .await?;
     let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
