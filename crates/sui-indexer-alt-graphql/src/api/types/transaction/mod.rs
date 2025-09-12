@@ -40,7 +40,9 @@ use crate::{
             base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
             module_filter::ModuleFilter, sui_address::SuiAddress,
         },
-        types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
+        types::{
+            lookups::tx_bounds, lookups::TxBoundsCursor, transaction::filter::TransactionKindInput,
+        },
     },
     error::RpcError,
     pagination::Page,
@@ -209,9 +211,7 @@ impl Transaction {
 
         let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
 
-        let Some(tx_bounds) =
-            tx_bounds(ctx, &scope, &filter, reader_lo, &page, |c| *c.deref()).await?
-        else {
+        let Some(tx_bounds) = tx_bounds(ctx, &scope, &filter, reader_lo, &page).await? else {
             return Ok(conn);
         };
 
@@ -265,6 +265,12 @@ impl Transaction {
         conn.has_next_page = next;
 
         Ok(conn)
+    }
+}
+
+impl TxBoundsCursor for CTransaction {
+    fn tx_sequence_number(&self) -> u64 {
+        *self.deref()
     }
 }
 

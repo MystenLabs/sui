@@ -20,6 +20,10 @@ pub(crate) trait TxBoundsFilter {
     fn before_checkpoint(&self) -> Option<UInt53>;
 }
 
+pub(crate) trait TxBoundsCursor {
+    fn tx_sequence_number(&self) -> u64;
+}
+
 /// The tx_sequence_numbers within checkpoint bounds
 /// The checkpoint lower and upper bounds are used to determine the inclusive lower (tx_lo) and exclusive
 /// upper (tx_hi) bounds of the sequence of tx_sequence_numbers to use in queries.
@@ -32,13 +36,12 @@ pub(crate) trait TxBoundsFilter {
 /// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
 /// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
 /// `hi_inclusive`).
-pub(crate) async fn tx_bounds<C>(
+pub(crate) async fn tx_bounds(
     ctx: &Context<'_>,
     scope: &Scope,
     filter: &impl TxBoundsFilter,
     reader_lo: u64,
-    page: &Page<C>,
-    f: fn(&C) -> u64,
+    page: &Page<impl TxBoundsCursor>,
 ) -> Result<Option<Range<u64>>, RpcError> {
     if page.limit() == 0 {
         return Ok(None);
@@ -120,11 +123,13 @@ SELECT
         .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
 
     // Inclusive cursor bounds
-    let tx_lo = page.after().map_or(tx_lo, |cursor| f(cursor).max(tx_lo));
+    let tx_lo = page
+        .after()
+        .map_or(tx_lo, |cursor| cursor.tx_sequence_number().max(tx_lo));
 
-    let tx_hi = page
-        .before()
-        .map_or(tx_hi, |cursor| f(cursor).saturating_add(1).min(tx_hi));
+    let tx_hi = page.before().map_or(tx_hi, |cursor| {
+        cursor.tx_sequence_number().saturating_add(1).min(tx_hi)
+    });
 
     Ok(Some(tx_lo..tx_hi))
 }
