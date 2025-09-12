@@ -2185,7 +2185,8 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::StoreExecutionTimeObservations(observations) => message
                 .with_execution_time_observations(observations)
                 .with_kind(Kind::StoreExecutionTimeObservations),
-            _ => message,
+            K::AccumulatorRootCreate => message.with_kind(Kind::AccumulatorRootCreate),
+            // K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
         }
     }
 }

@@ -1462,7 +1462,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 stored_execution_time_observations,
             ) => Self::StoreExecutionTimeObservations(stored_execution_time_observations.into()),
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                todo!("AccumulatorRootCreate needs to be added to sdk")
+                Self::AccumulatorRootCreate
             }
         }
     }
