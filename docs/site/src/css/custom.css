@@ -764,8 +764,6 @@ h5 {
   padding: 0;
 }
 
-
-/* Optional: if your bullets have a known class or role, you can be stricter */
 .theme-doc-markdown p .badge + .bullet,
 .theme-doc-markdown p .badge + [role="separator"] {
   display: block !important;
