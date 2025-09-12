@@ -1,1 +1,0 @@
-base and upgraded stay the exact same except that the elements in the module get shuffled around and some alpha renaming is done on both parameters and locals. All compatibility and inclusion checks should pass.

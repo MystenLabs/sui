@@ -1,3 +1,0 @@
-[workspace]
-resolver = "2"
-members = ["xtask", "nodefw", "nodefw-common"]

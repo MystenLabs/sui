@@ -1,6 +1,0 @@
----
-# disable ufw as iptables is being manipulated directly
-- name: Disable UFW
-  community.general.ufw:
-    state: disabled
-  when: skip_iptables == false and (ansible_distribution_version == "20.04" or ansible_distribution_version == "22.04")

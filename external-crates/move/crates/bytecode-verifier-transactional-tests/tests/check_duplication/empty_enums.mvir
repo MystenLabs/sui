@@ -1,7 +1,0 @@
-//# publish
-module 0x1.EmptyStruct {
-  // no empty enums allowed
-  enum Empty { }
-
-}
-

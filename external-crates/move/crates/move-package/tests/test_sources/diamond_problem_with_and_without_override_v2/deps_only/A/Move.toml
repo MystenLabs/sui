@@ -1,6 +1,0 @@
-[package]
-name = "A"
-
-[dependencies]
-B = { local = "../B" }
-C = { local = "../C1" }

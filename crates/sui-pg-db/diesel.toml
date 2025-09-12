@@ -1,6 +1,0 @@
-[print_schema]
-file = "src/schema.rs"
-patch_file = "schema.patch"
-
-[migrations_directory]
-dir = "migrations"

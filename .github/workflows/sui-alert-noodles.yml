@@ -27,29 +27,29 @@ jobs:
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
 
-      - name: Sync sui.yaml
-        id: sync_sui
-        run: |
-          git checkout main
-          git restore --source upstream/main crates/sui-core/tests/staged/sui.yaml
-          if ! git diff --quiet crates/sui-core/tests/staged/sui.yaml; then
-            git add crates/sui-core/tests/staged/sui.yaml
-            git commit -m "🔄 Sync sui.yaml fully with upstream"
-            git push origin main
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
+      # - name: Sync sui.yaml
+      #   id: sync_sui
+      #   run: |
+      #     git checkout main
+      #     git restore --source upstream/main crates/sui-core/tests/staged/sui.yaml
+      #     if ! git diff --quiet crates/sui-core/tests/staged/sui.yaml; then
+      #       git add crates/sui-core/tests/staged/sui.yaml
+      #       git commit -m "🔄 Sync sui.yaml fully with upstream"
+      #       git push origin main
+      #       echo "changed=true" >> $GITHUB_OUTPUT
+      #     else
+      #       echo "changed=false" >> $GITHUB_OUTPUT
+      #     fi
 
-      - name: Send Slack Alert
-        if: steps.sync_sui.outputs.changed == 'true'
-        run: |
-          commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml)
-          commit_author=$(git log -1 --pretty=format:'%an' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
-          commit_msg=$(git log -1 --pretty=format:'%s' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
-          commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
-          slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
+      # - name: Send Slack Alert
+      #   if: steps.sync_sui.outputs.changed == 'true'
+      #   run: |
+      #     commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml)
+      #     commit_author=$(git log -1 --pretty=format:'%an' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
+      #     commit_msg=$(git log -1 --pretty=format:'%s' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
+      #     commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
+      #     slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
 
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
-            ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
+      #     curl -X POST -H 'Content-type: application/json' \
+      #       --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
+      #       ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}

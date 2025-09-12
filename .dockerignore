@@ -1,9 +1,0 @@
-*~
-*.swp
-**/.terraform/
-target/
-**/*Dockerfile
-*.md
-build/
-storage/
-docker/

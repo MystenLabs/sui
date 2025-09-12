@@ -1,4 +1,0 @@
-new --path . foo
-build --lint
-build --no-lint
-build --lint --no-lint

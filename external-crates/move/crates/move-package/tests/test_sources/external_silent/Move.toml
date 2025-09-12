@@ -1,5 +1,0 @@
-[package]
-name = "Root"
-
-[dependencies]
-A = { r."../resolvers/silent.sh" = "a" }

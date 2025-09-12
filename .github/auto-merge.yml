@@ -1,4 +1,0 @@
-# Update Github actions automatically
-- match:
-    dependency_type: production
-    update_type: all

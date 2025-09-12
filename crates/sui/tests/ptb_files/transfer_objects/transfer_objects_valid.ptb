@@ -1,3 +1,0 @@
---split-coins gas [1,2,3] 
---assign s 
---transfer-objects [s.0, s.1, s.2] @0x1

@@ -1,2 +1,0 @@
-build
-disassemble --package Test --name m

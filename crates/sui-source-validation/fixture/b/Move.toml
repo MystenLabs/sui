@@ -1,7 +1,0 @@
-[package]
-name = "b"
-version = "0.0.1"
-published-at = "$STORAGE_ID"
-
-[addresses]
-b = "$RUNTIME_ID"

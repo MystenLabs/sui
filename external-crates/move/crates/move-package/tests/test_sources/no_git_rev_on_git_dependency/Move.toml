@@ -1,5 +1,0 @@
-[package]
-name = "test"
-
-[dependencies]
-Pkg = { git = "url doesnt matter" }

@@ -1,6 +1,0 @@
-**/dependency/*
-**/dependencies/*
-*.mvsm
-*.yaml
-*~
-!**/build/

@@ -1,5 +1,0 @@
-[package]
-name = "A"
-
-[dependencies]
-C = { local = "../C", addr_subst = { "AA" = "A" } }
