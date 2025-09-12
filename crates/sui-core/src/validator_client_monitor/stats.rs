@@ -158,7 +158,10 @@ impl ClientObservedStats {
             .collect()
     }
 
-    fn calculate_max_latencies(&self, committee: &Committee) -> HashMap<OperationType, f64> {
+    pub(crate) fn calculate_max_latencies(
+        &self,
+        committee: &Committee,
+    ) -> HashMap<OperationType, f64> {
         let mut max_latencies = HashMap::new();
 
         for validator in committee.names() {
