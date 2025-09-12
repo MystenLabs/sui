@@ -16,6 +16,7 @@ use prometheus::{
 };
 use std::{
     cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
     future::Future,
     io,
     net::{IpAddr, SocketAddr},
@@ -27,8 +28,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
-use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
@@ -46,6 +45,14 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
+use sui_types::{
+    base_types::SequenceNumber, effects::TransactionEvents, execution_status::ExecutionStatus,
+    gas::GasCostSummary,
+};
+use sui_types::{
+    digests::{TransactionDigest, TransactionEffectsDigest},
+    effects::TransactionEffectsV2,
+};
 use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
@@ -1477,6 +1484,28 @@ impl ValidatorService {
             request.ping.expect("Ping type should be present") == PingType::Consensus;
 
         let mut last_status = None;
+        let details = if request.include_details {
+            Some(Box::new(ExecutedData {
+                effects: TransactionEffects::V2(TransactionEffectsV2::new(
+                    ExecutionStatus::Success,
+                    epoch_store.epoch(),
+                    GasCostSummary::default(),
+                    vec![],
+                    BTreeSet::new(),
+                    request.transaction_digest,
+                    SequenceNumber::default(),
+                    BTreeMap::new(),
+                    None,
+                    None,
+                    vec![],
+                )),
+                events: None,
+                input_objects: vec![],
+                output_objects: vec![],
+            }))
+        } else {
+            None
+        };
 
         loop {
             let status = consensus_tx_status_cache
@@ -1494,7 +1523,7 @@ impl ValidatorService {
                         }
                         return Ok(WaitForEffectsResponse::Executed {
                             effects_digest: TransactionEffectsDigest::ZERO,
-                            details: None,
+                            details,
                             fast_path: true,
                         });
                     }
@@ -1504,7 +1533,7 @@ impl ValidatorService {
                     ConsensusTxStatus::Finalized => {
                         return Ok(WaitForEffectsResponse::Executed {
                             effects_digest: TransactionEffectsDigest::ZERO,
-                            details: None,
+                            details,
                             fast_path: false,
                         });
                     }
