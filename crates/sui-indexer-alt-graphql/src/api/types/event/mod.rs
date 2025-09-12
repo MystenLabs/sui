@@ -19,7 +19,10 @@ use sui_types::{
 use crate::{
     api::{
         scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-        types::{event::filter::EventFilter, lookups::CheckpointBounds},
+        types::{
+            event::filter::EventFilter,
+            lookups::{CheckpointBounds, TxBoundsCursor},
+        },
     },
     error::RpcError,
     pagination::Page,
@@ -129,10 +132,7 @@ impl Event {
         // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
         let reader_lo = 0;
 
-        let Some(tx_bounds) = filter
-            .tx_bounds(ctx, &scope, reader_lo, &page, |c| c.tx_sequence_number)
-            .await?
-        else {
+        let Some(tx_bounds) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
             return Ok(c);
         };
 
@@ -183,5 +183,11 @@ impl Event {
         }
 
         Ok(c)
+    }
+}
+
+impl TxBoundsCursor for CEvent {
+    fn tx_sequence_number(&self) -> u64 {
+        self.tx_sequence_number
     }
 }
