@@ -3,18 +3,20 @@ title: Sui Replay CLI
 description: Use the Sui CLI to replay a given transaction to view its effects.
 ---
 
-Replay is a tool that allows you to replay a given transaction to check and analyze the transaction effects. In a nutshell, the replay tool will locally execute the transaction and compare its effects to the effects that exist on chain. 
+Replay is a tool that allows you to replay a given transaction to check and analyze the transaction effects. In a nutshell, the replay tool will locally execute the transaction and compare its effects to the effects that exist on chain.
 
 Using the replay tool, you can pass the `--trace` flag to generate execution traces for a transaction that can be used with the Move debugger. For more information about the Move debugger, see the [Move Debugger](../ide/debugger.mdx) page. You can run different [analyses on the transaction traces](./trace-analysis.mdx) such as [gas profiling](./trace-analysis.mdx#profiling-a-transaction).
 
-## Usage 
-The main command for replaying a transaction follows. For all available flags and arguments, run `sui client replay-transaction --help`.
+## Usage
+The main command for replaying a transaction follows. For all available flags and arguments, run `sui replay --help`.
 
 ```
-sui client replay-transaction --tx-digest <digest>
+sui replay --digest <digest>
 ```
 
-After running this command, the tool generates a directory corresponding to the digest in the current directory: `<cur_directory>/.replay/<digest>`, unless you set the `--output-dir` flag.
+After running this command, the tool generates a directory corresponding to the digest in `<cur_directory>/.replay/<digest>`, unless you set the `--output-dir` flag. The output directory is **not** automatically overwritten if you attempt to replay the same transaction more than once. If you want to overwrite this directory, include the `--overwrite` flag.
+
+
 After successfully running the previous command, your console provides a response similar to the following:
 ```
 Successfully replayed transaction
@@ -126,3 +128,5 @@ Transaction Gas Report for 5sbk5UYpQv1i84zkSBSWmowAmPTxw71U7Bb1gbiW5w4y
 
 The response above provides the transaction effects information, gas report, and a more detailed list of the each object's size and cost. For more information about
 the gas cost, please refer to the [gas in sui](../../concepts/tokenomics/gas-in-sui.mdx) page.
+
+You can replay multiple transactions at once by using the `--digests-path` flag to specify a location of a file containing multiple transaction digests, one per line. By default, the entire batch is replayed regardless of the success or failure of an individual transaction execution. You can use the `--terminate-early` flag to terminate batch execution if an error occurs when replaying one of the transactions.

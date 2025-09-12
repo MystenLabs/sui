@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{
-    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands,
+    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands, USER_AGENT,
 };
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
@@ -66,6 +66,8 @@ use sui_move_build::{
     implicit_deps, BuildConfig as SuiBuildConfig, SuiPackageHooks,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
+use sui_protocol_config::Chain;
+use sui_replay_2 as SR2;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -75,6 +77,7 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
+use sui_types::digests::ChainIdentifier;
 use tracing;
 use tracing::info;
 
@@ -380,6 +383,15 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         command: AnalyzeTraceCommand,
     },
+
+    #[clap(name = "replay")]
+    ReplayTransaction {
+        #[clap(flatten)]
+        config: SuiEnvConfig,
+
+        #[command(flatten)]
+        replay_config: SR2::ReplayConfigStable,
+    },
 }
 
 impl SuiCommand {
@@ -545,7 +557,7 @@ impl SuiCommand {
                         // If they didn't run with `--bytecode` correct this for them but warn them
                         // to let them know that we are changing it.
                         if !s.summary.bytecode {
-                            eprintln!("{}", 
+                            eprintln!("{}",
                                 "[warning] `sui move summary --package-id <object_id>` only supports bytecode summaries. \
                                  Falling back to producing a bytecode-based summary. To not get this warning you can run with `--bytecode`".yellow().bold()
                             );
@@ -774,6 +786,42 @@ impl SuiCommand {
                 output_dir,
                 command,
             } => command.execute(path, output_dir).await,
+            SuiCommand::ReplayTransaction {
+                config,
+                replay_config,
+            } => {
+                let config_path = config
+                    .config
+                    .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                prompt_if_no_config(&config_path, /* accept_defaults */ false).await?;
+                let mut context = WalletContext::new(&config_path)?;
+                if let Some(env_override) = config.env {
+                    context = context.with_env_override(env_override);
+                }
+
+                let node = get_replay_node(&context).await?;
+
+                let experimental_config = SR2::ReplayConfigExperimental {
+                    node,
+                    ..Default::default()
+                };
+
+                let artifact_path =
+                    SR2::handle_replay_config(&replay_config, &experimental_config, USER_AGENT)
+                        .await?;
+
+                if let Some(digest) = &replay_config.digest {
+                    // show effects and gas
+                    SR2::print_effects_or_fork(
+                        digest,
+                        &artifact_path,
+                        replay_config.show_effects,
+                        &mut std::io::stdout(),
+                    )?;
+                }
+
+                Ok(())
+            }
         }
     }
 }
@@ -1628,4 +1676,23 @@ pub fn parse_host_port(
     } else {
         format!("{default_host}:{default_port_if_missing}").parse::<SocketAddr>()
     }
+}
+
+/// Get the replay node representing a specific chain (e.g., testnet, mainnet, or custom)
+/// from a given wallet context contining chain identifier string.
+pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyhow::Error> {
+    let chain_id = context
+        .get_client()
+        .await?
+        .read_api()
+        .get_chain_identifier()
+        .await?;
+    let err_msg = format!("'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently");
+    let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
+        .ok_or_else(|| anyhow::anyhow!(err_msg.clone()))?;
+    Ok(match chain_id.chain() {
+        Chain::Mainnet => SR2::Node::Mainnet,
+        Chain::Testnet => SR2::Node::Testnet,
+        Chain::Unknown => bail!(err_msg),
+    })
 }
