@@ -5,6 +5,7 @@ use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -169,6 +170,7 @@ impl AuthorityPerpetualTables {
     pub fn open(
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
+        _pruner_watermark: Option<Arc<AtomicU64>>,
     ) -> Self {
         let db_options_override = db_options_override.unwrap_or_default();
         let db_options =
@@ -202,14 +204,47 @@ impl AuthorityPerpetualTables {
     }
 
     #[cfg(tidehunter)]
-    pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
+    fn apply_relocation_filter<T: DeserializeOwned>(
+        config: typed_store::tidehunter_util::KeySpaceConfig,
+        pruner_watermark: Arc<AtomicU64>,
+        extractor: impl Fn(T) -> TxSequenceNumber + Send + Sync + 'static,
+        by_key: bool,
+    ) -> typed_store::tidehunter_util::KeySpaceConfig {
+        use bincode::Options;
+        use typed_store::tidehunter_util::Decision;
+        config.with_relocation_filter(move |key, value| {
+            let data = if by_key {
+                bincode::DefaultOptions::new()
+                    .with_big_endian()
+                    .with_fixint_encoding()
+                    .deserialize(&key)
+                    .expect("relocation filter deserialization error")
+            } else {
+                bcs::from_bytes(&value).expect("relocation filter deserialization error")
+            };
+            if extractor(data) < pruner_watermark.load(Ordering::Relaxed) {
+                Decision::Remove
+            } else {
+                Decision::StopRelocation
+            }
+        })
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open(
+        parent_path: &Path,
+        _: Option<AuthorityPerpetualTablesOptions>,
+        pruner_watermark: Option<Arc<AtomicU64>>,
+    ) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
             default_cells_per_mutex, default_mutex_count, default_value_cache_size, Bytes,
-            IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            Decision, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
         };
         let mutexes = default_mutex_count() * 2;
         let value_cache_size = default_value_cache_size();
+        // effectively disables pruning if not set
+        let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
@@ -256,7 +291,9 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     mutexes,
                     uniform_key,
-                    KeySpaceConfig::new().with_value_cache_size(value_cache_size),
+                    KeySpaceConfig::new()
+                        .with_value_cache_size(value_cache_size)
+                        .with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -266,7 +303,12 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     mutexes,
                     uniform_key,
-                    bloom_config.clone().with_value_cache_size(value_cache_size),
+                    Self::apply_relocation_filter(
+                        bloom_config.clone().with_value_cache_size(value_cache_size),
+                        pruner_watermark.clone(),
+                        |effects: TransactionEffects| effects.executed_epoch(),
+                        false,
+                    ),
                     digest_prefix.clone(),
                 ),
             ),
@@ -276,7 +318,10 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     mutexes,
                     uniform_key,
-                    bloom_config.clone().with_value_cache_size(value_cache_size),
+                    bloom_config
+                        .clone()
+                        .with_value_cache_size(value_cache_size)
+                        .with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -286,7 +331,7 @@ impl AuthorityPerpetualTables {
                     32 + 8,
                     mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -296,7 +341,7 @@ impl AuthorityPerpetualTables {
                     32,
                     mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -306,7 +351,12 @@ impl AuthorityPerpetualTables {
                     32,
                     mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    Self::apply_relocation_filter(
+                        KeySpaceConfig::default(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, CheckpointSequenceNumber)| epoch_id,
+                        false,
+                    ),
                     digest_prefix.clone(),
                 ),
             ),
@@ -336,7 +386,12 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::VariableLength,
                     mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    Self::apply_relocation_filter(
+                        KeySpaceConfig::default(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, ObjectKey)| epoch_id,
+                        true,
+                    ),
                 ),
             ),
             (
@@ -345,7 +400,12 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::VariableLength,
                     mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    Self::apply_relocation_filter(
+                        KeySpaceConfig::default(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, FullObjectKey)| epoch_id,
+                        true,
+                    ),
                 ),
             ),
         ];

@@ -836,7 +836,11 @@ pub async fn download_formal_snapshot(
     if path.exists() {
         fs::remove_dir_all(path.clone())?;
     }
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &path.join("store"),
+        None,
+        None,
+    ));
     let genesis = Genesis::load(genesis).unwrap();
     let genesis_committee = genesis.committee()?;
     let committee_store = Arc::new(CommitteeStore::new(
