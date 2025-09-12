@@ -10,7 +10,6 @@ mod tests;
 
 pub use metrics::ValidatorClientMetrics;
 pub use monitor::ValidatorClientMonitor;
-pub use monitor::ValidatorClientMonitorPool;
 use mysten_metrics::TX_TYPE_SHARED_OBJ_TX;
 use mysten_metrics::TX_TYPE_SINGLE_WRITER_TX;
 use strum::EnumIter;
@@ -23,8 +22,9 @@ use std::time::Duration;
 pub enum OperationType {
     Submit,
     Effects,
-    Finalization,
+    FastPath,
     HealthCheck,
+    Consensus,
 }
 
 impl OperationType {
@@ -32,8 +32,9 @@ impl OperationType {
         match self {
             OperationType::Submit => "submit",
             OperationType::Effects => "effects",
-            OperationType::Finalization => "finalization",
             OperationType::HealthCheck => "health_check",
+            OperationType::FastPath => "fast_path",
+            OperationType::Consensus => "consensus",
         }
     }
 }

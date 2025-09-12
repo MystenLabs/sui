@@ -99,7 +99,6 @@ impl ClientObservedStats {
         &mut self,
         feedback: OperationFeedback,
         metrics: &ValidatorClientMetrics,
-        tx_type: TxType,
     ) {
         let validator_stats = self
             .validator_stats
@@ -125,7 +124,7 @@ impl ClientObservedStats {
 
         metrics
             .consecutive_failures
-            .with_label_values(&[&feedback.display_name, tx_type.as_str()])
+            .with_label_values(&[&feedback.display_name])
             .set(validator_stats.consecutive_failures as i64);
     }
 
@@ -133,7 +132,11 @@ impl ClientObservedStats {
     ///
     /// Returns a map of all tracked validators to their scores.
     /// Score is 0 if the validator is excluded or has no stats.
-    pub fn get_all_validator_stats(&self, committee: &Committee) -> HashMap<AuthorityName, f64> {
+    pub fn get_all_validator_stats(
+        &self,
+        committee: &Committee,
+        tx_type: TxType,
+    ) -> HashMap<AuthorityName, f64> {
         let max_latencies = self.calculate_max_latencies(committee);
 
         committee
@@ -148,7 +151,7 @@ impl ClientObservedStats {
                     if is_excluded {
                         0.0
                     } else {
-                        self.calculate_client_score(stats, &max_latencies)
+                        self.calculate_client_score(stats, &max_latencies, tx_type)
                     }
                 } else {
                     0.0
@@ -211,6 +214,7 @@ impl ClientObservedStats {
         &self,
         stats: &ValidatorClientStats,
         max_latencies: &HashMap<OperationType, f64>,
+        tx_type: TxType,
     ) -> f64 {
         let mut latency_score = 0.0;
         let mut total_weight = 0.0;
@@ -220,10 +224,17 @@ impl ClientObservedStats {
                 OperationType::Submit => self.config.score_weights.submit_latency_weight,
                 OperationType::Effects => self.config.score_weights.effects_latency_weight,
                 OperationType::HealthCheck => self.config.score_weights.health_check_latency_weight,
-                OperationType::Finalization => {
-                    self.config.score_weights.finalization_latency_weight
-                }
+                OperationType::FastPath => self.config.score_weights.fast_path_latency_weight,
+                OperationType::Consensus => self.config.score_weights.consensus_latency_weight,
             };
+
+            if tx_type == TxType::SingleWriter && op == OperationType::Consensus {
+                continue;
+            }
+
+            if tx_type == TxType::SharedObject && op == OperationType::FastPath {
+                continue;
+            }
 
             // Skip if max latency is missing for this operation
             let Some(max_latency) = max_latencies.get(&op) else {

@@ -35,7 +35,7 @@ impl ValidatorClientMetrics {
             observed_latency: register_histogram_vec_with_registry!(
                 "validator_client_observed_latency",
                 "Client-observed latency of operations per validator",
-                &["validator", "operation_type", "tx_type"],
+                &["validator", "operation_type"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -44,7 +44,7 @@ impl ValidatorClientMetrics {
             operation_success: register_int_counter_vec_with_registry!(
                 "validator_client_operation_success_total",
                 "Total successful operations observed by client per validator",
-                &["validator", "operation_type", "tx_type"],
+                &["validator", "operation_type"],
                 registry,
             )
             .unwrap(),
@@ -52,7 +52,7 @@ impl ValidatorClientMetrics {
             operation_failure: register_int_counter_vec_with_registry!(
                 "validator_client_operation_failure_total",
                 "Total failed operations observed by client per validator",
-                &["validator", "operation_type", "tx_type"],
+                &["validator", "operation_type"],
                 registry,
             )
             .unwrap(),
@@ -60,7 +60,7 @@ impl ValidatorClientMetrics {
             performance_score: register_gauge_vec_with_registry!(
                 "validator_client_observed_score",
                 "Current client-observed score per validator",
-                &["validator", "tx_type"],
+                &["validator"],
                 registry,
             )
             .unwrap(),
@@ -68,7 +68,7 @@ impl ValidatorClientMetrics {
             consecutive_failures: register_int_gauge_vec_with_registry!(
                 "validator_client_consecutive_failures",
                 "Current consecutive failures observed by client per validator",
-                &["validator", "tx_type"],
+                &["validator"],
                 registry,
             )
             .unwrap(),

@@ -279,7 +279,9 @@ async fn test_submit_transaction_with_amplification() {
         create_test_authority_aggregator_with_rgp(reference_gas_price);
     let authority_aggregator = Arc::new(authority_aggregator);
 
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let submitter = TransactionSubmitter::new(metrics);
 
@@ -317,6 +319,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
                 &options,
@@ -369,6 +372,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
                 &options,
@@ -421,6 +425,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
                 &options,
@@ -486,6 +491,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
                 &options,
@@ -516,7 +522,9 @@ async fn test_submit_transaction_invalid_input() {
         create_test_authority_aggregator_with_rgp(reference_gas_price);
     let authority_aggregator = Arc::new(authority_aggregator);
 
-    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(TxType::SingleWriter));
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let submitter = TransactionSubmitter::new(metrics);
 
@@ -547,6 +555,7 @@ async fn test_submit_transaction_invalid_input() {
             &authority_aggregator,
             &client_monitor,
             tx_digest,
+            TxType::SingleWriter,
             amplification_factor,
             raw_request,
             &options,
