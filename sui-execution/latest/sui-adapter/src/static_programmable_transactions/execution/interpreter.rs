@@ -4,7 +4,7 @@
 use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
-    sp,
+    object_runtime, sp,
     static_programmable_transactions::{
         env::Env,
         execution::context::{Context, CtxValue},
@@ -92,9 +92,8 @@ where
             c,
             trace_builder_opt.as_mut(),
         ) {
-            let object_runtime = context.object_runtime()?;
             // We still need to record the loaded child objects for replay
-            let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+            let loaded_runtime_objects = object_runtime!(context)?.loaded_runtime_objects();
             // we do not save the wrapped objects since on error, they should not be modified
             drop(context);
             // TODO wtf is going on with the borrow checker here. 'state is bound into the object
@@ -107,14 +106,14 @@ where
         timings.push(ExecutionTiming::Success(start.elapsed()));
     }
     // Save loaded objects table in case we fail in post execution
-    let object_runtime = context.object_runtime()?;
+    //
     // We still need to record the loaded child objects for replay
     // Record the objects loaded at runtime (dynamic fields + received) for
     // storage rebate calculation.
-    let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+    let loaded_runtime_objects = object_runtime!(context)?.loaded_runtime_objects();
     // We record what objects were contained in at the start of the transaction
     // for expensive invariant checks
-    let wrapped_object_containers = object_runtime.wrapped_object_containers();
+    let wrapped_object_containers = object_runtime!(context)?.wrapped_object_containers();
 
     // apply changes
     let finished = context.finish::<Mode>();

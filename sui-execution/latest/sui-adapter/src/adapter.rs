@@ -4,7 +4,7 @@
 pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
+    use move_vm_runtime::natives::extensions::NativeExtensions;
     use move_vm_runtime::natives::functions::{NativeFunctionTable, NativeFunctions};
     use move_vm_runtime::runtime::MoveRuntime;
     use std::cell::RefCell;
@@ -76,19 +76,21 @@ mod checked {
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
-    ) -> NativeContextExtensions<'r> {
+    ) -> NativeExtensions<'r> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
-        let mut extensions = NativeContextExtensions::default();
-        extensions.add(NativeContextMut::new(ObjectRuntime::new(
+        let extensions = NativeExtensions::default();
+        extensions.write().add(ObjectRuntime::new(
             child_resolver,
             input_objects,
             is_metered,
             protocol_config,
             metrics,
             current_epoch_id,
-        )));
-        extensions.add(NativesCostTable::from_protocol_config(protocol_config));
-        extensions.add(TransactionContext::new(tx_context));
+        ));
+        extensions
+            .write()
+            .add(NativesCostTable::from_protocol_config(protocol_config));
+        extensions.write().add(TransactionContext::new(tx_context));
         extensions
     }
 

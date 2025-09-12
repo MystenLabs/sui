@@ -68,20 +68,6 @@ fn get_simple_instruction_stack_change(
     }
 }
 
-// Convert from our representation of gas costs to the type that the MoveVM expects for unit tests.
-// We don't want our gas depending on the MoveVM test utils and we don't want to fix our
-// representation to whatever is there, so instead we perform this translation from our gas units
-// and cost schedule to the one expected by the Move unit tests.
-pub fn initial_cost_schedule_for_unit_tests() -> move_vm_runtime::dev_utils::gas_schedule::CostTable
-{
-    let table = sui_types::gas_model::tables::initial_cost_schedule_v5();
-    move_vm_runtime::dev_utils::gas_schedule::CostTable {
-        instruction_tiers: table.instruction_tiers.into_iter().collect(),
-        stack_height_tiers: table.stack_height_tiers.into_iter().collect(),
-        stack_size_tiers: table.stack_size_tiers.into_iter().collect(),
-    }
-}
-
 impl GasMeter for SuiGasMeter<'_> {
     /// Charge an instruction and fail if not enough gas units are left.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {

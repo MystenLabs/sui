@@ -14,6 +14,7 @@ use crate::{
         gas::GasMeter,
         linkage_context::LinkageContext,
         serialization::{SerializedReturnValues, *},
+        types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
 };
@@ -23,7 +24,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
-    identifier::IdentStr,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     runtime_value,
     vm_status::{StatusCode, StatusType},
@@ -76,6 +77,18 @@ pub struct LoadedFunctionInformation {
     pub instruction_count: CodeOffset,
     pub parameters: Vec<Type>,
     pub return_: Vec<Type>,
+}
+
+pub struct LoadedTypeInformation {
+    pub abilities: AbilitySet,
+    pub datatype_info: Option<DatatypeInfo>,
+}
+
+pub struct DatatypeInfo {
+    pub original_id: OriginalId,
+    pub defining_id: DefiningTypeId,
+    pub module_name: Identifier,
+    pub type_name: Identifier,
 }
 
 impl<'extensions> MoveVM<'extensions> {
@@ -188,6 +201,18 @@ impl<'extensions> MoveVM<'extensions> {
 
     pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
         &self.vm_config
+    }
+
+    pub fn type_information(&self, ty: &Type) -> VMResult<LoadedTypeInformation> {
+        let abilities = self.type_abilities(ty)?;
+        let datatype_info = self
+            .virtual_tables
+            .datatype_information(ty)
+            .map_err(|e| e.finish(Location::Undefined))?;
+        Ok(LoadedTypeInformation {
+            abilities,
+            datatype_info,
+        })
     }
 
     pub fn type_abilities(&self, ty: &Type) -> VMResult<AbilitySet> {
