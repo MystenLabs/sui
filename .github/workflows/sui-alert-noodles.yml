@@ -34,13 +34,15 @@ jobs:
         id: get_commit
         run: |
           last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
-          echo "last_commit=$last_commit" >> $GITHUB_OUTPUT
+          echo "LAST_COMMIT=$last_commit" >> $GITHUB_ENV
 
+      - name: Compare with previous commit
+        id: check_change
+        run: |
           prev_commit=$(cat .last_file_commit 2>/dev/null || echo "")
-
-          if [ "$last_commit" != "$prev_commit" ]; then
+          if [ "$LAST_COMMIT" != "$prev_commit" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "$last_commit" > .last_file_commit
+            echo "$LAST_COMMIT" > .last_file_commit
           else
             echo "changed=false" >> $GITHUB_OUTPUT
 
@@ -51,9 +53,9 @@ jobs:
           key: sui-yaml-commit
 
       # - name: Send Slack Alert
-      #   if: steps.get_commit.outputs.changed == 'true'
+      #   if: steps.check_change.outputs.changed == 'true'
       #   run: |
-      #     commit_hash=${{ steps.get_commit.outputs.last_commit }}
+      #     commit_hash=$LAST_COMMIT
       #     commit_author=$(git log -1 --pretty=format:'%an' $commit_hash)
       #     commit_msg=$(git log -1 --pretty=format:'%s' $commit_hash)
       #     commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
