@@ -20,7 +20,7 @@ use std::io::Write;
 // where we want to support building a Move model.
 pub fn build<W: Write, F: MoveFlavor>(
     writer: &mut W,
-    root_pkg: RootPackage<F>,
+    root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
 ) -> PackageResult<source_model::Model> {
     // TODO: does this also need to be `name_root` like in compilation?

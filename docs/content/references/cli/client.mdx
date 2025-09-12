@@ -47,9 +47,9 @@ Commands:
   upgrade                     Upgrade Move modules
   verify-bytecode-meter       Run the bytecode verifier on the package
   verify-source               Verify local Move packages against on-chain packages, and optionally their dependencies
-  replay-transaction          Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug
-  replay-batch                Replay transactions listed in a file
-  replay-checkpoint           Replay all transactions in a range of checkpoints
+  replay-transaction          Replay a given transaction to view transaction effects (deprecated; use `sui replay` instead)
+  replay-batch                Replay transactions listed in a file (deprecated; use `sui replay` instead)
+  replay-checkpoint           Replay all transactions in a range of checkpoints (deprecated; use `sui replay` instead)
   help                        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -116,7 +116,7 @@ $ sui client active-address
 ### Request a SUI coin from faucet
 
 If you use one of the standard public RPCs (for example, `fullnode.devnet.sui.io:443`), you can use the `faucet` command to request gas coins. If you use a custom faucet service, then pass in the URL to the faucet using the `--url` option.
-The `faucet` command works for a local network, as well. If you start your network with a custom faucet port, include the `--url` option. 
+The `faucet` command works for a local network, as well. If you start your network with a custom faucet port, include the `--url` option.
 
 ```sh
 $ sui client faucet
@@ -209,12 +209,12 @@ $ sui client dynamic-field 0x5
 
 ### Send SUI or objects
 
-In this example, let's see how to transfer SUI or transfer an object from one address to another. First of all, there two main commands for sending SUI or transferring objects: `pay` and `transfer`. 
-Both `pay` and `transfer` have a few sister commands: `pay-sui`, `pay-all-sui`, `transfer-sui`. 
+In this example, let's see how to transfer SUI or transfer an object from one address to another. First of all, there two main commands for sending SUI or transferring objects: `pay` and `transfer`.
+Both `pay` and `transfer` have a few sister commands: `pay-sui`, `pay-all-sui`, `transfer-sui`.
 
 The differences between these commands are:
 - commands that end in `-sui` deal with Sui's native coin, and they use the input coints to pay for gas and for transferring SUI or the object.
-- `pay-` commands typically deal with coins and handle gas smashing for you, whereas `transfer` commands can handle the transfer of any object that has public transfer, meaning any object that has the `store` ability. 
+- `pay-` commands typically deal with coins and handle gas smashing for you, whereas `transfer` commands can handle the transfer of any object that has public transfer, meaning any object that has the `store` ability.
 - `pay` commands allow you to send coins to multiple recipients, whereas `transfer` commands only accept one recipient.
 - `pay-all-sui` is a special case of `pay-sui` that offers a way to transfer the entire balance after smashing.
 - `transfer-sui` is a legacy command and has been entirely superseded by `pay-sui` or `pay-all-sui` depending on whether an amount is specified or not.
@@ -408,7 +408,7 @@ $ sui client gas eloquent-amber
 ╰────────────────────────────────────────────────────────────────────┴────────────────────┴──────────────────╯
 ```
 
-If you want to transfer the whole object, you can use `sui client pay-all-sui` or `sui client transfer-sui` (without passing the amount): 
+If you want to transfer the whole object, you can use `sui client pay-all-sui` or `sui client transfer-sui` (without passing the amount):
 ```sh
 $ sui client pay-sui --recipient eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --gas-budget 5000000
 ```
@@ -433,16 +433,7 @@ $ sui client gas eloquent-amber
 
 ### Replay a transaction
 
-Use the `sui client replay-transaction --tx-digest <TRANSACTION-DIGEST>` to re-execute a transaction locally and show the transaction effects.
-This command will fetch the transaction dependencies from the full node specified in the client env. For transactions that happened quite far in
-the past, it is advised to set the client full node to one that has non-pruned chain data for that transaction.
-This will also verify that the resulting effects from the locally executed transaction match the effects of the transaction stored on-chain.
-
-```sh
-$ sui client replay-transaction --tx-digest 51MzJP2Uesvza8vXGpPCGbfLrY6UCfdvdoErN1z4oXPW
-```
-
-Learn more about replaying a transaction and how it can be used for debugging or profiling in the [Transaction Replay](./replay.mdx), [Debugging Transactions](../ide/debugger.mdx), and [Transaction Trace Analysis](./trace-analysis.mdx) guides.
+Client commands to replay transactions have been deprecated in favor of the `sui replay` command. Learn about replaying a transaction and how it can be used for debugging or profiling in the [Transaction Replay](./replay.mdx), [Debugging Transactions](../ide/debugger.mdx), and [Transaction Trace Analysis](./trace-analysis.mdx) guides.
 
 ## Publish a Move package
 
@@ -497,7 +488,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     │ Used   │ 4565       │ 4565       │
     ╰────────┴────────────┴────────────╯
     ```
-1. Use `sui client gas` to verify that the active address has a gas coin for paying gas. 
+1. Use `sui client gas` to verify that the active address has a gas coin for paying gas.
     ```sh
     $ sui client gas
     ```

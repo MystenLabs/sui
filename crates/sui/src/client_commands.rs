@@ -26,7 +26,6 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 use reqwest::StatusCode;
-use sui_replay_2 as SR2;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
@@ -108,7 +107,8 @@ use sui_keys::key_derive;
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
 
-static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+pub(crate) static USER_AGENT: &str =
+    concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 /// Only to be used within CLI
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
@@ -640,20 +640,17 @@ pub enum SuiClientCommands {
     #[clap(name = "remove-address")]
     RemoveAddress { alias_or_address: String },
 
-    /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
+    /// Replay a given transaction to view transaction effects (deprecated; use `sui replay` instead)
     #[clap(name = "replay-transaction")]
-    ReplayTransaction {
-        #[command(flatten)]
-        replay_config: SR2::ReplayConfigStable,
+    ReplayTransaction {},
 
-        /// Log extra gas-related information
-        #[arg(long)]
-        gas_info: bool,
+    /// Replay transactions listed in a file (deprecated; use `sui replay` instead)
+    #[clap(name = "replay-batch")]
+    ReplayBatch {},
 
-        /// Log information about each programmable transaction command
-        #[arg(long)]
-        ptb_info: bool,
-    },
+    /// Replay all transactions in a range of checkpoints (deprecated; use `sui replay` instead)
+    #[clap(name = "replay-checkpoint")]
+    ReplayCheckpoints {},
 }
 
 /// Arguments related to providing coins for gas payment
@@ -735,33 +732,16 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = match self {
-            SuiClientCommands::ReplayTransaction {
-                replay_config,
-                gas_info: _,
-                ptb_info: _,
-            } => {
-                let node = get_replay_node(context).await?;
-
-                let experimental_config = SR2::ReplayConfigExperimental {
-                    node,
-                    ..Default::default()
-                };
-
-                let artifact_path =
-                    SR2::handle_replay_config(&replay_config, &experimental_config, USER_AGENT)
-                        .await?;
-
-                if let Some(digest) = &replay_config.digest {
-                    // show effects and gas
-                    SR2::print_effects_or_fork(
-                        digest,
-                        &artifact_path,
-                        replay_config.show_effects,
-                        &mut std::io::stdout(),
-                    )?;
-                }
-
-                // this will be displayed via trace info, so no output is needed here
+            SuiClientCommands::ReplayTransaction {} => {
+                eprintln!("This command is deprecated. Use `sui replay` instead.");
+                SuiClientCommandResult::NoOutput
+            }
+            SuiClientCommands::ReplayBatch {} => {
+                eprintln!("This command is deprecated. Use `sui replay` instead.");
+                SuiClientCommandResult::NoOutput
+            }
+            SuiClientCommands::ReplayCheckpoints {} => {
+                eprintln!("This command is deprecated. Use `sui replay` instead.");
                 SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::Addresses { sort_by_alias } => {
@@ -3542,20 +3522,4 @@ pub(crate) async fn pkg_tree_shake(
     });
 
     Ok(())
-}
-
-async fn get_replay_node(context: &mut WalletContext) -> Result<SR2::Node, anyhow::Error> {
-    let chain_id = context
-        .get_client()
-        .await?
-        .read_api()
-        .get_chain_identifier()
-        .await?;
-    let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
-        .ok_or_else(|| anyhow::anyhow!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently: {chain_id}"))?;
-    Ok(match chain_id.chain() {
-        Chain::Mainnet => SR2::Node::Mainnet,
-        Chain::Testnet => SR2::Node::Testnet,
-        Chain::Unknown => bail!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently"),
-    })
 }

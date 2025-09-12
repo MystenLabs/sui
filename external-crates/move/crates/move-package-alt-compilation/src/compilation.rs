@@ -26,12 +26,16 @@ use move_compiler::{
     diagnostics::warning_filters::WarningFiltersBuilder,
     editions::{Edition, Flavor},
     linters,
-    shared::{PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles},
+    shared::{
+        PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
+        known_attributes::ModeAttribute,
+    },
     sui_mode,
 };
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, package::RootPackage, schema::Environment,
+    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
+    schema::Environment,
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -44,14 +48,12 @@ pub async fn compile_package<W: Write, F: MoveFlavor>(
     env: &Environment,
     writer: &mut W,
 ) -> PackageResult<CompiledPackage> {
-    println!("Path to compile_package: {:?}", path);
     let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
-    println!("Hello");
-    BuildPlan::create(root_pkg, build_config)?.compile(writer, |compiler| compiler)
+    BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
 pub async fn compile_from_root_package<W: Write, F: MoveFlavor>(
-    root_pkg: RootPackage<F>,
+    root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     writer: &mut W,
 ) -> PackageResult<CompiledPackage> {
@@ -59,15 +61,18 @@ pub async fn compile_from_root_package<W: Write, F: MoveFlavor>(
 }
 
 pub fn compiler_flags(build_config: &BuildConfig) -> Flags {
-    let flags = if build_config.test_mode {
-        Flags::testing()
-    } else {
-        Flags::empty()
-    };
+    let flags =
+        if build_config.test_mode || build_config.modes.contains(&ModeAttribute::TEST.into()) {
+            Flags::testing()
+        } else {
+            Flags::empty()
+        };
+
     flags
         .set_warnings_are_errors(build_config.warnings_are_errors)
         .set_json_errors(build_config.json_errors)
         .set_silence_warnings(build_config.silence_warnings)
+        .set_modes(build_config.modes.clone())
 }
 
 pub fn build_all<W: Write, F: MoveFlavor>(
@@ -93,7 +98,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
 
     // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
     // this has to match whatever we're doing in build_for_driver function
-    let root_package_name = Symbol::from(format!("{}_root", package_name.as_str()));
+    let root_package_name = Symbol::from(package_name.to_string());
 
     for mut annot_unit in all_compiled_units {
         let source_path = PathBuf::from(
@@ -195,39 +200,7 @@ pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
     let packages = root_pkg.packages()?;
-
-    let mut package_paths: Vec<PackagePaths> = vec![];
-
-    for pkg in packages.into_iter() {
-        let name: Symbol = pkg.name().as_str().into();
-
-        if !pkg.is_root() {
-            writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
-        }
-
-        let addresses: BuildNamedAddresses = pkg.named_addresses()?.into();
-
-        // TODO: better default handling for edition and flavor
-        let config = PackageConfig {
-            is_dependency: !pkg.is_root(),
-            edition: Edition::from_str(pkg.edition())?,
-            flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
-            warning_filter: WarningFiltersBuilder::new_for_source(),
-        };
-
-        // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
-        let safe_name = Symbol::from(pkg.id().clone());
-
-        debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
-        debug!("Named address map {:#?}", addresses);
-        let paths = PackagePaths {
-            name: Some((safe_name, config)),
-            paths: get_sources(pkg.path(), build_config)?,
-            named_address_map: addresses.inner,
-        };
-
-        package_paths.push(paths);
-    }
+    let package_paths = make_deps_for_compiler(w, packages, build_config)?;
 
     debug!("Package paths {:#?}", package_paths);
 
@@ -365,4 +338,52 @@ fn check_filepaths_ok(
         )
     }
     Ok(())
+}
+
+/// Return a list of package paths for the transitive dependencies.
+pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
+    w: &mut W,
+    packages: Vec<PackageInfo<'_, F>>,
+    build_config: &BuildConfig,
+) -> anyhow::Result<Vec<PackagePaths>> {
+    let mut package_paths: Vec<PackagePaths> = vec![];
+    // let cwd = std::env::current_dir()?;
+    for pkg in packages.into_iter() {
+        let name: Symbol = pkg.name().as_str().into();
+
+        if !pkg.is_root() {
+            writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
+        }
+
+        let addresses: BuildNamedAddresses = pkg.named_addresses()?.into();
+
+        // TODO: better default handling for edition and flavor
+        let config = PackageConfig {
+            is_dependency: !pkg.is_root(),
+            edition: Edition::from_str(pkg.edition())?,
+            flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
+            warning_filter: WarningFiltersBuilder::new_for_source(),
+        };
+
+        // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
+        let safe_name = Symbol::from(pkg.id().clone());
+
+        // let sources = get_sources(pkg.path(), build_config)?
+        //     .iter()
+        //     .map(|x| x.replace(cwd.to_str().unwrap(), ".").into())
+        //     .collect();
+
+        debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
+        debug!("Named address map {:#?}", addresses);
+        let paths = PackagePaths {
+            name: Some((safe_name, config)),
+            // paths: sources,
+            paths: get_sources(pkg.path(), build_config)?,
+            named_address_map: addresses.inner,
+        };
+
+        package_paths.push(paths);
+    }
+
+    Ok(package_paths)
 }

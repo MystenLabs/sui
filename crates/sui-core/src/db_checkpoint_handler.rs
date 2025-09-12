@@ -249,7 +249,11 @@ impl DBCheckpointHandler {
         epoch: u64,
         epoch_duration_ms: u64,
     ) -> Result<()> {
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+            &db_path.join("store"),
+            None,
+            None,
+        ));
         let checkpoint_store = Arc::new(CheckpointStore::new_for_db_checkpoint_handler(
             &db_path.join("checkpoints"),
         ));

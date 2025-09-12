@@ -1186,14 +1186,16 @@ impl AuthorityStore {
         transaction_effects: &TransactionEffects,
     ) -> Result<(), TypedStoreError> {
         let mut write_batch = self.perpetual_tables.transactions.batch();
+        // effects must be inserted before the corresponding transaction entry
+        // because they carry epoch information necessary for correct pruning via relocation filters
         write_batch
-            .insert_batch(
-                &self.perpetual_tables.transactions,
-                [(transaction.digest(), transaction.serializable_ref())],
-            )?
             .insert_batch(
                 &self.perpetual_tables.effects,
                 [(transaction_effects.digest(), transaction_effects)],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.transactions,
+                [(transaction.digest(), transaction.serializable_ref())],
             )?;
 
         write_batch.write()?;

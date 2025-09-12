@@ -69,6 +69,7 @@ async fn main() -> Result<()> {
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
         )
         .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(
             sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
         )
@@ -78,6 +79,7 @@ async fn main() -> Result<()> {
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
         )
         .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(
             sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
         )
@@ -95,7 +97,10 @@ async fn main() -> Result<()> {
         .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
             Arc::new(RpcMetrics::new(&registry)),
         )))
-        .add_service(LedgerServiceServer::new(server))
+        .add_service(LedgerServiceServer::new(server.clone()))
+        .add_service(
+            sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(server),
+        )
         .add_service(reflection_v1)
         .add_service(reflection_v1alpha)
         .serve(addr)
