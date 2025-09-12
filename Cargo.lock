@@ -13806,7 +13806,6 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=21b2155487cbecf3c46c035b3c361f2cdc4686ab#21b2155487cbecf3c46c035b3c361f2cdc4686ab"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15873,7 +15872,6 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=21b2155487cbecf3c46c035b3c361f2cdc4686ab#21b2155487cbecf3c46c035b3c361f2cdc4686ab"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -15929,6 +15927,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.13.1",
+ "tonic-build 0.13.1",
  "tonic-health",
  "tonic-reflection",
  "tonic-web",
@@ -16032,7 +16031,6 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=21b2155487cbecf3c46c035b3c361f2cdc4686ab#21b2155487cbecf3c46c035b3c361f2cdc4686ab"
 dependencies = [
  "base64ct",
  "bcs",
@@ -19652,3 +19650,11 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "sui-graphql-client"
+version = "0.0.7"
+
+[[patch.unused]]
+name = "sui-graphql-client-build"
+version = "0.0.7"
