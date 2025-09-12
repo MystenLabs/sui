@@ -4,17 +4,19 @@ description: Derived objects enable deterministic object addressing, Transfer-to
 keywords: [ Derived objects, deterministic addressing, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
 ---
 
-Derived objects enable you to deterministically compute object IDs from a parent object ID and a key, both on- and off-chain. This means you can compute the ID of a derived object before you ever create it on the blockchain. 
+Most Sui objects get a unique ID assigned to them upon object creation. However, a **derived object** does not technically have an assigned ID; instead it has a _claimed_ ID created by mapping a parent object to a key. The parent object's unique ID that exists on-chain is mapped to an individual key, ensuring that the derived object's claimed ID is both deterministic and unique.
 
-Most objects on Sui get an ID assigned to them upon object creation that is guaranteed to be unique to every other object on the network. Derived objects do not technically have assigned IDs, but instead have _claimed_ IDs created from the mapping of a parent object and a key. This `parent-key` mapping ensures that the claimed ID is one of a kind because the objects derived from the parent object (unique ID that exists on-chain) are paired with individual keys. It's this mapping that makes the resulting ID of derived objects both deterministic and unique.
+Derived objects enable you to deterministically compute object IDs from a parent object ID and a key, both on- and off-chain. This means you can compute the ID of a derived object before you ever actually create it on the network. 
 
-When you claim an ID from the `derived_object` module, you typically pass the parent object and key. The parent object already exists on-chain, either at package publish time or through a transaction with the smart contract. The parent object can be [shared, owned, party, or even a wrapped UID](../object-ownership.mdx). An existing parent object is not a requirement, however, as you could create a new parent object in a function and immediately claim a derived object UID from a provided key. This workflow would not support off-chain determinism, though, because you could not know the parent UID beforehand.   
+To claim an ID using the `derived_object` module, pass the parent object and key. The parent object might already exist on-chain, either through a published package or through a transaction. An existing parent object is not a requirement, however, as you could create a new parent object in a function and immediately claim a derived object UID from a provided key. This workflow would not support off-chain determinism, though, because you could not know the parent UID beforehand.   
 
-The key can be an address or other object ID, which are themselves unique. This is not a requirement, though, as the `derived_object` module uses a `ClaimedStatus` enum to mark already claimed IDs as `Reserved`. Trying to claim an ID with a `Reserved` enum value results in transaction failure. So, you could use something like the US lowercase alphabet as your key, but would then be limited to 26 derived objects from one parent (assuming it's the only key you use).
+Parent objects can be [shared, owned, party, or wrapped](../object-ownership.mdx). 
 
-Although claiming the ID of the derived object requires a parent object, the derived object is not a child of the parent. This is an important distinction as the the lack of a hierarchal relationship means that using the derived object as inputs to your transactions does not require sequential processing through the parent. The derived object is its own entity; the parent only exists to ensure its uniqueness. This relationship provides parallelization that is not possible with parent-child relationships.
+The key can be an address or object ID, but using a unique value is not required. You could use, for example, a finite array of numbers (`[1, 2, 3]`) as your possible keys. Doing so means that more than one derived object might attempt to claim an ID using the same digit as their key. The `derived_object` module prevents duplication in such situations through the use of a `ClaimedStatus` enum, setting its value to `Reserved` when an ID is claimed. If two transactions tried to claim an ID using the same digit as its key, the second transaction fails because the first transaction already reserved the ID.
 
-Because you can compute the ID of a derived object off-chain, your client logic is able to treat as-yet unclaimed IDs as if they already exist. If your key is a limited one, such as the US alphabet, and two clients tried to claim the ID from the same parent using the `r` key, then the first one to submit the transaction claims the ID and the subsequent client transaction fails.
+Claiming the ID of derived objects requires a parent object, but the derived objects are not children of that parent. This is an important distinction because the lack of a hierarchal relationship means that using a derived object as input to a transaction does not require sequential processing through the parent. The derived object is its own entity; the parent only exists to ensure its uniqueness. This relationship provides parallelization that is not possible with parent-child relationships.
+
+If you know the parent ID, you can compute the ID of the derived object through off-chain logic using the [TypeScript](https://github.com/MystenLabs/ts-sdks/blob/642ff2784ffb89b1bce4a43a6ceae91c04486669/packages/typescript/src/utils/derived-objects.ts) or [Rust SDK](https://mystenlabs.github.io/sui/sui_types/derived_object/index.html) helper functions. This functionality means your client logic can treat unclaimed IDs as if they already exist. 
 
 <details>
 <summary>
@@ -25,29 +27,32 @@ Because you can compute the ID of a derived object off-chain, your client logic 
 
 ## Core capabilities
 
-Derived objects provide four fundamental capabilities:
+Derived objects provide four fundamental capabilities: deterministic addressing, Transfer-to-Object compatibility, one-per-key uniqueness, and native parallelization. 
 
 ### Deterministic addressing
 
-Object IDs can be computed ahead of time using `derived_object::derive_address(parent_id, key)`. This means applications can predict where objects will live before they exist, enabling sophisticated coordination patterns and reducing the need for on-chain lookups.
+You can compute derived object IDs ahead of time using the `derived_object::derive_address(parent_id, key)` function. This means applications can predict where objects will live before they exist, enabling sophisticated coordination patterns and reducing the need for on-chain lookups.
 
 ### Transfer-to-Object (TTO) compatibility
 
-Because addresses are computable, objects can receive transfers even before they exist. Send assets to a derived address, then create the object later to claim them. This enables patterns like:
+Because the ID of a derived object can exist before the object does, derived objects can also receive transfers before they exist. Send assets to a derived address, then create the object later to claim them. This enables patterns like:
 
 - Pre-funding accounts before user onboarding.
-- Conditional object creation based on received assets. So, an object is created only after SUI is received.
+- Conditional object creation based on received assets, such as creation of an object only after receiving SUI.
 - Cross-chain bridging to deterministic destinations.
-
-Players can compute loot box addresses before opening. This allows for pre-funding, conditional reveals, and parallel processing.
+- In gaming, players can compute loot box addresses before opening. This allows for pre-funding, conditional reveals, and parallel processing.
 
 ### One-per-key uniqueness
 
-Each `(parent, key)` pair maps to exactly one object address. This gives you registry-like uniqueness guarantees without the registry bottleneck. Perfect for soulbound tokens, per-user configurations, or any scenario requiring unique slots.
+Each `(parent, key)` pair maps to exactly one object address. This gives you registry-like uniqueness guarantees without the registry bottleneck. Example use cases include:
+
+- Soulbound tokens
+- Per-user configurations
+- Any scenario requiring unique slots
 
 ### Native parallelization
 
-Unlike dynamic fields that funnel operations through a parent object, derived objects operate independently after creation. Unrelated keys can be modified in parallel, eliminating consensus hotspots while maintaining namespace guarantees.
+In contrast to dynamic fields, which route operations through a parent object, derived objects function autonomously after you create them. Unrelated keys update in parallel, avoiding consensus hotspots while maintaining namespace guarantees.
 
 These capabilities combine to enable entirely new design patterns that were previously impossible or inefficient.
 
@@ -60,12 +65,12 @@ These capabilities combine to enable entirely new design patterns that were prev
 **Off-chain benefits**
 
 -	Fewer hops: Clients can compute or look up the derived object ID directly without requiring a sequential operation to find it through the parent.
--	Better discoverability/indexing: SDKs can compute objects with fewer sequential queries.
--	Lean SDK calls: Less queries needed, minimizes the SDK codebase and improves performance through reduced network traffic (object lookups can be bundled in multiGet queries).
+-	Better discoverability and indexing: SDKs can compute objects with fewer sequential queries.
+-	Lean SDK calls: Less queries needed minimizes the SDK codebase and improves performance through reduced network traffic (object lookups can be bundled in multiGet queries).
 
 ## Derived objects and dynamic fields matrix
 
-The following matrix highlights some of the differences between using dynamic fields versus derived objects. Considering the tradeoffs helps you select the optimum approach for your project.
+The following matrix highlights some of the differences between using dynamic fields versus derived objects. Considering the tradeoffs helps you select the optimal approach for your project.
 
 | Aspect | Derived objects | Dynamic fields |
 | --- | --- | --- |
@@ -80,7 +85,7 @@ The following matrix highlights some of the differences between using dynamic fi
 
 ## Registries {#registries}
 
-The possibilities and uses for derived objects are only limited by your imagination. One of the more obvious implementations is their application in registries. The following examples compare dynamic field tables, pointer-based, and derived objects registries to illustrate the core tradeoffs between the different patterns.
+The derived object model defines a broad design space, enabling implementation of a wide range of patterns. Registry structures are patterns that work particularly well with derived objects because they manage key–value mappings efficiently and avoid centralized bottlenecks. The following sections compare different registry implementations to illustrate the inherent trade-offs to each pattern.
 
 ### Classic registry
 
@@ -125,7 +130,7 @@ public fun receive_from_vault<T key + store>(
 
 ### Registry with pointer
 
-If parallelization is an important aspect for your project needs, you could create a registry that uses a pointer. This approach provides good parallelization, but requires 2 sequential network hops to discover. To find a vault, you first have to find its pointer.
+If parallelization is an important aspect for your project, you could create a registry that uses a pointer. This approach provides good parallelization, but requires 2 sequential network hops to discover. To find a vault, you first have to find its pointer.
 
 ```move
 const EVaultAlreadyExists: u64 = 0;
