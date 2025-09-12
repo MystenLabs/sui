@@ -102,7 +102,8 @@ pub fn simulate_transaction(
     if request.do_gas_selection() && checks.enabled() {
         // At this point, the budget on the transaction can be set to one of the following:
         // - The budget from the request, if specified.
-        // - The total balance of all of the gas payment coins in the request if the budget was not
+        // - The total balance of all of the gas payment coins (clamped to the protocol
+        //   MAX_GAS_BUDGET) in the request if the budget was not
         //   specified but the gas payment coins were specified.
         // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
         //
@@ -118,8 +119,18 @@ pub fn simulate_transaction(
                 reference_gas_price,
             );
 
-            let selected_gas_value = transaction.gas_data().budget;
-            validate_budget(transaction.gas_data().owner, estimate, selected_gas_value)?;
+            // If the request specified gas payment, then transaction.gas_data().budget will be the
+            // cumulative balance of those coins. We don't want to return a resolved transaction where
+            // the gas payment can't satisfy the budget, so validate that balance can actually cover the
+            // estimated budget.
+            let gas_balance = transaction.gas_data().budget;
+            if gas_balance < estimate {
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
+                    format!("Insufficient gas balance to cover estimated transaction cost. \
+                        Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"),
+                ));
+            }
             transaction.gas_data_mut().budget = estimate;
         }
 
@@ -382,17 +393,8 @@ fn select_gas(
         selected_gas_value += value;
     }
 
-    validate_budget(owner, budget, selected_gas_value)?;
-    Ok(selected_gas)
-}
-
-fn validate_budget(
-    owner: SuiAddress,
-    budget: u64,
-    selected_gas_value: u64,
-) -> std::result::Result<(), RpcError> {
     if selected_gas_value >= budget {
-        Ok(())
+        Ok(selected_gas)
     } else {
         Err(RpcError::new(
             tonic::Code::InvalidArgument,
