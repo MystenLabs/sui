@@ -181,7 +181,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
                 let display_name = authority_agg.get_display_name(validator);
                 self.metrics
                     .performance_score
-                    .with_label_values(&[&display_name])
+                    .with_label_values(&[&display_name, tx_type.as_str()])
                     .set(*score);
             }
 

@@ -63,7 +63,7 @@ impl ValidatorClientMetrics {
             performance_score: register_gauge_vec_with_registry!(
                 "validator_client_observed_score",
                 "Current client-observed score per validator",
-                &["validator"],
+                &["validator", "tx_type"],
                 registry,
             )
             .unwrap(),

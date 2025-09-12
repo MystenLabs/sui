@@ -38,7 +38,7 @@ impl<A: Clone> RequestRetrier<A> {
     ) -> Self {
         let selected_validators = client_monitor.select_shuffled_preferred_validators(
             &auth_agg.committee,
-            auth_agg.committee.num_members() / 3,
+            auth_agg.committee.num_members() / 4,
             tx_type,
         );
         let remaining_clients = selected_validators
