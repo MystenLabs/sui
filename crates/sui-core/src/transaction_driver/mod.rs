@@ -106,7 +106,7 @@ where
     async fn run_latency_checks(self: Arc<Self>) {
         const MAX_DELAY_BETWEEN_REQUESTS_MS: u64 = 5_000;
         const INTERVAL_BETWEEN_RUNS_MS: u64 = 10_000;
-        let mut interval = interval(Duration::from_secs(INTERVAL_BETWEEN_RUNS_MS));
+        let mut interval = interval(Duration::from_millis(INTERVAL_BETWEEN_RUNS_MS));
 
         loop {
             interval.tick().await;
