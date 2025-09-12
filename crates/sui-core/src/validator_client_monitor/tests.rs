@@ -161,7 +161,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter, &metrics);
         assert_eq!(all_stats.len(), 2);
 
         // Validator 1 should have higher score
@@ -220,7 +220,7 @@ mod client_stats_tests {
         );
 
         // Should be excluded (score 0)
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter, &metrics);
         let score = *all_stats.get(&validator).unwrap();
         assert_eq!(score, 0.0);
 
@@ -228,7 +228,7 @@ mod client_stats_tests {
         sleep(Duration::from_millis(150)).await;
 
         // Should be included again (score > 0)
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter, &metrics);
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
     }
@@ -320,7 +320,7 @@ mod client_stats_tests {
             vec![(validator, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter, &metrics);
         // Should have a partial score even with only one operation type
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
@@ -496,11 +496,249 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter, &metrics);
         // Validator 1 should have higher score due to fast effects (high weight)
         let score1 = *all_stats.get(&validator1).unwrap();
         let score2 = *all_stats.get(&validator2).unwrap();
         assert!(score1 > score2);
+    }
+
+    #[tokio::test]
+    async fn test_calculate_max_latencies() {
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
+        let metrics = create_test_metrics();
+
+        let validators = create_test_validator_names(3);
+        let validator1 = validators[0];
+        let validator2 = validators[1];
+        let validator3 = validators[2];
+
+        // Record different latencies for each validator and operation type
+        // Validator 1: lowest latencies for all operations
+        for op in [
+            OperationType::Submit,
+            OperationType::Effects,
+            OperationType::HealthCheck,
+            OperationType::FastPath,
+        ] {
+            stats.record_interaction_result(
+                OperationFeedback {
+                    authority_name: validator1,
+                    display_name: validator1.concise().to_string(),
+                    operation: op,
+                    result: Ok(Duration::from_millis(100)),
+                },
+                &metrics,
+            );
+        }
+
+        // Validator 2: highest latencies for all operations
+        for op in [
+            OperationType::Submit,
+            OperationType::Effects,
+            OperationType::HealthCheck,
+            OperationType::FastPath,
+        ] {
+            stats.record_interaction_result(
+                OperationFeedback {
+                    authority_name: validator2,
+                    display_name: validator2.concise().to_string(),
+                    operation: op,
+                    result: Ok(Duration::from_millis(300)),
+                },
+                &metrics,
+            );
+        }
+
+        // Validator 3: mixed latencies (highest for Submit, lowest for Effects)
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator3,
+                display_name: validator3.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Ok(Duration::from_millis(400)), // Highest Submit latency
+            },
+            &metrics,
+        );
+
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator3,
+                display_name: validator3.concise().to_string(),
+                operation: OperationType::Effects,
+                result: Ok(Duration::from_millis(50)), // Lowest Effects latency
+            },
+            &metrics,
+        );
+
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator3,
+                display_name: validator3.concise().to_string(),
+                operation: OperationType::HealthCheck,
+                result: Ok(Duration::from_millis(200)), // Medium HealthCheck latency
+            },
+            &metrics,
+        );
+
+        // Create committee with all validators
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
+            0,
+            vec![(validator1, 1), (validator2, 1), (validator3, 1)]
+                .into_iter()
+                .collect(),
+        );
+
+        // Test calculate_max_latencies
+        let max_latencies = stats.calculate_max_latencies(&committee);
+
+        // Verify that max latencies are calculated correctly
+        assert_eq!(max_latencies.len(), 4); // Should have all 4 operation types
+
+        // Submit: validator3 has highest at 400ms = 0.4s
+        assert_eq!(*max_latencies.get(&OperationType::Submit).unwrap(), 0.4);
+
+        // Effects: validator2 has highest at 300ms = 0.3s
+        assert_eq!(*max_latencies.get(&OperationType::Effects).unwrap(), 0.3);
+
+        // HealthCheck: validator2 has highest at 300ms = 0.3s
+        assert_eq!(
+            *max_latencies.get(&OperationType::HealthCheck).unwrap(),
+            0.3
+        );
+
+        // Finalization: only validator1 and validator2 have data, validator2 is highest at 300ms = 0.3s
+        assert_eq!(*max_latencies.get(&OperationType::FastPath).unwrap(), 0.3);
+    }
+
+    #[tokio::test]
+    async fn test_calculate_max_latencies_with_excluded_validators() {
+        let config = ValidatorClientMonitorConfig {
+            max_consecutive_failures: 2,
+            failure_cooldown: Duration::from_secs(10),
+            ..Default::default()
+        };
+        let mut stats = ClientObservedStats::new(config);
+        let metrics = create_test_metrics();
+
+        let validators = create_test_validator_names(3);
+        let validator1 = validators[0];
+        let validator2 = validators[1];
+        let validator3 = validators[2];
+
+        // Record successful operations for validator1 (good performance)
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator1,
+                display_name: validator1.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Ok(Duration::from_millis(100)),
+            },
+            &metrics,
+        );
+
+        // Record successful operations for validator2 (worse performance)
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator2,
+                display_name: validator2.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Ok(Duration::from_millis(300)),
+            },
+            &metrics,
+        );
+
+        // Record successful operations for validator3 initially (highest latency)
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator3,
+                display_name: validator3.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Ok(Duration::from_millis(500)), // Highest latency
+            },
+            &metrics,
+        );
+
+        // Now exclude validator3 by causing consecutive failures
+        for _ in 0..2 {
+            stats.record_interaction_result(
+                OperationFeedback {
+                    authority_name: validator3,
+                    display_name: validator3.concise().to_string(),
+                    operation: OperationType::Submit,
+                    result: Err(()),
+                },
+                &metrics,
+            );
+        }
+
+        // Create committee with all validators
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
+            0,
+            vec![(validator1, 1), (validator2, 1), (validator3, 1)]
+                .into_iter()
+                .collect(),
+        );
+
+        // Test calculate_max_latencies - should exclude validator3's data
+        let max_latencies = stats.calculate_max_latencies(&committee);
+
+        // Verify that excluded validator's latency is not considered
+        // Max should be from validator2 (300ms = 0.3s), not validator3 (500ms = 0.5s)
+        assert_eq!(*max_latencies.get(&OperationType::Submit).unwrap(), 0.3);
+    }
+
+    #[tokio::test]
+    async fn test_calculate_max_latencies_empty_operations() {
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
+        let metrics = create_test_metrics();
+
+        let validators = create_test_validator_names(2);
+        let validator1 = validators[0];
+        let validator2 = validators[1];
+
+        // Record only Submit operations, leaving other operations empty
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator1,
+                display_name: validator1.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Ok(Duration::from_millis(100)),
+            },
+            &metrics,
+        );
+
+        stats.record_interaction_result(
+            OperationFeedback {
+                authority_name: validator2,
+                display_name: validator2.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Ok(Duration::from_millis(200)),
+            },
+            &metrics,
+        );
+
+        // Create committee with both validators
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
+            0,
+            vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
+        );
+
+        // Test calculate_max_latencies
+        let max_latencies = stats.calculate_max_latencies(&committee);
+
+        // Should have Submit operation with max latency
+        assert_eq!(*max_latencies.get(&OperationType::Submit).unwrap(), 0.2);
+
+        // Other operations should have 0.0 as max latency since no data exists
+        assert_eq!(*max_latencies.get(&OperationType::Effects).unwrap(), 0.0);
+        assert_eq!(
+            *max_latencies.get(&OperationType::HealthCheck).unwrap(),
+            0.0
+        );
+        assert_eq!(*max_latencies.get(&OperationType::FastPath).unwrap(), 0.0);
     }
 }
 

@@ -171,10 +171,10 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         let mut cached_scores = self.cached_scores.write();
 
         for tx_type in TxType::iter() {
-            let score_map = self
-                .client_stats
-                .read()
-                .get_all_validator_stats(committee, tx_type);
+            let score_map =
+                self.client_stats
+                    .read()
+                    .get_all_validator_stats(committee, tx_type, &self.metrics);
 
             for (validator, score) in score_map.iter() {
                 debug!("Validator {}: score {}", validator, score);

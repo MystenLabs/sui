@@ -136,8 +136,17 @@ impl ClientObservedStats {
         &self,
         committee: &Committee,
         tx_type: TxType,
+        metrics: &ValidatorClientMetrics,
     ) -> HashMap<AuthorityName, f64> {
         let max_latencies = self.calculate_max_latencies(committee);
+
+        // Add to metrics the max latencies
+        for (op, max_latency) in max_latencies.iter() {
+            metrics
+                .max_latency
+                .with_label_values(&[op.as_str()])
+                .set(*max_latency);
+        }
 
         committee
             .names()
@@ -161,7 +170,10 @@ impl ClientObservedStats {
             .collect()
     }
 
-    fn calculate_max_latencies(&self, committee: &Committee) -> HashMap<OperationType, f64> {
+    pub(crate) fn calculate_max_latencies(
+        &self,
+        committee: &Committee,
+    ) -> HashMap<OperationType, f64> {
         let mut max_latencies = HashMap::new();
 
         for validator in committee.names() {

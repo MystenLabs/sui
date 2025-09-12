@@ -27,6 +27,9 @@ pub struct ValidatorClientMetrics {
 
     /// Consecutive failures per validator
     pub consecutive_failures: IntGaugeVec,
+
+    /// Max latency per operation type
+    pub max_latency: GaugeVec,
 }
 
 impl ValidatorClientMetrics {
@@ -69,6 +72,14 @@ impl ValidatorClientMetrics {
                 "validator_client_consecutive_failures",
                 "Current consecutive failures observed by client per validator",
                 &["validator"],
+                registry,
+            )
+            .unwrap(),
+
+            max_latency: register_gauge_vec_with_registry!(
+                "validator_client_max_latency",
+                "Current max latency per operation type",
+                &["operation_type"],
                 registry,
             )
             .unwrap(),
