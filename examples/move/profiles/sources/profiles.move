@@ -64,7 +64,7 @@ public fun new_profile(
     // Claim a derived UID using the sender's address as the key
     // This ensures deterministic addresses and prevents duplicate profiles per address.
     // You can now always figure out the Object ID of the profile, based on the user's
-    // & the registry's ID.
+    // address & the registry's ID.
     let derived_id = derived_object::claim(&mut registry.id, sender);
 
     // Increment user counter
