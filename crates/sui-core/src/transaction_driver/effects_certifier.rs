@@ -113,7 +113,8 @@ impl EffectsCertifier {
                 tx_type,
                 consensus_position,
                 options,
-                current_target
+                current_target,
+                ping
             ),
             async {
                 // No need to send a full effects request if it is already provided.
@@ -291,10 +292,20 @@ impl EffectsCertifier {
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
         submitted_tx_to_validator: AuthorityName,
+        ping: bool,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        let ping = if ping {
+            match tx_type {
+                TxType::SingleWriter => Some(PingType::FastPath),
+                TxType::SharedObject => Some(PingType::Consensus),
+            }
+        } else {
+            None
+        };
+
         self.metrics
             .certified_effects_ack_attempts
             .with_label_values(&[tx_type.as_str()])
@@ -309,7 +320,7 @@ impl EffectsCertifier {
             transaction_digest: *tx_digest,
             consensus_position,
             include_details: false,
-            ping: None,
+            ping,
         })
         .unwrap();
 
