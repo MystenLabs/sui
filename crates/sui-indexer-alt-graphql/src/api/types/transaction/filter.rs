@@ -3,9 +3,11 @@
 
 use async_graphql::{CustomValidator, Enum, InputObject, InputValueError};
 
-use crate::api::types::lookups::TxBoundsFilter;
 use crate::{
-    api::scalars::{fq_name_filter::FqNameFilter, sui_address::SuiAddress, uint53::UInt53},
+    api::{
+        scalars::{fq_name_filter::FqNameFilter, sui_address::SuiAddress, uint53::UInt53},
+        types::lookups::TxBoundsFilter,
+    },
     intersect,
 };
 

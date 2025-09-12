@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
-use async_graphql::Context;
-use diesel::{sql_types::BigInt, QueryableByName};
-use std::ops::Range;
 use std::sync::Arc;
-use sui_indexer_alt_reader::pg_reader::PgReader;
+
+use async_graphql::Context;
+use diesel::sql_types::BigInt;
+use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
@@ -36,13 +35,13 @@ pub(crate) trait TxBoundsCursor {
 /// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
 /// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
 /// `hi_inclusive`).
-pub(crate) async fn tx_bounds(
+pub(crate) async fn tx_bounds_query<'a>(
     ctx: &Context<'_>,
     scope: &Scope,
     filter: &impl TxBoundsFilter,
     reader_lo: u64,
     page: &Page<impl TxBoundsCursor>,
-) -> Result<Option<Range<u64>>, RpcError> {
+) -> Result<Option<Query<'a>>, RpcError> {
     if page.limit() == 0 {
         return Ok(None);
     }
@@ -64,72 +63,41 @@ pub(crate) async fn tx_bounds(
     let watermarks: &Arc<Watermarks> = ctx.data()?;
     let global_tx_hi = watermarks.high_watermark().transaction();
 
-    let pg_reader: &PgReader = ctx.data()?;
     let query = query!(
         r#"
 WITH
-tx_lo AS (
+-- tx_lo is the tx_lo of the checkpoint at cp_lo
+tx_lo AS MATERIALIZED (
     SELECT
-        tx_lo
+        -- MAX returns NULL if there are no rows
+        -- GREATEST ignores nulls
+        GREATEST(MAX(tx_lo), {Nullable<BigInt>} /* page_tx_lo */) AS tx_lo
     FROM
         cp_sequence_numbers
     WHERE
-        cp_sequence_number = {BigInt}
-    LIMIT 1
+        cp_sequence_number = {BigInt} /* cp_lo */
 ),
 
--- tx_hi is the tx_lo of the checkpoint directly after the cp_bounds.end()
-tx_hi AS (
+-- tx_hi is the tx_lo of the checkpoint after cp_hi
+tx_hi AS MATERIALIZED (
     SELECT
-        tx_lo AS tx_hi
+        -- MAX returns NULL if there are no rows
+        -- LEAST ignores nulls
+        LEAST(MAX(tx_lo), {Nullable<BigInt>} /* page_tx_hi */, {BigInt} /* global_tx_hi */) AS tx_hi
     FROM
         cp_sequence_numbers
     WHERE
-        cp_sequence_number = {BigInt} + 1
-    LIMIT 1
+        cp_sequence_number = {BigInt} /* cp_hi */ + 1
 )
-
-SELECT
-    (SELECT tx_lo FROM tx_lo) AS "tx_lo",
-    -- If we cannot get the tx_hi from the checkpoint directly after the cp_bounds.end() we use global tx_hi.
-    COALESCE((SELECT tx_hi FROM tx_hi), {BigInt}) AS "tx_hi";
 "#,
-        *cp_bounds.start() as i64,
-        *cp_bounds.end() as i64,
-        global_tx_hi as i64
+        page.after().map(|c| c.tx_sequence_number() as i64), /* page_tx_lo */
+        *cp_bounds.start() as i64,                           /* cp_lo */
+        page.before()
+            // convert cursor inclusive bounds to exclusive bounds
+            .map(|c| (c.tx_sequence_number() as i64).saturating_add(1)), /* page_tx_hi */
+        global_tx_hi as i64,
+        *cp_bounds.end() as i64, /* cp_hi */
     );
 
-    let mut conn = pg_reader
-        .connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    #[derive(QueryableByName)]
-    struct TxBounds {
-        #[diesel(sql_type = BigInt, column_name = "tx_lo")]
-        tx_lo: i64,
-        #[diesel(sql_type = BigInt, column_name = "tx_hi")]
-        tx_hi: i64,
-    }
-
-    let results: Vec<TxBounds> = conn
-        .results(query)
-        .await
-        .context("Failed to execute query")?;
-
-    let (tx_lo, tx_hi) = results
-        .first()
-        .context("No valid checkpoints found")
-        .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
-
-    // Inclusive cursor bounds
-    let tx_lo = page
-        .after()
-        .map_or(tx_lo, |cursor| cursor.tx_sequence_number().max(tx_lo));
-
-    let tx_hi = page.before().map_or(tx_hi, |cursor| {
-        cursor.tx_sequence_number().saturating_add(1).min(tx_hi)
-    });
-
-    Ok(Some(tx_lo..tx_hi))
+    Ok(Some(query))
 }

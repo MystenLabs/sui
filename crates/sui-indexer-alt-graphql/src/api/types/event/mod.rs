@@ -17,7 +17,7 @@ use sui_types::{
 };
 
 use super::{
-    address::Address, lookups::tx_bounds, move_module::MoveModule, move_package::MovePackage,
+    address::Address, lookups::tx_bounds_query, move_module::MoveModule, move_package::MovePackage,
     move_type::MoveType, move_value::MoveValue, transaction::Transaction,
 };
 
@@ -129,7 +129,8 @@ impl Event {
         // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
         let reader_lo = 0;
 
-        let Some(tx_bounds) = tx_bounds(ctx, &scope, &filter, reader_lo, &page).await? else {
+        let Some(tx_bounds_query) = tx_bounds_query(ctx, &scope, &filter, reader_lo, &page).await?
+        else {
             return Ok(c);
         };
 
@@ -138,7 +139,7 @@ impl Event {
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
 
-        let mut query = filter.query(tx_bounds)?;
+        let mut query = filter.query(tx_bounds_query)?;
         query += query!(
             r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
             page.order_by_direction(),
