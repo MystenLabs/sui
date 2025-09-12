@@ -20,7 +20,6 @@ use tracing::{info, warn};
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
 const MAX_PROTOCOL_VERSION: u64 = 96;
-const MAX_PROTOCOL_VERSION: u64 = 96;
 
 // Record history of protocol version allocations here:
 //
@@ -263,6 +262,7 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 // Version 95: Change type name id base cost to 52, increase max transactions per checkpoint to 20000.
 // Version 96: Enable authority capabilities v2.
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
+//             Create Coin Registry object
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
