@@ -1,0 +1,18 @@
+// switch 0 {
+//   a => { 1; if 2 { 3 } else { 4 } }
+//   b => { 5 }
+// }
+// if 6 { 7 } else { 8 }
+// 9
+
+variants,0,1,5
+code,1,2
+cond,2,3,4
+code,3,6
+code,4,6
+code,5,6
+cond,6,7,8
+code,7,9
+code,8,9
+code,9
+

@@ -60,8 +60,9 @@ pub enum Instruction {
     Abort(Trivial),
     Nop,
     VariantSwitch {
-        cases: Vec<Label>,
-        subject: Trivial,
+        condition: Trivial,
+        labels: Vec<Label>,
+        variants: Vec<Symbol>,
     },
     Drop(Register), // Drop an operand in the case of a Pop operation
     NotImplemented(String),
@@ -75,8 +76,8 @@ pub enum Trivial {
 
 #[derive(Debug, Clone)]
 pub struct Register {
-    pub(crate) name: RegId,
-    pub(crate) ty: Rc<Type<Symbol>>,
+    pub name: RegId,
+    pub ty: Rc<Type<Symbol>>,
 }
 
 #[derive(Debug, Clone)]
@@ -277,16 +278,21 @@ impl std::fmt::Display for Instruction {
                 else_label,
             } => write!(f, "JumpIf({condition}, LBL_{then_label}, LBL_{else_label})"),
             Instruction::Abort(trivial) => write!(f, "Abort({trivial})"),
-            Instruction::VariantSwitch { cases, subject } => write!(
-                f,
-                "VariantSwitch(SUBJECT({subject}), {})",
-                cases
-                    .iter()
-                    .map(|case| format!("LBL_({case})"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Instruction::Drop(reg) => write!(f, "Drop({reg})"),
+            Instruction::VariantSwitch {
+                condition,
+                labels,
+                variants,
+            } => {
+                write!(f, "Switch({condition}) ")?;
+                for (i, label) in labels.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "Case: {} (lbl {label})", variants[i])?
+                }
+                write!(f, "")
+            }
+            Instruction::Drop(reg_id) => write!(f, "Drop({reg_id})"),
             Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
         }
