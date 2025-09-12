@@ -1069,7 +1069,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut cancelled_txns = BTreeMap::new();
 
         for transaction in ordered_txns {
-            self.handle_congestion(
+            self.handle_deferral_and_cancellation(
                 state,
                 &mut cancelled_txns,
                 &mut deferred_txns,
@@ -1098,7 +1098,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 randomness_transactions_to_schedule.push(transaction);
                 continue;
             }
-            self.handle_congestion(
+            self.handle_deferral_and_cancellation(
                 state,
                 &mut cancelled_txns,
                 &mut deferred_txns,
@@ -1293,7 +1293,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         Some(transaction)
     }
 
-    fn handle_congestion(
+    fn handle_deferral_and_cancellation(
         &self,
         state: &mut CommitHandlerState,
         cancelled_txns: &mut BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
@@ -2224,7 +2224,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // Note: we no longer have to check protocol_config.ignore_execution_time_observations_after_certs_closed()
                         | ConsensusTransactionKind::ExecutionTimeObservation(_)
                         // DONE(commit-handler-rewrite): [ssm] ignore jwk votes if !should_accept_consensus_certs()
-                        | ConsensusTransactionKind::NewJWKFetched(_, _, _) =>  continue,
+                        | ConsensusTransactionKind::NewJWKFetched(_, _, _) => continue,
                         _ => {},
                     }
                 }
@@ -2310,12 +2310,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .epoch_store
                         .has_received_end_of_publish_from(author_name)
                     {
-                        // This can not happen with valid authority
-                        // With some edge cases consensus might sometimes resend previously seen certificate after EndOfPublish
-                        // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
-                        // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
+                        // In some edge cases, consensus might resend previously seen certificate after EndOfPublish
+                        // An honest validator should not send a new transaction after EndOfPublish. Whether the
+                        // transaction is duplicate or not, we filter it out here.
                         warn!(
-                                "[Byzantine authority] Authority {:?} sent a new, previously unseen transaction {:?} after it sent EndOfPublish message to consensus",
+                                "Ignoring consensus transaction {:?} from authority {:?}, which already sent EndOfPublish message to consensus",
                                 author_name.concise(),
                                 parsed.transaction.key(),
                             );
