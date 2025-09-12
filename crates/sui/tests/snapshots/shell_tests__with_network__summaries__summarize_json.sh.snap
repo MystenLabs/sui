@@ -8,9 +8,9 @@ description: tests/shell_tests/with_network/summaries/summarize_json.sh
 
 # Default output format is JSON
 sui move --client.config $CONFIG summary --package-id 0x2 --bytecode
-ls -1 package_summaries
-ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000002
-ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000001
+ls -1 package_summaries | LC_ALL=C sort -f
+ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000002 | LC_ALL=C sort -f
+ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000001 | LC_ALL=C sort -f
 cat package_summaries/root_package_metadata.json
 echo
 cat package_summaries/address_mapping.json
@@ -25,9 +25,9 @@ Summary generation successful. Summaries stored in 'package_summaries'
 0x0000000000000000000000000000000000000000000000000000000000000002
 address_mapping.json
 root_package_metadata.json
+accumulator.json
 accumulator_metadata.json
 accumulator_settlement.json
-accumulator.json
 address.json
 authenticator_state.json
 bag.json
@@ -54,14 +54,14 @@ group_ops.json
 hash.json
 hex.json
 hmac.json
-kiosk_extension.json
 kiosk.json
+kiosk_extension.json
 linked_table.json
 math.json
 nitro_attestation.json
+object.json
 object_bag.json
 object_table.json
-object.json
 package.json
 party.json
 pay.json
@@ -70,11 +70,11 @@ priority_queue.json
 prover.json
 random.json
 sui.json
-table_vec.json
 table.json
+table_vec.json
 token.json
-transfer_policy.json
 transfer.json
+transfer_policy.json
 tx_context.json
 types.json
 url.json

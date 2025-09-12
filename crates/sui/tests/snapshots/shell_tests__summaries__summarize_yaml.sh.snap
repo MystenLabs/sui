@@ -7,10 +7,10 @@ description: tests/shell_tests/summaries/summarize_yaml.sh
 # SPDX-License-Identifier: Apache-2.0
 
 sui move summary --path data/move_package -o yaml
-ls -1 data/move_package/package_summaries
-ls -1 data/move_package/package_summaries/move_package
-ls -1 data/move_package/package_summaries/sui
-ls -1 data/move_package/package_summaries/std
+ls -1 data/move_package/package_summaries | LC_ALL=C sort -f
+ls -1 data/move_package/package_summaries/move_package | LC_ALL=C sort -f
+ls -1 data/move_package/package_summaries/sui | LC_ALL=C sort -f
+ls -1 data/move_package/package_summaries/std | LC_ALL=C sort -d
 # NB: No root_package_metadata for source packages as these are not generated w.r.t. a specific network.
 cat data/move_package/package_summaries/root_package_metadata.yaml
 # This will contain the address mapping for the package from the literal value
@@ -33,9 +33,9 @@ root_package_metadata.yaml
 std
 sui
 move_package.yaml
+accumulator.yaml
 accumulator_metadata.yaml
 accumulator_settlement.yaml
-accumulator.yaml
 address.yaml
 authenticator_state.yaml
 bag.yaml
@@ -62,14 +62,14 @@ group_ops.yaml
 hash.yaml
 hex.yaml
 hmac.yaml
-kiosk_extension.yaml
 kiosk.yaml
+kiosk_extension.yaml
 linked_table.yaml
 math.yaml
 nitro_attestation.yaml
+object.yaml
 object_bag.yaml
 object_table.yaml
-object.yaml
 package.yaml
 party.yaml
 pay.yaml
@@ -78,11 +78,11 @@ priority_queue.yaml
 prover.yaml
 random.yaml
 sui.yaml
-table_vec.yaml
 table.yaml
+table_vec.yaml
 token.yaml
-transfer_policy.yaml
 transfer.yaml
+transfer_policy.yaml
 tx_context.yaml
 types.yaml
 url.yaml

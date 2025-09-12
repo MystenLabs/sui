@@ -7,12 +7,11 @@ description: tests/shell_tests/with_network/summaries/summarize_yaml.sh
 # SPDX-License-Identifier: Apache-2.0
 
 sui move --client.config $CONFIG summary --package-id 0x2 -o yaml --bytecode
-ls -1 package_summaries
-ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000002
-ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000001
+ls -1 package_summaries | LC_ALL=C sort -f
+ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000002 | LC_ALL=C sort -f
+ls -1 package_summaries/0x0000000000000000000000000000000000000000000000000000000000000001 | LC_ALL=C sort -f
 cat package_summaries/root_package_metadata.yaml
 cat package_summaries/address_mapping.yaml
-
 
 ----- results -----
 success: true
@@ -24,9 +23,9 @@ Summary generation successful. Summaries stored in 'package_summaries'
 0x0000000000000000000000000000000000000000000000000000000000000002
 address_mapping.yaml
 root_package_metadata.yaml
+accumulator.yaml
 accumulator_metadata.yaml
 accumulator_settlement.yaml
-accumulator.yaml
 address.yaml
 authenticator_state.yaml
 bag.yaml
@@ -53,14 +52,14 @@ group_ops.yaml
 hash.yaml
 hex.yaml
 hmac.yaml
-kiosk_extension.yaml
 kiosk.yaml
+kiosk_extension.yaml
 linked_table.yaml
 math.yaml
 nitro_attestation.yaml
+object.yaml
 object_bag.yaml
 object_table.yaml
-object.yaml
 package.yaml
 party.yaml
 pay.yaml
@@ -69,11 +68,11 @@ priority_queue.yaml
 prover.yaml
 random.yaml
 sui.yaml
-table_vec.yaml
 table.yaml
+table_vec.yaml
 token.yaml
-transfer_policy.yaml
 transfer.yaml
+transfer_policy.yaml
 tx_context.yaml
 types.yaml
 url.yaml
