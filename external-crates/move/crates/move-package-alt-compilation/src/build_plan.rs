@@ -34,14 +34,14 @@ const EDITION_NAME: &str = "edition";
 const PACKAGE_NAME: &str = "package";
 
 #[derive(Debug)]
-pub struct BuildPlan<F: MoveFlavor> {
-    root_pkg: RootPackage<F>,
+pub struct BuildPlan<'a, F: MoveFlavor> {
+    root_pkg: &'a RootPackage<F>,
     compiler_vfs_root: Option<VfsPath>,
     build_config: BuildConfig,
 }
 
-impl<F: MoveFlavor> BuildPlan<F> {
-    pub fn create(root_pkg: RootPackage<F>, build_config: &BuildConfig) -> PackageResult<Self> {
+impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
+    pub fn create(root_pkg: &'a RootPackage<F>, build_config: &BuildConfig) -> PackageResult<Self> {
         Ok(Self {
             root_pkg,
             build_config: build_config.clone(),
