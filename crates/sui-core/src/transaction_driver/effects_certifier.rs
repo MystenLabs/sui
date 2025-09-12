@@ -62,7 +62,7 @@ impl EffectsCertifier {
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         tx_type: TxType,
         // This keeps track of the current target for getting full effects.
@@ -100,7 +100,7 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
+        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, tx_type);
 
         // Setting this to None at first because if the full effects are already provided,
         // we do not need to record the latency. We track the time in this function instead of inside
@@ -260,7 +260,7 @@ impl EffectsCertifier {
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
@@ -553,7 +553,7 @@ impl EffectsCertifier {
         name: AuthorityName,
         display_name: String,
         client: &Arc<SafeClient<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         raw_request: &RawWaitForEffectsRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<WaitForEffectsResponse, SuiError>
