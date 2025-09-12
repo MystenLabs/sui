@@ -49,12 +49,12 @@ Each `(parent, key)` pair maps to exactly one object address. This gives you reg
 
 Unlike dynamic fields that funnel operations through a parent object, derived objects operate independently after creation. Unrelated keys can be modified in parallel, eliminating consensus hotspots while maintaining namespace guarantees.
 
-These capabilities combine to enable entirely new design patterns that were previously impossible or inefficient on other blockchains.
+These capabilities combine to enable entirely new design patterns that were previously impossible or inefficient.
 
 **On-chain benefits**
 
 -	Less contention and better parallelism: No parent bottleneck for unrelated keys.
--	Deterministic uniqueness: One object per (parent, key) without manual bookkeeping.
+-	Deterministic uniqueness: One object per `(parent, key)` without manual bookkeeping.
 -	Top-level object ergonomics: Clean capability patterns, Object Display, and simpler permissioning.
 
 **Off-chain benefits**
@@ -210,4 +210,7 @@ public fun receive_from_vault<T key + store>(
 <RelatedLink to="/concepts/dynamic-fields" />
 <RelatedLink to="/concepts/object-ownership" />
 <RelatedLink to="/concepts/transfers/transfer-to-object" />
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/move/profiles" label="Profiles example" desc="An example smart contract that creates profiles using derived objects." />
+<RelatedLink href="https://mystenlabs.github.io/sui/sui_types/derived_object/index.html" label="Rust SDK helper" desc="Helper function for the Rust SDK." />
+<RelatedLink href="https://github.com/MystenLabs/ts-sdks/blob/642ff2784ffb89b1bce4a43a6ceae91c04486669/packages/typescript/src/utils/derived-objects.ts" label="TypeScript SDK helper" desc="Helper function for the TypeScript SDK." />
 <RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/derived_object.move" label="`derived_object` module" desc="The code that defines derived objects on Sui." />
