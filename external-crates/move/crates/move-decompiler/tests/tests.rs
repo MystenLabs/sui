@@ -5,7 +5,6 @@ use move_decompiler::decompile_module;
 
 use move_command_line_common::insta_assert;
 use move_package::{BuildConfig, compilation::model_builder};
-use move_stackless_bytecode_2;
 use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
