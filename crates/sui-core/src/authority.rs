@@ -54,7 +54,7 @@ use std::{
     fs,
     pin::Pin,
     str::FromStr,
-    sync::{atomic::AtomicU64, Arc},
+    sync::Arc,
     vec,
 };
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
@@ -90,7 +90,7 @@ use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
-use self::authority_store_pruner::AuthorityStorePruningMetrics;
+use self::authority_store_pruner::{AuthorityStorePruningMetrics, PrunerWatermarks};
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
@@ -3360,7 +3360,7 @@ impl AuthorityState {
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
-        pruner_watermark: Arc<AtomicU64>,
+        pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -3392,7 +3392,7 @@ impl AuthorityState {
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
             pruner_db,
-            pruner_watermark,
+            pruner_watermarks,
         );
         let input_loader =
             TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());

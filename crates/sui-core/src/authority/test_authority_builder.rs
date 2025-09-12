@@ -5,7 +5,7 @@ use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
 use super::ExecutionEnv;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
+use crate::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
 use crate::authority::authority_store_tables::{
     AuthorityPerpetualTables, AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
 };
@@ -26,7 +26,6 @@ use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
@@ -259,7 +258,10 @@ impl<'a> TestAuthorityBuilder<'a> {
         .unwrap();
         let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+        let checkpoint_store = CheckpointStore::new(
+            &path.join("checkpoints"),
+            Arc::new(PrunerWatermarks::default()),
+        );
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
@@ -378,7 +380,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             pruner_db,
             policy_config,
             firewall_config,
-            Arc::new(AtomicU64::new(0)),
+            Arc::new(PrunerWatermarks::default()),
         )
         .await;
 
