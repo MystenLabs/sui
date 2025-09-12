@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::stackless::ast::Function;
+use crate::ast::Function;
 
 mod inline_immediates;
 

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_stackless_bytecode_2::generator::StacklessBytecodeGenerator;
+use move_stackless_bytecode_2::from_model;
 
 use move_command_line_common::insta_assert;
 use move_package::{BuildConfig, compilation::model_builder};
@@ -25,9 +25,6 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let mut writer = Vec::new();
     let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
-    let model = model_builder::build(resolved_package, &mut writer)?;
-
-    let generator = StacklessBytecodeGenerator::from_model(model);
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
@@ -37,9 +34,10 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
-    let packages = generator.generate_stackless_bytecode(/* optimize */ true)?;
+    let model = model_builder::build(resolved_package.clone(), &mut writer)?;
+    let bytecode = from_model(model, /* optimize */ true)?;
 
-    for pkg in &packages {
+    for pkg in &bytecode.packages {
         let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
@@ -49,15 +47,16 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
                     input_path: file_path,
                     contents: stackless_bytecode,
                     name: name,
-                    suffix: ".opt.sbir",
+                    suffix: "opt.sbir",
                 };
             }
         }
     }
 
-    let packages = generator.generate_stackless_bytecode(/* optimize */ false)?;
+    let model = model_builder::build(resolved_package, &mut writer)?;
+    let bytecode = from_model(model, /* optimize */ false)?;
 
-    for pkg in &packages {
+    for pkg in &bytecode.packages {
         let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
@@ -67,7 +66,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
                     input_path: file_path,
                     contents: stackless_bytecode,
                     name: name,
-                    suffix: ".no_opt.sbir",
+                    suffix: "no_opt.sbir",
                 };
             }
         }

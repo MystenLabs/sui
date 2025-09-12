@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_stackless_bytecode_2::generator::StacklessBytecodeGenerator;
+use move_stackless_bytecode_2::from_compiled_modules;
 
 use move_command_line_common::insta_assert;
 use move_symbol_pool::Symbol;
@@ -34,16 +34,14 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
         modules.push(module);
     }
 
-    let generator = StacklessBytecodeGenerator::new(modules);
-
-    let packages = generator.generate_stackless_bytecode(/* optimize */ true)?;
+    let bytecode = from_compiled_modules(modules.clone(), /* optimize */ true)?;
 
     let test_module_names = test_module_names
         .into_iter()
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
-    for pkg in &packages {
+    for pkg in &bytecode.packages {
         let pkg_name = pkg
             .name
             .unwrap_or(Symbol::from(pkg.address.to_hex_literal()));
@@ -56,15 +54,15 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
                     input_path: file_path,
                     contents: stackless_bytecode,
                     name: name,
-                    suffix: ".opt.sbir",
+                    suffix: "opt.sbir",
                 };
             }
         }
     }
 
-    let packages = generator.generate_stackless_bytecode(/* optimize */ false)?;
+    let bytecode = from_compiled_modules(modules, /* optimize */ false)?;
 
-    for pkg in &packages {
+    for pkg in &bytecode.packages {
         let pkg_name = pkg
             .name
             .unwrap_or(Symbol::from(pkg.address.to_hex_literal()));
@@ -76,7 +74,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
                     input_path: file_path,
                     contents: stackless_bytecode,
                     name: name,
-                    suffix: ".no_opt.sbir",
+                    suffix: "no_opt.sbir",
                 };
             }
         }

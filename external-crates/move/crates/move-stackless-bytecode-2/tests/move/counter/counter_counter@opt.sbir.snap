@@ -1,37 +1,37 @@
 ---
-source: crates/move-stackless-bytecode-2/tests/tests.rs
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
 ---
   Module: counter
     Function: create (entry: LBL_0)
       Label LBL_0:
-        reg_1 = Pack(Immediate(U64(0)))
-        Return(reg_1)
+        reg_1 : 0x0::counter::Counter = Pack<Counter>(Immediate(U64(0)))
+        Return(reg_1 : 0x0::counter::Counter)
 
 
     Function: increment (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Copy(lcl_0)
-        reg_1 = ImmBorrowField(reg_0)
-        reg_2 = ReadRef(reg_1)
-        reg_4 = Add(reg_2, Immediate(U64(1)))
-        reg_5 = Move(lcl_0)
-        reg_6 = MutBorrowField(reg_5)
-        WriteRef(reg_6, reg_4)
+        reg_0 : &mut 0x0::counter::Counter = Copy(lcl_0)
+        reg_1 : &u64 = ImmBorrowField<u64>(reg_0 : &mut 0x0::counter::Counter)
+        reg_2 : u64 = ReadRef(reg_1 : &u64)
+        reg_4 : u64 = Add(reg_2 : u64, Immediate(U64(1)))
+        reg_5 : &mut 0x0::counter::Counter = Move(lcl_0)
+        reg_6 : &mut u64 = MutBorrowField<u64>(reg_5 : &mut 0x0::counter::Counter)
+        WriteRef(reg_6 : &mut u64, reg_4 : u64)
         Return()
 
 
     Function: set_value (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_1)
-        reg_1 = Move(lcl_0)
-        reg_2 = MutBorrowField(reg_1)
-        WriteRef(reg_2, reg_0)
+        reg_0 : u64 = Move(lcl_1)
+        reg_1 : &mut 0x0::counter::Counter = Move(lcl_0)
+        reg_2 : &mut u64 = MutBorrowField<u64>(reg_1 : &mut 0x0::counter::Counter)
+        WriteRef(reg_2 : &mut u64, reg_0 : u64)
         Return()
 
 
     Function: value (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = ImmBorrowField(reg_0)
-        reg_2 = ReadRef(reg_1)
-        Return(reg_2)
+        reg_0 : &0x0::counter::Counter = Move(lcl_0)
+        reg_1 : &u64 = ImmBorrowField<u64>(reg_0 : &0x0::counter::Counter)
+        reg_2 : u64 = ReadRef(reg_1 : &u64)
+        Return(reg_2 : u64)
