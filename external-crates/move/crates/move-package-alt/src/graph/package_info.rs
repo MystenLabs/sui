@@ -192,7 +192,7 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     /// Return the NamedAddress for `node`
     fn node_to_addr(&self, node: NodeIndex) -> NamedAddress {
         let package = self.graph.inner[node].clone();
-        if self.is_root() {
+        if package.is_root() {
             return NamedAddress::RootPackage(package.original_id().cloned());
         }
         if let Some(oid) = package.original_id() {

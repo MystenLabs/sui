@@ -110,7 +110,7 @@ impl BuildConfig {
         writer: &mut W,
     ) -> PackageResult<CompiledPackage> {
         let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
-        BuildPlan::create(root_pkg, self)?.compile(writer, |compiler| compiler)
+        BuildPlan::create(&root_pkg, self)?.compile(writer, |compiler| compiler)
     }
 
     /// Migrate the package at `path`.
@@ -124,7 +124,7 @@ impl BuildConfig {
         // we set test to migrate all the code
         self.test_mode = true;
         let root_pkg = RootPackage::<F>::load(path, env).await?;
-        let build_plan = BuildPlan::create(root_pkg, &self)?;
+        let build_plan = BuildPlan::create(&root_pkg, &self)?;
 
         migrate(build_plan, writer, reader)?;
         Ok(())
@@ -137,12 +137,12 @@ impl BuildConfig {
         writer: &mut W,
     ) -> PackageResult<source_model::Model> {
         let root_pkg = RootPackage::<F>::load(path, env).await?;
-        self.move_model_from_root_pkg(root_pkg, writer).await
+        self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 
     pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write>(
         &self,
-        root_pkg: RootPackage<F>,
+        root_pkg: &RootPackage<F>,
         writer: &mut W,
     ) -> PackageResult<source_model::Model> {
         model_builder::build(writer, root_pkg, self)
