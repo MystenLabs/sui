@@ -4,3 +4,9 @@
 [submodule "docs/submodules/ts-sdks"]
 	path = docs/submodules/ts-sdks
 	url = https://github.com/MystenLabs/ts-sdks
+[submodule "docs/submodules/awesome-sui"]
+	path = docs/submodules/awesome-sui
+	url = https://github.com/sui-foundation/awesome-sui.git
+[submodule "docs/site/docs/submodules/awesome-sui"]
+	path = docs/site/docs/submodules/awesome-sui
+	url = https://github.com/sui-foundation/awesome-sui.git
