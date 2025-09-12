@@ -1,15 +1,15 @@
-name: 🔄 Sync sui.yaml from Upstream
+name: 🔔 Alert on upstream sui.yaml change
 
 on:
+  push:
+    branches:
+      - feature-update-workflow-alert-for-sui
   schedule:
     - cron: "0 0 * * *" 
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  sync-and-alert:
+  alert-on-change:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Fork
@@ -17,36 +17,45 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure Git User
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Add & Fetch Upstream
         run: |
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
 
-      # - name: Sync sui.yaml
-      #   id: sync_sui
-      #   run: |
-      #     git checkout main
-      #     git restore --source upstream/main crates/sui-core/tests/staged/sui.yaml
-      #     if ! git diff --quiet crates/sui-core/tests/staged/sui.yaml; then
-      #       git add crates/sui-core/tests/staged/sui.yaml
-      #       git commit -m "🔄 Sync sui.yaml fully with upstream"
-      #       git push origin main
-      #       echo "changed=true" >> $GITHUB_OUTPUT
-      #     else
-      #       echo "changed=false" >> $GITHUB_OUTPUT
-      #     fi
+      - name: Restore previous commit hash from cache
+        id: restore_cache
+        uses: actions/cache@v3
+        with:
+          path: .last_file_commit
+          key: sui-yaml-commit
+          restore-keys: sui-yaml-commit
+
+      - name: Get last commit affecting sui.yaml
+        id: get_commit
+        run: |
+          last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
+          echo "last_commit=$last_commit" >> $GITHUB_OUTPUT
+
+          prev_commit=$(cat .last_file_commit 2>/dev/null || echo "")
+
+          if [ "$last_commit" != "$prev_commit" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "$last_commit" > .last_file_commit
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+
+      - name: Save commit hash to cache
+        uses: actions/cache@v3
+        with:
+          path: .last_file_commit
+          key: sui-yaml-commit
 
       # - name: Send Slack Alert
-      #   if: steps.sync_sui.outputs.changed == 'true'
+      #   if: steps.get_commit.outputs.changed == 'true'
       #   run: |
-      #     commit_hash=$(git log upstream/main -1 --pretty=format:'%h' -- crates/sui-core/tests/staged/sui.yaml)
-      #     commit_author=$(git log -1 --pretty=format:'%an' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
-      #     commit_msg=$(git log -1 --pretty=format:'%s' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
+      #     commit_hash=${{ steps.get_commit.outputs.last_commit }}
+      #     commit_author=$(git log -1 --pretty=format:'%an' $commit_hash)
+      #     commit_msg=$(git log -1 --pretty=format:'%s' $commit_hash)
       #     commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
       #     slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
 
