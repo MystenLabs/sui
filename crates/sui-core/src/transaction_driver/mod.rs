@@ -118,11 +118,24 @@ where
                 // score ascending and then take a `K` of them.
                 let self_clone = self.clone();
                 let auth_agg = self_clone.authority_aggregator.load().clone();
-                let clients: Vec<_> = auth_agg
-                    .authority_clients
-                    .iter()
-                    .map(|(name, client)| (*name, client.clone()))
-                    .collect();
+
+                // Get the clients in score descending order
+                let mut clients_in_score_descending_order = self_clone
+                    .client_monitor
+                    .select_shuffled_preferred_validators(&auth_agg.committee, 0, tx_type);
+
+                // Remove the clients that are probably being used currently for submission.
+                clients_in_score_descending_order = clients_in_score_descending_order
+                    [auth_agg.committee.num_members() / 4..]
+                    .to_vec();
+
+                // Now send the ping transactions to the corresponding clients.
+                let clients = clients_in_score_descending_order.iter().filter_map(|name| {
+                    auth_agg
+                        .authority_clients
+                        .get(name)
+                        .map(|client| (*name, client.clone()))
+                });
 
                 for (name, client) in clients {
                     let metrics_clone = self_clone.metrics.clone();
