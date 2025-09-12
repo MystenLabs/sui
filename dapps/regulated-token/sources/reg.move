@@ -13,7 +13,6 @@ module regulated_token::reg {
     /// The OTW and the type for the Token
     public struct REG has drop {}
 
-    #[allow(deprecated_usage)]
     // Create a TreasuryCap in the module initializer.
     // Also create a `TokenPolicy` (while this action can be performed offchain).
     // The policy does not allow any action by default!
