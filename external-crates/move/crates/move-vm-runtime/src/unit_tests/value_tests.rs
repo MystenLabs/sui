@@ -155,11 +155,11 @@ fn vec_and_ref_eq() -> PartialVMResult<()> {
 #[test]
 fn global_value_non_struct() -> PartialVMResult<()> {
     assert!(
-        GlobalValue::cached(Value::u64(100)).is_err(),
+        GlobalValue::create(Value::u64(100)).is_err(),
         "cache error 0"
     );
     assert!(
-        GlobalValue::cached(Value::bool(false)).is_err(),
+        GlobalValue::create(Value::bool(false)).is_err(),
         "cache error 1"
     );
 
@@ -168,7 +168,7 @@ fn global_value_non_struct() -> PartialVMResult<()> {
 
     locals.store_loc(0, Value::u8(0)).expect("stored");
     let r = locals.borrow_loc(0).expect("borrowed");
-    assert!(GlobalValue::cached(r).is_err(), "cache error 2");
+    assert!(GlobalValue::create(r).is_err(), "cache error 2");
 
     let _ = heap.free_stack_frame(locals);
 
