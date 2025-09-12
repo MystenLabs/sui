@@ -78,7 +78,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         let compiled = build_all::<W, F>(
             writer,
             self.compiler_vfs_root.clone(),
-            &self.root_pkg,
+            self.root_pkg,
             &self.build_config,
             |compiler| {
                 let compiler = compiler.add_save_hook(&program_info_hook);
@@ -166,7 +166,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
             writer,
             None,
             &self.build_config,
-            &self.root_pkg,
+            self.root_pkg,
             |compiler| compiler.generate_migration_patch(&root_name),
         )?;
         let migration = match res {

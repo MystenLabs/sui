@@ -98,7 +98,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
 
     // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
     // this has to match whatever we're doing in build_for_driver function
-    let root_package_name = Symbol::from(format!("{}", package_name.as_str()));
+    let root_package_name = Symbol::from(package_name.to_string());
 
     for mut annot_unit in all_compiled_units {
         let source_path = PathBuf::from(
