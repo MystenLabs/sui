@@ -42,12 +42,17 @@ pub struct IndexerArgs {
     /// ingestion will start just after the lowest checkpoint watermark across all active
     /// pipelines.
     ///
-    /// NOTE: This value is validated against the current watermark for each pipeline. The
-    /// provided checkpoint must not be greater than the current watermark + 1. If it is,
-    /// the indexer will refuse to start. This is to prevent gaps in the indexed data.
+    /// NOTE: This value is validated against the current watermark for each pipeline. Only
+    /// sequential pipelines fail to start if --first-checkpoint is in the future. Concurrent
+    /// pipelines will start and commit data, but they won't update the watermark.
     ///
     /// For testing purposes, you can bypass this check by manually updating the `watermarks`
-    /// table in your database (e.g., `UPDATE watermarks SET checkpoint_hi_inclusive = <your_checkpoint_number>`).
+    /// table in your database:
+    ///
+    /// ```sql
+    /// INSERT INTO watermarks (pipeline, checkpoint_hi_inclusive) VALUES ('<pipeline>', <first_checkpoint> - 1);
+    /// ```
+    ///
     /// However, this is NOT recommended in a production environment as it will create
     /// inconsistencies in your indexed data.
     #[arg(long)]
