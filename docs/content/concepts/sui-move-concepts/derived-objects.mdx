@@ -68,8 +68,8 @@ These capabilities combine to enable entirely new design patterns that were prev
 **Off-chain benefits**
 
 -	Fewer hops: Clients can compute or look up the derived object ID directly without requiring a sequential operation to find it through the parent.
--	Better discoverability/indexing: Explorers/SDKs can infer or cache the parent-key namespace with fewer sequential queries.
--	Lean SDK calls: Less querying needed, minimizing the SDK codebase and requiring less network traffic.
+-	Better discoverability/indexing: SDKs can compute objects with fewer sequential queries.
+-	Lean SDK calls: Less queries needed, minimizes the SDK codebase and improves performance through reduced network traffic (object lookups can be bundled in multiGet queries).
 
 ## Derived objects and dynamic fields matrix
 
