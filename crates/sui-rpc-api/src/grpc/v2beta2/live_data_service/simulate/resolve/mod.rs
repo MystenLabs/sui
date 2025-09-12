@@ -172,7 +172,11 @@ fn resolve_unresolved_transaction(
         let max_gas_budget = if payment.is_empty() {
             max_gas_budget
         } else {
-            gas_coins.iter().map(|(_, value)| *value).sum()
+            gas_coins
+                .iter()
+                .map(|(_, value)| *value)
+                .sum::<u64>()
+                .min(max_gas_budget)
         };
         GasData {
             payment,
