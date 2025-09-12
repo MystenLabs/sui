@@ -1,3 +1,0 @@
-require: './tests/run_spec.js'
-spec:
-  - 'tests/**/*.spec.js'

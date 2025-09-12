@@ -1,6 +1,0 @@
-[package]
-name = "Bar"
-edition = "2024.beta"
-
-[addresses]
-A = "_"

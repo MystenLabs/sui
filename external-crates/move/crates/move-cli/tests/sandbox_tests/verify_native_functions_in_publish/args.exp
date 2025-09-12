@@ -1,7 +1,0 @@
-Command `sandbox publish`:
-error[E02007]: invalid 'fun' declaration
-  ┌─ ./sources/example.move:3:16
-  │
-3 │     native fun create_signer(addr: address): signer;
-  │                ^^^^^^^^^^^^^ Missing implementation for the native function M::create_signer
-

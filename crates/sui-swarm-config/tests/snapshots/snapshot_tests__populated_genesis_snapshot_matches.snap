@@ -1,8 +1,0 @@
----
-source: crates/sui-config/tests/snapshot_tests.rs
-expression: genesis.sui_system_wrapper_object()
----
-id:
-  id: "0x0000000000000000000000000000000000000000000000000000000000000005"
-version: 1
-

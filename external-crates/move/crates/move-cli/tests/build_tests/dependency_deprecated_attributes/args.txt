@@ -1,1 +1,0 @@
-build -v --mode verify_only

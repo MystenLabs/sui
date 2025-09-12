@@ -1,3 +1,0 @@
-build
-disassemble --package Test --name m
-build -p dep

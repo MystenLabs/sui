@@ -1,7 +1,0 @@
-[package]
-name = "Sui Move 2024"
-edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
-
-
-[addresses]
-sui_move_2024 = "0x0"

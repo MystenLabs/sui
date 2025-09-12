@@ -1,5 +1,0 @@
-[package]
-name = "Nested"
-
-[dependencies]
-More = { local = "./more", override = true }

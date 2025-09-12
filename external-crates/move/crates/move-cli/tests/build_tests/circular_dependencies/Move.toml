@@ -1,6 +1,0 @@
-[package]
-name = "Foo"
-edition = "2024.beta"
-
-[dependencies]
-Bar = { local = "bar" }

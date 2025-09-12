@@ -1,6 +1,0 @@
-[package]
-name = "Vector"
-edition = "2024.beta"
-
-[addresses]
-vector_test = "0x0"

@@ -1,4 +1,0 @@
-address 0x3 {}
-address 0x4 {}
-address 0x2 {}
-address 0x4 {}

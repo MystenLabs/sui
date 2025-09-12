@@ -1,9 +1,0 @@
-[package]
-name = "InlayHints"
-edition = "2024.beta"
-
-[dependencies]
-MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
-
-[addresses]
-InlayHints = "0xCAFE"

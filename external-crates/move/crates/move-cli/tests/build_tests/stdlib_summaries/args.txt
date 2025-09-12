@@ -1,2 +1,0 @@
-summary -o yaml
->cat package_summaries/std/*.yaml

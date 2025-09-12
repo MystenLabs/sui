@@ -1,4 +1,0 @@
-build --mode spec
-build --mode test
-build --mode test --mode spec
-build
