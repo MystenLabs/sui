@@ -525,6 +525,7 @@ impl Scenario {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
 
