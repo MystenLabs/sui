@@ -5,15 +5,17 @@ use std::ops::Range;
 
 use anyhow::Context as _;
 use async_graphql::InputObject;
-
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
 
 use crate::{
-    api::scalars::{
-        module_filter::ModuleFilter, sui_address::SuiAddress, type_filter::TypeFilter,
-        uint53::UInt53,
+    api::{
+        scalars::{
+            module_filter::ModuleFilter, sui_address::SuiAddress, type_filter::TypeFilter,
+            uint53::UInt53,
+        },
+        types::lookups::CheckpointBounds,
     },
     error::{feature_unavailable, RpcError},
     pagination::Page,
@@ -170,6 +172,20 @@ impl EventFilter {
         }
 
         true
+    }
+}
+
+impl CheckpointBounds for EventFilter {
+    fn after_checkpoint(&self) -> Option<UInt53> {
+        self.after_checkpoint
+    }
+
+    fn at_checkpoint(&self) -> Option<UInt53> {
+        self.at_checkpoint
+    }
+
+    fn before_checkpoint(&self) -> Option<UInt53> {
+        self.before_checkpoint
     }
 }
 

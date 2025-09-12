@@ -24,29 +24,28 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
-use super::{
-    address::Address,
-    checkpoint::filter::checkpoint_bounds,
-    epoch::Epoch,
-    gas_input::GasInput,
-    transaction::filter::TransactionFilter,
-    transaction_effects::{EffectsContents, TransactionEffects},
-    transaction_kind::TransactionKind,
-    user_signature::UserSignature,
-};
-
 use crate::{
     api::{
         scalars::{
             base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
             module_filter::ModuleFilter, sui_address::SuiAddress,
         },
-        types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
+        types::{lookups::CheckpointBounds, transaction::filter::TransactionKindInput},
     },
     error::RpcError,
     pagination::Page,
     scope::Scope,
     task::watermark::Watermarks,
+};
+
+use super::{
+    address::Address,
+    epoch::Epoch,
+    gas_input::GasInput,
+    transaction::filter::TransactionFilter,
+    transaction_effects::{EffectsContents, TransactionEffects},
+    transaction_kind::TransactionKind,
+    user_signature::UserSignature,
 };
 
 pub(crate) mod filter;
@@ -202,45 +201,31 @@ impl Transaction {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CTransaction>,
-        TransactionFilter {
-            after_checkpoint,
-            at_checkpoint,
-            before_checkpoint,
-            function,
-            kind,
-            affected_address,
-            affected_object,
-            sent_address,
-        }: TransactionFilter,
+        filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(Connection::new(false, false));
-        };
-
         let mut conn = Connection::new(false, false);
-
-        if page.limit() == 0 {
-            return Ok(Connection::new(false, false));
-        }
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
         let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
 
-        let global_tx_hi = watermarks.high_watermark().transaction();
-
-        let Some(cp_bounds) = checkpoint_bounds(
-            after_checkpoint.map(u64::from),
-            at_checkpoint.map(u64::from),
-            before_checkpoint.map(u64::from),
-            reader_lo,
-            checkpoint_viewed_at,
-        ) else {
-            return Ok(Connection::new(false, false));
+        let Some(tx_bounds) = filter
+            .tx_bounds(ctx, &scope, reader_lo, &page, |c| *c.deref())
+            .await?
+        else {
+            return Ok(conn);
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| *c.deref()).await?;
-
+        let TransactionFilter {
+            after_checkpoint: _,
+            at_checkpoint: _,
+            before_checkpoint: _,
+            function,
+            kind,
+            affected_address,
+            affected_object,
+            sent_address,
+        } = filter;
         let tx_digest_keys = if let Some(function) = function {
             tx_call(ctx, tx_bounds, &page, function, sent_address).await?
         } else if let Some(kind) = kind {
