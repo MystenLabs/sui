@@ -132,7 +132,7 @@ impl Event {
         // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
         let reader_lo = 0;
 
-        let Some(tx_bounds) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
+        let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
             return Ok(c);
         };
 
@@ -141,7 +141,7 @@ impl Event {
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
 
-        let mut query = filter.query(tx_bounds)?;
+        query += filter.query()?;
         query += query!(
             r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
             page.order_by_direction(),
