@@ -152,20 +152,20 @@ public(package) fun sui_accumulator_root_address(): address {
     SUI_ACCUMULATOR_ROOT_OBJECT_ID
 }
 
+/// Create the `UID` for the singleton `CoinRegistry` object.
+/// This should only be called once from `coin_registry`.
+public(package) fun sui_coin_registry_object_id(): UID {
+    UID {
+        id: ID { bytes: SUI_COIN_REGISTRY_OBJECT_ID },
+    }
+}
+
 #[allow(unused_function)]
 /// Create the `UID` for the singleton `Bridge` object.
 /// This should only be called once from `bridge`.
 fun bridge(): UID {
     UID {
         id: ID { bytes: SUI_BRIDGE_ID },
-    }
-}
-
-/// Create the `UID` for the singleton `CoinMetadataObject` object.
-/// This should only be called once from `coin_registry`.
-public(package) fun sui_coin_registry_object_id(): UID {
-    UID {
-        id: ID { bytes: SUI_COIN_REGISTRY_OBJECT_ID },
     }
 }
 

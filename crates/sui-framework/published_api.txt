@@ -1339,11 +1339,11 @@ sui_accumulator_root_object_id
 sui_accumulator_root_address
 	public(package) fun
 	0x2::object
-bridge
-	fun
-	0x2::object
 sui_coin_registry_object_id
 	public(package) fun
+	0x2::object
+bridge
+	fun
 	0x2::object
 uid_as_inner
 	public fun
