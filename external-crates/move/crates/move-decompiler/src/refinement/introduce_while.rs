@@ -3,7 +3,7 @@
 
 use crate::{ast::Exp, refinement::Refine};
 
-use move_stackless_bytecode_2::stackless::ast::PrimitiveOp;
+use move_stackless_bytecode_2::ast::PrimitiveOp;
 
 pub fn refine(exp: &mut Exp) -> bool {
     let r1 = IntroduceWhile0.refine(exp);

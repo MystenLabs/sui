@@ -10,7 +10,7 @@ use crate::{
 };
 
 use crate::ast::Exp;
-use move_stackless_bytecode_2::stackless::ast as S;
+use move_stackless_bytecode_2::ast as S;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, HashSet};
 

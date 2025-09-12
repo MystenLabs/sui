@@ -3,15 +3,15 @@
 
 use crate::ast as Out;
 
-use move_stackless_bytecode_2::stackless::ast::{DataOp, RValue, RegId, Trivial};
+use move_stackless_bytecode_2::ast::{DataOp, RValue, RegId, Trivial};
 
 use std::collections::{BTreeMap, HashSet};
 
 pub fn exp(
-    block: move_stackless_bytecode_2::stackless::ast::BasicBlock,
+    block: move_stackless_bytecode_2::ast::BasicBlock,
     let_binds: &mut HashSet<RegId>,
 ) -> Out::Exp {
-    use move_stackless_bytecode_2::stackless::ast::Instruction as SI;
+    use move_stackless_bytecode_2::ast::Instruction as SI;
     let mut map: BTreeMap<RegId, Out::Exp> = BTreeMap::new();
     let mut seq = Vec::new();
 
@@ -109,7 +109,7 @@ pub fn exp(
 }
 
 fn rvalue(map: &mut BTreeMap<RegId, Out::Exp>, rvalue: RValue) -> Out::Exp {
-    use move_stackless_bytecode_2::stackless::ast as S;
+    use move_stackless_bytecode_2::ast as S;
     match rvalue {
         RValue::Call { .. } => unreachable!(),
         RValue::Primitive { op, args } => Out::Exp::Primitive {
