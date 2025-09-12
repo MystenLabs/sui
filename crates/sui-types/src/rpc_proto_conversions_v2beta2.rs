@@ -7,7 +7,7 @@ use crate::crypto::SuiSignature;
 use crate::message_envelope::Message as _;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::merge::Merge;
-use sui_rpc::proto::sui::rpc::v2::*;
+use sui_rpc::proto::sui::rpc::v2beta2::*;
 
 //
 // CheckpointSummary
@@ -1228,13 +1228,11 @@ impl<const T: bool> From<crate::crypto::AuthorityQuorumSignInfo<T>>
     for ValidatorAggregatedSignature
 {
     fn from(value: crate::crypto::AuthorityQuorumSignInfo<T>) -> Self {
-        let mut bitmap = Vec::new();
-        value.signers_map.serialize_into(&mut bitmap).unwrap();
-
-        Self::default()
-            .with_epoch(value.epoch)
-            .with_signature(value.signature.as_ref().to_vec())
-            .with_bitmap(bitmap)
+        let mut message = Self::default();
+        message.epoch = Some(value.epoch);
+        message.signature = Some(value.signature.as_ref().to_vec().into());
+        message.bitmap = value.signers_map.iter().collect();
+        message
     }
 }
 
@@ -1266,18 +1264,16 @@ impl From<crate::committee::Committee> for ValidatorCommittee {
 
 impl From<crate::zk_login_authenticator::ZkLoginAuthenticator> for ZkLoginAuthenticator {
     fn from(value: crate::zk_login_authenticator::ZkLoginAuthenticator) -> Self {
-        //TODO implement this without going through the sdk type
         let mut inputs = ZkLoginInputs::default();
+        // proof_points: None,       // TODO expose in fastcrypto
+        // iss_base64_details: None, // TODO expose in fastcrypto
+        // header_base64: None,      // TODO expose in fastcrypto
         inputs.address_seed = Some(value.inputs.get_address_seed().to_string());
         let mut message = Self::default();
         message.inputs = Some(inputs);
         message.max_epoch = Some(value.get_max_epoch());
-        message.signature = Some(value.user_signature.clone().into());
-
-        sui_sdk_types::ZkLoginAuthenticator::try_from(value)
-            .map(Into::into)
-            .ok()
-            .unwrap_or(message)
+        message.signature = Some(value.user_signature.into());
+        message
     }
 }
 
@@ -1286,12 +1282,10 @@ impl From<crate::zk_login_authenticator::ZkLoginAuthenticator> for ZkLoginAuthen
 //
 
 impl From<&crate::crypto::ZkLoginPublicIdentifier> for ZkLoginPublicIdentifier {
-    fn from(value: &crate::crypto::ZkLoginPublicIdentifier) -> Self {
-        //TODO implement this without going through the sdk type
-        sui_sdk_types::ZkLoginPublicIdentifier::try_from(value.to_owned())
-            .map(|id| (&id).into())
-            .ok()
-            .unwrap_or_default()
+    fn from(_value: &crate::crypto::ZkLoginPublicIdentifier) -> Self {
+        Self::default()
+        // iss: None,          // TODO expose
+        // address_seed: None, // TODO expose
     }
 }
 
@@ -1454,16 +1448,11 @@ impl From<&crate::crypto::CompressedSignature> for MultisigMemberSignature {
 
 impl From<&crate::multisig_legacy::MultiSigLegacy> for MultisigAggregatedSignature {
     fn from(value: &crate::multisig_legacy::MultiSigLegacy) -> Self {
-        let mut legacy_bitmap = Vec::new();
-        value
-            .get_bitmap()
-            .serialize_into(&mut legacy_bitmap)
-            .unwrap();
-
-        Self::default()
-            .with_signatures(value.get_sigs().iter().map(Into::into).collect())
-            .with_legacy_bitmap(legacy_bitmap)
-            .with_committee(value.get_pk())
+        let mut message = Self::default();
+        message.signatures = value.get_sigs().iter().map(Into::into).collect();
+        message.legacy_bitmap = value.get_bitmap().iter().collect();
+        message.committee = Some(value.get_pk().into());
+        message
     }
 }
 
@@ -1880,45 +1869,37 @@ impl From<crate::transaction::TransactionKind> for TransactionKind {
         use crate::transaction::TransactionKind as K;
         use transaction_kind::Kind;
 
-        let message = Self::default();
+        let kind = match value {
+            K::ProgrammableTransaction(ptb) => Kind::ProgrammableTransaction(ptb.into()),
+            K::ProgrammableSystemTransaction(ptb) => {
+                Kind::ProgrammableSystemTransaction(ptb.into())
+            }
+            K::ChangeEpoch(change_epoch) => Kind::ChangeEpoch(change_epoch.into()),
+            K::Genesis(genesis) => Kind::Genesis(genesis.into()),
+            K::ConsensusCommitPrologue(prologue) => {
+                Kind::ConsensusCommitPrologueV1(prologue.into())
+            }
+            K::AuthenticatorStateUpdate(update) => Kind::AuthenticatorStateUpdate(update.into()),
+            K::EndOfEpochTransaction(transactions) => Kind::EndOfEpoch({
+                let mut message = EndOfEpochTransaction::default();
+                message.transactions = transactions.into_iter().map(Into::into).collect();
+                message
+            }),
+            K::RandomnessStateUpdate(update) => Kind::RandomnessStateUpdate(update.into()),
+            K::ConsensusCommitPrologueV2(prologue) => {
+                Kind::ConsensusCommitPrologueV2(prologue.into())
+            }
+            K::ConsensusCommitPrologueV3(prologue) => {
+                Kind::ConsensusCommitPrologueV3(prologue.into())
+            }
+            K::ConsensusCommitPrologueV4(prologue) => {
+                Kind::ConsensusCommitPrologueV4(prologue.into())
+            }
+        };
 
-        match value {
-            K::ProgrammableTransaction(ptb) => message
-                .with_programmable_transaction(ptb)
-                .with_kind(Kind::ProgrammableTransaction),
-            K::ChangeEpoch(change_epoch) => message
-                .with_change_epoch(change_epoch)
-                .with_kind(Kind::ChangeEpoch),
-            K::Genesis(genesis) => message.with_genesis(genesis).with_kind(Kind::Genesis),
-            K::ConsensusCommitPrologue(prologue) => message
-                .with_consensus_commit_prologue(prologue)
-                .with_kind(Kind::ConsensusCommitPrologueV1),
-            K::AuthenticatorStateUpdate(update) => message
-                .with_authenticator_state_update(update)
-                .with_kind(Kind::AuthenticatorStateUpdate),
-            K::EndOfEpochTransaction(transactions) => message
-                .with_end_of_epoch({
-                    EndOfEpochTransaction::default()
-                        .with_transactions(transactions.into_iter().map(Into::into).collect())
-                })
-                .with_kind(Kind::EndOfEpoch),
-            K::RandomnessStateUpdate(update) => message
-                .with_randomness_state_update(update)
-                .with_kind(Kind::RandomnessStateUpdate),
-            K::ConsensusCommitPrologueV2(prologue) => message
-                .with_consensus_commit_prologue(prologue)
-                .with_kind(Kind::ConsensusCommitPrologueV2),
-            K::ConsensusCommitPrologueV3(prologue) => message
-                .with_consensus_commit_prologue(prologue)
-                .with_kind(Kind::ConsensusCommitPrologueV3),
-            K::ConsensusCommitPrologueV4(prologue) => message
-                .with_consensus_commit_prologue(prologue)
-                .with_kind(Kind::ConsensusCommitPrologueV4),
-            K::ProgrammableSystemTransaction(_) => message,
-            // TODO support ProgrammableSystemTransaction
-            // .with_programmable_transaction(ptb)
-            // .with_kind(Kind::ProgrammableSystemTransaction),
-        }
+        let mut message = Self::default();
+        message.kind = Some(kind);
+        message
     }
 }
 
@@ -2164,29 +2145,26 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
         use crate::transaction::EndOfEpochTransactionKind as K;
         use end_of_epoch_transaction_kind::Kind;
 
-        let message = Self::default();
+        let kind = match value {
+            K::ChangeEpoch(change_epoch) => Kind::ChangeEpoch(change_epoch.into()),
+            K::AuthenticatorStateCreate => Kind::AuthenticatorStateCreate(()),
+            K::AuthenticatorStateExpire(expire) => Kind::AuthenticatorStateExpire(expire.into()),
+            K::RandomnessStateCreate => Kind::RandomnessStateCreate(()),
+            K::DenyListStateCreate => Kind::DenyListStateCreate(()),
+            K::BridgeStateCreate(chain_id) => Kind::BridgeStateCreate(chain_id.to_string()),
+            K::BridgeCommitteeInit(bridge_object_version) => {
+                Kind::BridgeCommitteeInit(bridge_object_version.value())
+            }
+            K::StoreExecutionTimeObservations(observations) => {
+                Kind::ExecutionTimeObservations(observations.into())
+            }
+            K::AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
+            // K::CoinRegistryCreate => Kind::CoinRegistryCreate(()),
+        };
 
-        match value {
-            K::ChangeEpoch(change_epoch) => message
-                .with_change_epoch(change_epoch)
-                .with_kind(Kind::ChangeEpoch),
-            K::AuthenticatorStateCreate => message.with_kind(Kind::AuthenticatorStateCreate),
-            K::AuthenticatorStateExpire(expire) => message
-                .with_authenticator_state_expire(expire)
-                .with_kind(Kind::AuthenticatorStateExpire),
-            K::RandomnessStateCreate => message.with_kind(Kind::RandomnessStateCreate),
-            K::DenyListStateCreate => message.with_kind(Kind::DenyListStateCreate),
-            K::BridgeStateCreate(chain_id) => message
-                .with_bridge_chain_id(chain_id.to_string())
-                .with_kind(Kind::BridgeStateCreate),
-            K::BridgeCommitteeInit(bridge_object_version) => message
-                .with_bridge_object_version(bridge_object_version)
-                .with_kind(Kind::BridgeCommitteeInit),
-            K::StoreExecutionTimeObservations(observations) => message
-                .with_execution_time_observations(observations)
-                .with_kind(Kind::StoreExecutionTimeObservations),
-            _ => message,
-        }
+        let mut message = Self::default();
+        message.kind = Some(kind);
+        message
     }
 }
 
