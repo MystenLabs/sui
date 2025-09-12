@@ -121,9 +121,9 @@ pub fn simulate_transaction(
                 reference_gas_price,
             );
 
-            // If the request specified gas payment, then transaction.gas_data().budget will be the
-            // cumulative balance of those coins. We don't want to return a resolved transaction where
-            // the gas payment can't satisfy the budget, so validate that balance can actually cover the
+            // If the request specified gas payment, then transaction.gas_data().budget should have been
+            // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
+            // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
             // estimated budget.
             let gas_balance = transaction.gas_data().budget;
             if gas_balance < estimate {
