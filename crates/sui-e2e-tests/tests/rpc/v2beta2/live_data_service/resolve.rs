@@ -513,7 +513,7 @@ async fn resolve_transaction_insufficient_gas_with_payment_objects() {
         .into_iter()
         .map(|(obj_ref, _)| obj_ref)
         .find(|obj_ref| obj_ref.0 != coin_to_split.0)
-        .expect("Should have created a new coin with 1 MIST");
+        .expect("Should have created a new coin with 1M MIST");
 
     // Now try to use this 1 MIST coin as gas payment for a transaction
     let gas_objects = vec![{
@@ -563,5 +563,8 @@ async fn resolve_transaction_insufficient_gas_with_payment_objects() {
         tonic::Code::InvalidArgument,
         "Expected InvalidArgument error code"
     );
-    assert_contains(error.message(), "unable to select sufficient gas coins");
+    assert_contains(
+        error.message(),
+        "Insufficient gas balance to cover estimated transaction cost.",
+    );
 }
