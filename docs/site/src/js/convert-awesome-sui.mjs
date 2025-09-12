@@ -96,22 +96,23 @@ function processContent(content) {
     },
   );
 
-  // Store the "Further Information" links for later processing
+  // Store the "Further Information" and "Further Documentation" links for later processing
   const furtherInfoLinks = new Map();
   let linkCounter = 0;
   
+  // Handle both "Further Information" and "Further Documentation"
   processedContent = processedContent.replace(
-    /^- \[Further Information\]\([^)]+\)$/gm,
-    (match) => {
-      const linkMatch = match.match(/\[Further Information\]\(\.\/awesome-sui\/([^)]+)\.mdx\)/);
+    /^- \[Further (Information|Documentation)\]\([^)]+\)$/gm,
+    (match, type) => {
+      const linkMatch = match.match(/\[Further (?:Information|Documentation)\]\(\.\/awesome-sui\/([^)]+)\.mdx\)/);
       if (linkMatch) {
         const filename = linkMatch[1].replace(/-/g, '_');
-        const placeholder = `##### Further Information <!-- PLACEHOLDER_${linkCounter} -->`;
+        const placeholder = `##### Further ${type} <!-- PLACEHOLDER_${linkCounter} -->`;
         furtherInfoLinks.set(linkCounter, filename);
         linkCounter++;
         return placeholder;
       }
-      return `##### Further Information`;
+      return `##### Further ${type}`;
     },
   );
 
@@ -187,8 +188,8 @@ function processContent(content) {
   
   // Replace placeholders with actual content
   finalContent = finalContent.replace(
-    /##### Further Information <!-- PLACEHOLDER_(\d+) -->/g,
-    (match, placeholderIndex) => {
+    /##### Further (Information|Documentation) <!-- PLACEHOLDER_(\d+) -->/g,
+    (match, type, placeholderIndex) => {
       const filename = furtherInfoLinks.get(parseInt(placeholderIndex));
       if (filename) {
         const detailFilePath = path.join(detailsSourceDir, `${filename}.md`);
@@ -198,17 +199,17 @@ function processContent(content) {
             const detailContent = fs.readFileSync(detailFilePath, "utf8");
             const processedDetailContent = processDetailContent(detailContent);
             
-            return `##### Further Information\n\n${processedDetailContent}`;
+            return `##### Further ${type}\n\n${processedDetailContent}`;
           } else {
             console.log(`⚠️ Detail file not found: ${detailFilePath}`);
-            return `##### Further Information`;
+            return `##### Further ${type}`;
           }
         } catch (error) {
           console.log(`⚠️ Error reading detail file ${detailFilePath}:`, error.message);
-          return `##### Further Information`;
+          return `##### Further ${type}`;
         }
       }
-      return `##### Further Information`;
+      return `##### Further ${type}`;
     },
   );
 
