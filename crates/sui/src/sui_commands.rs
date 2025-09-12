@@ -1678,6 +1678,8 @@ pub fn parse_host_port(
     }
 }
 
+/// Get the replay node representing a specific chain (e.g., testnet, mainnet, or custom)
+/// from a given wallet context contining chain identifier string.
 pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyhow::Error> {
     let chain_id = context
         .get_client()
@@ -1685,7 +1687,7 @@ pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyho
         .read_api()
         .get_chain_identifier()
         .await?;
-    let err_msg = format!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently {chain_id}");
+    let err_msg = format!("'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently");
     let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
         .ok_or_else(|| anyhow::anyhow!(err_msg.clone()))?;
     Ok(match chain_id.chain() {
