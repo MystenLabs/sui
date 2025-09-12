@@ -6,9 +6,9 @@ keywords: [ Derived objects, deterministic addressing, Transfer-to-Object, TTO, 
 
 Derived objects enable you to deterministically compute object IDs from a parent object ID and a key, both on- and off-chain. This means you can compute the ID of a derived object before you ever create it on the blockchain. 
 
-Most objects on Sui get an ID assigned to them upon object creation that is guaranteed to be unique to every other object on the network. Derived objects, on the other hand, have an ID that is claimed from the mapping of a parent object and a key. This `parent-key` mapping ensures that the claimed ID is a singular namespace because the objects derived from the parent object (unique ID that exists on-chain) are paired with individual keys. It's this mapping that makes the resulting ID of derived objects deterministic.
+Most objects on Sui get an ID assigned to them upon object creation that is guaranteed to be unique to every other object on the network. Derived objects do not technically have assigned IDs, but instead have _claimed_ IDs created from the mapping of a parent object and a key. This `parent-key` mapping ensures that the claimed ID is one of a kind because the objects derived from the parent object (unique ID that exists on-chain) are paired with individual keys. It's this mapping that makes the resulting ID of derived objects both deterministic and unique.
 
-When you claim an ID from the `derived_object` module, you pass the parent object and key. The parent object already exists on-chain, either at package publish time or through a transaction with the smart contract. The parent object can be [shared, owned, party, or even a wrapped UID](../object-ownership.mdx).  
+When you claim an ID from the `derived_object` module, you typically pass the parent object and key. The parent object already exists on-chain, either at package publish time or through a transaction with the smart contract. The parent object can be [shared, owned, party, or even a wrapped UID](../object-ownership.mdx). An existing parent object is not a requirement, however, as you could create a new parent object in a function and immediately claim a derived object UID from a provided key. This workflow would not support off-chain determinism, though, because you could not know the parent UID beforehand.   
 
 The key can be an address or other object ID, which are themselves unique. This is not a requirement, though, as the `derived_object` module uses a `ClaimedStatus` enum to mark already claimed IDs as `Reserved`. Trying to claim an ID with a `Reserved` enum value results in transaction failure. So, you could use something like the US lowercase alphabet as your key, but would then be limited to 26 derived objects from one parent.
 
@@ -40,14 +40,6 @@ Because addresses are computable, objects can receive transfers even before they
 - Cross-chain bridging to deterministic destinations.
 
 Players can compute loot box addresses before opening. This allows for pre-funding, conditional reveals, and parallel processing.
-
-```move
-public fun derive_loot_box_address(game_id: ID, player: address, box_type: u8): address {
-    let key = bcs::to_bytes(&player);
-    vector::append(&mut key, bcs::to_bytes(&box_type));
-    derived_object::derive_address(game_id, key)
-}
-```
 
 ### One-per-key uniqueness
 
@@ -88,7 +80,7 @@ The following matrix highlights some of the differences between using dynamic fi
 
 ## Registries {#registries}
 
-The possibilities and uses for derived objects are only limited by your imagination (or AI prompt quotas). One of the more obvious implementations is their application in registries. The following examples compare dynamic field tables, pointer-based, and derived objects registries to illustrate the core tradeoffs between the different patterns.
+The possibilities and uses for derived objects are only limited by your imagination. One of the more obvious implementations is their application in registries. The following examples compare dynamic field tables, pointer-based, and derived objects registries to illustrate the core tradeoffs between the different patterns.
 
 ### Classic registry
 
