@@ -1,80 +1,11 @@
-# name: 🔔 Alert on upstream sui.yaml change
-
-# on:
-#   push:
-#     branches:
-#       - feature-update-workflow-alert-for-sui
-#   schedule:
-#     - cron: "0 0 * * *" 
-#   workflow_dispatch:
-
-# jobs:
-#   alert-on-change:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout Fork
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0
-
-#       - name: Add & Fetch Upstream
-#         run: |
-#           git remote add upstream https://github.com/MystenLabs/sui.git || true
-#           git fetch upstream main
-
-#       - name: Restore previous commit hash from cache
-#         id: restore_cache
-#         uses: actions/cache@v3
-#         with:
-#           path: .last_file_commit
-#           key: sui-yaml-commit
-#           restore-keys: sui-yaml-commit
-
-#       - name: Get last commit affecting sui.yaml
-#         id: get_commit
-#         run: |
-#           last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
-#           echo "LAST_COMMIT=$last_commit" >> $GITHUB_ENV
-
-#       - name: Compare with previous commit
-#         id: check_change
-#         run: |
-#           prev_commit=$(cat .last_file_commit 2>/dev/null || echo "")
-#           if [ "$LAST_COMMIT" != "$prev_commit" ]; then
-#             echo "changed=true" >> $GITHUB_OUTPUT
-#             echo "$LAST_COMMIT" > .last_file_commit
-#           else
-#             echo "changed=false" >> $GITHUB_OUTPUT
-#           fi
-
-#       - name: Save commit hash to cache
-#         uses: actions/cache@v3
-#         with:
-#           path: .last_file_commit
-#           key: sui-yaml-commit
-
-#       # - name: Send Slack Alert
-#       #   if: steps.check_change.outputs.changed == 'true'
-#       #   run: |
-#       #     commit_hash=$LAST_COMMIT
-#       #     commit_author=$(git log -1 --pretty=format:'%an' $commit_hash)
-#       #     commit_msg=$(git log -1 --pretty=format:'%s' $commit_hash)
-#       #     commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
-#       #     slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
-
-#       #     curl -X POST -H 'Content-type: application/json' \
-#       #       --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
-#       #       ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
-
-
-name: 🔔 Alert on upstream sui.yaml change (Test Mode)
+name: 🔔 Alert on upstream sui.yaml change
 
 on:
   push:
     branches:
-      - feature-update-workflow-alert-for-sui
+      - main
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 0 * * *" 
   workflow_dispatch:
 
 jobs:
@@ -91,10 +22,13 @@ jobs:
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
 
-      # --- Fake previous commit to force alert ---
-      - name: Set fake previous commit for testing
-        run: |
-          echo "0000000000000000000000000000000000000000" > .last_file_commit
+      - name: Restore previous commit hash from cache
+        id: restore_cache
+        uses: actions/cache@v3
+        with:
+          path: .last_file_commit
+          key: sui-yaml-commit
+          restore-keys: sui-yaml-commit
 
       - name: Get last commit affecting sui.yaml
         id: get_commit
@@ -131,3 +65,4 @@ jobs:
           curl -X POST -H 'Content-type: application/json' \
             --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
             ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
+
