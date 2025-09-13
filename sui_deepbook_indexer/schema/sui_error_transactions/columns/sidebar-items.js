@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["cmd_idx","failure_status","id","package","sender_address","star","timestamp_ms","txn_digest"]};

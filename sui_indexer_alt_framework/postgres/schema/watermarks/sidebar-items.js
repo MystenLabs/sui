@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["all_columns"],"mod":["columns","dsl"],"struct":["checkpoint_hi_inclusive","epoch_hi_inclusive","pipeline","pruner_hi","pruner_timestamp","reader_lo","star","table","timestamp_ms_hi_inclusive","tx_hi"],"type":["BoxedQuery","SqlType"]};

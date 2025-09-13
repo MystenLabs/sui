@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_coin_registry_obj_initial_shared_version"]};

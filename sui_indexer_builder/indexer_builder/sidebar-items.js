@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BackfillStrategy"],"struct":["Indexer","IndexerBuilder"],"trait":["DataMapper","Datasource","IndexerProgressStore","Persistent"],"type":["DataSender"]};
