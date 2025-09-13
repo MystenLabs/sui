@@ -13,7 +13,7 @@
 use crate::summary_metrics::{log_replay_metrics, tx_metrics_reset};
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    execution::{execute_transaction_to_effects, ReplayExecutor},
+    execution::{execute_transaction_to_effects, ReplayCacheSummary, ReplayExecutor},
     replay_interface::{
         EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
     },
@@ -118,6 +118,18 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     artifact_manager
         .member(Artifact::TransactionGasReport)
         .serialize_artifact(&context_and_effects.gas_status.gas_usage_report())
+        .transpose()?
+        .unwrap();
+
+    // Save the replay cache summary
+    let cache_summary = ReplayCacheSummary::from_cache(
+        context_and_effects.expected_effects.executed_epoch(),
+        context_and_effects.checkpoint,
+        &context_and_effects.object_cache,
+    );
+    artifact_manager
+        .member(Artifact::ReplayCacheSummary)
+        .serialize_artifact(&cache_summary)
         .transpose()?
         .unwrap();
 
