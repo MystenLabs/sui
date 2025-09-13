@@ -167,8 +167,7 @@ const config = {
             keywords: ["checkpoint"],
             extendDefaults: true,
           },
-          beforeDefaultRemarkPlugins: [
-          ],
+          beforeDefaultRemarkPlugins: [],
           remarkPlugins: [
             math,
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
@@ -214,6 +213,17 @@ const config = {
       type: "text/css",
     },
   ],
+
+  i18n: {
+    defaultLocale: "en",
+    locales: ["en", "ko"],
+    path: "i18n",
+    localeConfigs: {
+      en: { label: "English", htmlLang: "en-US" },
+      ko: { label: "한국어", htmlLang: "ko-KR" },
+    },
+  },
+
   themes: ["@docusaurus/theme-mermaid", "docusaurus-theme-github-codeblock"],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -234,19 +244,23 @@ const config = {
         items: [
           {
             label: "Guides",
-            to: "guides",
+            to: "/guides",
           },
           {
             label: "Concepts",
-            to: "concepts",
+            to: "/concepts",
           },
           {
             label: "Standards",
-            to: "standards",
+            to: "/standards",
           },
           {
             label: "References",
-            to: "references",
+            to: "/references",
+          },
+          {
+            type: "localeDropdown",
+            position: "right",
           },
         ],
       },
