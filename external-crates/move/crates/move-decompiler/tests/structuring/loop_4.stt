@@ -1,0 +1,16 @@
+// loop {
+//   0;
+//   if 1 {
+//     continue
+//   }
+//   if 2 {
+//     break
+//   }
+// }
+// 3
+
+code,0,1
+cond,1,0,2
+cond,2,3,0
+code,3
+

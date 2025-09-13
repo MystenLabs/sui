@@ -92,6 +92,21 @@ pub fn get_checkpoint(
                 .transactions
                 .into_iter()
                 .map(|t| {
+                    let balance_changes = submask
+                        .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
+                        .then(|| {
+                            service
+                                .reader
+                                .get_transaction_info(t.transaction.digest())
+                                .map(|info| {
+                                    info.balance_changes
+                                        .into_iter()
+                                        .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
+                                        .collect::<Vec<_>>()
+                                })
+                        })
+                        .flatten()
+                        .unwrap_or_default();
                     let mut transaction = ExecutedTransaction::merge_from(t, &submask);
                     transaction.checkpoint = submask
                         .contains(ExecutedTransaction::CHECKPOINT_FIELD)
@@ -99,6 +114,7 @@ pub fn get_checkpoint(
                     transaction.timestamp = submask
                         .contains(ExecutedTransaction::TIMESTAMP_FIELD)
                         .then(|| sui_rpc::proto::timestamp_ms_to_proto(timestamp_ms));
+                    transaction.balance_changes = balance_changes;
                     transaction
                 })
                 .collect();

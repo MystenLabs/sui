@@ -5848,6 +5848,15 @@ dependencies = [
 
 [[package]]
 name = "heck"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
@@ -8225,6 +8234,7 @@ dependencies = [
  "codespan-reporting",
  "derive-where",
  "futures",
+ "heck 0.3.3",
  "indoc",
  "itertools 0.10.5",
  "jsonrpc",
@@ -8246,6 +8256,7 @@ dependencies = [
  "toml_edit 0.22.24",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
@@ -13805,7 +13816,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bcdc5e6e7c8c45ff626ec6ad8e48b9ff0530f9f0#bcdc5e6e7c8c45ff626ec6ad8e48b9ff0530f9f0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15874,7 +15885,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bcdc5e6e7c8c45ff626ec6ad8e48b9ff0530f9f0#bcdc5e6e7c8c45ff626ec6ad8e48b9ff0530f9f0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16033,7 +16044,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bcdc5e6e7c8c45ff626ec6ad8e48b9ff0530f9f0#bcdc5e6e7c8c45ff626ec6ad8e48b9ff0530f9f0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "base64ct",
  "bcs",

@@ -409,6 +409,7 @@ fn localpubs_to_publications<F: MoveFlavor>(
 
 #[cfg(test)]
 mod tests {
+    use indoc::formatdoc;
     use insta::assert_snapshot;
     use std::{fs, io::Write, path::PathBuf};
     use test_log::test;
@@ -569,55 +570,59 @@ pkg_b = { local = "../pkg_b" }"#,
     pub async fn test_all() {
         debug!("running test_all");
         let env = crate::flavor::vanilla::default_environment();
-        let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
+        let pkg_git = git::new("pkg_git", |project| {
             project.file(
                 "Move.toml",
                 &basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id()),
             )
-        });
+        })
+        .await;
 
-        pkg_git.change_file(
+        pkg_git.as_ref().change_file(
             "Move.toml",
             &basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id()),
         );
-        pkg_git_repo.commit();
-        pkg_git.change_file(
+        pkg_git.commit().await;
+        pkg_git.as_ref().change_file(
             "Move.toml",
             &basic_manifest_with_env("pkg_git", "0.0.3", env.name(), env.id()),
         );
-        pkg_git_repo.commit();
+        pkg_git.commit().await;
 
-        let (pkg_dep_on_git, _) = git::new_repo("pkg_dep_on_git", |project| {
+        let pkg_dep = git::new("pkg_dep_on_git", |project| {
             project.file(
                 "Move.toml",
-                &format!(
-                    r#"[package]
-name = "pkg_dep_on_git"
-edition = "2025"
-license = "Apache-2.0"
-authors = ["Move Team"]
-version = "0.0.1"
+                &formatdoc!(
+                    r#"
+                    [package]
+                    name = "pkg_dep_on_git"
+                    edition = "2025"
+                    license = "Apache-2.0"
+                    authors = ["Move Team"]
+                    version = "0.0.1"
 
-[dependencies]
-pkg_git = {{ git = "../pkg_git", rev = "main" }}
+                    [dependencies]
+                    pkg_git = {{ git = "../pkg_git", rev = "main" }}
 
-[environments]
-{} = "{}"
-"#,
+                    [environments]
+                    {} = "{}"
+                    "#,
                     env.name(),
                     env.id(),
                 ),
             )
-        });
+        })
+        .await;
 
-        let root_pkg_path = pkg_dep_on_git.root();
-        let commits = pkg_git.commits();
+        let root_pkg_path = pkg_dep.as_ref().root();
+        let commits = pkg_git.commits().await;
         let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
 
         // we need to replace this relative path with the actual git repository path, because find_sha
         // function does not take a cwd, so this `git ls-remote` would be called from the cwd and not from the
         // repo path.
-        root_pkg_manifest = root_pkg_manifest.replace("../pkg_git", pkg_git.root_path_str());
+        root_pkg_manifest =
+            root_pkg_manifest.replace("../pkg_git", pkg_git.as_ref().root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
         let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
