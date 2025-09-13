@@ -60,6 +60,28 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
         self.package().display_name()
     }
 
+    /// Produce a string of identifiers from the root to this package for identifying the package
+    /// in error messages
+    pub fn display_path(&self) -> String {
+        if let Some(incoming) = self
+            .graph
+            .inner
+            .edges_directed(self.node, Direction::Incoming)
+            .next()
+        {
+            let parent = PackageInfo {
+                graph: self.graph,
+                node: incoming.source(),
+            };
+            let mut result = parent.display_path();
+            result.push_str("::");
+            result.push_str(incoming.weight().name.as_str());
+            result
+        } else {
+            self.package().name().to_string()
+        }
+    }
+
     /// The unique ID for this package in the package graph
     pub fn id(&self) -> &PackageID {
         self.graph
