@@ -6,18 +6,18 @@ processed 12 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-25:
+task 1, lines 6-26:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 16864400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 27:
+task 2, line 28:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 29-31:
+task 3, lines 30-32:
 //# programmable --sender A --inputs 1000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -25,7 +25,7 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 33-35:
+task 4, lines 34-36:
 //# programmable --sender A --inputs 500 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -33,7 +33,7 @@ created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 37-39:
+task 5, lines 38-40:
 //# programmable --sender A --inputs @A
 //> 0: sui::bag::new();
 //> 1: TransferObjects([Result(0)], Input(0))
@@ -41,28 +41,28 @@ created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 41:
+task 6, line 42:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, lines 43-44:
+task 7, lines 44-45:
 //# programmable --sender A --inputs object(1,0) @B
 //> TransferObjects([Input(0)], Input(1))
 mutated: object(0,0), object(1,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
-task 8, lines 46-47:
+task 8, lines 47-48:
 //# programmable --sender A --inputs object(3,0) @B
 //> TransferObjects([Input(0)], Input(1))
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 9, line 49:
+task 9, line 50:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 10, lines 51-145:
+task 10, lines 52-146:
 //# run-graphql
 Response: {
   "data": {
@@ -514,7 +514,7 @@ Response: {
   }
 }
 
-task 11, lines 147-174:
+task 11, lines 148-175:
 //# run-graphql
 Response: {
   "data": {
