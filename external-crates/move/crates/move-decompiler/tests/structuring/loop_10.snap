@@ -2,8 +2,12 @@
 source: crates/move-decompiler/tests/tests.rs
 ---
 { 0 }
-while (1) {
-    { 2 }
-    continue;
+loop {
+    if (1) {
+        { 2 }
+        continue;
+    } else {
+        break;
+    }
 }
 { 3 }

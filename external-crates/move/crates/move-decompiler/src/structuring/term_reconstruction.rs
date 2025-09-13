@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::ast as Out;
 
 use move_stackless_bytecode_2::stackless::ast::{DataOp, RValue, RegId, Trivial};
