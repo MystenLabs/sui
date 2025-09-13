@@ -1,0 +1,46 @@
+.wrap {
+  position: relative; /* 기준점 보장 */
+}
+
+.wrap :global(.navbar__link::after) {
+  display: none !important;
+  content: none !important;
+}
+
+.wrap :global(.dropdown__menu) {
+  right: 0;
+  left: auto;
+  top: calc(100% - 24px);
+  margin-top: 0 !important;
+  transform: translateY(-6px);
+  z-index: calc(var(--ifm-z-index-fixed) + 1);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+
+  height: var(--ifm-navbar-height);
+  line-height: var(--ifm-navbar-height);
+
+  padding-block: 0;
+  background: transparent;
+}
+
+.btn :global(.navbar__label) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.flag {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  display: block;
+}
+
+.wrap :global(.navbar__item.dropdown:hover > .navbar__link),
+.wrap :global(.navbar__item.dropdown--show > .navbar__link) {
+  background: transparent !important;
+}
