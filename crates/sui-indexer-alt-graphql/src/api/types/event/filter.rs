@@ -10,16 +10,19 @@ use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
 
+use super::CEvent;
+
 use crate::{
-    api::scalars::{
-        module_filter::ModuleFilter, sui_address::SuiAddress, type_filter::TypeFilter,
-        uint53::UInt53,
+    api::{
+        scalars::{
+            module_filter::ModuleFilter, sui_address::SuiAddress, type_filter::TypeFilter,
+            uint53::UInt53,
+        },
+        types::lookups::TxBoundsFilter,
     },
     error::{feature_unavailable, RpcError},
     pagination::Page,
 };
-
-use super::CEvent;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct EventFilter {
@@ -51,13 +54,7 @@ pub(crate) struct EventFilter {
 impl EventFilter {
     /// Builds a SQL query to select and filter events based on sender, module, and type filters.
     /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
-    pub(crate) fn query<'q>(
-        &self,
-        Range {
-            start: tx_lo,
-            end: tx_hi,
-        }: Range<u64>,
-    ) -> Result<Query<'q>, RpcError> {
+    pub(crate) fn query<'q>(&self, tx_bounds_query: Query<'q>) -> Result<Query<'q>, RpcError> {
         let table = match (&self.module, &self.type_) {
             (Some(_), Some(_)) => {
                 return Err(feature_unavailable(
@@ -68,20 +65,19 @@ impl EventFilter {
             (None, _) => query!("ev_struct_inst"),
         };
 
-        let mut query = query!(
-            r#"
+        let mut query = tx_bounds_query
+            + query!(
+                r#"
             SELECT
                 tx_sequence_number
             FROM
                 {}
             WHERE
-                tx_sequence_number >= {BigInt}
-                AND tx_sequence_number < {BigInt}
+                tx_sequence_number >= (SELECT tx_lo FROM tx_lo)
+                AND tx_sequence_number < (SELECT tx_hi FROM tx_hi)
             "#,
-            table,
-            tx_lo as i64,
-            tx_hi as i64,
-        );
+                table,
+            );
 
         if let Some(sender) = self.sender {
             query += query!(" AND sender = {Bytea}", sender.into_vec());
@@ -170,6 +166,20 @@ impl EventFilter {
         }
 
         true
+    }
+}
+
+impl TxBoundsFilter for EventFilter {
+    fn after_checkpoint(&self) -> Option<UInt53> {
+        self.after_checkpoint
+    }
+
+    fn at_checkpoint(&self) -> Option<UInt53> {
+        self.at_checkpoint
+    }
+
+    fn before_checkpoint(&self) -> Option<UInt53> {
+        self.before_checkpoint
     }
 }
 

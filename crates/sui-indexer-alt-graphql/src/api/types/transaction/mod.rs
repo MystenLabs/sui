@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Deref, ops::Range, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use anyhow::Context as _;
 use async_graphql::{
@@ -26,7 +26,6 @@ use sui_types::{
 
 use super::{
     address::Address,
-    checkpoint::filter::checkpoint_bounds,
     epoch::Epoch,
     gas_input::GasInput,
     transaction::filter::TransactionFilter,
@@ -41,7 +40,10 @@ use crate::{
             base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
             module_filter::ModuleFilter, sui_address::SuiAddress,
         },
-        types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
+        types::{
+            lookups::tx_bounds_query, lookups::TxBoundsCursor,
+            transaction::filter::TransactionKindInput,
+        },
     },
     error::RpcError,
     pagination::Page,
@@ -202,55 +204,37 @@ impl Transaction {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CTransaction>,
-        TransactionFilter {
-            after_checkpoint,
-            at_checkpoint,
-            before_checkpoint,
-            function,
-            kind,
-            affected_address,
-            affected_object,
-            sent_address,
-        }: TransactionFilter,
+        filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(Connection::new(false, false));
-        };
-
         let mut conn = Connection::new(false, false);
-
-        if page.limit() == 0 {
-            return Ok(Connection::new(false, false));
-        }
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
         let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
 
-        let global_tx_hi = watermarks.high_watermark().transaction();
-
-        let Some(cp_bounds) = checkpoint_bounds(
-            after_checkpoint.map(u64::from),
-            at_checkpoint.map(u64::from),
-            before_checkpoint.map(u64::from),
-            reader_lo,
-            checkpoint_viewed_at,
-        ) else {
-            return Ok(Connection::new(false, false));
+        let Some(tx_bounds_query) = tx_bounds_query(ctx, &scope, &filter, reader_lo, &page).await?
+        else {
+            return Ok(conn);
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| *c.deref()).await?;
-
+        let TransactionFilter {
+            function,
+            kind,
+            affected_address,
+            affected_object,
+            sent_address,
+            ..
+        } = filter;
         let tx_digest_keys = if let Some(function) = function {
-            tx_call(ctx, tx_bounds, &page, function, sent_address).await?
+            tx_call(ctx, tx_bounds_query, &page, function, sent_address).await?
         } else if let Some(kind) = kind {
-            tx_kind(ctx, tx_bounds, &page, kind, sent_address).await?
+            tx_kind(ctx, tx_bounds_query, &page, kind, sent_address).await?
         } else if affected_address.is_some() || sent_address.is_some() {
-            tx_affected_address(ctx, tx_bounds, &page, affected_address, sent_address).await?
+            tx_affected_address(ctx, tx_bounds_query, &page, affected_address, sent_address).await?
         } else if let Some(affected_object) = affected_object {
-            tx_affected_object(ctx, tx_bounds, &page, affected_object, sent_address).await?
+            tx_affected_object(ctx, tx_bounds_query, &page, affected_object, sent_address).await?
         } else {
-            tx_unfiltered(tx_bounds, &page)
+            tx_unfiltered(ctx, tx_bounds_query, &page).await?
         };
 
         // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
@@ -286,9 +270,15 @@ impl Transaction {
     }
 }
 
+impl TxBoundsCursor for CTransaction {
+    fn tx_sequence_number(&self) -> u64 {
+        *self.deref()
+    }
+}
+
 async fn tx_call(
     ctx: &Context<'_>,
-    tx_bounds: Range<u64>,
+    tx_bounds_query: Query<'_>,
     page: &Page<CTransaction>,
     function: FqNameFilter,
     sent_address: Option<SuiAddress>,
@@ -338,12 +328,12 @@ WHERE
             sent_address.into_vec(),
         );
     }
-    tx_sequence_numbers(ctx, tx_bounds, page, query).await
+    tx_sequence_numbers(ctx, tx_bounds_query, page, query).await
 }
 
 async fn tx_kind(
     ctx: &Context<'_>,
-    tx_bounds: Range<u64>,
+    tx_bounds_query: Query<'_>,
     page: &Page<CTransaction>,
     kind: TransactionKindInput,
     sent_address: Option<SuiAddress>,
@@ -352,7 +342,7 @@ async fn tx_kind(
         // We can simplify the query to just the `tx_affected_addresses` table if ProgrammableTX
         // and sender are specified.
         (TransactionKindInput::ProgrammableTx, Some(_)) => {
-            tx_affected_address(ctx, tx_bounds, page, None, sent_address).await
+            tx_affected_address(ctx, tx_bounds_query, page, None, sent_address).await
         }
         (TransactionKindInput::SystemTx, Some(_)) => Ok(vec![]),
         // Otherwise, we can ignore the sender always, and just query the `tx_kinds` table.
@@ -368,14 +358,14 @@ WHERE
 "#,
                 kind as i64,
             );
-            tx_sequence_numbers(ctx, tx_bounds, page, query).await
+            tx_sequence_numbers(ctx, tx_bounds_query, page, query).await
         }
     }
 }
 
 async fn tx_affected_address(
     ctx: &Context<'_>,
-    tx_bounds: Range<u64>,
+    tx_bounds_query: Query<'_>,
     page: &Page<CTransaction>,
     affected_address: Option<SuiAddress>,
     sent_address: Option<SuiAddress>,
@@ -396,12 +386,12 @@ WHERE
     if let Some(sent_address) = sent_address {
         query += filter_sender(sent_address);
     }
-    tx_sequence_numbers(ctx, tx_bounds, page, query).await
+    tx_sequence_numbers(ctx, tx_bounds_query, page, query).await
 }
 
 async fn tx_affected_object(
     ctx: &Context<'_>,
-    tx_bounds: Range<u64>,
+    tx_bounds_query: Query<'_>,
     page: &Page<CTransaction>,
     affected_object: SuiAddress,
     sent_address: Option<SuiAddress>,
@@ -420,7 +410,7 @@ WHERE
     if let Some(sent_address) = sent_address {
         query += filter_sender(sent_address);
     }
-    tx_sequence_numbers(ctx, tx_bounds, page, query).await
+    tx_sequence_numbers(ctx, tx_bounds_query, page, query).await
 }
 
 fn filter_sender(sent_address: SuiAddress) -> Query<'static> {
@@ -429,27 +419,24 @@ fn filter_sender(sent_address: SuiAddress) -> Query<'static> {
 
 async fn tx_sequence_numbers(
     ctx: &Context<'_>,
-    Range {
-        start: tx_lo,
-        end: tx_hi,
-    }: Range<u64>,
+    tx_bounds_query: Query<'_>,
     page: &Page<CTransaction>,
     mut query: Query<'_>,
 ) -> Result<Vec<u64>, RpcError> {
-    query += query!(
-        r#"
-    AND {BigInt} <= tx_sequence_number /* tx_lo */
-    AND tx_sequence_number < {BigInt} /* tx_hi */
+    query = tx_bounds_query
+        + query
+        + query!(
+            r#"
+    AND (SELECT tx_lo FROM tx_lo) <= tx_sequence_number
+    AND tx_sequence_number < (SELECT tx_hi FROM tx_hi)
 ORDER BY
     tx_sequence_number {} /* order_by_direction */
 LIMIT
     {BigInt} /* limit_with_overhead */
 "#,
-        tx_lo as i64,
-        tx_hi as i64,
-        page.order_by_direction(),
-        page.limit_with_overhead() as i64,
-    );
+            page.order_by_direction(),
+            page.limit_with_overhead() as i64,
+        );
 
     let pg_reader: &PgReader = ctx.data()?;
 
@@ -487,16 +474,54 @@ LIMIT
 
 /// The tx_sequence_numbers with cursors applied inclusively.
 /// Results are limited to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
-fn tx_unfiltered(tx_bounds: Range<u64>, page: &Page<CTransaction>) -> Vec<u64> {
-    if page.is_from_front() {
-        tx_bounds.take(page.limit_with_overhead()).collect()
-    } else {
-        // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
-        // we reverse the results after applying limits.
-        let mut results: Vec<_> = tx_bounds.rev().take(page.limit_with_overhead()).collect();
-        results.reverse();
-        results
+async fn tx_unfiltered(
+    ctx: &Context<'_>,
+    tx_bounds_query: Query<'_>,
+    page: &Page<CTransaction>,
+) -> Result<Vec<u64>, RpcError> {
+    let query = tx_bounds_query
+        + query!(
+            r#"
+SELECT
+    (SELECT tx_lo FROM tx_lo),
+    (SELECT tx_hi FROM tx_hi)
+"#
+        );
+
+    let pg_reader: &PgReader = ctx.data()?;
+
+    #[derive(QueryableByName)]
+    struct TxBounds {
+        #[diesel(sql_type = BigInt)]
+        tx_hi: i64,
+
+        #[diesel(sql_type = BigInt)]
+        tx_lo: i64,
     }
+
+    let mut conn = pg_reader
+        .connect()
+        .await
+        .context("#Failed to connect to database")?;
+
+    let results: Vec<TxBounds> = conn
+        .results(query)
+        .await
+        .context("Failed to execute query")?;
+
+    let (mut tx_lo, mut tx_hi) = results
+        .first()
+        .context("No valid checkpoints found")
+        .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
+
+    let limit = page.limit_with_overhead() as u64;
+    if page.is_from_front() {
+        tx_hi = tx_hi.min(tx_lo.saturating_add(limit));
+    } else {
+        tx_lo = tx_lo.max(tx_hi.saturating_sub(limit));
+    }
+    let tx_sequence_numbers = (tx_lo..tx_hi).collect();
+    Ok(tx_sequence_numbers)
 }
 
 impl TransactionContents {
