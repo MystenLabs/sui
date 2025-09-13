@@ -203,9 +203,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
 #[cfg(any(doc, test))]
 mod tests {
-    // Note: to generate diagrams for these tests, run
+    // Note: to generate diagrams for these tests, you need to first make the `dep-dependencies`
+    // into real dependencies (this seems to be a fundamental limitation to rust)
     // ```sh
+    // sed -I "" 's/\[dev-dep/# \[dev-dep/g' Cargo.toml
     // cargo rustdoc --lib -- --cfg test --document-private-items
+    // sed -I "" 's/# \[dev-dep/\[dev-dep/g' Cargo.toml
     // cargo docs --dir ../../target/doc
     // ```
     //
