@@ -1339,6 +1339,9 @@ sui_accumulator_root_object_id
 sui_accumulator_root_address
 	public(package) fun
 	0x2::object
+sui_coin_registry_object_id
+	public(package) fun
+	0x2::object
 bridge
 	fun
 	0x2::object
@@ -1754,6 +1757,9 @@ redeem_funds
 	public(package) fun
 	0x2::balance
 withdraw_funds_from_object
+	public(package) fun
+	0x2::balance
+create_supply_internal
 	public(package) fun
 	0x2::balance
 create_staking_rewards
@@ -2506,6 +2512,21 @@ get_description
 get_icon_url
 	public fun
 	0x2::coin
+destroy_metadata
+	public(package) fun
+	0x2::coin
+deny_cap_id
+	public(package) fun
+	0x2::coin
+new_deny_cap_v2
+	public(package) fun
+	0x2::coin
+new_treasury_cap
+	public(package) fun
+	0x2::coin
+allow_global_pause
+	public(package) fun
+	0x2::coin
 supply
 	public fun
 	0x2::coin
@@ -2539,6 +2560,153 @@ exists
 derive_address
 	public fun
 	0x2::derived_object
+CoinRegistry
+	public struct
+	0x2::coin_registry
+ExtraField
+	public struct
+	0x2::coin_registry
+CurrencyKey
+	public struct
+	0x2::coin_registry
+MetadataCap
+	public struct
+	0x2::coin_registry
+Currency
+	public struct
+	0x2::coin_registry
+CurrencyInitializer
+	public struct
+	0x2::coin_registry
+SupplyState
+	public enum
+	0x2::coin_registry
+RegulatedState
+	public enum
+	0x2::coin_registry
+MetadataCapState
+	public enum
+	0x2::coin_registry
+new_currency
+	public fun
+	0x2::coin_registry
+new_currency_with_otw
+	public fun
+	0x2::coin_registry
+claim_metadata_cap
+	public fun
+	0x2::coin_registry
+make_regulated
+	public fun
+	0x2::coin_registry
+make_supply_fixed_init
+	public fun
+	0x2::coin_registry
+make_supply_burn_only_init
+	public fun
+	0x2::coin_registry
+make_supply_fixed
+	public fun
+	0x2::coin_registry
+make_supply_burn_only
+	public fun
+	0x2::coin_registry
+finalize
+	public fun
+	0x2::coin_registry
+finalize_registration
+	public fun
+	0x2::coin_registry
+delete_metadata_cap
+	public fun
+	0x2::coin_registry
+burn
+	public fun
+	0x2::coin_registry
+burn_balance
+	public fun
+	0x2::coin_registry
+set_name
+	public fun
+	0x2::coin_registry
+set_symbol
+	public fun
+	0x2::coin_registry
+set_description
+	public fun
+	0x2::coin_registry
+set_icon_url
+	public fun
+	0x2::coin_registry
+set_treasury_cap_id
+	public fun
+	0x2::coin_registry
+migrate_legacy_metadata
+	public fun
+	0x2::coin_registry
+update_from_legacy_metadata
+	public fun
+	0x2::coin_registry
+delete_migrated_legacy_metadata
+	public fun
+	0x2::coin_registry
+migrate_regulated_state_by_metadata
+	public fun
+	0x2::coin_registry
+migrate_regulated_state_by_cap
+	public fun
+	0x2::coin_registry
+decimals
+	public fun
+	0x2::coin_registry
+name
+	public fun
+	0x2::coin_registry
+symbol
+	public fun
+	0x2::coin_registry
+description
+	public fun
+	0x2::coin_registry
+icon_url
+	public fun
+	0x2::coin_registry
+is_metadata_cap_claimed
+	public fun
+	0x2::coin_registry
+is_metadata_cap_deleted
+	public fun
+	0x2::coin_registry
+metadata_cap_id
+	public fun
+	0x2::coin_registry
+treasury_cap_id
+	public fun
+	0x2::coin_registry
+deny_cap_id
+	public fun
+	0x2::coin_registry
+is_supply_fixed
+	public fun
+	0x2::coin_registry
+is_supply_burn_only
+	public fun
+	0x2::coin_registry
+is_regulated
+	public fun
+	0x2::coin_registry
+total_supply
+	public fun
+	0x2::coin_registry
+exists
+	public fun
+	0x2::coin_registry
+coin_registry_id
+	public fun
+	0x2::coin_registry
+create
+	fun
+	0x2::coin_registry
 Publisher
 	public struct
 	0x2::package

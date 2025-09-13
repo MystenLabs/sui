@@ -262,6 +262,7 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 // Version 95: Change type name id base cost to 52, increase max transactions per checkpoint to 20000.
 // Version 96: Enable authority capabilities v2.
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
+//             Create Coin Registry object
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -796,6 +797,10 @@ struct FeatureFlags {
     // If true, cancel randomness-using txns when DKG has failed *before* doing other congestion checks.
     #[serde(skip_serializing_if = "is_false")]
     cancel_for_failed_dkg_early: bool,
+
+    // Enable coin registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_registry: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1897,6 +1902,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn enable_coin_registry(&self) -> bool {
+        self.feature_flags.enable_coin_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
@@ -3996,6 +4005,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.authority_capabilities_v2 = true;
                     cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
                     cfg.feature_flags.cancel_for_failed_dkg_early = true;
+                    cfg.feature_flags.enable_coin_registry = true;
                 }
                 // Use this template when making changes:
                 //
