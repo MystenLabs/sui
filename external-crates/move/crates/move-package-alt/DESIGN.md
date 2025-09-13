@@ -14,7 +14,7 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
 
 # TODOs
 
- - careful rollout plan - parallel with extisting system?
+ - careful rollout plan - parallel with existing system?
  - sui move build/test now will use the active env from cli to match which dependencies to use
  - two packages share an identity if they have the same original-id in any environment
  - maybe need to do additional identity checks when running `--publish-unpublished-deps`
