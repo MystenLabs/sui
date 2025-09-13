@@ -48,7 +48,10 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
     effects::TransactionEffects,
-    messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
+    messages_grpc::{
+        ExecutedData, RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
+        SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
+    },
 };
 use sui_types::{
     effects::TransactionEffectsAPI, executable_transaction::VerifiedExecutableTransaction,
@@ -76,9 +79,6 @@ use crate::{
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
-    transaction_driver::{
-        ExecutedData, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
-    },
     transaction_outputs::TransactionOutputs,
 };
 use crate::{

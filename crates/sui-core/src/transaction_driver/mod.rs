@@ -3,16 +3,13 @@
 
 mod effects_certifier;
 mod error;
-mod message_types;
 mod metrics;
 mod request_retrier;
 mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
-pub use message_types::*;
 pub use metrics::*;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
 use std::{
     net::SocketAddr,
@@ -26,9 +23,10 @@ use mysten_metrics::{monitored_future, TxType};
 use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, error::UserInputError,
-    messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
+    messages_grpc::SubmitTxRequest, transaction::TransactionDataAPI as _,
 };
 use tokio::{task::JoinSet, time::sleep};
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::instrument;
 use transaction_submitter::*;
 
@@ -46,6 +44,19 @@ pub struct SubmitTransactionOptions {
     /// When forwarding transactions on behalf of a client, this is the client's address
     /// specified for ddos protection.
     pub forwarded_client_addr: Option<SocketAddr>,
+}
+
+#[derive(Clone, Debug)]
+pub struct QuorumTransactionResponse {
+    // TODO(fastpath): Stop using QD types
+    pub effects: sui_types::quorum_driver_types::FinalizedEffects,
+
+    pub events: Option<sui_types::effects::TransactionEvents>,
+    // Input objects will only be populated in the happy path
+    pub input_objects: Option<Vec<sui_types::object::Object>>,
+    // Output objects will only be populated in the happy path
+    pub output_objects: Option<Vec<sui_types::object::Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
 }
 
 pub struct TransactionDriver<A: Clone> {
@@ -117,7 +128,6 @@ where
             });
         }
 
-        let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
         self.metrics.total_transactions_submitted.inc();
@@ -138,7 +148,7 @@ where
                         tx_digest,
                         tx_type,
                         amplification_factor,
-                        raw_request.clone(),
+                        request.clone(),
                         &options,
                     )
                     .await
@@ -210,7 +220,7 @@ where
         tx_digest: &TransactionDigest,
         tx_type: TxType,
         amplification_factor: u64,
-        raw_request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
@@ -224,7 +234,7 @@ where
                 &self.client_monitor,
                 tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 options,
             )
             .await?;
