@@ -216,6 +216,7 @@ impl EffectsCertifier {
             transaction_digest: *tx_digest,
             consensus_position,
             include_details: true,
+            ping: None,
         })
         .unwrap();
 
@@ -283,6 +284,7 @@ impl EffectsCertifier {
             transaction_digest: *tx_digest,
             consensus_position,
             include_details: false,
+            ping: None,
         })
         .unwrap();
 
