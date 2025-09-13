@@ -90,10 +90,10 @@ pub enum TargetKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageDefinition {
+pub struct PackageDefinition<Def = Definition> {
     pub package: Option<Symbol>,
     pub named_address_map: NamedAddressMapIndex,
-    pub def: Definition,
+    pub def: Def,
     pub target_kind: TargetKind,
 }
 
@@ -275,6 +275,7 @@ pub struct ModuleDefinition {
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
     pub is_spec_module: bool,
+    pub is_extension: bool,
     pub definition_mode: ModuleDefinitionMode,
     pub members: Vec<ModuleMember>,
 }
@@ -371,6 +372,7 @@ new_name!(FunctionName);
 
 pub const NATIVE_MODIFIER: &str = "native";
 pub const ENTRY_MODIFIER: &str = "entry";
+pub const EXTEND_MODIFIER: &str = "extend";
 pub const MACRO_MODIFIER: &str = "macro";
 
 #[derive(PartialEq, Clone, Debug)]
@@ -1782,18 +1784,19 @@ impl AstDebug for ModuleDefinition {
             address,
             name,
             is_spec_module,
+            is_extension,
             members,
             definition_mode: _,
         } = self;
         doc.ast_debug(w);
         attributes.ast_debug(w);
+        let keyword = if *is_extension { "extend " } else { "module " };
         match address {
             None => w.write(format!(
-                "module {}{}",
+                "{keyword} {}{name}",
                 if *is_spec_module { "spec " } else { "" },
-                name
             )),
-            Some(addr) => w.write(format!("module {}::{}", addr, name)),
+            Some(addr) => w.write(format!("{keyword} {addr}::{name}")),
         };
         w.block(|w| {
             for mem in members {

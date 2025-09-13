@@ -60,6 +60,11 @@ impl FilterContext for Context<'_> {
             return Some(module_def);
         }
 
+        if module_def.is_extension {
+            // Extensions do not get a poison function, as we will already poison them
+            return Some(module_def);
+        }
+
         let poison_function = create_test_poison(module_def.loc);
         module_def.members.push(poison_function);
         Some(module_def)

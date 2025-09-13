@@ -32,11 +32,12 @@ use crate::{
         visitor::{TypingVisitor, TypingVisitorObj},
     },
 };
+
 use clap::*;
 use known_attributes::ModeAttribute;
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
+use move_symbol_pool::{Symbol, symbol};
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -756,7 +757,7 @@ impl Flags {
             keep_testing_functions: false,
             ide_mode: false,
             ide_test_mode: false,
-            modes: vec![],
+            modes: vec![symbol!("test")],
         }
     }
 
@@ -810,7 +811,9 @@ impl Flags {
     }
 
     pub fn set_modes(self, value: Vec<Symbol>) -> Self {
+        let test = self.test || value.iter().any(|mode| *mode == symbol!("test"));
         Self {
+            test,
             modes: value,
             ..self
         }
@@ -821,7 +824,7 @@ impl Flags {
     }
 
     pub fn is_testing(&self) -> bool {
-        self.test
+        self.test || self.mode(symbol!("test"))
     }
 
     pub fn keep_testing_functions(&self) -> bool {

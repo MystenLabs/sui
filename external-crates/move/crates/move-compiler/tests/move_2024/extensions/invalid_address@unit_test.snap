@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_2024/extensions/invalid_address.move:6:1
+  │  
+6 │ ╭ extend module asdf::m {
+7 │ │     public fun g(): u64 { 1 }
+8 │ │ }
+  │ ╰─^ Cannot extend unknown module 'asdf::m'
+
+error[E03001]: address with no value
+  ┌─ tests/move_2024/extensions/invalid_address.move:6:15
+  │
+6 │ extend module asdf::m {
+  │               ^^^^ address 'asdf' is not assigned a value. Try assigning it a value when calling the compiler

@@ -98,7 +98,8 @@ static_symbols!(
     "development",
     "party_transfer",
     "derived_object",
-    "claim"
+    "claim",
+    "test",
 );
 
 /// The global, unique cache of strings.

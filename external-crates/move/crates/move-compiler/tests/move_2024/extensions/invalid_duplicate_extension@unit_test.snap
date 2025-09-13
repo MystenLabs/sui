@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/extensions/invalid_duplicate_extension.move:11:1
+   │    
+ 6 │   ╭ extend module a::m {
+ 7 │   │     public fun g(): u64 { 1 }
+ 8 │   │ }
+   │   ╰─' Previous declaration here
+   ·   │
+11 │ ╭   extend module a::m {
+12 │ │       public fun g(): u64 { 1 }
+13 │ │   }
+   │ ╰───^ Duplicate module extension declaration
