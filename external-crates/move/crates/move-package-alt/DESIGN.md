@@ -51,6 +51,10 @@ foo_2 = {
 
 bar = { r.mvr = "@protocol/bar" }
 
+# dependencies can contain a list of modes; if present then the dependencies will be removed when
+# compiling for any mode not listed. For example, the following is a test-only dependency:
+baz = { ..., modes = ["test"] }
+
 [dep-replacements]
 # used to replace dependencies for specific environments
 mainnet.foo = {
@@ -118,7 +122,7 @@ deps.std = "MoveStdlib"
 deps.sui = "Sui"
 
 [pinned.mainnet.baz]
-source = { git = "...", path = "...", rev = "baza" }
+source = { git = "...", path = "...", rev = "baza", modes = ["test"] }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
@@ -197,6 +201,7 @@ DefaultDependency: # information used to locate a dependency
     # dep-type specific fields e.g. git = "...", rev = "..."
     override: bool
     rename-from: PackageName
+    modes: Optional Array of String
 
 ReplacementDependency:
     optionally any DefaultDependency fields
@@ -214,7 +219,7 @@ Move.lock
         deps : PackageName → PackageID
 
 PinnedDependency:
-    DependencyLocation with additional constraints - see Pinning
+    ReplacementDependency with additional constraints - see Pinning
 
 Move.published
     published : EnvironmentName →
@@ -647,6 +652,8 @@ dependencies. In the new system, if you refer to a package by name in your sourc
 specify a direct dependency in your manifest. This makes all dependency names local, which makes it
 possible to integrate multiple packages with the same name.
 
+We also perform mode filtering before handing packages to the compiler.
+
 ## Linkage
 
 For the entire process through compilation, the package system can treat the package graph as a
@@ -682,6 +689,8 @@ source/bytecode we have.
 
 When running tests, we compute the linkage first and then hand those packages to the VM for
 execution. This models what happens on-chain as closely as possible.
+
+When running tests, we use the "test" mode.
 
 ## Publish / Upgrade
 
@@ -808,6 +817,13 @@ collect all of them from transitive dependencies. For legacy packages only, we
 include these in the named addresses we hand to the compiler.
 
 If a legacy package depends on a modern package, it will not inherit addresses from that package.
+
+## Dev-dependencies
+
+When processing the `[dev-dependencies]` section of a legacy manifest, we produce normal dependencies
+with `mode = ["test"]`. We should make a best effort to do the right thing if the same dependency
+shows up in both `[dependencies]` and `[dev-dependencies]` --- I'm not sure what the current system
+does in this case.
 
 ## What we see in the wild
 
