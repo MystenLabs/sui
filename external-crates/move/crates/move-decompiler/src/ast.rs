@@ -3,6 +3,7 @@
 
 use move_binary_format::normalized::Constant;
 
+use move_model_2::{model::Model, source_kind::SourceKind};
 use move_stackless_bytecode_2::ast::{DataOp, PrimitiveOp, Value};
 use move_symbol_pool::Symbol;
 
@@ -11,6 +12,17 @@ use std::collections::BTreeMap;
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
+
+pub struct Decompiled<S: SourceKind> {
+    pub model: Model<S>,
+    pub packages: Vec<Package>,
+}
+
+pub struct Package {
+    pub name: Option<Symbol>,
+    pub address: AccountAddress,
+    pub modules: BTreeMap<Symbol, Module>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Module {

@@ -44,7 +44,7 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
     let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
     let model = model_builder::build(resolved_package, &mut writer)?;
 
-    let bytecode = move_stackless_bytecode_2::from_model(model, /* optimize */ true)?;
+    let bytecode = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
@@ -58,7 +58,7 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
         // let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
-                // FIXME pkg name not coherent, address name returned instead let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
+                // FIXME pkg name not coherent, address name returned instead
                 let name = format!("{}", module_name);
                 let module = decompile_module(module.clone());
                 let decompiled = format!("{}", module);

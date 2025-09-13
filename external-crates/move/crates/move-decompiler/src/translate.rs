@@ -10,16 +10,66 @@ use crate::{
 };
 
 use crate::ast::Exp;
-use move_stackless_bytecode_2::ast as S;
+use move_model_2::{model::Model, source_kind::SourceKind};
+use move_stackless_bytecode_2::ast as SB;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, HashSet};
+
+// -------------------------------------------------------------------------------------------------
+// Entry
+// -------------------------------------------------------------------------------------------------
+
+pub fn model<S: SourceKind>(model: Model<S>) -> anyhow::Result<Out::Decompiled<S>> {
+    let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
+    let packages = packages(&model, stackless);
+    Ok(Out::Decompiled { model, packages })
+}
+
+fn packages<S: SourceKind>(
+    model: &Model<S>,
+    stackless: move_stackless_bytecode_2::ast::StacklessBytecode,
+) -> Vec<Out::Package> {
+    let SB::StacklessBytecode {
+        packages: sb_packages,
+    } = stackless;
+
+    sb_packages
+        .into_iter()
+        .map(|pkg| package(model, pkg))
+        .collect()
+}
+
+fn package<S: SourceKind>(
+    _model: &Model<S>,
+    sb_pkg: move_stackless_bytecode_2::ast::Package,
+) -> Out::Package {
+    let SB::Package {
+        name,
+        address,
+        modules,
+    } = &sb_pkg;
+    let modules = sb_pkg
+        .modules
+        .into_iter()
+        .map(|(module_name, m)| {
+            let decompiled_module = module(m);
+            (module_name, decompiled_module)
+        })
+        .collect();
+
+    Out::Package {
+        name,
+        address,
+        modules,
+    }
+}
 
 // -------------------------------------------------------------------------------------------------
 // Module
 // -------------------------------------------------------------------------------------------------
 
-pub(crate) fn module(module: S::Module) -> Out::Module {
-    let S::Module { name, functions } = module;
+pub(crate) fn module(module: SB::Module) -> Out::Module {
+    let SB::Module { name, functions } = module;
 
     let functions = functions
         .into_iter()
@@ -33,7 +83,7 @@ pub(crate) fn module(module: S::Module) -> Out::Module {
 // Function
 // -------------------------------------------------------------------------------------------------
 
-fn function(fun: S::Function) -> Out::Function {
+fn function(fun: SB::Function) -> Out::Function {
     println!("Decompiling function {}", fun.name);
     let (name, terms, input, entry) = make_input(fun);
     println!("Input: {input:?}");
@@ -46,14 +96,14 @@ fn function(fun: S::Function) -> Out::Function {
 }
 
 fn make_input(
-    fun: S::Function,
+    fun: SB::Function,
 ) -> (
     Symbol,
     BTreeMap<D::Label, Out::Exp>,
     BTreeMap<D::Label, D::Input>,
     D::Label,
 ) {
-    let S::Function {
+    let SB::Function {
         name,
         entry_label,
         basic_blocks,
@@ -90,21 +140,21 @@ fn make_input(
     (name, terms, input, (entry_label as u32).into())
 }
 
-fn generate_term_block(block: &S::BasicBlock, let_binds: &mut HashSet<S::RegId>) -> Out::Exp {
+fn generate_term_block(block: &SB::BasicBlock, let_binds: &mut HashSet<SB::RegId>) -> Out::Exp {
     // remove the last jump / replace the conditional with just the "triv" in it
     term_reconstruction::exp(block.clone(), let_binds)
 }
 
-fn extract_input(block: &S::BasicBlock, next_block_label: Option<S::Label>) -> D::Input {
+fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) -> D::Input {
     // Look at the last instruction to determine control flow
     if let Some(last_instr) = block.instructions.last() {
         match last_instr {
-            S::Instruction::Jump(label) => D::Input::Code(
+            SB::Instruction::Jump(label) => D::Input::Code(
                 (block.label as u32).into(),
                 ((block.label as u32).into(), false),
                 Some((*label as u32).into()),
             ),
-            S::Instruction::JumpIf {
+            SB::Instruction::JumpIf {
                 condition: _,
                 then_label,
                 else_label,
@@ -114,7 +164,7 @@ fn extract_input(block: &S::BasicBlock, next_block_label: Option<S::Label>) -> D
                 (*then_label as u32).into(),
                 (*else_label as u32).into(),
             ),
-            S::Instruction::VariantSwitch {
+            SB::Instruction::VariantSwitch {
                 condition: _,
                 labels,
                 variants: _,
@@ -123,17 +173,17 @@ fn extract_input(block: &S::BasicBlock, next_block_label: Option<S::Label>) -> D
                 ((block.label as u32).into(), false),
                 labels.iter().map(|label| (*label as u32).into()).collect(),
             ),
-            S::Instruction::Return(_) => D::Input::Code(
+            SB::Instruction::Return(_) => D::Input::Code(
                 (block.label as u32).into(),
                 ((block.label as u32).into(), false),
                 None,
             ),
-            S::Instruction::AssignReg { lhs: _, rhs: _ }
-            | S::Instruction::StoreLoc { loc: _, value: _ }
-            | S::Instruction::Abort(_)
-            | S::Instruction::Nop
-            | S::Instruction::Drop(_)
-            | S::Instruction::NotImplemented(_) => D::Input::Code(
+            SB::Instruction::AssignReg { lhs: _, rhs: _ }
+            | SB::Instruction::StoreLoc { loc: _, value: _ }
+            | SB::Instruction::Abort(_)
+            | SB::Instruction::Nop
+            | SB::Instruction::Drop(_)
+            | SB::Instruction::NotImplemented(_) => D::Input::Code(
                 (block.label as u32).into(),
                 ((block.label as u32).into(), false),
                 next_block_label.map(|lbl| (lbl as u32).into()),
