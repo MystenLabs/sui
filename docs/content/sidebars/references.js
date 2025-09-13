@@ -157,6 +157,7 @@ const references = [
 			},
 		],
 	},
+	'references/awesome-sui',
 	'references/sui-glossary',
 	{
 		type: 'category',
