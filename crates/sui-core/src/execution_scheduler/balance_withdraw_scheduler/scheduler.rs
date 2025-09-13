@@ -17,6 +17,14 @@ use tracing::debug;
 pub(crate) trait BalanceWithdrawSchedulerTrait: Send + Sync {
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations);
     async fn settle_balances(&self, settlement: BalanceSettlement);
+    /// Reconfigure internal state at epoch start. Implementations should reset
+    /// their view of the last settled accumulator version to `starting_accumulator_version`.
+    /// This is necessary in the case when a node transitions from a fullnode to
+    /// a validator, we need to make sure the last settled accumulator version
+    /// begins consistently with the object state.
+    fn reconfigure(&self, starting_accumulator_version: SequenceNumber);
+    #[cfg(test)]
+    fn get_last_settled_version(&self) -> SequenceNumber;
 }
 
 pub(crate) struct WithdrawReservations {
@@ -104,6 +112,16 @@ impl BalanceWithdrawScheduler {
         if let Err(err) = self.settlement_sender.send(settlement) {
             tracing::error!("Failed to send balance settlement: {:?}", err);
         }
+    }
+
+    /// Reconfigure the scheduler at the start of a new epoch.
+    pub fn reconfigure(&self, starting_accumulator_version: SequenceNumber) {
+        self.inner.reconfigure(starting_accumulator_version);
+    }
+
+    #[cfg(test)]
+    pub fn get_last_settled_version(&self) -> SequenceNumber {
+        self.inner.get_last_settled_version()
     }
 
     async fn process_withdraw_task(

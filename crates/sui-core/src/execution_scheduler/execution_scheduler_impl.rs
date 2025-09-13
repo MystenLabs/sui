@@ -90,10 +90,8 @@ impl ExecutionScheduler {
         tracing::info!("Creating new ExecutionScheduler");
         let balance_accumulator_enabled = epoch_store.accumulators_enabled();
         let balance_withdraw_scheduler = if balance_accumulator_enabled {
-            let starting_accumulator_version = object_cache_read
-                .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                .expect("Accumulator root object must be present if balance accumulator is enabled")
-                .version();
+            let starting_accumulator_version =
+                Self::read_accumulator_root_version(&object_cache_read);
             Some(BalanceWithdrawScheduler::new(
                 Arc::new(child_object_resolver),
                 starting_accumulator_version,
@@ -505,6 +503,25 @@ impl ExecutionScheduler {
             .settle_balances(settlement);
     }
 
+    /// Reconfigure internal state at epoch start. This resets the balance withdraw scheduler
+    /// to the current accumulator root object version.
+    pub fn reconfigure(&self) {
+        if let Some(scheduler) = &self.balance_withdraw_scheduler {
+            let starting_accumulator_version =
+                Self::read_accumulator_root_version(&self.object_cache_read);
+            scheduler.reconfigure(starting_accumulator_version);
+        }
+    }
+
+    fn read_accumulator_root_version(
+        object_cache_read: &Arc<dyn ObjectCacheRead>,
+    ) -> SequenceNumber {
+        object_cache_read
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .expect("Accumulator root object must be present if balance accumulator is enabled")
+            .version()
+    }
+
     pub fn check_execution_overload(
         &self,
         overload_config: &AuthorityOverloadConfig,
@@ -534,9 +551,14 @@ impl ExecutionScheduler {
 
 #[cfg(test)]
 mod test {
-    use std::{time::Duration, vec};
-
+    use super::{ExecutionScheduler, PendingCertificate};
     use crate::authority::shared_object_version_manager::AssignedVersions;
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::authority::ExecutionEnv;
+    use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+    use crate::execution_scheduler::SchedulingSource;
+    use std::{time::Duration, vec};
+    use sui_protocol_config::ProtocolConfig;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
@@ -546,19 +568,13 @@ mod test {
         crypto::deterministic_random_account_key,
         object::Object,
         transaction::{CallArg, ObjectArg},
-        SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     };
     use tokio::time::Instant;
     use tokio::{
         sync::mpsc::{error::TryRecvError, unbounded_channel, UnboundedReceiver},
         time::sleep,
     };
-
-    use crate::authority::ExecutionEnv;
-    use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
-    use crate::execution_scheduler::SchedulingSource;
-
-    use super::{ExecutionScheduler, PendingCertificate};
 
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     fn make_execution_scheduler(
@@ -1426,5 +1442,40 @@ mod test {
         assert!(rx_ready_certificates.try_recv().is_err());
 
         execution_scheduler.check_empty_for_testing();
+    }
+
+    #[tokio::test]
+    async fn execution_scheduler_reconfigure() {
+        // Checks that when we reconfigure, we always sync the last settled version
+        // of the balance withdraw scheduler to be consistent with object state.
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.enable_accumulators_for_testing();
+        let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let mut accumulator_object = authority
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .await
+            .unwrap();
+        let version = accumulator_object.version();
+        accumulator_object
+            .data
+            .try_as_move_mut()
+            .unwrap()
+            .increment_version_to(version.next());
+        authority
+            .get_cache_writer()
+            .write_object_entry_for_test(accumulator_object);
+        authority.reconfigure_for_testing().await;
+        assert_eq!(
+            authority
+                .execution_scheduler()
+                .balance_withdraw_scheduler
+                .as_ref()
+                .unwrap()
+                .get_last_settled_version(),
+            version.next()
+        );
     }
 }

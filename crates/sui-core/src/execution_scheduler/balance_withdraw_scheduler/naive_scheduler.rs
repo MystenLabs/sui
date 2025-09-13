@@ -122,4 +122,19 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
         debug!("Settling balances for version {:?}", next_version);
         let _ = self.last_settled_version_sender.send(next_version);
     }
+
+    fn reconfigure(&self, starting_accumulator_version: SequenceNumber) {
+        debug!(
+            "Reconfiguring NaiveBalanceWithdrawScheduler to version {:?}",
+            starting_accumulator_version
+        );
+        let _ = self
+            .last_settled_version_sender
+            .send(starting_accumulator_version);
+    }
+
+    #[cfg(test)]
+    fn get_last_settled_version(&self) -> SequenceNumber {
+        *self.last_settled_version_receiver.borrow()
+    }
 }
