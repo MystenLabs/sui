@@ -19,6 +19,7 @@ module test::regulated_coin {
         coin: Coin<REGULATED_COIN>,
     }
 
+    #[allow(deprecated_usage)]
     fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
         let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
             otw,

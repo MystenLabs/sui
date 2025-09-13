@@ -43,6 +43,7 @@ module examples::simple_token {
 
     /// Internal: not necessary, but moving this call to a separate function for
     /// better visibility of the Closed Loop setup in `init`.
+    #[allow(deprecated_usage)]
     fun create_currency<T: drop>(otw: T, ctx: &mut TxContext): TreasuryCap<T> {
         let (treasury_cap, metadata) = coin::create_currency(
             otw,

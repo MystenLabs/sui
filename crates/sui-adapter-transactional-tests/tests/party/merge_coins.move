@@ -4,6 +4,7 @@
 //# init --accounts A --addresses ex=0x0
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module ex::m;
 
 use sui::coin;

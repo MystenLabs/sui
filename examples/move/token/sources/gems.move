@@ -65,6 +65,7 @@ module examples::gem {
 
     // In the module initializer we create the in-game currency and define the
     // rules for different types of actions.
+    #[allow(deprecated_usage)]
     fun init(otw: GEM, ctx: &mut TxContext) {
         let (treasury_cap, coin_metadata) = coin::create_currency(
             otw,

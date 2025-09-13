@@ -6,13 +6,13 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-20:
+task 1, lines 8-21:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 22-24:
+task 2, lines 23-25:
 //# programmable --sender A --inputs object(1,2) 100 @A
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
@@ -21,7 +21,7 @@ mutated: object(0,0), object(1,2)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
-task 3, line 26:
+task 3, line 27:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 3
@@ -36,20 +36,20 @@ Contents: sui::coin::Coin<test::fake::FAKE> {
     },
 }
 
-task 4, lines 28-30:
+task 4, lines 29-31:
 //# programmable --sender A --inputs object(1,2) 100
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> MergeCoins(Gas, [Result(0)])
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: Some("Coins do not have the same type"), command: Some(1) } }
 
-task 5, lines 32-33:
+task 5, lines 33-34:
 //# programmable --sender A --inputs object(2,0)
 //> MergeCoins(Gas, [Input(0)])
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: Some("Coins do not have the same type"), command: Some(0) } }
 
-task 6, lines 36-39:
+task 6, lines 37-40:
 //# programmable --sender A --inputs object(1,2) 100 object(2,0)
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> 1: SplitCoins(Gas, [Input(1)]);
@@ -57,7 +57,7 @@ task 6, lines 36-39:
 Error: Transaction Effects Status: Invalid command argument at 2. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: TypeMismatch }, source: Some("Coins do not have the same type"), command: Some(2) } }
 
-task 7, lines 41-44:
+task 7, lines 42-45:
 //# programmable --sender A --inputs object(1,2) 100
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> 1: SplitCoins(Result(0), [Input(1)]);
