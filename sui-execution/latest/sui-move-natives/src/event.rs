@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{abstract_size, legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -49,7 +49,10 @@ pub fn emit(
     let ty = ty_args.pop().unwrap();
     let event_value = args.pop_back().unwrap();
 
-    let event_value_size = event_value.legacy_size();
+    let event_value_size = abstract_size(
+        context.extensions().get::<ObjectRuntime>()?.protocol_config,
+        &event_value,
+    );
 
     // Deriving event value size can be expensive due to recursion overhead
     native_charge_gas_early_exit!(
