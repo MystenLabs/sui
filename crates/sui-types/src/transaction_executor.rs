@@ -13,6 +13,7 @@ use crate::object::Object;
 use crate::quorum_driver_types::ExecuteTransactionRequestV3;
 use crate::quorum_driver_types::ExecuteTransactionResponseV3;
 use crate::quorum_driver_types::QuorumDriverError;
+use crate::storage::ObjectKey;
 use crate::transaction::TransactionData;
 
 /// Trait to define the interface for how the REST service interacts with a a QuorumDriver or a
@@ -39,6 +40,7 @@ pub struct SimulateTransactionResult {
     pub output_objects: BTreeMap<ObjectID, Object>,
     pub execution_result: Result<Vec<ExecutionResult>, ExecutionError>,
     pub mock_gas_id: Option<ObjectID>,
+    pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
 }
 
 #[derive(Default, Debug, Copy, Clone)]

@@ -3715,6 +3715,13 @@ mod tests {
         fn take_accumulator_events(&self, _: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
             unimplemented!()
         }
+
+        fn get_unchanged_loaded_runtime_objects(
+            &self,
+            _digest: &TransactionDigest,
+        ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+            unimplemented!()
+        }
     }
 
     #[async_trait::async_trait]

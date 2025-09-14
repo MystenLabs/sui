@@ -137,6 +137,15 @@ fn transaction_to_response(
     if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
         let mut effects = TransactionEffects::merge_from(&source.effects, &submask);
 
+        if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD) {
+            effects.unchanged_loaded_runtime_objects = source
+                .unchanged_loaded_runtime_objects
+                .unwrap_or_default()
+                .iter()
+                .map(Into::into)
+                .collect();
+        }
+
         if let Some(object_types) = source.object_types {
             if submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
                 for changed_object in effects.changed_objects.iter_mut() {

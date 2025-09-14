@@ -10,7 +10,11 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn get_epoch() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    telemetry_subscribers::init_for_testing();
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(5000)
+        .build()
+        .await;
 
     let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
@@ -51,4 +55,6 @@ async fn get_epoch() {
         .epoch
         .unwrap();
     assert!(epoch.system_state.is_some());
+
+    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 }

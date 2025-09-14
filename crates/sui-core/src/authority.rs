@@ -75,6 +75,7 @@ use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabiliti
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
+use sui_types::storage::TrackingBackingStore;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
@@ -1929,10 +1930,12 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                self.get_backing_store().as_ref(),
+                &tracking_store,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -2037,6 +2040,13 @@ impl AuthorityState {
             );
         });
 
+        let unchanged_loaded_runtime_objects =
+            crate::transaction_outputs::unchanged_loaded_runtime_objects(
+                certificate.transaction_data(),
+                &effects,
+                tracking_store,
+            );
+
         // index certificate
         let _ = self
             .post_process_one_tx(certificate, &effects, &inner_temp_store, epoch_store)
@@ -2051,6 +2061,7 @@ impl AuthorityState {
             certificate.clone().into_unsigned(),
             effects,
             inner_temp_store,
+            unchanged_loaded_runtime_objects,
         );
 
         let elapsed = prepare_certificate_start_time.elapsed().as_micros() as f64;
@@ -2434,8 +2445,11 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
+
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
-            self.get_backing_store().as_ref(),
+            &tracking_store,
             protocol_config,
             self.metrics.limits_metrics.clone(),
             false, // expensive_checks
@@ -2454,6 +2468,13 @@ impl AuthorityState {
             checks.disabled(),
         );
 
+        let unchanged_loaded_runtime_objects =
+            crate::transaction_outputs::unchanged_loaded_runtime_objects(
+                &transaction,
+                &effects,
+                tracking_store,
+            );
+
         Ok(SimulateTransactionResult {
             input_objects: inner_temp_store.input_objects,
             output_objects: inner_temp_store.written,
@@ -2461,6 +2482,7 @@ impl AuthorityState {
             effects,
             execution_result,
             mock_gas_id,
+            unchanged_loaded_runtime_objects,
         })
     }
 

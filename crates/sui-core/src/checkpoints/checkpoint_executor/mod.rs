@@ -32,7 +32,7 @@ use sui_macros::fail_point;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
 use sui_types::{
@@ -57,7 +57,7 @@ mod data_ingestion_handler;
 pub mod metrics;
 pub(crate) mod utils;
 
-use data_ingestion_handler::{load_checkpoint_data, store_checkpoint_locally};
+use data_ingestion_handler::{load_checkpoint, store_checkpoint_locally};
 use metrics::CheckpointExecutorMetrics;
 use utils::*;
 
@@ -86,7 +86,7 @@ pub(crate) struct CheckpointExecutionState {
     pub data: CheckpointExecutionData,
 
     state_hasher: Option<GlobalStateHash>,
-    full_data: Option<CheckpointData>,
+    full_data: Option<Checkpoint>,
 }
 
 impl CheckpointExecutionState {
@@ -130,7 +130,7 @@ pub struct CheckpointExecutor {
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
-    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
+    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
 }
 
 impl CheckpointExecutor {
@@ -142,7 +142,7 @@ impl CheckpointExecutor {
         backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
-        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
+        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
     ) -> Self {
         Self {
             epoch_store,
@@ -600,12 +600,12 @@ impl CheckpointExecutor {
         &self,
         ckpt_data: &CheckpointExecutionData,
         tx_data: &CheckpointTransactionData,
-    ) -> Option<CheckpointData> {
+    ) -> Option<Checkpoint> {
         if !self.checkpoint_data_enabled() {
             return None;
         }
 
-        let checkpoint_data = load_checkpoint_data(
+        let checkpoint = load_checkpoint(
             ckpt_data,
             tx_data,
             self.state.get_object_store(),
@@ -614,6 +614,7 @@ impl CheckpointExecutor {
         .expect("failed to load checkpoint data");
 
         if self.state.rpc_index.is_some() || self.config.data_ingestion_dir.is_some() {
+            let checkpoint_data = checkpoint.clone().into();
             // Index the checkpoint. this is done out of order and is not written and committed to the
             // DB until later (committing must be done in-order)
             if let Some(rpc_index) = &self.state.rpc_index {
@@ -633,7 +634,7 @@ impl CheckpointExecutor {
             }
         }
 
-        Some(checkpoint_data)
+        Some(checkpoint)
     }
 
     // Load all required transaction and effects data for the checkpoint.
@@ -955,11 +956,11 @@ impl CheckpointExecutor {
     #[instrument(level = "info", skip_all)]
     async fn commit_index_updates_and_enqueue_to_subscription_service(
         &self,
-        checkpoint: CheckpointData,
+        checkpoint: Checkpoint,
     ) {
         if let Some(rpc_index) = &self.state.rpc_index {
             rpc_index
-                .commit_update_for_checkpoint(checkpoint.checkpoint_summary.sequence_number)
+                .commit_update_for_checkpoint(checkpoint.summary.sequence_number)
                 .expect("failed to update rpc_indexes");
         }
 
