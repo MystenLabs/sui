@@ -1166,7 +1166,7 @@ module bridge::bridge_env {
 // Test Coins
 //
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module bridge::test_token {
     use std::ascii;
     use std::type_name;

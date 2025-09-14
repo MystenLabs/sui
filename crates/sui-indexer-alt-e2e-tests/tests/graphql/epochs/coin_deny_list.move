@@ -6,6 +6,7 @@
 //# advance-epoch
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module P::coin {
   use sui::coin::{Self, CoinMetadata, DenyCapV2, TreasuryCap};
   use sui::deny_list::DenyList;
