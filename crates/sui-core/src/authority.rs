@@ -60,6 +60,7 @@ use std::{
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_types::balance_change::TrackingBackingStore;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionTimeObservationKey;
@@ -1954,10 +1955,12 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                self.get_backing_store().as_ref(),
+                &tracking_store, // self.get_backing_store().as_ref(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -2061,6 +2064,24 @@ impl AuthorityState {
                 fork_probability,
             );
         });
+
+        //TODO pipe balance changes through the system to be saved into the perpetual store
+        let _balance_chagnes = sui_types::balance_change::calculate_balance_changes(
+            certificate,
+            &effects,
+            &inner_temp_store,
+            epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
+                    &inner_temp_store,
+                    self.get_backing_package_store(),
+                ))),
+            tracking_store,
+        )
+        // For now if we error out while doing balance change calculations just output the error
+        // and produce an empty balance change list.
+        .tap_err(|e| error!(?tx_digest, "unable to calcualte balance changes: {e}"))
+        .unwrap_or_default();
 
         // index certificate
         let _ = self

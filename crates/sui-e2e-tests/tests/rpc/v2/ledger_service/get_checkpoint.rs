@@ -14,7 +14,12 @@ use crate::{stake_with_validator, transfer_coin};
 
 #[sim_test]
 async fn get_checkpoint() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    telemetry_subscribers::init_for_testing();
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(5000)
+        .build()
+        .await;
+    // let test_cluster = TestClusterBuilder::new().build().await;
 
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
     let transaction_digest = stake_with_validator(&test_cluster).await;
@@ -254,4 +259,6 @@ async fn get_checkpoint() {
     }
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
+
+    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 }
