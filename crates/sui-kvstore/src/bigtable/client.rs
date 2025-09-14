@@ -802,6 +802,18 @@ impl BigTableClient {
         raw_key.extend(object_key.1.value().to_be_bytes());
         Ok(raw_key)
     }
+
+    /// Creates a row filter for column qualifiers
+    fn column_filter(qualifiers: &[&str]) -> RowFilter {
+        let pattern = match qualifiers {
+            [single] => format!("^{single}$"),
+            multiple => format!("^({})$", multiple.join("|")),
+        };
+
+        RowFilter {
+            filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+        }
+    }
 }
 
 impl Service<Request<BoxBody>> for AuthChannel {
