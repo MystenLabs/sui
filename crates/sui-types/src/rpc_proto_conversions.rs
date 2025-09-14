@@ -8,62 +8,43 @@ use crate::message_envelope::Message as _;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::*;
+use sui_rpc::proto::TryFromProtoError;
 
 //
 // CheckpointSummary
 //
 
-impl From<crate::full_checkpoint_content::CheckpointData> for Checkpoint {
-    fn from(checkpoint_data: crate::full_checkpoint_content::CheckpointData) -> Self {
-        Self::merge_from(checkpoint_data, &FieldMaskTree::new_wildcard())
-    }
-}
+impl Merge<&crate::full_checkpoint_content::Checkpoint> for Checkpoint {
+    fn merge(&mut self, source: &crate::full_checkpoint_content::Checkpoint, mask: &FieldMaskTree) {
+        let sequence_number = source.summary.sequence_number;
+        let timestamp_ms = source.summary.timestamp_ms;
 
-impl Merge<crate::full_checkpoint_content::CheckpointData> for Checkpoint {
-    fn merge(
-        &mut self,
-        source: crate::full_checkpoint_content::CheckpointData,
-        mask: &FieldMaskTree,
-    ) {
-        let sequence_number = source.checkpoint_summary.sequence_number;
-        let timestamp_ms = source.checkpoint_summary.timestamp_ms;
-
-        let summary = source.checkpoint_summary.data();
-        let signature = source.checkpoint_summary.auth_sig();
+        let summary = source.summary.data();
+        let signature = source.summary.auth_sig();
 
         self.merge(summary, mask);
         self.merge(signature.clone(), mask);
 
         if mask.contains(Checkpoint::CONTENTS_FIELD.name) {
-            self.merge(&source.checkpoint_contents, mask);
+            self.merge(&source.contents, mask);
         }
 
         if let Some(submask) = mask
             .subtree(Checkpoint::OBJECTS_FIELD)
             .and_then(|submask| submask.subtree(ObjectSet::OBJECTS_FIELD))
         {
-            let set: std::collections::BTreeMap<
-                (crate::base_types::ObjectID, u64),
-                &crate::object::Object,
-            > = source
-                .transactions
+            let set = source
+                .object_set
                 .iter()
-                .flat_map(|t| t.input_objects.iter().chain(t.output_objects.iter()))
-                .map(|object| ((object.id(), object.version().value()), object))
+                .map(|o| sui_rpc::proto::sui::rpc::v2::Object::merge_from(o, &submask))
                 .collect();
-            self.objects = Some(
-                ObjectSet::default().with_objects(
-                    set.into_values()
-                        .map(|o| Object::merge_from(o, &submask))
-                        .collect(),
-                ),
-            );
+            self.objects = Some(ObjectSet::default().with_objects(set));
         }
 
         if let Some(submask) = mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
             self.transactions = source
                 .transactions
-                .into_iter()
+                .iter()
                 .map(|t| {
                     let mut transaction = ExecutedTransaction::merge_from(t, &submask);
                     transaction.checkpoint = submask
@@ -79,42 +60,46 @@ impl Merge<crate::full_checkpoint_content::CheckpointData> for Checkpoint {
     }
 }
 
-impl Merge<crate::full_checkpoint_content::CheckpointTransaction> for ExecutedTransaction {
+impl Merge<&crate::full_checkpoint_content::ExecutedTransaction> for ExecutedTransaction {
     fn merge(
         &mut self,
-        source: crate::full_checkpoint_content::CheckpointTransaction,
+        source: &crate::full_checkpoint_content::ExecutedTransaction,
         mask: &FieldMaskTree,
     ) {
         if mask.contains(ExecutedTransaction::DIGEST_FIELD) {
             self.digest = Some(source.transaction.digest().to_string());
         }
 
-        let (transaction_data, signatures) = {
-            let sender_signed = source.transaction.into_data().into_inner();
-            (
-                sender_signed.intent_message.value,
-                sender_signed.tx_signatures,
-            )
-        };
-
         if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD) {
-            self.transaction = Some(Transaction::merge_from(transaction_data, &submask));
+            self.transaction = Some(Transaction::merge_from(&source.transaction, &submask));
         }
 
         if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD) {
-            self.signatures = signatures
-                .into_iter()
+            self.signatures = source
+                .signatures
+                .iter()
                 .map(|s| UserSignature::merge_from(s, &submask))
                 .collect();
         }
 
         if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD) {
-            self.effects = Some(TransactionEffects::merge_from(&source.effects, &submask));
+            let mut effects = TransactionEffects::merge_from(&source.effects, &submask);
+            if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD) {
+                effects.set_unchanged_loaded_runtime_objects(
+                    source
+                        .unchanged_loaded_runtime_objects
+                        .iter()
+                        .map(Into::into)
+                        .collect(),
+                );
+            }
+            self.effects = Some(effects);
         }
 
         if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD) {
             self.events = source
                 .events
+                .as_ref()
                 .map(|events| TransactionEvents::merge_from(events, &submask));
         }
     }
@@ -386,12 +371,12 @@ impl Merge<crate::messages_checkpoint::CheckpointContents> for Checkpoint {
 
 impl From<crate::event::Event> for Event {
     fn from(value: crate::event::Event) -> Self {
-        Self::merge_from(value, &FieldMaskTree::new_wildcard())
+        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
     }
 }
 
-impl Merge<crate::event::Event> for Event {
-    fn merge(&mut self, source: crate::event::Event, mask: &FieldMaskTree) {
+impl Merge<&crate::event::Event> for Event {
+    fn merge(&mut self, source: &crate::event::Event, mask: &FieldMaskTree) {
         if mask.contains(Self::PACKAGE_ID_FIELD) {
             self.package_id = Some(source.package_id.to_canonical_string(true));
         }
@@ -409,7 +394,7 @@ impl Merge<crate::event::Event> for Event {
         }
 
         if mask.contains(Self::CONTENTS_FIELD) {
-            let mut bcs = Bcs::from(source.contents);
+            let mut bcs = Bcs::from(source.contents.clone());
             bcs.name = Some(source.type_.to_canonical_string(true));
             self.contents = Some(bcs);
         }
@@ -422,12 +407,12 @@ impl Merge<crate::event::Event> for Event {
 
 impl From<crate::effects::TransactionEvents> for TransactionEvents {
     fn from(value: crate::effects::TransactionEvents) -> Self {
-        Self::merge_from(value, &FieldMaskTree::new_wildcard())
+        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
     }
 }
 
-impl Merge<crate::effects::TransactionEvents> for TransactionEvents {
-    fn merge(&mut self, source: crate::effects::TransactionEvents, mask: &FieldMaskTree) {
+impl Merge<&crate::effects::TransactionEvents> for TransactionEvents {
+    fn merge(&mut self, source: &crate::effects::TransactionEvents, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD) {
             let mut bcs = Bcs::serialize(&source).unwrap();
             bcs.name = Some("TransactionEvents".to_owned());
@@ -441,7 +426,7 @@ impl Merge<crate::effects::TransactionEvents> for TransactionEvents {
         if let Some(events_mask) = mask.subtree(Self::EVENTS_FIELD) {
             self.events = source
                 .data
-                .into_iter()
+                .iter()
                 .map(|event| Event::merge_from(event, &events_mask))
                 .collect();
         }
@@ -1270,8 +1255,8 @@ impl From<crate::committee::Committee> for ValidatorCommittee {
 // ZkLoginAuthenticator
 //
 
-impl From<crate::zk_login_authenticator::ZkLoginAuthenticator> for ZkLoginAuthenticator {
-    fn from(value: crate::zk_login_authenticator::ZkLoginAuthenticator) -> Self {
+impl From<&crate::zk_login_authenticator::ZkLoginAuthenticator> for ZkLoginAuthenticator {
+    fn from(value: &crate::zk_login_authenticator::ZkLoginAuthenticator) -> Self {
         //TODO implement this without going through the sdk type
         let mut inputs = ZkLoginInputs::default();
         inputs.address_seed = Some(value.inputs.get_address_seed().to_string());
@@ -1280,7 +1265,7 @@ impl From<crate::zk_login_authenticator::ZkLoginAuthenticator> for ZkLoginAuthen
         message.max_epoch = Some(value.get_max_epoch());
         message.signature = Some(value.user_signature.clone().into());
 
-        sui_sdk_types::ZkLoginAuthenticator::try_from(value)
+        sui_sdk_types::ZkLoginAuthenticator::try_from(value.clone())
             .map(Into::into)
             .ok()
             .unwrap_or(message)
@@ -1327,6 +1312,12 @@ impl From<crate::crypto::SignatureScheme> for SignatureScheme {
 
 impl From<crate::crypto::Signature> for SimpleSignature {
     fn from(value: crate::crypto::Signature) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&crate::crypto::Signature> for SimpleSignature {
+    fn from(value: &crate::crypto::Signature) -> Self {
         let scheme: SignatureScheme = value.scheme().into();
         let signature = value.signature_bytes();
         let public_key = value.public_key_bytes();
@@ -1343,8 +1334,8 @@ impl From<crate::crypto::Signature> for SimpleSignature {
 // PasskeyAuthenticator
 //
 
-impl From<crate::passkey_authenticator::PasskeyAuthenticator> for PasskeyAuthenticator {
-    fn from(value: crate::passkey_authenticator::PasskeyAuthenticator) -> Self {
+impl From<&crate::passkey_authenticator::PasskeyAuthenticator> for PasskeyAuthenticator {
+    fn from(value: &crate::passkey_authenticator::PasskeyAuthenticator) -> Self {
         let mut message = Self::default();
         message.authenticator_data = Some(value.authenticator_data().to_vec().into());
         message.client_data_json = Some(value.client_data_json().to_owned());
@@ -1489,12 +1480,12 @@ impl From<&crate::multisig::MultiSig> for MultisigAggregatedSignature {
 
 impl From<crate::signature::GenericSignature> for UserSignature {
     fn from(value: crate::signature::GenericSignature) -> Self {
-        Self::merge_from(value, &FieldMaskTree::new_wildcard())
+        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
     }
 }
 
-impl Merge<crate::signature::GenericSignature> for UserSignature {
-    fn merge(&mut self, source: crate::signature::GenericSignature, mask: &FieldMaskTree) {
+impl Merge<&crate::signature::GenericSignature> for UserSignature {
+    fn merge(&mut self, source: &crate::signature::GenericSignature, mask: &FieldMaskTree) {
         use user_signature::Signature;
 
         if mask.contains(Self::BCS_FIELD) {
@@ -1554,6 +1545,27 @@ impl From<crate::balance_change::BalanceChange> for BalanceChange {
         message.coin_type = Some(value.coin_type.to_canonical_string(true));
         message.amount = Some(value.amount.to_string());
         message
+    }
+}
+
+impl TryFrom<&BalanceChange> for crate::balance_change::BalanceChange {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &BalanceChange) -> Result<Self, Self::Error> {
+        Ok(Self {
+            address: value
+                .address()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid(BalanceChange::ADDRESS_FIELD, e))?,
+            coin_type: value
+                .coin_type()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid(BalanceChange::COIN_TYPE_FIELD, e))?,
+            amount: value
+                .amount()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid(BalanceChange::AMOUNT_FIELD, e))?,
+        })
     }
 }
 
@@ -1725,13 +1737,21 @@ impl From<crate::transaction::GenesisObject> for Object {
 // ObjectReference
 //
 
-fn object_ref_to_proto(value: crate::base_types::ObjectRef) -> ObjectReference {
+pub fn object_ref_to_proto(value: &crate::base_types::ObjectRef) -> ObjectReference {
     let (object_id, version, digest) = value;
     let mut message = ObjectReference::default();
     message.object_id = Some(object_id.to_canonical_string(true));
     message.version = Some(version.value());
     message.digest = Some(digest.to_string());
     message
+}
+
+impl From<&crate::storage::ObjectKey> for ObjectReference {
+    fn from(value: &crate::storage::ObjectKey) -> Self {
+        Self::default()
+            .with_object_id(value.0.to_canonical_string(true))
+            .with_version(value.1.value())
+    }
 }
 
 //
@@ -1782,12 +1802,12 @@ impl From<crate::object::Owner> for Owner {
 
 impl From<crate::transaction::TransactionData> for Transaction {
     fn from(value: crate::transaction::TransactionData) -> Self {
-        Self::merge_from(value, &FieldMaskTree::new_wildcard())
+        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
     }
 }
 
-impl Merge<crate::transaction::TransactionData> for Transaction {
-    fn merge(&mut self, source: crate::transaction::TransactionData, mask: &FieldMaskTree) {
+impl Merge<&crate::transaction::TransactionData> for Transaction {
+    fn merge(&mut self, source: &crate::transaction::TransactionData, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
             let mut bcs = Bcs::serialize(&source).unwrap();
             bcs.name = Some("TransactionData".to_owned());
@@ -1805,7 +1825,7 @@ impl Merge<crate::transaction::TransactionData> for Transaction {
         let crate::transaction::TransactionData::V1(source) = source;
 
         if mask.contains(Self::KIND_FIELD.name) {
-            self.kind = Some(source.kind.into());
+            self.kind = Some(source.kind.clone().into());
         }
 
         if mask.contains(Self::SENDER_FIELD.name) {
@@ -1813,7 +1833,7 @@ impl Merge<crate::transaction::TransactionData> for Transaction {
         }
 
         if mask.contains(Self::GAS_PAYMENT_FIELD.name) {
-            self.gas_payment = Some(source.gas_data.into());
+            self.gas_payment = Some((&source.gas_data).into());
         }
 
         if mask.contains(Self::EXPIRATION_FIELD.name) {
@@ -1826,10 +1846,10 @@ impl Merge<crate::transaction::TransactionData> for Transaction {
 // GasPayment
 //
 
-impl From<crate::transaction::GasData> for GasPayment {
-    fn from(value: crate::transaction::GasData) -> Self {
+impl From<&crate::transaction::GasData> for GasPayment {
+    fn from(value: &crate::transaction::GasData) -> Self {
         let mut message = Self::default();
-        message.objects = value.payment.into_iter().map(object_ref_to_proto).collect();
+        message.objects = value.payment.iter().map(object_ref_to_proto).collect();
         message.owner = Some(value.owner.to_string());
         message.price = Some(value.price);
         message.budget = Some(value.budget);

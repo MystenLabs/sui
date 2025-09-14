@@ -1,21 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use crate::base_types::ObjectID;
 use crate::effects::TransactionEffects;
 use crate::effects::TransactionEvents;
 use crate::error::ExecutionError;
 use crate::error::SuiError;
 use crate::execution::ExecutionResult;
-use crate::object::Object;
+use crate::full_checkpoint_content::ObjectSet;
 use crate::quorum_driver_types::ExecuteTransactionRequestV3;
 use crate::quorum_driver_types::ExecuteTransactionResponseV3;
 use crate::quorum_driver_types::QuorumDriverError;
+use crate::storage::ObjectKey;
 use crate::transaction::TransactionData;
 
-/// Trait to define the interface for how the REST service interacts with a  QuorumDriver or a
+/// Trait to define the interface for how the gRPC service interacts with a  QuorumDriver or a
 /// simulated transaction executor.
 #[async_trait::async_trait]
 pub trait TransactionExecutor: Send + Sync {
@@ -35,10 +34,10 @@ pub trait TransactionExecutor: Send + Sync {
 pub struct SimulateTransactionResult {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
-    pub input_objects: BTreeMap<ObjectID, Object>,
-    pub output_objects: BTreeMap<ObjectID, Object>,
+    pub objects: ObjectSet,
     pub execution_result: Result<Vec<ExecutionResult>, ExecutionError>,
     pub mock_gas_id: Option<ObjectID>,
+    pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
 }
 
 #[derive(Default, Debug, Copy, Clone)]

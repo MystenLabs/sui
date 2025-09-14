@@ -22,6 +22,7 @@ mod signature_verification_service;
 mod state_service;
 mod subscription_service;
 mod transaction_execution_service;
+mod unchanged_loaded_runtime_objects;
 
 async fn execute_transaction(
     client: &mut Client,
@@ -66,6 +67,46 @@ async fn execute_transaction(
         .as_ref()
         .unwrap()
         .success());
+
+    transaction
+}
+
+async fn execute_transaction_assert_failed(
+    client: &mut Client,
+    signed_transaction: &sui_types::transaction::Transaction,
+) -> ExecutedTransaction {
+    let mut transaction = Transaction::default();
+    transaction.bcs = Some(Bcs::serialize(signed_transaction.transaction_data()).unwrap());
+
+    let signatures = signed_transaction
+        .tx_signatures()
+        .iter()
+        .map(|s| {
+            let mut message = UserSignature::default();
+            message.bcs = Some({
+                let mut message = Bcs::default();
+                message.value = Some(s.as_ref().to_owned().into());
+                message
+            });
+            message
+        })
+        .collect();
+
+    let mut request = ExecuteTransactionRequest::default();
+    request.transaction = Some(transaction);
+    request.signatures = signatures;
+    request.read_mask = Some(FieldMask::from_paths(["*"]));
+
+    let transaction = client
+        .execute_transaction_and_wait_for_checkpoint(request, Duration::from_secs(10))
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction()
+        .to_owned();
+
+    // Assert that the txn was successful
+    assert!(!transaction.effects().status().success());
 
     transaction
 }
