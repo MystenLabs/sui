@@ -44,7 +44,7 @@ impl RpcMetrics {
             requests_succeeded: register_int_counter_vec_with_registry!(
                 "consistent_rpc_requests_succeeded",
                 "Number of requests that completed successfully, by path",
-                &["service", "method"],
+                &["path", "code"],
                 registry,
             )
             .unwrap(),
