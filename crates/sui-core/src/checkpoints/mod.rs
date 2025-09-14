@@ -3611,6 +3611,13 @@ mod tests {
         fn take_accumulator_events(&self, _: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
             unimplemented!()
         }
+
+        fn get_balance_changes(
+            &self,
+            _digest: &TransactionDigest,
+        ) -> Option<Vec<sui_types::balance_change::BalanceChange>> {
+            unimplemented!()
+        }
     }
 
     #[async_trait::async_trait]

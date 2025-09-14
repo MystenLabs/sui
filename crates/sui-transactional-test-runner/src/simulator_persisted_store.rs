@@ -625,6 +625,13 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
     }
+
+    fn get_balance_changes(
+        &self,
+        _transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::balance_change::BalanceChange>> {
+        todo!()
+    }
 }
 
 impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {

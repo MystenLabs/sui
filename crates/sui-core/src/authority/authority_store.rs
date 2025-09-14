@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
+use sui_types::balance_change::BalanceChange;
 use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -330,6 +331,13 @@ impl AuthorityStore {
             .iter()
             .map(|digest| self.get_events(digest))
             .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn get_balance_changes(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<Vec<BalanceChange>>, TypedStoreError> {
+        self.perpetual_tables.balance_changes.get(digest)
     }
 
     pub fn multi_get_effects<'a>(
@@ -763,6 +771,7 @@ impl AuthorityStore {
             deleted,
             written,
             events,
+            balance_changes,
             locks_to_delete,
             new_locks_to_init,
             ..
@@ -806,6 +815,14 @@ impl AuthorityStore {
             write_batch.insert_batch(
                 &self.perpetual_tables.events_2,
                 [(transaction_digest, events)],
+            )?;
+        }
+
+        // Write balance_changes
+        if !balance_changes.is_empty() {
+            write_batch.insert_batch(
+                &self.perpetual_tables.balance_changes,
+                [(transaction_digest, balance_changes)],
             )?;
         }
 

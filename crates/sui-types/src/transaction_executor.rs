@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::balance_change::BalanceChange;
 use crate::base_types::ObjectID;
 use crate::effects::TransactionEffects;
 use crate::effects::TransactionEvents;
@@ -35,6 +36,7 @@ pub trait TransactionExecutor: Send + Sync {
 pub struct SimulateTransactionResult {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
+    pub balance_changes: Vec<BalanceChange>,
     pub input_objects: BTreeMap<ObjectID, Object>,
     pub output_objects: BTreeMap<ObjectID, Object>,
     pub execution_result: Result<Vec<ExecutionResult>, ExecutionError>,

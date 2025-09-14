@@ -65,6 +65,7 @@ use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
@@ -226,6 +227,8 @@ struct UncommittedData {
 
     transaction_events: DashMap<TransactionDigest, TransactionEvents>,
 
+    transaction_balance_changes: DashMap<TransactionDigest, Vec<BalanceChange>>,
+
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
@@ -264,6 +267,7 @@ impl UncommittedData {
                 ))
                 .build(),
             transaction_events: DashMap::with_shard_amount(2048),
+            transaction_balance_changes: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
         }
@@ -277,6 +281,7 @@ impl UncommittedData {
         self.pending_transaction_writes.clear();
         self.fastpath_transaction_outputs.invalidate_all();
         self.transaction_events.clear();
+        self.transaction_balance_changes.clear();
         self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
         self.total_transaction_commits
@@ -292,6 +297,7 @@ impl UncommittedData {
                     && self.transaction_effects.is_empty()
                     && self.executed_effects_digests.is_empty()
                     && self.transaction_events.is_empty()
+                    && self.transaction_balance_changes.is_empty()
                     && self
                         .total_transaction_inserts
                         .load(std::sync::atomic::Ordering::Relaxed)
@@ -904,6 +910,7 @@ impl WritebackCache {
             deleted,
             wrapped,
             events,
+            balance_changes,
             ..
         } = &*tx_outputs;
 
@@ -972,6 +979,12 @@ impl WritebackCache {
         self.dirty
             .transaction_events
             .insert(tx_digest, events.clone());
+
+        self.metrics
+            .record_cache_write("transaction_balance_changes");
+        self.dirty
+            .transaction_balance_changes
+            .insert(tx_digest, balance_changes.clone());
 
         self.metrics.record_cache_write("executed_effects_digests");
         self.dirty
@@ -1161,6 +1174,11 @@ impl WritebackCache {
             .transaction_events
             .remove(&tx_digest)
             .expect("events must exist");
+
+        self.dirty
+            .transaction_balance_changes
+            .remove(&tx_digest)
+            .expect("balance_changes must exist");
 
         self.dirty
             .executed_effects_digests
@@ -2144,6 +2162,14 @@ impl TransactionCacheRead for WritebackCache {
                 results
             },
         )
+    }
+
+    fn get_balance_changes(&self, digest: &TransactionDigest) -> Option<Vec<BalanceChange>> {
+        self.dirty
+            .transaction_balance_changes
+            .get(digest)
+            .map(|b| b.clone())
+            .or_else(|| self.store.get_balance_changes(digest).expect("db error"))
     }
 
     fn get_mysticeti_fastpath_outputs(

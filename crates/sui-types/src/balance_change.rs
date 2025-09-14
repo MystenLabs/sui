@@ -215,8 +215,9 @@ impl ParentSync for TrackingBackingStore<'_> {
 //
 // True balance change calculation
 //
+// TODO(address-balances): properly handle address balances changes
 pub fn calculate_balance_changes(
-    certificate: &crate::executable_transaction::VerifiedExecutableTransaction,
+    transaction: &TransactionData,
     effects: &TransactionEffects,
     inner_temporary_store: &crate::inner_temporary_store::InnerTemporaryStore,
     mut layout_resolver: Box<dyn crate::layout_resolver::LayoutResolver + '_>,
@@ -295,14 +296,9 @@ pub fn calculate_balance_changes(
         }
     }
 
-    let address_balance_changes = balance_changes(
-        certificate.transaction_data(),
-        effects,
-        &reads,
-        &writes,
-        &mut layout_resolver,
-    )
-    .context("Failed to compute balance changes")?;
+    let address_balance_changes =
+        balance_changes(transaction, effects, &reads, &writes, &mut layout_resolver)
+            .context("Failed to compute balance changes")?;
 
     // If debug level tracing is enabled for this module then we can do some more expensive work to
     // call out changes that are non-conservative (don't net out to 0, which can happen if tokens
@@ -331,7 +327,7 @@ pub fn calculate_balance_changes(
 }
 
 fn balance_changes(
-    transaction: &TransactionData,
+    transaction: &crate::transaction::TransactionData,
     effects: &TransactionEffects,
     read: &BTreeMap<ObjectID, Object>,
     write: &BTreeMap<ObjectID, Object>,

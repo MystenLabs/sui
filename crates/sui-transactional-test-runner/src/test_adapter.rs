@@ -2727,4 +2727,11 @@ impl ReadStore for SuiTestAdapter {
         self.executor
             .get_full_checkpoint_contents(sequence_number, digest)
     }
+
+    fn get_balance_changes(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::balance_change::BalanceChange>> {
+        self.executor.get_balance_changes(transaction_digest)
+    }
 }

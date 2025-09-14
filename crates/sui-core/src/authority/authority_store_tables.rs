@@ -6,6 +6,7 @@ use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
+use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -101,6 +102,9 @@ pub struct AuthorityPerpetualTables {
 
     // Events keyed by the digest of the transaction that produced them.
     pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
+
+    // BalanceChanges keyed by the digest of the transaction that produced them.
+    pub(crate) balance_changes: DBMap<TransactionDigest, Vec<BalanceChange>>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.
@@ -337,6 +341,16 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "events_2".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "balance_changes".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
                     mutexes,
