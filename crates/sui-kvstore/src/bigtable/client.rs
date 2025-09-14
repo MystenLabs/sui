@@ -311,7 +311,7 @@ impl KeyValueStoreReader for BigTableClient {
                 vec![(sequence_number - 1).to_be_bytes().to_vec()],
                 Some(RowFilter {
                     filter: Some(Filter::ColumnQualifierRegexFilter(
-                        CHECKPOINT_SUMMARY_COLUMN_QUALIFIER.into(),
+                        format!("^({CHECKPOINT_SUMMARY_COLUMN_QUALIFIER})$").into(),
                     )),
                 }),
             )
@@ -383,11 +383,8 @@ impl KeyValueStoreReader for BigTableClient {
                     .collect(),
                 Some(RowFilter {
                     filter: Some(Filter::ColumnQualifierRegexFilter(
-                        format!(
-                            "^{}$|^{}$",
-                            EVENTS_COLUMN_QUALIFIER, TIMESTAMP_COLUMN_QUALIFIER
-                        )
-                        .into(),
+                        format!("^({EVENTS_COLUMN_QUALIFIER}|{TIMESTAMP_COLUMN_QUALIFIER})$")
+                            .into(),
                     )),
                 }),
             )
@@ -804,6 +801,18 @@ impl BigTableClient {
         let mut raw_key = object_key.0.to_vec();
         raw_key.extend(object_key.1.value().to_be_bytes());
         Ok(raw_key)
+    }
+
+    /// Creates a row filter for column qualifiers
+    fn column_filter(qualifiers: &[&str]) -> RowFilter {
+        let pattern = match qualifiers {
+            [single] => format!("^{single}$"),
+            multiple => format!("^({})$", multiple.join("|")),
+        };
+
+        RowFilter {
+            filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+        }
     }
 }
 
