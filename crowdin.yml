@@ -6,10 +6,10 @@ source_language: en
 
 files:
   - source: /docs/content/**/*.{md,mdx}
-    translation: /docs/site/i18n/%two_letters_code%/docusaurus-plugin-content-docs/current/**/%original_file_name%
+    translation: /docs/site/i18n/%two_letters_code%/docusaurus-plugin-content-docs/current/%original_path%/%original_file_name%
 
   - source: /docs/site/i18n/en/**/*.json
-    translation: /docs/site/i18n/%two_letters_code%/**/%original_file_name%
+    translation: /docs/site/i18n/%two_letters_code%/%original_path%/%original_file_name%
 
 languages_mapping:
   two_letters_code:
