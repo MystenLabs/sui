@@ -3,7 +3,7 @@ name: 🔔 Alert on upstream sui.yaml change
 on:
   push:
     branches:
-      - feature-fix-duplicate-alert
+      - main
   schedule:
     - cron: "0 0 * * *" 
   workflow_dispatch:
@@ -53,59 +53,19 @@ jobs:
             echo "No change detected."
           fi
 
-      - name: Prepare Alert Message
-        if: steps.check_change.outputs.changed == 'true'
-        id: prepare_alert
-        run: |
-          commit_hash=$LAST_COMMIT
-          commit_author=$(git log -1 --pretty=format:'%an' $commit_hash)
-          commit_msg=$(git log -1 --pretty=format:'%s' $commit_hash)
-          commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
-          slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
-          
-          # Store values in environment for next step
-          echo "COMMIT_HASH=$commit_hash" >> $GITHUB_ENV
-          echo "COMMIT_AUTHOR=$commit_author" >> $GITHUB_ENV
-          echo "COMMIT_MSG=$commit_msg" >> $GITHUB_ENV
-          echo "COMMIT_URL=$commit_url" >> $GITHUB_ENV
-          echo "SLACK_MENTIONS=$slack_mentions" >> $GITHUB_ENV
-
-      - name: Test Alert Output
+      - name: Send Slack Alert
         if: steps.check_change.outputs.changed == 'true'
         run: |
-          echo "=== ALERT TEST OUTPUT ==="
-          echo "📋 Alert would be sent for the following change:"
-          echo ""
-          echo "🔹 Commit Hash: $COMMIT_HASH"
-          echo "🔹 Author: $COMMIT_AUTHOR"
-          echo "🔹 Message: $COMMIT_MSG"
-          echo "🔹 URL: $COMMIT_URL"
-          echo "🔹 Mentions: $SLACK_MENTIONS"
-          echo ""
-          echo "📝 Full Slack Message Preview:"
-          echo "----------------------------------------"
-          echo "🚨 *sui.yaml was updated in upstream!*"
-          echo "• Commit: *<$COMMIT_URL|$COMMIT_HASH>*"
-          echo "• Author: $COMMIT_AUTHOR"
-          echo "• Message: $COMMIT_MSG"
-          echo "$SLACK_MENTIONS"
-          echo "----------------------------------------"
-          echo ""
-          echo "✅ Alert test completed. Ready to send to Slack!"
-
-      # - name: Send Slack Alert
-      #   if: steps.check_change.outputs.changed == 'true'
-      #   run: |
-      #     response=$(curl -w "%{http_code}" -s -X POST -H 'Content-type: application/json' \
-      #       --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${COMMIT_URL}|${COMMIT_HASH}>*\n• Author: ${COMMIT_AUTHOR}\n• Message: ${COMMIT_MSG}\n${SLACK_MENTIONS}\"}" \
-      #       ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }})
+          response=$(curl -w "%{http_code}" -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${COMMIT_URL}|${COMMIT_HASH}>*\n• Author: ${COMMIT_AUTHOR}\n• Message: ${COMMIT_MSG}\n${SLACK_MENTIONS}\"}" \
+            ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }})
           
-      #     if [ "${response: -3}" = "200" ]; then
-      #       echo "✅ Slack notification sent successfully"
-      #     else
-      #       echo "❌ Failed to send Slack notification. Response: $response"
-      #       exit 1
-      #     fi
+          if [ "${response: -3}" = "200" ]; then
+            echo "✅ Slack notification sent successfully"
+          else
+            echo "❌ Failed to send Slack notification. Response: $response"
+            exit 1
+          fi
 
       - name: Save commit hash to cache
         if: steps.check_change.outputs.changed == 'true' 
