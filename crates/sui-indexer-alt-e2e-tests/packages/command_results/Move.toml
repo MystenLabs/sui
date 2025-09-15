@@ -1,0 +1,9 @@
+[package]
+name = "command_results"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+command_results = "0x0"

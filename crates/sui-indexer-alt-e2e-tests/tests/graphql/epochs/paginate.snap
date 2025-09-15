@@ -1,0 +1,186 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 2, line 8:
+//# advance-epoch
+Epoch advanced: 1
+
+task 4, line 12:
+//# advance-epoch
+Epoch advanced: 2
+
+task 5, line 14:
+//# advance-epoch
+Epoch advanced: 3
+
+task 6, line 16:
+//# advance-epoch
+Epoch advanced: 4
+
+task 7, line 18:
+//# advance-epoch
+Epoch advanced: 5
+
+task 8, line 20:
+//# advance-epoch
+Epoch advanced: 6
+
+task 9, lines 22-42:
+//# run-graphql --cursors 0 5
+Response: {
+  "data": {
+    "all": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        },
+        {
+          "epochId": 3
+        },
+        {
+          "epochId": 4
+        },
+        {
+          "epochId": 5
+        }
+      ]
+    },
+    "first": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        }
+      ]
+    },
+    "last": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 3
+        },
+        {
+          "epochId": 4
+        },
+        {
+          "epochId": 5
+        }
+      ]
+    },
+    "firstBefore": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        }
+      ]
+    },
+    "lastAfter": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 3
+        },
+        {
+          "epochId": 4
+        },
+        {
+          "epochId": 5
+        }
+      ]
+    },
+    "firstAfter": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        },
+        {
+          "epochId": 3
+        }
+      ]
+    },
+    "lastBefore": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 2
+        },
+        {
+          "epochId": 3
+        },
+        {
+          "epochId": 4
+        }
+      ]
+    },
+    "afterBefore": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        },
+        {
+          "epochId": 3
+        },
+        {
+          "epochId": 4
+        }
+      ]
+    }
+  }
+}

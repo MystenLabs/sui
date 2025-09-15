@@ -1,0 +1,101 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+  Module: colors
+    Function: is_blue (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = ImmBorrow(lcl_3)
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        Switch(reg_2) Case: Red (lbl 6), Case: Green (lbl 11), Case: Blue (lbl 16)
+
+      Label LBL_6:
+        reg_3 = Move(lcl_2)
+        Drop(3)
+        lcl_1 = Immediate(false)
+        Jump(LBL_22)
+
+      Label LBL_11:
+        reg_5 = Move(lcl_2)
+        Drop(5)
+        lcl_1 = Immediate(false)
+        Jump(LBL_22)
+
+      Label LBL_16:
+        reg_7 = Move(lcl_2)
+        UnpackVariantImmRef(reg_7)
+        reg_8 = Move(lcl_3)
+        UnpackVariant(reg_8)
+        lcl_1 = Immediate(true)
+
+      Label LBL_22:
+        reg_10 = Move(lcl_1)
+        Return(reg_10)
+
+
+    Function: is_green (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = ImmBorrow(lcl_3)
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        Switch(reg_2) Case: Red (lbl 6), Case: Green (lbl 11), Case: Blue (lbl 18)
+
+      Label LBL_6:
+        reg_3 = Move(lcl_2)
+        Drop(3)
+        lcl_1 = Immediate(false)
+        Jump(LBL_22)
+
+      Label LBL_11:
+        reg_5 = Move(lcl_2)
+        UnpackVariantImmRef(reg_5)
+        reg_6 = Move(lcl_3)
+        UnpackVariant(reg_6)
+        lcl_1 = Immediate(true)
+        Jump(LBL_22)
+
+      Label LBL_18:
+        reg_8 = Move(lcl_2)
+        Drop(8)
+        lcl_1 = Immediate(false)
+
+      Label LBL_22:
+        reg_10 = Move(lcl_1)
+        Return(reg_10)
+
+
+    Function: is_red (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = ImmBorrow(lcl_3)
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        Switch(reg_2) Case: Red (lbl 6), Case: Green (lbl 13), Case: Blue (lbl 18)
+
+      Label LBL_6:
+        reg_3 = Move(lcl_2)
+        UnpackVariantImmRef(reg_3)
+        reg_4 = Move(lcl_3)
+        UnpackVariant(reg_4)
+        lcl_1 = Immediate(true)
+        Jump(LBL_22)
+
+      Label LBL_13:
+        reg_6 = Move(lcl_2)
+        Drop(6)
+        lcl_1 = Immediate(false)
+        Jump(LBL_22)
+
+      Label LBL_18:
+        reg_8 = Move(lcl_2)
+        Drop(8)
+        lcl_1 = Immediate(false)
+
+      Label LBL_22:
+        reg_10 = Move(lcl_1)
+        Return(reg_10)

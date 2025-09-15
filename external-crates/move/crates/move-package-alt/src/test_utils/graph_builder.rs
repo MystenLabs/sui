@@ -54,7 +54,7 @@ use crate::{
         Vanilla,
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
     },
-    package::{EnvironmentID, EnvironmentName, paths::PackagePath},
+    package::{EnvironmentID, EnvironmentName, RootPackage, paths::PackagePath},
     schema::{OriginalID, PackageName, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
@@ -210,7 +210,7 @@ impl TestPackageGraph {
 
             project = project
                 .file(dir.join("Move.toml"), manifest)
-                .file(dir.join("Move.published"), pubfile);
+                .file(dir.join("Published.toml"), pubfile);
         }
 
         Scenario {
@@ -525,6 +525,7 @@ impl Scenario {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
 
@@ -556,9 +557,9 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("a/Move.published"), @"");
+        assert_snapshot!(graph.read_file("a/Published.toml"), @"");
 
-        assert_snapshot!(graph.read_file("b/Move.published"), @"");
+        assert_snapshot!(graph.read_file("b/Published.toml"), @"");
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -628,7 +629,7 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("c/Move.published"), @r###"
+        assert_snapshot!(graph.read_file("c/Published.toml"), @r###"
         [published._test_env]
         chain-id = "_test_env_id"
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"

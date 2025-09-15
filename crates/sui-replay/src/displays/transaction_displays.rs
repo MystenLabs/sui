@@ -77,9 +77,9 @@ impl Display for Pretty<'_, FullPTB> {
                     CallArg::Object(ObjectArg::Receiving(o)) => {
                         builder.push_record(vec![format!("{i:<3} Receiving Object  ID: {}", o.0)]);
                     }
-                    CallArg::BalanceWithdraw(r) => {
+                    CallArg::FundsWithdrawal(r) => {
                         builder.push_record(vec![format!(
-                            "{i:<3} Balance Withdraw reservation from {:?} and max amount {:?}",
+                            "{i:<3} Funds Withdrawal reservation from {:?} and max amount {:?}",
                             r.withdraw_from, r.reservation
                         )]);
                     }

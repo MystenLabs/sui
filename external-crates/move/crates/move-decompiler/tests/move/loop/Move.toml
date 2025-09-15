@@ -1,0 +1,6 @@
+[package]
+name = "loop"
+edition = "2024.beta"
+
+[addresses]
+addr = "0x0"

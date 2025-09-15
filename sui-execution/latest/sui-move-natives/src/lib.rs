@@ -78,6 +78,7 @@ mod config;
 mod crypto;
 mod dynamic_field;
 mod event;
+mod funds_accumulator;
 mod object;
 pub mod object_runtime;
 mod random;
@@ -988,6 +989,16 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(event::get_events_by_type),
         ),
         ("event", "num_events", make_native!(event::num_events)),
+        (
+            "funds_accumulator",
+            "add_to_accumulator_address",
+            make_native!(funds_accumulator::add_to_accumulator_address),
+        ),
+        (
+            "funds_accumulator",
+            "withdraw_from_accumulator_address",
+            make_native!(funds_accumulator::withdraw_from_accumulator_address),
+        ),
         (
             "groth16",
             "verify_groth16_proof_internal",

@@ -47,10 +47,10 @@ impl TransactionInput {
                     Receiving::from_object_ref(object_id, version, digest, scope),
                 ),
             },
-            // TODO: Handle BalanceWithdraw
-            CallArg::BalanceWithdraw(_) => Self::Pure(Pure {
+            // TODO: Handle FundsWithdrawal
+            CallArg::FundsWithdrawal(_) => Self::Pure(Pure {
                 bytes: Some(Base64::from(
-                    b"TODO: BalanceWithdraw not supported".to_vec(),
+                    b"TODO: FundsWithdrawal not supported".to_vec(),
                 )),
             }),
         }

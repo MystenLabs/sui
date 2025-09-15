@@ -11,21 +11,21 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
-use crate::{
-    api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},
-    error::{bad_user_input, RpcError},
-    scope::Scope,
-};
+use crate::error::{bad_user_input, upcast, RpcError};
 
-/// Error type for user input validation in executeTransaction
+/// Error type for user input validation in transaction operations
 #[derive(thiserror::Error, Debug)]
-enum TransactionInputError {
+pub enum TransactionInputError {
     #[error("Invalid BCS encoding in transaction data: {0}")]
     InvalidTransactionBcs(bcs::Error),
 
     #[error("Invalid signature format in signature {index}: {err}")]
     InvalidSignatureFormat { index: usize, err: FastCryptoError },
 }
+use crate::{
+    api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},
+    scope::Scope,
+};
 
 pub struct Mutation;
 
@@ -73,13 +73,14 @@ impl Mutation {
             .await
         {
             Ok(response) => {
-                let scope = Scope::new(ctx)?.with_execution_output();
+                let scope = Scope::new(ctx)?;
                 let effects = TransactionEffects::from_execution_response(
                     scope,
                     response,
                     tx_data,
                     parsed_signatures,
-                );
+                )
+                .map_err(upcast)?;
 
                 Ok(ExecutionResult {
                     effects: Some(effects),

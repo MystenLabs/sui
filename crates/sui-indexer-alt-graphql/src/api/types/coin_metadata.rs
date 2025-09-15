@@ -30,7 +30,7 @@ use super::{
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     owner::Owner,
-    transaction::Transaction,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
 
 pub(crate) struct CoinMetadata {
@@ -112,6 +112,8 @@ impl CoinMetadata {
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
@@ -137,6 +139,8 @@ impl CoinMetadata {
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic object field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,
@@ -296,6 +300,21 @@ impl CoinMetadata {
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
+    }
+
+    /// The transactions that sent objects to this object.
+    pub(crate) async fn received_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        self.super_
+            .received_transactions(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// The overall balance of coins issued.

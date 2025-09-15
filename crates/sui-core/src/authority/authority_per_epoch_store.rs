@@ -92,6 +92,9 @@ use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
 use super::shared_object_version_manager::AssignedVersions;
+use super::submitted_transaction_cache::{
+    SubmittedTransactionCache, SubmittedTransactionCacheMetrics,
+};
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use super::transaction_reject_reason_cache::TransactionRejectReasonCache;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -423,6 +426,9 @@ pub struct AuthorityPerEpochStore {
 
     /// A cache that maintains the reject vote reason for a transaction.
     pub(crate) tx_reject_reason_cache: Option<TransactionRejectReasonCache>,
+
+    /// A cache that tracks submitted transactions to prevent DoS through excessive resubmissions.
+    pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -968,6 +974,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
+        submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1130,6 +1137,9 @@ impl AuthorityPerEpochStore {
             None
         };
 
+        let submitted_transaction_cache =
+            SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
+
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
@@ -1171,6 +1181,7 @@ impl AuthorityPerEpochStore {
             end_of_epoch_execution_time_observations: OnceCell::new(),
             consensus_tx_status_cache,
             tx_reject_reason_cache,
+            submitted_transaction_cache,
             settlement_registrations: Default::default(),
         });
 
@@ -1255,6 +1266,12 @@ impl AuthorityPerEpochStore {
         self.protocol_config().enable_accumulators() && self.accumulator_root_exists()
     }
 
+    pub fn coin_registry_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .coin_registry_obj_initial_shared_version()
+            .is_some()
+    }
+
     pub fn coin_deny_list_state_exists(&self) -> bool {
         self.epoch_start_configuration
             .coin_deny_list_obj_initial_shared_version()
@@ -1324,6 +1341,7 @@ impl AuthorityPerEpochStore {
             expensive_safety_check_config,
             self.chain,
             previous_epoch_last_checkpoint,
+            self.submitted_transaction_cache.metrics(),
         )
     }
 
@@ -4456,6 +4474,23 @@ impl AuthorityPerEpochStore {
             return Ok(ConsensusCertificateResult::Ignored);
         }
 
+        let fail_dkg_early = self.protocol_config().cancel_for_failed_dkg_early();
+
+        if fail_dkg_early
+            && dkg_failed
+            && self.randomness_state_enabled()
+            && transaction.transaction_data().uses_randomness()
+        {
+            debug!(
+                "Canceling randomness-using transaction {:?} because DKG failed",
+                transaction.digest(),
+            );
+            return Ok(ConsensusCertificateResult::Cancelled((
+                transaction,
+                CancelConsensusCertificateReason::DkgFailed,
+            )));
+        }
+
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             &transaction,
@@ -4514,7 +4549,8 @@ impl AuthorityPerEpochStore {
             return Ok(deferral_result);
         }
 
-        if dkg_failed
+        if !fail_dkg_early
+            && dkg_failed
             && self.randomness_state_enabled()
             && transaction.transaction_data().uses_randomness()
         {

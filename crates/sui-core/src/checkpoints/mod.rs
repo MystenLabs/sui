@@ -25,7 +25,7 @@ use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{NotifyRead, CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME};
 use mysten_common::{assert_reachable, debug_fatal, fatal};
-use mysten_metrics::{monitored_future, monitored_scope, spawn_monitored_task, MonitoredFutureExt};
+use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -38,7 +38,6 @@ use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
-use tokio::task::JoinSet;
 use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -2957,9 +2956,9 @@ impl CheckpointService {
         }
 
         let (builder_finished_tx, builder_finished_rx) = tokio::sync::oneshot::channel();
-        let mut tasks = JoinSet::new();
-        tasks.spawn(monitored_future!(aggregator.run()));
-        tasks.spawn(monitored_future!(state_hasher.run()));
+
+        let state_hasher_task = spawn_monitored_task!(state_hasher.run());
+        let aggregator_task = spawn_monitored_task!(aggregator.run());
 
         spawn_monitored_task!(async move {
             epoch_store
@@ -2969,9 +2968,16 @@ impl CheckpointService {
                 })
                 .await
                 .ok();
+
+            // state hasher will terminate as soon as it has finished processing all messages from builder
+            state_hasher_task
+                .await
+                .expect("state hasher should exit normally");
+
             // builder must shut down before aggregator and state_hasher, since it sends
             // messages to them
-            tasks.shutdown().await;
+            aggregator_task.abort();
+            aggregator_task.await.ok();
         });
 
         // If this times out, the validator may still start up. The worst that can

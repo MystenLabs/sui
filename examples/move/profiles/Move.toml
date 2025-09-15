@@ -1,0 +1,9 @@
+[package]
+name = "profiles"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+profiles = "0x0"

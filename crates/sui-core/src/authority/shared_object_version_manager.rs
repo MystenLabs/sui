@@ -322,7 +322,7 @@ impl SharedObjVerManager {
 
         let withdraw_type =
             assignable.as_tx().and_then(|tx| {
-                if tx.transaction_data().has_balance_withdraws() {
+                if tx.transaction_data().has_funds_withdrawals() {
                     let accumulator_initial_version = epoch_store
                         .epoch_start_config()
                         .accumulator_root_obj_initial_shared_version()
@@ -507,7 +507,7 @@ mod tests {
     use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
 
     use sui_types::gas_coin::GAS;
-    use sui_types::transaction::BalanceWithdrawArg;
+    use sui_types::transaction::FundsWithdrawalArg;
     use sui_types::type_input::TypeInput;
     use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
@@ -996,7 +996,7 @@ mod tests {
         pub fn add_withdraw_transaction(&mut self) -> TransactionKey {
             let mut ptb_builder = ProgrammableTransactionBuilder::new();
             ptb_builder
-                .balance_withdraw(BalanceWithdrawArg::new_with_amount(
+                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                     200,
                     TypeInput::from(GAS::type_tag()),
                 ))
@@ -1040,7 +1040,7 @@ mod tests {
             }
             // Add balance withdraw
             ptb_builder
-                .balance_withdraw(BalanceWithdrawArg::new_with_amount(
+                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                     200,
                     TypeInput::from(GAS::type_tag()),
                 ))

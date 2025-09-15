@@ -6,6 +6,7 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::fake {
     use sui::coin;
 

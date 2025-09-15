@@ -298,20 +298,23 @@ pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
     let mut client_config: SuiClientConfig = PersistedConfig::read(&wallet_conf)?;
 
-    let default_active_address = if let Some(address) = keystore.addresses().first() {
-        *address
-    } else {
-        keystore
-            .generate(None, GenerateOptions::default())
-            .await?
-            .address
-    };
+    if client_config.active_address.is_none() {
+        let default_active_address = if let Some(address) = keystore.addresses().first() {
+            *address
+        } else {
+            keystore
+                .generate(None, GenerateOptions::default())
+                .await?
+                .address
+        };
+
+        client_config.active_address = Some(default_active_address);
+    }
 
     if keystore.addresses().len() < 2 {
         keystore.generate(None, GenerateOptions::default()).await?;
     }
 
-    client_config.active_address = Some(default_active_address);
     client_config.save(&wallet_conf)?;
 
     let wallet =

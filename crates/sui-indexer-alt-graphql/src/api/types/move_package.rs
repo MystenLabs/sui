@@ -50,7 +50,7 @@ use super::{
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, Validator as OFValidator},
     owner::Owner,
-    transaction::Transaction,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
     type_origin::TypeOrigin,
 };
 
@@ -483,6 +483,21 @@ impl MovePackage {
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
+    }
+
+    /// The transactions that sent objects to this object.
+    pub(crate) async fn received_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        self.super_
+            .received_transactions(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// A table identifying which versions of a package introduced each of its types.

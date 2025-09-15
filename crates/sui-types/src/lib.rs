@@ -35,6 +35,7 @@ pub mod base_types;
 pub mod bridge;
 pub mod clock;
 pub mod coin;
+pub mod coin_registry;
 pub mod collection_types;
 pub mod committee;
 pub mod config;
@@ -82,6 +83,7 @@ pub mod ptb_trace;
 pub mod quorum_driver_types;
 pub mod randomness_state;
 pub mod rpc_proto_conversions;
+pub mod rpc_proto_conversions_v2beta2;
 pub mod signature;
 pub mod signature_verification;
 pub mod storage;
@@ -137,6 +139,7 @@ built_in_ids! {
     SUI_BRIDGE_ADDRESS / SUI_BRIDGE_OBJECT_ID = 0x9;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
+    SUI_COIN_REGISTRY_ADDRESS / SUI_COIN_REGISTRY_OBJECT_ID = 0xc;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

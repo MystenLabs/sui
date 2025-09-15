@@ -395,9 +395,9 @@ dependencies = [
 
 [[package]]
 name = "arc-swap"
-version = "1.6.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
+checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 dependencies = [
  "serde",
 ]
@@ -2206,9 +2206,9 @@ dependencies = [
 
 [[package]]
 name = "blst"
-version = "0.3.11"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c94087b935a822949d3291a9989ad2b2051ea141eda0fd4e478a75f6aa3e604b"
+checksum = "4378725facc195f1a538864863f6de233b500a8862747e7f165078a419d5e874"
 dependencies = [
  "cc",
  "glob",
@@ -5848,6 +5848,15 @@ dependencies = [
 
 [[package]]
 name = "heck"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
@@ -8225,6 +8234,7 @@ dependencies = [
  "codespan-reporting",
  "derive-where",
  "futures",
+ "heck 0.3.3",
  "indoc",
  "itertools 0.10.5",
  "jsonrpc",
@@ -8246,6 +8256,7 @@ dependencies = [
  "toml_edit 0.22.24",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
@@ -13805,7 +13816,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=21b2155487cbecf3c46c035b3c361f2cdc4686ab#21b2155487cbecf3c46c035b3c361f2cdc4686ab"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -14814,12 +14825,14 @@ dependencies = [
  "futures",
  "move-core-types",
  "prometheus",
+ "prost-types",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
  "sui-kvstore",
  "sui-package-resolver",
  "sui-pg-db",
+ "sui-rpc",
  "sui-rpc-api",
  "sui-sql-macro",
  "sui-types",
@@ -15872,7 +15885,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=21b2155487cbecf3c46c035b3c361f2cdc4686ab#21b2155487cbecf3c46c035b3c361f2cdc4686ab"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16031,7 +16044,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=21b2155487cbecf3c46c035b3c361f2cdc4686ab#21b2155487cbecf3c46c035b3c361f2cdc4686ab"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "base64ct",
  "bcs",
@@ -18173,6 +18186,7 @@ dependencies = [
 name = "typed-store"
 version = "0.4.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "backoff",
  "bcs",

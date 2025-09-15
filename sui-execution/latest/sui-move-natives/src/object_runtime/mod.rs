@@ -40,8 +40,8 @@ use sui_types::{
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
     TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-    SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID,
+    SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::error;
 
@@ -287,6 +287,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_DENY_LIST_OBJECT_ID,
             SUI_BRIDGE_OBJECT_ID,
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            SUI_COIN_REGISTRY_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {

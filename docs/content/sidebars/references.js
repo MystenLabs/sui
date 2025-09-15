@@ -59,8 +59,8 @@ const references = [
 					id: 'references/sui-graphql',
 				},
 				items: [
-					graphqlAlpha,
 					graphqlBeta,
+					graphqlAlpha,
 				],
 			},
 			{
@@ -87,6 +87,7 @@ const references = [
 			'references/cli/keytool',
 			'references/cli/move',
       		'references/cli/replay',
+			'references/cli/trace-analysis',
 			'references/cli/validator',
 		],
 	},

@@ -256,11 +256,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             );
             let dep_index = Box::pin(future).await?;
 
-            // TODO(manos): re-check the implementation here --  to make sure nothing was missed.
-            // TODO(manos)(2): Do we wanna error for missmatches on legacy packages? Will come on a follow-up.
-            // TODO(manos)(3): Do we wanna rename only for legacy parents, and error out for modern parents?
-            // If we're dealing with legacy packages, we are free to fix the naming in the outgoing edge, to match
-            // our modern system names.
+            // If we're dealing with legacy packages, we are fixing the naming in the outgoing edge,
+            // to match our modern system names.
             let edge_name = if fetched.is_legacy() {
                 fetched.name()
             } else {

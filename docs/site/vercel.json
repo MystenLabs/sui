@@ -128,9 +128,10 @@
       { "source": "/guides/operator/validator-config", "destination": "/guides/operator/validator/validator-config"},
       { "source": "/guides/operator/validator-tasks", "destination": "/guides/operator/validator/validator-tasks"},
       { "source": "/standards/deepbookv2/:path*", "destination": "/standards/deepbook"},
+      { "source": "/guides/developer/advanced/graphql-migration", "destination": "/guides/developer/getting-started/graphql-rpc", "permanent": true },
       { "source": "/references/framework/bridge/:path*", "destination": "/references/framework/sui_bridge/:path*"},
-      { "source": "/references/framework/std/:path*", "destination": "/references/framework/sui_std/:path"},
-      { "source": "/references/framework/sui/:path*", "destination": "/references/framework/sui_sui/:path"},
-      { "source": "/references/framework/sui_system/:path*", "destination": "/references/framework/sui_sui_system/:path"}
+      { "source": "/references/framework/std/:path*", "destination": "/references/framework/sui_std/:path*"},
+      { "source": "/references/framework/sui/:path*", "destination": "/references/framework/sui_sui/:path*"},
+      { "source": "/references/framework/sui_system/:path*", "destination": "/references/framework/sui_sui_system/:path*"}
     ]
   }

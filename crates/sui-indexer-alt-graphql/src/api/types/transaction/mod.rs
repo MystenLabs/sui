@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Range, sync::Arc};
+use std::{ops::Deref, ops::Range, sync::Arc};
 
 use anyhow::Context as _;
 use async_graphql::{
@@ -24,23 +24,29 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
-use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, sui_address::SuiAddress},
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
 use super::{
     address::Address,
     checkpoint::filter::checkpoint_bounds,
     epoch::Epoch,
     gas_input::GasInput,
-    transaction::filter::{tx_bounds, TransactionFilter},
+    transaction::filter::TransactionFilter,
     transaction_effects::{EffectsContents, TransactionEffects},
     transaction_kind::TransactionKind,
     user_signature::UserSignature,
+};
+
+use crate::{
+    api::{
+        scalars::{
+            base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
+            module_filter::ModuleFilter, sui_address::SuiAddress,
+        },
+        types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
+    },
+    error::RpcError,
+    pagination::Page,
+    scope::Scope,
+    task::watermark::Watermarks,
 };
 
 pub(crate) mod filter;
@@ -200,7 +206,10 @@ impl Transaction {
             after_checkpoint,
             at_checkpoint,
             before_checkpoint,
+            function,
+            kind,
             affected_address,
+            affected_object,
             sent_address,
         }: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
@@ -230,21 +239,16 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
+        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| *c.deref()).await?;
 
-        // Inclusive cursor bounds
-        let tx_lo = page
-            .after()
-            .map_or(tx_bounds.start, |cursor| cursor.max(tx_bounds.start));
-        let tx_hi = page
-            .before()
-            .map(|cursor: &JsonCursor<u64>| cursor.saturating_add(1))
-            .map_or(tx_bounds.end, |cursor| cursor.min(tx_bounds.end));
-
-        let tx_bounds = tx_lo..tx_hi;
-
-        let tx_digest_keys = if affected_address.is_some() || sent_address.is_some() {
+        let tx_digest_keys = if let Some(function) = function {
+            tx_call(ctx, tx_bounds, &page, function, sent_address).await?
+        } else if let Some(kind) = kind {
+            tx_kind(ctx, tx_bounds, &page, kind, sent_address).await?
+        } else if affected_address.is_some() || sent_address.is_some() {
             tx_affected_address(ctx, tx_bounds, &page, affected_address, sent_address).await?
+        } else if let Some(affected_object) = affected_object {
+            tx_affected_object(ctx, tx_bounds, &page, affected_object, sent_address).await?
         } else {
             tx_unfiltered(tx_bounds, &page)
         };
@@ -282,6 +286,93 @@ impl Transaction {
     }
 }
 
+async fn tx_call(
+    ctx: &Context<'_>,
+    tx_bounds: Range<u64>,
+    page: &Page<CTransaction>,
+    function: FqNameFilter,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    let (package, module, member) = match function {
+        FqNameFilter::Module(module_filter) => match module_filter {
+            ModuleFilter::Package(package) => (package, None, None),
+            ModuleFilter::Module(package, module) => (package, Some(module), None),
+        },
+        FqNameFilter::FqName(package, module, member) => (package, Some(module), Some(member)),
+    };
+
+    let mut query = query!(
+        r#"
+SELECT
+    tx_sequence_number
+FROM
+    tx_calls
+WHERE
+    package = {Bytea} /* package */
+"#,
+        package.into_vec(),
+    );
+
+    if let Some(module) = module {
+        query += query!(
+            r#"
+    AND module = {Text} /* module */
+"#,
+            module,
+        );
+
+        if let Some(member) = member {
+            query += query!(
+                r#"
+    AND function = {Text} /* member */
+"#,
+                member,
+            );
+        }
+    }
+    if let Some(sent_address) = sent_address {
+        query += query!(
+            r#"
+    AND sender = {Bytea} /* sender */
+"#,
+            sent_address.into_vec(),
+        );
+    }
+    tx_sequence_numbers(ctx, tx_bounds, page, query).await
+}
+
+async fn tx_kind(
+    ctx: &Context<'_>,
+    tx_bounds: Range<u64>,
+    page: &Page<CTransaction>,
+    kind: TransactionKindInput,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    match (kind, sent_address) {
+        // We can simplify the query to just the `tx_affected_addresses` table if ProgrammableTX
+        // and sender are specified.
+        (TransactionKindInput::ProgrammableTx, Some(_)) => {
+            tx_affected_address(ctx, tx_bounds, page, None, sent_address).await
+        }
+        (TransactionKindInput::SystemTx, Some(_)) => Ok(vec![]),
+        // Otherwise, we can ignore the sender always, and just query the `tx_kinds` table.
+        (_, None) => {
+            let query = query!(
+                r#"
+SELECT
+    tx_sequence_number
+FROM
+    tx_kinds
+WHERE
+    tx_kind = {BigInt} /* kind */
+"#,
+                kind as i64,
+            );
+            tx_sequence_numbers(ctx, tx_bounds, page, query).await
+        }
+    }
+}
+
 async fn tx_affected_address(
     ctx: &Context<'_>,
     tx_bounds: Range<u64>,
@@ -303,14 +394,37 @@ WHERE
         affected_address.into_vec(),
     );
     if let Some(sent_address) = sent_address {
-        query += query!(
-            r#"
-AND sender = {Bytea} /* sent_address */
-"#,
-            sent_address.into_vec()
-        );
+        query += filter_sender(sent_address);
     }
     tx_sequence_numbers(ctx, tx_bounds, page, query).await
+}
+
+async fn tx_affected_object(
+    ctx: &Context<'_>,
+    tx_bounds: Range<u64>,
+    page: &Page<CTransaction>,
+    affected_object: SuiAddress,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    let mut query = query!(
+        r#"
+SELECT
+    tx_sequence_number
+FROM
+    tx_affected_objects
+WHERE
+    affected = {Bytea} /* affected_object */
+"#,
+        affected_object.into_vec(),
+    );
+    if let Some(sent_address) = sent_address {
+        query += filter_sender(sent_address);
+    }
+    tx_sequence_numbers(ctx, tx_bounds, page, query).await
+}
+
+fn filter_sender(sent_address: SuiAddress) -> Query<'static> {
+    query!(" AND sender = {Bytea}", sent_address.into_vec())
 }
 
 async fn tx_sequence_numbers(

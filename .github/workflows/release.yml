@@ -218,6 +218,21 @@ jobs:
           files: |
             ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
+  trigger-walrus-testnet-tag-update:
+    name: Trigger Walrus Testnet Tag Update
+    needs: release-build
+    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Dispatch Sui Testnet tag update in MystenLabs/walrus
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/walrus
+          token: ${{ secrets.WALRUS_REPO_DISPATCH }}
+          event-type: update-walrus-sui-testnet-tag
+          client-payload: '{"new_tag": "${{ env.TAG_NAME }}"}'            
+
   update-homebrew-formula:
     name: Run brew bump-formula-pr for sui on testnet releases
     needs: release-build

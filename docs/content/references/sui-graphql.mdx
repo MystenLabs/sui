@@ -24,9 +24,11 @@ To get started with GraphQL for the Sui RPC, check out the [Getting Started](/gu
 
 :::
 
+- [Beta](./sui-api/sui-graphql/beta/reference)
+
 - [Alpha](./sui-api/sui-graphql/alpha/reference)
 
-- [Beta](./sui-api/sui-graphql/beta/reference)
+
 
 ## Key types
 
@@ -36,10 +38,10 @@ All GraphQL API elements are accessible via the left sidebar, the following are 
 - "Mutations" lists operations that can modify chain state, like <UnsafeLink href="/references/sui-api/sui-graphql/reference/api/mutations/execute-transaction-block">executeTransactionBlock</UnsafeLink>.
 - <UnsafeLink href="/references/sui-api/sui-graphql/reference/types/objects/object">Object</UnsafeLink> is the type representing all on-chain objects (Move values and packages).
 - <UnsafeLink href="/references/sui-api/sui-graphql/reference/types/objects/address">Address</UnsafeLink> corresponds to account addresses (derived from the public keys of signatures that sign transactions) and can be used to query the objects owned by these accounts and the transactions they have signed or been affected by.
-- <UnsafeLink href="/references/sui-api/sui-graphql/reference/types/objects/owner">Owner</UnsafeLink> represents any entity that can own a <UnsafeLink href="/references/sui-api/sui-graphql/reference/types/objects/move-object">MoveObject</UnsafeLink> to handle cases where it is not known whether the owner is an <UnsafeLink href="/references/sui-api/sui-graphql/reference/types/objects/object">Object</UnsafeLink> or an <UnsafeLink href="/references/sui-api/sui-graphql/reference/types/objects/address">Address</UnsafeLink> (for example, from the perspective of a Move object looking at its owner).
+<UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/owner">Owner</UnsafeLink> represents any entity that can own a <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/move-object">MoveObject</UnsafeLink> to handle cases where it is not known whether the owner is an <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/object">Object</UnsafeLink> or an <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/address">Address</UnsafeLink> (for example, from the perspective of a Move object looking at its owner).
 
 ## Related links
 
-<RelatedLink to="/guides/developer/advanced/graphql-migration.mdx" />
 <RelatedLink to="/guides/developer/getting-started/graphql-rpc.mdx" />
 <RelatedLink to="/concepts/graphql-rpc.mdx" />
+<RelatedLink to="/concepts/graphql-indexer" />

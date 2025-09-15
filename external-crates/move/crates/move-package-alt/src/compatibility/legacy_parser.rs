@@ -29,6 +29,10 @@ use super::{legacy::LegacyData, parse_address_literal};
 
 const EMPTY_ADDR_STR: &str = "_";
 
+/// For packages that do not have a name defined, we are using a predefined name
+/// to be able to identify their status.
+pub(crate) const NO_NAME_LEGACY_PACKAGE_NAME: &str = "unnamed_legacy_package";
+
 pub const PACKAGE_NAME: &str = "package";
 const BUILD_NAME: &str = "build";
 const ADDRESSES_NAME: &str = "addresses";
@@ -145,7 +149,8 @@ fn parse_source_manifest(
                 .context("Error parsing '[dev-dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let modern_name = derive_modern_name(&addresses, path)?;
+            let modern_name = derive_modern_name(&addresses, path)?
+                .unwrap_or(PackageName::new(NO_NAME_LEGACY_PACKAGE_NAME).expect("Cannot fail"));
             let new_name = temporary_spanned(modern_name.clone());
 
             let original_id = addresses.get(modern_name.as_str()).copied().flatten();
@@ -690,7 +695,7 @@ fn get_manifest_address_info(
 fn derive_modern_name(
     addresses: &BTreeMap<Identifier, Option<AccountAddress>>,
     path: &PackagePath,
-) -> Result<PackageName> {
+) -> Result<Option<PackageName>> {
     debug!("Address to derve modern name from: {:?}", addresses);
     // Find all the addresses with 0x0.
     let zero_addresses = addresses
@@ -701,17 +706,9 @@ fn derive_modern_name(
         .map(|(name, _)| name)
         .collect::<Vec<_>>();
 
-    // If we have multiple, we cannot continue as this is not allowed.
-    if zero_addresses.len() > 1 {
-        bail!(
-            "Multiple 0x0 addresses found. This is not allowed. Duplicate names found: {:?}",
-            zero_addresses
-        );
-    }
-
     // If we have a single 0x0 address, we can use it as the name safely.
     if zero_addresses.len() == 1 {
-        Ok(PackageName::new(zero_addresses[0].to_string())?)
+        Ok(Some(PackageName::new(zero_addresses[0].to_string())?))
     } else {
         find_module_name_for_package(path)
     }

@@ -94,6 +94,8 @@ type Address implements IAddressable {
 	defaultSuinsName: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to the object with this address.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -104,6 +106,8 @@ type Address implements IAddressable {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to the object with this address.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -129,6 +133,12 @@ type Address implements IAddressable {
 	Objects owned by this address, optionally filtered by type.
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	Transactions associated with this address.
+	
+	Similar behavior to the `transactions` in Query but supporting the additional `AddressTransactionRelationship` filter, which defaults to `SENT`.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String, relation: AddressTransactionRelationship, filter: TransactionFilter): TransactionConnection
 }
 
 """
@@ -139,6 +149,20 @@ type AddressOwner {
 	The owner's address.
 	"""
 	address: Address
+}
+
+"""
+The possible relationship types for a transaction: sent or affected.
+"""
+enum AddressTransactionRelationship {
+	"""
+	Transactions this address has sent.
+	"""
+	SENT
+	"""
+	Transactions that this address was involved in, either as the sender, sponsor, or as the owner of some object that was created, modified or transferred.
+	"""
+	AFFECTED
 }
 
 """
@@ -503,6 +527,8 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -513,6 +539,8 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -580,6 +608,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
 	storageRebate: BigInt
@@ -595,6 +627,16 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	The version of this object that this content comes from.
 	"""
 	version: UInt53
+}
+
+"""
+System transaction for creating the coin registry.
+"""
+type CoinRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 """
@@ -629,6 +671,36 @@ type CommandEdge {
 	The item at the end of the edge
 	"""
 	node: Command!
+}
+
+"""
+A value produced or modified during command execution.
+
+This can represent either a return value from a command or an argument that was mutated by reference.
+"""
+type CommandOutput {
+	"""
+	The transaction argument that this value corresponds to (if any).
+	"""
+	argument: TransactionArgument
+	"""
+	The structured Move value, if available.
+	"""
+	value: MoveValue
+}
+
+"""
+The intermediate results for each command of a transaction simulation.
+"""
+type CommandResult {
+	"""
+	Changes made to arguments that were mutably borrowed by each command in this transaction.
+	"""
+	mutatedReferences: [CommandOutput!]
+	"""
+	Return results of each command in this transaction.
+	"""
+	returnValues: [CommandOutput!]
 }
 
 """
@@ -788,6 +860,8 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -798,6 +872,8 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -860,6 +936,10 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
@@ -932,7 +1012,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -1088,6 +1168,35 @@ type Epoch {
 	validatorSet: ValidatorSet
 }
 
+type EpochConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [EpochEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Epoch!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type EpochEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Epoch!
+}
+
 type Event {
 	"""
 	The Move value emitted for this event.
@@ -1163,6 +1272,24 @@ input EventFilter {
 	Limit to event that occured strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
+	"""
+	Events emitted by a particular module. An event is emitted by a particular module if some function in the module is called by a PTB and emits an event.
+	
+	Modules can be filtered by their package, or package::module. We currently do not support filtering by emitting module and event type at the same time so if both are provided in one filter, the query will error.
+	"""
+	module: String
+	"""
+	Filter on events by transaction sender address.
+	"""
+	sender: SuiAddress
+	"""
+	This field is used to specify the type of event emitted.
+	
+	Events can be filtered by their type's package, package::module, or their fully qualified type name.
+	
+	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
+	"""
+	type: String
 }
 
 """
@@ -1182,6 +1309,10 @@ type ExecutionError {
 	"""
 	constant: String
 	"""
+	The function that the abort originated from. Only populated for Move aborts and primitive runtime errors that have function name information.
+	"""
+	function: MoveFunction
+	"""
 	The error's name. Only populated for clever errors.
 	"""
 	identifier: String
@@ -1189,6 +1320,16 @@ type ExecutionError {
 	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
 	"""
 	instructionOffset: Int
+	"""
+	Human readable explanation of why the transaction failed.
+	
+	For Move aborts, the error message will be resolved to a human-readable form if possible, otherwise it will fall back to displaying the abort code and location.
+	"""
+	message: String!
+	"""
+	The module that the abort originated from. Only populated for Move aborts and primitive runtime errors.
+	"""
+	module: MoveModule
 	"""
 	The source line number for the abort. Only populated for clever errors.
 	"""
@@ -1388,6 +1529,8 @@ interface IMoveObject {
 	contents: MoveValue
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -1398,6 +1541,8 @@ interface IMoveObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -1457,6 +1602,10 @@ interface IObject {
 	"""
 	previousTransaction: Transaction
 	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
 	storageRebate: BigInt
@@ -1512,6 +1661,10 @@ type MakeMoveVecCommand {
 	The values to pack into the vector, all of the same type.
 	"""
 	elements: [TransactionArgument!]
+	"""
+	If the elements are not objects, or the vector is empty, a type must be supplied.
+	"""
+	type: MoveType
 }
 
 """
@@ -1931,6 +2084,8 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	digest: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
@@ -1941,6 +2096,8 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 	"""
 	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
@@ -2001,6 +2158,10 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
@@ -2136,6 +2297,10 @@ type MovePackage implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
@@ -2424,12 +2589,40 @@ type Object implements IAddressable & IObject {
 	"""
 	digest: String
 	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
 	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
 	If the address does not own any coins of a given type, a balance of zero is returned for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	
@@ -2460,6 +2653,10 @@ type Object implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
@@ -2906,6 +3103,10 @@ type Query {
 	"""
 	epoch(epochId: UInt53): Epoch
 	"""
+	Paginate epochs that are in the network.
+	"""
+	epochs(first: Int, after: String, last: Int, before: String): EpochConnection
+	"""
 	Paginate events that are emitted in the network, optionally filtered by event filters.
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
@@ -3019,6 +3220,14 @@ type Query {
 	Configuration for this RPC service.
 	"""
 	serviceConfig: ServiceConfig!
+	"""
+	Simulate a transaction to preview its effects without executing it on chain.
+	
+	- `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
+	
+	Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
+	"""
+	simulateTransaction(transactionDataBcs: Base64!): SimulationResult!
 	"""
 	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
 	"""
@@ -3259,6 +3468,34 @@ type SharedInput {
 	This has implications for scheduling: Transactions that just read shared objects at a certain version (mutable = false) can be executed concurrently, while transactions that write shared objects (mutable = true) must be executed serially with respect to each other.
 	"""
 	mutable: Boolean
+}
+
+"""
+The result of simulating a transaction, including the predicted effects, events, and any errors.
+"""
+type SimulationResult {
+	"""
+	The predicted effects of the transaction if it were executed.
+	
+	`None` if the simulation failed due to an error.
+	"""
+	effects: TransactionEffects
+	"""
+	Error message if the simulation failed.
+	
+	`None` if the simulation was successful.
+	"""
+	error: String
+	"""
+	The events that would be emitted if the transaction were executed.
+	
+	`None` if the simulation failed or no events would be emitted.
+	"""
+	events: [Event!]
+	"""
+	The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
+	"""
+	outputs: [CommandResult!]
 }
 
 """
@@ -3522,6 +3759,12 @@ input TransactionFilter {
 	"""
 	affectedAddress: SuiAddress
 	"""
+	Limit to transactions that interacted with the given object.
+	The object could have been created, read, modified, deleted, wrapped, or unwrapped by the transaction.
+	Objects that were passed as a `Receiving` input are not considered to have been affected by a transaction unless they were actually received.
+	"""
+	affectedObject: SuiAddress
+	"""
 	Filter to transactions that occurred strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
@@ -3533,6 +3776,14 @@ input TransactionFilter {
 	Filter to transaction that occurred strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
+	"""
+	Filter transactions by move function called. Calls can be filtered by the `package`, `package::module`, or the `package::module::name` of their function.
+	"""
+	function: String
+	"""
+	An input filter selecting for either system or programmable transactions.
+	"""
+	kind: TransactionKindInput
 	"""
 	Limit to transactions that were sent by the given address.
 	"""
@@ -3577,6 +3828,21 @@ type TransactionInputEdge {
 Different types of transactions that can be executed on the Sui network.
 """
 union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction | ProgrammableSystemTransaction
+
+"""
+An input filter selecting for either system or programmable transactions.
+"""
+enum TransactionKindInput {
+	"""
+	A system transaction can be one of several types of transactions.
+	See [unions/transaction-block-kind] for more details.
+	"""
+	SYSTEM_TX
+	"""
+	A user submitted transaction block.
+	"""
+	PROGRAMMABLE_TX
+}
 
 """
 Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.

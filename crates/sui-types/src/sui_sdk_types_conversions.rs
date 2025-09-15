@@ -1163,7 +1163,7 @@ impl From<crate::transaction::CallArg> for Input {
                     ObjectReference::new(id.into(), version.value(), digest.into()),
                 ),
             },
-            crate::transaction::CallArg::BalanceWithdraw(_) => {
+            crate::transaction::CallArg::FundsWithdrawal(_) => {
                 // TODO(address-balances): Add support for balance withdraws.
                 todo!("Convert balance withdraw reservation to sdk Input")
             }
@@ -1463,6 +1463,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             ) => Self::StoreExecutionTimeObservations(stored_execution_time_observations.into()),
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
                 Self::AccumulatorRootCreate
+            }
+            crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
+                Self::CoinRegistryCreate
             }
         }
     }
