@@ -47,8 +47,10 @@ tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 
-move-core-types.workspace = true
 move-binary-format.workspace = true
+move-core-types.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
 
 bin-version.workspace = true
 sui-default-config.workspace = true
@@ -56,6 +58,7 @@ sui-display.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-reader.workspace = true
 sui-indexer-alt-schema.workspace = true
+sui-name-service.workspace = true
 sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true

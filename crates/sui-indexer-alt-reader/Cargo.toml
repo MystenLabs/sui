@@ -18,6 +18,7 @@ clap.workspace = true
 diesel.workspace = true
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 futures.workspace = true
+prost-types.workspace = true
 prometheus.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -34,6 +35,7 @@ sui-indexer-alt-schema.workspace = true
 sui-kvstore.workspace = true
 sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
+sui-rpc.workspace = true
 sui-rpc-api.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true

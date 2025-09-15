@@ -45,20 +45,22 @@
 { # Successfully fetch a dynamic field with primitive value
   object(address: "@{obj_1_0}") {
     address
+    dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
     asMoveObject {
-      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) {
-        name {
-          type { repr }
-          json
-        }
+      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+    }
+  }
+}
 
-        value {
-          ... on MoveValue {
-            type { repr }
-            json
-          }
-        }
-      }
+fragment DF on DynamicField {
+  name {
+    type { repr }
+    json
+  }
+  value {
+    ... on MoveValue {
+      type { repr }
+      json
     }
   }
 }
@@ -67,20 +69,22 @@
 { # Successfully fetch a dynamic field with object value (wrapped)
   object(address: "@{obj_1_0}") {
     address
+      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
     asMoveObject {
-      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) {
-        name {
-          type { repr }
-          json
-        }
+      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+    }
+  }
+}
 
-        value {
-          ... on MoveValue {
-            type { repr }
-            bcs
-          }
-        }
-      }
+fragment DF on DynamicField {
+  name {
+    type { repr }
+    json
+  }
+  value {
+    ... on MoveValue {
+      type { repr }
+      json
     }
   }
 }
@@ -89,24 +93,26 @@
 { # Successfully fetch a dynamic object field
   object(address: "@{obj_2_0}") {
     address
+    dynamicObjectField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DOF }
     asMoveObject {
-      dynamicObjectField(name: { type: "u64", bcs: "@{cursor_0}" }) {
-        name {
-          type { repr }
-          json
-        }
+      dynamicObjectField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DOF }
+    }
+  }
+}
 
-        value {
-          ... on MoveObject {
-            address
-            version
+fragment DOF on DynamicField {
+  name {
+    type { repr }
+    json
+  }
+  value {
+    ... on MoveObject {
+      address
+      version
 
-            contents {
-              type { repr }
-              json
-            }
-          }
-        }
+      contents {
+        type { repr }
+        json
       }
     }
   }
@@ -195,6 +201,10 @@ fragment asDF on Object {
     nodes {
       version
 
+      df42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+      df43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }
+      df45: dynamicField(name: { type: "u64", bcs: "@{cursor_2}" }) { ...DF }
+
       asMoveObject {
         df42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
         df43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }
@@ -218,6 +228,11 @@ fragment DF on DynamicField {
 
 fragment Parent on Object {
   version
+
+  df42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+  df43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }
+  df45: dynamicField(name: { type: "u64", bcs: "@{cursor_2}" }) { ...DF }
+
   asMoveObject {
     df42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
     df43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }

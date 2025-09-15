@@ -11,7 +11,9 @@ use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
     message_envelope::Message,
-    messages_checkpoint::{CheckpointContents as NativeCheckpointContents, CheckpointSummary},
+    messages_checkpoint::{
+        CheckpointCommitment, CheckpointContents as NativeCheckpointContents, CheckpointSummary,
+    },
 };
 
 use crate::{
@@ -28,7 +30,10 @@ use super::{
     checkpoint::filter::{checkpoint_bounds, cp_by_epoch, cp_unfiltered, CheckpointFilter},
     epoch::Epoch,
     gas::GasCostSummary,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+        CTransaction, Transaction,
+    },
     validator_aggregated_signature::ValidatorAggregatedSignature,
 };
 
@@ -80,6 +85,22 @@ impl Checkpoint {
 
 #[Object]
 impl CheckpointContents {
+    /// A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
+    /// e.g., object checkpoint states
+    async fn artifacts_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+
+        for commitment in &summary.checkpoint_commitments {
+            if let CheckpointCommitment::CheckpointArtifactsDigest(digest) = commitment {
+                return Ok(Some(digest.base58_encode()));
+            }
+        }
+
+        Ok(None)
+    }
+
     /// A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
     async fn digest(&self) -> Result<Option<String>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
@@ -175,7 +196,7 @@ impl CheckpointContents {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
             return Ok(None);
@@ -199,16 +220,24 @@ impl CheckpointContents {
 
 impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
+    ///
+    /// If no sequence_number is provided, defaults to the scope's checkpoint.
     /// Returns `None` if the checkpoint is set in the future relative to the current scope's
-    /// checkpoint.
-    pub(crate) fn with_sequence_number(scope: Scope, sequence_number: u64) -> Option<Self> {
-        (sequence_number <= scope.checkpoint_viewed_at()).then_some(Self {
+    /// checkpoint, or when no checkpoint is set in scope (e.g. execution scope, where checkpoint
+    /// queries return None to prevent temporal inconsistency).
+    pub(crate) fn with_sequence_number(scope: Scope, sequence_number: Option<u64>) -> Option<Self> {
+        let scope_checkpoint = scope.checkpoint_viewed_at()?;
+        let sequence_number = sequence_number.unwrap_or(scope_checkpoint);
+
+        (sequence_number <= scope_checkpoint).then_some(Self {
             scope,
             sequence_number,
         })
     }
 
     /// Paginate through checkpoints with filters applied.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
@@ -219,7 +248,10 @@ impl Checkpoint {
 
         // TODO: (henrychen) Update when we figure out retention for key-value stores.
         let cp_lo = 0;
-        let cp_hi_inclusive = scope.checkpoint_viewed_at();
+        let Some(cp_hi_inclusive) = scope.checkpoint_viewed_at() else {
+            // In execution scope, checkpoint pagination returns empty results
+            return Ok(Connection::new(false, false));
+        };
 
         let Some(cp_bounds) = checkpoint_bounds(
             filter.after_checkpoint.map(u64::from),
@@ -245,7 +277,7 @@ impl Checkpoint {
         for (cursor, cp_sequence_number) in results {
             conn.edges.push(Edge::new(
                 cursor.encode_cursor(),
-                Self::with_sequence_number(scope.clone(), cp_sequence_number).unwrap(),
+                Self::with_sequence_number(scope.clone(), Some(cp_sequence_number)).unwrap(),
             ));
         }
 

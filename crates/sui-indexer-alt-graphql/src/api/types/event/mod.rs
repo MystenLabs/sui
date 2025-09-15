@@ -3,14 +3,6 @@
 
 use std::sync::Arc;
 
-use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
@@ -26,14 +18,22 @@ use sui_types::{
     event::Event as NativeEvent,
 };
 
-pub(crate) mod filter;
-mod lookups;
+use crate::{
+    api::scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
+    error::RpcError,
+    pagination::Page,
+    scope::Scope,
+    task::watermark::Watermarks,
+};
 
 use super::{
-    address::Address, checkpoint::filter::checkpoint_bounds, event::filter::pg_tx_bounds,
-    move_type::MoveType, move_value::MoveValue, transaction::filter::tx_bounds,
-    transaction::Transaction,
+    address::Address, checkpoint::filter::checkpoint_bounds, move_module::MoveModule,
+    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::filter::tx_bounds_query, transaction::Transaction,
 };
+
+pub(crate) mod filter;
+mod lookups;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
 pub(crate) struct EventCursor {
@@ -57,7 +57,6 @@ pub(crate) struct Event {
     pub(crate) timestamp_ms: u64,
 }
 
-// TODO(DVX-1200): Support sendingModule - MoveModule
 #[Object]
 impl Event {
     /// The Move value emitted for this event.
@@ -103,18 +102,32 @@ impl Event {
             self.transaction_digest,
         ))
     }
+
+    /// The module containing the function that was called in the programmable transaction, that resulted in this event being emitted.
+    async fn transaction_module(&self) -> Option<MoveModule> {
+        let package = MovePackage::with_address(self.scope.clone(), self.native.package_id.into());
+        Some(MoveModule::with_fq_name(
+            package,
+            self.native.transaction_module.to_string(),
+        ))
+    }
 }
 
 impl Event {
     /// Paginates events based on the provided filters and page parameters.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CEvent>,
         filter: filter::EventFilter,
     ) -> Result<Connection<String, Event>, RpcError> {
-        let mut c = Connection::new(false, false);
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
 
+        let mut c = Connection::new(false, false);
         let pg_reader: &PgReader = ctx.data()?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
@@ -127,35 +140,28 @@ impl Event {
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
             reader_lo,
-            scope.checkpoint_viewed_at(),
+            checkpoint_viewed_at,
         ) else {
             return Ok(Connection::new(false, false));
         };
 
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi).await?;
         // TODO: (henry) clean up bounds functions with CheckpointBounds struct.
-        let pg_tx_bounds = pg_tx_bounds(&page, tx_bounds);
+        let tx_bounds_query = tx_bounds_query(
+            &cp_bounds,
+            global_tx_hi,
+            page.after().map_or(0, |c| c.tx_sequence_number),
+            page.before()
+                .map_or(global_tx_hi, |c| c.tx_sequence_number.saturating_add(1)),
+        );
 
         #[derive(QueryableByName)]
         struct TxSequenceNumber(
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
-        // TODO: (henry) update query to select from ev_emit_mod or ev_struct_inst based on filters.
-        let query = query!(
-            r#"
-            SELECT
-                tx_sequence_number
-            FROM
-                ev_struct_inst
-            WHERE
-                tx_sequence_number >= {BigInt}
-                AND tx_sequence_number < {BigInt}
-            ORDER BY
-                tx_sequence_number {}
-            LIMIT {BigInt}
-            "#,
-            pg_tx_bounds.start as i64,
-            pg_tx_bounds.end as i64,
+
+        let mut query = filter.query(tx_bounds_query)?;
+        query += query!(
+            r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
             if page.is_from_front() {
                 query!("ASC")
             } else {
@@ -178,8 +184,14 @@ impl Event {
             .unique()
             .collect();
 
-        let events =
-            lookups::events_from_sequence_numbers(&scope, ctx, &page, &tx_sequence_numbers).await?;
+        let events = lookups::events_from_sequence_numbers(
+            &scope,
+            ctx,
+            &page,
+            &tx_sequence_numbers,
+            &filter,
+        )
+        .await?;
 
         let (has_prev, has_next, edges) =
             page.paginate_results(events, |(cursor, _)| JsonCursor::new(*cursor));

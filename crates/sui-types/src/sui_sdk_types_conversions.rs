@@ -494,6 +494,18 @@ impl From<Digest> for crate::digests::Digest {
     }
 }
 
+impl From<crate::digests::CheckpointArtifactsDigest> for Digest {
+    fn from(value: crate::digests::CheckpointArtifactsDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<Digest> for crate::digests::CheckpointArtifactsDigest {
+    fn from(value: Digest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
 impl From<crate::committee::Committee> for ValidatorCommittee {
     fn from(value: crate::committee::Committee) -> Self {
         Self {
@@ -1020,6 +1032,11 @@ impl From<crate::messages_checkpoint::CheckpointCommitment> for CheckpointCommit
             crate::messages_checkpoint::CheckpointCommitment::ECMHLiveObjectSetDigest(digest) => {
                 Self::EcmhLiveObjectSet {
                     digest: digest.digest.into(),
+                }
+            }
+            crate::messages_checkpoint::CheckpointCommitment::CheckpointArtifactsDigest(digest) => {
+                Self::CheckpointArtifactsDigest {
+                    digest: digest.into(),
                 }
             }
         }

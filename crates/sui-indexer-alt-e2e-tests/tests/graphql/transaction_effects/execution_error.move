@@ -141,6 +141,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
 }
@@ -155,6 +164,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -165,6 +183,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
 }
@@ -179,6 +206,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -189,6 +225,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -199,6 +244,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -209,6 +263,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -219,6 +282,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -229,6 +301,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
 
@@ -239,6 +320,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -249,6 +339,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
 
@@ -259,13 +358,22 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
 }
 
 //# run-graphql
 {
-  # Test MovePrimitiveRuntimeError cases
+  # Test MovePrimitiveRuntimeError cases - these test different error paths
   arithmeticUnderflow: transactionEffects(digest: "@{digest_14}") {
     executionError {
       abortCode
@@ -273,6 +381,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -283,6 +400,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -293,6 +419,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
   
@@ -303,6 +438,15 @@ module test::execution_error_tests {
       instructionOffset
       identifier
       constant
+      message
+      module {
+        name
+        package { address }
+      }
+      function {
+        name
+        module { name }
+      }
     }
   }
 }

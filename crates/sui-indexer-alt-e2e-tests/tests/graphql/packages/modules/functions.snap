@@ -1,0 +1,265 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-16:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4142000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 18:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 20-41:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "module": {
+        "f": {
+          "name": "f",
+          "isEntry": false,
+          "parameters": [],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [],
+          "visibility": "PUBLIC"
+        },
+        "g": {
+          "name": "g",
+          "isEntry": true,
+          "parameters": [],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [],
+          "visibility": "PRIVATE"
+        },
+        "h": {
+          "name": "h",
+          "isEntry": false,
+          "parameters": [
+            {
+              "repr": "vector<$0>",
+              "signature": {
+                "body": {
+                  "vector": {
+                    "typeParameter": 0
+                  }
+                }
+              }
+            },
+            {
+              "repr": "vector<$1>",
+              "signature": {
+                "body": {
+                  "vector": {
+                    "typeParameter": 1
+                  }
+                }
+              }
+            }
+          ],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [
+            {
+              "constraints": [
+                "DROP",
+                "STORE"
+              ]
+            },
+            {
+              "constraints": [
+                "COPY",
+                "DROP"
+              ]
+            }
+          ],
+          "visibility": "FRIEND"
+        },
+        "i": {
+          "name": "i",
+          "isEntry": false,
+          "parameters": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "return": [
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            },
+            {
+              "repr": "u64",
+              "signature": {
+                "body": "u64"
+              }
+            }
+          ],
+          "typeParameters": [],
+          "visibility": "PUBLIC"
+        },
+        "x": null
+      }
+    }
+  }
+}
+
+task 4, lines 43-70:
+//# run-graphql --cursors "f" "i"
+Response: {
+  "data": {
+    "package": {
+      "module": {
+        "all": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            },
+            {
+              "name": "h"
+            },
+            {
+              "name": "i"
+            }
+          ]
+        },
+        "first": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            }
+          ]
+        },
+        "last": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "h"
+            },
+            {
+              "name": "i"
+            }
+          ]
+        },
+        "firstBefore": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            }
+          ]
+        },
+        "lastAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false
+          },
+          "nodes": [
+            {
+              "name": "h"
+            },
+            {
+              "name": "i"
+            }
+          ]
+        },
+        "firstAfter": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "g"
+            },
+            {
+              "name": "h"
+            }
+          ]
+        },
+        "lastBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "g"
+            },
+            {
+              "name": "h"
+            }
+          ]
+        },
+        "afterBefore": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true
+          },
+          "nodes": [
+            {
+              "name": "g"
+            },
+            {
+              "name": "h"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

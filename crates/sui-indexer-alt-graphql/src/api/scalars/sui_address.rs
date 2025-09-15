@@ -45,6 +45,12 @@ impl ScalarType for SuiAddress {
     }
 }
 
+impl SuiAddress {
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
 impl FromStr for SuiAddress {
     type Err = Error;
 

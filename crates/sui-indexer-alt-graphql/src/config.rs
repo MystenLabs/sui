@@ -8,7 +8,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sui_default_config::DefaultConfig;
+use sui_name_service::NameServiceConfig;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 use crate::{
     extensions::{query_limits::QueryLimitsConfig, timeout::TimeoutConfig},
@@ -23,6 +25,9 @@ pub struct RpcConfig {
     /// Configuration for health checks.
     pub health: HealthConfig,
 
+    /// Configure for SuiNS related RPC methods.
+    pub name_service: NameServiceConfig,
+
     /// Configuration for the watermark task.
     pub watermark: WatermarkConfig,
 }
@@ -33,6 +38,7 @@ pub struct RpcConfig {
 pub struct RpcLayer {
     pub limits: LimitsLayer,
     pub health: HealthLayer,
+    pub name_service: NameServiceLayer,
     pub watermark: WatermarkLayer,
 }
 
@@ -130,6 +136,9 @@ pub struct Limits {
 
     /// Maximumm output size of a display output.
     pub max_display_output_size: usize,
+
+    /// Maximum output size of a disassembled Move module, in bytes.
+    pub max_disassembled_module_size: usize,
 }
 
 #[DefaultConfig]
@@ -155,6 +164,16 @@ pub struct LimitsLayer {
     pub max_move_value_bound: Option<usize>,
     pub max_display_field_depth: Option<usize>,
     pub max_display_output_size: Option<usize>,
+    pub max_disassembled_module_size: Option<usize>,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct NameServiceLayer {
+    pub package_address: Option<SuiAddress>,
+    pub registry_id: Option<ObjectID>,
+    pub reverse_registry_id: Option<ObjectID>,
 }
 
 pub struct WatermarkConfig {
@@ -174,6 +193,7 @@ impl RpcLayer {
         Self {
             limits: Limits::default().into(),
             health: HealthConfig::default().into(),
+            name_service: NameServiceConfig::default().into(),
             watermark: WatermarkConfig::default().into(),
         }
     }
@@ -182,6 +202,7 @@ impl RpcLayer {
         RpcConfig {
             limits: self.limits.finish(Limits::default()),
             health: self.health.finish(HealthConfig::default()),
+            name_service: self.name_service.finish(NameServiceConfig::default()),
             watermark: self.watermark.finish(WatermarkConfig::default()),
         }
     }
@@ -306,6 +327,19 @@ impl LimitsLayer {
             max_display_output_size: self
                 .max_display_output_size
                 .unwrap_or(base.max_display_output_size),
+            max_disassembled_module_size: self
+                .max_disassembled_module_size
+                .unwrap_or(base.max_disassembled_module_size),
+        }
+    }
+}
+
+impl NameServiceLayer {
+    pub(crate) fn finish(self, base: NameServiceConfig) -> NameServiceConfig {
+        NameServiceConfig {
+            package_address: self.package_address.unwrap_or(base.package_address),
+            registry_id: self.registry_id.unwrap_or(base.registry_id),
+            reverse_registry_id: self.reverse_registry_id.unwrap_or(base.reverse_registry_id),
         }
     }
 }
@@ -351,6 +385,17 @@ impl From<Limits> for LimitsLayer {
             max_move_value_bound: Some(value.max_move_value_bound),
             max_display_field_depth: Some(value.max_display_field_depth),
             max_display_output_size: Some(value.max_display_output_size),
+            max_disassembled_module_size: Some(value.max_disassembled_module_size),
+        }
+    }
+}
+
+impl From<NameServiceConfig> for NameServiceLayer {
+    fn from(config: NameServiceConfig) -> Self {
+        Self {
+            package_address: Some(config.package_address),
+            registry_id: Some(config.registry_id),
+            reverse_registry_id: Some(config.reverse_registry_id),
         }
     }
 }
@@ -418,6 +463,7 @@ impl Default for Limits {
             max_move_value_bound: 1024 * 1024,
             max_display_field_depth: 10,
             max_display_output_size: 1024 * 1024,
+            max_disassembled_module_size: 1024 * 1024,
         }
     }
 }

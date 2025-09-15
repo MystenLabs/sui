@@ -39,6 +39,40 @@ pub(crate) struct TypeInputError;
 pub(crate) struct TypeFilterError;
 
 impl TypeFilter {
+    /// Returns the package address if this filter contains one
+    pub(crate) fn package(&self) -> Option<SuiAddress> {
+        match self {
+            TypeFilter::Package(package) => Some(*package),
+            TypeFilter::Module(package, _) => Some(*package),
+            TypeFilter::Type(tag) => Some(SuiAddress::from(tag.address)),
+        }
+    }
+
+    /// Returns the module name if this filter contains one
+    pub(crate) fn module(&self) -> Option<&str> {
+        match self {
+            TypeFilter::Package(_) => None,
+            TypeFilter::Module(_, module) => Some(module.as_str()),
+            TypeFilter::Type(tag) => Some(tag.module.as_str()),
+        }
+    }
+
+    /// Returns the type name if this filter contains one
+    pub(crate) fn type_name(&self) -> Option<&str> {
+        match self {
+            TypeFilter::Package(_) | TypeFilter::Module(_, _) => None,
+            TypeFilter::Type(tag) => Some(tag.name.as_str()),
+        }
+    }
+
+    /// Returns the type's type parameters if this filter has any
+    pub(crate) fn type_params(&self) -> Option<&[TypeTag]> {
+        match self {
+            TypeFilter::Type(tag) if !tag.type_params.is_empty() => Some(&tag.type_params),
+            TypeFilter::Package(_) | TypeFilter::Module(_, _) | TypeFilter::Type(_) => None,
+        }
+    }
+
     /// Try to create a filter whose results are the intersection of `self`'s results and `other`'s
     /// results. May return `None` if the filters are incompatible (would result in no matches)
     pub(crate) fn intersect(self, other: Self) -> Option<Self> {
