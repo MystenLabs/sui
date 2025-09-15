@@ -49,9 +49,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
 /// matches the normalized legacy name.
 fn is_legacy_match(legacy_data: &Option<LegacyData>, expected_name: &PackageName) -> bool {
     if let Some(legacy_data) = legacy_data {
-        return &legacy_data.normalized_legacy_name == expected_name;
+        &legacy_data.normalized_legacy_name == expected_name
     } else {
-        return false;
+        false
     }
 }
 

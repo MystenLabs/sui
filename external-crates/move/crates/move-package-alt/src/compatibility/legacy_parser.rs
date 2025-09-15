@@ -200,7 +200,7 @@ fn parse_source_manifest(
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
             let normalized_legacy_name =
-                normalize_legacy_name_to_identifier(&metadata.legacy_name.as_str())?;
+                normalize_legacy_name_to_identifier(metadata.legacy_name.as_str())?;
 
             Ok(ParsedManifest {
                 package: PackageMetadata {
