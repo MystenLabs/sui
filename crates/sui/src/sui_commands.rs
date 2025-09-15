@@ -812,7 +812,7 @@ impl SuiCommand {
 
                     SR2::merge_configs_with_presence(&replay_config, file_config.as_ref(), &matches)
                 } else {
-                    if lfile_config.is_some() {
+                    if file_config.is_some() {
                         eprintln!("Replay coinfig file found but will be ignored as replay command line args cannot be re-parsed");
                     }
                     replay_config
@@ -827,7 +827,7 @@ impl SuiCommand {
                     SR2::handle_replay_config(&stable_config, &experimental_config, USER_AGENT)
                         .await?;
 
-                if let Some(digest) = &replay_config.digest {
+                if let Some(digest) = &stable_config.digest {
                     SR2::print_effects_or_fork(
                         digest,
                         &artifact_path,
@@ -850,7 +850,7 @@ fn extract_replay_subcommand_args(args: &[String]) -> Option<Vec<String>> {
         // Return "replay" + all args after it
         let mut result = vec!["replay".to_string()];
         result.extend(args[(replay_pos + 1)..].iter().cloned());
-        Some(result)
+        return Some(result);
     }
     None
 }
