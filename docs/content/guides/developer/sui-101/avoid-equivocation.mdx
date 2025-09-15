@@ -17,7 +17,7 @@ Equivocation can occur when:
 - A user or smart contract submits two transactions using the same (`ObjectId`, `SequenceNumber`) before the first is finalized.
 - Inadvertent logic traps in smart contract code, for example, when handling [sponsored transactions](/guides/developer/sui-101/sponsor-txn#client-equivocation-risk).
 
-Even though both transactions will not be finalized, submitting equivocated transactions still causes other problems for both developers and users. For example, when equivocation is detected, the involved object(s) are locked until the end of the current epoch. Neither transaction can proceed, and the object(s) cannot be used in any other transaction. Bad actors could intentionally submit equivocated transactions to lock up important objects and intentionally disrupt dApps.
+Even though both transactions aren't finalized, submitting equivocated transactions still causes other problems for both developers and users. For example, when equivocation is detected, the involved objects are locked until the end of the current epoch. Neither transaction can proceed, and the objects cannot be used in any other transaction. Bad actors could intentionally submit equivocated transactions to lock up important objects and intentionally disrupt dApps.
 
 ## Double spending 
 
