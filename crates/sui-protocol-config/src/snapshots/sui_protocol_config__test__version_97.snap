@@ -115,6 +115,7 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true

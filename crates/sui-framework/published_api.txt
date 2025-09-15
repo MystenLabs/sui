@@ -1726,7 +1726,10 @@ record_settlement_sui_conservation
 add_to_mmr
 	fun
 	0x2::accumulator_settlement
-hash_two_to_one_via_bcs
+u256_from_bytes
+	fun
+	0x2::accumulator_settlement
+hash_two_to_one_u256
 	fun
 	0x2::accumulator_settlement
 new_stream_head

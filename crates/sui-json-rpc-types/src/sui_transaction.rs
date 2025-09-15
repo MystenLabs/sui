@@ -778,7 +778,7 @@ impl From<AccumulatorEvent> for SuiAccumulatorEvent {
             write,
         } = event;
         Self {
-            accumulator_obj,
+            accumulator_obj: accumulator_obj.inner().to_owned(),
             address: write.address.address,
             ty: write.address.ty.into(),
             operation: write.operation.into(),
