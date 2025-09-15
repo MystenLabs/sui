@@ -175,6 +175,7 @@ impl TestEnv {
         let mut accumulator_object = self.get_accumulator_object();
         let next_version = accumulator_object.version().next();
         self.scheduler.settle_balances(BalanceSettlement {
+            next_accumulator_version: next_version,
             balance_changes: balance_changes.clone(),
         });
         for (object_id, balance_change) in balance_changes {
