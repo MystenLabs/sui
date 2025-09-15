@@ -1,7 +1,7 @@
 ---
 title: Derived Objects
-description: Derived objects enable deterministic object addressing, Transfer-to-Object capabilities, guaranteed uniqueness, and native parallelization for building scalable composable systems on Sui.
-keywords: [ Derived objects, deterministic addressing, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
+description: Derived objects enable deterministic object addresses, Transfer-to-Object capabilities, guaranteed uniqueness, and native parallelization for building scalable composable systems on Sui.
+keywords: [ Derived objects, deterministic addresses, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
 ---
 
 Sui objects get a unique ID assigned to them upon object creation. However, a **derived object** does not technically have an assigned ID; instead it has a _claimed_ ID created through the mapping of a parent object to a key. The parent object's unique ID that exists on-chain is mapped to an individual key, ensuring that the derived object's claimed ID is both deterministic and unique. You can deterministically compute derived object IDs using the parent ID and a key, both on- and off-chain. This means you can compute the ID of a derived object before you ever actually create it on the network. 
@@ -29,9 +29,9 @@ If you know the parent ID, you can compute the ID of the derived object through 
 
 ## Core capabilities
 
-Derived objects provide four fundamental capabilities: deterministic addressing, Transfer-to-Object compatibility, one-per-key uniqueness, and native parallelization. 
+Derived objects provide four fundamental capabilities: deterministic addresses, Transfer-to-Object compatibility, one-per-key uniqueness, and native parallelization. 
 
-### Deterministic addressing
+### Deterministic addresses
 
 You can compute derived object IDs ahead of time using the `derived_object::derive_address(parent_id, key)` function. This means applications can predict where objects will live before they exist, enabling sophisticated coordination patterns and reducing the need for on-chain lookups.
 
@@ -42,7 +42,6 @@ Because the ID of a derived object can exist before the object does, derived obj
 - Pre-funding accounts before user onboarding.
 - Conditional object creation based on received assets, such as creation of an object only after receiving SUI.
 - Cross-chain bridging to deterministic destinations.
-- In gaming, players can compute loot box addresses before opening. This allows for pre-funding, conditional reveals, and parallel processing.
 
 ### One-per-key uniqueness
 
