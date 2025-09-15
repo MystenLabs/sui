@@ -4220,6 +4220,14 @@ impl ProtocolConfig {
         self.feature_flags.record_time_estimate_processed = val;
     }
 
+    pub fn set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = val;
+    }
+
     pub fn push_aliased_addresses_for_testing(
         &mut self,
         original: [u8; 32],
@@ -4236,6 +4244,34 @@ impl ProtocolConfig {
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed = val;
+    }
+
+    pub fn set_consensus_checkpoint_signature_key_includes_digest_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest = val;
+    }
+
+    pub fn set_cancel_for_failed_dkg_early_for_testing(&mut self, val: bool) {
+        self.feature_flags.cancel_for_failed_dkg_early = val;
+    }
+
+    pub fn set_use_mfp_txns_in_load_initial_object_debts_for_testing(&mut self, val: bool) {
+        self.feature_flags.use_mfp_txns_in_load_initial_object_debts = val;
+    }
+
+    pub fn set_authority_capabilities_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.authority_capabilities_v2 = val;
     }
 }
 

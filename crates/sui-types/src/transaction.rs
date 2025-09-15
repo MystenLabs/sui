@@ -2143,8 +2143,8 @@ impl TransactionData {
     }
 
     pub fn uses_randomness(&self) -> bool {
-        self.shared_input_objects()
-            .iter()
+        self.kind()
+            .shared_input_objects()
             .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
 
