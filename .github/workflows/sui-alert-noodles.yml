@@ -67,7 +67,7 @@ jobs:
           echo "• Commit: ${commit_url}"
           echo "• Author: ${commit_author}"
           echo "• Message: ${commit_msg}"
-          echo "• Mentions: ${slack_mentions}"
+          echo "• Mentions: ${slack_mentions}" 
 
       # - name: Send Slack Alert
       #   if: steps.check_change.outputs.changed == 'true'
