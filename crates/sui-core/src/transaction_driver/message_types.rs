@@ -177,7 +177,7 @@ pub struct QuorumTransactionResponse {
 }
 
 pub(crate) struct WaitForEffectsRequest {
-    pub transaction_digest: TransactionDigest,
+    pub transaction_digest: Option<TransactionDigest>,
     /// If consensus position is provided, waits in the server handler for the transaction in it to execute,
     /// either in fastpath outputs or finalized.
     /// If it is not provided, only waits for finalized effects of the transaction in the server handler,
@@ -263,12 +263,16 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
     type Error = SuiError;
 
     fn try_from(value: RawWaitForEffectsRequest) -> Result<Self, Self::Error> {
-        let transaction_digest = bcs::from_bytes(&value.transaction_digest).map_err(|err| {
-            SuiError::GrpcMessageDeserializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
-                error: err.to_string(),
-            }
-        })?;
+        let transaction_digest = if let Some(transaction_digest) = value.transaction_digest {
+            Some(bcs::from_bytes(&transaction_digest).map_err(|err| {
+                SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
+                    error: err.to_string(),
+                }
+            })?)
+        } else {
+            None
+        };
         let consensus_position = match value.consensus_position {
             Some(cp) => Some(cp.as_ref().try_into()?),
             None => None,
@@ -410,12 +414,19 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
     type Error = SuiError;
 
     fn try_from(value: WaitForEffectsRequest) -> Result<Self, Self::Error> {
-        let transaction_digest = bcs::to_bytes(&value.transaction_digest)
-            .map_err(|err| SuiError::GrpcMessageSerializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
-                error: err.to_string(),
-            })?
-            .into();
+        let transaction_digest = if let Some(transaction_digest) = value.transaction_digest {
+            Some(
+                bcs::to_bytes(&transaction_digest)
+                    .map_err(|err| SuiError::GrpcMessageSerializeError {
+                        type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
+                        error: err.to_string(),
+                    })?
+                    .into(),
+            )
+        } else {
+            None
+        };
+
         let consensus_position = match value.consensus_position {
             Some(cp) => Some(cp.into_raw()?),
             None => None,

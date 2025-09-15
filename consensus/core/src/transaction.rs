@@ -72,7 +72,7 @@ pub enum LimitReached {
 
 impl TransactionConsumer {
     pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
-        assert!(context.protocol_config.max_num_transactions_in_block() <= TransactionIndex::MAX as u64, "The max number of transactions in a block should be less than the transaction index max");
+        assert!(context.protocol_config.max_num_transactions_in_block() < TransactionIndex::MAX as u64, "The max number of transactions in a block should be less than the transaction index max");
 
         Self {
             tx_receiver,
@@ -287,7 +287,7 @@ impl TransactionClient {
     /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included
     /// to next proposed blocks.
     ///
-    ///  If `transactions` is empty, then this will be interpreted as a "ping" signal from the client in order to get information about the next
+    /// If `transactions` is empty, then this will be interpreted as a "ping" signal from the client in order to get information about the next
     /// block and simulate a transaction inclusion to the next block. In this an empty vector of the transaction indexes will be returned as response
     /// and the block status receiver.
     pub async fn submit(

@@ -783,7 +783,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // TODO: consider only messages within 1~3 rounds of the leader?
                 self.last_consensus_stats.stats.inc_num_messages(author);
 
-                // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be finalized.
+                // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be finalized.
                 self.epoch_store.set_consensus_tx_status(
                     ConsensusPosition::ping(epoch, block),
                     ConsensusTxStatus::Finalized,

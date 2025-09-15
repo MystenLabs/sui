@@ -16,6 +16,7 @@ use prometheus::{
 };
 use std::{
     cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
     future::Future,
     io,
     net::{IpAddr, SocketAddr},
@@ -27,7 +28,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -46,6 +46,14 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
+use sui_types::{
+    base_types::SequenceNumber,
+    digests::{TransactionDigest, TransactionEffectsDigest},
+    effects::TransactionEffectsV2,
+    error::UserInputError,
+    execution_status::ExecutionStatus,
+    gas::GasCostSummary,
+};
 use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
@@ -206,7 +214,7 @@ pub struct ValidatorServiceMetrics {
     pub handle_soft_bundle_certificates_count: Histogram,
     pub handle_soft_bundle_certificates_size_bytes: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
-    pub handle_submit_transaction_consensus_latency: Histogram,
+    pub handle_submit_transaction_consensus_latency: HistogramVec,
     pub handle_wait_for_effects_ping_latency: Histogram,
 
     handle_submit_transaction_latency: HistogramVec,
@@ -311,9 +319,10 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            handle_submit_transaction_consensus_latency: register_histogram_with_registry!(
+            handle_submit_transaction_consensus_latency: register_histogram_vec_with_registry!(
                 "validator_service_submit_transaction_consensus_latency",
                 "Latency of submitting a user transaction sent through consensus",
+                &["req_type"],
                 mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -586,26 +595,8 @@ impl ValidatorService {
 
         let request = request.into_inner();
 
-        // Check for empty transactions. We don't allow them unless they are a ping request.
-        if request.transactions.is_empty() && !request.ping {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::InvalidBatchTransaction {
-                    error: "SubmitTransactionRequest must contain at least one transaction"
-                        .to_string(),
-                },
-            }
-            .into());
-        }
-
-        // The ping request must not contain any transactions.
-        if request.ping && !request.transactions.is_empty() {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::InvalidPingRequest {
-                    error: "Ping request must not contain any transaction".to_string(),
-                },
-            }
-            .into());
-        }
+        // Treat an empty transactions as a ping request.
+        let is_ping_request = request.transactions.is_empty();
 
         let max_num_transactions = if request.soft_bundle {
             // Soft bundle cannot contain too many transactions.
@@ -637,7 +628,7 @@ impl ValidatorService {
         // Total size of all transactions in the request.
         let mut total_size_bytes = 0;
 
-        let req_type = if request.ping {
+        let req_type = if is_ping_request {
             "ping"
         } else if request.transactions.len() == 1 {
             "single_transaction"
@@ -653,7 +644,7 @@ impl ValidatorService {
             .start_timer();
 
         // If this is a ping request, we assume at least one transaction is provided for the indexing and result purposes.
-        if request.ping {
+        if is_ping_request {
             transaction_indexes.push(0);
             results.push(None);
         }
@@ -797,7 +788,7 @@ impl ValidatorService {
             total_size_bytes += tx_size;
         }
 
-        if consensus_transactions.is_empty() && !request.ping {
+        if consensus_transactions.is_empty() && !is_ping_request {
             return Ok((
                 tonic::Response::new(Self::try_from_submit_tx_response(results)?),
                 Weight::zero(),
@@ -839,11 +830,12 @@ impl ValidatorService {
 
         let _latency_metric_guard = metrics
             .handle_submit_transaction_consensus_latency
+            .with_label_values(&[req_type])
             .start_timer();
 
-        let consensus_positions = if request.soft_bundle || request.ping {
+        let consensus_positions = if request.soft_bundle || is_ping_request {
             assert!(
-                request.ping || !consensus_transactions.is_empty(),
+                is_ping_request || !consensus_transactions.is_empty(),
                 "A valid soft bundle must have at least one transaction"
             );
             self.handle_submit_to_consensus_for_position(
@@ -1402,7 +1394,14 @@ impl ValidatorService {
             .map_err(|_| SuiError::TimeoutError)?;
         }
 
-        let tx_digest = request.transaction_digest;
+        let Some(tx_digest) = request.transaction_digest else {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::InvalidWaitForEffectsRequest {
+                    error: "Transaction digest is required for wait for effects requests"
+                        .to_string(),
+                },
+            });
+        };
         let tx_digests = [tx_digest];
 
         let fastpath_effects_future: Pin<Box<dyn Future<Output = _> + Send>> =
@@ -1466,35 +1465,68 @@ impl ValidatorService {
             });
         };
 
+        let Some(consensus_position) = request.consensus_position else {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::InvalidPingRequest {
+                    error: "Consensus position is required for ping requests".to_string(),
+                },
+            });
+        };
+
+        let Some(ping) = request.ping else {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::InvalidPingRequest {
+                    error: "Ping type is required for ping requests".to_string(),
+                },
+            });
+        };
+
         let _metrics_guard = self
             .metrics
             .handle_wait_for_effects_ping_latency
             .start_timer();
 
-        consensus_tx_status_cache.check_position_too_ahead(&request.consensus_position.unwrap())?;
-
-        let wait_for_finality =
-            request.ping.expect("Ping type should be present") == PingType::Consensus;
+        consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
 
         let mut last_status = None;
+        let details = if request.include_details {
+            Some(Box::new(ExecutedData {
+                effects: TransactionEffects::V2(TransactionEffectsV2::new(
+                    ExecutionStatus::Success,
+                    epoch_store.epoch(),
+                    GasCostSummary::default(),
+                    vec![],
+                    BTreeSet::new(),
+                    TransactionDigest::ZERO,
+                    SequenceNumber::default(),
+                    BTreeMap::new(),
+                    None,
+                    None,
+                    vec![],
+                )),
+                events: None,
+                input_objects: vec![],
+                output_objects: vec![],
+            }))
+        } else {
+            None
+        };
 
         loop {
             let status = consensus_tx_status_cache
-                .notify_read_transaction_status_change(
-                    request.consensus_position.unwrap(),
-                    last_status,
-                )
+                .notify_read_transaction_status_change(consensus_position, last_status)
                 .await;
             match status {
                 NotifyReadConsensusTxStatusResult::Status(status) => match status {
                     ConsensusTxStatus::FastpathCertified => {
-                        if wait_for_finality {
+                        // If the request is for consensus, we need to wait for the transaction to be finalised via Consensus.
+                        if ping == PingType::Consensus {
                             last_status = Some(status);
                             continue;
                         }
                         return Ok(WaitForEffectsResponse::Executed {
                             effects_digest: TransactionEffectsDigest::ZERO,
-                            details: None,
+                            details,
                             fast_path: true,
                         });
                     }
@@ -1504,7 +1536,7 @@ impl ValidatorService {
                     ConsensusTxStatus::Finalized => {
                         return Ok(WaitForEffectsResponse::Executed {
                             effects_digest: TransactionEffectsDigest::ZERO,
-                            details: None,
+                            details,
                             fast_path: false,
                         });
                     }

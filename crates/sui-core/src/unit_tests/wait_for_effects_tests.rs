@@ -126,7 +126,7 @@ async fn test_wait_for_effects_position_mismatch() {
     });
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position1),
         include_details: true,
         ping: None,
@@ -151,7 +151,7 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
         ping: None,
@@ -199,7 +199,7 @@ async fn test_wait_for_effects_epoch_mismatch() {
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
         ping: None,
@@ -225,7 +225,7 @@ async fn test_wait_for_effects_timeout() {
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
         ping: None,
@@ -251,7 +251,7 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
         ping: None,
@@ -332,7 +332,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
     // -------- First, test getting effects acknowledgement with consensus position. --------
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
@@ -364,7 +364,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
     // -------- Then, test getting effects with details when consensus position is provided. --------
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
         ping: None,
@@ -394,7 +394,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
     // -------- Finally, test getting effects acknowledgement without consensus position. --------
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: None,
         include_details: true,
         ping: None,
@@ -421,7 +421,7 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
@@ -506,7 +506,7 @@ async fn test_wait_for_effects_finalized() {
     // -------- First, test getting effects acknowledgement with consensus position. --------
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
@@ -538,7 +538,7 @@ async fn test_wait_for_effects_finalized() {
     // -------- Then, test getting full effects without consensus position. --------
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: None,
         include_details: true,
         ping: None,
@@ -585,7 +585,7 @@ async fn test_wait_for_effects_expired() {
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        transaction_digest: tx_digest,
+        transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
         ping: None,
@@ -645,7 +645,7 @@ async fn test_wait_for_effects_ping() {
         };
 
         let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: TransactionDigest::ZERO,
+            transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
             ping: Some(PingType::FastPath),
@@ -692,7 +692,7 @@ async fn test_wait_for_effects_ping() {
         };
 
         let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: TransactionDigest::ZERO,
+            transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
             ping: Some(PingType::Consensus),
@@ -746,7 +746,7 @@ async fn test_wait_for_effects_ping() {
         };
 
         let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: TransactionDigest::ZERO,
+            transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
             ping: Some(PingType::Consensus),

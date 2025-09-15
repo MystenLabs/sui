@@ -222,6 +222,7 @@ pub struct HandleCertificateRequestV3 {
 
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxRequest {
+    /// The transactions to be submitted. When the vector is empty, then this is treated as a ping request.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub transactions: Vec<Bytes>,
 
@@ -231,12 +232,6 @@ pub struct RawSubmitTxRequest {
     /// out of order in blocks (batch).
     #[prost(bool, tag = "2")]
     pub soft_bundle: bool,
-
-    /// If true, then a request to help perform latency measurement. In this case
-    /// the system will simulate a (ping) transaction submission to consensus and return the consensus position.
-    /// In this case no transactions should be provided as part of the request.
-    #[prost(bool, tag = "3")]
-    pub ping: bool,
 }
 
 #[derive(Clone, prost::Message)]
@@ -278,8 +273,8 @@ pub enum RawPingType {
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsRequest {
     /// The transaction's digest. If it's a ping request, then this will practically be ignored.
-    #[prost(bytes = "bytes", tag = "1")]
-    pub transaction_digest: Bytes,
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub transaction_digest: Option<Bytes>,
 
     /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
     /// in addition to waiting for finalized effects.

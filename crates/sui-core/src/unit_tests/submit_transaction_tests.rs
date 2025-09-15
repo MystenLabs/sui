@@ -139,7 +139,6 @@ async fn test_submit_ping_request() {
     {
         let request = RawSubmitTxRequest {
             transactions: vec![],
-            ping: false,
             ..Default::default()
         };
 
@@ -159,7 +158,6 @@ async fn test_submit_ping_request() {
             transactions: vec![bcs::to_bytes(&test_context.build_test_transaction())
                 .unwrap()
                 .into()],
-            ping: true,
             ..Default::default()
         };
 
@@ -178,7 +176,6 @@ async fn test_submit_ping_request() {
         // The request should explicitly set `ping` to true to indicate a ping check.
         let request = RawSubmitTxRequest {
             transactions: vec![],
-            ping: true,
             ..Default::default()
         };
 
@@ -404,7 +401,6 @@ async fn test_submit_batched_transactions() {
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
         soft_bundle: false,
-        ping: false,
     };
 
     // Submit request with batched transactions.
@@ -474,7 +470,6 @@ async fn test_submit_batched_transactions_with_already_executed() {
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
         soft_bundle: false,
-        ping: false,
     };
 
     // Submit both transactions
@@ -517,7 +512,6 @@ async fn test_submit_soft_bundle_transactions() {
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
         soft_bundle: true,
-        ping: false,
     };
 
     // Submit request with batched transactions.
@@ -587,7 +581,6 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
         soft_bundle: true,
-        ping: false,
     };
 
     // Submit request with batched transactions.

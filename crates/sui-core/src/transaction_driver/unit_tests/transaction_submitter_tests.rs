@@ -266,7 +266,6 @@ fn create_test_raw_request(gas_price: u64) -> RawSubmitTxRequest {
     RawSubmitTxRequest {
         transactions: vec![bcs::to_bytes(&tx).unwrap().into()],
         soft_bundle: false,
-        ping: false,
     }
 }
 
