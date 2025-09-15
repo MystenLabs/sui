@@ -1,0 +1,349 @@
+---
+title: Coin Registry System
+description: Learn about Sui's centralized coin registry system that manages metadata, supply states, and regulatory status for all coin types in the ecosystem.
+---
+
+The Sui blockchain includes a centralized coin registry system that provides a unified way to manage metadata, supply information, and regulatory status for all coin types in the ecosystem. This system is implemented in the `sui::coin_registry` module and serves as the foundation for coin management across the network.
+
+## Overview
+
+The Coin Registry is a system-level shared object located at address `0xc` that acts as a central repository for all coin-related data. Unlike the legacy `CoinMetadata` approach where each coin type had its own metadata object, the registry provides a unified interface for managing coin information while maintaining backward compatibility.
+
+## Core Components
+
+### CoinRegistry
+
+The `CoinRegistry` is the main system object that coordinates all coin-related operations:
+
+```move
+public struct CoinRegistry has key {
+    id: UID,
+}
+```
+
+This shared object serves as the entry point for all registry operations and is created only once by the system address during network initialization.
+
+### Currency<T>
+
+The `Currency<T>` struct is the heart of the registry system, storing comprehensive information about each coin type:
+
+```move
+public struct Currency<phantom T> has key {
+    id: UID,
+    decimals: u8,
+    name: String,
+    symbol: String,
+    description: String,
+    icon_url: String,
+    supply: Option<SupplyState<T>>,
+    regulated: RegulatedState,
+    treasury_cap_id: Option<ID>,
+    metadata_cap_id: MetadataCapState,
+    extra_fields: VecMap<String, ExtraField>,
+}
+```
+
+Key features of `Currency<T>`:
+
+- **Metadata Management**: Stores basic coin information like name, symbol, decimals, description, and icon URL
+- **Supply Tracking**: Maintains supply state information (fixed, burn-only, or unknown)
+- **Regulatory Status**: Tracks whether the coin is regulated with deny list capabilities
+- **Capability References**: Links to treasury caps and metadata caps for the coin type
+- **Extensibility**: Includes extra fields for future enhancements
+
+### Supply States
+
+The registry supports three different supply management models:
+
+```move
+public enum SupplyState<phantom T> has store {
+    Fixed(Supply<T>),      // Fixed supply, no minting or burning
+    BurnOnly(Supply<T>),   // Only burning allowed, no minting
+    Unknown,               // Flexible supply controlled by TreasuryCap
+}
+```
+
+- **Fixed Supply**: The total supply is permanently locked and cannot be changed
+- **Burn-Only Supply**: New coins cannot be minted, but existing coins can be burned
+- **Unknown Supply**: Traditional model where the `TreasuryCap` holder controls minting and burning
+
+### Regulatory States
+
+Coins can have different regulatory statuses that affect their behavior:
+
+```move
+public enum RegulatedState has copy, drop, store {
+    Regulated { cap: ID, allow_global_pause: Option<bool>, variant: u8 },
+    Unregulated,
+    Unknown,
+}
+```
+
+- **Regulated**: The coin has an associated `DenyCapV2` that can restrict addresses from using it
+- **Unregulated**: The coin was created without any deny list capabilities
+- **Unknown**: Regulatory status is undetermined (typically from legacy migrations)
+
+### Metadata Capability
+
+The `MetadataCap<T>` controls who can update a coin's metadata:
+
+```move
+public struct MetadataCap<phantom T> has key, store { 
+    id: UID 
+}
+```
+
+This capability can be in one of three states:
+- **Unclaimed**: The metadata cap has not yet been claimed
+- **Claimed**: The metadata cap has been claimed and can be used for updates
+- **Deleted**: The metadata cap has been permanently deleted, preventing future updates
+
+## Coin Creation Process
+
+### Two-Phase Creation
+
+The registry supports two different coin creation flows:
+
+#### 1. Standard Creation
+
+```move
+public fun new_currency<T: key>(
+    registry: &mut CoinRegistry,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &mut TxContext,
+): (CurrencyInitializer<T>, TreasuryCap<T>)
+```
+
+This can be called at any time after the coin type is published and immediately creates a shared `Currency<T>` object.
+
+#### 2. One-Time Witness (OTW) Creation
+
+```move
+public fun new_currency_with_otw<T: drop>(
+    otw: T,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &mut TxContext,
+): (CurrencyInitializer<T>, TreasuryCap<T>)
+```
+
+This uses an OTW for uniqueness proof and requires a separate finalization step to make the currency shared.
+
+### Currency Initialization
+
+Both creation methods return a `CurrencyInitializer<T>` that allows for additional configuration before finalization:
+
+- **Make Regulated**: Add deny list capabilities
+- **Set Supply Model**: Choose between fixed, burn-only, or flexible supply
+- **Add Extensions**: Include additional fields for custom functionality
+
+### Finalization
+
+The initialization process concludes with the `finalize` function:
+
+```move
+public fun finalize<T>(
+    builder: CurrencyInitializer<T>, 
+    ctx: &mut TxContext
+): MetadataCap<T>
+```
+
+This creates the final shared `Currency<T>` object and returns the `MetadataCap<T>` for metadata management.
+
+## Key Operations
+
+### Metadata Management
+
+Metadata can only be updated by the holder of the `MetadataCap<T>`:
+
+```move
+public fun set_name<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, name: String)
+public fun set_symbol<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, symbol: String)
+public fun set_description<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, description: String)
+public fun set_icon_url<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, icon_url: String)
+```
+
+### Supply Management
+
+For burn-only currencies, coins can be burned through the registry:
+
+```move
+public fun burn<T>(currency: &mut Currency<T>, coin: Coin<T>)
+public fun burn_balance<T>(currency: &mut Currency<T>, balance: Balance<T>)
+```
+
+### Capability Management
+
+The metadata capability can be claimed once and optionally deleted:
+
+```move
+public fun claim_metadata_cap<T>(
+    currency: &mut Currency<T>,
+    _: &TreasuryCap<T>,
+    ctx: &mut TxContext,
+): MetadataCap<T>
+
+public fun delete_metadata_cap<T>(currency: &mut Currency<T>, cap: MetadataCap<T>)
+```
+
+## Legacy Migration
+
+The registry system provides seamless migration from the legacy `CoinMetadata<T>` system:
+
+### Metadata Migration
+
+```move
+public fun migrate_legacy_metadata<T>(
+    registry: &mut CoinRegistry,
+    legacy: &CoinMetadata<T>,
+    _ctx: &mut TxContext,
+)
+```
+
+This creates a new `Currency<T>` entry based on existing `CoinMetadata<T>` information.
+
+### Regulatory Migration
+
+For coins with deny list capabilities:
+
+```move
+public fun migrate_regulated_state_by_metadata<T>(
+    currency: &mut Currency<T>,
+    metadata: &RegulatedCoinMetadata<T>,
+)
+
+public fun migrate_regulated_state_by_cap<T>(
+    currency: &mut Currency<T>, 
+    cap: &DenyCapV2<T>
+)
+```
+
+These functions update the regulatory status based on existing deny list objects.
+
+## Query Interface
+
+The registry provides comprehensive read-only access to coin information:
+
+### Basic Metadata
+
+```move
+public fun decimals<T>(currency: &Currency<T>): u8
+public fun name<T>(currency: &Currency<T>): String
+public fun symbol<T>(currency: &Currency<T>): String
+public fun description<T>(currency: &Currency<T>): String
+public fun icon_url<T>(currency: &Currency<T>): String
+```
+
+### Supply Information
+
+```move
+public fun total_supply<T>(currency: &Currency<T>): Option<u64>
+public fun is_supply_fixed<T>(currency: &Currency<T>): bool
+public fun is_supply_burn_only<T>(currency: &Currency<T>): bool
+```
+
+### Capability Status
+
+```move
+public fun is_metadata_cap_claimed<T>(currency: &Currency<T>): bool
+public fun is_metadata_cap_deleted<T>(currency: &Currency<T>): bool
+public fun treasury_cap_id<T>(currency: &Currency<T>): Option<ID>
+public fun metadata_cap_id<T>(currency: &Currency<T>): Option<ID>
+```
+
+### Regulatory Information
+
+```move
+public fun is_regulated<T>(currency: &Currency<T>): bool
+public fun deny_cap_id<T>(currency: &Currency<T>): Option<ID>
+```
+
+## Benefits and Use Cases
+
+### Centralized Management
+
+The registry provides a single source of truth for all coin information, making it easier for:
+
+- **Wallets**: Display consistent coin information
+- **Exchanges**: Access standardized metadata
+- **DApps**: Query coin properties reliably
+- **Indexers**: Track all coins from one location
+
+### Supply Transparency
+
+By tracking supply states, the registry enables:
+
+- **Fixed Supply Verification**: Users can verify that a coin's supply is truly fixed
+- **Deflationary Mechanisms**: Burn-only coins provide guaranteed deflation
+- **Supply Analytics**: Clear tracking of total supply changes over time
+
+### Regulatory Compliance
+
+The regulatory tracking features support:
+
+- **Compliance Tooling**: Easy identification of regulated coins
+- **Risk Assessment**: Understanding deny list capabilities
+- **Jurisdictional Filtering**: Filtering coins based on regulatory status
+
+### Backward Compatibility
+
+The migration system ensures:
+
+- **Seamless Transition**: Existing coins continue to work
+- **Gradual Adoption**: Projects can migrate at their own pace
+- **No Breaking Changes**: Legacy interfaces remain functional
+
+## Best Practices
+
+### For Coin Creators
+
+1. **Use OTW Creation**: Prefer the OTW-based creation for better uniqueness guarantees
+2. **Set Supply Model Early**: Decide on supply model during initialization
+3. **Consider Regulation**: Evaluate whether deny list capabilities are needed
+4. **Manage Metadata Cap**: Decide whether to keep, transfer, or delete the metadata capability
+
+### For dApp Developers
+
+1. **Query Registry First**: Check the registry for coin information before fallback to legacy methods
+2. **Handle Migration States**: Account for coins in various migration states
+3. **Respect Supply Models**: Understand the implications of different supply states
+4. **Check Regulatory Status**: Be aware of regulated coins and their restrictions
+
+### For Infrastructure Providers
+
+1. **Monitor Registry Changes**: Track new coin registrations and updates
+2. **Index Supply Changes**: Monitor burn events for burn-only coins
+3. **Handle Legacy Coins**: Support both registry and legacy metadata systems
+4. **Cache Efficiently**: Registry data changes infrequently and can be cached
+
+## Security Considerations
+
+### Capability Security
+
+- **MetadataCap**: Protect metadata capabilities as they control coin branding
+- **TreasuryCap**: Treasury capabilities determine minting/burning permissions
+- **DenyCapV2**: Deny capabilities can restrict coin usage
+
+### Validation
+
+The registry enforces several important validations:
+
+- **Symbol Validation**: Symbols must be ASCII printable characters
+- **Uniqueness**: Each coin type can only be registered once
+- **Supply Consistency**: Supply states cannot be downgraded
+- **Permission Checks**: Only appropriate capability holders can make changes
+
+### Migration Safety
+
+- **One-Time Migration**: Legacy metadata can only be migrated once
+- **Capability Proof**: Metadata deletion requires capability ownership
+- **State Consistency**: Regulatory state migration prevents double-setting
+
+The coin registry system represents a significant evolution in Sui's approach to coin management, providing a robust, extensible, and user-friendly foundation for the ecosystem's monetary infrastructure.
