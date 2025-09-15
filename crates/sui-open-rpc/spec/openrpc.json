@@ -1297,6 +1297,7 @@
               "maxSupportedProtocolVersion": "96",
               "protocolVersion": "6",
               "featureFlags": {
+                "abstract_size_in_object_runtime": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_consensus_digest_indirect_state": false,
@@ -1368,6 +1369,7 @@
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
                 "normalize_ptb_arguments": false,
+                "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,

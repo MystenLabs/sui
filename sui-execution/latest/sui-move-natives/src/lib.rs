@@ -1385,8 +1385,8 @@ macro_rules! get_extension_mut {
 macro_rules! charge_cache_or_load_gas {
     ($context:ident, $cache_info:expr) => {
         match $cache_info {
-            crate::object_runtime::object_store::CacheInfo::Cached => (),
-            crate::object_runtime::object_store::CacheInfo::Loaded(size) => {
+            $crate::object_runtime::object_store::CacheInfo::Cached => (),
+            $crate::object_runtime::object_store::CacheInfo::Loaded(size) => {
                 let config = get_extension!($context, ObjectRuntime)?.protocol_config;
                 if config.object_runtime_charge_cache_load_gas() {
                     let cost = size * config.obj_access_cost_read_per_byte() as usize;

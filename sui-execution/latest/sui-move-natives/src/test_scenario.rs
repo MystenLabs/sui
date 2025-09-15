@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
+    get_extension, get_extension_mut, get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
     object_runtime::{object_store::ChildObjectEffects, ObjectRuntime, RuntimeResults},
 };
 use better_any::{Tid, TidAble};
@@ -97,7 +97,7 @@ pub fn end_transaction(
 ) -> PartialVMResult<NativeResult> {
     assert!(ty_args.is_empty());
     assert!(args.is_empty());
-    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime_ref: &mut ObjectRuntime = get_extension_mut!(context)?;
     let taken_shared_or_imm: BTreeMap<_, _> = object_runtime_ref
         .test_inventories
         .taken
@@ -158,7 +158,7 @@ pub fn end_transaction(
             ));
         }
     };
-    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime_ref: &mut ObjectRuntime = get_extension_mut!(context)?;
     let all_active_child_objects_with_values = object_runtime_ref
         .all_active_child_objects()
         .filter(|child| child.copied_value.is_some())
@@ -246,7 +246,7 @@ pub fn end_transaction(
     }
 
     // For any unused allocated tickets, remove them from the store.
-    let store: &&InMemoryTestStore = context.extensions().get()?;
+    let store: &&InMemoryTestStore = get_extension!(context)?;
     for id in unreceived {
         if store
             .0
@@ -271,7 +271,7 @@ pub fn end_transaction(
     }
     // find all wrapped objects
     let mut all_wrapped = BTreeSet::new();
-    let object_runtime_ref: &ObjectRuntime = context.extensions().get()?;
+    let object_runtime_ref: &ObjectRuntime = get_extension!(context)?;
     find_all_wrapped_objects(
         context,
         &mut all_wrapped,
@@ -305,7 +305,7 @@ pub fn end_transaction(
     }
 
     // new input objects are remaining taken objects not written/deleted
-    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime_ref: &mut ObjectRuntime = get_extension_mut!(context)?;
     let mut config_settings = vec![];
     for child in object_runtime_ref.all_active_child_objects() {
         let s: StructTag = child.ty.clone().into();
@@ -383,7 +383,7 @@ pub fn take_from_address_by_id(
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
@@ -416,7 +416,7 @@ pub fn ids_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let ids = inventories
         .address_inventories
@@ -438,7 +438,7 @@ pub fn most_recent_id_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = match inventories.address_inventories.get(&account) {
         None => pack_option(vector_specialization(&specified_ty), None),
@@ -460,7 +460,7 @@ pub fn was_taken_from_address(
     let id = pop_id(&mut args)?;
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
         .taken
@@ -484,7 +484,7 @@ pub fn take_immutable_by_id(
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
@@ -522,7 +522,7 @@ pub fn most_recent_immutable_id(
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
         &inventories.taken,
@@ -545,7 +545,7 @@ pub fn was_taken_immutable(
     assert!(ty_args.is_empty());
     let id = pop_id(&mut args)?;
     assert!(args.is_empty());
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
         .taken
@@ -569,7 +569,7 @@ pub fn take_shared_by_id(
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
@@ -600,7 +600,7 @@ pub fn most_recent_id_shared(
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
         &inventories.taken,
@@ -623,7 +623,7 @@ pub fn was_taken_shared(
     assert!(ty_args.is_empty());
     let id = pop_id(&mut args)?;
     assert!(args.is_empty());
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
         .taken
@@ -651,7 +651,7 @@ pub fn allocate_receiving_ticket_for_object(
             E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
         ));
     };
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let object_version = SequenceNumber::new();
     let inventories = &mut object_runtime.test_inventories;
     if inventories.allocated_tickets.contains_key(&id) {
@@ -712,7 +712,7 @@ pub fn allocate_receiving_ticket_for_object(
     );
 
     // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
-    let store: &&InMemoryTestStore = context.extensions().get()?;
+    let store: &&InMemoryTestStore = get_extension!(context)?;
     store.0.with_borrow_mut(|store| store.insert_object(object));
 
     Ok(NativeResult::ok(
@@ -728,7 +728,7 @@ pub fn deallocate_receiving_ticket_for_object(
 ) -> PartialVMResult<NativeResult> {
     let id = pop_id(&mut args)?;
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     // Deallocate the ticket -- we should never hit this scenario
     let Some((_, value)) = inventories.allocated_tickets.remove(&id) else {
@@ -743,7 +743,7 @@ pub fn deallocate_receiving_ticket_for_object(
     inventories.objects.insert(id, value);
 
     // Remove the object from storage. We should never hit this scenario either.
-    let store: &&InMemoryTestStore = context.extensions().get()?;
+    let store: &&InMemoryTestStore = get_extension!(context)?;
     if store
         .0
         .with_borrow_mut(|store| store.remove_object(id).is_none())
