@@ -120,7 +120,6 @@ async fn test_batch_verify() {
             &committee,
             &certs.iter().collect_vec(),
             Arc::new(VerifiedDigestCache::new_empty()),
-            None,
         );
         results[i].as_ref().unwrap_err();
         for (_, r) in results.iter().enumerate().filter(|(j, _)| *j != i) {
@@ -148,7 +147,6 @@ async fn test_async_verifier() {
         true,
         true,
         Some(30),
-        vec![],
         true,
     ));
 
