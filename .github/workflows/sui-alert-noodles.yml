@@ -9,54 +9,53 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-sui:
+  alert-on-change:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Add upstream
-        run: git remote add upstream https://github.com/MystenLabs/sui.git || true
+      - name: Add & Fetch Upstream
+        run: |
+          git remote add upstream https://github.com/MystenLabs/sui.git || true
+          git fetch upstream main
 
-      - name: Fetch upstream
-        run: git fetch upstream main
+      - name: Restore previous commit hash from cache
+        id: restore_cache
+        uses: actions/cache/restore@v3
+        with:
+          path: .last_file_commit
+          key: sui-yaml-commit-${{ github.run_id }}
+          restore-keys: sui-yaml-commit-
 
-      - name: Get last commit for sui.yaml
+      - name: Get last commit affecting sui.yaml
         id: get_commit
         run: |
           last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
-          echo "last_commit=$last_commit" >> $GITHUB_ENV
+          echo "LAST_COMMIT=$last_commit" >> $GITHUB_ENV
+          echo "Last commit: $last_commit"
 
-      - name: Download previous commit artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: last-sui-commit
-          path: .
-        continue-on-error: true  # don't fail if not found (first run)
-
-      - name: Compare commits
-        id: compare
+      - name: Compare with previous commit
+        id: check_change
         run: |
           prev_commit=$(cat .last_file_commit 2>/dev/null || echo "")
           echo "Previous commit: $prev_commit"
-          echo "Current commit: $last_commit"
-          if [ "$last_commit" != "$prev_commit" ]; then
+          echo "Current commit: $LAST_COMMIT"
+          
+          if [ "$LAST_COMMIT" != "$prev_commit" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Change detected! Updating commit hash..."
+            echo "$LAST_COMMIT" > .last_file_commit
           else
             echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No change detected."
           fi
-          # always write the new commit hash to file
-          echo "$last_commit" > .last_file_commit
 
-      - name: Upload new commit artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: last-sui-commit
-          path: .last_file_commit
-          overwrite: true
-          retention-days: 30  
-
-      - name: Test Alert Output (dry run)
+      - name: Prepare Alert Message
         if: steps.check_change.outputs.changed == 'true'
+        id: prepare_alert
         run: |
           commit_hash=$LAST_COMMIT
           commit_author=$(git log -1 --pretty=format:'%an' $commit_hash)
@@ -64,21 +63,53 @@ jobs:
           commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
           slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
           
-          echo "🚨 sui.yaml was updated in upstream!"
-          echo "• Commit: ${commit_url}"
-          echo "• Author: ${commit_author}"
-          echo "• Message: ${commit_msg}"
-          echo "• Mentions: ${slack_mentions}"
+          # Store values in environment for next step
+          echo "COMMIT_HASH=$commit_hash" >> $GITHUB_ENV
+          echo "COMMIT_AUTHOR=$commit_author" >> $GITHUB_ENV
+          echo "COMMIT_MSG=$commit_msg" >> $GITHUB_ENV
+          echo "COMMIT_URL=$commit_url" >> $GITHUB_ENV
+          echo "SLACK_MENTIONS=$slack_mentions" >> $GITHUB_ENV
 
-      # 🔔 Uncomment when ready to send Slack alerts
+      - name: Test Alert Output
+        if: steps.check_change.outputs.changed == 'true'
+        run: |
+          echo "=== ALERT TEST OUTPUT ==="
+          echo "📋 Alert would be sent for the following change:"
+          echo ""
+          echo "🔹 Commit Hash: $COMMIT_HASH"
+          echo "🔹 Author: $COMMIT_AUTHOR"
+          echo "🔹 Message: $COMMIT_MSG"
+          echo "🔹 URL: $COMMIT_URL"
+          echo "🔹 Mentions: $SLACK_MENTIONS"
+          echo ""
+          echo "📝 Full Slack Message Preview:"
+          echo "----------------------------------------"
+          echo "🚨 *sui.yaml was updated in upstream!*"
+          echo "• Commit: *<$COMMIT_URL|$COMMIT_HASH>*"
+          echo "• Author: $COMMIT_AUTHOR"
+          echo "• Message: $COMMIT_MSG"
+          echo "$SLACK_MENTIONS"
+          echo "----------------------------------------"
+          echo ""
+          echo "✅ Alert test completed. Ready to send to Slack!"
+
       # - name: Send Slack Alert
       #   if: steps.check_change.outputs.changed == 'true'
       #   run: |
-      #     commit_hash=$LAST_COMMIT
-      #     commit_author=$(git log -1 --pretty=format:'%an' $commit_hash)
-      #     commit_msg=$(git log -1 --pretty=format:'%s' $commit_hash)
-      #     commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
-      #     slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
-      #     curl -X POST -H 'Content-type: application/json' \
-      #       --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
-      #       ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
+      #     response=$(curl -w "%{http_code}" -s -X POST -H 'Content-type: application/json' \
+      #       --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${COMMIT_URL}|${COMMIT_HASH}>*\n• Author: ${COMMIT_AUTHOR}\n• Message: ${COMMIT_MSG}\n${SLACK_MENTIONS}\"}" \
+      #       ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }})
+          
+      #     if [ "${response: -3}" = "200" ]; then
+      #       echo "✅ Slack notification sent successfully"
+      #     else
+      #       echo "❌ Failed to send Slack notification. Response: $response"
+      #       exit 1
+      #     fi
+
+      - name: Save commit hash to cache
+        if: steps.check_change.outputs.changed == 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: .last_file_commit
+          key: sui-yaml-commit-${{ github.run_id }}
