@@ -28,7 +28,7 @@ use super::{
     move_object::MoveObject,
     move_value::MoveValue,
     object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, Validator as OFValidator},
+    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
     transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
