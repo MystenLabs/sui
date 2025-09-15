@@ -6587,9 +6587,9 @@ dependencies = [
 
 [[package]]
 name = "io-uring"
-version = "0.7.8"
+version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b86e202f00093dcba4275d4636b93ef9dd75d025ae560d2521b45ea28ab49013"
+checksum = "d93587f37623a1a17d94ef2bc9ada592f5465fe7732084ab7beefabe5c77c0c4"
 dependencies = [
  "bitflags 2.6.0",
  "cfg-if",
@@ -10048,18 +10048,18 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "1.1.5"
+version = "1.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6bf43b791c5b9e34c3d182969b4abb522f9343702850a2e57f460d00d09b4b3"
+checksum = "677f1add503faace112b9f1373e43e9e054bfdd22ff1a63c1bc485eaec6a6a8a"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "1.1.5"
+version = "1.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
+checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12608,9 +12608,9 @@ dependencies = [
 
 [[package]]
 name = "slab"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
+checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 
 [[package]]
 name = "slip10_ed25519"
@@ -13816,6 +13816,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15884,6 +15885,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16042,6 +16044,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.7"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
 dependencies = [
  "base64ct",
  "bcs",
@@ -17371,9 +17374,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.46.1"
+version = "1.47.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
+checksum = "89e49afdadebb872d3145a5638b59eb0691ea23e46ca484037cfab3b76b95038"
 dependencies = [
  "backtrace",
  "bytes",
@@ -17384,10 +17387,10 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "slab",
- "socket2 0.5.6",
+ "socket2 0.6.0",
  "tokio-macros 2.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
