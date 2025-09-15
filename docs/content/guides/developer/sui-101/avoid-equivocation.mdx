@@ -4,7 +4,7 @@ description: Avoid unintentionally locking objects with your smart contract logi
 keywords: [ equivocation, how to avoid equivocation, unintentionally locking objects, accidentally locking objects ]
 ---
 
-On Sui, object versioning ensures that each object is referenced by a unique (`ObjectId`, `SequenceNumber`) pair, where `SequenceNumber` refers to the object's version. Only a single transaction can modify an object at a specific version. Once a transaction modifies an object, the version is incremented. Only the latest version can be used in a future transaction.
+On Sui, object versioning ensures that each object is referenced by a unique (`ObjectId`, `SequenceNumber`) pair, where `SequenceNumber` refers to the object's version. Only a single transaction can modify an object at a specific version. After a transaction modifies an object, the version is incremented. Only the latest version can be used in a future transaction.
 
 Object versioning tracks the state of objects across transactions and epochs. 
 
