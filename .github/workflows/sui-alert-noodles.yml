@@ -9,44 +9,45 @@ on:
   workflow_dispatch:
 
 jobs:
-  alert-on-change:
+  check-sui:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Fork
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Add & Fetch Upstream
+      - name: Add upstream
+        run: git remote add upstream https://github.com/MystenLabs/sui.git || true
+
+      - name: Fetch upstream
+        run: git fetch upstream main
+
+      - name: Get last commit for sui.yaml
+        id: get_commit
         run: |
-          git remote add upstream https://github.com/MystenLabs/sui.git || true
-          git fetch upstream main
+          last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
+          echo "last_commit=$last_commit" >> $GITHUB_ENV
 
-      - name: Download last commit artifact
+      - name: Download previous commit artifact
         uses: actions/download-artifact@v4
         with:
           name: last-sui-commit
           path: .
-        continue-on-error: true   
+        continue-on-error: true  # don't fail if not found (first run)
 
-      - name: Get last commit affecting sui.yaml
-        id: get_commit
-        run: |
-          last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
-          echo "LAST_COMMIT=$last_commit" >> $GITHUB_ENV
-
-      - name: Compare with previous commit
-        id: check_change
+      - name: Compare commits
+        id: compare
         run: |
           prev_commit=$(cat .last_file_commit 2>/dev/null || echo "")
-          echo "$LAST_COMMIT" > .last_file_commit   # ✅ always update file
-          if [ "$LAST_COMMIT" != "$prev_commit" ]; then
+          echo "Previous commit: $prev_commit"
+          echo "Current commit: $last_commit"
+          if [ "$last_commit" != "$prev_commit" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
+          # always write the new commit hash to file
+          echo "$last_commit" > .last_file_commit
 
-      - name: Upload last commit artifact
+      - name: Upload new commit artifact
         uses: actions/upload-artifact@v4
         with:
           name: last-sui-commit
