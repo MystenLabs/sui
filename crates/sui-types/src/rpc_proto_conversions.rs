@@ -8,6 +8,7 @@ use crate::message_envelope::Message as _;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::*;
+use sui_rpc::proto::TryFromProtoError;
 
 //
 // CheckpointSummary
@@ -1548,6 +1549,27 @@ impl From<crate::balance_change::BalanceChange> for BalanceChange {
         message.coin_type = Some(value.coin_type.to_canonical_string(true));
         message.amount = Some(value.amount.to_string());
         message
+    }
+}
+
+impl TryFrom<&BalanceChange> for crate::balance_change::BalanceChange {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &BalanceChange) -> Result<Self, Self::Error> {
+        Ok(Self {
+            address: value
+                .address()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid(BalanceChange::ADDRESS_FIELD, e))?,
+            coin_type: value
+                .coin_type()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid(BalanceChange::COIN_TYPE_FIELD, e))?,
+            amount: value
+                .amount()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid(BalanceChange::AMOUNT_FIELD, e))?,
+        })
     }
 }
 

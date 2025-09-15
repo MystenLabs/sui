@@ -10,6 +10,7 @@ use sui_rpc::proto::sui::rpc::v2::{
     Bcs, ExecuteTransactionRequest, ExecutedTransaction, Transaction, UserSignature,
 };
 
+mod balance_changes;
 mod ledger_service;
 mod move_package_service;
 mod signature_verification_service;
