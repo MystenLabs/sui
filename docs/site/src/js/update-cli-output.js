@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-const fs = require('fs');
+const { writeFileSync } = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
@@ -20,6 +20,13 @@ function updateCliOutput() {
       timeout: 10000
     });
     
+    writeFileSync(
+      path.join(
+        __dirname,
+        "../../../content/snippets/console-output/client.mdx",
+      ),
+      `\`\`\`sh\n${output}\`\`\`\n`,
+    );
     console.log('✅ Command executed successfully');
     console.log('Output length:', output.length);
     console.log('First 100 chars:', output.substring(0, 100));
