@@ -33,7 +33,7 @@ jobs:
       - name: Get last commit affecting sui.yaml
         id: get_commit
         run: |
-          last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml)
+          last_commit=$(git log -n 1 --pretty=format:'%H' upstream/main -- crates/sui-core/tests/staged/sui.yaml) 
           echo "LAST_COMMIT=$last_commit" >> $GITHUB_ENV
           echo "Last commit: $last_commit"
 
