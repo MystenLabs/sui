@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fastcrypto::hash::Blake2b256;
 use fastcrypto::merkle::MerkleTree;
+use move_core_types::u256::U256;
 use mysten_common::fatal;
 use serde::Serialize;
 use sui_types::accumulator_event::AccumulatorEvent;
@@ -13,7 +14,7 @@ use sui_types::accumulator_root::{
     ACCUMULATOR_SETTLEMENT_MODULE,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{SequenceNumber};
 
 use sui_types::digests::Digest;
 use sui_types::effects::{
@@ -106,7 +107,9 @@ impl MergedValue {
                 let args = vec![
                     root,
                     builder.pure(address.address).unwrap(),
-                    builder.pure(digest).unwrap(),
+                    builder
+                        .pure(U256::from_le_bytes(&digest.into_inner()))
+                        .unwrap(),
                     builder.pure(event_count).unwrap(),
                     builder.pure(checkpoint_seq).unwrap(),
                 ];
@@ -146,15 +149,11 @@ struct EventCommitment {
 }
 
 fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
-    if events.is_empty() {
-        Digest::new([0u8; 32])
-    } else {
-        let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
-            .expect("failed to serialize event commitments for merkle root");
-        let root_node = merkle_tree.root();
-        let root_digest = root_node.bytes();
-        Digest::new(root_digest)
-    }
+    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
+        .expect("failed to serialize event commitments for merkle root");
+    let root_node = merkle_tree.root();
+    let root_digest = root_node.bytes();
+    Digest::new(root_digest)
 }
 
 /// MergedValueIntermediate is an intermediate / in-memory representation of the for

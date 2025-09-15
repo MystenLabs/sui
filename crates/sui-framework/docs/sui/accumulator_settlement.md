@@ -10,7 +10,8 @@ title: Module `sui::accumulator_settlement`
 -  [Function `settle_u128`](#sui_accumulator_settlement_settle_u128)
 -  [Function `record_settlement_sui_conservation`](#sui_accumulator_settlement_record_settlement_sui_conservation)
 -  [Function `add_to_mmr`](#sui_accumulator_settlement_add_to_mmr)
--  [Function `hash_two_to_one_via_bcs`](#sui_accumulator_settlement_hash_two_to_one_via_bcs)
+-  [Function `u256_from_bytes`](#sui_accumulator_settlement_u256_from_bytes)
+-  [Function `hash_two_to_one_u256`](#sui_accumulator_settlement_hash_two_to_one_u256)
 -  [Function `new_stream_head`](#sui_accumulator_settlement_new_stream_head)
 -  [Function `settle_events`](#sui_accumulator_settlement_settle_events)
 
@@ -54,7 +55,7 @@ title: Module `sui::accumulator_settlement`
 
 <dl>
 <dt>
-<code>mmr: vector&lt;vector&lt;u8&gt;&gt;</code>
+<code>mmr: vector&lt;u256&gt;</code>
 </dt>
 <dd>
  Merkle Mountain Range of all events in the stream.
@@ -215,7 +216,7 @@ Called by the settlement transaction to track conservation of SUI.
 
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_add_to_mmr">add_to_mmr</a>(new_val: vector&lt;u8&gt;, mmr: &<b>mut</b> vector&lt;vector&lt;u8&gt;&gt;)
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_add_to_mmr">add_to_mmr</a>(new_val: u256, mmr: &<b>mut</b> vector&lt;u256&gt;)
 </code></pre>
 
 
@@ -224,17 +225,17 @@ Called by the settlement transaction to track conservation of SUI.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_add_to_mmr">add_to_mmr</a>(new_val: vector&lt;u8&gt;, mmr: &<b>mut</b> vector&lt;vector&lt;u8&gt;&gt;) {
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_add_to_mmr">add_to_mmr</a>(new_val: u256, mmr: &<b>mut</b> vector&lt;u256&gt;) {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> cur = new_val;
     <b>while</b> (i &lt; vector::length(mmr)) {
         <b>let</b> r = vector::borrow_mut(mmr, i);
-        <b>if</b> (vector::is_empty(r)) {
+        <b>if</b> (*r == 0) {
             *r = cur;
             <b>return</b>
         } <b>else</b> {
-            cur = <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_hash_two_to_one_via_bcs">hash_two_to_one_via_bcs</a>(*r, cur);
-            *r = vector::empty();
+            cur = <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_hash_two_to_one_u256">hash_two_to_one_u256</a>(*r, cur);
+            *r = 0;
         };
         i = i + 1;
     };
@@ -247,13 +248,13 @@ Called by the settlement transaction to track conservation of SUI.
 
 </details>
 
-<a name="sui_accumulator_settlement_hash_two_to_one_via_bcs"></a>
+<a name="sui_accumulator_settlement_u256_from_bytes"></a>
 
-## Function `hash_two_to_one_via_bcs`
+## Function `u256_from_bytes`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_hash_two_to_one_via_bcs">hash_two_to_one_via_bcs</a>(left: vector&lt;u8&gt;, right: vector&lt;u8&gt;): vector&lt;u8&gt;
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(bytes: vector&lt;u8&gt;): u256
 </code></pre>
 
 
@@ -262,12 +263,36 @@ Called by the settlement transaction to track conservation of SUI.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_hash_two_to_one_via_bcs">hash_two_to_one_via_bcs</a>(left: vector&lt;u8&gt;, right: vector&lt;u8&gt;): vector&lt;u8&gt; {
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(bytes: vector&lt;u8&gt;): u256 {
+    <a href="../sui/bcs.md#sui_bcs_new">bcs::new</a>(bytes).peel_u256()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_accumulator_settlement_hash_two_to_one_u256"></a>
+
+## Function `hash_two_to_one_u256`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_hash_two_to_one_u256">hash_two_to_one_u256</a>(left: u256, right: u256): u256
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_hash_two_to_one_u256">hash_two_to_one_u256</a>(left: u256, right: u256): u256 {
     <b>let</b> left_bytes = <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&left);
     <b>let</b> right_bytes = <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&right);
     <b>let</b> <b>mut</b> concatenated = left_bytes;
     vector::append(&<b>mut</b> concatenated, right_bytes);
-    <a href="../sui/hash.md#sui_hash_blake2b256">hash::blake2b256</a>(&concatenated)
+    <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(<a href="../sui/hash.md#sui_hash_blake2b256">hash::blake2b256</a>(&concatenated))
 }
 </code></pre>
 
@@ -281,7 +306,7 @@ Called by the settlement transaction to track conservation of SUI.
 
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_new_stream_head">new_stream_head</a>(new_root: vector&lt;u8&gt;, event_count_delta: u64, checkpoint_seq: u64): <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_EventStreamHead">sui::accumulator_settlement::EventStreamHead</a>
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_new_stream_head">new_stream_head</a>(new_root: u256, event_count_delta: u64, checkpoint_seq: u64): <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_EventStreamHead">sui::accumulator_settlement::EventStreamHead</a>
 </code></pre>
 
 
@@ -290,11 +315,7 @@ Called by the settlement transaction to track conservation of SUI.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_new_stream_head">new_stream_head</a>(
-    new_root: vector&lt;u8&gt;,
-    event_count_delta: u64,
-    checkpoint_seq: u64,
-): <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_EventStreamHead">EventStreamHead</a> {
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_new_stream_head">new_stream_head</a>(new_root: u256, event_count_delta: u64, checkpoint_seq: u64): <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_EventStreamHead">EventStreamHead</a> {
     <b>let</b> <b>mut</b> initial_mmr = vector::empty();
     <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_add_to_mmr">add_to_mmr</a>(new_root, &<b>mut</b> initial_mmr);
     <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_EventStreamHead">EventStreamHead</a> {
@@ -315,7 +336,7 @@ Called by the settlement transaction to track conservation of SUI.
 
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settle_events">settle_events</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, event_count_delta: u64, checkpoint_seq: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settle_events">settle_events</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, stream_id: <b>address</b>, new_root: u256, event_count_delta: u64, checkpoint_seq: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -327,7 +348,7 @@ Called by the settlement transaction to track conservation of SUI.
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settle_events">settle_events</a>(
     accumulator_root: &<b>mut</b> AccumulatorRoot,
     stream_id: <b>address</b>,
-    new_root: vector&lt;u8&gt;,
+    new_root: u256,
     event_count_delta: u64,
     checkpoint_seq: u64,
     ctx: &TxContext,
