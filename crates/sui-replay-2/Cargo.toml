@@ -31,10 +31,12 @@ move-trace-format.workspace = true
 prometheus.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
+shell-words.workspace = true
 similar.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
 sui-types.workspace = true
+sui-config.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
 telemetry-subscribers.workspace = true

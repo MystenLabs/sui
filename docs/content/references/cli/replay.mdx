@@ -130,3 +130,5 @@ The response above provides the transaction effects information, gas report, and
 the gas cost, please refer to the [gas in sui](../../concepts/tokenomics/gas-in-sui.mdx) page.
 
 You can replay multiple transactions at once by using the `--digests-path` flag to specify a location of a file containing multiple transaction digests, one per line. By default, the entire batch is replayed regardless of the success or failure of an individual transaction execution. You can use the `--terminate-early` flag to terminate batch execution if an error occurs when replaying one of the transactions.
+
+You can provide default values for the replay tool flags by specifying them in the `~/.sui/sui_config/replay.config` file, one flag per line. The file format supports comments starting with `#`. Flags specified on the command line take priority over flags specified in the config file.
