@@ -44,5 +44,6 @@ pub(crate) mod transaction_kind;
 mod type_origin;
 pub(crate) mod unchanged_consensus_object;
 pub(crate) mod user_signature;
+pub(crate) mod validator;
 pub(crate) mod validator_aggregated_signature;
 pub(crate) mod validator_set;
