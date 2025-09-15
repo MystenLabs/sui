@@ -3,7 +3,8 @@ use petgraph::visit::EdgeRef;
 use thiserror::Error;
 
 use crate::{
-    dependency::PinnedDependencyInfo, flavor::MoveFlavor, package::Package, schema::PackageName,
+    compatibility::legacy::LegacyData, dependency::PinnedDependencyInfo, flavor::MoveFlavor,
+    package::Package, schema::PackageName,
 };
 
 use super::PackageGraph;
@@ -27,15 +28,10 @@ impl<F: MoveFlavor> PackageGraph<F> {
             let pkg = self.inner[edge.target()].clone();
             let actual_name = pkg.name();
 
-            // If we're operating on a legacy package, we are OK also if the
-            // legacy name matches the old name too (the normalized one).
-            let is_legacy_match = pkg
-                .legacy_data
-                .as_ref()
-                .map(|d| &d.normalized_legacy_name == expected_name)
-                .unwrap_or(true);
-
-            if expected_name != actual_name && !is_legacy_match {
+            // Modern packages: If there's a name missmatch, we error
+            // Legacy packages: If there's a name missmatch and there's also a missmatch with the
+            // legacy name, we fail again.
+            if expected_name != actual_name && !is_legacy_match(&pkg.legacy_data, expected_name) {
                 return Err(RenameError::new(
                     &self.inner[edge.source()],
                     &self.inner[edge.target()],
@@ -46,6 +42,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
 
         Ok(())
+    }
+}
+
+/// Checks that for a given package `pkg`, if it's legacy, the expected name
+/// matches the normalized legacy name.
+fn is_legacy_match(legacy_data: &Option<LegacyData>, expected_name: &PackageName) -> bool {
+    if let Some(legacy_data) = legacy_data {
+        return &legacy_data.normalized_legacy_name == expected_name;
+    } else {
+        return false;
     }
 }
 
