@@ -122,7 +122,7 @@ impl ReplayConfigStable {
 
     /// Names of fields whose presence on the command-line or in the config
     /// file we have to check (will fail at compile time if field names change)
-    pub const ERMINATE_EARLY_FIELD_NAME: &'static str = stable_config_field_name!(terminate_early);
+    pub const TERMINATE_EARLY_FIELD_NAME: &'static str = stable_config_field_name!(terminate_early);
     pub const TRACE_FIELD_NAME: &'static str = stable_config_field_name!(trace);
     pub const SHOW_EFFECTS_FIELD_NAME: &'static str = stable_config_field_name!(show_effects);
     pub const OVERWRITE_FIELD_NAME: &'static str = stable_config_field_name!(overwrite);
@@ -317,7 +317,7 @@ pub fn merge_configs_with_presence(
 
         terminate_early: if is_cli_flag_present(
             cli_arg_matches,
-            ReplayConfigStable::ERMINATE_EARLY_FIELD_NAME,
+            ReplayConfigStable::TERMINATE_EARLY_FIELD_NAME,
         ) {
             cli_config.terminate_early
         } else if let Some(file_config) = config_file_config {
