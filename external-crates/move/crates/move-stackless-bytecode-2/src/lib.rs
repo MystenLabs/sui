@@ -20,7 +20,10 @@ pub(crate) mod utils;
 pub fn from_compiled_modules(
     modules: Vec<CompiledModule>,
     optimize: bool,
-) -> anyhow::Result<(move_model_2::model::Model<WithoutSource>, ast::StacklessBytecode)> {
+) -> anyhow::Result<(
+    move_model_2::model::Model<WithoutSource>,
+    ast::StacklessBytecode,
+)> {
     let model =
         move_model_2::model::Model::<WithoutSource>::from_compiled(&BTreeMap::new(), modules);
     let packages = translate::packages(&model, optimize)?;

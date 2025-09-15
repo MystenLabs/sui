@@ -3,10 +3,10 @@
 
 pub mod ast;
 pub mod decompiler;
+pub mod output;
+pub mod pretty;
 mod refinement;
 mod structuring;
-pub mod output;
 pub mod translate;
-pub mod pretty;
 
 pub mod testing;

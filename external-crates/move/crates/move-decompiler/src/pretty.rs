@@ -138,12 +138,8 @@ pub fn to_doc(exp: &Exp) -> Doc {
                     .append(braces_block(arms_doc))
             }
             // Fallbacks for forms we didn’t special-case (shouldn’t happen here):
-            Exp::Primitive { op, args } => {
-                primitive_op_doc(&op, &args)
-            }
-            Exp::Data { op, args } => {
-                data_op_doc(&op, &args)
-            }
+            Exp::Primitive { op, args } => primitive_op_doc(&op, &args),
+            Exp::Data { op, args } => data_op_doc(&op, &args),
         }
     }
 

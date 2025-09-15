@@ -39,10 +39,7 @@ fn packages<S: SourceKind>(
         .collect()
 }
 
-fn package<S: SourceKind>(
-    _model: &Model<S>,
-    sb_pkg: SB::Package,
-) -> Out::Package {
+fn package<S: SourceKind>(_model: &Model<S>, sb_pkg: SB::Package) -> Out::Package {
     let SB::Package {
         name,
         address,

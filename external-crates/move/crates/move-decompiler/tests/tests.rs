@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_decompiler::{translate::module, output::generate_output, testing::structuring_unit_test};
+use move_decompiler::{output::generate_output, testing::structuring_unit_test, translate::module};
 
 use move_command_line_common::insta_assert;
 use move_package::{BuildConfig, compilation::model_builder};
@@ -9,7 +9,11 @@ use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
 
-use std::{collections::{BTreeMap, BTreeSet}, io::BufRead, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::BufRead,
+    path::Path,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Structuring Unit Tests
@@ -74,7 +78,6 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-
 #[allow(dead_code)]
 fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
@@ -92,7 +95,10 @@ fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
     let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
     let root_pkg = resolved_package.root_package();
     let model = model_builder::build(resolved_package, &mut writer)?;
-    println!("Packages: {:#?}", model.packages().map(|pkg| pkg.name()).collect::<Vec<_>>());
+    println!(
+        "Packages: {:#?}",
+        model.packages().map(|pkg| pkg.name()).collect::<Vec<_>>()
+    );
 
     let output_path = output_dir.path().join("output");
 

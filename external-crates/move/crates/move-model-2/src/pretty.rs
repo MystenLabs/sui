@@ -52,8 +52,7 @@ pub fn fun_header<K: SourceKind>(model_fun: &crate::model::Function<K>) -> Doc {
             many => {
                 let items = many.iter().map(|t| t.to_doc());
                 RD::text(": ").append(RD::group(
-
-                        RD::text("(")
+                    RD::text("(")
                         .append(
                             RD::softline()
                                 .append(RD::intersperse(
@@ -357,14 +356,20 @@ impl ToDoc for Fields {
         use RcDoc as RD;
 
         // TODO: positional_fields (left as-is per your comment)
-        let Fields { positional_fields: _, fields } = self;
+        let Fields {
+            positional_fields: _,
+            fields,
+        } = self;
 
         // name: Type
-        let items: Vec<Doc> = fields.iter().map(|(name, field)| {
-            RD::as_string(name)
-                .append(RD::text(": "))
-                .append(field.type_.to_doc())
-        }).collect();
+        let items: Vec<Doc> = fields
+            .iter()
+            .map(|(name, field)| {
+                RD::as_string(name)
+                    .append(RD::text(": "))
+                    .append(field.type_.to_doc())
+            })
+            .collect();
 
         if items.is_empty() {
             return RD::nil();
@@ -539,4 +544,3 @@ fn indent(doc: Doc, n: isize) -> Doc {
     let spaces = RcDoc::text(" ".repeat(n as usize));
     hang(spaces.append(doc), n)
 }
-
