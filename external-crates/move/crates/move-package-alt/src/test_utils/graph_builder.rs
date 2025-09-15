@@ -83,8 +83,6 @@ pub struct PackageSpec {
     /// Is the package a legacy package?
     is_legacy: bool,
 
-    /// Do we wanna have a different "address" name?
-    ///
     /// ```toml
     /// name = "MoveStdLib" <-- `legacy_name`
     ///

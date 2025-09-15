@@ -192,6 +192,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
+    /// TODO: Add a mermaid diagram
     async fn test_modern_using_legacy_framework() {
         let scenario = TestPackageGraph::new(["root"])
             .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdLib"))
@@ -206,6 +207,7 @@ mod tests {
             })
             .add_dep("sui", "std", |dep| dep.name("MoveStdLib"))
             // legacy -> legacy case (SuiSystem -> MoveStdLib (std)
+            .add_dep("sui_system", "sui", |dep| dep.name("Sui"))
             .add_dep("sui_system", "std", |dep| dep.name("MoveStdLib"))
             .build();
 
@@ -224,15 +226,17 @@ mod tests {
 
     #[test(tokio::test)]
     async fn test_modern_to_legacy_not_allowed_behaviours() {
-        let scenario = TestPackageGraph::new(["root", "foo", "bar", "baz"])
+        let scenario = TestPackageGraph::new(["foo", "bat", "bar", "baz"])
             .add_package("legacy", |pkg| pkg.set_legacy().set_legacy_name("Legacy"))
+            .add_package("legacy2", |pkg| pkg.set_legacy().set_legacy_name("Legacy2"))
+            .add_package("legacy3", |pkg| pkg.set_legacy().set_legacy_name("Legacy3"))
             .add_package("sui", |pkg| pkg.set_legacy().set_legacy_name("Sui"))
             .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdLib"))
             .add_package("malformed", |pkg| {
                 pkg.set_legacy().set_legacy_name("weird-input")
             })
             // 1. (FAIL) Cannot use the legacy name in the left side assignment
-            .add_dep("root", "sui", |dep| dep.name("Sui"))
+            .add_dep("bat", "sui", |dep| dep.name("Sui"))
             // 2. (OK) Can use the "modern" name in the rename-from (even if we name it as the legacy name)
             .add_dep("foo", "std", |dep| {
                 dep.name("MoveStdLib").rename_from("std")
@@ -245,14 +249,12 @@ mod tests {
             .add_dep("legacy", "std", |dep| dep.name("MoveStdLib"))
             // 5. (OK) Can use a malformed legacy name (as the system normalizes)
             .add_dep("baz", "malformed", |dep| dep.name("malformed"))
+            // 6. (FAIL) Cannot accept wrong names for deps
+            .add_dep("legacy2", "std", |dep| dep.name("Wrong"))
             .build();
 
         // 1.
-        let _ = scenario
-            .graph_for("root")
-            .await
-            .check_rename_from()
-            .is_err();
+        let _ = scenario.graph_for("bat").await.check_rename_from().is_err();
 
         // 2.
         scenario.graph_for("foo").await.check_rename_from().unwrap();
@@ -269,5 +271,12 @@ mod tests {
 
         // 5.
         scenario.graph_for("baz").await.check_rename_from().unwrap();
+
+        // 6.
+        let _ = scenario
+            .graph_for("legacy2")
+            .await
+            .check_rename_from()
+            .is_err();
     }
 }
