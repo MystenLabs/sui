@@ -74,25 +74,25 @@ native fun record_settlement_sui_conservation(input_sui: u64, output_sui: u64);
 #[allow(unused_field)]
 public struct EventStreamHead has store {
     /// Merkle Mountain Range of all events in the stream.
-    mmr: vector<vector<u8>>,
+    mmr: vector<u256>,
     /// Checkpoint sequence number at which the event stream was written.
     checkpoint_seq: u64,
     /// Number of events in the stream.
     num_events: u64,
 }
 
-fun add_to_mmr(new_val: vector<u8>, mmr: &mut vector<vector<u8>>) {
+fun add_to_mmr(new_val: u256, mmr: &mut vector<u256>) {
     let mut i = 0;
     let mut cur = new_val;
 
     while (i < vector::length(mmr)) {
         let r = vector::borrow_mut(mmr, i);
-        if (vector::is_empty(r)) {
+        if (*r == 0) {
             *r = cur;
             return
         } else {
-            cur = hash_two_to_one_via_bcs(*r, cur);
-            *r = vector::empty();
+            cur = hash_two_to_one_u256(*r, cur);
+            *r = 0;
         };
         i = i + 1;
     };
@@ -101,16 +101,20 @@ fun add_to_mmr(new_val: vector<u8>, mmr: &mut vector<vector<u8>>) {
     vector::push_back(mmr, cur);
 }
 
-fun hash_two_to_one_via_bcs(left: vector<u8>, right: vector<u8>): vector<u8> {
+fun u256_from_bytes(bytes: vector<u8>): u256 {
+    bcs::new(bytes).peel_u256()
+}
+
+fun hash_two_to_one_u256(left: u256, right: u256): u256 {
     let left_bytes = bcs::to_bytes(&left);
     let right_bytes = bcs::to_bytes(&right);
     let mut concatenated = left_bytes;
     vector::append(&mut concatenated, right_bytes);
-    hash::blake2b256(&concatenated)
+    u256_from_bytes(hash::blake2b256(&concatenated))
 }
 
 fun new_stream_head(
-    new_root: vector<u8>,
+    new_root: u256,
     event_count_delta: u64,
     checkpoint_seq: u64,
 ): EventStreamHead {
@@ -126,7 +130,7 @@ fun new_stream_head(
 entry fun settle_events(
     accumulator_root: &mut AccumulatorRoot,
     stream_id: address,
-    new_root: vector<u8>,
+    new_root: u256,
     event_count_delta: u64,
     checkpoint_seq: u64,
     ctx: &TxContext,
@@ -151,33 +155,34 @@ fun test_mmr_addition() {
     let fixed_new_val = vector::tabulate!(32, |_| 2);
 
     // Initial MMR should be empty
-    assert!(vector::all!(&mmr, |x| vector::is_empty(x)));
+    assert!(vector::all!(&mmr, |x| *x == 0));
 
     // Round 1: Add first element - should be at position 0
-    add_to_mmr(fixed_new_val, &mut mmr);
-    assert!(vector::map_ref!(&mmr, |x| vector::is_empty(x)) == 
+    add_to_mmr(u256_from_bytes(fixed_new_val), &mut mmr);
+    assert!(vector::map_ref!(&mmr, |x| *x == 0) == 
             vector[false]);
 
     // Round 2: Add second element - should trigger merge and clear position 0
-    add_to_mmr(fixed_new_val, &mut mmr);
-    assert!(vector::map_ref!(&mmr, |x| vector::is_empty(x)) == 
+    add_to_mmr(u256_from_bytes(fixed_new_val), &mut mmr);
+    assert!(vector::map_ref!(&mmr, |x| *x == 0) == 
             vector[true, false]);
 
     // Round 3: Add third element - should place at position 0
-    add_to_mmr(fixed_new_val, &mut mmr);
-    assert!(vector::map_ref!(&mmr, |x| vector::is_empty(x)) == 
+    add_to_mmr(u256_from_bytes(fixed_new_val), &mut mmr);
+    assert!(vector::map_ref!(&mmr, |x| *x == 0) == 
             vector[false, false]);
 
     // Round 4: Add fourth element - should trigger cascade merge to position 2
-    add_to_mmr(fixed_new_val, &mut mmr);
+    add_to_mmr(u256_from_bytes(fixed_new_val), &mut mmr);
     assert!(
-        vector::map_ref!(&mmr, |x| vector::is_empty(x)) == 
+        vector::map_ref!(&mmr, |x| *x == 0) == 
             vector[true, true, false],
     );
 
     // Verify the final hash represents all 4 elements
-    let x = hash_two_to_one_via_bcs(fixed_new_val, fixed_new_val);
-    let y = hash_two_to_one_via_bcs(x, x);
+    let leaf = u256_from_bytes(fixed_new_val);
+    let x = hash_two_to_one_u256(leaf, leaf);
+    let y = hash_two_to_one_u256(x, x);
     assert!(mmr[2] == y);
 }
 
@@ -197,20 +202,20 @@ fun test_mmr_with_different_values() {
     assert!(val3 != val4);
 
     // Add them one by one and verify MMR behavior
-    add_to_mmr(val1, &mut mmr);
-    add_to_mmr(val2, &mut mmr);
+    add_to_mmr(u256_from_bytes(val1), &mut mmr);
+    add_to_mmr(u256_from_bytes(val2), &mut mmr);
     // After second add, position 0 should be empty, position 1 should have merged hash
-    assert!(vector::is_empty(&mmr[0]));
-    assert!(!vector::is_empty(&mmr[1]));
+    assert!(mmr[0] == 0);
+    assert!(mmr[1] != 0);
 
-    add_to_mmr(val3, &mut mmr);
+    add_to_mmr(u256_from_bytes(val3), &mut mmr);
     // Position 0 should now have val3, position 1 should still have the merged hash
-    assert!(!vector::is_empty(&mmr[0]));
-    assert!(!vector::is_empty(&mmr[1]));
+    assert!(mmr[0] != 0);
+    assert!(mmr[1] != 0);
 
-    add_to_mmr(val4, &mut mmr);
+    add_to_mmr(u256_from_bytes(val4), &mut mmr);
     // Final state: positions 0,1 empty, position 2 has the final merged hash
-    assert!(vector::is_empty(&mmr[0]));
-    assert!(vector::is_empty(&mmr[1]));
-    assert!(!vector::is_empty(&mmr[2]));
+    assert!(mmr[0] == 0);
+    assert!(mmr[1] == 0);
+    assert!(mmr[2] != 0);
 }
