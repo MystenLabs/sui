@@ -3,15 +3,12 @@
 
 use std::path::PathBuf;
 use sui_macros::sim_test;
-use sui_move_build::BuildConfig;
 use sui_rpc::client::v2::Client;
 use sui_rpc::proto::sui::rpc::v2::{ExecutedTransaction, GasCostSummary};
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{
-    Argument, CallArg, Command, ObjectArg, TransactionData, TransactionKind,
-};
+use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::{base_types::SuiAddress, Identifier};
 use test_cluster::TestClusterBuilder;
 const SUI_COIN_TYPE: &str =
@@ -80,50 +77,19 @@ async fn test_custom_coin_balance() {
     // Publish trusted coin package
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "trusted_coin"]);
-    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-    let compiled_modules_bytes = compiled_package.get_package_bytes(false);
-    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
-    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(address)
-        .await
-        .unwrap()
-        .unwrap();
+    let (package_id_obj, transaction) =
+        super::super::publish_package(&test_cluster, address, path).await;
+    let package_id = package_id_obj.to_string();
 
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(compiled_modules_bytes, dependencies);
-    let ptb = builder.finish();
-    let gas_data = sui_types::transaction::GasData {
-        payment: vec![(gas_object.0, gas_object.1, gas_object.2)],
-        owner: address,
-        price: gas_price,
-        budget: 100_000_000,
-    };
-
-    let kind = TransactionKind::ProgrammableTransaction(ptb);
-    let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
-    let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
-
-    let (transaction, publish_gas_used) = execute_transaction(&test_cluster, &txn).await;
-
-    // Extract package ID from changed objects
-    let package_id = transaction
+    let gas_summary = transaction
         .effects
         .as_ref()
         .unwrap()
-        .changed_objects
-        .iter()
-        .find_map(|o| {
-            use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
-            if o.output_state == Some(OutputObjectState::PackageWrite as i32) {
-                o.object_id.clone()
-            } else {
-                None
-            }
-        })
+        .gas_used
+        .as_ref()
         .unwrap();
+    let publish_gas_used = calculate_gas_used(gas_summary);
 
     // Get treasury cap object from changed objects
     let treasury_cap = transaction
@@ -142,6 +108,7 @@ async fn test_custom_coin_balance() {
 
     // Mint some coins
     let mint_amount = 1_000_000; // 10 TRUSTED (with 2 decimals)
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(address)
