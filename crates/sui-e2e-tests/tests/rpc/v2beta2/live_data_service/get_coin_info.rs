@@ -8,10 +8,10 @@ use sui_macros::sim_test;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::coin_metadata::MetadataCapState;
 use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
-use sui_rpc::proto::sui::rpc::v2beta2::get_coin_info_response::RegulationState;
 use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
 use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
+use sui_rpc::proto::sui::rpc::v2beta2::regulated_coin_metadata::CoinRegulatedState;
 use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     ExecutedTransaction, GetCoinInfoRequest, GetCoinInfoResponse, GetObjectRequest,
@@ -41,7 +41,7 @@ async fn get_coin_info_sui() {
         coin_type,
         metadata,
         treasury,
-        regulation_state,
+        regulated_metadata,
         ..
     } = grpc_client
         .get_coin_info(request)
@@ -76,10 +76,11 @@ async fn get_coin_info_sui() {
     );
 
     // SUI is not in CoinRegistry, so regulation state is Unknown
-    assert!(matches!(
-        regulation_state,
-        Some(RegulationState::Unknown(_))
-    ));
+    let regulated_metadata = regulated_metadata.unwrap();
+    assert_eq!(
+        regulated_metadata.coin_regulated_state,
+        Some(CoinRegulatedState::Unknown as i32)
+    );
 }
 
 #[sim_test]
@@ -166,7 +167,11 @@ async fn test_get_coin_info_registry_coin() {
         Some("https://example.com/registry.png".to_string())
     );
     // Check that metadata cap is claimed with the correct ID
-    if let Some(MetadataCapState::Claimed(cap_id)) = &metadata.metadata_cap_state {
+    if metadata.metadata_cap_state == Some(MetadataCapState::Claimed as i32) {
+        let cap_id = metadata
+            .metadata_cap_id
+            .as_ref()
+            .expect("Expected metadata_cap_id when state is Claimed");
         assert!(
             ObjectID::from_str(cap_id).is_ok(),
             "metadata_cap_state.claimed should be a valid ObjectID"
@@ -189,10 +194,11 @@ async fn test_get_coin_info_registry_coin() {
         "Treasury cap not owned by 0x0 should have Unknown supply state"
     );
 
-    assert!(matches!(
-        response.regulation_state,
-        Some(RegulationState::Unregulated(_))
-    ));
+    let regulated_metadata = response.regulated_metadata.unwrap();
+    assert_eq!(
+        regulated_metadata.coin_regulated_state,
+        Some(CoinRegulatedState::Unregulated as i32)
+    );
 
     // Phase 2: Register the supply (consuming the TreasuryCap) and verify RPC reflects the update
     // Get the CoinRegistry object's initial shared version
@@ -348,7 +354,11 @@ async fn test_regulated_coin_info() {
         Some("https://example.com/regulated.png".to_string())
     );
     // Check that metadata cap is claimed with the correct ID
-    if let Some(MetadataCapState::Claimed(cap_id)) = &metadata.metadata_cap_state {
+    if metadata.metadata_cap_state == Some(MetadataCapState::Claimed as i32) {
+        let cap_id = metadata
+            .metadata_cap_id
+            .as_ref()
+            .expect("Expected metadata_cap_id when state is Claimed");
         assert!(
             ObjectID::from_str(cap_id).is_ok(),
             "metadata_cap_state.claimed should be a valid ObjectID"
@@ -364,10 +374,14 @@ async fn test_regulated_coin_info() {
     assert_eq!(treasury.total_supply.unwrap(), 0);
     assert_eq!(treasury.supply_state, Some(SupplyState::Unknown as i32),);
 
-    let regulated = match response.regulation_state {
-        Some(RegulationState::Regulated(metadata)) => metadata,
-        _ => panic!("Expected coin to be regulated"),
-    };
+    let regulated = response
+        .regulated_metadata
+        .expect("Expected regulated_metadata");
+    assert_eq!(
+        regulated.coin_regulated_state,
+        Some(CoinRegulatedState::Regulated as i32),
+        "Expected coin to be regulated"
+    );
     // CoinRegistry coins don't have separate RegulatedCoinMetadata objects
     assert!(regulated.id.is_none());
     assert!(regulated.coin_metadata_object.is_none());
@@ -468,10 +482,11 @@ async fn test_legacy_coin_from_registry() {
     );
 
     // Legacy coins from index return Unknown regulation state
-    assert!(matches!(
-        response.regulation_state,
-        Some(RegulationState::Unknown(_))
-    ));
+    let regulated_metadata = response.regulated_metadata.unwrap();
+    assert_eq!(
+        regulated_metadata.coin_regulated_state,
+        Some(CoinRegulatedState::Unknown as i32)
+    );
 
     // Phase 2: Send the treasury cap to 0x0 to make the supply Fixed the old fashioned way.
     let updated_treasury_cap_obj = test_cluster
@@ -648,7 +663,11 @@ async fn test_burnonly_coin_info() {
         Some("https://example.com/burnonly.png".to_string())
     );
     // Check that metadata cap is claimed with the correct ID
-    if let Some(MetadataCapState::Claimed(cap_id)) = &metadata.metadata_cap_state {
+    if metadata.metadata_cap_state == Some(MetadataCapState::Claimed as i32) {
+        let cap_id = metadata
+            .metadata_cap_id
+            .as_ref()
+            .expect("Expected metadata_cap_id when state is Claimed");
         assert_eq!(cap_id, &metadata_cap.to_string());
     } else {
         panic!("Expected metadata_cap_state to be Claimed");
@@ -769,10 +788,11 @@ async fn test_burnonly_coin_info() {
         "After register_supply_as_burnonly, the supply state should be BurnOnly"
     );
 
-    assert!(matches!(
-        response_after.regulation_state,
-        Some(RegulationState::Unregulated(_))
-    ));
+    let regulated_metadata_after = response_after.regulated_metadata.unwrap();
+    assert_eq!(
+        regulated_metadata_after.coin_regulated_state,
+        Some(CoinRegulatedState::Unregulated as i32)
+    );
 }
 
 async fn finalize_registration(
