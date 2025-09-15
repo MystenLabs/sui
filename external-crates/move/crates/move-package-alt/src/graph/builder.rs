@@ -256,19 +256,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             );
             let dep_index = Box::pin(future).await?;
 
-            // If we're dealing with legacy packages, we are fixing the naming in the outgoing edge,
-            // to match our modern system names.
-            let edge_name = if fetched.is_legacy() {
-                fetched.name()
-            } else {
-                name
-            };
-
             graph.lock().expect("unpoisoned").add_edge(
                 index,
                 dep_index,
                 PackageGraphEdge {
-                    name: edge_name.clone(),
+                    name: name.clone(),
                     dep: dep.clone(),
                 },
             );

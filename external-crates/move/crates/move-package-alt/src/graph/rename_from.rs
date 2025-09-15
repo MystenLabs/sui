@@ -3,7 +3,8 @@ use petgraph::visit::EdgeRef;
 use thiserror::Error;
 
 use crate::{
-    dependency::PinnedDependencyInfo, flavor::MoveFlavor, package::Package, schema::PackageName,
+    compatibility::legacy::LegacyData, dependency::PinnedDependencyInfo, flavor::MoveFlavor,
+    package::Package, schema::PackageName,
 };
 
 use super::PackageGraph;
@@ -24,9 +25,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
             let dep = &edge.weight().dep;
 
             let expected_name = dep.rename_from().as_ref().unwrap_or(&edge.weight().name);
-            let actual_name = self.inner[edge.target()].name();
+            let origin_pkg = self.inner[edge.source()].clone();
+            let target_pkg = self.inner[edge.target()].clone();
 
-            if expected_name != actual_name {
+            // Modern packages: If there's a name missmatch, we error
+            // Legacy packages: If there's a name missmatch and there's also a missmatch with the
+            // legacy name, we fail again.
+            if expected_name != target_pkg.name()
+                && (!origin_pkg.is_legacy()
+                    || !is_legacy_match(&target_pkg.legacy_data, expected_name))
+            {
                 return Err(RenameError::new(
                     &self.inner[edge.source()],
                     &self.inner[edge.target()],
@@ -37,6 +45,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
 
         Ok(())
+    }
+}
+
+/// Checks that for a given package `pkg`, if it's legacy, the expected name
+/// matches the normalized legacy name.
+fn is_legacy_match(legacy_data: &Option<LegacyData>, expected_name: &PackageName) -> bool {
+    if let Some(legacy_data) = legacy_data {
+        &legacy_data.normalized_legacy_name == expected_name
+    } else {
+        false
     }
 }
 
@@ -171,5 +189,94 @@ mod tests {
 
         assert_snapshot!(scenario.graph_for("root").await.check_rename_from().unwrap_err().to_string(), @"TODO");
         assert_snapshot!(scenario.graph_for("a").await.check_rename_from().unwrap_err().to_string(), @"TODO");
+    }
+
+    #[test(tokio::test)]
+    /// TODO: Add a mermaid diagram
+    async fn test_modern_using_legacy_framework() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdLib"))
+            .add_package("sui", |pkg| pkg.set_legacy().set_legacy_name("Sui"))
+            .add_package("sui_system", |pkg| {
+                pkg.set_legacy().set_legacy_name("SuiSystem")
+            })
+            .add_deps([("root", "std")])
+            .add_dep("root", "sui", |dep| dep.name("my_sui").rename_from("sui"))
+            .add_dep("root", "sui_system", |dep| {
+                dep.name("my_sui_system").rename_from("sui_system")
+            })
+            .add_dep("sui", "std", |dep| dep.name("MoveStdLib"))
+            // legacy -> legacy case (SuiSystem -> MoveStdLib (std)
+            .add_dep("sui_system", "sui", |dep| dep.name("Sui"))
+            .add_dep("sui_system", "std", |dep| dep.name("MoveStdLib"))
+            .build();
+
+        scenario
+            .graph_for("root")
+            .await
+            .check_rename_from()
+            .unwrap();
+
+        scenario
+            .graph_for("sui_system")
+            .await
+            .check_rename_from()
+            .unwrap();
+    }
+
+    #[test(tokio::test)]
+    async fn test_modern_to_legacy_not_allowed_behaviours() {
+        let scenario = TestPackageGraph::new(["foo", "bat", "bar", "baz"])
+            .add_package("legacy", |pkg| pkg.set_legacy().set_legacy_name("Legacy"))
+            .add_package("legacy2", |pkg| pkg.set_legacy().set_legacy_name("Legacy2"))
+            .add_package("legacy3", |pkg| pkg.set_legacy().set_legacy_name("Legacy3"))
+            .add_package("sui", |pkg| pkg.set_legacy().set_legacy_name("Sui"))
+            .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdLib"))
+            .add_package("malformed", |pkg| {
+                pkg.set_legacy().set_legacy_name("weird-input")
+            })
+            // 1. (FAIL) Cannot use the legacy name in the left side assignment
+            .add_dep("bat", "sui", |dep| dep.name("Sui"))
+            // 2. (OK) Can use the "modern" name in the rename-from (even if we name it as the legacy name)
+            .add_dep("foo", "std", |dep| {
+                dep.name("MoveStdLib").rename_from("std")
+            })
+            // 3. (FAIL) Cannot use the legacy name in the rename-from
+            .add_dep("bar", "std", |dep| {
+                dep.name("foo").rename_from("MoveStdLib")
+            })
+            // 4. (OK) Legacy packages CAN use legacy names freely!
+            .add_dep("legacy", "std", |dep| dep.name("MoveStdLib"))
+            // 5. (OK) Can use a malformed legacy name (as the system normalizes)
+            .add_dep("baz", "malformed", |dep| dep.name("malformed"))
+            // 6. (FAIL) Cannot accept wrong names for deps
+            .add_dep("legacy2", "std", |dep| dep.name("Wrong"))
+            .build();
+
+        // 1.
+        let _ = scenario.graph_for("bat").await.check_rename_from().is_err();
+
+        // 2.
+        scenario.graph_for("foo").await.check_rename_from().unwrap();
+
+        // 3.
+        let _ = scenario.graph_for("bar").await.check_rename_from().is_err();
+
+        // 4.
+        scenario
+            .graph_for("legacy")
+            .await
+            .check_rename_from()
+            .unwrap();
+
+        // 5.
+        scenario.graph_for("baz").await.check_rename_from().unwrap();
+
+        // 6.
+        let _ = scenario
+            .graph_for("legacy2")
+            .await
+            .check_rename_from()
+            .is_err();
     }
 }
