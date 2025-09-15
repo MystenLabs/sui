@@ -311,7 +311,7 @@ impl KeyValueStoreReader for BigTableClient {
                 vec![(sequence_number - 1).to_be_bytes().to_vec()],
                 Some(RowFilter {
                     filter: Some(Filter::ColumnQualifierRegexFilter(
-                        CHECKPOINT_SUMMARY_COLUMN_QUALIFIER.into(),
+                        format!("^({CHECKPOINT_SUMMARY_COLUMN_QUALIFIER})$").into(),
                     )),
                 }),
             )
@@ -383,7 +383,8 @@ impl KeyValueStoreReader for BigTableClient {
                     .collect(),
                 Some(RowFilter {
                     filter: Some(Filter::ColumnQualifierRegexFilter(
-                        EVENTS_COLUMN_QUALIFIER.into(),
+                        format!("^({EVENTS_COLUMN_QUALIFIER}|{TIMESTAMP_COLUMN_QUALIFIER})$")
+                            .into(),
                     )),
                 }),
             )
