@@ -14,10 +14,6 @@ use move_core_types::{ident_str, identifier::IdentStr};
 use serde::{Deserialize, Serialize};
 
 pub const COIN_REGISTRY_MODULE_NAME: &IdentStr = ident_str!("coin_registry");
-pub const COIN_REGISTRY_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
-pub const COIN_DATA_STRUCT_NAME: &IdentStr = ident_str!("CoinData");
-pub const COIN_DATA_KEY_STRUCT_NAME: &IdentStr = ident_str!("CoinDataKey");
-pub const CURRENCY_STRUCT_NAME: &IdentStr = ident_str!("Currency");
 pub const CURRENCY_KEY_STRUCT_NAME: &IdentStr = ident_str!("CurrencyKey");
 
 pub fn get_coin_registry_obj_initial_shared_version(
