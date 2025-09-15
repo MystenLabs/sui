@@ -23,6 +23,10 @@ pub struct LegacyData {
     /// things after parsing
     pub legacy_name: String,
 
+    /// The `legacy_name` transformed into a normalized name from the parser.
+    /// This is helpful for `rename-from` validation.
+    pub normalized_legacy_name: Identifier,
+
     /// These addresses should store all addresses that were part of the package.
     pub named_addresses: BTreeMap<Identifier, AccountAddress>,
 

@@ -24,9 +24,18 @@ impl<F: MoveFlavor> PackageGraph<F> {
             let dep = &edge.weight().dep;
 
             let expected_name = dep.rename_from().as_ref().unwrap_or(&edge.weight().name);
-            let actual_name = self.inner[edge.target()].name();
+            let pkg = self.inner[edge.target()].clone();
+            let actual_name = pkg.name();
 
-            if expected_name != actual_name {
+            // If we're operating on a legacy package, we are OK also if the
+            // legacy name matches the old name too (the normalized one).
+            let is_legacy_match = pkg
+                .legacy_data
+                .as_ref()
+                .map(|d| &d.normalized_legacy_name == expected_name)
+                .unwrap_or(true);
+
+            if expected_name != actual_name && !is_legacy_match {
                 return Err(RenameError::new(
                     &self.inner[edge.source()],
                     &self.inner[edge.target()],
