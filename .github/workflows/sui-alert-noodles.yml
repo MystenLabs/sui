@@ -108,7 +108,7 @@ jobs:
       #     fi
 
       - name: Save commit hash to cache
-        if: steps.check_change.outputs.changed == 'true'
+        if: steps.check_change.outputs.changed == 'true' 
         uses: actions/cache/save@v3
         with:
           path: .last_file_commit
