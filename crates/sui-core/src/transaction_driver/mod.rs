@@ -10,6 +10,8 @@ mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt as _;
 pub use message_types::*;
 pub use metrics::*;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -31,7 +33,7 @@ use sui_types::{
 };
 use tokio::{
     task::JoinSet,
-    time::{interval, sleep},
+    time::{interval, sleep, timeout},
 };
 use tracing::instrument;
 use transaction_submitter::*;
@@ -40,13 +42,13 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    transaction_driver::request_retrier::TOP_K_VALIDATORS_DENOMINATOR,
     validator_client_monitor::{
         OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
 use strum::IntoEnumIterator;
 use sui_config::NodeConfig;
-
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
 pub struct SubmitTransactionOptions {
@@ -104,120 +106,160 @@ where
     // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
     async fn run_latency_checks(self: Arc<Self>) {
         const MAX_DELAY_BETWEEN_REQUESTS_MS: u64 = 5_000;
-        const INTERVAL_BETWEEN_RUNS_MS: u64 = 10_000;
-        let mut interval = interval(Duration::from_secs(INTERVAL_BETWEEN_RUNS_MS));
+        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_millis(10_000);
+        const TASK_TIMEOUT: Duration = Duration::from_millis(5_000);
+        let mut interval = interval(INTERVAL_BETWEEN_RUNS);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
             interval.tick().await;
 
             // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
             let mut tasks = JoinSet::new();
-            for tx_type in TxType::iter() {
-                // Send the latency requests to all validators.
-                // TODO: do not send requests to all validators, but only to a subset of validators. For example order the validators by their
-                // score ascending and then take a `K` of them.
-                let self_clone = self.clone();
-                let auth_agg = self_clone.authority_aggregator.load().clone();
-                let clients: Vec<_> = auth_agg
-                    .authority_clients
-                    .iter()
-                    .map(|(name, client)| (*name, client.clone()))
-                    .collect();
 
-                for (name, client) in clients {
-                    let metrics_clone = self_clone.metrics.clone();
-                    let display_name = self_clone
-                        .authority_aggregator
-                        .load()
-                        .get_display_name(&name);
-                    let options = SubmitTransactionOptions::default();
-                    let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
+            let self_clone = self.clone();
+            let auth_agg = self_clone.authority_aggregator.load().clone();
 
-                    // Clone values for each task
-                    let self_task_clone = self_clone.clone();
-                    let auth_agg_clone = auth_agg.clone();
+            // Get the validators by their total score
+            let mut clients_by_total_score = self_clone
+                .client_monitor
+                .validators_by_total_score(&auth_agg.committee);
 
-                    tasks.spawn(async move {
-                        // Add some random delay to the task to avoid all tasks running at the same time
-                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-                        let start_time = Instant::now();
+            // Order the clients by their total score in score descending order
+            clients_by_total_score.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-                        // Submit the ping transaction to the validator.
-                        let submit_txn_result = match self_task_clone
-                            .submitter
-                            .submit_transaction_once(
-                                client.clone(),
-                                &RawSubmitTxRequest {
-                                    transactions: vec![],
-                                    soft_bundle: false,
-                                    ping: true,
-                                },
-                                &options,
-                                &self_task_clone.client_monitor,
-                                name,
-                                display_name.clone(),
-                            )
-                            .await
-                        {
-                            Ok(submit_txn_result) => submit_txn_result,
-                            Err(e) => {
-                                tracing::info!(
-                                    "Failed to submit ping transaction to validator {}: {}",
-                                    display_name.clone(),
-                                    e
-                                );
-                                return Err(TransactionDriverError::Internal {
-                                    error: e.to_string(),
-                                });
-                            }
-                        };
+            // Now keep only the clients after the first K as those being used on the retrier
+            let clients = clients_by_total_score
+                [auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR..]
+                .iter()
+                .filter_map(|(name, _)| {
+                    auth_agg
+                        .authority_clients
+                        .get(name)
+                        .map(|client| (*name, client.clone()))
+                });
 
-                        // Wait for quorum effects using EffectsCertifier
-                        let result = self_task_clone
-                            .certifier
-                            .get_certified_finalized_effects(
-                                &auth_agg_clone,
-                                &self_task_clone.client_monitor,
-                                &TransactionDigest::ZERO,
-                                tx_type,
-                                name,
-                                submit_txn_result,
-                                &options,
-                                true,
-                            )
-                            .await?;
+            for (name, client) in clients {
+                let metrics = self_clone.metrics.clone();
+                let display_name = self_clone
+                    .authority_aggregator
+                    .load()
+                    .get_display_name(&name);
+                let options = SubmitTransactionOptions::default();
+                let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
 
-                        self_task_clone.client_monitor.record_interaction_result(
-                            OperationFeedback {
-                                authority_name: name,
-                                display_name: auth_agg_clone.get_display_name(&name),
-                                operation: if tx_type == TxType::SingleWriter {
-                                    OperationType::FastPath
-                                } else {
-                                    OperationType::Consensus
-                                },
-                                result: Ok(start_time.elapsed()),
+                let self_clone = self_clone.clone();
+                let auth_agg = auth_agg.clone();
+
+                let task = async move {
+                    // Add some random delay to the task to avoid all tasks running at the same time
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    let start_time = Instant::now();
+
+                    // Submit the ping transaction to the validator.
+                    let submit_txn_result = match self_clone
+                        .submitter
+                        .submit_transaction_once(
+                            client.clone(),
+                            &RawSubmitTxRequest {
+                                transactions: vec![],
+                                soft_bundle: false,
                             },
-                        );
+                            &options,
+                            &self_clone.client_monitor,
+                            name,
+                            display_name.clone(),
+                        )
+                        .await
+                    {
+                        Ok(submit_txn_result) => submit_txn_result,
+                        Err(e) => {
+                            tracing::info!(
+                                "Failed to submit ping transaction to validator {}: {}",
+                                display_name.clone(),
+                                e
+                            );
+                            return Err(TransactionDriverError::Internal {
+                                error: e.to_string(),
+                            });
+                        }
+                    };
 
-                        metrics_clone
-                            .ping_latency
-                            .with_label_values(&[&display_name, tx_type.as_str()])
-                            .observe(start_time.elapsed().as_secs_f64());
+                    // Wait for quorum effects using EffectsCertifier for each transaction type. Run those as independent futures
+                    // to avoid sequential delays distorting the latency measurements.
+                    let mut requests = FuturesUnordered::new();
+                    for tx_type in TxType::iter() {
+                        let self_clone = self_clone.clone();
+                        let submit_txn_result = submit_txn_result.clone();
+                        let options = options.clone();
+                        let auth_agg = auth_agg.clone();
 
-                        tracing::debug!(
-                            "Ping transaction to validator {} completed end to end in {} seconds",
-                            display_name,
-                            start_time.elapsed().as_secs_f64()
-                        );
-                        Ok(result)
-                    });
-                }
+                        requests.push(async move {
+                            let result = self_clone
+                                .certifier
+                                .get_certified_finalized_effects(
+                                    &auth_agg,
+                                    &self_clone.client_monitor,
+                                    &TransactionDigest::ZERO,
+                                    tx_type,
+                                    name,
+                                    submit_txn_result,
+                                    &options,
+                                    true,
+                                )
+                                .await;
 
-                while let Some(result) = tasks.join_next().await {
-                    if let Err(e) = result {
-                        tracing::info!("Failed to drive ping transaction: {}", e);
+                            if let Err(err) = result {
+                                Err((tx_type, err))
+                            } else {
+                                Ok(tx_type)
+                            }
+                        });
                     }
+
+                    while let Some(result) = requests.next().await {
+                        match result {
+                            Ok(tx_type) => {
+                                self_clone.client_monitor.record_interaction_result(
+                                    OperationFeedback {
+                                        authority_name: name,
+                                        display_name: auth_agg.get_display_name(&name),
+                                        operation: if tx_type == TxType::SingleWriter {
+                                            OperationType::FastPath
+                                        } else {
+                                            OperationType::Consensus
+                                        },
+                                        result: Ok(start_time.elapsed()),
+                                    },
+                                );
+
+                                metrics
+                                    .ping_latency
+                                    .with_label_values(&[&display_name, tx_type.as_str()])
+                                    .observe(start_time.elapsed().as_secs_f64());
+
+                                tracing::debug!(
+                                    "Ping transaction to validator {} for tx type {} completed end to end in {} seconds",
+                                    display_name,
+                                    tx_type.as_str(),
+                                    start_time.elapsed().as_secs_f64()
+                                );
+                            }
+                            Err((tx_type, err)) => {
+                                tracing::info!("Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}", tx_type.as_str(), display_name, err);
+                            }
+                        }
+                    }
+
+                    Ok(())
+                };
+
+                tasks.spawn(timeout(TASK_TIMEOUT, task));
+            }
+
+            while let Some(result) = tasks.join_next().await {
+                if let Err(e) = result {
+                    tracing::info!("Timeout while driving ping transaction: {}", e);
                 }
             }
         }
@@ -273,6 +315,7 @@ where
                         amplification_factor,
                         raw_request.clone(),
                         &options,
+                        false,
                     )
                     .await
                 {
@@ -345,12 +388,17 @@ where
         amplification_factor: u64,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
+        ping: bool,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        debug_assert!(
+            ping || !raw_request.transactions.is_empty(),
+            "Only ping requests can have empty transactions"
+        );
+
         let auth_agg = self.authority_aggregator.load();
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
-        let ping = raw_request.ping;
 
         let (name, submit_txn_result) = self
             .submitter

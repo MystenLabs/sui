@@ -16,6 +16,8 @@ use crate::{
     validator_client_monitor::{TxType, ValidatorClientMonitor},
 };
 
+pub(crate) const TOP_K_VALIDATORS_DENOMINATOR: usize = 4;
+
 /// Provides the next target validator to retry operations,
 /// and gathers the errors along with the operations.
 ///
@@ -38,7 +40,7 @@ impl<A: Clone> RequestRetrier<A> {
     ) -> Self {
         let selected_validators = client_monitor.select_shuffled_preferred_validators(
             &auth_agg.committee,
-            auth_agg.committee.num_members() / 3,
+            auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR,
             tx_type,
         );
         let remaining_clients = selected_validators

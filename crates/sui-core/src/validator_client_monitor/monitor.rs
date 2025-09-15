@@ -278,6 +278,36 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         validator_with_scores.into_iter().map(|(v, _)| v).collect()
     }
 
+    // Returns a vector of validators by their total score. The total score is the sum of the scores for all transaction types.
+    pub fn validators_by_total_score(&self, committee: &Committee) -> Vec<(AuthorityName, f64)> {
+        let cached_scores = self.cached_scores.read();
+        let mut validator_with_scores = HashMap::new();
+
+        for tx_type in TxType::iter() {
+            committee
+                .names()
+                .map(|v| {
+                    if let Some(scores) = cached_scores.get(&tx_type) {
+                        (v, scores.get(v).cloned().unwrap_or(0.0))
+                    } else {
+                        (v, 0.0)
+                    }
+                })
+                .for_each(|(v, score)| {
+                    if let Some(prev_score) = validator_with_scores.get(v) {
+                        validator_with_scores.insert(v, prev_score + score);
+                    } else {
+                        validator_with_scores.insert(v, score);
+                    }
+                });
+        }
+
+        validator_with_scores
+            .into_iter()
+            .map(|(v, s)| (*v, s))
+            .collect()
+    }
+
     #[cfg(test)]
     pub fn force_update_cached_scores(&self) {
         self.update_cached_scores();
