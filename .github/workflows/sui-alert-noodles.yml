@@ -112,4 +112,4 @@ jobs:
         uses: actions/cache/save@v3
         with:
           path: .last_file_commit
-          key: sui-yaml-commit-${{ github.run_id }}
+          key: sui-yaml-commit-${{ github.run_id }} 
