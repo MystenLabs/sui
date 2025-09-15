@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use fastcrypto::vrf::ecvrf::{ECVRFProof, ECVRFPublicKey};
 use fastcrypto::vrf::VRFProof;
 use move_binary_format::errors::PartialVMResult;
@@ -48,9 +48,7 @@ pub fn ecvrf_verify(
     debug_assert!(args.len() == 4);
 
     // Load the cost parameters from the protocol config
-    let ecvrf_ecvrf_verify_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let ecvrf_ecvrf_verify_cost_params = get_extension!(context, NativesCostTable)?
         .ecvrf_ecvrf_verify_cost_params
         .clone();
     // Charge the base cost for this oper
