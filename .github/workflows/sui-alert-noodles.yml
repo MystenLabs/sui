@@ -3,7 +3,7 @@ name: 🔔 Alert on upstream sui.yaml change
 on:
   push:
     branches:
-      - feature-fix-duplicate-alert
+      - main
   schedule:
     - cron: "0 0 * * *" 
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
         with:
           name: last-sui-commit
           path: .
-        continue-on-error: true   # first run won't have artifact
+        continue-on-error: true   
 
       - name: Get last commit affecting sui.yaml
         id: get_commit
@@ -39,20 +39,20 @@ jobs:
         id: check_change
         run: |
           prev_commit=$(cat .last_file_commit 2>/dev/null || echo "")
+          echo "$LAST_COMMIT" > .last_file_commit   # ✅ always update file
           if [ "$LAST_COMMIT" != "$prev_commit" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "$LAST_COMMIT" > .last_file_commit
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload last commit artifact
-        if: steps.check_change.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: last-sui-commit
           path: .last_file_commit
           overwrite: true
+          retention-days: 30  
 
       - name: Test Alert Output (dry run)
         if: steps.check_change.outputs.changed == 'true'
@@ -67,8 +67,9 @@ jobs:
           echo "• Commit: ${commit_url}"
           echo "• Author: ${commit_author}"
           echo "• Message: ${commit_msg}"
-          echo "• Mentions: ${slack_mentions}" 
+          echo "• Mentions: ${slack_mentions}"
 
+      # 🔔 Uncomment when ready to send Slack alerts
       # - name: Send Slack Alert
       #   if: steps.check_change.outputs.changed == 'true'
       #   run: |
