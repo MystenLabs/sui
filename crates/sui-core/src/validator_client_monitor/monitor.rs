@@ -271,6 +271,35 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         validator_with_scores.into_iter().map(|(v, _)| v).collect()
     }
 
+    pub fn select_validators_by_score(&self, committee: &Committee) -> Vec<AuthorityName> {
+        let cached_scores = self.cached_scores.read();
+        let mut validator_with_scores = HashMap::new();
+
+        for tx_type in TxType::iter() {
+            committee
+                .names()
+                .map(|v| {
+                    if let Some(scores) = cached_scores.get(&tx_type) {
+                        (v, scores.get(v).cloned().unwrap_or(0.0))
+                    } else {
+                        (v, 0.0)
+                    }
+                })
+                .for_each(|(v, score)| {
+                    if let Some(prev_score) = validator_with_scores.get(v) {
+                        validator_with_scores.insert(v, prev_score + score);
+                    } else {
+                        validator_with_scores.insert(v, score);
+                    }
+                });
+        }
+
+        let mut validator_with_scores = validator_with_scores.into_iter().collect::<Vec<_>>();
+        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        validator_with_scores.into_iter().map(|(v, _)| *v).collect()
+    }
+
     #[cfg(test)]
     pub fn force_update_cached_scores(&self) {
         self.update_cached_scores();

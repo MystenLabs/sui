@@ -213,7 +213,7 @@ pub struct ValidatorServiceMetrics {
     pub handle_soft_bundle_certificates_count: Histogram,
     pub handle_soft_bundle_certificates_size_bytes: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
-    pub handle_submit_transaction_consensus_latency: Histogram,
+    pub handle_submit_transaction_consensus_latency: HistogramVec,
     pub handle_wait_for_effects_ping_latency: Histogram,
 
     handle_submit_transaction_latency: HistogramVec,
@@ -318,9 +318,10 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            handle_submit_transaction_consensus_latency: register_histogram_with_registry!(
+            handle_submit_transaction_consensus_latency: register_histogram_vec_with_registry!(
                 "validator_service_submit_transaction_consensus_latency",
                 "Latency of submitting a user transaction sent through consensus",
+                &["req_type"],
                 mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -846,6 +847,7 @@ impl ValidatorService {
 
         let _latency_metric_guard = metrics
             .handle_submit_transaction_consensus_latency
+            .with_label_values(&[req_type])
             .start_timer();
 
         let consensus_positions = if request.soft_bundle || request.ping {
