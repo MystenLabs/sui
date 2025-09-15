@@ -7,6 +7,6 @@ mod refinement;
 mod structuring;
 pub mod output;
 pub mod translate;
+pub mod pretty;
 
-#[cfg(test)]
 pub mod testing;

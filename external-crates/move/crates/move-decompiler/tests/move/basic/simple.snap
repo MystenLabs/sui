@@ -1,0 +1,9 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module simple {
+    public fun f () {
+        return         &( l0 ).x
+    }
+
+}

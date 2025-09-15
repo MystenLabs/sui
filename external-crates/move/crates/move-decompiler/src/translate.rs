@@ -27,7 +27,7 @@ pub fn model<S: SourceKind>(model: Model<S>) -> anyhow::Result<Out::Decompiled<S
 
 fn packages<S: SourceKind>(
     model: &Model<S>,
-    stackless: move_stackless_bytecode_2::ast::StacklessBytecode,
+    stackless: SB::StacklessBytecode,
 ) -> Vec<Out::Package> {
     let SB::StacklessBytecode {
         packages: sb_packages,
@@ -41,22 +41,20 @@ fn packages<S: SourceKind>(
 
 fn package<S: SourceKind>(
     _model: &Model<S>,
-    sb_pkg: move_stackless_bytecode_2::ast::Package,
+    sb_pkg: SB::Package,
 ) -> Out::Package {
     let SB::Package {
         name,
         address,
         modules,
-    } = &sb_pkg;
-    let modules = sb_pkg
-        .modules
+    } = sb_pkg;
+    let modules = modules
         .into_iter()
         .map(|(module_name, m)| {
             let decompiled_module = module(m);
             (module_name, decompiled_module)
         })
         .collect();
-
     Out::Package {
         name,
         address,
@@ -68,7 +66,7 @@ fn package<S: SourceKind>(
 // Module
 // -------------------------------------------------------------------------------------------------
 
-pub(crate) fn module(module: SB::Module) -> Out::Module {
+pub fn module(module: SB::Module) -> Out::Module {
     let SB::Module { name, functions } = module;
 
     let functions = functions

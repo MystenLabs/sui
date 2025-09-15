@@ -5,7 +5,6 @@
 // Harness for Structring Testing
 // -------------------------------------------------------------------------------------------------
 
-#[cfg(test)]
 pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
     use crate::structuring::ast::Input as In;
 

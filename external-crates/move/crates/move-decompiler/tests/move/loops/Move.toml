@@ -1,6 +1,6 @@
 [package]
-name = "loop"
+name = "loops"
 edition = "2024.beta"
 
 [addresses]
-addr = "0x0"
+loops = "0x0"
