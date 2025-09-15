@@ -12,7 +12,7 @@ use tap::Pipe;
 pub mod client;
 mod config;
 mod error;
-mod grpc;
+pub mod grpc;
 mod metrics;
 mod reader;
 mod response;
@@ -115,6 +115,10 @@ impl RpcService {
                 sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer::new(
                     self.clone(),
                 );
+            let event_service2 =
+                crate::grpc::v2beta2::event_service_proto::event_service_server::EventServiceServer::new(
+                    self.clone(),
+                );
             let transaction_execution_service2 = sui_rpc::proto::sui::rpc::v2beta2::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone());
             let live_data_service2 =
                 sui_rpc::proto::sui::rpc::v2beta2::live_data_service_server::LiveDataServiceServer::new(
@@ -131,9 +135,6 @@ impl RpcService {
                 )
                 .register_encoded_file_descriptor_set(
                     crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1()
@@ -159,6 +160,7 @@ impl RpcService {
 
             for service_name in [
                 service_name(&ledger_service2),
+                service_name(&event_service2),
                 service_name(&transaction_execution_service2),
                 service_name(&live_data_service2),
                 service_name(&signature_verification_service2),
@@ -173,6 +175,7 @@ impl RpcService {
 
             let mut services = grpc::Services::new()
                 .add_service(ledger_service2)
+                .add_service(event_service2)
                 .add_service(transaction_execution_service2)
                 .add_service(live_data_service2)
                 .add_service(signature_verification_service2)

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulator_event::AccumulatorEvent,
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::TransactionDigest,
@@ -24,6 +25,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
 pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");
+pub const ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD: &IdentStr = ident_str!("EventStreamHead");
 pub const ACCUMULATOR_ROOT_CREATE_FUNC: &IdentStr = ident_str!("create");
 pub const ACCUMULATOR_ROOT_SETTLE_U128_FUNC: &IdentStr = ident_str!("settle_u128");
 pub const ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC: &IdentStr = ident_str!("settlement_prologue");
@@ -208,6 +210,19 @@ impl AccumulatorValue {
             TransactionDigest::genesis_marker(),
         )
     }
+}
+
+/// Extract stream id from an accumulator event if it targets sui::accumulator_settlement::EventStreamHead
+pub fn stream_id_from_accumulator_event(ev: &AccumulatorEvent) -> Option<SuiAddress> {
+    if let TypeTag::Struct(tag) = &ev.write.address.ty {
+        if tag.address == SUI_FRAMEWORK_ADDRESS
+            && tag.module.as_ident_str() == ACCUMULATOR_SETTLEMENT_MODULE
+            && tag.name.as_ident_str() == ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD
+        {
+            return Some(ev.write.address.address);
+        }
+    }
+    None
 }
 
 impl TryFrom<&MoveObject> for AccumulatorValue {

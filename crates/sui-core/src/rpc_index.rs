@@ -20,6 +20,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 use sui_config::RpcIndexInitConfig;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -27,6 +28,8 @@ use sui_types::base_types::SuiAddress;
 use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::{AccumulatorValue, TransactionEffectsAPI};
+use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -48,7 +51,7 @@ use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
 
-const CURRENT_DB_VERSION: u64 = 3;
+const CURRENT_DB_VERSION: u64 = 4;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
 
@@ -334,9 +337,22 @@ struct IndexStoreTables {
     /// Allows efficient listing of all versions of a package.
     #[default_options_override_fn = "default_table_options"]
     package_version: DBMap<PackageVersionKey, PackageVersionInfo>,
+
+    /// Authenticated events index by (stream_id, checkpoint_seq, transaction_idx, event_index)
+    /// Value is the full sui_types::event::Event
+    #[default_options_override_fn = "default_table_options"]
+    events_by_stream: DBMap<EventIndexKey, Event>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EventIndexKey {
+    pub stream_id: SuiAddress,
+    pub checkpoint_seq: u64,
+    pub transaction_idx: u32,
+    pub event_index: u32,
 }
 
 impl IndexStoreTables {
@@ -546,6 +562,17 @@ impl IndexStoreTables {
             [(Watermark::Pruned, pruned_checkpoint_watermark)],
         )?;
 
+        let to_delete: Vec<EventIndexKey> = self
+            .events_by_stream
+            .safe_iter()
+            .take_while(|item| match item {
+                Ok((key, _)) => key.checkpoint_seq <= pruned_checkpoint_watermark,
+                Err(_) => true,
+            })
+            .filter_map(|res| res.ok().map(|(k, _)| k))
+            .collect();
+        batch.delete_batch(&self.events_by_stream, to_delete)?;
+
         batch.write()
     }
 
@@ -565,6 +592,7 @@ impl IndexStoreTables {
         self.index_epoch(checkpoint, &mut batch)?;
         self.index_transactions(checkpoint, &mut batch)?;
         self.index_objects(checkpoint, &mut batch)?;
+        self.index_authenticated_events(checkpoint, &mut batch)?;
 
         batch.insert_batch(
             &self.watermark,
@@ -580,6 +608,61 @@ impl IndexStoreTables {
         );
 
         Ok(batch)
+    }
+
+    fn stream_id_from_accumulator_event(ev: &AccumulatorEvent) -> Option<SuiAddress> {
+        sui_types::accumulator_root::stream_id_from_accumulator_event(ev)
+    }
+
+    fn index_authenticated_events(
+        &self,
+        checkpoint: &CheckpointData,
+        batch: &mut typed_store::rocks::DBBatch,
+    ) -> Result<(), StorageError> {
+        let mut entries: Vec<(EventIndexKey, Event)> = Vec::new();
+        let cp = checkpoint.checkpoint_summary.sequence_number;
+
+        for (tx_idx, tx) in checkpoint.transactions.iter().enumerate() {
+            let acc_events = tx.effects.accumulator_events();
+            if acc_events.is_empty() {
+                continue;
+            }
+
+            let mut per_tx_indices: Vec<(SuiAddress, u64)> = Vec::new();
+            for acc in acc_events {
+                if let Some(stream_id) = Self::stream_id_from_accumulator_event(&acc) {
+                    if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
+                        per_tx_indices.push((stream_id, idx));
+                    }
+                }
+            }
+
+            if per_tx_indices.is_empty() {
+                continue;
+            }
+
+            let Some(tx_events) = tx.events.as_ref() else {
+                continue;
+            };
+            for (stream_id, idx) in per_tx_indices {
+                let ui = idx as usize;
+                if ui < tx_events.data.len() {
+                    let ev = &tx_events.data[ui];
+                    let key = EventIndexKey {
+                        stream_id,
+                        checkpoint_seq: cp,
+                        transaction_idx: tx_idx as u32,
+                        event_index: idx as u32,
+                    };
+                    entries.push((key, ev.clone()));
+                }
+            }
+        }
+
+        if !entries.is_empty() {
+            batch.insert_batch(&self.events_by_stream, entries)?;
+        }
+        Ok(())
     }
 
     fn index_epoch(
@@ -784,6 +867,30 @@ impl IndexStoreTables {
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionInfo>, TypedStoreError> {
         self.transactions.get(digest)
+    }
+
+    fn event_iter(
+        &self,
+        stream_id: SuiAddress,
+        start: u64,
+        end: u64,
+    ) -> Result<
+        impl Iterator<Item = Result<(EventIndexKey, Event), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        let lower = EventIndexKey {
+            stream_id,
+            checkpoint_seq: start,
+            transaction_idx: 0,
+            event_index: 0,
+        };
+        Ok(self
+            .events_by_stream
+            .safe_iter_with_bounds(Some(lower), None)
+            .take_while(move |item| match item {
+                Ok((key, _)) => key.stream_id == stream_id && key.checkpoint_seq <= end,
+                Err(_) => true,
+            }))
     }
 
     fn owner_iter(
@@ -1284,6 +1391,24 @@ impl RpcIndexStore {
         TypedStoreError,
     > {
         self.tables.package_versions_iter(original_id, cursor)
+    }
+
+    pub fn event_iter(
+        &self,
+        stream_id: SuiAddress,
+        start: u64,
+        end: u64,
+    ) -> Result<
+        impl Iterator<Item = Result<(EventIndexKey, Event), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        self.tables.event_iter(stream_id, start, end)
+    }
+
+    pub fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.tables.watermark.get(&Watermark::Indexed)
     }
 }
 

@@ -11,6 +11,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::{
 };
 
 mod ledger_service;
+mod list_authenticated_events;
 mod live_data_service;
 mod move_package_service;
 mod signature_verification_service;
