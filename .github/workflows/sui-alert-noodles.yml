@@ -3,7 +3,7 @@ name: 🔔 Alert on upstream sui.yaml change
 on:
   push:
     branches:
-      - main
+      - feature-fix-duplicate-alert
   schedule:
     - cron: "0 0 * * *" 
   workflow_dispatch:
@@ -22,13 +22,12 @@ jobs:
           git remote add upstream https://github.com/MystenLabs/sui.git || true
           git fetch upstream main
 
-      - name: Restore previous commit hash from cache
-        id: restore_cache
-        uses: actions/cache@v3
+      - name: Download last commit artifact
+        uses: actions/download-artifact@v4
         with:
-          path: .last_file_commit
-          key: sui-yaml-commit
-          restore-keys: sui-yaml-commit
+          name: last-sui-commit
+          path: .
+        continue-on-error: true   # first run won't have artifact
 
       - name: Get last commit affecting sui.yaml
         id: get_commit
@@ -47,13 +46,15 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Save commit hash to cache
-        uses: actions/cache@v3
+      - name: Upload last commit artifact
+        if: steps.check_change.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
         with:
+          name: last-sui-commit
           path: .last_file_commit
-          key: sui-yaml-commit
+          overwrite: true
 
-      - name: Send Slack Alert
+      - name: Test Alert Output (dry run)
         if: steps.check_change.outputs.changed == 'true'
         run: |
           commit_hash=$LAST_COMMIT
@@ -61,8 +62,21 @@ jobs:
           commit_msg=$(git log -1 --pretty=format:'%s' $commit_hash)
           commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
           slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
+          
+          echo "🚨 sui.yaml was updated in upstream!"
+          echo "• Commit: ${commit_url}"
+          echo "• Author: ${commit_author}"
+          echo "• Message: ${commit_msg}"
+          echo "• Mentions: ${slack_mentions}"
 
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
-            ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
-
+      # - name: Send Slack Alert
+      #   if: steps.check_change.outputs.changed == 'true'
+      #   run: |
+      #     commit_hash=$LAST_COMMIT
+      #     commit_author=$(git log -1 --pretty=format:'%an' $commit_hash)
+      #     commit_msg=$(git log -1 --pretty=format:'%s' $commit_hash)
+      #     commit_url="https://github.com/MystenLabs/sui/commit/${commit_hash}"
+      #     slack_mentions="<@U096HQGCCBV> <@U0839EP9DHA> <@U02HSBFJL5R>"
+      #     curl -X POST -H 'Content-type: application/json' \
+      #       --data "{\"text\":\"🚨 *sui.yaml was updated in upstream!*\n• Commit: *<${commit_url}|${commit_hash}>*\n• Author: ${commit_author}\n• Message: ${commit_msg}\n${slack_mentions}\"}" \
+      #       ${{ secrets.SLACK_ALERT_NOODLES_WEBHOOK }}
