@@ -63,6 +63,7 @@ use sui_types::messages_grpc::{
 };
 
 use crate::formal_snapshot_util::{read_summaries_for_list_no_verify, FormalSnapshotWorker};
+use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_types::storage::ReadStore;
 use tracing::info;
 
@@ -849,7 +850,10 @@ pub async fn download_formal_snapshot(
         &genesis_committee,
         None,
     ));
-    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint_store = CheckpointStore::new(
+        &path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
 
     let summaries_handle = start_summary_sync(
         perpetual_db.clone(),
