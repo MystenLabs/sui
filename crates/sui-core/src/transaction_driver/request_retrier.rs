@@ -16,7 +16,7 @@ use crate::{
     validator_client_monitor::{TxType, ValidatorClientMonitor},
 };
 
-pub(crate) const TOP_K_VALIDATORS_DENOMINATOR: usize = 4;
+pub(crate) const TOP_K_VALIDATORS_DENOMINATOR: usize = 3;
 
 /// Provides the next target validator to retry operations,
 /// and gathers the errors along with the operations.

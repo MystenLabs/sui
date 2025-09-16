@@ -128,11 +128,10 @@ where
             // Order the clients by their total score in score descending order
             clients_by_total_score.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-            // Now keep only the clients after the first K as those being used on the retrier
-            let clients = clients_by_total_score
-                [auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR..]
-                .iter()
-                .map(|(name, _)| *name);
+            // Now keep only the clients after the first K as those being used on the retrier, and at least half of the committee.
+            let k = (auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR)
+                .max(auth_agg.committee.num_members() / 2);
+            let clients = clients_by_total_score[k..].iter().map(|(name, _)| *name);
 
             for name in clients {
                 for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
