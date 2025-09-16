@@ -8,7 +8,9 @@ use std::time::Duration;
 use move_core_types::language_storage::TypeTag;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::accumulator_root::{update_account_balance_for_testing, AccumulatorValue};
+use sui_types::accumulator_root::{
+    update_account_balance_for_testing, AccumulatorObjId, AccumulatorValue,
+};
 use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
@@ -164,6 +166,12 @@ impl TestEnv {
     }
 
     fn settle_balances(&mut self, balance_changes: BTreeMap<ObjectID, i128>) {
+        let balance_changes: BTreeMap<AccumulatorObjId, i128> = balance_changes
+            .into_iter()
+            .map(|(object_id, balance_change)| {
+                (AccumulatorObjId::new_unchecked(object_id), balance_change)
+            })
+            .collect();
         let mut accumulator_object = self.get_accumulator_object();
         let next_version = accumulator_object.version().next();
         self.scheduler.settle_balances(BalanceSettlement {
@@ -173,7 +181,7 @@ impl TestEnv {
             let mut account_object = self
                 .state
                 .get_object_cache_reader()
-                .get_object(&object_id)
+                .get_object(object_id.inner())
                 .unwrap();
             update_account_balance_for_testing(&mut account_object, balance_change);
             account_object
