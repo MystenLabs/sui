@@ -24,7 +24,7 @@ use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
 const SUI_COIN_TREASURY: CoinTreasury = {
     let mut treasury = CoinTreasury::const_default();
     treasury.total_supply = Some(sui_types::gas_coin::TOTAL_SUPPLY_MIST);
-    treasury.supply_state = Some(1); // RpcSupplyState::Fixed = 1
+    treasury.supply_state = Some(RpcSupplyState::Fixed as i32);
     treasury
 };
 
