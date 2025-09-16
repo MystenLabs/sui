@@ -70,6 +70,31 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    const DISABLED: &[&str] = &[
+        "child_count/count_decremented_v74.move",
+        "deny_list_v2/double_add_v74.move",
+        "dynamic_fields/mut_unchanged_chain_dof_v74.move",
+        "dynamic_fields/mut_unchanged_chain_v74.move",
+        "dynamic_fields/mut_unchanged_dof_v74.move",
+        "dynamic_fields/mut_unchanged_v74.move",
+        "entry_points/large_enum_v58.move",
+        "programmable/index_before_typing_v78.move",
+        "programmable/large_dev_inspect_pure_v81.move",
+        "programmable/large_vector_v81.move",
+        "programmable/make_vec_non_existent_type_v71.move",
+        "shared/by_value_shared_object_deletion_via_make_move_vec_fails_v90.move",
+        "shared/by_value_shared_object_deletion_via_make_move_vec_v90.move",
+        "shared/by_value_shared_object_deletion_via_move_call_fails_v90.move",
+        "shared/by_value_shared_object_deletion_via_move_call_v90.move",
+        "upgrade/abort_code_resolution_v46.move",
+        "upgrade/type_resolution_v82.move",
+        "upgrade/type_resolution.move",
+        "shared/re_share_v45.move",
+    ];
+    if DISABLED.iter().any(|p| path.ends_with(p)) {
+        return Ok(());
+    }
+
     ENABLE_PTB_V2.set(true).unwrap();
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()

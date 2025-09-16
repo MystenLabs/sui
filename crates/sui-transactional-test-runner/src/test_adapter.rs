@@ -37,7 +37,7 @@ use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
-use move_vm_runtime::shared::serialization::SerializedReturnValues;
+use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Deserialize;
@@ -613,7 +613,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         args: Vec<SuiValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
+    ) -> anyhow::Result<(Option<String>, ValueFrame)> {
         self.next_task();
         let SuiRunArgs { summarize, .. } = extra;
         let transaction = self.build_function_call_tx(
@@ -621,10 +621,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         )?;
         let summary = self.execute_txn(transaction).await?;
         let output = self.object_summary_output(&summary, summarize);
-        let empty = SerializedReturnValues {
-            mutable_reference_outputs: vec![],
-            return_values: vec![],
-        };
+        let empty = ValueFrame::empty();
         Ok((output, empty))
     }
 
@@ -1425,7 +1422,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
     ) -> anyhow::Result<(
         Option<String>,
         Vec<MaybeNamedCompiledModule>,
-        Vec<SerializedReturnValues>,
+        Vec<ValueFrame>,
     )> {
         unimplemented!()
     }
