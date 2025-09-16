@@ -810,10 +810,10 @@ impl SuiCommand {
                     let replay_command = SR2::ReplayConfigStable::command();
                     let matches = replay_command.try_get_matches_from(replay_args).ok();
 
-                    SR2::merge_configs_with_presence(&replay_config, file_config.as_ref(), &matches)
+                    SR2::merge_configs_with_presence(replay_config, file_config, &matches)
                 } else {
-                    if file_config.is_some() {
-                        eprintln!("Replay coinfig file found but will be ignored as replay command line args cannot be re-parsed");
+                    if file_config != SR2::TOMLReplayConfigStable::default() {
+                        eprintln!("Found flags in replay config file but they will be ignored as replay command line args cannot be re-parsed");
                     }
                     replay_config
                 };

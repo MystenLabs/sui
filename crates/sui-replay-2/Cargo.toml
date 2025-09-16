@@ -42,6 +42,7 @@ sui-package-management.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+toml.workspace = true
 tracing.workspace = true
 sui-json-rpc-types.workspace = true
 serde_json.workspace = true

@@ -13,6 +13,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail};
 use clap::{parser::ValueSource, ArgAction, ArgMatches, Parser, ValueEnum};
+use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 use std::{
     fs,
@@ -39,7 +40,7 @@ pub mod tracing;
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
 const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
 const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
-const CONFIG_FILE_NAME: &str = "replay.config";
+const CONFIG_FILE_NAME: &str = "replay.toml";
 
 // Arguments to the replay tool.
 // It allows to replay a single transaction by digest or
@@ -62,18 +63,18 @@ pub struct Config {
 }
 
 /// Arguments for replay (used for both CLI parsing and internal processing)
-#[derive(Parser, Clone, Debug, Default)]
+#[derive(Parser, Clone, Debug)]
 pub struct ReplayConfigStable {
     /// Transaction digest to replay
-    #[arg(long, short)]
+    #[arg(long = "digest", short)]
     pub digest: Option<String>,
 
     /// File containing a list of digests, one per line
-    #[arg(long)]
+    #[arg(long = "digests-path")]
     pub digests_path: Option<PathBuf>,
 
     /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
-    #[arg(long, default_value = "false")]
+    #[arg(long = "terminate-early", default_value = "false")]
     pub terminate_early: bool,
 
     /// Whether to trace the transaction execution. Generated traces will be saved in the output
@@ -82,16 +83,16 @@ pub struct ReplayConfigStable {
     pub trace: bool,
 
     /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`
-    #[arg(long, short)]
+    #[arg(long = "output-dir", short)]
     pub output_dir: Option<PathBuf>,
 
     /// Show transaction effects.
-    #[arg(long, short = 'e', action = ArgAction::Set, default_value = "true")]
+    #[arg(long = "show-effects", short = 'e', action = ArgAction::Set, default_value = "true")]
     pub show_effects: bool,
 
     /// Whether existing artifacts that were generated from a previous replay of the transaction
     /// should be overwritten or an error raised if they already exist.
-    #[arg(long, default_value = "false")]
+    #[arg(long = "overwrite", default_value = "false")]
     pub overwrite: bool,
 }
 
@@ -126,6 +127,27 @@ impl ReplayConfigStable {
     pub const TRACE_FIELD_NAME: &'static str = stable_config_field_name!(trace);
     pub const SHOW_EFFECTS_FIELD_NAME: &'static str = stable_config_field_name!(show_effects);
     pub const OVERWRITE_FIELD_NAME: &'static str = stable_config_field_name!(overwrite);
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct TOMLConfig {
+    flags: Option<TOMLReplayConfigStable>,
+}
+
+/// Sane as ReplayConfigStable but with all fields optional
+/// so that it can be used to deserialize a TOML file.
+/// Make sure that the serde re-named fields match long
+/// names of the Clap options in ReplayConfigStable.
+#[derive(Debug, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct TOMLReplayConfigStable {
+    digest: Option<String>,
+    digests_path: Option<PathBuf>,
+    terminate_early: Option<bool>,
+    trace: Option<bool>,
+    output_dir: Option<PathBuf>,
+    show_effects: Option<bool>,
+    overwrite: Option<bool>,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -224,21 +246,20 @@ impl FromStr for Node {
     }
 }
 
-/// Load replay configuration from ~/.sui/sui_config/replay.config file
-/// Returns None if file cannot be found or read, Some(config)
-/// if file exists and can be parsed.
-pub fn load_config_file() -> anyhow::Result<Option<ReplayConfigStable>> {
+/// Load replay configuration from ~/.sui/sui_config/replay.toml file.
+/// Returns default config (all fields set to None) if file cannot be found or read.
+pub fn load_config_file() -> anyhow::Result<TOMLReplayConfigStable> {
     let config_dir = match sui_config_dir() {
         Ok(dir) => dir,
         Err(e) => {
             eprintln!("Cannot locate replay config file: {e}");
-            return Ok(None);
+            return Ok(TOMLReplayConfigStable::default());
         }
     };
     let config_file_path = config_dir.join(CONFIG_FILE_NAME);
 
     if !config_file_path.exists() {
-        return Ok(None);
+        return Ok(TOMLReplayConfigStable::default());
     }
 
     let content = fs::read_to_string(&config_file_path).map_err(|e| {
@@ -249,51 +270,27 @@ pub fn load_config_file() -> anyhow::Result<Option<ReplayConfigStable>> {
         )
     })?;
 
-    // Process file content: strip comments and empty lines, then parse each line with shell-like splitting
-    let mut args: Vec<String> = Vec::new();
-    for line in content.lines() {
-        // Strip comments after #
-        let line = if let Some(comment_pos) = line.find('#') {
-            &line[..comment_pos]
-        } else {
-            line
-        };
+    let config: TOMLConfig = toml::from_str(&content).map_err(|e| {
+        anyhow!(
+            "Failed to parse replay config file '{:?}': {}",
+            config_file_path,
+            e
+        )
+    })?;
 
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        // Use shell_words::split for proper shell-like argument parsing
-        let line_args = shell_words::split(line)
-            .map_err(|e| anyhow!("Failed to parse replay config file line '{}': {}", line, e))?;
-        args.extend(line_args);
-    }
-
-    if args.is_empty() {
-        return Ok(None);
-    }
-
-    // Add program name as first argument for clap parsing
-    let mut clap_args = vec!["replay".to_string()];
-    clap_args.extend(args);
-
-    ReplayConfigStable::try_parse_from(clap_args)
-        .map_err(|e| {
-            anyhow!(
-                "Failed to parse replay config file {:?}: {}",
-                config_file_path,
-                e
-            )
-        })
-        .map(Some)
+    config.flags.ok_or_else(|| {
+        anyhow!(
+            "No flags section found in replay config file '{:?}'",
+            config_file_path
+        )
+    })
 }
 
-/// Merge CLI flags and config file flags into a single config using presence detection.
+/// Merge CLI flags and config file flags into a single config using flag presence detection.
 /// CLI flags take precedence over config file flags, which take precedence over defaults.
 pub fn merge_configs_with_presence(
-    cli_config: &ReplayConfigStable,
-    config_file_config: Option<&ReplayConfigStable>,
+    cli_config: ReplayConfigStable,
+    toml_config: TOMLReplayConfigStable,
     cli_arg_matches: &Option<ArgMatches>,
 ) -> ReplayConfigStable {
     fn is_cli_flag_present(matches: &Option<ArgMatches>, flag: &str) -> bool {
@@ -302,50 +299,42 @@ pub fn merge_configs_with_presence(
         }
         matches.as_ref().unwrap().value_source(flag) == Some(ValueSource::CommandLine)
     }
-
-    let default_config = ReplayConfigStable::default();
+    // Get default config from clap (any name can be used as first
+    // element of the vector to represent the command/program name).
+    let default_config = ReplayConfigStable::parse_from(&["dummy"]);
     ReplayConfigStable {
-        digest: cli_config
-            .digest
-            .clone()
-            .or_else(|| config_file_config.and_then(|f| f.digest.clone())),
+        digest: cli_config.digest.or_else(|| toml_config.digest),
 
-        digests_path: cli_config
-            .digests_path
-            .clone()
-            .or_else(|| config_file_config.and_then(|f| f.digests_path.clone())),
+        digests_path: cli_config.digests_path.or_else(|| toml_config.digests_path),
 
         terminate_early: if is_cli_flag_present(
             cli_arg_matches,
             ReplayConfigStable::TERMINATE_EARLY_FIELD_NAME,
         ) {
             cli_config.terminate_early
-        } else if let Some(file_config) = config_file_config {
-            file_config.terminate_early
+        } else if let Some(terminate_early) = toml_config.terminate_early {
+            terminate_early
         } else {
             default_config.terminate_early
         },
 
         trace: if is_cli_flag_present(cli_arg_matches, ReplayConfigStable::TRACE_FIELD_NAME) {
             cli_config.trace
-        } else if let Some(file_config) = config_file_config {
-            file_config.trace
+        } else if let Some(trace) = toml_config.trace {
+            trace
         } else {
             default_config.trace
         },
 
-        output_dir: cli_config
-            .output_dir
-            .clone()
-            .or_else(|| config_file_config.and_then(|f| f.output_dir.clone())),
+        output_dir: cli_config.output_dir.or_else(|| toml_config.output_dir),
 
         show_effects: if is_cli_flag_present(
             cli_arg_matches,
             ReplayConfigStable::SHOW_EFFECTS_FIELD_NAME,
         ) {
             cli_config.show_effects
-        } else if let Some(file_config) = config_file_config {
-            file_config.show_effects
+        } else if let Some(show_effects) = toml_config.show_effects {
+            show_effects
         } else {
             default_config.show_effects
         },
@@ -353,8 +342,8 @@ pub fn merge_configs_with_presence(
         overwrite: if is_cli_flag_present(cli_arg_matches, ReplayConfigStable::OVERWRITE_FIELD_NAME)
         {
             cli_config.overwrite
-        } else if let Some(file_config) = config_file_config {
-            file_config.overwrite
+        } else if let Some(overwrite) = toml_config.overwrite {
+            overwrite
         } else {
             default_config.overwrite
         },

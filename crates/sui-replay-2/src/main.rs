@@ -25,12 +25,12 @@ async fn main() -> anyhow::Result<()> {
 
     let file_config = load_config_file()?;
     let stable_config =
-        merge_configs_with_presence(&config.replay_stable, file_config.as_ref(), &Some(matches));
+        merge_configs_with_presence(config.replay_stable, file_config, &Some(matches));
 
     let output_root =
         handle_replay_config(&stable_config, &config.replay_experimental, VERSION).await?;
 
-    if let Some(digest) = &config.replay_stable.digest {
+    if let Some(digest) = &stable_config.digest {
         print_effects_or_fork(
             digest,
             &output_root,
