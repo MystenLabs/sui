@@ -3964,6 +3964,97 @@ type UserSignature {
 	signatureBytes: Base64
 }
 
+type Validator {
+	"""
+	The validator's address.
+	"""
+	address: SuiAddress!
+	"""
+	The fee charged by the validator for staking services.
+	"""
+	commissionRate: Int
+	"""
+	Validator's set of credentials such as public keys, network addresses and others.
+	"""
+	credentials: ValidatorCredentials
+	"""
+	Validator's description.
+	"""
+	description: String
+	"""
+	Number of exchange rates in the table.
+	"""
+	exchangeRatesSize: UInt53
+	"""
+	The reference gas price for this epoch.
+	"""
+	gasPrice: BigInt
+	"""
+	Validator's url containing their custom image.
+	"""
+	imageUrl: String
+	"""
+	Validator's name.
+	"""
+	name: String
+	"""
+	The proposed next epoch fee for the validator's staking services.
+	"""
+	nextEpochCommissionRate: Int
+	"""
+	Validator's set of credentials for the next epoch.
+	"""
+	nextEpochCredentials: ValidatorCredentials
+	"""
+	The validator's gas price quote for the next epoch.
+	"""
+	nextEpochGasPrice: BigInt
+	"""
+	The total number of SUI tokens in this pool plus the pending stake amount for this epoch.
+	"""
+	nextEpochStake: BigInt
+	"""
+	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingPoolTokenWithdraw: BigInt
+	"""
+	Pending stake amount for this epoch.
+	"""
+	pendingStake: BigInt
+	"""
+	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingTotalSuiWithdraw: BigInt
+	"""
+	Total number of pool tokens issued by the pool.
+	"""
+	poolTokenBalance: BigInt
+	"""
+	Validator's homepage URL.
+	"""
+	projectUrl: String
+	"""
+	The epoch stake rewards will be added here at the end of each epoch.
+	"""
+	rewardsPool: BigInt
+	"""
+	The epoch at which this pool became active.
+	"""
+	stakingPoolActivationEpoch: UInt53
+	"""
+	The ID of this validator's `0x3::staking_pool::StakingPool`.
+	"""
+	stakingPoolId: SuiAddress!
+	"""
+	The total number of SUI tokens in this pool.
+	"""
+	stakingPoolSuiBalance: BigInt
+	"""
+	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
+	"""
+	votingPower: Int
+}
+
 type ValidatorAggregatedSignature {
 	"""
 	The epoch when this aggregate signature was produced.
@@ -3980,9 +4071,27 @@ type ValidatorAggregatedSignature {
 }
 
 """
+The credentials related fields associated with a validator.
+"""
+type ValidatorCredentials {
+	netAddress: String
+	networkPubKey: Base64
+	p2PAddress: String
+	primaryAddress: String
+	proofOfPossession: Base64
+	protocolPubKey: Base64
+	workerAddress: String
+	workerPubKey: Base64
+}
+
+"""
 Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
+	"""
+	The current list of active validators.
+	"""
+	activeValidators: [Validator!]
 	"""
 	Object ID of the `Table` storing the inactive staking pools.
 	"""

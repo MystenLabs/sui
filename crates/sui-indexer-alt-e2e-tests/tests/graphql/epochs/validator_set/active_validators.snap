@@ -1,0 +1,63 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-58:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 0,
+      "validatorSet": {
+        "activeValidators": [
+          {
+            "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+            "credentials": {
+              "protocolPubKey": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+              "networkPubKey": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
+              "workerPubKey": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
+              "proofOfPossession": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
+              "netAddress": "/ip4/127.0.0.1/tcp/8000/http",
+              "p2PAddress": "/ip4/127.0.0.1/udp/8001/http",
+              "primaryAddress": "/ip4/127.0.0.1/udp/8004/http",
+              "workerAddress": "/ip4/127.0.0.1/udp/8005/http"
+            },
+            "nextEpochCredentials": {
+              "protocolPubKey": null,
+              "networkPubKey": null,
+              "workerPubKey": null,
+              "proofOfPossession": null,
+              "netAddress": null,
+              "p2PAddress": null,
+              "primaryAddress": null,
+              "workerAddress": null
+            },
+            "name": "validator-0",
+            "description": "",
+            "imageUrl": "",
+            "projectUrl": "",
+            "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+            "exchangeRatesSize": 1,
+            "stakingPoolActivationEpoch": 0,
+            "stakingPoolSuiBalance": "20000000000000000",
+            "rewardsPool": "0",
+            "poolTokenBalance": "20000000000000000",
+            "pendingStake": "0",
+            "pendingTotalSuiWithdraw": "0",
+            "pendingPoolTokenWithdraw": "0",
+            "votingPower": 10000,
+            "gasPrice": "1000",
+            "commissionRate": 200,
+            "nextEpochStake": "20000000000000000",
+            "nextEpochGasPrice": "1000",
+            "nextEpochCommissionRate": 200
+          }
+        ]
+      }
+    }
+  }
+}

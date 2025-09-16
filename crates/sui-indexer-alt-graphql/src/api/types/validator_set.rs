@@ -1,16 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::scalars::big_int::BigInt;
-use crate::api::scalars::sui_address::SuiAddress;
 use async_graphql::SimpleObject;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
+
+use crate::api::{
+    scalars::{big_int::BigInt, sui_address::SuiAddress},
+    types::validator::Validator,
+};
 
 /// Representation of `0x3::validator_set::ValidatorSet`.
 #[derive(Clone, Debug, SimpleObject, Default)]
 pub(crate) struct ValidatorSet {
     /// Total amount of stake for all active validators at the beginning of the epoch.
     pub total_stake: Option<BigInt>,
+
+    /// The current list of active validators.
+    pub active_validators: Option<Vec<Validator>>,
 
     /// Validators that are pending removal from the active validator set, expressed as indices in
     /// to `activeValidators`.
@@ -48,6 +54,16 @@ impl From<ValidatorSetV1> for ValidatorSet {
     fn from(value: ValidatorSetV1) -> Self {
         ValidatorSet {
             total_stake: Some(BigInt::from(value.total_stake)),
+            active_validators: Some(
+                value
+                    .active_validators
+                    .iter()
+                    .map(|v| v.clone().into())
+                    // todo (ewall)
+                    // remove this and add pagination
+                    .take(1)
+                    .collect(),
+            ),
             pending_removals: Some(value.pending_removals),
             pending_active_validators_id: Some(value.pending_active_validators.contents.id.into()),
             pending_active_validators_size: Some(value.pending_active_validators.contents.size),
