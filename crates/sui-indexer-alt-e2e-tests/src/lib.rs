@@ -682,6 +682,24 @@ pub fn find_address_owned(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> 
         .context("Could not find created object")
 }
 
+/// Returns the reference for the first address-owned object created in the effects owned by
+/// `owner`, or an error if there is none.
+pub fn find_address_owned_by(
+    fx: &TransactionEffects,
+    owner: SuiAddress,
+) -> anyhow::Result<ObjectRef> {
+    if let ExecutionStatus::Failure { error, command } = fx.status() {
+        bail!("Transaction failed: {error} (command {command:?})");
+    }
+
+    fx.created()
+        .into_iter()
+        .find_map(|(oref, o)| {
+            matches!(o, Owner::AddressOwner(addr) if addr == owner).then_some(oref)
+        })
+        .context("Could not find created object")
+}
+
 /// Returns the reference for the first immutable object created in the effects, or an error if
 /// there is none.
 pub fn find_immutable(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {

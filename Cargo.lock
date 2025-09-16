@@ -14594,6 +14594,7 @@ dependencies = [
  "diesel",
  "diesel-async",
  "fastcrypto",
+ "insta",
  "jsonrpsee",
  "move-core-types",
  "msim",

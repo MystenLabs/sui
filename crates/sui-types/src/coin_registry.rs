@@ -1,20 +1,105 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::{
+    ident_str,
+    identifier::IdentStr,
+    language_storage::{StructTag, TypeTag},
+};
+use serde::{Deserialize, Serialize};
+
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     collection_types::VecMap,
+    derived_object,
     error::SuiResult,
-    id::UID,
     object::Owner,
     storage::ObjectStore,
-    SUI_COIN_REGISTRY_OBJECT_ID,
+    SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
 };
-use move_core_types::{ident_str, identifier::IdentStr};
-use serde::{Deserialize, Serialize};
 
 pub const COIN_REGISTRY_MODULE_NAME: &IdentStr = ident_str!("coin_registry");
 pub const CURRENCY_KEY_STRUCT_NAME: &IdentStr = ident_str!("CurrencyKey");
+
+/// Rust representation of `sui::coin_registry::CurrencyKey<T>`.
+#[derive(Serialize, Deserialize, Copy, Clone, Default, PartialEq, Eq)]
+pub struct CurrencyKey(bool);
+
+/// Rust representation of `sui::coin_registry::Currency<phantom T>`.
+#[derive(Serialize, Deserialize)]
+pub struct Currency {
+    pub id: ObjectID,
+    pub decimals: u8,
+    pub name: String,
+    pub symbol: String,
+    pub description: String,
+    pub icon_url: String,
+    pub supply: Option<SupplyState>,
+    pub regulated: RegulatedState,
+    pub treasury_cap_id: Option<ObjectID>,
+    pub metadata_cap_id: MetadataCapState,
+    pub extra_fields: VecMap<String, ExtraField>,
+}
+
+/// Rust representation of `sui::coin_registry::SupplyState<phantom T>`.
+#[derive(Serialize, Deserialize)]
+pub enum SupplyState {
+    Fixed(u64),
+    BurnOnly(u64),
+    Unknown,
+}
+
+/// Rust representation of `sui::coin_registry::RegulatedState`.
+#[derive(Serialize, Deserialize)]
+pub enum RegulatedState {
+    Regulated {
+        cap: ObjectID,
+        allow_global_pause: Option<bool>,
+        variant: u8,
+    },
+    Unregulated,
+    Unknown,
+}
+
+/// Rust representation of `sui::coin_registry::MetadataCapState`.
+#[derive(Serialize, Deserialize)]
+pub enum MetadataCapState {
+    Claimed(ObjectID),
+    Unclaimed,
+    Deleted,
+}
+
+/// Rust representation of `sui::coin_registry::ExtraField`.
+#[derive(Serialize, Deserialize)]
+pub struct ExtraField {
+    pub type_: String,
+    pub value: Vec<u8>,
+}
+
+impl Currency {
+    /// Derive the ObjectID for `sui::coin_registry::Currency<$coin_type>`.
+    pub fn derive_object_id(coin_type: TypeTag) -> Result<ObjectID, bcs::Error> {
+        let key = TypeTag::Struct(Box::new(StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: COIN_REGISTRY_MODULE_NAME.to_owned(),
+            name: CURRENCY_KEY_STRUCT_NAME.to_owned(),
+            type_params: vec![coin_type],
+        }));
+
+        derived_object::derive_object_id(
+            SUI_COIN_REGISTRY_OBJECT_ID,
+            &key,
+            &bcs::to_bytes(&CurrencyKey::default())?,
+        )
+    }
+
+    /// Is this `StructTag` a `sui::coin_registry::Currency<...>`?
+    pub fn is_currency(tag: &StructTag) -> bool {
+        tag.address == SUI_FRAMEWORK_ADDRESS
+            && tag.module.as_str() == "coin_registry"
+            && tag.name.as_str() == "Currency"
+    }
+}
 
 pub fn get_coin_registry_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
@@ -28,74 +113,3 @@ pub fn get_coin_registry_obj_initial_shared_version(
             _ => unreachable!("CoinRegistry object must be shared"),
         }))
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Supply {
-    pub value: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum SupplyState {
-    Fixed(Supply) = 0,
-    BurnOnly(Supply) = 1,
-    Unknown = 2,
-}
-
-/// Empty struct used as a key for deriving Currency addresses
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct CurrencyKey {
-    /// Move serializes empty structs as [0x00] while Rust serde serializes them as []. This field
-    /// is a workaround to bridge the difference.
-    dummy: bool,
-}
-
-impl CurrencyKey {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self { dummy: false }
-    }
-}
-
-/// Currency stores metadata such as name, symbol, decimals, icon_url and description,
-/// as well as supply states (optional) and regulatory status.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Currency {
-    pub id: UID,
-    pub decimals: u8,
-    pub name: String,
-    pub symbol: String,
-    pub description: String,
-    pub icon_url: String,
-    pub supply: Option<SupplyState>,
-    pub regulated: CurrencyRegulatedState,
-    pub treasury_cap_id: Option<ObjectID>,
-    pub metadata_cap_id: MetadataCapState,
-    pub extra_fields: VecMap<String, ExtraField>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum CurrencyRegulatedState {
-    Regulated {
-        cap: ObjectID,
-        allow_global_pause: Option<bool>,
-        variant: u8,
-    },
-    Unregulated,
-    Unknown,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub enum MetadataCapState {
-    Claimed(ObjectID),
-    Unclaimed,
-    Deleted,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TypeName {
-    pub name: String,
-}
-
-pub type ExtraField = (TypeName, Vec<u8>);

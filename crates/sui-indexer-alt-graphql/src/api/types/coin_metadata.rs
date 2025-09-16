@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use async_graphql::{connection::Connection, Context, Object};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
     coin::{
         CoinMetadata as NativeMetadata, TreasuryCap, COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME,
     },
-    gas_coin::{GAS, TOTAL_SUPPLY_SUI},
+    coin_registry::{Currency as NativeCurrency, SupplyState},
+    gas_coin::{GAS, TOTAL_SUPPLY_MIST},
     TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 use tokio::sync::OnceCell;
@@ -36,7 +37,17 @@ use super::{
 pub(crate) struct CoinMetadata {
     pub(crate) super_: MoveObject,
 
-    native: OnceCell<Option<NativeMetadata>>,
+    contents: OnceCell<Option<MetadataContents>>,
+}
+
+struct MetadataContents {
+    coin_type: TypeTag,
+    native: NativeContents,
+}
+
+enum NativeContents {
+    Metadata(NativeMetadata),
+    Registry(NativeCurrency),
 }
 
 /// An object representing metadata about a coin type.
@@ -87,11 +98,14 @@ impl CoinMetadata {
 
     /// Number of decimal places the coin uses.
     pub(crate) async fn decimals(&self, ctx: &Context<'_>) -> Result<Option<u8>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(contents) = self.metadata_contents(ctx).await? else {
             return Ok(None);
         };
 
-        Ok(Some(native.decimals))
+        Ok(Some(match &contents.native {
+            NativeContents::Metadata(metadata) => metadata.decimals,
+            NativeContents::Registry(currency) => currency.decimals,
+        }))
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
@@ -104,11 +118,14 @@ impl CoinMetadata {
 
     /// Description of the coin.
     pub(crate) async fn description(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(contents) = self.metadata_contents(ctx).await? else {
             return Ok(None);
         };
 
-        Ok(Some(&native.description))
+        Ok(Some(match &contents.native {
+            NativeContents::Metadata(metadata) => &metadata.description,
+            NativeContents::Registry(currency) => &currency.description,
+        }))
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -161,11 +178,14 @@ impl CoinMetadata {
 
     /// URL for the coin logo.
     pub(crate) async fn icon_url(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(contents) = self.metadata_contents(ctx).await? else {
             return Ok(None);
         };
 
-        Ok(native.icon_url.as_deref())
+        Ok(match &contents.native {
+            NativeContents::Metadata(metadata) => metadata.icon_url.as_deref(),
+            NativeContents::Registry(currency) => Some(&currency.icon_url),
+        })
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -210,12 +230,15 @@ impl CoinMetadata {
     }
 
     /// Name for the coin.
-    pub(crate) async fn name(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
+    pub(crate) async fn name(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
+        let Some(contents) = self.metadata_contents(ctx).await? else {
             return Ok(None);
         };
 
-        Ok(Some(native.name.clone()))
+        Ok(Some(match &contents.native {
+            NativeContents::Metadata(metadata) => &metadata.name,
+            NativeContents::Registry(currency) => &currency.name,
+        }))
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -322,21 +345,31 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError<object::Error>> {
-        let Some(native) = self.super_.native(ctx).await.map_err(upcast)? else {
+        let Some(contents) = self.metadata_contents(ctx).await.map_err(upcast)? else {
             return Ok(None);
         };
 
-        let Some(TypeTag::Struct(coin_type)) =
-            StructTag::from(native.type_().clone()).type_params.pop()
-        else {
+        // If the currency's metadata is stored in the Coin Registry, and its supply is known,
+        // return it.
+        if let NativeContents::Registry(NativeCurrency {
+            supply: Some(SupplyState::Fixed(s) | SupplyState::BurnOnly(s)),
+            ..
+        }) = &contents.native
+        {
+            return Ok(Some(BigInt::from(*s)));
+        }
+
+        // ...otherwise fall back to looking up the TreasuryCap singleton object (for coin registry
+        // currencies where the supply state is not known and for legacy currencies).
+        let TypeTag::Struct(coin_type) = &contents.coin_type else {
             return Ok(None);
         };
 
         if GAS::is_gas(coin_type.as_ref()) {
-            return Ok(Some(BigInt::from(TOTAL_SUPPLY_SUI)));
+            return Ok(Some(BigInt::from(TOTAL_SUPPLY_MIST)));
         }
 
-        let type_ = TreasuryCap::type_(*coin_type);
+        let type_ = TreasuryCap::type_(*coin_type.clone());
         let scope = self.super_.super_.super_.scope.without_root_version();
         let Some(object) = Object::singleton(ctx, scope, type_).await? else {
             return Ok(None);
@@ -358,11 +391,14 @@ impl CoinMetadata {
 
     /// Symbol for the coin.
     pub(crate) async fn symbol(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
+        let Some(contents) = self.metadata_contents(ctx).await? else {
             return Ok(None);
         };
 
-        Ok(Some(&native.symbol))
+        Ok(Some(match &contents.native {
+            NativeContents::Metadata(metadata) => &metadata.symbol,
+            NativeContents::Registry(currency) => &currency.symbol,
+        }))
     }
 }
 
@@ -372,7 +408,7 @@ impl CoinMetadata {
     pub(crate) fn from_super(super_: MoveObject) -> Self {
         Self {
             super_,
-            native: OnceCell::new(),
+            contents: OnceCell::new(),
         }
     }
 
@@ -385,7 +421,7 @@ impl CoinMetadata {
             return Ok(None);
         };
 
-        if !native.type_().is_coin_metadata() {
+        if !native.type_().is_coin_metadata() && !native.type_().is_currency() {
             return Ok(None);
         }
 
@@ -394,13 +430,28 @@ impl CoinMetadata {
 
     /// Find a CoinMetadata object by the coin type it represents.
     ///
-    /// Returns `None` if there is no live `CoinMetadata` object for the given coin type (it may
-    /// have been deleted, wrapped, or never created).
+    /// First checks if the currency is represented in the Coin Registry, and otherwise looks for a
+    /// live singleton `CoinMetadata` object.
+    ///
+    /// Returns `None` if the currency is not in the Coin Registry and there is no live
+    /// `CoinMetadata` object for the given coin type (it may have been deleted, wrapped, or never
+    /// created).
     pub(crate) async fn by_coin_type(
         ctx: &Context<'_>,
         scope: Scope,
         coin_type: TypeTag,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
+        let currency_id: SuiAddress = NativeCurrency::derive_object_id(coin_type.clone())
+            .context("Failed to derive Currency ID")?
+            .into();
+
+        if let Some(object) = Object::latest(ctx, scope.clone(), currency_id)
+            .await
+            .map_err(upcast)?
+        {
+            return Ok(Some(Self::from_super(MoveObject::from_super(object))));
+        }
+
         let type_ = StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: COIN_MODULE_NAME.to_owned(),
@@ -414,17 +465,42 @@ impl CoinMetadata {
     }
 
     /// Get the native CoinMetadata data, loading it lazily if needed.
-    async fn native(&self, ctx: &Context<'_>) -> Result<&Option<NativeMetadata>, RpcError> {
-        self.native
+    async fn metadata_contents(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<MetadataContents>, RpcError> {
+        self.contents
             .get_or_try_init(async || {
                 let Some(native_move) = self.super_.native(ctx).await?.as_ref() else {
                     return Ok(None);
                 };
 
-                let metadata: NativeMetadata = bcs::from_bytes(native_move.contents())
-                    .context("Failed to deserialize CoinMetadata")?;
+                let coin_type = || {
+                    StructTag::from(native_move.type_().clone())
+                        .type_params
+                        .pop()
+                        .context("No coin type parameter")
+                };
 
-                Ok(Some(metadata))
+                Ok(Some(if native_move.type_().is_currency() {
+                    MetadataContents {
+                        coin_type: coin_type()?,
+                        native: NativeContents::Registry(
+                            bcs::from_bytes(native_move.contents())
+                                .context("Failed to deserialize Currency")?,
+                        ),
+                    }
+                } else if native_move.type_().is_coin_metadata() {
+                    MetadataContents {
+                        coin_type: coin_type()?,
+                        native: NativeContents::Metadata(
+                            bcs::from_bytes(native_move.contents())
+                                .context("Failed to deserialize CoinMetadata")?,
+                        ),
+                    }
+                } else {
+                    return Err(anyhow!("Not a CoinMetadata").into());
+                }))
             })
             .await
     }
