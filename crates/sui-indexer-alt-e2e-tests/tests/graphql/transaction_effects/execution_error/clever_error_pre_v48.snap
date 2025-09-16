@@ -1,0 +1,63 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-14:
+//# publish --sender A --upgradeable
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5798800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 16-31:
+//# upgrade --package test --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6323200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, line 33:
+//# run test::clever_error_pre_v48::test_new_error --sender A
+Error: Transaction Effects Status: Move Abort in fake(1,0)::clever_error_pre_v48::test_new_error (function index 1) at offset 1 at line 26
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: fake(1,0), name: Identifier("clever_error_pre_v48") }, function: 1, instruction: 1, function_name: Some("test_new_error") }, 13906834286012661763), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834286012661763), message: Some("fake(1,0)::clever_error_pre_v48::test_new_error at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("clever_error_pre_v48") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
+
+task 4, line 35:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 37-66:
+//# run-graphql
+Response: {
+  "data": {
+    "originalPackage": {
+      "address": "0x80a3d7983fb5c4855eea10cc19e0e3410b11d6dee9f8613702155b36bd2a116d"
+    },
+    "upgradedPackage": {
+      "address": "0xb066ee04c2e281ceda12b5435f3ed3f65ea577003ae302ad229daa5a9ea6bfcd"
+    },
+    "cleverErrorPreV48": {
+      "executionError": {
+        "abortCode": "13906834286012661763",
+        "sourceLineNumber": 26,
+        "instructionOffset": 1,
+        "identifier": "ENewError",
+        "constant": "New error in v2",
+        "message": "Error in 1st command, from '0xb066ee04c2e281ceda12b5435f3ed3f65ea577003ae302ad229daa5a9ea6bfcd::clever_error_pre_v48::test_new_error' (line 26), abort 'ENewError': New error in v2",
+        "module": {
+          "name": "clever_error_pre_v48",
+          "package": {
+            "address": "0xb066ee04c2e281ceda12b5435f3ed3f65ea577003ae302ad229daa5a9ea6bfcd"
+          }
+        },
+        "function": {
+          "name": "test_new_error",
+          "module": {
+            "name": "clever_error_pre_v48"
+          }
+        }
+      }
+    }
+  }
+}
