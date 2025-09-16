@@ -27,6 +27,4 @@ RUN git clone https://github.com/MystenLabs/sui.git ; \
 
 RUN echo ${GIT_REVISION:-$GIT_REVISION} > /var/run/sui_commit
 
-COPY docker/stress/entrypoint.sh /entrypoint.sh
-
-CMD ["/entrypoint.sh"]
+CMD ["/docker/stress/entrypoint.sh"]
