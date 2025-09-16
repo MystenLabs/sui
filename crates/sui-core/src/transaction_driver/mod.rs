@@ -118,11 +118,10 @@ where
             // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
             let mut tasks = JoinSet::new();
 
-            let self_clone = self.clone();
-            let auth_agg = self_clone.authority_aggregator.load().clone();
+            let auth_agg = self.authority_aggregator.load().clone();
 
             // Get the validators by their total score
-            let mut clients_by_total_score = self_clone
+            let mut clients_by_total_score = self
                 .client_monitor
                 .validators_by_total_score(&auth_agg.committee);
 
@@ -137,16 +136,9 @@ where
 
             for name in clients {
                 for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
-                    let display_name = self_clone
-                        .authority_aggregator
-                        .load()
-                        .get_display_name(&name);
-                    let options = SubmitTransactionOptions {
-                        allowed_validator_list: vec![name],
-                        ..Default::default()
-                    };
+                    let display_name = auth_agg.get_display_name(&name);
                     let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
-                    let self_clone = self_clone.clone();
+                    let self_clone = self.clone();
 
                     let task = async move {
                         // Add some random delay to the task to avoid all tasks running at the same time
@@ -163,7 +155,10 @@ where
                         match self_clone
                             .drive_transaction(
                                 SubmitTxRequest::new_ping(ping),
-                                options,
+                                SubmitTransactionOptions {
+                                    allowed_validator_list: vec![name],
+                                    ..Default::default()
+                                },
                                 Some(TASK_TIMEOUT),
                             )
                             .await
