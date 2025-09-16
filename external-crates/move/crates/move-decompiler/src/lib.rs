@@ -4,7 +4,7 @@
 pub mod ast;
 pub mod decompiler;
 pub mod output;
-pub mod pretty;
+pub mod pretty_printer;
 mod refinement;
 mod structuring;
 pub mod translate;

@@ -11,13 +11,13 @@ module loops::infinite_loop;
 
 // -- functions -- 
 
-public fun inf_loop_0(  ) {
+public fun inf_loop_0() {
     loop {
         
     }
 }
 
-public fun inf_loop_1(  ) {
+public fun inf_loop_1() {
     loop {
         
     }
