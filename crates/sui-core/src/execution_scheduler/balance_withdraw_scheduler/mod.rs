@@ -7,7 +7,7 @@ use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
 };
 
-mod balance_read;
+pub(crate) mod balance_read;
 mod eager_scheduler;
 mod naive_scheduler;
 pub(crate) mod scheduler;

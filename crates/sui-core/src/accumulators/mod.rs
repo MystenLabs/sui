@@ -29,6 +29,10 @@ use sui_types::{
 
 use crate::execution_cache::TransactionCacheRead;
 
+pub mod balance_checks;
+pub mod coin_reservation;
+pub mod transaction_rewriting;
+
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.
 ///

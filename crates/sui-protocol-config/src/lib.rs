@@ -770,6 +770,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_address_balance_gas_payments: bool,
 
+    // Enable coin reservation backward compatibility layer
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_reservation: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -2010,6 +2014,10 @@ impl ProtocolConfig {
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn enable_coin_reservation(&self) -> bool {
+        self.feature_flags.enable_coin_reservation
     }
 
     pub fn enable_coin_registry(&self) -> bool {
@@ -4512,6 +4520,10 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs_for_testing(&mut self) {
         self.feature_flags.allow_references_in_ptbs = true;
+    }
+
+    pub fn enable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation = true;
     }
 }
 
