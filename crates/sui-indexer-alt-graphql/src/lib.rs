@@ -188,18 +188,18 @@ where
             cancel,
         } = self;
 
-        router = router
-            .layer(Extension(schema.finish()))
-            .layer(axum::middleware::from_fn_with_state(
-                Version(version),
-                middleware::version::set_version,
-            ))
-            .layer(
-                cors::CorsLayer::new()
-                    .allow_methods([Method::POST])
-                    .allow_origin(cors::Any)
-                    .allow_headers(cors::Any),
-            );
+        let cors = cors::CorsLayer::new()
+            .allow_methods([Method::POST])
+            .allow_origin(cors::Any)
+            .allow_headers(cors::Any);
+
+        router =
+            router
+                .layer(Extension(schema.finish()))
+                .layer(axum::middleware::from_fn_with_state(
+                    Version(version),
+                    middleware::version::set_version,
+                ));
 
         if with_ide {
             info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
@@ -212,6 +212,8 @@ where
         let listener = TcpListener::bind(rpc_listen_address)
             .await
             .context("Failed to bind GraphQL to listen address")?;
+
+        router = router.layer(cors);
 
         let service = axum::serve(
             listener,
