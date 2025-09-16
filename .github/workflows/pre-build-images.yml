@@ -1,4 +1,4 @@
-name: Trigger builds for images and binaries
+name: Trigger pre-build images for Sui commits
 
 on:
   workflow_dispatch:
