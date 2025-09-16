@@ -26,8 +26,8 @@ use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
 use rand::Rng;
 use sui_types::{
-    committee::EpochId, digests::TransactionDigest, error::UserInputError,
-    messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
+    base_types::AuthorityName, committee::EpochId, digests::TransactionDigest,
+    error::UserInputError, messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
 };
 use tokio::{
     task::JoinSet,
@@ -52,6 +52,10 @@ pub struct SubmitTransactionOptions {
     /// When forwarding transactions on behalf of a client, this is the client's address
     /// specified for ddos protection.
     pub forwarded_client_addr: Option<SocketAddr>,
+
+    /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
+    /// When the allowed validator list is empty, any validator can be used.
+    pub allowed_validator_list: Vec<AuthorityName>,
 }
 
 pub struct TransactionDriver<A: Clone> {
@@ -129,20 +133,18 @@ where
             let clients = clients_by_total_score
                 [auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR..]
                 .iter()
-                .filter_map(|(name, _)| {
-                    auth_agg
-                        .authority_clients
-                        .get(name)
-                        .map(|client| (*name, client.clone()))
-                });
+                .map(|(name, _)| *name);
 
-            for (name, _client) in clients {
+            for name in clients {
                 for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
                     let display_name = self_clone
                         .authority_aggregator
                         .load()
                         .get_display_name(&name);
-                    let options = SubmitTransactionOptions::default();
+                    let options = SubmitTransactionOptions {
+                        allowed_validator_list: vec![name],
+                        ..Default::default()
+                    };
                     let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
                     let self_clone = self_clone.clone();
 

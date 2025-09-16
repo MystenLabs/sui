@@ -582,6 +582,8 @@ where
                 SubmitTxRequest::new_transaction(request.transaction.clone()),
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
+                    // TODO: provide a list of validators to submit the transaction via config
+                    allowed_validator_list: vec![],
                 },
                 timeout_duration,
             )

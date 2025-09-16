@@ -62,7 +62,12 @@ impl TransactionSubmitter {
             .submit_amplification_factor
             .observe(amplification_factor as f64);
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, tx_type);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            tx_type,
+            options.allowed_validator_list.clone(),
+        );
         let mut retries = 0;
         let mut requests = FuturesUnordered::new();
 

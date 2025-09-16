@@ -99,7 +99,8 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, tx_type);
+        let mut retrier =
+            RequestRetrier::new(authority_aggregator, client_monitor, tx_type, vec![]);
 
         // Setting this to None at first because if the full effects are already provided,
         // we do not need to record the latency. We track the time in this function instead of inside
