@@ -115,7 +115,7 @@ pub enum Mutability {
     Immutable,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrimitiveOp {
     CastU8,
     CastU16,

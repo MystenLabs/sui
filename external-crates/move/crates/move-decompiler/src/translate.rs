@@ -39,7 +39,8 @@ fn function(fun: S::Function) -> Out::Function {
     println!("Input: {input:?}");
     let structured = crate::structuring::structure(input, entry);
     // println!("{}", structured.to_test_string());
-    let code = generate_output(terms, structured);
+    let mut code = generate_output(terms, structured);
+    crate::refinement::refine(&mut code);
     // println!("Function {name}:\n{code}");
     Out::Function { name, code }
 }
@@ -155,17 +156,6 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 .map(|s| generate_output(terms.clone(), s))
                 .collect();
             Out::Exp::Seq(seq)
-        }
-        D::Structured::While((lbl, _invert), body) => {
-            let term = terms.remove(&(lbl as u32).into()).unwrap();
-            // TODO create helper function to extract last exp from term that works with whatever Exp, not just Seq
-            let Exp::Seq(mut seq) = term else {
-                panic!("A seq espected")
-            };
-            let (cond, mut body_) = (seq.pop().unwrap(), seq);
-            let while_body = generate_output(terms, *body);
-            body_.push(while_body);
-            Out::Exp::While(Box::new(cond), Box::new(Exp::Seq(body_)))
         }
         D::Structured::IfElse((lbl, _invert), conseq, alt) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();

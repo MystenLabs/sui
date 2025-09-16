@@ -4,10 +4,10 @@
 pub(crate) mod ast;
 pub(crate) mod dom_tree;
 pub(crate) mod graph;
-pub(crate) mod loop_refinement;
 pub(crate) mod term_reconstruction;
 
-use crate::structuring::{ast as D, graph::Graph, loop_refinement::refine_loop};
+use crate::structuring::{ast as D, graph::Graph};
+
 use petgraph::{graph::NodeIndex, visit::DfsPostOrder};
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
@@ -61,15 +61,14 @@ fn structure_loop(
         let Some(node) = structured_blocks.remove(&node) else {
             continue;
         };
-        let result = instert_breaks(&loop_nodes, loop_head, succ_node, node, graph);
+        let result = insert_breaks(&loop_nodes, loop_head, succ_node, node, graph);
         loop_body.push(result);
     }
 
     let loop_body = loop_body.into_iter().rev().collect::<Vec<_>>();
     let seq = D::Structured::Seq(loop_body);
     graph.update_loop_info(loop_head);
-    let result = D::Structured::Loop(Box::new(seq));
-    let mut result = refine_loop(result);
+    let mut result = D::Structured::Loop(Box::new(seq));
     if let Some(succ_node) = succ_node {
         if graph
             .dom_tree
@@ -84,7 +83,7 @@ fn structure_loop(
     structured_blocks.insert(loop_head, result);
 }
 
-fn instert_breaks(
+fn insert_breaks(
     loop_nodes: &HashSet<NodeIndex>,
     loop_head: NodeIndex,
     succ_node: Option<NodeIndex>,
@@ -126,16 +125,16 @@ fn instert_breaks(
         DS::Seq(nodes) => DS::Seq(
             nodes
                 .into_iter()
-                .map(|node| instert_breaks(loop_nodes, loop_head, succ_node, node, graph))
+                .map(|node| insert_breaks(loop_nodes, loop_head, succ_node, node, graph))
                 .collect::<Vec<_>>(),
         ),
         DS::Break => node,
         DS::IfElse(code, conseq, alt) => DS::IfElse(
             code,
-            Box::new(instert_breaks(
+            Box::new(insert_breaks(
                 loop_nodes, loop_head, succ_node, *conseq, graph,
             )),
-            Box::new(alt.map(|alt| instert_breaks(loop_nodes, loop_head, succ_node, alt, graph))),
+            Box::new(alt.map(|alt| insert_breaks(loop_nodes, loop_head, succ_node, alt, graph))),
         ),
         DS::Jump(next) => match find_latch_kind(loop_nodes, loop_head, succ_node, next, graph) {
             LatchKind::Continue => DS::Continue,
@@ -211,28 +210,18 @@ fn instert_breaks(
             }
         }
         DS::Continue => DS::Continue,
-        DS::Loop(structured) => DS::Loop(Box::new(instert_breaks(
+        DS::Loop(structured) => DS::Loop(Box::new(insert_breaks(
             loop_nodes,
             loop_head,
             succ_node,
             *structured,
             graph,
         ))),
-        DS::While(code, structured) => DS::While(
-            code,
-            Box::new(instert_breaks(
-                loop_nodes,
-                loop_head,
-                succ_node,
-                *structured,
-                graph,
-            )),
-        ),
         DS::Switch(code, structureds) => {
             let result = structureds
                 .into_iter()
                 .map(|structured| {
-                    instert_breaks(loop_nodes, loop_head, succ_node, structured, graph)
+                    insert_breaks(loop_nodes, loop_head, succ_node, structured, graph)
                 })
                 .collect::<Vec<_>>();
             DS::Switch(code, result)
@@ -424,7 +413,6 @@ fn flatten_sequence(seq: D::Structured) -> D::Structured {
             DS::Block(_)
             | DS::Break
             | DS::Loop(_)
-            | DS::While(_, _)
             | DS::IfElse(_, _, _)
             | DS::Switch(_, _)
             | DS::Continue

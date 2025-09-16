@@ -52,6 +52,75 @@ pub enum Exp {
 }
 
 // -------------------------------------------------------------------------------------------------
+// Impls
+// -------------------------------------------------------------------------------------------------
+
+impl Exp {
+    pub fn contains_break(&self) -> bool {
+        match self {
+            Exp::Continue => false,
+            Exp::Break => true,
+            // Ignore nested loops and whiles
+            Exp::Loop(_) | Exp::While(_, _) => false,
+            // Check sub-expressions
+            Exp::Seq(seq) => seq.iter().any(|e| e.contains_break()),
+            Exp::IfElse(_, conseq, alt) => {
+                conseq.contains_break()
+                    || if let Some(alt) = &**alt {
+                        alt.contains_break()
+                    } else {
+                        false
+                    }
+            }
+            Exp::Switch(_, cases) => cases.iter().any(|e| e.contains_break()),
+            Exp::Assign(_, exp) => exp.contains_break(),
+            Exp::LetBind(_, exp) => exp.contains_break(),
+            Exp::Call(_, exps) => exps.iter().any(|e| e.contains_break()),
+            Exp::Abort(exp) => exp.contains_break(),
+            Exp::Primitive { op: _, args } => args.iter().any(|e| e.contains_break()),
+            Exp::Data { op: _, args } => args.iter().any(|e| e.contains_break()),
+            Exp::Borrow(_, exp) => exp.contains_break(),
+            Exp::Return(_) | Exp::Value(_) | Exp::Variable(_) | Exp::Constant(_) => false,
+        }
+    }
+
+    pub fn contains_continue(&self) -> bool {
+        match self {
+            Exp::Continue => true,
+            Exp::Break => false,
+            // Ignore nested loops and whiles
+            Exp::Loop(_) | Exp::While(_, _) => false,
+            // Check sub-expressions
+            Exp::Seq(seq) => seq.iter().any(|e| e.contains_continue()),
+            Exp::IfElse(_, conseq, alt) => {
+                conseq.contains_continue()
+                    || if let Some(alt) = &**alt {
+                        alt.contains_continue()
+                    } else {
+                        false
+                    }
+            }
+            Exp::Switch(_, cases) => cases.iter().any(|e| e.contains_continue()),
+            Exp::Assign(_, exp) => exp.contains_continue(),
+            Exp::LetBind(_, exp) => exp.contains_continue(),
+            Exp::Call(_, exps) => exps.iter().any(|e| e.contains_continue()),
+            Exp::Abort(exp) => exp.contains_continue(),
+            Exp::Primitive { op: _, args } => args.iter().any(|e| e.contains_continue()),
+            Exp::Data { op: _, args } => args.iter().any(|e| e.contains_continue()),
+            Exp::Borrow(_, exp) => exp.contains_continue(),
+            Exp::Return(_) | Exp::Value(_) | Exp::Variable(_) | Exp::Constant(_) => false,
+        }
+    }
+
+    pub fn map_mut<F>(&mut self, f: F)
+    where
+        F: FnOnce(Exp) -> Exp,
+    {
+        *self = f(std::mem::replace(self, Exp::Break));
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
 // Display
 // -------------------------------------------------------------------------------------------------
 
@@ -243,12 +312,12 @@ fn write_primitive_op(
         PrimitiveOp::Multiply => write!(f, "{} * {}", args[0], args[1]),
         PrimitiveOp::Modulo => write!(f, "{} % {}", args[0], args[1]),
         PrimitiveOp::Divide => write!(f, "{} / {}", args[0], args[1]),
-        PrimitiveOp::BitOr => todo!(),
-        PrimitiveOp::BitAnd => todo!(),
-        PrimitiveOp::Xor => todo!(),
-        PrimitiveOp::Or => todo!(),
-        PrimitiveOp::And => todo!(),
-        PrimitiveOp::Not => todo!(),
+        PrimitiveOp::BitOr => write!(f, "{} | {}", args[0], args[1]),
+        PrimitiveOp::BitAnd => write!(f, "{} & {}", args[0], args[1]),
+        PrimitiveOp::Xor => write!(f, "{} ^ {}", args[0], args[1]),
+        PrimitiveOp::Or => write!(f, "{} || {}", args[0], args[1]),
+        PrimitiveOp::And => write!(f, "{} && {}", args[0], args[1]),
+        PrimitiveOp::Not => write!(f, "!({})", args[0]),
         PrimitiveOp::Equal => write!(f, "{} == {}", args[0], args[1]),
         PrimitiveOp::NotEqual => write!(f, "{} != {}", args[0], args[1]),
         PrimitiveOp::LessThan => write!(f, "{} < {}", args[0], args[1]),
