@@ -12,10 +12,7 @@ use crate::{
     shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::ModuleId,
-    runtime_value::{MoveValue, serialize_values},
+    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
     vm_status::StatusType,
 };
 use std::collections::BTreeMap;
@@ -36,7 +33,7 @@ fn call_non_existent_module() {
             &module_id,
             &fun_name,
             vec![],
-            serialize_values(&vec![MoveValue::Signer(TEST_ADDR)]),
+            vec![],
             &mut UnmeteredGasMeter,
             None,
         )
@@ -71,7 +68,7 @@ fn call_non_existent_function() {
             &module_id,
             &fun_name,
             vec![],
-            serialize_values(&vec![MoveValue::Signer(TEST_ADDR)]),
+            vec![],
             &mut UnmeteredGasMeter,
             None,
         )

@@ -10,9 +10,10 @@ use crate::{
         gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
         in_memory_test_adapter::InMemoryTestAdapter,
         storage::{InMemoryStorage, StoredPackage},
+        vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
-    shared::{linkage_context::LinkageContext, serialization::SerializedReturnValues},
+    shared::linkage_context::LinkageContext,
 };
 use move_binary_format::{
     errors::VMResult,
@@ -543,7 +544,7 @@ fn run_with_module(
         AccountAddress,
         &mut InMemoryTestAdapter,
     ) -> (ModuleId, Identifier, Vec<TypeTag>),
-) -> (VMResult<SerializedReturnValues>, u128) {
+) -> (VMResult<ValueFrame>, u128) {
     let addr = AccountAddress::from_hex_literal("0xcafe").unwrap();
 
     //
@@ -561,13 +562,15 @@ fn run_with_module(
         .map(|tag| vm_session.load_type(&tag))
         .collect::<VMResult<Vec<_>>>();
     let res = type_args.and_then(|type_args| {
-        vm_session.execute_entry_function(
-            &module_id,
-            entry_name.as_ref(),
-            type_args,
-            Vec::<Vec<u8>>::new(),
-            gas,
-        )
+        ValueFrame::empty().call(|values| {
+            vm_session.execute_entry_function(
+                &module_id,
+                entry_name.as_ref(),
+                type_args,
+                values,
+                gas,
+            )
+        })
     });
 
     let time = now.elapsed().as_millis();
