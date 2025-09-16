@@ -148,7 +148,7 @@ fn execute<M: Measurement + 'static>(
                             module_id,
                             fun_name,
                             vec![],
-                            Vec::<Vec<u8>>::new(),
+                            vec![],
                             &mut UnmeteredGasMeter,
                             None,
                         )

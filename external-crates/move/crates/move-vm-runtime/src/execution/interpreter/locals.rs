@@ -84,14 +84,13 @@ impl BaseHeap {
             );
         }
 
-        let Some(value_box) = self.values.remove(&ndx) else {
+        let Some(value_box) = self.values.get_mut(&ndx) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message(format!("Invalid index: {}", ndx)),
             );
         };
-
-        value_box.take()
+        Ok(value_box.replace(Value::invalid()))
     }
 
     /// Borrows the specified location

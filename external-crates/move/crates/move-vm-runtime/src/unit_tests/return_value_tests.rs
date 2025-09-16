@@ -7,16 +7,18 @@ use crate::{
         compilation_utils::{as_module, compile_units, serialize_module_at_max_version},
         in_memory_test_adapter::InMemoryTestAdapter,
         storage::StoredPackage,
+        vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
-    shared::{gas::UnmeteredGasMeter, serialization::SerializedReturnValues},
+    execution::values::{Reference, Value},
+    shared::gas::UnmeteredGasMeter,
 };
 use move_binary_format::errors::VMResult;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
-    runtime_value::{MoveTypeLayout, MoveValue},
+    runtime_value::MoveValue,
 };
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
@@ -27,7 +29,7 @@ fn run(
     fun_body: &str,
     ty_arg_tags: Vec<TypeTag>,
     args: Vec<MoveValue>,
-) -> VMResult<Vec<Vec<u8>>> {
+) -> VMResult<ValueFrame> {
     let structs = structs.to_vec().join("\n");
 
     let code = format!(
@@ -62,27 +64,18 @@ fn run(
         .map(|tag| sess.load_type(&tag))
         .collect::<VMResult<_>>()?;
 
-    let args: Vec<_> = args
-        .into_iter()
-        .map(|val| val.simple_serialize().unwrap())
-        .collect();
-
-    let SerializedReturnValues {
-        return_values,
-        mutable_reference_outputs: _,
-    } = sess.execute_function_bypass_visibility(
+    ValueFrame::serialized_call(
+        &mut sess,
         &module_id,
         &fun_name,
         ty_args,
-        args,
+        args.into_iter()
+            .map(|v| v.simple_serialize().unwrap())
+            .collect(),
         &mut UnmeteredGasMeter,
         None,
-    )?;
-
-    Ok(return_values
-        .into_iter()
-        .map(|(bytes, _layout)| bytes)
-        .collect())
+        true, /* bypass_visibility_checks */
+    )
 }
 
 fn expect_success(
@@ -91,13 +84,16 @@ fn expect_success(
     fun_body: &str,
     ty_args: Vec<TypeTag>,
     args: Vec<MoveValue>,
-    expected_layouts: &[MoveTypeLayout],
+    expected_values: &[MoveValue],
 ) {
     let return_vals = run(structs, fun_sig, fun_body, ty_args, args).unwrap();
-    assert!(return_vals.len() == expected_layouts.len());
+    assert!(return_vals.values.len() == expected_values.len());
 
-    for (blob, layout) in return_vals.iter().zip(expected_layouts.iter()) {
-        MoveValue::simple_deserialize(blob, layout).unwrap();
+    for (ret_val, exp_val) in return_vals.values.iter().zip(expected_values.iter()) {
+        assert_eq!(
+            ret_val.serialize().unwrap(),
+            exp_val.simple_serialize().unwrap()
+        );
     }
 }
 
@@ -108,7 +104,7 @@ fn return_nothing() {
 
 #[test]
 fn return_u64() {
-    expect_success(&[], "(): u64", "42", vec![], vec![], &[MoveTypeLayout::U64])
+    expect_success(&[], "(): u64", "42", vec![], vec![], &[MoveValue::U64(42)])
 }
 
 #[test]
@@ -119,18 +115,33 @@ fn return_u64_bool() {
         "(42, true)",
         vec![],
         vec![],
-        &[MoveTypeLayout::U64, MoveTypeLayout::Bool],
+        &[MoveValue::U64(42), MoveValue::Bool(true)],
     )
 }
 
 #[test]
 fn return_signer_ref() {
-    expect_success(
+    let ValueFrame {
+        heap: _,
+        heap_mut_refs: _,
+        heap_imm_refs: heap_refs,
+        values,
+    } = run(
         &[],
         "(s: &signer): &signer",
         "s",
         vec![],
         vec![MoveValue::Signer(TEST_ADDR)],
-        &[MoveTypeLayout::Signer],
     )
+    .unwrap();
+    assert!(values.len() == 1);
+    assert!(heap_refs.len() == 1);
+    let Value::Reference(Reference::Value(inner)) = &values[0] else {
+        panic!("Expected reference return");
+    };
+    let inner_val = inner.borrow();
+    let ret_move_val =
+        inner_val.as_move_value(&move_core_types::runtime_value::MoveTypeLayout::Signer);
+    let expected = MoveValue::Signer(TEST_ADDR);
+    assert_eq!(ret_move_val, expected);
 }

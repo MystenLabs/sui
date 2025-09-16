@@ -12,10 +12,16 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
-use move_core_types::{identifier::IdentStr, language_storage::TypeTag, runtime_value::MoveValue};
+use move_core_types::{
+    identifier::IdentStr,
+    language_storage::TypeTag,
+    runtime_value::{MoveValue, serialize_values},
+};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
-    dev_utils::gas_schedule::CostTable, natives::functions::NativeFunctions, runtime::MoveRuntime,
+    dev_utils::{gas_schedule::CostTable, vm_arguments::ValueFrame},
+    natives::functions::NativeFunctions,
+    runtime::MoveRuntime,
 };
 use std::{fs, path::Path};
 
@@ -44,14 +50,6 @@ pub fn run(
     );
     let bytecode = fs::read(module_file)?;
 
-    let vm_args: Vec<Vec<u8>> = txn_args
-        .iter()
-        .map(|arg| {
-            arg.simple_serialize()
-                .expect("Transaction arguments must serialize")
-        })
-        .collect();
-
     let natives = NativeFunctions::new(natives)?;
     let runtime = MoveRuntime::new_with_default_config(natives);
 
@@ -74,12 +72,16 @@ pub fn run(
             .map(|tag| vm_instance.load_type(tag))
             .collect::<Result<Vec<_>, _>>()?;
         let function = IdentStr::new(function)?;
-        vm_instance.execute_entry_function(
+
+        ValueFrame::serialized_call(
+            &mut vm_instance,
             &module.self_id(),
             function,
             type_args,
-            vm_args,
+            serialize_values(txn_args.iter()),
             &mut gas_status,
+            None,
+            false, /*  bypass_declared_entry_check */
         )
     };
 

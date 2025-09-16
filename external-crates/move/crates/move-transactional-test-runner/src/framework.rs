@@ -39,7 +39,7 @@ use move_core_types::{
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
-use move_vm_runtime::shared::serialization::SerializedReturnValues;
+use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::{Debug, Write as FmtWrite},
@@ -146,7 +146,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
     ) -> Result<(
         Option<String>,
         Vec<MaybeNamedCompiledModule>,
-        Vec<SerializedReturnValues>,
+        Vec<ValueFrame>,
     )>;
     async fn call_function(
         &mut self,
@@ -157,7 +157,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)>;
+    ) -> Result<(Option<String>, ValueFrame)>;
 
     async fn handle_subcommand(
         &mut self,
@@ -443,19 +443,39 @@ fn single_entry_function(
     Ok((module.self_id(), name))
 }
 
-fn display_return_values(return_values: SerializedReturnValues) -> Option<String> {
-    let SerializedReturnValues {
-        mutable_reference_outputs,
-        return_values,
-    } = return_values;
+fn display_return_values(
+    ValueFrame {
+        mut heap,
+        heap_mut_refs,
+        heap_imm_refs: _,
+        values: return_values,
+    }: ValueFrame,
+) -> Option<String> {
     let mut output = vec![];
-    if !mutable_reference_outputs.is_empty() {
-        let values = mutable_reference_outputs
+    // Values first so we can drop them before grabbing values from the base heap.
+    let printed = if !return_values.is_empty() {
+        Some(
+            return_values
+                .iter()
+                .map(|v| {
+                    let mut buf = String::new();
+                    move_vm_runtime::execution::values::debug::print_value(&mut buf, v).unwrap();
+                    buf
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    } else {
+        None
+    };
+
+    drop(return_values);
+
+    if !heap_mut_refs.is_empty() {
+        let values = heap_mut_refs
             .iter()
-            .map(|(idx, bytes, layout)| {
-                let value =
-                    move_vm_runtime::execution::values::Value::simple_deserialize(bytes, layout)
-                        .unwrap();
+            .map(|(idx, heap_id)| {
+                let value = heap.take_loc(*heap_id).unwrap();
                 (idx, value)
             })
             .collect::<Vec<_>>();
@@ -470,25 +490,11 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
             .join(", ");
         output.push(format!("mutable inputs after call: {}", printed))
     };
-    if !return_values.is_empty() {
-        let values = return_values
-            .iter()
-            .map(|(bytes, layout)| {
-                move_vm_runtime::execution::values::Value::simple_deserialize(bytes, layout)
-                    .unwrap()
-            })
-            .collect::<Vec<_>>();
-        let printed = values
-            .iter()
-            .map(|v| {
-                let mut buf = String::new();
-                move_vm_runtime::execution::values::debug::print_value(&mut buf, v).unwrap();
-                buf
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
+
+    if let Some(printed) = printed {
         output.push(format!("return values: {}", printed))
-    };
+    }
+
     if output.is_empty() {
         None
     } else {

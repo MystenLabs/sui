@@ -36,6 +36,7 @@ use move_vm_runtime::{
         gas_schedule::{CostTable, Gas, GasStatus, unit_cost_schedule},
         in_memory_test_adapter::InMemoryTestAdapter,
         storage::InMemoryStorage,
+        vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
     natives::functions::{NativeFunctionTable, NativeFunctions},
@@ -289,7 +290,7 @@ impl SharedTestingConfig {
         test_plan: &ModuleTestPlan,
         function_name: &str,
         arguments: Vec<MoveValue>,
-    ) -> (VMResult<Vec<Vec<u8>>>, TestRunInfo) {
+    ) -> (VMResult<ValueFrame>, TestRunInfo) {
         // A nicety since Rust doesn't have `try { .. }` yet
         fn do_call(
             test_config: &SharedTestingConfig,
@@ -298,7 +299,7 @@ impl SharedTestingConfig {
             module_id: ModuleId,
             function_name: &str,
             arguments: Vec<MoveValue>,
-        ) -> VMResult<Vec<Vec<u8>>> {
+        ) -> VMResult<ValueFrame> {
             let link_context = test_config
                 .vm_test_adapter
                 .read()
@@ -310,20 +311,16 @@ impl SharedTestingConfig {
 
             let function_name = IdentStr::new(function_name).unwrap();
 
-            let serialized_return_values_result = vm_instance.execute_function_bypass_visibility(
+            ValueFrame::serialized_call(
+                &mut vm_instance,
                 &module_id,
                 function_name,
-                vec![], /* no ty args for now */
+                vec![],
                 serialize_values(arguments.iter()),
                 gas_meter,
                 tracer,
-            );
-            serialized_return_values_result.map(|res| {
-                res.return_values
-                    .into_iter()
-                    .map(|(bytes, _layout)| bytes)
-                    .collect::<Vec<_>>()
-            })
+                true, /* bypass declared entry check */
+            )
         }
 
         let mut move_tracer = MoveTraceBuilder::new();
