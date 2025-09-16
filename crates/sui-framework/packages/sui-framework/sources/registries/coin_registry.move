@@ -3,7 +3,7 @@
 
 /// Defines the system object for managing coin data in a central
 /// registry. This module provides a centralized way to store and manage
-/// metadata for all coin types in the Sui ecosystem, including their
+/// metadata for all currencies in the Sui ecosystem, including their
 /// supply information, regulatory status, and metadata capabilities.
 module sui::coin_registry;
 
@@ -17,7 +17,6 @@ use sui::derived_object;
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
-#[allow(unused_const)]
 /// Metadata cap already claimed
 #[error(code = 0)]
 const EMetadataCapAlreadyClaimed: vector<u8> = b"Metadata cap already claimed.";
@@ -77,11 +76,11 @@ public struct CurrencyKey<phantom T>() has copy, drop, store;
 
 /// Capability object that gates metadata (name, description, icon_url, symbol)
 /// changes in the `Currency`. It can only be created (or claimed) once, and can
-/// be deleted to prevent changes to the `Currency` metacurrency.
+/// be deleted to prevent changes to the `Currency` metadata.
 public struct MetadataCap<phantom T> has key, store { id: UID }
 
-// Currency stores metadata such as name, symbol, decimals, icon_url and description,
-// as well as supply states (optional) and regulatory status.
+/// Currency stores metadata such as name, symbol, decimals, icon_url and description,
+/// as well as supply states (optional) and regulatory status.
 public struct Currency<phantom T> has key {
     id: UID,
     /// Number of decimal places the coin uses for display purposes.
@@ -369,51 +368,53 @@ public fun delete_metadata_cap<T>(currency: &mut Currency<T>, cap: MetadataCap<T
     id.delete();
 }
 
-/// Allows burning coins for burn-only currencies
+/// Burn the `Coin` if the `Currency` has a `BurnOnly` supply state.
 public fun burn<T>(currency: &mut Currency<T>, coin: Coin<T>) {
     currency.burn_balance(coin.into_balance());
 }
 
-/// Lower level function to burn a `Balance` of a burn-only `Currency`.
+/// Burn the `Balance` if the `Currency` has a `BurnOnly` supply state.
 public fun burn_balance<T>(currency: &mut Currency<T>, balance: Balance<T>) {
     assert!(currency.is_supply_burn_only(), ESupplyNotBurnOnly);
     match (currency.supply.borrow_mut()) {
         SupplyState::BurnOnly(supply) => { supply.decrease_supply(balance); },
-        _ => abort EInvariantViolation,
+        _ => abort EInvariantViolation, // unreachable
     }
 }
 
 // === Currency Setters  ===
 
-/// Enables a metadata cap holder to update a coin's name.
+/// Update the name of the `Currency`.
 public fun set_name<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, name: String) {
     currency.name = name;
 }
 
-/// Enables a metadata cap holder to update a coin's symbol.
+/// Update the symbol of the `Currency`.
 public fun set_symbol<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, symbol: String) {
     assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
     currency.symbol = symbol;
 }
 
-/// Enables a metadata cap holder to update a coin's description.
+/// Update the description of the `Currency`.
 public fun set_description<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, description: String) {
     currency.description = description;
 }
 
-/// Enables a metadata cap holder to update a coin's icon URL.
+/// Update the icon URL of the `Currency`.
 public fun set_icon_url<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, icon_url: String) {
     currency.icon_url = icon_url;
 }
 
-/// Register the treasury cap ID for a coin type at a later point.
+/// Register the treasury cap ID for a migrated `Currency`. All currencies created with
+/// `new_currency` or `new_currency_with_otw` have their treasury cap ID set during
+/// initialization.
 public fun set_treasury_cap_id<T>(currency: &mut Currency<T>, cap: &TreasuryCap<T>) {
     currency.treasury_cap_id.fill(object::id(cap));
 }
 
 // == Migrations from legacy coin flows ==
 
-/// Register `CoinMetadata` in the `Registry`. This can happen only once, if the
+/// Register `CoinMetadata` in the `CoinRegistry`. This can happen only once, if the
 /// `Currency` did not exist yet. Further updates are possible through
 /// `update_from_legacy_metadata`.
 public fun migrate_legacy_metadata<T>(
@@ -442,9 +443,11 @@ public fun migrate_legacy_metadata<T>(
     });
 }
 
-/// Update `Currency` from `CoinMetadata` as long as the `MetadataCap` is not claimed.
+/// Update `Currency` from `CoinMetadata` if the `MetadataCap` is not claimed. After
+/// the `MetadataCap` is claimed, updates can only be made through `set_*` functions.
 public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &CoinMetadata<T>) {
     assert!(!currency.is_metadata_cap_claimed(), ECannotUpdateManagedMetadata);
+
     currency.name = legacy.get_name();
     currency.symbol = legacy.get_symbol().to_string();
     currency.description = legacy.get_description();
@@ -479,7 +482,7 @@ public fun migrate_regulated_state_by_metadata<T>(
         };
 }
 
-/// Allow migrating the regulated state by a `DenyCapV2` object.
+/// Mark regulated state by showing the `DenyCapV2` object for the `Currency`.
 public fun migrate_regulated_state_by_cap<T>(currency: &mut Currency<T>, cap: &DenyCapV2<T>) {
     currency.regulated =
         RegulatedState::Regulated {
@@ -501,9 +504,7 @@ public fun name<T>(currency: &Currency<T>): String { currency.name }
 public fun symbol<T>(currency: &Currency<T>): String { currency.symbol }
 
 /// Get the description of the coin.
-public fun description<T>(currency: &Currency<T>): String {
-    currency.description
-}
+public fun description<T>(currency: &Currency<T>): String { currency.description }
 
 /// Get the icon URL for the coin.
 public fun icon_url<T>(currency: &Currency<T>): String { currency.icon_url }
@@ -538,6 +539,9 @@ public fun treasury_cap_id<T>(currency: &Currency<T>): Option<ID> {
 }
 
 /// Get the deny cap ID for this coin type, if it's a regulated coin.
+/// Returns `None` if:
+/// - The `Currency` is not regulated;
+/// - The `Currency` is migrated from legacy, and its regulated state has not been set;
 public fun deny_cap_id<T>(currency: &Currency<T>): Option<ID> {
     match (currency.regulated) {
         RegulatedState::Regulated { cap, .. } => option::some(cap),
@@ -590,7 +594,7 @@ public fun coin_registry_id(): ID {
 }
 
 #[allow(unused_function)]
-/// Create and share the singleton Registry -- this function is
+/// Create and share the singleton `CoinRegistry` -- this function is
 /// called exactly once, during the upgrade epoch.
 /// Only the system address (0x0) can create the registry.
 fun create(ctx: &TxContext) {
