@@ -4,11 +4,14 @@
 use crate::{
     data_store::PackageStore,
     execution_mode::ExecutionMode,
-    static_programmable_transactions::linkage::{
-        config::ResolutionConfig,
-        legacy_linkage,
-        resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
-        resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
+    static_programmable_transactions::{
+        linkage::{
+            config::ResolutionConfig,
+            legacy_linkage,
+            resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
+            resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
+        },
+        loading::ast::Type,
     },
 };
 use sui_protocol_config::ProtocolConfig;
@@ -20,9 +23,10 @@ use sui_types::{
 pub trait LinkageAnalysis {
     fn compute_call_linkage(
         &self,
-        move_call: &P::ProgrammableMoveCall,
+        package: &ObjectID,
+        type_args: &[Type],
         store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError>;
+    ) -> Result<ExecutableLinkage, ExecutionError>;
 
     fn compute_publication_linkage(
         &self,
