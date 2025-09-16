@@ -94,7 +94,7 @@ fn merge_borrow_states_infinite_loop() {
             &module_id,
             &fname,
             vec![],
-            Vec::<Vec<u8>>::new(),
+            vec![],
             &mut GasStatus::new_unmetered(),
         )
         .unwrap_err();

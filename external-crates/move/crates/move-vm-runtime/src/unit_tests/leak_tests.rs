@@ -75,7 +75,7 @@ fn leak_with_abort() {
             &module_id,
             &fname,
             vec![],
-            Vec::<Vec<u8>>::new(),
+            vec![],
             &mut GasStatus::new_unmetered(),
         );
     }

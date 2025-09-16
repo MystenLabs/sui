@@ -9,7 +9,6 @@ pub mod data_store;
 pub mod gas;
 pub mod linkage_context;
 pub mod logging;
-pub mod serialization;
 pub mod types;
 pub mod views;
 pub mod vm_pointer;
