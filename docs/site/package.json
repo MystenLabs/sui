@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
+    "update-cli-docs": "node src/js/update-cli-output.js",
     "prebuild": "git submodule update --init --recursive; node src/js/generate-import-context.js; node src/js/convert-awesome-sui.mjs",
     "prestart": "git submodule update --init --recursive; node src/js/convert-awesome-sui.mjs",
     "start": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus start",
