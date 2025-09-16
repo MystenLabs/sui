@@ -598,6 +598,18 @@ impl ValidatorService {
         // Treat an empty transactions as a ping request.
         let is_ping_request = request.transactions.is_empty();
 
+        if is_ping_request {
+            fp_ensure!(
+                !request.soft_bundle,
+                SuiError::UserInputError {
+                    error: UserInputError::InvalidBatchTransaction {
+                        error: "Soft bundle transactions cannot be empty".to_string()
+                    },
+                }
+                .into()
+            );
+        }
+
         let max_num_transactions = if request.soft_bundle {
             // Soft bundle cannot contain too many transactions.
             // Otherwise it is hard to include all of them in a single block.
@@ -834,6 +846,8 @@ impl ValidatorService {
             .start_timer();
 
         let consensus_positions = if request.soft_bundle || is_ping_request {
+            // We only allow the `consensus_transactions` to be empty for ping requests. This is how it should and is be treated from the downstream components.
+            // For any other case, having an empty `consensus_transactions` vector is an invalid state and we should have never reached at this point.
             assert!(
                 is_ping_request || !consensus_transactions.is_empty(),
                 "A valid soft bundle must have at least one transaction"
@@ -1467,15 +1481,16 @@ impl ValidatorService {
 
         let Some(consensus_position) = request.consensus_position else {
             return Err(SuiError::UserInputError {
-                error: UserInputError::InvalidPingRequest {
+                error: UserInputError::InvalidWaitForEffectsRequest {
                     error: "Consensus position is required for ping requests".to_string(),
                 },
             });
         };
 
+        // We assume that the caller has already checked for the existence of the `ping` field, but handling it gracefully here.
         let Some(ping) = request.ping else {
             return Err(SuiError::UserInputError {
-                error: UserInputError::InvalidPingRequest {
+                error: UserInputError::InvalidWaitForEffectsRequest {
                     error: "Ping type is required for ping requests".to_string(),
                 },
             });

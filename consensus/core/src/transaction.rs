@@ -72,6 +72,9 @@ pub enum LimitReached {
 
 impl TransactionConsumer {
     pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
+        // As the TransactionIndex::MAX is reserved for the ping transaction, we need to ensure that the max number of transactions in a block is less than the transaction index max
+        // so we don't accidentally include a transaction in the ping's transaction position. As the ping's transaction position will always be considered as Fast Path certified,
+        // this could be deemeded dangerous as a transaction could be considered as Fast Path certified when it should have been (possibly) rejected.
         assert!(context.protocol_config.max_num_transactions_in_block() < TransactionIndex::MAX as u64, "The max number of transactions in a block should be less than the transaction index max");
 
         Self {
@@ -896,7 +899,7 @@ mod tests {
     #[tokio::test]
     async fn ping_transaction_index_never_reached() {
         // Set the max number of transactions in a block to the max value of u16.
-        static MAX_NUM_TRANSACTIONS_IN_BLOCK: u64 = u16::MAX as u64;
+        static MAX_NUM_TRANSACTIONS_IN_BLOCK: u64 = (u16::MAX as u64) - 1;
 
         // Ensure that enough space is allocated in the channel for the pending transactions, so we don't end up consuming the transactions in chunks.
         static MAX_PENDING_TRANSACTIONS: usize = 2 * MAX_NUM_TRANSACTIONS_IN_BLOCK as usize;
@@ -933,6 +936,6 @@ mod tests {
         assert_eq!(transactions.len() as u64, MAX_NUM_TRANSACTIONS_IN_BLOCK);
 
         let t: String = bcs::from_bytes(transactions.last().unwrap().data()).unwrap();
-        assert_eq!(t, format!("t {}", PING_TRANSACTION_INDEX - 1));
+        assert_eq!(t, format!("t {}", PING_TRANSACTION_INDEX - 2));
     }
 }

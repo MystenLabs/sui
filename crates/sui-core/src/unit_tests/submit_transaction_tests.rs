@@ -135,11 +135,11 @@ async fn test_submit_transaction_success() {
 async fn test_submit_ping_request() {
     let test_context = TestContext::new().await;
 
-    println!("Case 1. Submitting an empty array of transactions, but `ping` is false.");
+    println!("Case 1. Submitting an empty array of transactions, soft bundle is true.");
     {
         let request = RawSubmitTxRequest {
             transactions: vec![],
-            ..Default::default()
+            soft_bundle: true,
         };
 
         let response = test_context.client.submit_transaction(request, None).await;
@@ -152,31 +152,13 @@ async fn test_submit_ping_request() {
         ));
     }
 
-    println!("Case 2. Submitting an non-empty array of transactions, but `ping` is true.");
-    {
-        let request = RawSubmitTxRequest {
-            transactions: vec![bcs::to_bytes(&test_context.build_test_transaction())
-                .unwrap()
-                .into()],
-            ..Default::default()
-        };
-
-        let response = test_context.client.submit_transaction(request, None).await;
-        assert!(matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
-                error: UserInputError::InvalidPingRequest { .. }
-            }
-        ));
-    }
-
-    println!("Case 3. Submitting an empty array of transactions, but ping is true.");
+    println!("Case 2. Submitting an empty array of transactions, soft bundle is false.");
     {
         // Submit an empty array of transactions.
         // The request should explicitly set `ping` to true to indicate a ping check.
         let request = RawSubmitTxRequest {
             transactions: vec![],
-            ..Default::default()
+            soft_bundle: false,
         };
 
         let response = test_context
