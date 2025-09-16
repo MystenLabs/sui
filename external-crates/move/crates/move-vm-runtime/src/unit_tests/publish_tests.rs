@@ -47,7 +47,7 @@ fn publish_package_and_initialize() {
         &module_id,
         &function,
         vec![],
-        Vec::<Vec<u8>>::new(),
+        vec![],
         &mut UnmeteredGasMeter,
         None,
     )
@@ -75,7 +75,7 @@ fn publish_package_and_abort_initialize() {
         &module_id,
         &function,
         vec![],
-        Vec::<Vec<u8>>::new(),
+        vec![],
         &mut UnmeteredGasMeter,
         None,
     )

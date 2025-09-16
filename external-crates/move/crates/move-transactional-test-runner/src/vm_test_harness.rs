@@ -30,14 +30,13 @@ use move_vm_runtime::{
         gas_schedule::{self, GasStatus},
         in_memory_test_adapter::InMemoryTestAdapter,
         storage::{InMemoryStorage, StoredPackage},
+        vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
     execution::vm::MoveVM,
     natives::move_stdlib::{GasParameters, stdlib_native_functions},
     runtime::MoveRuntime,
-    shared::{
-        gas::GasMeter, linkage_context::LinkageContext, serialization::SerializedReturnValues,
-    },
+    shared::{gas::GasMeter, linkage_context::LinkageContext},
 };
 use once_cell::sync::Lazy;
 
@@ -304,7 +303,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
     ) -> Result<(
         Option<String>,
         Vec<MaybeNamedCompiledModule>,
-        Vec<SerializedReturnValues>,
+        Vec<ValueFrame>,
     )> {
         println!("---- PUBLISHING MODULE WITH CALLS ---------------------------------------------");
         let pub_modules = modules
@@ -388,7 +387,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
         extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)> {
+    ) -> Result<(Option<String>, ValueFrame)> {
         println!("---- CALLING FUNCTION ---------------------------------------------------------");
         let signers: Vec<_> = signers
             .into_iter()
@@ -505,28 +504,33 @@ fn call_vm_function(
     signers: Vec<AccountAddress>,
     txn_args: Vec<MoveValue>,
     gas_meter: &mut impl GasMeter,
-) -> VMResult<SerializedReturnValues> {
+) -> VMResult<ValueFrame> {
     println!("Creating type arguments");
     let type_args: Vec<_> = type_arg_tags
         .into_iter()
         .map(|tag| vm_instance.load_type(&tag))
         .collect::<VMResult<_>>()?;
 
-    println!("Creaing args");
-    let args = txn_args
-        .iter()
+    println!("Creating args");
+
+    let args = signers
+        .into_iter()
+        .map(MoveValue::Signer)
+        .chain(txn_args)
         .map(|arg| arg.simple_serialize().unwrap())
         .collect::<Vec<_>>();
-    // TODO rethink testing signer args
-    let args = signers
-        .iter()
-        .map(|a| MoveValue::Signer(*a).simple_serialize().unwrap())
-        .chain(args)
-        .collect();
 
     println!("Doing call");
-    let result = vm_instance
-        .execute_function_bypass_visibility(module, function, type_args, args, gas_meter, None);
+    let result = ValueFrame::serialized_call(
+        vm_instance,
+        module,
+        function,
+        type_args,
+        args,
+        gas_meter,
+        None,
+        true, /* bypass_declared_entry_check */
+    );
     println!("Done calling");
     result
 }

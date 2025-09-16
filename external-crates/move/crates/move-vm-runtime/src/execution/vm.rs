@@ -4,23 +4,19 @@
 use crate::{
     cache::identifier_interner::{intern_ident_str, intern_identifier},
     dbg_println,
-    execution::{
-        dispatch_tables::VMDispatchTables,
-        interpreter::{self, locals::BaseHeap},
-    },
-    jit::execution::ast::{Function, Type, TypeSubst},
+    execution::{dispatch_tables::VMDispatchTables, interpreter, values::Value},
+    jit::execution::ast::{Function, Type},
     natives::extensions::NativeExtensions,
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
-        serialization::{SerializedReturnValues, *},
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
 };
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
-    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+    errors::{Location, PartialVMError, VMError, VMResult},
+    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
 };
 use move_core_types::{
     annotated_value,
@@ -31,7 +27,7 @@ use move_core_types::{
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::runtime::VMConfig;
-use std::{borrow::Borrow, sync::Arc};
+use std::sync::Arc;
 
 use super::{
     dispatch_tables::{IntraPackageKey, VirtualTableKey},
@@ -58,8 +54,6 @@ pub struct MoveVM<'extensions> {
     pub(crate) native_extensions: NativeExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
-    /// Move VM Base Heap, which holds base arguments, including reference return values, etc.
-    pub(crate) base_heap: BaseHeap,
 }
 
 pub(crate) struct MoveVMFunction {
@@ -126,9 +120,9 @@ impl<'extensions> MoveVM<'extensions> {
         module: &ModuleId,
         function_name: &IdentStr,
         ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
+        args: Vec<Value>,
         gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
+    ) -> VMResult<Vec<Value>> {
         let bypass_declared_entry_check = false;
         self.execute_function(
             module,
@@ -147,10 +141,10 @@ impl<'extensions> MoveVM<'extensions> {
         module: &ModuleId,
         function_name: &IdentStr,
         ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
+        args: Vec<Value>,
         gas_meter: &mut impl GasMeter,
         tracer: Option<&mut MoveTraceBuilder>,
-    ) -> VMResult<SerializedReturnValues> {
+    ) -> VMResult<Vec<Value>> {
         let tracer = if cfg!(feature = "tracing") {
             tracer
         } else {
@@ -186,7 +180,14 @@ impl<'extensions> MoveVM<'extensions> {
             function,
             parameters,
             return_type,
-        } = self.find_function(module_id, function_name, ty_args)?;
+        } = self
+            .find_function(module_id, function_name, ty_args)
+            .map_err(|e| {
+                Self::convert_to_external_resolution_error(
+                    e,
+                    format!("Failed to find function {module_id}::{function_name}"),
+                )
+            })?;
 
         Ok(LoadedFunctionInformation {
             is_entry: function.to_ref().is_entry,
@@ -236,9 +237,12 @@ impl<'extensions> MoveVM<'extensions> {
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
     pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
-        self.virtual_tables
-            .load_type(tag)
-            .map_err(|e| Self::convert_to_external_type_tag_error(e, tag))
+        self.virtual_tables.load_type(tag).map_err(|e| {
+            Self::convert_to_external_resolution_error(
+                e,
+                format!("Failed to load VM type for {tag}",),
+            )
+        })
     }
 
     /// Resolve a `TypeTag` to a runtime type layout using the VM's virtual tables.
@@ -248,9 +252,12 @@ impl<'extensions> MoveVM<'extensions> {
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
     pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<runtime_value::MoveTypeLayout> {
-        self.virtual_tables
-            .get_type_layout(ty)
-            .map_err(|e| Self::convert_to_external_type_tag_error(e, ty))
+        self.virtual_tables.get_type_layout(ty).map_err(|e| {
+            Self::convert_to_external_resolution_error(
+                e,
+                format!("Failed to resolve type layotu for {ty}",),
+            )
+        })
     }
 
     /// Resolve a `TypeTag` to an annotated type layout using the VM's virtual tables.
@@ -262,14 +269,19 @@ impl<'extensions> MoveVM<'extensions> {
     pub fn annotated_type_layout(&self, ty: &TypeTag) -> VMResult<annotated_value::MoveTypeLayout> {
         self.virtual_tables
             .get_fully_annotated_type_layout(ty)
-            .map_err(|e| Self::convert_to_external_type_tag_error(e, ty))
+            .map_err(|e| {
+                Self::convert_to_external_resolution_error(
+                    e,
+                    format!("Failed to resolve external type tag {ty}",),
+                )
+            })
     }
 
-    fn convert_to_external_type_tag_error(err: VMError, tag: &TypeTag) -> VMError {
+    fn convert_to_external_resolution_error(err: VMError, msg: String) -> VMError {
         if err.major_status().status_type() == StatusType::InvariantViolation {
             PartialVMError::new(StatusCode::EXTERNAL_RESOLUTION_REQUEST_ERROR)
                 .with_message(format!(
-                    "Failed to resolve external type tag{tag}{}",
+                    "{msg}{}",
                     err.message()
                         .map(|s| format!(": {}", s))
                         .unwrap_or_default()
@@ -297,16 +309,16 @@ impl<'extensions> MoveVM<'extensions> {
         runtime_id: &ModuleId,
         function_name: &IdentStr,
         type_arguments: Vec<Type>,
-        serialized_args: Vec<impl Borrow<[u8]>>,
+        args: Vec<Value>,
         tracer: Option<&mut MoveTraceBuilder>,
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
-    ) -> VMResult<SerializedReturnValues> {
+    ) -> VMResult<Vec<Value>> {
         // Find the function definition
         let MoveVMFunction {
             function,
-            parameters,
-            return_type,
+            parameters: _,
+            return_type: _,
         } = self.find_function(runtime_id, function_name, &type_arguments)?;
 
         if !bypass_declared_entry_check && !function.to_ref().is_entry {
@@ -320,9 +332,7 @@ impl<'extensions> MoveVM<'extensions> {
         self.execute_function_impl(
             function,
             type_arguments,
-            parameters,
-            return_type,
-            serialized_args,
+            args,
             &mut tracer.map(VMTracer::new),
             gas_meter,
         )
@@ -380,43 +390,11 @@ impl<'extensions> MoveVM<'extensions> {
         &mut self,
         func: VMPointer<Function>,
         ty_args: Vec<Type>,
-        param_types: Vec<Type>,
-        return_types: Vec<Type>,
-        serialized_args: Vec<impl Borrow<[u8]>>,
+        args: Vec<Value>,
         tracer: &mut Option<VMTracer<'_>>,
         gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
-        let arg_types = param_types
-            .into_iter()
-            .map(|ty| ty.subst(&ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
-        let mut_ref_args = arg_types
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, ty)| match ty {
-                Type::MutableReference(inner) => Some((idx, inner.clone())),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        // TODO: Lift deserialization out to the PTB layer, and expose the Base Heap to that layer
-        // so that it can allocate values into it for usage in function calls.
-        // The external calls in should eventually just call `Value`; serialization and
-        // deserialization should be done outside of the VM calls.
-        let (ref_ids, deserialized_args) = deserialize_args(
-            &self.virtual_tables,
-            &mut self.base_heap,
-            arg_types,
-            serialized_args,
-        )
-        .map_err(|e| e.finish(Location::Undefined))?;
-        let return_types = return_types
-            .into_iter()
-            .map(|ty| ty.subst(&ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
-
-        let return_values = interpreter::run(
+    ) -> VMResult<Vec<Value>> {
+        interpreter::run(
             &mut self.virtual_tables,
             self.vm_config.clone(),
             &mut self.native_extensions.write(),
@@ -424,29 +402,8 @@ impl<'extensions> MoveVM<'extensions> {
             gas_meter,
             func,
             ty_args,
-            deserialized_args,
-        )?;
-
-        let serialized_return_values =
-            serialize_return_values(&self.virtual_tables, &return_types, return_values)
-                .map_err(|e| e.finish(Location::Undefined))?;
-        let serialized_mut_ref_outputs = mut_ref_args
-            .into_iter()
-            .map(|(ndx, ty)| {
-                let heap_ref_id = ref_ids.get(&ndx).expect("No heap ref for ref argument");
-                // take the value of each reference; return values first in the case that a value
-                // points into this local
-                let local_val = self.base_heap.take_loc(*heap_ref_id)?;
-                let (bytes, layout) = serialize_return_value(&self.virtual_tables, &ty, local_val)?;
-                Ok((ndx as LocalIndex, bytes, layout))
-            })
-            .collect::<PartialVMResult<_>>()
-            .map_err(|e| e.finish(Location::Undefined))?;
-
-        Ok(SerializedReturnValues {
-            mutable_reference_outputs: serialized_mut_ref_outputs,
-            return_values: serialized_return_values,
-        })
+            args,
+        )
     }
 
     // -------------------------------------------
@@ -464,7 +421,6 @@ impl std::fmt::Debug for MoveVM<'_> {
             .field("virtual_tables", &self.virtual_tables)
             .field("link_context", &self.link_context)
             .field("vm_config", &self.vm_config)
-            .field("base_heap", &self.base_heap)
             // Note: native_extensions is intentionally omitted
             .finish()
     }

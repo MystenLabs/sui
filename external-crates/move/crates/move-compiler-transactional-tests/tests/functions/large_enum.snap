@@ -13,11 +13,4 @@ return values: |1|{ 0 }
 
 task 4, line 47:
 //# run 0x42::m::x4
-Error: Function execution failed with VMError: {
-    major_status: VERIFICATION_ERROR,
-    sub_status: None,
-    location: undefined,
-    indices: [],
-    offsets: [],
-    message: "entry point functions cannot have non-serializable return types",
-}
+return values: |1|{ 0 }

@@ -13,14 +13,16 @@ use crate::{
         storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
-    execution::dispatch_tables::{DepthFormula, IntraPackageKey, VirtualTableKey},
+    execution::{
+        dispatch_tables::{DepthFormula, IntraPackageKey, VirtualTableKey},
+        values::Value,
+    },
     jit::execution::ast::Type,
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
     shared::{
         gas::UnmeteredGasMeter,
         linkage_context::LinkageContext,
-        serialization::SerializedReturnValues,
         types::{OriginalId, VersionId},
     },
 };
@@ -38,7 +40,6 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     resolver::TypeOrigin,
-    runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use once_cell::sync::Lazy;
@@ -248,7 +249,7 @@ impl Adapter {
                             &module_id,
                             &name,
                             vec![],
-                            Vec::<Vec<u8>>::new(),
+                            vec![],
                             &mut UnmeteredGasMeter,
                             None,
                         )
@@ -263,25 +264,7 @@ impl Adapter {
         }
     }
 
-    fn call_function_with_return(&self, module: &ModuleId, name: &IdentStr) -> Vec<MoveValue> {
-        self.call_function(module, name)
-            .return_values
-            .into_iter()
-            .map(|(bytes, ty)| {
-                MoveValue::simple_deserialize(&bytes[..], &ty)
-                    .expect("Can't deserialize return value")
-            })
-            .collect()
-    }
-
-    fn validate_linkage_with_err(&self) {
-        let vm = self.runtime_adapter.write();
-        let Err(_) = vm.make_vm(self.store.linkage.clone()) else {
-            panic!("Should fail to make VM since function is missing");
-        };
-    }
-
-    fn call_function(&self, module: &ModuleId, name: &IdentStr) -> SerializedReturnValues {
+    fn call_function(&self, module: &ModuleId, name: &IdentStr) -> Vec<Value> {
         let vm = self.runtime_adapter.write();
         let mut session = vm.make_vm(self.store.linkage.clone()).unwrap();
         session
@@ -289,11 +272,18 @@ impl Adapter {
                 module,
                 name,
                 vec![],
-                Vec::<Vec<u8>>::new(),
+                vec![],
                 &mut UnmeteredGasMeter,
                 None,
             )
             .unwrap_or_else(|e| panic!("Failure executing {module:?}::{name:?}: {e:#?}"))
+    }
+
+    fn validate_linkage_with_err(&self) {
+        let vm = self.runtime_adapter.write();
+        let Err(_) = vm.make_vm(self.store.linkage.clone()) else {
+            panic!("Should fail to make VM since function is missing");
+        };
     }
 }
 
@@ -600,12 +590,12 @@ fn relink() {
         .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![])
         .publish_package(b0_modules);
 
-    assert_eq!(
-        vec![MoveValue::U64(42 + 1)],
+    assert!(matches!(
         adapter
             .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3),]), vec![],)
-            .call_function_with_return(&b0, ident_str!("b")),
-    );
+            .call_function(&b0, ident_str!("b")).as_slice(),
+        [Value::U64(out)] if *out == 42 + 1,
+    ));
 
     let mut adapter = adapter.with_linkage(
         /* linkage */ BTreeMap::from_iter([(ADDR2, ADDR5)]),
@@ -625,10 +615,10 @@ fn relink() {
     );
     adapter.publish_package(a0_modules);
 
-    assert_eq!(
-        vec![MoveValue::U64(44 + 43 + 1)],
-        adapter.call_function_with_return(&a0, ident_str!("a")),
-    );
+    assert!(matches!(
+        adapter.call_function(&a0, ident_str!("a")).as_slice(),
+        [Value::U64(out)] if *out == 44 + 43 + 1,
+    ));
 }
 
 #[test]
@@ -681,10 +671,10 @@ fn relink_load_err() {
     );
     adapter.publish_package(b0_modules);
 
-    assert_eq!(
-        vec![MoveValue::U64(42 + 1)],
-        adapter.call_function_with_return(&b0, ident_str!("b")),
-    );
+    assert!(matches!(
+        adapter.call_function(&b0, ident_str!("b")).as_slice(),
+        [Value::U64(out)] if *out == 42 + 1,
+    ));
 
     adapter
         .with_linkage(
@@ -714,10 +704,10 @@ fn relink_load_err() {
     );
     adapter.publish_package(b1_modules);
 
-    assert_eq!(
-        vec![MoveValue::U64(44 * 43)],
-        adapter.call_function_with_return(&b0, ident_str!("b")),
-    );
+    assert!(matches!(
+        adapter.call_function(&b0, ident_str!("b")).as_slice(),
+        [Value::U64(out)] if *out == 44 * 43,
+    ));
 
     // But B v1 *does not* work with C v0
     adapter
@@ -959,10 +949,10 @@ fn publish_bundle_and_load() {
     );
     adapter.publish_package(a0_modules);
 
-    assert_eq!(
-        vec![MoveValue::U64(44 + 43 + 1)],
-        adapter.call_function_with_return(&a0, ident_str!("a")),
-    );
+    assert!(matches!(
+        adapter.call_function(&a0, ident_str!("a")).as_slice(),
+        [Value::U64(out)] if *out == 44 + 43 + 1,
+    ));
 }
 
 #[test]
@@ -1007,10 +997,10 @@ fn publish_bundle_with_err_retry() {
     // will not leave behind modules in the loader).
     adapter.publish_package(a0_modules);
 
-    assert_eq!(
-        vec![MoveValue::U64(44 + 43 + 1)],
-        adapter.call_function_with_return(&a0, ident_str!("a")),
-    );
+    assert!(matches!(
+        adapter.call_function(&a0, ident_str!("a")).as_slice(),
+        [Value::U64(out)] if *out == 44 + 43 + 1,
+    ));
 }
 
 #[test]

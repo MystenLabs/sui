@@ -7,20 +7,17 @@ use crate::{
         compilation_utils::{as_module, compile_units},
         in_memory_test_adapter::InMemoryTestAdapter,
         storage::StoredPackage,
+        vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
-    shared::{gas::UnmeteredGasMeter, serialization::SerializedReturnValues},
+    execution::values::Value,
+    shared::gas::UnmeteredGasMeter,
 };
 use move_binary_format::errors::VMResult;
 use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::ModuleId,
-    runtime_value::{MoveValue, serialize_values},
-    u256::U256,
-    vm_status::StatusCode,
+    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+    runtime_value::MoveValue, u256::U256, vm_status::StatusCode,
 };
-use std::convert::TryInto;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 const TEST_MODULE_ID: &str = "M";
@@ -59,11 +56,14 @@ fn fail_arg_deserialize() {
 #[test]
 fn mutref_output_success() {
     let mod_code = setup_module();
-    let result = run(&mod_code, USE_MUTREF_LABEL, MoveValue::U64(1));
-    let ret_values = result.unwrap();
-    assert_eq!(1, ret_values.mutable_reference_outputs.len());
-    let parsed = parse_u64_arg(&ret_values.mutable_reference_outputs.first().unwrap().1);
-    assert_eq!(EXPECT_MUTREF_OUT_VALUE, parsed);
+    let base_val = MoveValue::U64(1);
+    let result = run(&mod_code, USE_MUTREF_LABEL, base_val);
+    let mut ret_values = result.unwrap();
+    assert!(ret_values.values.is_empty());
+    assert!(ret_values.heap_mut_refs.len() == 1);
+    let id = *ret_values.heap_mut_refs.iter().next().unwrap().1;
+    let v = ret_values.heap.take_loc(id).unwrap();
+    assert!(matches!(v, Value::U64(EXPECT_MUTREF_OUT_VALUE)));
 }
 
 // TODO - how can we cause serialization errors in values returned from Move ?
@@ -85,11 +85,7 @@ fn setup_module() -> ModuleCode {
     (module_id, code)
 }
 
-fn run(
-    module: &ModuleCode,
-    fun_name: &str,
-    arg_val0: MoveValue,
-) -> VMResult<SerializedReturnValues> {
+fn run(module: &ModuleCode, fun_name: &str, arg_val0: MoveValue) -> VMResult<ValueFrame> {
     let module_id = &module.0;
     let modules = vec![module.clone()];
     let adapter = setup_vm(&modules);
@@ -97,14 +93,15 @@ fn run(
     let mut session = adapter.make_vm(linkage).unwrap();
 
     let fun_name = Identifier::new(fun_name).unwrap();
-
-    session.execute_function_bypass_visibility(
+    ValueFrame::serialized_call(
+        &mut session,
         module_id,
         &fun_name,
         vec![],
-        serialize_values(&vec![arg_val0]),
+        vec![arg_val0.simple_serialize().unwrap()],
         &mut UnmeteredGasMeter,
         None,
+        true,
     )
 }
 
@@ -125,11 +122,4 @@ fn setup_vm(modules: &[ModuleCode]) -> InMemoryTestAdapter {
             .unwrap(),
     );
     adapter
-}
-
-fn parse_u64_arg(arg: &[u8]) -> u64 {
-    let as_arr: [u8; 8] = arg[..8]
-        .try_into()
-        .expect("wrong u64 length, must be 8 bytes");
-    u64::from_le_bytes(as_arr)
 }
