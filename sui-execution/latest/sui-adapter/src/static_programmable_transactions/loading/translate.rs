@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{
-    env::Env, linkage::resolved_linkage::ExecutableLinkage, loading::ast as L,
-};
+use crate::static_programmable_transactions::{env::Env, loading::ast as L};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
@@ -91,9 +89,6 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
 fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {
     Ok(match command {
         P::Command::MoveCall(pmc) => {
-            let resolved_linkage = env
-                .linkage_analysis
-                .compute_call_linkage(&pmc, env.linkable_store)?;
             let P::ProgrammableMoveCall {
                 package,
                 module,
@@ -101,12 +96,16 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
                 type_arguments: ptype_arguments,
                 arguments,
             } = *pmc;
-            let linkage = ExecutableLinkage::new(resolved_linkage);
             let type_arguments = ptype_arguments
                 .into_iter()
                 .enumerate()
                 .map(|(idx, ty)| env.load_type_input(idx, ty))
                 .collect::<Result<Vec<_>, _>>()?;
+            let linkage = env.linkage_analysis.compute_call_linkage(
+                &package,
+                &type_arguments,
+                env.linkable_store,
+            )?;
             let function = env.load_function(package, module, name, type_arguments, linkage)?;
             L::Command::MoveCall(Box::new(L::MoveCall {
                 function,
