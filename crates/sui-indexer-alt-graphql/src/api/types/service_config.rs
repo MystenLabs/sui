@@ -4,7 +4,7 @@
 use async_graphql::{Context, Object, Result};
 
 use crate::{
-    api::types::available_range::{AvailableRange, Error as AvailableRangeError, RetentionKey},
+    api::types::available_range::{AvailableRange, RetentionKey},
     config::Limits,
     error::RpcError,
     pagination::{is_connection, PaginationConfig},
@@ -212,7 +212,7 @@ impl ServiceConfig {
         type_: String,
         field: String,
         filter: Option<String>,
-    ) -> Result<AvailableRange, RpcError<AvailableRangeError>> {
+    ) -> Result<AvailableRange, RpcError> {
         AvailableRange::new(
             ctx,
             &self.scope,
