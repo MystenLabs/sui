@@ -108,7 +108,7 @@ where
     async fn run_latency_checks(self: Arc<Self>) {
         const MAX_DELAY_BETWEEN_REQUESTS_MS: u64 = 5_000;
         const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_millis(10_000);
-        const TASK_TIMEOUT: Duration = Duration::from_millis(5_000);
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(5_000);
         let mut interval = interval(INTERVAL_BETWEEN_RUNS);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
@@ -159,7 +159,7 @@ where
                                     allowed_validator_list: vec![name],
                                     ..Default::default()
                                 },
-                                Some(TASK_TIMEOUT),
+                                Some(PING_REQUEST_TIMEOUT),
                             )
                             .await
                         {
