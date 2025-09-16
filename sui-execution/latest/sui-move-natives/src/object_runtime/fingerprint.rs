@@ -4,7 +4,6 @@
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::execution::values::Value;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{MoveObjectType, ObjectID};
 
 /// This type is used to track if an object has changed since it was read from storage. Ideally,
@@ -25,38 +24,24 @@ enum ObjectFingerprint_ {
 }
 
 impl ObjectFingerprint {
-    #[cfg(debug_assertions)]
-    pub fn is_disabled(&self) -> bool {
-        self.0.is_none()
-    }
-
     /// Creates a new object fingerprint for a child object not found in storage.
     /// Will be internally disabled if the feature is not enabled in the protocol config.
-    pub fn none(protocol_config: &ProtocolConfig) -> Self {
-        if !protocol_config.minimize_child_object_mutations() {
-            Self(None)
-        } else {
-            Self(Some(ObjectFingerprint_::Empty))
-        }
+    pub fn none() -> Self {
+        Self(Some(ObjectFingerprint_::Empty))
     }
 
     /// Creates a new object fingerprint for a child found in storage.
     /// Will be internally disabled if the feature is not enabled in the protocol config.
     pub fn preexisting(
-        protocol_config: &ProtocolConfig,
         preexisting_owner: &ObjectID,
         preexisting_type: &MoveObjectType,
         preexisting_value: &Value,
     ) -> PartialVMResult<Self> {
-        Ok(if !protocol_config.minimize_child_object_mutations() {
-            Self(None)
-        } else {
-            Self(Some(ObjectFingerprint_::Preexisting {
-                owner: *preexisting_owner,
-                ty: preexisting_type.clone(),
-                value: preexisting_value.copy_value(),
-            }))
-        })
+        Ok(Self(Some(ObjectFingerprint_::Preexisting {
+            owner: *preexisting_owner,
+            ty: preexisting_type.clone(),
+            value: preexisting_value.copy_value(),
+        })))
     }
 
     /// Checks if the object has changed since it was read from storage.

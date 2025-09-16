@@ -17,7 +17,6 @@ use move_binary_format::{
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
-    effects::Op,
     gas_algebra::AbstractMemorySize,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
@@ -109,11 +108,6 @@ pub enum Reference {
     Indexed(Box<(MemBox<Value>, usize)>),
 }
 
-// XXX/TODO(vm-rewrite): Remove this and replace with proper value dirtying.
-// This is a temporary shim for the new VM. It _MUST_ be removed before final rollout.
-#[derive(Debug)]
-pub struct GlobalFingerprint(Option<String>);
-
 // -------------------------------------------------------------------------------------------------
 // Alias Types
 // -------------------------------------------------------------------------------------------------
@@ -183,17 +177,12 @@ struct VectorMatchRefMut<'v>(VectorMatch<&'v mut Vec<MemBox<Value>>, &'v mut Pri
 #[derive(Debug)]
 pub enum GlobalValueImpl {
     /// No resource resides in this slot or in storage.
-    None,
-    /// A resource has been published to this slot and it did not previously exist in storage.
-    Fresh { container: MemBox<Value> },
-    /// A resource resides in this slot and also in storage. The status flag indicates whether
-    /// it has potentially been altered.
-    Cached {
-        fingerprint: GlobalFingerprint,
-        container: MemBox<Value>,
-    },
-    /// A resource used to exist in storage but has been deleted by the current transaction.
-    Deleted,
+    Empty,
+    /// A resource exists at this slot. No information about the state of storage (e.g., if it is
+    /// new or was an existing value that was loaded) as it relates to this value is implied.
+    /// Determining if this is a new or mutated global value at the end of execution is the
+    /// responsibility of the adapter and is outside the scope of the VM.
+    Filled(MemBox<Value>),
 }
 
 /// A wrapper around `GlobalValueImpl`, representing a "slot" in global storage that can
@@ -479,21 +468,6 @@ impl Index<usize> for FixedSizeVec {
 impl IndexMut<usize> for FixedSizeVec {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
-    }
-}
-
-impl GlobalFingerprint {
-    pub fn fingerprint(container: &Struct) -> Self {
-        // XXX/TODO(vm-rewrite): Implement proper fingerprinting.
-        Self(Some(format!("{:?}", container)))
-    }
-
-    pub fn dirty() -> Self {
-        Self(None)
-    }
-
-    pub fn same_value(&self, other: &Struct) -> bool {
-        self.0 == Self::fingerprint(other).0
     }
 }
 
@@ -2347,32 +2321,9 @@ impl Struct {
 
 #[allow(clippy::unnecessary_wraps)]
 impl GlobalValueImpl {
-    fn cached(
-        val: Value,
-        existing_fingerprint: Option<GlobalFingerprint>,
-    ) -> Result<Self, (PartialVMError, Value)> {
+    fn fill(val: Value) -> Result<Self, (PartialVMError, Value)> {
         match val {
-            Value::Struct(struct_) => {
-                let fingerprint = existing_fingerprint
-                    .unwrap_or_else(|| GlobalFingerprint::fingerprint(&struct_));
-                Ok(Self::Cached {
-                    container: MemBox::new(Value::Struct(struct_)),
-                    fingerprint,
-                })
-            }
-            val => Err((
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("failed to publish cached: not a resource".to_string()),
-                val,
-            )),
-        }
-    }
-
-    fn fresh(val: Value) -> Result<Self, (PartialVMError, Value)> {
-        match val {
-            container @ Value::Struct(_) => Ok(Self::Fresh {
-                container: MemBox::new(container),
-            }),
+            container @ Value::Struct(_) => Ok(Self::Filled(MemBox::new(container))),
             val => Err((
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("failed to publish fresh: not a resource".to_string()),
@@ -2382,22 +2333,13 @@ impl GlobalValueImpl {
     }
 
     fn move_from(&mut self) -> PartialVMResult<Value> {
-        let value = std::mem::replace(self, Self::None);
+        let value = std::mem::replace(self, Self::Empty);
         let value_box = match value {
-            Self::None | Self::Deleted => {
+            Self::Empty => {
                 return Err(PartialVMError::new(StatusCode::MISSING_DATA));
             }
-            Self::Fresh { container } => {
-                let previous = std::mem::replace(self, Self::None);
-                assert!(matches!(previous, Self::None));
-                container
-            }
-            Self::Cached {
-                fingerprint: _,
-                container,
-            } => {
-                let previous = std::mem::replace(self, Self::Deleted);
-                assert!(matches!(previous, Self::None));
+            Self::Filled(container) => {
+                assert!(matches!(self, Self::Empty));
                 container
             }
         };
@@ -2406,96 +2348,37 @@ impl GlobalValueImpl {
 
     fn move_to(&mut self, val: Value) -> Result<(), (PartialVMError, Value)> {
         match self {
-            Self::Fresh { .. } | Self::Cached { .. } => {
+            Self::Filled(_) => {
                 return Err((
                     PartialVMError::new(StatusCode::RESOURCE_ALREADY_EXISTS),
                     val,
                 ));
             }
-            Self::None => *self = Self::fresh(val)?,
-            Self::Deleted => {
-                let Self::Deleted = std::mem::replace(self, Self::None) else {
-                    unreachable!()
-                };
-                *self = Self::cached(val, Some(GlobalFingerprint::dirty()))?
-            }
+            Self::Empty => *self = Self::fill(val)?,
         }
         Ok(())
     }
 
     fn exists(&self) -> PartialVMResult<bool> {
         match self {
-            Self::Fresh { .. } | Self::Cached { .. } => Ok(true),
-            Self::None | Self::Deleted => Ok(false),
+            Self::Filled(_) => Ok(true),
+            Self::Empty => Ok(false),
         }
     }
 
     fn borrow_global(&self) -> PartialVMResult<Value> {
         match self {
-            Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
-            GlobalValueImpl::Fresh { container } => {
+            Self::Empty => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
+            GlobalValueImpl::Filled(container) => {
                 Ok(Value::Reference(Reference::Value(container.ptr_clone())))
-            }
-            GlobalValueImpl::Cached { container, .. } => {
-                Ok(Value::Reference(Reference::Value(container.ptr_clone())))
-            }
-        }
-    }
-
-    #[deprecated(note = "Remove this after fingerprinting is enabled")]
-    fn into_effect(self) -> Option<Op<Value>> {
-        match self {
-            Self::None => None,
-            Self::Deleted => Some(Op::Delete),
-            Self::Fresh { container } => {
-                let value @ Value::Struct(_) = container
-                    .take()
-                    .expect("Tried to take a global value in use")
-                else {
-                    unreachable!()
-                };
-                Some(Op::New(value))
-            }
-            Self::Cached {
-                container,
-                fingerprint,
-            } => {
-                let Value::Struct(struct_) = container
-                    .take()
-                    .expect("Tried to take a global value in use")
-                else {
-                    unreachable!()
-                };
-                if fingerprint.same_value(&struct_) {
-                    None
-                } else {
-                    Some(Op::New(Value::Struct(struct_)))
-                }
-            }
-        }
-    }
-
-    fn is_mutated(&self) -> bool {
-        match self {
-            Self::None => false,
-            Self::Deleted => true,
-            Self::Fresh { .. } => true,
-            Self::Cached {
-                fingerprint,
-                container,
-            } => {
-                let Value::Struct(struct_) = &*container.borrow() else {
-                    unreachable!()
-                };
-                !fingerprint.same_value(struct_)
             }
         }
     }
 
     fn into_value(self) -> Option<Value> {
         match self {
-            Self::None | Self::Deleted => None,
-            Self::Fresh { container } | Self::Cached { container, .. } => {
+            Self::Empty => None,
+            Self::Filled(container) => {
                 let struct_ @ Value::Struct(_) =
                     container.take().expect("Could not take global value ")
                 else {
@@ -2508,14 +2391,12 @@ impl GlobalValueImpl {
 }
 
 impl GlobalValue {
-    pub fn none() -> Self {
-        Self(GlobalValueImpl::None)
+    pub fn empty() -> Self {
+        Self(GlobalValueImpl::Empty)
     }
 
-    pub fn cached(val: Value) -> PartialVMResult<Self> {
-        Ok(Self(
-            GlobalValueImpl::cached(val, None).map_err(|(err, _val)| err)?,
-        ))
+    pub fn create(val: Value) -> PartialVMResult<Self> {
+        Ok(Self(GlobalValueImpl::fill(val).map_err(|(err, _val)| err)?))
     }
 
     pub fn move_from(&mut self) -> PartialVMResult<Value> {
@@ -2532,15 +2413,6 @@ impl GlobalValue {
 
     pub fn exists(&self) -> PartialVMResult<bool> {
         self.0.exists()
-    }
-
-    pub fn into_effect(self) -> Option<Op<Value>> {
-        #[allow(deprecated)]
-        self.0.into_effect()
-    }
-
-    pub fn is_mutated(&self) -> bool {
-        self.0.is_mutated()
     }
 
     pub fn into_value(self) -> Option<Value> {
@@ -3596,8 +3468,8 @@ impl GlobalValue {
         }
 
         match &self.0 {
-            G::None | G::Deleted => None,
-            G::Cached { container, .. } | G::Fresh { container } => Some(Wrapper(container)),
+            G::Empty => None,
+            G::Filled(container) => Some(Wrapper(container)),
         }
     }
 }
