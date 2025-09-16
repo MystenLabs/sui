@@ -2,6 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::balance_checks;
+use crate::accumulators::coin_reservation::CoinReservationResolver;
+use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
@@ -896,6 +899,7 @@ pub struct AuthorityState {
     /// The database
     input_loader: TransactionInputLoader,
     execution_cache_trait_pointers: ExecutionCacheTraitPointers,
+    coin_reservation_resolver: CoinReservationResolver,
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -1027,6 +1031,12 @@ impl AuthorityState {
                 }
             }
         }
+
+        let withdraws = tx_data.process_funds_withdrawals(&self.coin_reservation_resolver)?;
+        balance_checks::check_balances_available(
+            &*self.execution_cache_trait_pointers.child_object_resolver,
+            &withdraws,
+        )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
@@ -1953,6 +1963,8 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
+
+        let kind = rewrite_transaction_for_coin_reservations(&self.coin_reservation_resolver, kind);
 
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
@@ -3417,6 +3429,10 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
+        let coin_reservation_resolver = CoinReservationResolver::new(
+            execution_cache_trait_pointers.object_cache_reader.clone(),
+        );
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3424,6 +3440,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
             execution_cache_trait_pointers,
+            coin_reservation_resolver,
             indexes,
             rpc_index,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),

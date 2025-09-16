@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulators::coin_reservation::CoinReservationResolver,
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::{Schedulable, WithdrawType},
@@ -43,6 +44,7 @@ use super::{overload_tracker::OverloadTracker, PendingCertificate};
 pub struct ExecutionScheduler {
     object_cache_read: Arc<dyn ObjectCacheRead>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
+    coin_reservation_resolver: Arc<CoinReservationResolver>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     balance_withdraw_scheduler: Arc<Mutex<Option<BalanceWithdrawScheduler>>>,
@@ -95,9 +97,14 @@ impl ExecutionScheduler {
                 &object_cache_read,
                 child_object_resolver,
             )));
+
+        let coin_reservation_resolver =
+            Arc::new(CoinReservationResolver::new(object_cache_read.clone()));
+
         Self {
             object_cache_read,
             transaction_cache_read,
+            coin_reservation_resolver,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
             balance_withdraw_scheduler,
@@ -255,7 +262,7 @@ impl ExecutionScheduler {
         for (cert, version, _) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
-                .process_funds_withdrawals()
+                .process_funds_withdrawals(&*self.coin_reservation_resolver)
                 .expect("Balance withdraws should have already been checked");
             assert!(!tx_withdraws.is_empty());
             if let Some(prev_version) = prev_version {

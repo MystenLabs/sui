@@ -20,6 +20,7 @@ pub const BALANCE_CREATE_REWARDS_FUNCTION_NAME: &IdentStr = ident_str!("create_s
 pub const BALANCE_DESTROY_REBATES_FUNCTION_NAME: &IdentStr = ident_str!("destroy_storage_rebates");
 pub const SEND_TO_ACCOUNT_FUNCTION_NAME: &IdentStr = ident_str!("send_to_account");
 pub const WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME: &IdentStr = ident_str!("withdraw_from_account");
+pub const BALANCE_REDEEM_FUNDS_FUNCTION_NAME: &IdentStr = ident_str!("redeem_funds");
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]

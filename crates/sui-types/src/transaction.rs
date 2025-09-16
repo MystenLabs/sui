@@ -6,6 +6,7 @@ use super::{base_types::*, error::*, SUI_BRIDGE_OBJECT_ID};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::Balance;
+use crate::coin_reservation::{self, is_coin_reservation_digest, CoinReservationResolverTrait};
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
@@ -643,7 +644,11 @@ impl CallArg {
         match self {
             CallArg::Pure(_) => vec![],
             CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+                if is_coin_reservation_digest(&object_ref.2) {
+                    vec![]
+                } else {
+                    vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+                }
             }
             CallArg::Object(ObjectArg::SharedObject {
                 id,
@@ -692,6 +697,14 @@ impl CallArg {
                 );
             }
             CallArg::Object(o) => match o {
+                ObjectArg::ImmOrOwnedObject(obj_ref) if is_coin_reservation_digest(&obj_ref.2) => {
+                    if !config.enable_coin_reservation() {
+                        return Err(UserInputError::Unsupported(
+                            "coin reservation backward compatibility layer is not enabled"
+                                .to_string(),
+                        ));
+                    }
+                }
                 ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
                 ObjectArg::Receiving(_) => {
                     if !config.receiving_objects_supported() {
@@ -1195,6 +1208,17 @@ impl ProgrammableTransaction {
         Ok(())
     }
 
+    pub fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        self.inputs.iter().filter_map(|arg| match arg {
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
+                if is_coin_reservation_digest(&obj_ref.2) =>
+            {
+                Some(*obj_ref)
+            }
+            _ => None,
+        })
+    }
+
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         self.inputs.iter().filter_map(|arg| match arg {
             CallArg::Pure(_)
@@ -1399,6 +1423,13 @@ impl TransactionKind {
         };
 
         Some((e.computation_charge + e.storage_charge, e.storage_rebate))
+    }
+
+    pub fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        match self {
+            Self::ProgrammableTransaction(pt) => Either::Left(pt.coin_reservation_obj_refs()),
+            _ => Either::Right(iter::empty()),
+        }
     }
 
     /// Returns an iterator of all shared input objects used by this transaction.
@@ -2190,6 +2221,8 @@ pub trait TransactionDataAPI {
 
     fn receiving_objects(&self) -> Vec<ObjectRef>;
 
+    fn coin_reservation_obj_refs(&self) -> Vec<ObjectRef>;
+
     // Dependency (input, package & receiving) objects that already have a version,
     // and do not require version assignment from consensus.
     // Returns move objects, package objects and receiving objects.
@@ -2201,7 +2234,10 @@ pub trait TransactionDataAPI {
     /// reserved amount. This method aggregates all withdraw operations for the same account by
     /// merging their reservations. Each account object ID is derived from the type parameter of
     /// each withdraw operation.
-    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
+    fn process_funds_withdrawals(
+        &self,
+        coin_reservation_resolver: impl CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
 
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
@@ -2294,6 +2330,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             inputs.extend(
                 self.gas()
                     .iter()
+                    .filter(|obj_ref| !is_coin_reservation_digest(&obj_ref.2))
                     .map(|obj_ref| InputObjectKind::ImmOrOwnedMoveObject(*obj_ref)),
             );
         }
@@ -2306,6 +2343,16 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn receiving_objects(&self) -> Vec<ObjectRef> {
         self.kind.receiving_objects()
+    }
+
+    fn coin_reservation_obj_refs(&self) -> Vec<ObjectRef> {
+        self.gas_data
+            .payment
+            .iter()
+            .cloned()
+            .filter(|obj_ref| is_coin_reservation_digest(&obj_ref.2))
+            .chain(self.kind.coin_reservation_obj_refs())
+            .collect()
     }
 
     fn fastpath_dependency_objects(
@@ -2329,10 +2376,14 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok((move_objects, packages, receiving_objects))
     }
 
-    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
+    fn process_funds_withdrawals(
+        &self,
+        coin_reservation_resolver: impl CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = Vec::new();
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.
+
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
         // First get all withdraw arguments.
@@ -2349,6 +2400,10 @@ impl TransactionDataAPI for TransactionDataV1 {
                     }
                 }
             }
+        }
+
+        for obj in self.kind.coin_reservation_obj_refs() {
+            withdraws.push(coin_reservation_resolver.resolve_funds_withdrawal(obj)?);
         }
 
         // Accumulate all withdraws per account.
@@ -2396,10 +2451,24 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn has_funds_withdrawals(&self) -> bool {
+        if self
+            .gas_data
+            .payment
+            .iter()
+            .any(|obj_ref| is_coin_reservation_digest(&obj_ref.2))
+        {
+            return true;
+        }
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             for input in &pt.inputs {
-                if matches!(input, CallArg::FundsWithdrawal(_)) {
-                    return true;
+                match input {
+                    CallArg::FundsWithdrawal(_) => return true,
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
+                        if is_coin_reservation_digest(&obj_ref.2) =>
+                    {
+                        return true
+                    }
+                    _ => {}
                 }
             }
         }
@@ -2503,6 +2572,12 @@ pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
     pub accumulator_object_init_shared_version: Option<SequenceNumber>,
+}
+
+impl TxValidityCheckContext<'_> {
+    pub fn accumulators_enabled(&self) -> bool {
+        self.config.enable_accumulators() && self.accumulator_object_init_shared_version.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -2726,7 +2801,7 @@ impl SenderSignedData {
 
         // CRITICAL!!
         // Users cannot send system transactions.
-        let tx_data = &self.transaction_data();
+        let tx_data = self.transaction_data();
         fp_ensure!(
             !tx_data.is_system_tx(),
             SuiError::UserInputError {
@@ -2746,15 +2821,67 @@ impl SenderSignedData {
 
         if tx_data.has_funds_withdrawals() {
             fp_ensure!(
-                context.config.enable_accumulators()
-                    && context.accumulator_object_init_shared_version.is_some(),
+                context.accumulators_enabled(),
                 SuiError::UserInputError {
                     error: UserInputError::Unsupported(
                         "Address balance withdraw is not enabled".to_string()
                     )
                 }
             );
-            tx_data.process_funds_withdrawals()?;
+        }
+
+        let coin_reservation_obj_refs = tx_data.coin_reservation_obj_refs();
+        fp_ensure!(
+            coin_reservation_obj_refs.is_empty()
+                || (context.accumulators_enabled() && context.config.enable_coin_reservation()),
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "coin reservation backward compatibility layer is not enabled".to_string()
+                )
+            }
+        );
+
+        // each coin reservation object ref will result in two additional commands added to the PTB
+        // during rewriting. This means that all existing Argument::Result() values need to be offset.
+        // The highest valid result index is the number of commands in the PTB. This means that the
+        // number of current commands plus the number of coin reservation object refs times 2 must fit
+        // in a u16. Protocol config currently limits commands to 1024, but this check is intended to
+        // be future-proof even if the protocol config limit is increased.
+        let num_commands = tx_data.kind().num_commands();
+        fp_ensure!(
+            num_commands + coin_reservation_obj_refs.len() * 2 <= u16::MAX as usize,
+            SuiError::UserInputError {
+                // Don't worry too much about whether this error is pretty, it should never be hit
+                error: UserInputError::SizeLimitExceeded {
+                    limit: "commands + coin reservation object refs * 2 <= u16::MAX".to_string(),
+                    value: format!(
+                        "{} + {} * 2 = {}",
+                        num_commands,
+                        coin_reservation_obj_refs.len(),
+                        num_commands + coin_reservation_obj_refs.len() * 2
+                    ),
+                }
+            }
+        );
+
+        for reservation_obj_ref in tx_data.coin_reservation_obj_refs() {
+            let parsed = coin_reservation::parse_object_ref(&reservation_obj_ref).ok_or(
+                SuiError::UserInputError {
+                    error: UserInputError::Unsupported(
+                        "invalid coin reservation object ref".to_string(),
+                    ),
+                },
+            )?;
+
+            // TODO: when we support multi-epoch validity, check if it is valid in the current or next epoch
+            fp_ensure!(
+                parsed.epoch_id == context.epoch,
+                SuiError::UserInputError {
+                    error: UserInputError::TransactionNotValidDuringThisEpoch {
+                        valid_epoch: parsed.epoch_id,
+                    },
+                }
+            );
         }
 
         // Enforce overall transaction size limit.

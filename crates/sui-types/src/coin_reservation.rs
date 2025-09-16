@@ -25,8 +25,17 @@ use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     committee::EpochId,
     digests::ObjectDigest,
-    error::SuiError,
+    error::{SuiError, UserInputResult},
+    transaction::FundsWithdrawalArg,
 };
+
+/// Trait for resolving funds withdrawal from a coin reservation
+pub trait CoinReservationResolverTrait {
+    fn resolve_funds_withdrawal(
+        &self,
+        coin_reservation: ObjectRef,
+    ) -> UserInputResult<FundsWithdrawalArg>;
+}
 
 // Derived with: echo "accumulator id xor mask" | sha256sum
 // This mask is applied to the ID field in order to prevent clients from looking up
@@ -56,6 +65,12 @@ pub fn parse_digest(digest: &ObjectDigest) -> Option<(EpochId, u64 /* reservatio
     } else {
         None
     }
+}
+
+pub fn is_coin_reservation_digest(digest: &ObjectDigest) -> bool {
+    let inner = digest.inner();
+    let last_20_bytes: &[u8; 20] = inner[12..32].try_into().unwrap();
+    *last_20_bytes == COIN_RESERVATION_MAGIC
 }
 
 pub fn encode_digest(epoch_id: EpochId, reservation_amount: u64) -> Result<ObjectDigest, SuiError> {
@@ -125,6 +140,15 @@ mod tests {
     }
 
     #[test]
+    fn test_is_coin_reservation_digest() {
+        let digest = ObjectDigest::random();
+        assert!(!is_coin_reservation_digest(&digest));
+
+        let digest = encode_digest(42, 1232348999).unwrap();
+        assert!(is_coin_reservation_digest(&digest));
+    }
+
+    #[test]
     fn test_encode_and_parse_digest() {
         let original_epoch = 42;
         let original_reservation_amount = 1232348999;
@@ -147,7 +171,6 @@ mod tests {
 
     #[test]
     fn test_parse_object_ref_with_valid_digest() {
-
         let id = ObjectID::random();
         let encoded_obj_ref = encode_object_ref(id, SequenceNumber::new(), 42, 1232348999).unwrap();
 
