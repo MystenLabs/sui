@@ -305,15 +305,13 @@ impl Inner<'_> {
         child_ty_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<(MoveObjectType, GlobalValue, ObjectFingerprint)>> {
-        // we copy the reference to the protocol config ahead of time for lifetime reasons
-        let protocol_config = self.protocol_config;
         // retrieve the object from storage if it exists
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
                     child_move_type.clone(),
-                    GlobalValue::none(),
-                    ObjectFingerprint::none(protocol_config),
+                    GlobalValue::empty(),
+                    ObjectFingerprint::none(),
                 )))
             }
             Some(obj) => obj,
@@ -334,16 +332,14 @@ impl Inner<'_> {
         };
         // save a fingerprint
         let fingerprint =
-            ObjectFingerprint::preexisting(protocol_config, &parent, child_move_type, &v).map_err(
-                |e| {
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                        format!("Failed to fingerprint value for object {child}. Error: {e}"),
-                    )
-                },
-            )?;
+            ObjectFingerprint::preexisting(&parent, child_move_type, &v).map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Failed to fingerprint value for object {child}. Error: {e}"),
+                )
+            })?;
         // generate a global value
         let global_value =
-            match GlobalValue::cached(v) {
+            match GlobalValue::create(v) {
                 Ok(gv) => gv,
                 Err(e) => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
@@ -613,8 +609,8 @@ impl<'a> ChildObjectStore<'a> {
             }
             (value, fingerprint)
         } else {
-            let fingerprint = ObjectFingerprint::none(self.inner.protocol_config);
-            (GlobalValue::none(), fingerprint)
+            let fingerprint = ObjectFingerprint::none();
+            (GlobalValue::empty(), fingerprint)
         };
         if let Err((e, _)) = value.move_to(child_value) {
             return Err(
@@ -728,58 +724,27 @@ impl<'a> ChildObjectStore<'a> {
 
     // retrieve the `Op` effects for the child objects
     pub(super) fn take_effects(&mut self) -> PartialVMResult<ChildObjectEffects> {
-        if self.inner.protocol_config.minimize_child_object_mutations() {
-            let v1_effects = std::mem::take(&mut self.store)
-                .into_iter()
-                .map(|(id, child_object)| {
-                    let ChildObject {
-                        owner,
-                        ty,
-                        value,
-                        fingerprint,
-                    } = child_object;
-                    #[cfg(debug_assertions)]
-                    let dirty_flag_mutated = value.is_mutated();
-                    let final_value = value.into_value();
-                    let object_changed =
-                        fingerprint.object_has_changed(&owner, &ty, &final_value)?;
-                    // The old dirty flag was pessimistic in its tracking of mutations, meaning
-                    // it would mark mutations even if the value remained the same.
-                    // This means that if the object changed, the dirty flag must have been marked.
-                    // However, we can't guarantee the opposite.
-                    // object changed ==> dirty flag mutated
-                    #[cfg(debug_assertions)]
-                    debug_assert!(!object_changed || dirty_flag_mutated);
-                    let child_effect = ChildObjectEffectV1 {
-                        owner,
-                        ty,
-                        final_value,
-                        object_changed,
-                    };
-                    Ok((id, child_effect))
-                })
-                .collect::<PartialVMResult<_>>()?;
-            Ok(ChildObjectEffects::V1(v1_effects))
-        } else {
-            let v0_effects = std::mem::take(&mut self.store)
-                .into_iter()
-                .filter_map(|(id, child_object)| {
-                    let ChildObject {
-                        owner,
-                        ty,
-                        value,
-                        fingerprint: _fingerprint,
-                    } = child_object;
-                    let effect = value.into_effect()?;
-                    // should be disabled if the feature is disabled
-                    #[cfg(debug_assertions)]
-                    debug_assert!(_fingerprint.is_disabled());
-                    let child_effect = ChildObjectEffectV0 { owner, ty, effect };
-                    Some((id, child_effect))
-                })
-                .collect();
-            Ok(ChildObjectEffects::V0(v0_effects))
-        }
+        let effects = std::mem::take(&mut self.store)
+            .into_iter()
+            .map(|(id, child_object)| {
+                let ChildObject {
+                    owner,
+                    ty,
+                    value,
+                    fingerprint,
+                } = child_object;
+                let final_value = value.into_value();
+                let object_changed = fingerprint.object_has_changed(&owner, &ty, &final_value)?;
+                let child_effect = ChildObjectEffectV1 {
+                    owner,
+                    ty,
+                    final_value,
+                    object_changed,
+                };
+                Ok((id, child_effect))
+            })
+            .collect::<PartialVMResult<_>>()?;
+        Ok(ChildObjectEffects::V1(effects))
     }
 
     pub(super) fn all_active_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
