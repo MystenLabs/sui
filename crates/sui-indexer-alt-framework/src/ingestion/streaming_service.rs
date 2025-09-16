@@ -1,10 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use async_trait::async_trait;
 use futures::StreamExt;
 use sui_rpc::{
     field::{FieldMask, FieldMaskUtil},
     proto::sui::rpc::v2beta2::{
-        subscription_service_client::SubscriptionServiceClient,
-        SubscribeCheckpointsRequest,
+        subscription_service_client::SubscriptionServiceClient, SubscribeCheckpointsRequest,
         SubscribeCheckpointsResponse,
     },
 };
@@ -41,10 +43,11 @@ impl StreamingService for GRPCStreamingService {
     async fn start_streaming(&mut self) -> Result<()> {
         let mut client = SubscriptionServiceClient::connect(self.endpoint.clone())
             .await
-            .map_err(|err|Error::RpcClientError(Status::from_error(err.into())))?;
+            .map_err(|err| Error::RpcClientError(Status::from_error(err.into())))?;
 
         // Request all the fields we need to construct CheckpointData
         let mut request = SubscribeCheckpointsRequest::default();
+        // TODO: we probably don't need all of these fields, trim down later.
         request.read_mask = Some(FieldMask::from_paths([
             "summary.bcs",
             "signature",
@@ -68,28 +71,20 @@ impl StreamingService for GRPCStreamingService {
     }
 
     async fn next_checkpoint(&mut self) -> Result<CheckpointData> {
-        let stream = self
-            .stream
-            .as_mut()
-            .ok_or_else(|| {
-                Error::StreamingError(
-                    "Stream not initialized. Call start_streaming first.".to_string(),
-                )
-            })?;
+        let stream = self.stream.as_mut().ok_or_else(|| {
+            Error::StreamingError("Stream not initialized. Call start_streaming first.".to_string())
+        })?;
 
         match stream.next().await {
             Some(Ok(response)) => {
-                let checkpoint = response
-                    .checkpoint
-                    .ok_or_else(|| {
-                        Error::StreamingError(
-                            "Checkpoint data missing in response".to_string(),
-                        )
-                    })?;
+                let checkpoint = response.checkpoint.ok_or_else(|| {
+                    Error::StreamingError("Checkpoint data missing in response".to_string())
+                })?;
 
                 // Use the conversion function from sui-rpc-api
-                checkpoint_data_try_from_proto(&checkpoint)
-                    .map_err(|e| Error::StreamingError(format!("Failed to parse checkpoint: {}", e)))
+                checkpoint_data_try_from_proto(&checkpoint).map_err(|e| {
+                    Error::StreamingError(format!("Failed to parse checkpoint: {}", e))
+                })
             }
             Some(Err(e)) => Err(Error::RpcClientError(e)),
             None => Err(Error::StreamingError(
@@ -102,12 +97,12 @@ impl StreamingService for GRPCStreamingService {
 #[cfg(test)]
 pub mod test_utils {
     use super::*;
-    use std::collections::VecDeque;
     use crate::types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+    use std::collections::VecDeque;
 
     enum MockCheckpointOrError {
         Checkpoint(u64),
-        Error
+        Error,
     }
 
     /// Mock streaming service for testing
@@ -122,19 +117,23 @@ pub mod test_utils {
         {
             let checkpoints: VecDeque<_> = checkpoint_range
                 .into_iter()
-                .map(|n| MockCheckpointOrError::Checkpoint(n))
+                .map(MockCheckpointOrError::Checkpoint)
                 .collect();
-            Self { checkpoints_or_errors: checkpoints }
+            Self {
+                checkpoints_or_errors: checkpoints,
+            }
         }
 
         /// Insert an error at the back of the queue.
         pub fn insert_error(&mut self) {
-            self.checkpoints_or_errors.push_back(MockCheckpointOrError::Error);
+            self.checkpoints_or_errors
+                .push_back(MockCheckpointOrError::Error);
         }
 
         /// Insert a checkpoint at the back of the queue.
         pub fn insert_checkpoint(&mut self, sequence_number: u64) {
-            self.checkpoints_or_errors.push_back(MockCheckpointOrError::Checkpoint(sequence_number));
+            self.checkpoints_or_errors
+                .push_back(MockCheckpointOrError::Checkpoint(sequence_number));
         }
 
         pub fn insert_checkpoint_range<I>(&mut self, checkpoint_range: I)
@@ -142,7 +141,8 @@ pub mod test_utils {
             I: IntoIterator<Item = u64>,
         {
             for sequence_number in checkpoint_range {
-                self.checkpoints_or_errors.push_back(MockCheckpointOrError::Checkpoint(sequence_number));
+                self.checkpoints_or_errors
+                    .push_back(MockCheckpointOrError::Checkpoint(sequence_number));
             }
         }
     }
@@ -160,8 +160,10 @@ pub mod test_utils {
                     let mut builder = TestCheckpointDataBuilder::new(sequence_number);
                     Ok(builder.build_checkpoint())
                 }
-                Some(MockCheckpointOrError::Error) => Err(Error::StreamingError("Failed to stream checkpoint".to_string())),
-                None => Err(Error::StreamingError("No more checkpoints".to_string()))
+                Some(MockCheckpointOrError::Error) => Err(Error::StreamingError(
+                    "Failed to stream checkpoint".to_string(),
+                )),
+                None => Err(Error::StreamingError("No more checkpoints".to_string())),
             }
         }
     }

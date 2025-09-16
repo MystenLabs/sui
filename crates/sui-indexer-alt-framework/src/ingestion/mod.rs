@@ -191,7 +191,7 @@ impl IngestionService {
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.ingest_concurrency);
 
         // Create the streaming service
-        let streaming_service = streaming_endpoint.map(|s| GRPCStreamingService::new(s));
+        let streaming_service = streaming_endpoint.map(GRPCStreamingService::new);
 
         let regulator = regulator(
             streaming_service,

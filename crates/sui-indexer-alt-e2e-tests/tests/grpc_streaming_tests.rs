@@ -1,22 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
+use std::time::Duration;
 
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
-use sui_types::full_checkpoint_content::CheckpointData;
 use sui_indexer_alt_framework::{
     cluster::IndexerCluster,
     ingestion::ClientArgs,
-    pipeline::{concurrent::{self, ConcurrentConfig}, Processor}
+    pipeline::{
+        concurrent::{self, ConcurrentConfig},
+        Processor,
+    },
 };
-use sui_pg_db::{temp::get_available_port, Db, DbArgs};
+use sui_pg_db::{Db, DbArgs};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::full_checkpoint_content::CheckpointData;
 use tempfile::tempdir;
 use test_cluster::TestClusterBuilder;
 
@@ -42,7 +42,10 @@ impl Processor for TxCounts {
     const NAME: &'static str = "tx_counts";
     type Value = StoredTxCount;
 
-    fn process(&self, checkpoint: &std::sync::Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+    fn process(
+        &self,
+        checkpoint: &std::sync::Arc<CheckpointData>,
+    ) -> anyhow::Result<Vec<Self::Value>> {
         Ok(vec![StoredTxCount {
             cp_sequence_number: checkpoint.checkpoint_summary.sequence_number as i64,
             count: checkpoint.transactions.len() as i64,
@@ -78,8 +81,9 @@ async fn transfer_coin(
     let gas_obj = gas_objs.1.object_ref();
 
     let tx_data = TestTransactionBuilder::new(sender, gas_obj, 1000)
-        .transfer_sui(Some(1000), sender).build();
-    let tx = wallet.sign_transaction(&tx_data);
+        .transfer_sui(Some(1000), sender)
+        .build();
+    let tx = wallet.sign_transaction(&tx_data).await;
 
     wallet.execute_transaction_must_succeed(tx).await.digest
 }
@@ -108,22 +112,16 @@ async fn test_indexer_cluster_with_grpc_streaming() {
         transfer_coin(wallet).await;
     }
 
-    // Wait a bit for checkpoints to be created
-    // tokio::time::sleep(Duration::from_secs(2)).await;
-
-    // Configure metrics
-    let metrics_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
-
     // Set up the indexer with gRPC streaming endpoint from TestCluster
     let client_args = ClientArgs {
-            local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
-            remote_store_url: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
-            // Use the TestCluster's RPC URL as the gRPC streaming endpoint
-            streaming_endpoint: Some(test_cluster.rpc_url().to_string()),
-        };
+        local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
+        remote_store_url: None,
+        rpc_api_url: None,
+        rpc_username: None,
+        rpc_password: None,
+        // Use the TestCluster's RPC URL as the gRPC streaming endpoint
+        streaming_endpoint: Some(test_cluster.rpc_url().to_string()),
+    };
 
     // Create writer/reader for database operations
     let reader = Db::for_read(url.clone(), DbArgs::default()).await.unwrap();
@@ -178,8 +176,8 @@ async fn test_indexer_cluster_with_grpc_streaming() {
             .unwrap();
 
         println!("Tx counts: {:?}", counts);
-        // We should have processed checkpoints 0-4
-        assert!(counts.len() > 0);
+        // We should have processed some checkpoints.
+        assert!(!counts.is_empty());
         for (i, count) in counts.iter().enumerate() {
             assert_eq!(count.cp_sequence_number, i as i64);
             // Each checkpoint should have at least one transaction
@@ -189,7 +187,6 @@ async fn test_indexer_cluster_with_grpc_streaming() {
 
     // Verify metrics show that checkpoints were ingested
     assert!(metrics.total_ingested_checkpoints.get() >= 5);
-    // assert_eq!(metrics.latest_ingested_checkpoint.get(), 4);
 
     // Verify pipeline metrics
     assert!(
