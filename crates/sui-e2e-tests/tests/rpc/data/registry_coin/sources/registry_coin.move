@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Example coin using the new CoinRegistry API
-module registry_coin::registry_coin {
-	use sui::{
-		coin::{Self, TreasuryCap},
-		coin_registry::{Self, MetadataCap, CoinRegistry, Currency},
-		transfer::{Self, Receiving},
-		tx_context::{Self, TxContext}
-	};
+module registry_coin::registry_coin;
+
+use sui::{
+	coin::{Self, TreasuryCap},
+	coin_registry::{Self, MetadataCap, CoinRegistry, Currency},
+	transfer::{Self, Receiving},
+	tx_context::{Self, TxContext}
+};
 
 	/// Name of the coin
 	public struct REGISTRY_COIN has drop {}
@@ -38,7 +39,7 @@ module registry_coin::registry_coin {
 	}
 
 	/// Mint new coins
-	public entry fun mint(
+	public fun mint(
 		treasury_cap: &mut TreasuryCap<REGISTRY_COIN>,
 		amount: u64,
 		recipient: address,
@@ -49,7 +50,7 @@ module registry_coin::registry_coin {
 	}
 
 	/// Update coin metadata using MetadataCap
-	public entry fun update_name(
+	public fun update_name(
 		currency: &mut Currency<REGISTRY_COIN>,
 		metadata_cap: &MetadataCap<REGISTRY_COIN>,
 		new_name: vector<u8>,
@@ -58,7 +59,7 @@ module registry_coin::registry_coin {
 	}
 
 	/// Register the supply after minting, consuming the TreasuryCap
-	public entry fun register_supply(
+	public fun register_supply(
 		currency: &mut Currency<REGISTRY_COIN>,
 		treasury_cap: TreasuryCap<REGISTRY_COIN>,
 	) {

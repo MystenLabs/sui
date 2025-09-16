@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Example coin using the BurnOnly supply state in CoinRegistry
-module burnonly_coin::burnonly_coin {
-	use sui::{
-		coin::{Self, TreasuryCap, Coin},
-		coin_registry::{Self, MetadataCap, CoinRegistry, Currency},
-		transfer::{Self, Receiving},
-		tx_context::{Self, TxContext}
-	};
+module burnonly_coin::burnonly_coin;
+
+use sui::{
+	coin::{Self, TreasuryCap, Coin},
+	coin_registry::{Self, MetadataCap, CoinRegistry, Currency},
+	transfer::{Self, Receiving},
+	tx_context::{Self, TxContext}
+};
 
 	/// Name of the coin
 	public struct BURNONLY_COIN has drop {}
@@ -38,7 +39,7 @@ module burnonly_coin::burnonly_coin {
 	}
 
 	/// Mint new coins
-	public entry fun mint(
+	public fun mint(
 		treasury_cap: &mut TreasuryCap<BURNONLY_COIN>,
 		amount: u64,
 		recipient: address,
@@ -49,12 +50,12 @@ module burnonly_coin::burnonly_coin {
 	}
 
 	/// Burn coins - this will always be allowed for BurnOnly coins
-	public entry fun burn(coin: Coin<BURNONLY_COIN>, treasury_cap: &mut TreasuryCap<BURNONLY_COIN>) {
+	public fun burn(coin: Coin<BURNONLY_COIN>, treasury_cap: &mut TreasuryCap<BURNONLY_COIN>) {
 		coin::burn(treasury_cap, coin);
 	}
 
 	/// Update coin metadata using MetadataCap
-	public entry fun update_name(
+	public fun update_name(
 		currency: &mut Currency<BURNONLY_COIN>,
 		metadata_cap: &MetadataCap<BURNONLY_COIN>,
 		new_name: vector<u8>,
@@ -64,11 +65,9 @@ module burnonly_coin::burnonly_coin {
 
 	/// Register the supply as BurnOnly, consuming the TreasuryCap
 	/// After this, no more minting is allowed, but burning is still permitted
-	public entry fun register_supply_as_burnonly(
+	public fun register_supply_as_burnonly(
 		currency: &mut Currency<BURNONLY_COIN>,
 		treasury_cap: TreasuryCap<BURNONLY_COIN>,
 	) {
 		coin_registry::make_supply_burn_only(currency, treasury_cap);
 	}
-}
-

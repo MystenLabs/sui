@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Example coin using the legacy create_currency API (v1)
-module legacy_coin::legacy_coin {
-	use std::option;
-	use sui::{coin::{Self, TreasuryCap}, transfer, tx_context::{Self, TxContext}, url};
+#[allow(deprecated_usage)]
+module legacy_coin::legacy_coin;
+
+use std::option;
+use sui::{coin::{Self, TreasuryCap}, transfer, tx_context::{Self, TxContext}, url};
 
 	/// Name of the coin
 	public struct LEGACY_COIN has drop {}
@@ -29,7 +31,7 @@ module legacy_coin::legacy_coin {
 	}
 
 	/// Mint new coins
-	public entry fun mint(
+	public fun mint(
 		treasury_cap: &mut TreasuryCap<LEGACY_COIN>,
 		amount: u64,
 		recipient: address,
@@ -38,5 +40,3 @@ module legacy_coin::legacy_coin {
 		let coin = coin::mint<LEGACY_COIN>(treasury_cap, amount, ctx);
 		transfer::public_transfer(coin, recipient);
 	}
-}
-

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Example regulated coin using create_regulated_currency_v3 API
-module regulated_coin::regulated_coin {
-	use sui::{
-		coin::{Self, TreasuryCap, DenyCapV2},
-		coin_registry::{Self, MetadataCap, CoinRegistry, Currency},
-		deny_list,
-		transfer::{Self, Receiving},
-		tx_context::{Self, TxContext}
-	};
+module regulated_coin::regulated_coin;
+
+use sui::{
+	coin::{Self, TreasuryCap, DenyCapV2},
+	coin_registry::{Self, MetadataCap, CoinRegistry, Currency},
+	deny_list,
+	transfer::{Self, Receiving},
+	tx_context::{Self, TxContext}
+};
 
 	/// Name of the coin
 	public struct REGULATED_COIN has drop {}
@@ -40,7 +41,7 @@ module regulated_coin::regulated_coin {
 	}
 
 	/// Mint new coins
-	public entry fun mint(
+	public fun mint(
 		treasury_cap: &mut TreasuryCap<REGULATED_COIN>,
 		amount: u64,
 		recipient: address,
@@ -51,7 +52,7 @@ module regulated_coin::regulated_coin {
 	}
 
 	/// Add an address to the deny list
-	public entry fun deny_address(
+	public fun deny_address(
 		deny_list: &mut deny_list::DenyList,
 		deny_cap: &mut DenyCapV2<REGULATED_COIN>,
 		address_to_deny: address,
