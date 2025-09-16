@@ -8,6 +8,7 @@ use crate::effects::{
 };
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
+
 use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
@@ -262,12 +263,11 @@ pub enum RawValidatorSubmitStatus {
     Rejected(RawRejectedStatus),
 }
 
-#[derive(Clone, prost::Oneof)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, prost::Enumeration)]
+#[repr(i32)]
 pub enum RawPingType {
-    #[prost(bool, tag = "5")]
-    FastPath(bool),
-    #[prost(bool, tag = "6")]
-    Consensus(bool),
+    FastPath = 0,
+    Consensus = 1,
 }
 
 #[derive(Clone, prost::Message)]
@@ -287,9 +287,9 @@ pub struct RawWaitForEffectsRequest {
     #[prost(bool, tag = "3")]
     pub include_details: bool,
 
-    /// if this is a ping request, then this is the type of ping.
-    #[prost(oneof = "RawPingType", tags = "5, 6")]
-    pub ping: Option<RawPingType>,
+    /// Set when this is a ping request, to differentiate between fastpath and consensus pings.
+    #[prost(enumeration = "RawPingType", optional, tag = "4")]
+    pub ping_type: Option<i32>,
 }
 
 #[derive(Clone, prost::Message)]

@@ -16,7 +16,6 @@ use prometheus::{
 };
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
     future::Future,
     io,
     net::{IpAddr, SocketAddr},
@@ -47,12 +46,8 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
-    base_types::SequenceNumber,
     digests::{TransactionDigest, TransactionEffectsDigest},
-    effects::TransactionEffectsV2,
     error::UserInputError,
-    execution_status::ExecutionStatus,
-    gas::GasCostSummary,
 };
 use sui_types::{
     effects::TransactionEffects,
@@ -655,12 +650,6 @@ impl ValidatorService {
             .with_label_values(&[req_type])
             .start_timer();
 
-        // If this is a ping request, we assume at least one transaction is provided for the indexing and result purposes.
-        if is_ping_request {
-            transaction_indexes.push(0);
-            results.push(None);
-        }
-
         for (idx, tx_bytes) in request.transactions.iter().enumerate() {
             let transaction = match bcs::from_bytes::<Transaction>(tx_bytes) {
                 Ok(txn) => txn,
@@ -873,8 +862,19 @@ impl ValidatorService {
                 .collect()
         };
 
-        for (idx, consensus_position) in transaction_indexes.into_iter().zip(consensus_positions) {
-            results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
+        if is_ping_request {
+            // For ping requests, return the special consensus position.
+            assert_eq!(consensus_positions.len(), 1);
+            results.push(Some(SubmitTxResult::Submitted {
+                consensus_position: consensus_positions[0],
+            }));
+        } else {
+            // Otherwise, return the consensus position for each transaction.
+            for (idx, consensus_position) in
+                transaction_indexes.into_iter().zip(consensus_positions)
+            {
+                results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
+            }
         }
 
         Ok((
@@ -1061,6 +1061,7 @@ impl ValidatorService {
     )]
     async fn handle_submit_to_consensus_for_position(
         &self,
+        // Empty when this is a ping request.
         consensus_transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         submitter_client_addr: Option<IpAddr>,
@@ -1505,24 +1506,7 @@ impl ValidatorService {
 
         let mut last_status = None;
         let details = if request.include_details {
-            Some(Box::new(ExecutedData {
-                effects: TransactionEffects::V2(TransactionEffectsV2::new(
-                    ExecutionStatus::Success,
-                    epoch_store.epoch(),
-                    GasCostSummary::default(),
-                    vec![],
-                    BTreeSet::new(),
-                    TransactionDigest::ZERO,
-                    SequenceNumber::default(),
-                    BTreeMap::new(),
-                    None,
-                    None,
-                    vec![],
-                )),
-                events: None,
-                input_objects: vec![],
-                output_objects: vec![],
-            }))
+            Some(Box::new(ExecutedData::default()))
         } else {
             None
         };

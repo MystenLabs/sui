@@ -19,6 +19,7 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
+use mysten_common::debug_fatal;
 use mysten_metrics::{
     spawn_monitored_task, GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS,
 };
@@ -761,7 +762,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        mut tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
         submitter_client_addr: Option<IpAddr>,
     ) {
         if transactions.is_empty() {
@@ -772,13 +773,10 @@ impl ConsensusAdapter {
                 .submit_inner(&transactions, epoch_store, &[], "ping", false)
                 .await;
 
-            debug_assert!(
-                tx_consensus_positions.is_some(),
-                "Ping check must have a consensus position channel"
-            );
-            let mut tx_consensus_positions = tx_consensus_positions;
             if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
                 let _ = tx_consensus_positions.send(consensus_positions);
+            } else {
+                debug_fatal!("Ping check must have a consensus position channel");
             }
             return;
         }

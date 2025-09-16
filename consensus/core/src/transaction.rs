@@ -3,7 +3,9 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use consensus_config::Epoch;
-use consensus_types::block::{BlockRef, Round, TransactionIndex, PING_TRANSACTION_INDEX};
+use consensus_types::block::{
+    BlockRef, Round, TransactionIndex, NUM_RESERVED_TRANSACTION_INDICES, PING_TRANSACTION_INDEX,
+};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
 use parking_lot::Mutex;
@@ -72,10 +74,19 @@ pub enum LimitReached {
 
 impl TransactionConsumer {
     pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
-        // As the TransactionIndex::MAX is reserved for the ping transaction, we need to ensure that the max number of transactions in a block is less than the transaction index max
-        // so we don't accidentally include a transaction in the ping's transaction position. As the ping's transaction position will always be considered as Fast Path certified,
-        // this could be deemeded dangerous as a transaction could be considered as Fast Path certified when it should have been (possibly) rejected.
-        assert!(context.protocol_config.max_num_transactions_in_block() < TransactionIndex::MAX as u64, "The max number of transactions in a block should be less than the transaction index max");
+        // max_num_transactions_in_block - 1 is the max possible transaction index in a block.
+        // TransactionIndex::MAX is reserved for the ping transaction.
+        // Indexes down to TransactionIndex::MAX - 8 are also reserved for future use.
+        // This check makes sure they do not overlap.
+        assert!(
+            context
+                .protocol_config
+                .max_num_transactions_in_block()
+                .saturating_sub(1)
+                < TransactionIndex::MAX.saturating_sub(NUM_RESERVED_TRANSACTION_INDICES) as u64,
+            "Unsupported max_num_transactions_in_block: {}",
+            context.protocol_config.max_num_transactions_in_block()
+        );
 
         Self {
             tx_receiver,
@@ -291,7 +302,7 @@ impl TransactionClient {
     /// to next proposed blocks.
     ///
     /// If `transactions` is empty, then this will be interpreted as a "ping" signal from the client in order to get information about the next
-    /// block and simulate a transaction inclusion to the next block. In this an empty vector of the transaction indexes will be returned as response
+    /// block and simulate a transaction inclusion to the next block. In this an empty vector of the transaction index will be returned as response
     /// and the block status receiver.
     pub async fn submit(
         &self,
@@ -424,7 +435,10 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use consensus_config::AuthorityIndex;
-    use consensus_types::block::{BlockDigest, BlockRef, PING_TRANSACTION_INDEX};
+    use consensus_types::block::{
+        BlockDigest, BlockRef, TransactionIndex, NUM_RESERVED_TRANSACTION_INDICES,
+        PING_TRANSACTION_INDEX,
+    };
     use futures::{stream::FuturesUnordered, StreamExt};
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::timeout;
@@ -899,7 +913,8 @@ mod tests {
     #[tokio::test]
     async fn ping_transaction_index_never_reached() {
         // Set the max number of transactions in a block to the max value of u16.
-        static MAX_NUM_TRANSACTIONS_IN_BLOCK: u64 = (u16::MAX as u64) - 1;
+        static MAX_NUM_TRANSACTIONS_IN_BLOCK: u64 =
+            (TransactionIndex::MAX - NUM_RESERVED_TRANSACTION_INDICES) as u64;
 
         // Ensure that enough space is allocated in the channel for the pending transactions, so we don't end up consuming the transactions in chunks.
         static MAX_PENDING_TRANSACTIONS: usize = 2 * MAX_NUM_TRANSACTIONS_IN_BLOCK as usize;
@@ -936,6 +951,12 @@ mod tests {
         assert_eq!(transactions.len() as u64, MAX_NUM_TRANSACTIONS_IN_BLOCK);
 
         let t: String = bcs::from_bytes(transactions.last().unwrap().data()).unwrap();
-        assert_eq!(t, format!("t {}", PING_TRANSACTION_INDEX - 2));
+        assert_eq!(
+            t,
+            format!(
+                "t {}",
+                PING_TRANSACTION_INDEX - NUM_RESERVED_TRANSACTION_INDICES - 1
+            )
+        );
     }
 }
