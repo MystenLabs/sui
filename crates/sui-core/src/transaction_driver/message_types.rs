@@ -43,12 +43,17 @@ impl SubmitTxRequest {
 
 impl SubmitTxRequest {
     pub fn into_raw(&self) -> Result<RawSubmitTxRequest, SuiError> {
-        Ok(RawSubmitTxRequest {
-            transactions: vec![bcs::to_bytes(&self.transaction)
+        let transactions = if let Some(transaction) = &self.transaction {
+            vec![bcs::to_bytes(transaction)
                 .map_err(|e| SuiError::TransactionSerializationError {
                     error: e.to_string(),
                 })?
-                .into()],
+                .into()]
+        } else {
+            vec![]
+        };
+        Ok(RawSubmitTxRequest {
+            transactions,
             ..Default::default()
         })
     }
