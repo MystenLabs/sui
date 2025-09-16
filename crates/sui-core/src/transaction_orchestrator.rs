@@ -43,7 +43,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
 use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
@@ -77,9 +77,6 @@ pub struct TransactionOrchestrator<A: Clone> {
     metrics: Arc<TransactionOrchestratorMetrics>,
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
-    td_effects_broadcaster: Sender<QuorumTransactionEffectsResult>,
-    _effects_merger_handle: JoinHandle<()>,
-    merged_effects_broadcaster: Sender<QuorumTransactionEffectsResult>,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -168,17 +165,6 @@ where
             None
         };
 
-        const EFFECTS_QUEUE_SIZE: usize = 20000;
-        let (td_effects_broadcaster, td_effects_receiver) =
-            tokio::sync::broadcast::channel(EFFECTS_QUEUE_SIZE);
-        let (merged_effects_broadcaster, _) = tokio::sync::broadcast::channel(EFFECTS_QUEUE_SIZE);
-
-        let qd_receiver = quorum_driver_handler.subscribe_to_effects();
-        let merged_sender = merged_effects_broadcaster.clone();
-        let _effects_merger_handle = spawn_monitored_task!(async move {
-            Self::merge_effects_streams(qd_receiver, td_effects_receiver, merged_sender).await;
-        });
-
         Self {
             quorum_driver_handler,
             validator_state,
@@ -188,9 +174,6 @@ where
             metrics,
             transaction_driver,
             td_percentage,
-            td_effects_broadcaster,
-            _effects_merger_handle,
-            merged_effects_broadcaster,
         }
     }
 }
@@ -313,6 +296,7 @@ where
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
+        let include_auxiliary_data = request.include_auxiliary_data;
 
         // Track whether TD is being used for this transaction
         let using_td = Arc::new(AtomicBool::new(false));
@@ -405,7 +389,22 @@ where
                     match result {
                         Ok(resp) => {
                             // First success gets returned.
-                            debug!(?tx_digest, "Execution succeeded, returning response");
+                            debug!("Execution succeeded, returning response");
+                            let QuorumTransactionResponse {
+                                effects,
+                                events,
+                                input_objects,
+                                output_objects,
+                                auxiliary_data,
+                            } = resp;
+                            // Filter fields based on request flags.
+                            let resp = QuorumTransactionResponse {
+                                effects,
+                                events: if include_events { events } else { None },
+                                input_objects: if include_input_objects { input_objects } else { None },
+                                output_objects: if include_output_objects { output_objects } else { None },
+                                auxiliary_data: if include_auxiliary_data { auxiliary_data } else { None },
+                            };
                             break Ok((resp, false));
                         }
                         Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
@@ -449,18 +448,14 @@ where
                                 } else {
                                     None
                                 };
-
                                 let input_objects = include_input_objects
                                     .then(|| self.validator_state.get_transaction_input_objects(&effects))
                                     .transpose()
                                     .map_err(QuorumDriverError::QuorumDriverInternalError)?;
-
-
                                 let output_objects = include_output_objects
                                     .then(|| self.validator_state.get_transaction_output_objects(&effects))
                                     .transpose()
                                     .map_err(QuorumDriverError::QuorumDriverInternalError)?;
-
                                 let response = QuorumTransactionResponse {
                                     effects: FinalizedEffects {
                                         effects,
@@ -516,7 +511,7 @@ where
         result
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?verified_transaction.digest()))]
+    #[instrument(level = "error", skip_all)]
     async fn execute_transaction_impl(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -622,7 +617,7 @@ where
         }
     }
 
-    #[instrument(level = "error", skip_all, err(level = "info"), fields(tx_digest = ?request.transaction.digest()))]
+    #[instrument(level = "error", skip_all, err(level = "info"))]
     async fn submit_with_transaction_driver(
         &self,
         td: &Arc<TransactionDriver<A>>,
@@ -661,19 +656,6 @@ where
                     details: other.to_string(),
                 },
             });
-
-        // Broadcast TD effects to the channel
-        let effects_queue_result = match &td_response {
-            Ok(qtx_response) => Ok((verified_transaction.clone().into_inner(), qtx_response)),
-            Err(e) => Err((tx_digest, e.clone())),
-        };
-
-        // Send to TD effects broadcast channel
-        if let Err(err) = self.td_effects_broadcaster.send(
-            effects_queue_result.map(|(transaction, response)| (transaction, response.clone())),
-        ) {
-            debug!(?tx_digest, "No subscriber found for TD effects: {}", err);
-        }
 
         match td_response {
             Err(e) => {
@@ -735,7 +717,12 @@ where
         })
     }
 
-    #[instrument(name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
+    #[instrument(
+        name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout",
+        level = "debug",
+        skip_all,
+        err(level = "info")
+    )]
     async fn wait_for_finalized_tx_executed_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
         transaction: &Transaction,
@@ -753,10 +740,7 @@ where
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
         };
-        debug!(
-            ?tx_digest,
-            "Waiting for finalized tx to be executed locally."
-        );
+        debug!("Waiting for finalized tx to be executed locally.");
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
             validator_state
@@ -855,50 +839,6 @@ where
         self.quorum_driver().authority_aggregator().load_full()
     }
 
-    pub fn subscribe_to_effects_queue(&self) -> Receiver<QuorumTransactionEffectsResult> {
-        self.merged_effects_broadcaster.subscribe()
-    }
-
-    /// Merges QD and TD effects streams into a single broadcast channel
-    async fn merge_effects_streams(
-        mut qd_receiver: Receiver<QuorumDriverEffectsQueueResult>,
-        mut td_receiver: Receiver<QuorumTransactionEffectsResult>,
-        merged_sender: Sender<QuorumTransactionEffectsResult>,
-    ) {
-        loop {
-            tokio::select! {
-                qd_result = qd_receiver.recv() => {
-                    match qd_result {
-                        Ok(effects) => {
-                            let _ = merged_sender.send(convert_to_quorum_transaction_effects_result(effects));
-                        }
-                        Err(RecvError::Closed) => {
-                            error!("QD effects channel closed unexpectedly");
-                            break;
-                        }
-                        Err(RecvError::Lagged(n)) => {
-                            warn!("QD effects receiver lagged by {} messages", n);
-                        }
-                    }
-                }
-                td_result = td_receiver.recv() => {
-                    match td_result {
-                        Ok(effects) => {
-                            let _ = merged_sender.send(effects);
-                        }
-                        Err(RecvError::Closed) => {
-                            error!("TD effects channel closed unexpectedly");
-                            break;
-                        }
-                        Err(RecvError::Lagged(n)) => {
-                            warn!("TD effects receiver lagged by {} messages", n);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     fn update_metrics(
         &'_ self,
         transaction: &Transaction,
@@ -981,26 +921,6 @@ where
         self.pending_tx_log.load_all_pending_transactions()
     }
 }
-
-// Convert from QuorumDriverEffectsQueueResult to QuorumTransactionEffectsResult
-fn convert_to_quorum_transaction_effects_result(
-    quorum_driver_effects_queue_result: QuorumDriverEffectsQueueResult,
-) -> QuorumTransactionEffectsResult {
-    match quorum_driver_effects_queue_result {
-        Ok((transaction, effects)) => Ok((
-            transaction,
-            QuorumTransactionResponse {
-                effects: FinalizedEffects::new_from_effects_cert(effects.effects_cert.into()),
-                events: effects.events,
-                input_objects: effects.input_objects,
-                output_objects: effects.output_objects,
-                auxiliary_data: effects.auxiliary_data,
-            },
-        )),
-        Err((tx_digest, err)) => Err((tx_digest, err)),
-    }
-}
-
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
 pub struct TransactionOrchestratorMetrics {

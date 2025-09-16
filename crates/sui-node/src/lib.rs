@@ -110,7 +110,6 @@ use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
-use sui_core::transaction_orchestrator::QuorumTransactionEffectsResult;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -1740,15 +1739,6 @@ impl SuiNode {
         &self,
     ) -> Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>> {
         self.transaction_orchestrator.clone()
-    }
-
-    pub fn subscribe_to_transaction_orchestrator_effects(
-        &self,
-    ) -> Result<tokio::sync::broadcast::Receiver<QuorumTransactionEffectsResult>> {
-        self.transaction_orchestrator
-            .as_ref()
-            .map(|to| to.subscribe_to_effects_queue())
-            .ok_or_else(|| anyhow::anyhow!("Transaction Orchestrator is not enabled in this node."))
     }
 
     /// This function awaits the completion of checkpoint execution of the current epoch,
