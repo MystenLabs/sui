@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    get_extension, get_extension_mut,
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
     NativesCostTable,
 };
@@ -40,9 +41,7 @@ fn emit_event(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 3);
 
-    let event_emit_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let event_emit_cost_params = get_extension!(context, NativesCostTable)?
         .event_emit_cost_params
         .clone();
 
@@ -64,7 +63,7 @@ fn emit_event(
 
     let ty_tag = context.type_to_type_tag(&ty_args.pop().unwrap())?;
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
 
     obj_runtime.emit_accumulator_event(
         accumulator,
