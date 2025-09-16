@@ -22,7 +22,7 @@ jobs:
           client-payload: >
             {
               "sui_commit": "${{ github.sha }}",
-              "push_to_dockerhub": false,
+              "push_to_dockerhub": true,
               "build_arm64": false,
               "services": true,
               "graphql_rpc": true,
