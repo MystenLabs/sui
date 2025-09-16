@@ -3,15 +3,18 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::{
-        analysis::LinkageAnalysis,
-        config::{LinkageConfig, ResolutionConfig},
-        resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
-        resolved_linkage::ResolvedLinkage,
+    static_programmable_transactions::{
+        linkage::{
+            analysis::LinkageAnalysis,
+            config::{LinkageConfig, ResolutionConfig},
+            resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
+            resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
+        },
+        loading::ast::Type,
     },
 };
 use move_binary_format::binary_config::BinaryConfig;
-use sui_types::{base_types::ObjectID, error::ExecutionError, transaction as P};
+use sui_types::{base_types::ObjectID, error::ExecutionError, move_package::MovePackage};
 
 #[derive(Debug)]
 pub struct LegacyLinkage {
@@ -21,11 +24,14 @@ pub struct LegacyLinkage {
 impl LinkageAnalysis for LegacyLinkage {
     fn compute_call_linkage(
         &self,
-        move_call: &P::ProgrammableMoveCall,
+        package: &ObjectID,
+        type_args: &[Type],
         store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError> {
-        Ok(ResolvedLinkage::from_resolution_table(
-            self.compute_call_linkage(move_call, store)?,
+    ) -> Result<ExecutableLinkage, ExecutionError> {
+        Ok(ExecutableLinkage::new(
+            ResolvedLinkage::from_resolution_table(
+                self.compute_call_linkage(package, type_args, store)?,
+            ),
         ))
     }
 
@@ -62,33 +68,51 @@ impl LegacyLinkage {
 
     fn compute_call_linkage(
         &self,
-        move_call: &P::ProgrammableMoveCall,
+        package: &ObjectID,
+        type_args: &[Type],
         store: &dyn PackageStore,
     ) -> Result<ResolutionTable, ExecutionError> {
         let mut resolution_table = self
             .internal
             .linkage_config
             .resolution_table_with_native_packages(store)?;
-        let pkg = get_package(&move_call.package, store)?;
-        let transitive_deps = pkg
-            .linkage_table()
-            .values()
-            .map(|info| info.upgraded_id)
-            .collect::<Vec<_>>();
-        for object_id in transitive_deps.iter() {
-            add_and_unify(
-                object_id,
-                store,
-                &mut resolution_table,
-                ConflictResolution::exact,
-            )?;
+
+        fn add_package(
+            object_id: &ObjectID,
+            store: &dyn PackageStore,
+            resolution_table: &mut ResolutionTable,
+            resolution_fn: fn(&MovePackage) -> Option<ConflictResolution>,
+        ) -> Result<(), ExecutionError> {
+            let pkg = get_package(object_id, store)?;
+            let transitive_deps = pkg
+                .linkage_table()
+                .values()
+                .map(|info| info.upgraded_id)
+                .collect::<Vec<_>>();
+            for object_id in transitive_deps.iter() {
+                add_and_unify(object_id, store, resolution_table, resolution_fn)?;
+            }
+            add_and_unify(object_id, store, resolution_table, resolution_fn)?;
+            Ok(())
         }
-        add_and_unify(
-            &move_call.package,
+
+        add_package(
+            package,
             store,
             &mut resolution_table,
             ConflictResolution::exact,
         )?;
+
+        for type_defining_id in type_args.iter().flat_map(|ty| ty.all_addresses()) {
+            // Type arguments are "at least" constraints
+            add_package(
+                &ObjectID::from(type_defining_id),
+                store,
+                &mut resolution_table,
+                ConflictResolution::at_least,
+            )?;
+        }
+
         Ok(resolution_table)
     }
 
