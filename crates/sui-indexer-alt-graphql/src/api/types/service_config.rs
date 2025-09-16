@@ -205,7 +205,7 @@ impl ServiceConfig {
         Ok(Some(limits.max_disassembled_module_size))
     }
 
-    /// Range of checkpoints for which data is available for a query type, field and optional filter.
+    /// Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
     async fn retention(
         &self,
         ctx: &Context<'_>,

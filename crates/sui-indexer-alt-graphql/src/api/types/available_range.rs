@@ -4,19 +4,9 @@
 use async_graphql::{Context, InputObject, Object};
 use std::sync::Arc;
 
-use crate::{
-    error::{bad_user_input, RpcError},
-    scope::Scope,
-    task::watermark::Watermarks,
-};
+use crate::{error::RpcError, scope::Scope, task::watermark::Watermarks};
 
 use super::checkpoint::Checkpoint;
-
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
-    #[error("Retention range not found for: {0}.{1}({2})")]
-    NotFound(String, String, String),
-}
 
 /// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint)
 ///
@@ -62,14 +52,18 @@ impl AvailableRange {
         ctx: &Context<'_>,
         scope: &Scope,
         retention_key: RetentionKey,
-    ) -> Result<Self, RpcError<Error>> {
+    ) -> Result<Self, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let pipelines = pipeline(retention_key)?;
+        let pipelines = pipeline(
+            &retention_key.type_,
+            &retention_key.field,
+            retention_key.filter.as_deref(),
+        );
 
         let lo_checkpoint =
             pipelines
                 .iter()
-                .try_fold(0, |acc: u64, pipeline| -> Result<u64, RpcError<Error>> {
+                .try_fold(0, |acc: u64, pipeline| -> Result<u64, RpcError> {
                     let watermark = watermarks.pipeline_lo_watermark(pipeline)?;
                     let checkpoint = watermark.checkpoint();
                     Ok(acc.max(checkpoint))
@@ -82,42 +76,20 @@ impl AvailableRange {
     }
 }
 
-/// Determine the pipeline name based on the query parameters
-fn pipeline(retention_key: RetentionKey) -> Result<Vec<String>, RpcError<Error>> {
-    // Map query type, function, and filter to pipeline names
-    // TODO: (henry) Could use some suggestions on how to store Query, field, filter to pipeline mapping
-    match (
-        retention_key.type_.as_str(),
-        retention_key.field.as_str(),
-        retention_key
-            .filter
-            .as_ref()
-            .filter(|s| !s.is_empty())
-            .map(|s| s.as_str()),
-    ) {
-        ("Query", "transactions", None) => Ok(vec!["tx_digests".to_string()]),
-        ("Query", "transactions", Some("affectedAddress")) => Ok(vec![
-            "tx_digests".to_string(),
-            "tx_affected_addresses".to_string(),
-        ]),
-        ("Query", "transactions", Some("affectedObject")) => Ok(vec![
-            "tx_digests".to_string(),
-            "tx_affected_objects".to_string(),
-        ]),
-        ("Query", "checkpoints", _) => Ok(vec![
-            "cp_sequence_numbers".to_string(),
-            "tx_digests".to_string(),
-        ]),
-        ("Query", "events", None) => Ok(vec![
-            "ev_struct_inst".to_string(),
-            "ev_emit_mod".to_string(),
-        ]),
-        ("Query", "events", Some("module")) => Ok(vec!["ev_emit_mod".to_string()]),
-        ("Query", "events", Some("type")) => Ok(vec!["ev_emit_mod".to_string()]),
-        _ => Err(bad_user_input(Error::NotFound(
-            retention_key.type_,
-            retention_key.field,
-            retention_key.filter.unwrap_or_default(),
-        ))),
+fn pipeline(type_: &str, field: &str, filter: Option<&str>) -> &'static [&'static str] {
+    match (type_, field, filter) {
+        ("Query", "transactions", None) => &["tx_digests"],
+        ("Query", "checkpoint", None) => &["cp_sequence_numbers"],
+        ("Query", "transactions", Some("function")) => &["tx_digests"],
+        ("Query", "transactions", Some("kind")) => &["tx_digests"],
+        ("Query", "transactions", Some("affectedAddress")) => {
+            &["tx_digests", "tx_affected_addresses"]
+        }
+        ("Query", "transactions", Some("affectedObject")) => &["tx_digests", "tx_affected_objects"],
+        ("Query", "checkpoints", None) => &["cp_sequence_numbers", "tx_digests"],
+        ("Query", "events", None) => &["ev_struct_inst", "ev_emit_mod"],
+        ("Query", "events", Some("module")) => &["ev_emit_mod"],
+        ("Query", "events", Some("type")) => &["ev_emit_mod"],
+        _ => &[],
     }
 }
