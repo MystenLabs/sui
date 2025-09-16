@@ -25,7 +25,8 @@ jobs:
       - name: Determine latest Sui release tag
         id: release
         run: |
-          TAG=$(curl -s https://api.github.com/repos/MystenLabs/sui/releases/latest | jq -r .tag_name)
+          TAG=$(curl -s https://api.github.com/repos/MystenLabs/sui/releases \
+            | jq -r 'map(select(.tag_name | startswith("testnet-")))[0].tag_name')
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Restore cached Sui binary
