@@ -10,6 +10,7 @@ use cached::SizedCache;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
 use tracing::{debug, instrument};
@@ -24,8 +25,8 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
-use sui_types::coin_registry::{self};
-use sui_types::dynamic_field::{DOFWrapper, Field};
+use sui_types::coin_registry::{self, Currency, CurrencyKey, SupplyState};
+use sui_types::derived_object;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
 use sui_types::object::Object;
@@ -253,9 +254,8 @@ impl CoinReadApiServer for CoinReadApi {
 
             let state = self.internal.get_state();
             let object_store = state.get_object_store();
-            if let Some(coin_data) = get_coin_data_from_registry(object_store, &coin_struct).await?
-            {
-                return Ok(Some(coin_data.into()));
+            if let Some(currency) = get_currency_from_registry(object_store, &coin_struct).await? {
+                return Ok(Some(currency.into()));
             }
 
             let metadata_object = self
@@ -283,16 +283,15 @@ impl CoinReadApiServer for CoinReadApi {
 
             let state = self.internal.get_state();
             let object_store = state.get_object_store();
-            if let Some(coin_data) = get_coin_data_from_registry(object_store, &coin_struct).await?
-            {
-                match &coin_data.supply {
-                    Some(coin_registry::SupplyState::Fixed(supply)) => {
+            if let Some(currency) = get_currency_from_registry(object_store, &coin_struct).await? {
+                match &currency.supply {
+                    Some(SupplyState::Fixed(supply)) | Some(SupplyState::BurnOnly(supply)) => {
                         return Ok(Supply {
                             value: supply.value,
                         });
                     }
                     _ => {
-                        if let Some(treasury_cap_id) = coin_data.treasury_cap_id {
+                        if let Some(treasury_cap_id) = currency.treasury_cap_id {
                             let state = self.internal.get_state();
                             let object_store = state.get_object_store();
                             if let Some(treasury_cap_obj) =
@@ -416,63 +415,54 @@ impl CoinReadInternalImpl {
     }
 }
 
-async fn get_coin_data_from_registry(
+async fn get_currency_from_registry(
     object_store: &Arc<dyn ObjectStore + Send + Sync>,
     coin_type: &StructTag,
-) -> RpcInterimResult<Option<coin_registry::CoinData>> {
-    let field_id = coin_registry::derive_dynamic_field_object_id(coin_type).map_err(|e| {
+) -> RpcInterimResult<Option<Currency>> {
+    use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
+
+    let currency_key_type = StructTag {
+        address: AccountAddress::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
+        name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
+        type_params: vec![TypeTag::Struct(Box::new(coin_type.clone()))],
+    };
+
+    let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new())
+        .map_err(|e| Error::UnexpectedError(format!("Failed to serialize CurrencyKey: {}", e)))?;
+
+    let currency_id = derived_object::derive_object_id(
+        SUI_COIN_REGISTRY_OBJECT_ID,
+        &TypeTag::Struct(Box::new(currency_key_type)),
+        &currency_key_bytes,
+    )
+    .map_err(|e| {
         Error::UnexpectedError(format!(
-            "Failed to derive dynamic field ID for coin type {}: {}",
+            "Failed to derive Currency ID for coin type {}: {}",
             coin_type, e
         ))
     })?;
 
-    let field_obj = match object_store.get_object(&field_id) {
+    let currency_obj = match object_store.get_object(&currency_id) {
         Some(obj) => obj,
         None => return Ok(None),
     };
 
-    let move_obj = field_obj.data.try_as_move().ok_or_else(|| {
+    let move_obj = currency_obj.data.try_as_move().ok_or_else(|| {
         Error::UnexpectedError(format!(
-            "Dynamic field for coin type {} is not a Move object",
+            "Currency for coin type {} is not a Move object",
             coin_type
         ))
     })?;
 
-    // For dynamic object fields containing CoinDataKey, we have:
-    // Field<DOFWrapper<CoinDataKey<T>>, ObjectID>
-    // Since CoinDataKey is an empty struct, DOFWrapper<CoinDataKey<T>> serializes to just [0x00]
-    let field: Field<DOFWrapper<[u8; 1]>, ObjectID> = bcs::from_bytes(move_obj.contents())
-        .map_err(|e| {
-            Error::UnexpectedError(format!(
-                "Failed to deserialize dynamic field for coin type {}: {}",
-                coin_type, e
-            ))
-        })?;
-
-    let coin_data_obj = object_store.get_object(&field.value).ok_or_else(|| {
+    let currency = bcs::from_bytes::<Currency>(move_obj.contents()).map_err(|e| {
         Error::UnexpectedError(format!(
-            "CoinData object {} for coin type {} not found",
-            field.value, coin_type
+            "Failed to deserialize Currency for coin type {}: {}",
+            coin_type, e
         ))
     })?;
 
-    let coin_data_move_obj = coin_data_obj.data.try_as_move().ok_or_else(|| {
-        Error::UnexpectedError(format!(
-            "CoinData for coin type {} is not a Move object",
-            coin_type
-        ))
-    })?;
-
-    let coin_data = bcs::from_bytes::<coin_registry::CoinData>(coin_data_move_obj.contents())
-        .map_err(|e| {
-            Error::UnexpectedError(format!(
-                "Failed to deserialize CoinData for coin type {}: {}",
-                coin_type, e
-            ))
-        })?;
-
-    Ok(Some(coin_data))
+    Ok(Some(currency))
 }
 
 #[async_trait]
@@ -727,50 +717,10 @@ mod tests {
         )
     }
 
-    fn create_dynamic_field_object(field_object_id: ObjectID, coin_data_id: ObjectID) -> Object {
-        use sui_types::dynamic_field::{DOFWrapper, Field};
+    fn create_currency_object(currency: Currency) -> Object {
         use sui_types::object::{Data, ObjectInner};
 
-        let field_value: Field<DOFWrapper<[u8; 1]>, ObjectID> = Field {
-            id: UID::new(field_object_id),
-            name: DOFWrapper { name: [0x00] },
-            value: coin_data_id,
-        };
-        let field_bytes = bcs::to_bytes(&field_value).unwrap();
-        let data = Data::Move(unsafe {
-            MoveObject::new_from_execution_with_limit(
-                move_core_types::language_storage::StructTag {
-                    address: move_core_types::account_address::AccountAddress::from_hex_literal(
-                        "0x2",
-                    )
-                    .unwrap(),
-                    module: move_core_types::identifier::Identifier::new("dynamic_field").unwrap(),
-                    name: move_core_types::identifier::Identifier::new("Field").unwrap(),
-                    type_params: vec![],
-                }
-                .into(),
-                false,
-                SequenceNumber::from_u64(1),
-                field_bytes,
-                1000,
-            )
-            .unwrap()
-        });
-        ObjectInner {
-            data,
-            owner: Owner::Shared {
-                initial_shared_version: SequenceNumber::from_u64(1),
-            },
-            previous_transaction: TransactionDigest::from([0; 32]),
-            storage_rebate: 0,
-        }
-        .into()
-    }
-
-    fn create_coin_data_object(coin_data: sui_types::coin_registry::CoinData) -> Object {
-        use sui_types::object::{Data, ObjectInner};
-
-        let coin_data_bytes = bcs::to_bytes(&coin_data).unwrap();
+        let currency_bytes = bcs::to_bytes(&currency).unwrap();
         let data = Data::Move(unsafe {
             MoveObject::new_from_execution_with_limit(
                 move_core_types::language_storage::StructTag {
@@ -779,13 +729,13 @@ mod tests {
                     )
                     .unwrap(),
                     module: move_core_types::identifier::Identifier::new("coin_registry").unwrap(),
-                    name: move_core_types::identifier::Identifier::new("CoinData").unwrap(),
+                    name: move_core_types::identifier::Identifier::new("Currency").unwrap(),
                     type_params: vec![],
                 }
                 .into(),
                 false,
                 SequenceNumber::from_u64(1),
-                coin_data_bytes,
+                currency_bytes,
                 10000,
             )
             .unwrap()
@@ -810,23 +760,16 @@ mod tests {
     }
 
     fn setup_mock_object_store_with_registry(
-        field_id: ObjectID,
-        field_object: Object,
-        coin_data_id: ObjectID,
-        coin_data_object: Object,
+        currency_id: ObjectID,
+        currency_object: Object,
         treasury_cap: Option<(ObjectID, Object)>,
     ) -> MockObjectStore {
         let mut mock_object_store = MockObjectStore::new();
 
         mock_object_store
             .expect_get_object()
-            .with(predicate::eq(field_id))
-            .return_once(move |_| Some(field_object));
-
-        mock_object_store
-            .expect_get_object()
-            .with(predicate::eq(coin_data_id))
-            .return_once(move |_| Some(coin_data_object));
+            .with(predicate::eq(currency_id))
+            .return_once(move |_| Some(currency_object));
 
         if let Some((treasury_cap_id, treasury_cap_object)) = treasury_cap {
             mock_object_store
@@ -1517,8 +1460,20 @@ mod tests {
             let coin_metadata_object =
                 Object::coin_metadata_for_testing(input_coin_struct.clone(), coin_metadata);
             let metadata = SuiCoinMetadata::try_from(coin_metadata_object.clone()).unwrap();
+
+            // Mock object store that returns None for registry lookup
+            let mut mock_object_store = MockObjectStore::new();
+            mock_object_store.expect_get_object().return_once(|_| None); // No registry entry
+
+            let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_get_object_store()
+                .return_const(Arc::new(mock_object_store) as Arc<dyn ObjectStore + Send + Sync>);
+
             let mut mock_internal = MockCoinReadInternal::new();
-            // return TreasuryCap instead of CoinMetadata to set up test
+            mock_internal
+                .expect_get_state()
+                .return_once(move || Arc::new(mock_state) as Arc<dyn StateRead>);
             mock_internal
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(coin_metadata_struct))
@@ -1545,7 +1500,14 @@ mod tests {
             let transaction_digest = TransactionDigest::from([0; 32]);
             let transaction_effects = TransactionEffects::default();
 
+            // Mock object store that returns None for registry lookup
+            let mut mock_object_store = MockObjectStore::new();
+            mock_object_store.expect_get_object().return_once(|_| None); // No registry entry
+
             let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_get_object_store()
+                .return_const(Arc::new(mock_object_store) as Arc<dyn ObjectStore + Send + Sync>);
             mock_state
                 .expect_find_publish_txn_digest()
                 .return_once(move |_| Ok(transaction_digest));
@@ -1575,7 +1537,20 @@ mod tests {
             };
             let treasury_cap_object =
                 Object::treasury_cap_for_testing(input_coin_struct.clone(), treasury_cap);
+
+            // Mock object store that returns None for registry lookup
+            let mut mock_object_store = MockObjectStore::new();
+            mock_object_store.expect_get_object().return_once(|_| None); // No registry entry
+
+            let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_get_object_store()
+                .return_const(Arc::new(mock_object_store) as Arc<dyn ObjectStore + Send + Sync>);
+
             let mut mock_internal = MockCoinReadInternal::new();
+            mock_internal
+                .expect_get_state()
+                .return_once(move || Arc::new(mock_state) as Arc<dyn StateRead>);
             // return TreasuryCap instead of CoinMetadata to set up test
             mock_internal
                 .expect_find_package_object()
@@ -1600,48 +1575,53 @@ mod tests {
 
         #[tokio::test]
         async fn test_coin_metadata_with_registry_data() {
-            use sui_types::coin_registry;
+            use sui_types::coin_registry::{
+                self, Currency, CurrencyKey, MetadataCapState, SupplyState,
+            };
+            use sui_types::collection_types::VecMap;
+            use sui_types::derived_object;
 
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
             let coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
 
-            let coin_data_id = ObjectID::from_hex_literal(
+            let currency_object_id = ObjectID::from_hex_literal(
                 "0xDADA000000000000000000000000000000000000000000000000000000000000",
             )
             .unwrap();
-            let coin_data = coin_registry::CoinData {
-                id: UID::new(coin_data_id),
+            let currency = Currency {
+                id: UID::new(currency_object_id),
                 decimals: 9,
                 name: "Registry Test Coin".to_string(),
                 symbol: "RTC".to_string(),
                 description: "A coin from the registry".to_string(),
                 icon_url: "https://registry.test/icon.png".to_string(),
-                supply: Some(coin_registry::SupplyState::Fixed(coin_registry::Supply {
-                    value: 1000000,
-                })),
-                regulated: coin_registry::RegulatedState::Unknown,
+                supply: Some(SupplyState::Fixed(coin_registry::Supply { value: 1000000 })),
+                regulated: coin_registry::CurrencyRegulatedState::Unknown,
                 treasury_cap_id: None,
-                metadata_cap_id: None,
-                extra_fields: vec![],
+                metadata_cap_id: MetadataCapState::Unclaimed,
+                extra_fields: VecMap { contents: vec![] },
             };
 
-            let field_id = coin_registry::derive_dynamic_field_object_id(&coin_struct).unwrap();
-
-            let field_object_id = ObjectID::from_hex_literal(
-                "0xF1E1D00000000000000000000000000000000000000000000000000000000000",
+            // Derive currency ID the same way the function does
+            let currency_key_type = StructTag {
+                address: AccountAddress::from_hex_literal("0x2").unwrap(),
+                module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
+                name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
+                type_params: vec![TypeTag::Struct(Box::new(coin_struct.clone()))],
+            };
+            let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).unwrap();
+            let currency_id = derived_object::derive_object_id(
+                sui_types::SUI_COIN_REGISTRY_OBJECT_ID,
+                &TypeTag::Struct(Box::new(currency_key_type)),
+                &currency_key_bytes,
             )
             .unwrap();
-            let field_object = create_dynamic_field_object(field_object_id, coin_data_id);
-            let coin_data_object = create_coin_data_object(coin_data);
 
-            let mock_object_store = setup_mock_object_store_with_registry(
-                field_id,
-                field_object,
-                coin_data_id,
-                coin_data_object,
-                None,
-            );
+            let currency_object = create_currency_object(currency);
+
+            let mock_object_store =
+                setup_mock_object_store_with_registry(currency_id, currency_object, None);
 
             let mut mock_state = MockStateRead::new();
             mock_state
@@ -1693,7 +1673,20 @@ mod tests {
             let package_id = get_test_package_id();
             let (coin_name, _, treasury_cap_struct, _, treasury_cap_object) =
                 get_test_treasury_cap_peripherals(package_id);
+
+            // Mock object store that returns None for registry lookup
+            let mut mock_object_store = MockObjectStore::new();
+            mock_object_store.expect_get_object().return_once(|_| None); // No registry entry
+
+            let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_get_object_store()
+                .return_const(Arc::new(mock_object_store) as Arc<dyn ObjectStore + Send + Sync>);
+
             let mut mock_internal = MockCoinReadInternal::new();
+            mock_internal
+                .expect_get_state()
+                .return_once(move || Arc::new(mock_state) as Arc<dyn StateRead>);
             mock_internal
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(treasury_cap_struct))
@@ -1723,7 +1716,14 @@ mod tests {
             let transaction_digest = TransactionDigest::from([0; 32]);
             let transaction_effects = TransactionEffects::default();
 
+            // Mock object store that returns None for registry lookup
+            let mut mock_object_store = MockObjectStore::new();
+            mock_object_store.expect_get_object().return_once(|_| None); // No registry entry
+
             let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_get_object_store()
+                .return_const(Arc::new(mock_object_store) as Arc<dyn ObjectStore + Send + Sync>);
             mock_state
                 .expect_find_publish_txn_digest()
                 .return_once(move |_| Ok(transaction_digest));
@@ -1759,7 +1759,20 @@ mod tests {
             };
             let coin_metadata_object =
                 Object::coin_metadata_for_testing(input_coin_struct.clone(), coin_metadata);
+
+            // Mock object store that returns None for registry lookup
+            let mut mock_object_store = MockObjectStore::new();
+            mock_object_store.expect_get_object().return_once(|_| None); // No registry entry
+
+            let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_get_object_store()
+                .return_const(Arc::new(mock_object_store) as Arc<dyn ObjectStore + Send + Sync>);
+
             let mut mock_internal = MockCoinReadInternal::new();
+            mock_internal
+                .expect_get_state()
+                .return_once(move || Arc::new(mock_state) as Arc<dyn StateRead>);
             mock_internal
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(treasury_cap_struct))
@@ -1787,48 +1800,55 @@ mod tests {
 
         #[tokio::test]
         async fn test_total_supply_with_registry_fixed_supply() {
-            use sui_types::coin_registry;
+            use sui_types::coin_registry::{
+                self, Currency, CurrencyKey, MetadataCapState, SupplyState,
+            };
+            use sui_types::collection_types::VecMap;
+            use sui_types::derived_object;
 
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
             let coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
 
-            let coin_data_id = ObjectID::from_hex_literal(
+            let currency_uid = ObjectID::from_hex_literal(
                 "0xDADA200000000000000000000000000000000000000000000000000000000000",
             )
             .unwrap();
-            let coin_data = coin_registry::CoinData {
-                id: UID::new(coin_data_id),
+            let currency = Currency {
+                id: UID::new(currency_uid),
                 decimals: 18,
                 name: "Fixed Supply Coin".to_string(),
                 symbol: "FSC".to_string(),
                 description: "A coin with fixed supply".to_string(),
                 icon_url: "https://fixed.supply/icon.png".to_string(),
-                supply: Some(coin_registry::SupplyState::Fixed(coin_registry::Supply {
+                supply: Some(SupplyState::Fixed(coin_registry::Supply {
                     value: 21_000_000_000_000_000,
                 })),
-                regulated: coin_registry::RegulatedState::Unknown,
+                regulated: coin_registry::CurrencyRegulatedState::Unknown,
                 treasury_cap_id: None,
-                metadata_cap_id: None,
-                extra_fields: vec![],
+                metadata_cap_id: MetadataCapState::Unclaimed,
+                extra_fields: VecMap { contents: vec![] },
             };
 
-            let field_id = coin_registry::derive_dynamic_field_object_id(&coin_struct).unwrap();
-
-            let field_object_id = ObjectID::from_hex_literal(
-                "0xF1E1D20000000000000000000000000000000000000000000000000000000000",
+            // Derive currency ID the same way the function does
+            let currency_key_type = StructTag {
+                address: AccountAddress::from_hex_literal("0x2").unwrap(),
+                module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
+                name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
+                type_params: vec![TypeTag::Struct(Box::new(coin_struct.clone()))],
+            };
+            let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).unwrap();
+            let currency_id = derived_object::derive_object_id(
+                sui_types::SUI_COIN_REGISTRY_OBJECT_ID,
+                &TypeTag::Struct(Box::new(currency_key_type)),
+                &currency_key_bytes,
             )
             .unwrap();
-            let field_object = create_dynamic_field_object(field_object_id, coin_data_id);
-            let coin_data_object = create_coin_data_object(coin_data);
 
-            let mock_object_store = setup_mock_object_store_with_registry(
-                field_id,
-                field_object,
-                coin_data_id,
-                coin_data_object,
-                None,
-            );
+            let currency_object = create_currency_object(currency);
+
+            let mock_object_store =
+                setup_mock_object_store_with_registry(currency_id, currency_object, None);
 
             let mut mock_state = MockStateRead::new();
             mock_state
@@ -1845,7 +1865,11 @@ mod tests {
 
         #[tokio::test]
         async fn test_total_supply_with_registry_unknown_supply() {
-            use sui_types::coin_registry;
+            use sui_types::coin_registry::{
+                self, Currency, CurrencyKey, MetadataCapState, SupplyState,
+            };
+            use sui_types::collection_types::VecMap;
+            use sui_types::derived_object;
 
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
@@ -1856,32 +1880,40 @@ mod tests {
             )
             .unwrap();
 
-            let coin_data_id = ObjectID::from_hex_literal(
+            let currency_uid = ObjectID::from_hex_literal(
                 "0xDADA300000000000000000000000000000000000000000000000000000000000",
             )
             .unwrap();
-            let coin_data = coin_registry::CoinData {
-                id: UID::new(coin_data_id),
+            let currency = Currency {
+                id: UID::new(currency_uid),
                 decimals: 6,
                 name: "Unknown Supply Coin".to_string(),
                 symbol: "USC".to_string(),
                 description: "A coin with unknown supply".to_string(),
                 icon_url: "https://unknown.supply/icon.png".to_string(),
-                supply: Some(coin_registry::SupplyState::Unknown),
-                regulated: coin_registry::RegulatedState::Unknown,
+                supply: Some(SupplyState::Unknown),
+                regulated: coin_registry::CurrencyRegulatedState::Unknown,
                 treasury_cap_id: Some(treasury_cap_id),
-                metadata_cap_id: None,
-                extra_fields: vec![],
+                metadata_cap_id: MetadataCapState::Unclaimed,
+                extra_fields: VecMap { contents: vec![] },
             };
 
-            let field_id = coin_registry::derive_dynamic_field_object_id(&coin_struct).unwrap();
-
-            let field_object_id = ObjectID::from_hex_literal(
-                "0xF1E1D30000000000000000000000000000000000000000000000000000000000",
+            // Derive currency ID the same way the function does
+            let currency_key_type = StructTag {
+                address: AccountAddress::from_hex_literal("0x2").unwrap(),
+                module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
+                name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
+                type_params: vec![TypeTag::Struct(Box::new(coin_struct.clone()))],
+            };
+            let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).unwrap();
+            let currency_id = derived_object::derive_object_id(
+                sui_types::SUI_COIN_REGISTRY_OBJECT_ID,
+                &TypeTag::Struct(Box::new(currency_key_type)),
+                &currency_key_bytes,
             )
             .unwrap();
-            let field_object = create_dynamic_field_object(field_object_id, coin_data_id);
-            let coin_data_object = create_coin_data_object(coin_data);
+
+            let currency_object = create_currency_object(currency);
 
             let treasury_cap = TreasuryCap {
                 id: UID::new(treasury_cap_id),
@@ -1891,10 +1923,8 @@ mod tests {
                 Object::treasury_cap_for_testing(coin_struct.clone(), treasury_cap);
 
             let mock_object_store = setup_mock_object_store_with_registry(
-                field_id,
-                field_object,
-                coin_data_id,
-                coin_data_object,
+                currency_id,
+                currency_object,
                 Some((treasury_cap_id, treasury_cap_object)),
             );
 

@@ -108,15 +108,15 @@ impl TryFrom<Object> for SuiCoinMetadata {
     }
 }
 
-impl From<coin_registry::CoinData> for SuiCoinMetadata {
-    fn from(coin_data: coin_registry::CoinData) -> Self {
+impl From<coin_registry::Currency> for SuiCoinMetadata {
+    fn from(currency: coin_registry::Currency) -> Self {
         Self {
-            id: Some(coin_data.id.id.bytes),
-            decimals: coin_data.decimals,
-            name: coin_data.name,
-            symbol: coin_data.symbol,
-            description: coin_data.description,
-            icon_url: Some(coin_data.icon_url),
+            id: Some(currency.id.id.bytes),
+            decimals: currency.decimals,
+            name: currency.name,
+            symbol: currency.symbol,
+            description: currency.description,
+            icon_url: Some(currency.icon_url),
         }
     }
 }
