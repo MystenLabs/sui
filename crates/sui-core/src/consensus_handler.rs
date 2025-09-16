@@ -782,6 +782,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 let author = block.author.value();
                 // TODO: consider only messages within 1~3 rounds of the leader?
                 self.last_consensus_stats.stats.inc_num_messages(author);
+
+                // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be finalized.
+                self.epoch_store.set_consensus_tx_status(
+                    ConsensusPosition::ping(epoch, block),
+                    ConsensusTxStatus::Finalized,
+                );
+
                 for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
                     let position = ConsensusPosition {
                         epoch,
@@ -1453,6 +1460,12 @@ impl ConsensusBlockHandler {
             .collect::<Vec<_>>();
         let mut executable_transactions = vec![];
         for (block, transactions) in parsed_transactions.into_iter() {
+            // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be certified.
+            self.epoch_store.set_consensus_tx_status(
+                ConsensusPosition::ping(epoch, block),
+                ConsensusTxStatus::FastpathCertified,
+            );
+
             for (txn_idx, parsed) in transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
                     epoch,

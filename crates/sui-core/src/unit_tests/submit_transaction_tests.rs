@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use consensus_core::BlockStatus;
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
@@ -129,6 +129,55 @@ async fn test_submit_transaction_success() {
         }
         _ => panic!("Expected Submitted response"),
     };
+}
+
+#[tokio::test]
+async fn test_submit_ping_request() {
+    let test_context = TestContext::new().await;
+
+    println!("Case 1. Submitting an empty array of transactions, soft bundle is true.");
+    {
+        let request = RawSubmitTxRequest {
+            transactions: vec![],
+            soft_bundle: true,
+        };
+
+        let response = test_context.client.submit_transaction(request, None).await;
+        assert!(response.is_err());
+        assert!(matches!(
+            response.unwrap_err(),
+            SuiError::UserInputError {
+                error: UserInputError::InvalidBatchTransaction { .. }
+            }
+        ));
+    }
+
+    println!("Case 2. Submitting an empty array of transactions, soft bundle is false.");
+    {
+        // Submit an empty array of transactions.
+        // The request should explicitly set `ping` to true to indicate a ping check.
+        let request = RawSubmitTxRequest {
+            transactions: vec![],
+            soft_bundle: false,
+        };
+
+        let response = test_context
+            .client
+            .submit_transaction(request, None)
+            .await
+            .unwrap();
+
+        // Verify we got a consensus position back
+        let response: SubmitTxResponse = response.try_into().unwrap();
+        assert_eq!(response.results.len(), 1);
+        match &response.results[0] {
+            SubmitTxResult::Submitted { consensus_position } => {
+                assert_eq!(consensus_position.index, PING_TRANSACTION_INDEX);
+                assert_eq!(consensus_position.block, BlockRef::MIN);
+            }
+            _ => panic!("Expected Submitted response"),
+        };
+    }
 }
 
 #[tokio::test]

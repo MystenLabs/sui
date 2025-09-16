@@ -19,6 +19,7 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
+use mysten_common::debug_fatal;
 use mysten_metrics::{
     spawn_monitored_task, GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS,
 };
@@ -632,6 +633,8 @@ impl ConsensusAdapter {
         )
     }
 
+    // Submits the provided transactions to consensus in a batched fashion. The `transactions` vector can be also empty in case of a ping check.
+    // In this case the system will simulate a transaction submission to consensus and return the consensus position.
     pub fn submit_batch(
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
@@ -676,7 +679,10 @@ impl ConsensusAdapter {
             }
         }
 
-        epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
+        if !transactions.is_empty() {
+            epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
+        }
+
         Ok(self.submit_unchecked(
             transactions,
             epoch_store,
@@ -756,10 +762,22 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        mut tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
         submitter_client_addr: Option<IpAddr>,
     ) {
         if transactions.is_empty() {
+            // If transactions are empty, then we attempt to ping consensus and simulate a transaction submission to consensus.
+            // We intentionally do not wait for the block status, as we are only interested in the consensus position and return it immediately.
+            debug!("Performing a ping check, pinging consensus to get a consensus position in next block");
+            let (consensus_positions, _status_waiter) = self
+                .submit_inner(&transactions, epoch_store, &[], "ping", false)
+                .await;
+
+            if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
+                let _ = tx_consensus_positions.send(consensus_positions);
+            } else {
+                debug_fatal!("Ping check must have a consensus position channel");
+            }
             return;
         }
 
@@ -1036,6 +1054,7 @@ impl ConsensusAdapter {
     ) -> (Vec<ConsensusPosition>, BlockStatusReceiver) {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
+        let is_dkg = !transactions.is_empty() && transactions[0].kind.is_dkg();
 
         let (consensus_positions, status_waiter) = loop {
             let span = debug_span!("client_submit");
@@ -1048,9 +1067,7 @@ impl ConsensusAdapter {
                 Err(err) => {
                     // This can happen during reconfig, or when consensus has full internal buffers
                     // and needs to back pressure, so retry a few times before logging warnings.
-                    if retries > 30
-                        || (retries > 3 && (is_soft_bundle || !transactions[0].kind.is_dkg()))
-                    {
+                    if retries > 30 || (retries > 3 && (is_soft_bundle || !is_dkg)) {
                         warn!(
                             "Failed to submit transactions {transaction_keys:?} to consensus: {err:?}. Retry #{retries}"
                         );
@@ -1061,7 +1078,7 @@ impl ConsensusAdapter {
                         .inc();
                     retries += 1;
 
-                    if transactions[0].kind.is_dkg() {
+                    if is_dkg {
                         // Shorter delay for DKG messages, which are time-sensitive and happen at
                         // start-of-epoch when submit errors due to active reconfig are likely.
                         time::sleep(Duration::from_millis(100)).await;

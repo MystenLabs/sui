@@ -13,7 +13,7 @@ use crate::consensus_handler::SequencedConsensusTransaction;
 
 use crate::mock_consensus::with_block_status;
 use consensus_core::BlockStatus;
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use parking_lot::Mutex;
@@ -206,6 +206,14 @@ pub fn make_consensus_adapter_for_test(
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
+            // If transactions are empty, then we are performing a ping check and will attempt to ping consensus and simulate a transaction submission to consensus.
+            if transactions.is_empty() {
+                return Ok((
+                    vec![ConsensusPosition::ping(epoch_store.epoch(), BlockRef::MIN)],
+                    with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                ));
+            }
+
             let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
@@ -502,4 +510,40 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
 
     t1.await.unwrap();
     t2.await.unwrap();
+}
+
+#[tokio::test]
+async fn submit_empty_array_of_transactions_to_consensus_adapter() {
+    telemetry_subscribers::init_for_testing();
+
+    // Initialize an authority
+    let state = init_state_with_objects(vec![]).await;
+    let epoch_store = state.epoch_store_for_testing();
+
+    // Make a new consensus adapter instance.
+    let adapter = make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
+
+    // Submit the transaction and ensure the adapter reports success to the caller. Note
+    // that consensus may drop some transactions (so we may need to resubmit them).
+    let (tx_consensus_position, rx_consensus_position) = oneshot::channel();
+    let waiter = adapter
+        .submit_batch(
+            &[],
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+            Some(tx_consensus_position),
+            None,
+        )
+        .unwrap();
+    waiter.await.unwrap();
+
+    let consensus_position = rx_consensus_position.await.unwrap();
+    assert_eq!(
+        consensus_position,
+        vec![ConsensusPosition {
+            epoch: epoch_store.epoch(),
+            block: BlockRef::MIN,
+            index: PING_TRANSACTION_INDEX,
+        }]
+    );
 }

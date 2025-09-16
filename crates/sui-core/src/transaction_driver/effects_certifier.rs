@@ -213,9 +213,10 @@ impl EffectsCertifier {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: *tx_digest,
+            transaction_digest: Some(*tx_digest),
             consensus_position,
             include_details: true,
+            ping: None,
         })
         .unwrap();
 
@@ -280,9 +281,10 @@ impl EffectsCertifier {
             .collect::<Vec<_>>();
         let committee = authority_aggregator.committee.clone();
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: *tx_digest,
+            transaction_digest: Some(*tx_digest),
             consensus_position,
             include_details: false,
+            ping: None,
         })
         .unwrap();
 
