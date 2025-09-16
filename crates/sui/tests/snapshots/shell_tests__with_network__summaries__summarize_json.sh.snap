@@ -37,6 +37,7 @@ bls12381.json
 borrow.json
 clock.json
 coin.json
+coin_registry.json
 config.json
 deny_list.json
 derived_object.json

@@ -10,7 +10,7 @@ use tracing::debug;
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
-use crate::graph::PackageInfo;
+use crate::graph::{LinkageTable, PackageInfo};
 use crate::schema::{
     Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
     Publication, RenderToml,
@@ -61,6 +61,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     pubs: PublicationSource<F>,
 
     /// The list of published ids for every dependency in the root package
+    // TODO: the comment says published ids but the type says original id; what is this for?
     deps_published_ids: Vec<OriginalID>,
 }
 
@@ -245,7 +246,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Return the linkage table for the root package. This contains an entry for each package that
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
-    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+    pub fn linkage(&self) -> PackageResult<LinkageTable<F>> {
         Ok(self.graph.linkage()?)
     }
 
@@ -382,6 +383,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.package_graph().sorted_deps()
     }
 
+    // TODO: what is the spec of this function?
     pub fn deps_published_ids(&self) -> &Vec<OriginalID> {
         &self.deps_published_ids
     }
@@ -409,6 +411,7 @@ fn localpubs_to_publications<F: MoveFlavor>(
 
 #[cfg(test)]
 mod tests {
+    use indoc::formatdoc;
     use insta::assert_snapshot;
     use std::{fs, io::Write, path::PathBuf};
     use test_log::test;
@@ -569,55 +572,59 @@ pkg_b = { local = "../pkg_b" }"#,
     pub async fn test_all() {
         debug!("running test_all");
         let env = crate::flavor::vanilla::default_environment();
-        let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
+        let pkg_git = git::new("pkg_git", |project| {
             project.file(
                 "Move.toml",
                 &basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id()),
             )
-        });
+        })
+        .await;
 
-        pkg_git.change_file(
+        pkg_git.as_ref().change_file(
             "Move.toml",
             &basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id()),
         );
-        pkg_git_repo.commit();
-        pkg_git.change_file(
+        pkg_git.commit().await;
+        pkg_git.as_ref().change_file(
             "Move.toml",
             &basic_manifest_with_env("pkg_git", "0.0.3", env.name(), env.id()),
         );
-        pkg_git_repo.commit();
+        pkg_git.commit().await;
 
-        let (pkg_dep_on_git, _) = git::new_repo("pkg_dep_on_git", |project| {
+        let pkg_dep = git::new("pkg_dep_on_git", |project| {
             project.file(
                 "Move.toml",
-                &format!(
-                    r#"[package]
-name = "pkg_dep_on_git"
-edition = "2025"
-license = "Apache-2.0"
-authors = ["Move Team"]
-version = "0.0.1"
+                &formatdoc!(
+                    r#"
+                    [package]
+                    name = "pkg_dep_on_git"
+                    edition = "2025"
+                    license = "Apache-2.0"
+                    authors = ["Move Team"]
+                    version = "0.0.1"
 
-[dependencies]
-pkg_git = {{ git = "../pkg_git", rev = "main" }}
+                    [dependencies]
+                    pkg_git = {{ git = "../pkg_git", rev = "main" }}
 
-[environments]
-{} = "{}"
-"#,
+                    [environments]
+                    {} = "{}"
+                    "#,
                     env.name(),
                     env.id(),
                 ),
             )
-        });
+        })
+        .await;
 
-        let root_pkg_path = pkg_dep_on_git.root();
-        let commits = pkg_git.commits();
+        let root_pkg_path = pkg_dep.as_ref().root();
+        let commits = pkg_git.commits().await;
         let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
 
         // we need to replace this relative path with the actual git repository path, because find_sha
         // function does not take a cwd, so this `git ls-remote` would be called from the cwd and not from the
         // repo path.
-        root_pkg_manifest = root_pkg_manifest.replace("../pkg_git", pkg_git.root_path_str());
+        root_pkg_manifest =
+            root_pkg_manifest.replace("../pkg_git", pkg_git.as_ref().root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
         let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
@@ -991,7 +998,17 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @"TODO: inconsistent linkage");
+        assert_snapshot!(root.unwrap_err().to_string(), @r###"
+        Package depends on multiple versions of the package with ID 0x00...0001:
+
+          root::dep1 refers to { local = "../dep1" }
+          root::dep2 refers to { local = "../dep2" }
+
+        To resolve this, you must explicitly add an override in your Move.toml:
+
+            [dependencies]
+            _dep1 = { ..., override = true }
+        "###);
     }
 
     /// Loading an ephemeral root package from a non-existing file succeeds and uses the published

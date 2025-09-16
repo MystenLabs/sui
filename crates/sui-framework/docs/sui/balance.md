@@ -23,6 +23,7 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 -  [Function `send_funds`](#sui_balance_send_funds)
 -  [Function `redeem_funds`](#sui_balance_redeem_funds)
 -  [Function `withdraw_funds_from_object`](#sui_balance_withdraw_funds_from_object)
+-  [Function `create_supply_internal`](#sui_balance_create_supply_internal)
 -  [Function `create_staking_rewards`](#sui_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#sui_balance_destroy_storage_rebates)
 -  [Function `destroy_supply`](#sui_balance_destroy_supply)
@@ -506,6 +507,30 @@ Create a <code>Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Bal
     <a href="../sui/balance.md#sui_balance_value">value</a>: u64,
 ): Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt; {
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_object">sui::funds_accumulator::withdraw_from_object</a>(obj, <a href="../sui/balance.md#sui_balance_value">value</a> <b>as</b> u256)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_balance_create_supply_internal"></a>
+
+## Function `create_supply_internal`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt; {
+    <a href="../sui/balance.md#sui_balance_Supply">Supply</a> { <a href="../sui/balance.md#sui_balance_value">value</a>: 0 }
 }
 </code></pre>
 

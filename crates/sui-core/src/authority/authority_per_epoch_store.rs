@@ -1266,6 +1266,12 @@ impl AuthorityPerEpochStore {
         self.protocol_config().enable_accumulators() && self.accumulator_root_exists()
     }
 
+    pub fn coin_registry_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .coin_registry_obj_initial_shared_version()
+            .is_some()
+    }
+
     pub fn coin_deny_list_state_exists(&self) -> bool {
         self.epoch_start_configuration
             .coin_deny_list_obj_initial_shared_version()

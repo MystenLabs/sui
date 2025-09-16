@@ -8,6 +8,14 @@ pagination_prev: null
 
 Find terms used in Sui defined below.
 
+### Archival Service {#archival-service}
+
+A gRPC API layer that exposes access to this store, enabling point lookups of historical data, ex., LedgerService
+
+### Archival Store {#archival-store}
+
+A long-term storage system that holds checkpoint-indexed Sui data, i.e., Bigtable.
+
 ### Causal history {#causal-history}
 
 Causal history is the relationship between an object in Sui and its direct predecessors and successors. This history is essential to the causal order Sui uses to process transactions. In contrast, other blockchains read the entire state of their world for each transaction,
@@ -19,8 +27,20 @@ introducing latency.
 
 ### Certificate {#certificate}
 
-A certificate is the mechanism proving a transaction was approved or certified. Validators vote on transactions, and aggregators collect a Byzantine-resistant-majority of these votes into a certificate and broadcasts it to all Sui validators, thereby ensuring finality.
+A certificate is the mechanism proving a transaction was approved or certified. Validators vote on transactions, and aggregators collect a Byzantine-resistant majority of these votes into a certificate and broadcast it to all Sui validators, thereby ensuring finality.
 
+### Closed-Loop Token {#closed-loop-token}
+
+A token that can be used only for a specific service, by an authorized account, or a token that certain accounts can be blocked from using.
+
+#### DeepBook {#deepbook}
+
+A decentralized central limit order book (CLOB) built on Sui. The Sui documentation refers to the DeepBook standard as "DeepBookV3" to avoid confusion with the recently deprecated version of DeepBook (DeepBookV2).
+
+#### Devnet {#devnet}
+
+A development network where data is wiped regularly as part of scheduled software updates.
+ 
 ### Epoch {#epoch}
 
 Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration epochs. During a particular epoch, the set of validators participating in the network is fixed.
@@ -46,27 +66,47 @@ certifies the transaction, all of the other honest validators will too eventuall
 
 Genesis is the initial act of creating accounts and gas objects for a Sui network. Sui provides a `genesis` command that allows users to create and inspect the genesis object setting up the network for operation.
 
+### Localnet {#localnet}
+
+A locally created development network running on your local machine.
+
+### Kiosk {#kiosk}
+
+A decentralized system for commerce applications on Sui. The Sui Kiosk standard consists of Kiosk objects: shared objects owned by individual parties that store assets that can be sold or traded.
+
+### Mainnet {#mainnet}
+
+The Sui production network. 
+
 ### Multi-writer objects {#multi-writer-objects}
 
 Multi-writer objects are objects that are owned by more than one address. Transactions affecting multi-writer objects require consensus in Sui. This contrasts with transactions affecting only single-writer objects, which require only a confirmation of the owner's address contents.
 
+### Mysticeti {#mysticeti}
+
+The consensus protocol used on Sui. Mysticeti is a high-throughput, Directed Acyclic Graph (DAG)-based Byzantine consensus protocol. 
+
 ### Object {#object}
 
-The basic unit of storage in Sui is object. In contrast to many other blockchains, where storage is centered around address and each address contains a key-value store, Sui's storage is centered around objects. Sui objects have one of the following primary states:
+The basic unit of storage in Sui is an object. In contrast to many other blockchains, where storage is centered around an address and each address contains a key-value store, Sui's storage is centered around objects. Sui objects have one of the following primary states:
 
-- _Immutable_ - the object cannot be modified.
-- _Mutable_ - the object can be changed.
+- **Immutable:** The object cannot be modified.
+- **Mutable:** The object can be modified.
 
 Further, mutable objects are divided into these categories:
 
-- _Owned_ - the object can be modified only by its owner.
-- _Shared_ - the object can be modified by anyone.
+- **Owned:** The object can be modified only by its owner.
+- **Shared:** The object can be modified by anyone.
 
 Immutable objects do not need this distinction because they have no owner.
 
+#### Operation Cap {#operation-cap}
+
+Allows a validator to authorize another account to perform certain actions on its behalf.
+
 ### Proof-of-stake {#proof-of-stake}
 
-[Proof-of-stake](https://en.wikipedia.org/wiki/Proof_of_stake) is a blockchain consensus mechanism where the voting weights of validators or validators is proportional to a bonded amount of the network's native currency (called their stake in the network). This mitigates [Sybil attacks](https://en.wikipedia.org/wiki/Sybil_attack) by forcing bad actors to gain a large stake in the blockchain first.
+[Proof-of-stake](https://en.wikipedia.org/wiki/Proof_of_stake) is a blockchain consensus mechanism where the voting weight of each validator is proportional to a bonded amount of the network's native currency (called their stake in the network). This mitigates [Sybil attacks](https://en.wikipedia.org/wiki/Sybil_attack) by forcing bad actors to gain a large stake in the blockchain first.
 
 ### Single-writer objects {#single-writer-objects}
 
@@ -84,15 +124,39 @@ Sui refers to the Sui blockchain, and the [Sui open source project](https://gith
 
 SUI is the native token to the Sui network.
 
+#### Sui Keystore {#sui-keystore}
+
+A secure storage system for managing your Sui cryptographic key pairs.
+
+#### Sui Keytool {#sui-keytool}
+
+A CLI tool that provides commands for managing and generating addresses, and interacting with private keys, signatures, or zkLogin.
+
+#### SuiLink {#suilink}
+
+A Mysten Labs product that connects wallets across chains to support use cases such as cross chain wallet verification, asset ownership verification, and asset distributions across chains.
+
+#### Sui Object Display {#sui-object-display}
+
+A template engine that enables on-chain management of off-chain representation (display) for a type. 
+
+#### Soulbound {#soulbound}
+
+An asset that is bound to an account and cannot be transferred.
+
+#### Testnet {#testnet}
+
+A development network. Data deployed to the Testnet persists through the regular update process, but might be wiped when necessary. Testnet data wipes are announced ahead of time.
+
 ### Total order {#total-order}
 
 [Total order](https://en.wikipedia.org/wiki/Total_order) refers to the ordered presentation of the history of all transactions processed by a traditional blockchain up to a given time. This is maintained by many blockchain systems, as the only way to process transactions. In contrast, Sui uses a causal (partial) order wherever possible and safe.
 
 ### Transaction {#transaction}
 
-A transaction in Sui is a change to the blockchain. This may be a _simple transaction_ affecting only single-writer, single-address objects, such as minting an NFT or transferring an NFT or another token. These transactions may bypass the consensus protocol in Sui.
+A transaction in Sui is a change to the blockchain. This may be a simple transaction affecting only single-writer, single-address objects, such as minting an NFT or transferring an NFT or another token. These transactions may bypass the consensus protocol in Sui.
 
-More _complex transactions_ affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, do go through consensus.
+More complex transactions affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, do go through consensus.
 
 ### Transfer {#transfer}
 
@@ -100,5 +164,9 @@ A transfer is switching the owner address of a token to a new one via command in
 
 ### Validator {#validator}
 
-A validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui, validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
-certificate.
+A validator in Sui plays a passive role analogous to the more active role of validators and miners in other blockchains. In Sui, validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or certificate.
+
+#### Wallet Standard {#wallet-standard}
+
+A cross-chain standard that defines how dApps can automatically discover and interact with wallets.
+

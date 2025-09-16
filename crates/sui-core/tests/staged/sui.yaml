@@ -465,6 +465,8 @@ EndOfEpochTransactionKind:
           TYPENAME: StoredExecutionTimeObservations
     8:
       AccumulatorRootCreate: UNIT
+    9:
+      CoinRegistryCreate: UNIT
 Event:
   STRUCT:
     - package_id:
